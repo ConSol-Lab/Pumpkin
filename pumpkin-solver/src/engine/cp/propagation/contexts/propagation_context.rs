@@ -1,13 +1,38 @@
-use super::PropagatorId;
+use crate::basic_types::Trail;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
+use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
+use crate::engine::StateChange;
 use crate::pumpkin_assert_simple;
+
+pub(crate) struct StatefulPropagationContext<'a> {
+    pub(crate) stateful_trail: &'a mut Trail<StateChange>,
+    pub(crate) assignments: &'a Assignments,
+}
+
+impl<'a> StatefulPropagationContext<'a> {
+    pub(crate) fn new(
+        stateful_trail: &'a mut Trail<StateChange>,
+        assignments: &'a Assignments,
+    ) -> Self {
+        Self {
+            stateful_trail,
+            assignments,
+        }
+    }
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments: self.assignments,
+        }
+    }
+}
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -34,6 +59,8 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
+    pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
+    pub(crate) stateful_trail: &'a mut Trail<StateChange>,
     reification_literal: Option<Literal>,
 }
 
@@ -42,14 +69,18 @@ impl<'a> PropagationContextMut<'a> {
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
+        domain_faithfulness: &'a mut DomainFaithfulness,
         propagator_id: PropagatorId,
+        stateful_trail: &'a mut Trail<StateChange>,
     ) -> Self {
         PropagationContextMut {
             assignments,
             reason_store,
             propagator_id,
+            domain_faithfulness,
             semantic_minimiser,
             reification_literal: None,
+            stateful_trail,
         }
     }
 
@@ -109,6 +140,12 @@ mod private {
             self.assignments
         }
     }
+
+    impl HasAssignments for StatefulPropagationContext<'_> {
+        fn assignments(&self) -> &Assignments {
+            self.assignments
+        }
+    }
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
@@ -145,24 +182,8 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
-    fn lower_bound_at_trail_position<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-        trail_position: usize,
-    ) -> i32 {
-        var.lower_bound_at_trail_position(self.assignments(), trail_position)
-    }
-
     fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
         var.upper_bound(self.assignments())
-    }
-
-    fn upper_bound_at_trail_position<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-        trail_position: usize,
-    ) -> i32 {
-        var.upper_bound_at_trail_position(self.assignments(), trail_position)
     }
 
     fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {

@@ -1,5 +1,6 @@
 use std::ops::Not;
 
+use log::info;
 use log::warn;
 
 use super::LearnedNogoodSortingStrategy;
@@ -9,16 +10,16 @@ use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
+use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::propagation_context::HasAssignments;
-use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -26,12 +27,11 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::EventSink;
-use crate::engine::IntDomainEvent;
+use crate::engine::DomainFaithfulness;
 use crate::engine::SolverStatistics;
-use crate::predicate;
+use crate::engine::StateChange;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -56,15 +56,12 @@ pub(crate) struct NogoodPropagator {
     learned_nogood_ids: LearnedNogoodIds,
     /// Ids which have been deleted and can now be re-used
     delete_ids: Vec<NogoodId>,
-    /// The trail index is used to determine the domains of the variables since last time.
-    last_index_on_trail: usize,
     /// Indicates whether the nogood propagator is in an infeasible state
     is_in_infeasible_state: bool,
     /// Watch lists for the nogood propagator.
     // TODO: could improve the data structure for watching.
-    watch_lists: KeyedVec<DomainId, NogoodWatchList>,
-    /// Keep track of the events which the propagator has been notified of.
-    enqueued_updates: EventSink,
+    watch_lists: KeyedVec<PredicateId, NogoodWatchList>,
+    updated_predicate_ids: Vec<PredicateId>,
     /// A helper for calculating the LBD for the nogoods.
     lbd_helper: Lbd,
     /// The parameters which influence the learning of the propagator and aspects such as clause
@@ -123,6 +120,22 @@ impl NogoodPropagator {
         }
         false
     }
+
+    fn is_watched_predicate(
+        predicate: Predicate,
+        predicate_id: &PredicateId,
+        context: &mut PropagationContextMut,
+    ) -> bool {
+        context
+            .domain_faithfulness
+            .predicate_to_id
+            .has_id_for_predicate(predicate)
+            && context
+                .domain_faithfulness
+                .predicate_to_id
+                .get_id(predicate)
+                == *predicate_id
+    }
 }
 
 impl Propagator for NogoodPropagator {
@@ -136,12 +149,17 @@ impl Propagator for NogoodPropagator {
         0
     }
 
+    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
+        self.updated_predicate_ids.push(predicate_id);
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        pumpkin_assert_advanced!(self.debug_is_properly_watched());
+        info!("Nogood Propagator Propagating");
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
-        self.clean_up_learned_nogoods_if_needed(context.as_readonly(), context.reason_store);
+        self.clean_up_learned_nogoods_if_needed(&mut context);
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(
@@ -150,659 +168,114 @@ impl Propagator for NogoodPropagator {
             );
         }
 
-        let old_trail_position = context.assignments.trail.len() - 1;
+        // TODO: should drop all elements afterwards
+        for predicate_id in self.updated_predicate_ids.drain(..) {
+            pumpkin_assert_moderate!(
+                context.is_predicate_satisfied(
+                    context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                ),
+                "The predicate {} should be satisfied but was not - bounds: {}, {}",
+                context
+                    .domain_faithfulness
+                    .get_predicate_for_id(predicate_id),
+                context.lower_bound(
+                    &context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                        .get_domain()
+                ),
+                context.upper_bound(
+                    &context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                        .get_domain()
+                )
+            );
+            let mut index = 0;
+            while index < self.watch_lists[predicate_id].watchers.len() {
+                let nogood_id = self.watch_lists[predicate_id].watchers[index];
+                let nogood = &mut self.nogoods[nogood_id].predicates;
 
-        for (domain_event, updated_domain_id) in self.enqueued_updates.drain() {
-            let mut current_index = 0;
-            let mut end_index = 0;
-
-            match domain_event {
-                IntDomainEvent::LowerBound => {
-                    let old_lower_bound = context.lower_bound_at_trail_position(
-                        &updated_domain_id,
-                        self.last_index_on_trail,
-                    );
-                    let new_lower_bound = context.lower_bound(&updated_domain_id);
-
-                    // Effectively, resizing the watch list to size zero,
-                    // and in the loop add some of the old watchers back.
-                    let num_watchers =
-                        self.watch_lists[updated_domain_id].num_lower_bound_watchers();
-                    // Iterate through all watchers.
-                    while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id]
-                            .get_lower_bound_watcher_at_index(current_index)
-                            .right_hand_side;
-
-                        if old_lower_bound < right_hand_side && right_hand_side <= new_lower_bound {
-                            let nogood_id = self.watch_lists[updated_domain_id]
-                                .get_lower_bound_watcher_at_index(current_index)
-                                .nogood_id;
-
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
-
-                            let is_watched_predicate = |predicate: Predicate| {
-                                predicate.is_lower_bound_predicate()
-                                    && predicate.get_domain() == updated_domain_id
-                            };
-
-                            // Place the watched predicate at position 1 for simplicity.
-                            if is_watched_predicate(nogood[0]) {
-                                nogood.swap(0, 1);
-                            }
-
-                            pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
-
-                            // Check the other watched predicate is already falsified, in which case
-                            // no propagation can take place. Recall that the other watched
-                            // predicate is at position 0 due to previous code.
-                            // todo: check if comparing to the cache literal would make sense.
-                            if context.is_predicate_falsified(nogood[0]) {
-                                // Keep the watchers, the nogood is falsified,
-                                // no propagation can take place.
-                                self.watch_lists[updated_domain_id]
-                                    .set_lower_bound_watcher_to_other_watcher(
-                                        end_index,
-                                        current_index,
-                                    );
-                                current_index += 1;
-                                end_index += 1;
-                                continue;
-                            }
-                            // Look for another nonsatisfied predicate
-                            // to replace the watched predicate.
-                            let mut found_new_watch = false;
-                            // Start from index 2 since we are skipping watched predicates.
-                            for i in 2..nogood.len() {
-                                // Find a predicate that is either false or unassigned,
-                                // i.e., not assigned true.
-                                if !context.is_predicate_satisfied(nogood[i]) {
-                                    // Found another predicate that can be the watcher.
-                                    found_new_watch = true;
-                                    // todo: does it make sense to replace the cached predicate with
-                                    // this new predicate?
-
-                                    // Replace the current watcher with the new predicate watcher.
-                                    nogood.swap(1, i);
-                                    pumpkin_assert_moderate!(
-                                        nogood[i].get_domain() == updated_domain_id
-                                    );
-                                    // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
-
-                                    // No propagation is taking place, go to the next nogood.
-                                    break;
-                                }
-                            } // end iterating through the nogood
-
-                            if found_new_watch {
-                                // Note this nogood is effectively removed from the watch list
-                                // of the the current predicate, since we
-                                // are only incrementing the current index, and not copying
-                                // anything to the end_index.
-                                current_index += 1;
-                                continue;
-                            }
-
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_lower_bound_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
-                            pumpkin_assert_advanced!(nogood
-                                .iter()
-                                .skip(1)
-                                .all(|p| context.is_predicate_satisfied(*p)));
-
-                            // There are two scenarios:
-                            // nogood[0] is unassigned -> propagate the predicate to false
-                            // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
-
-                            let result = context.post_predicate(!nogood[0], reason);
-                            // If the propagation lead to a conflict.
-                            if let Err(e) = result {
-                                // Stop any further propagation and report the conflict.
-                                // Readd the remaining watchers to the watch list.
-                                while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id]
-                                        .set_lower_bound_watcher_to_other_watcher(
-                                            end_index,
-                                            current_index,
-                                        );
-
-                                    current_index += 1;
-                                    end_index += 1;
-                                }
-                                self.watch_lists[updated_domain_id]
-                                    .truncate_lower_bound_watchers(end_index);
-                                return Err(e.into());
-                            }
-                        } else {
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_lower_bound_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-                        }
-                    }
-                    // Went through all the watchers.
-                    if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id]
-                            .truncate_lower_bound_watchers(end_index);
-                    }
+                // Place the watched predicate at position 1 for simplicity.
+                if Self::is_watched_predicate(nogood[0], &predicate_id, &mut context) {
+                    nogood.swap(0, 1);
                 }
-                IntDomainEvent::UpperBound => {
-                    let old_upper_bound = context.upper_bound_at_trail_position(
-                        &updated_domain_id,
-                        self.last_index_on_trail,
-                    );
-                    let new_upper_bound = context.upper_bound(&updated_domain_id);
 
-                    // We are manually implementing a retain-like function from Vec.
+                pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
 
-                    // Effectively, resizing the watch list to size zero,
-                    // and in the loop add some of the old watchers back.
-                    let num_watchers =
-                        self.watch_lists[updated_domain_id].num_upper_bound_watchers();
-                    // Iterate through all watchers.
-                    while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id]
-                            .get_upper_bound_watcher_at_index(current_index)
-                            .right_hand_side;
-
-                        if old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound {
-                            let nogood_id = self.watch_lists[updated_domain_id]
-                                .get_upper_bound_watcher_at_index(current_index)
-                                .nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
-
-                            let is_watched_predicate = |predicate: Predicate| {
-                                predicate.is_upper_bound_predicate()
-                                    && predicate.get_domain() == updated_domain_id
-                            };
-
-                            // Place the watched predicate at position 1 for simplicity.
-                            if is_watched_predicate(nogood[0]) {
-                                nogood.swap(0, 1);
-                            }
-
-                            pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
-
-                            // Check the other watched predicate is already falsified, in which case
-                            // no propagation can take place. Recall that the other watched
-                            // predicate is at position 0 due to previous code.
-                            // todo: check if comparing to the cache literal would make sense.
-                            if context.is_predicate_falsified(nogood[0]) {
-                                // Keep the watchers, the nogood is falsified,
-                                // no propagation can take place.
-                                self.watch_lists[updated_domain_id]
-                                    .set_upper_bound_watcher_to_other_watcher(
-                                        end_index,
-                                        current_index,
-                                    );
-                                current_index += 1;
-                                end_index += 1;
-                                continue;
-                            }
-                            // Look for another nonsatisfied predicate
-                            // to replace the watched predicate.
-                            let mut found_new_watch = false;
-                            // Start from index 2 since we are skipping watched predicates.
-                            for i in 2..nogood.len() {
-                                // Find a predicate that is either false or unassigned,
-                                // i.e., not assigned true.
-                                if !context.is_predicate_satisfied(nogood[i]) {
-                                    // Found another predicate that can be the watcher.
-                                    found_new_watch = true;
-                                    // Replace the current watcher with the new predicate watcher.
-                                    nogood.swap(1, i);
-                                    pumpkin_assert_moderate!(
-                                        nogood[i].get_domain() == updated_domain_id
-                                    );
-                                    // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
-
-                                    // No propagation is taking place, go to the next nogood.
-                                    break;
-                                }
-                            } // end iterating through the nogood
-
-                            if found_new_watch {
-                                // Note this nogood is effectively removed from the watch list
-                                // of the the current predicate, since we
-                                // are only incrementing the current index, and not copying
-                                // anything to the end_index.
-
-                                current_index += 1;
-                                continue;
-                            }
-
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_upper_bound_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
-                            pumpkin_assert_advanced!(nogood
-                                .iter()
-                                .skip(1)
-                                .all(|p| context.is_predicate_satisfied(*p)));
-
-                            // There are two scenarios:
-                            // nogood[0] is unassigned -> propagate the predicate to false
-                            // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
-
-                            let result = context.post_predicate(!nogood[0], reason);
-                            // If the propagation lead to a conflict.
-                            if let Err(e) = result {
-                                // Stop any further propagation and report the conflict.
-                                // Readd the remaining watchers to the watch list.
-                                while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id]
-                                        .set_upper_bound_watcher_to_other_watcher(
-                                            end_index,
-                                            current_index,
-                                        );
-                                    current_index += 1;
-                                    end_index += 1;
-                                }
-                                self.watch_lists[updated_domain_id]
-                                    .truncate_upper_bound_watchers(end_index);
-                                return Err(e.into());
-                            }
-                        } else {
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_upper_bound_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-                        }
-                    }
-                    // Went through all the watchers.
-                    if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id]
-                            .truncate_upper_bound_watchers(end_index);
-                    }
+                // Check the other watched predicate is already falsified, in which case
+                // no propagation can take place. Recall that the other watched
+                // predicate is at position 0 due to previous code.
+                if context.is_predicate_falsified(nogood[0]) {
+                    index += 1;
+                    continue;
                 }
-                IntDomainEvent::Removal => {
-                    let old_lower_bound = context.lower_bound_at_trail_position(
-                        &updated_domain_id,
-                        self.last_index_on_trail,
-                    );
-                    let new_lower_bound = context.lower_bound(&updated_domain_id);
 
-                    let old_upper_bound = context.upper_bound_at_trail_position(
-                        &updated_domain_id,
-                        self.last_index_on_trail,
-                    );
-                    let new_upper_bound = context.upper_bound(&updated_domain_id);
+                // Look for another nonsatisfied predicate
+                // to replace the watched predicate.
+                let mut found_new_watch = false;
+                // Start from index 2 since we are skipping watched predicates.
+                for i in 2..nogood.len() {
+                    // Find a predicate that is either false or unassigned,
+                    // i.e., not assigned true.
+                    if !context.is_predicate_satisfied(nogood[i]) {
+                        // Found another predicate that can be the watcher.
+                        found_new_watch = true;
+                        // todo: does it make sense to replace the cached predicate with
+                        // this new predicate?
 
-                    // Effectively, resizing the watch list to size zero,
-                    // and in the loop add some of the old watchers back.
-                    let num_watchers =
-                        self.watch_lists[updated_domain_id].num_inequality_watchers();
-                    // Iterate through all watchers.
-                    while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id]
-                            .get_inequality_watcher_at_index(current_index)
-                            .right_hand_side;
+                        // Replace the current watcher with the new predicate watcher.
+                        nogood.swap(1, i);
+                        // Add this nogood to the watch list of the new watcher.
+                        Self::add_watcher(
+                            context.domain_faithfulness,
+                            context.stateful_trail,
+                            &mut self.watch_lists,
+                            nogood[1],
+                            nogood_id,
+                            context.assignments,
+                        );
 
-                        let update_domain = updated_domain_id;
-                        // Only look at the watcher if:
-                        // 1) The removed value was definitely removed due to bound changes, OR
-                        // 2) The removed value is within the bounds, and was actually removed.
-                        if old_upper_bound >= right_hand_side && right_hand_side > new_upper_bound
-                            || old_lower_bound <= right_hand_side
-                                && right_hand_side < new_lower_bound
-                            || (new_lower_bound < right_hand_side
-                                && right_hand_side < new_upper_bound
-                                && context.is_predicate_satisfied(predicate!(
-                                    update_domain != right_hand_side
-                                )))
-                        {
-                            let nogood_id = self.watch_lists[updated_domain_id]
-                                .get_inequality_watcher_at_index(current_index)
-                                .nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
-
-                            let is_watched_predicate = |predicate: Predicate| {
-                                predicate.is_not_equal_predicate()
-                                    && predicate.get_domain() == updated_domain_id
-                                    && predicate.get_right_hand_side() == right_hand_side
-                            };
-
-                            // Place the watched predicate at position 1 for simplicity.
-                            if is_watched_predicate(nogood[0]) {
-                                nogood.swap(0, 1);
-                            }
-
-                            pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
-
-                            // Check the other watched predicate is already falsified, in which case
-                            // no propagation can take place. Recall that the other watched
-                            // predicate is at position 0 due to previous code.
-                            if context.is_predicate_falsified(nogood[0]) {
-                                // Keep the watchers, the nogood is falsified,
-                                // no propagation can take place.
-                                self.watch_lists[updated_domain_id]
-                                    .set_inequality_watcher_to_other_watcher(
-                                        end_index,
-                                        current_index,
-                                    );
-                                current_index += 1;
-                                end_index += 1;
-                                continue;
-                            }
-                            // Look for another nonsatisfied predicate
-                            // to replace the watched predicate.
-                            let mut found_new_watch = false;
-                            // The watcher for holes has a special case. In case the watcher that is
-                            // going to replace this one is 1) a predicate with the same
-                            // domain_id and 2) is also a not equals predicate, then the watcher
-                            // should not be moved from this list, but instead only its right hand
-                            // side should be changed to reflect the new watcher. The variable
-                            // 'kept_watcher_new_rhs' holds info about this new rhs if appropriate.
-                            let mut kept_watcher_new_rhs: Option<i32> = None;
-                            // Start from index 2 since we are skipping watched predicates.
-                            for i in 2..nogood.len() {
-                                // Find a predicate that is either false or unassigned,
-                                // i.e., not assigned true.
-                                if !context.is_predicate_satisfied(nogood[i]) {
-                                    // Found another predicate that can be the watcher.
-                                    found_new_watch = true;
-                                    // Replace the current watcher with the new predicate watcher.
-                                    nogood.swap(1, i);
-                                    pumpkin_assert_moderate!(
-                                        nogood[i].get_domain() == updated_domain_id
-                                    );
-
-                                    // Add this nogood to the watch list of the new watcher. Note
-                                    // that there
-                                    if nogood[1].is_not_equal_predicate()
-                                        && nogood[1].get_domain() == updated_domain_id
-                                    {
-                                        // The watcher should stay in this list, but change
-                                        // its right hand side to reflect the new watching
-                                        // predicate. Here we only note that the watcher
-                                        // should stay, and later it actually gets copied.
-                                        kept_watcher_new_rhs =
-                                            Some(nogood[1].get_right_hand_side());
-                                    } else {
-                                        // Add this nogood to the watch list of the new watcher.
-                                        Self::add_watcher(
-                                            &mut self.watch_lists,
-                                            nogood[1],
-                                            nogood_id,
-                                        );
-                                    }
-
-                                    // No propagation is taking place, go to the next nogood.
-                                    break;
-                                }
-                            } // end iterating through the nogood
-
-                            if found_new_watch {
-                                if let Some(new_rhs) = kept_watcher_new_rhs {
-                                    // Keep the current watch for this predicate,
-                                    // and update its right hand side.
-                                    self.watch_lists[updated_domain_id]
-                                        .set_inequality_watcher_to_other_watcher(
-                                            end_index,
-                                            current_index,
-                                        );
-                                    self.watch_lists[updated_domain_id]
-                                        .set_right_hand_side_of_inequality_watcher_at_index(
-                                            end_index, new_rhs,
-                                        );
-
-                                    end_index += 1;
-                                    current_index += 1;
-
-                                    continue;
-                                } else {
-                                    // Note this nogood is effectively removed from the watch list
-                                    // of the the current predicate, since we
-                                    // are only incrementing the current index, and not copying
-                                    // anything to the end_index.
-                                    current_index += 1;
-                                    continue;
-                                }
-                            }
-
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_inequality_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
-                            pumpkin_assert_advanced!(nogood
-                                .iter()
-                                .skip(1)
-                                .all(|p| context.is_predicate_satisfied(*p)));
-
-                            // There are two scenarios:
-                            // nogood[0] is unassigned -> propagate the predicate to false
-                            // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
-
-                            let result = context.post_predicate(!nogood[0], reason);
-                            // If the propagation lead to a conflict.
-                            if let Err(e) = result {
-                                // Stop any further propagation and report the conflict.
-                                // Readd the remaining watchers to the watch list.
-                                while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id]
-                                        .set_inequality_watcher_to_other_watcher(
-                                            end_index,
-                                            current_index,
-                                        );
-                                    current_index += 1;
-                                    end_index += 1;
-                                }
-
-                                self.watch_lists[updated_domain_id]
-                                    .truncate_inequality_watchers(end_index);
-                                return Err(e.into());
-                            }
-                        } else {
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_inequality_watcher_to_other_watcher(end_index, current_index);
-                            end_index += 1;
-                            current_index += 1;
-                        }
+                        // No propagation is taking place, go to the next nogood.
+                        break;
                     }
-                    // Went through all the watchers.
-                    if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id].truncate_inequality_watchers(end_index);
-                    }
+                } // end iterating through the nogood
+
+                if found_new_watch {
+                    // We remove the current watcher
+                    let _ = self.watch_lists[predicate_id].watchers.swap_remove(index);
+                    continue;
                 }
-                IntDomainEvent::Assign => {
-                    let new_lower_bound = context.lower_bound(&updated_domain_id);
-                    let new_upper_bound = context.upper_bound(&updated_domain_id);
 
-                    assert!(new_lower_bound == new_upper_bound);
-                    let assigned_value = new_lower_bound;
+                // At this point, nonwatched predicates and nogood[1] are falsified.
+                pumpkin_assert_advanced!(nogood
+                    .iter()
+                    .skip(1)
+                    .all(|p| context.is_predicate_satisfied(*p)));
 
-                    // Effectively, resizing the watch list to size zero,
-                    // and in the loop add some of the old watchers back.
-                    let num_watchers = self.watch_lists[updated_domain_id].num_equality_watchers();
-                    // Iterate through all watchers.
+                // There are two scenarios:
+                // nogood[0] is unassigned -> propagate the predicate to false
+                // nogood[0] is assigned true -> conflict.
+                let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                    while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id]
-                            .get_equality_watcher_at_index(current_index)
-                            .right_hand_side;
-
-                        if assigned_value == right_hand_side {
-                            let nogood_id = self.watch_lists[updated_domain_id]
-                                .get_equality_watcher_at_index(current_index)
-                                .nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
-
-                            let is_watched_predicate = |predicate: Predicate| {
-                                predicate.is_equality_predicate()
-                                    && predicate.get_domain() == updated_domain_id
-                                    && predicate.get_right_hand_side() == assigned_value
-                            };
-
-                            // Place the watched predicate at position 1 for simplicity.
-                            if is_watched_predicate(nogood[0]) {
-                                nogood.swap(0, 1);
-                            }
-
-                            pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
-
-                            // Check the other watched predicate is already falsified, in which case
-                            // no propagation can take place. Recall that the other watched
-                            // predicate is at position 0 due to previous code.
-                            if context.is_predicate_falsified(nogood[0]) {
-                                // Keep the watchers, the nogood is falsified,
-                                // no propagation can take place.
-                                self.watch_lists[updated_domain_id]
-                                    .set_equality_watcher_to_other_watcher(
-                                        end_index,
-                                        current_index,
-                                    );
-                                current_index += 1;
-                                end_index += 1;
-                                continue;
-                            }
-                            // Look for another nonsatisfied predicate
-                            // to replace the watched predicate.
-                            let mut found_new_watch = false;
-                            // Start from index 2 since we are skipping watched predicates.
-                            for i in 2..nogood.len() {
-                                // Find a predicate that is either false or unassigned,
-                                // i.e., not assigned true.
-                                if !context.is_predicate_satisfied(nogood[i]) {
-                                    // Found another predicate that can be the watcher.
-                                    found_new_watch = true;
-
-                                    // Replace the current watcher with the new predicate watcher.
-                                    nogood.swap(1, i);
-                                    pumpkin_assert_moderate!(
-                                        nogood[i].get_domain() == updated_domain_id
-                                    );
-                                    // Add this nogood to the watch list of the new watcher.
-                                    // Ensure there is an entry.
-                                    // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
-
-                                    // No propagation is taking place, go to the next nogood.
-                                    break;
-                                }
-                            } // end iterating through the nogood
-
-                            if found_new_watch {
-                                // Note this nogood is effectively removed from the watch list
-                                // of the the current predicate, since we
-                                // are only incrementing the current index, and not copying
-                                // anything to the end_index.
-
-                                current_index += 1;
-                                continue;
-                            }
-
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_equality_watcher_to_other_watcher(end_index, current_index);
-
-                            end_index += 1;
-                            current_index += 1;
-
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
-                            pumpkin_assert_advanced!(nogood
-                                .iter()
-                                .skip(1)
-                                .all(|p| context.is_predicate_satisfied(*p)));
-
-                            // There are two scenarios:
-                            // nogood[0] is unassigned -> propagate the predicate to false
-                            // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
-
-                            let result = context.post_predicate(!nogood[0], reason);
-                            // If the propagation lead to a conflict.
-                            if let Err(e) = result {
-                                // Stop any further propagation and report the conflict.
-                                // Readd the remaining watchers to the watch list.
-                                while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id]
-                                        .set_equality_watcher_to_other_watcher(
-                                            end_index,
-                                            current_index,
-                                        );
-
-                                    current_index += 1;
-                                    end_index += 1;
-                                }
-                                self.watch_lists[updated_domain_id]
-                                    .truncate_equality_watchers(end_index);
-                                return Err(e.into());
-                            }
-                        } else {
-                            // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id]
-                                .set_equality_watcher_to_other_watcher(end_index, current_index);
-
-                            end_index += 1;
-                            current_index += 1;
-                        }
-                    }
-                    // Went through all the watchers.
-                    if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id].truncate_equality_watchers(end_index);
-                    }
+                let result = context.post_predicate(!nogood[0], reason);
+                // If the propagation lead to a conflict.
+                if let Err(e) = result {
+                    return Err(e.into());
                 }
+                index += 1;
             }
         }
-        self.last_index_on_trail = old_trail_position;
 
-        pumpkin_assert_advanced!(self.debug_is_properly_watched());
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         Ok(())
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
-        self.last_index_on_trail = context.assignments().trail.len() - 1;
-        let _ = self.enqueued_updates.drain();
-    }
-
-    fn notify(
-        &mut self,
-        _context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) -> EnqueueDecision {
-        while local_id.unpack() as usize >= self.enqueued_updates.num_domains() {
-            self.enqueued_updates.grow();
-        }
-
-        // Save the update, and also enqueue removal in case the lower or upper bound updates are
-        // set.
-        self.enqueued_updates.event_occurred(
-            event.unwrap(),
-            DomainId {
-                id: local_id.unpack(),
-            },
-        );
-        if let IntDomainEvent::LowerBound | IntDomainEvent::UpperBound = event.unwrap() {
-            // If it is a lower-bound or upper-bound event then we also add a removal event
-            self.enqueued_updates.event_occurred(
-                IntDomainEvent::Removal,
-                DomainId {
-                    id: local_id.unpack(),
-                },
-            );
-        }
-        EnqueueDecision::Enqueue
+    fn synchronise(&mut self, _context: PropagationContext) {
+        self.updated_predicate_ids.clear()
     }
 
     fn debug_propagate_from_scratch(
@@ -842,7 +315,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated, reason = "should be refactored later")]
+                #[allow(deprecated, reason = "Should be changed when the API is changed")]
                 context.assignments(),
             );
 
@@ -918,6 +391,8 @@ impl NogoodPropagator {
             .average_lbd
             .add_term(lbd as u64);
 
+        info!("Adding learned nogood: {:?}", nogood,);
+
         // Add the nogood to the database.
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
@@ -936,14 +411,20 @@ impl NogoodPropagator {
 
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
+            context.domain_faithfulness,
+            context.stateful_trail,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
+            context.assignments,
         );
         NogoodPropagator::add_watcher(
+            context.domain_faithfulness,
+            context.stateful_trail,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
+            context.assignments,
         );
 
         // Then we propagate the asserting predicate and as reason we give the index to the
@@ -1051,14 +532,20 @@ impl NogoodPropagator {
             self.permanent_nogoods.push(new_id);
 
             NogoodPropagator::add_watcher(
+                context.domain_faithfulness,
+                context.stateful_trail,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
+                context.assignments,
             );
             NogoodPropagator::add_watcher(
+                context.domain_faithfulness,
+                context.stateful_trail,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
+                context.assignments,
             );
 
             Ok(())
@@ -1070,9 +557,12 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
-        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
+        domain_faithfulness: &mut DomainFaithfulness,
+        stateful_trail: &mut Trail<StateChange>,
+        watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
+        assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
         if predicate.get_domain().id as usize >= watch_lists.len() {
@@ -1082,75 +572,37 @@ impl NogoodPropagator {
             );
         }
 
-        // Then we add this nogood to the watch list of the new watcher.
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => watch_lists[domain_id].add_lower_bound_watcher(nogood_id, lower_bound),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => {
-                watch_lists[domain_id].add_upper_bound_watcher(nogood_id, upper_bound);
-            }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                watch_lists[domain_id].add_inequality_watcher(nogood_id, not_equal_constant);
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                watch_lists[domain_id].add_equality_watcher(nogood_id, equality_constant);
-            }
+        let predicate_id =
+            domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
+        while watch_lists.len() <= predicate_id.index() {
+            let _ = watch_lists.push(NogoodWatchList::default());
         }
+        watch_lists[predicate_id].add_watcher(nogood_id);
     }
 
     /// Removes the noogd from the watch list
     fn remove_nogood_from_watch_list(
-        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
-        watching_predicate: Predicate,
+        watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
+        predicate_id: PredicateId,
         id: NogoodId,
     ) {
-        match watching_predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => watch_lists[domain_id].remove_lower_bound_watcher(id, lower_bound),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => watch_lists[domain_id].remove_upper_bound_watcher(id, upper_bound),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => watch_lists[domain_id].remove_inequality_watcher(id, not_equal_constant),
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => watch_lists[domain_id].remove_equality_watcher(id, equality_constant),
-        }
+        watch_lists[predicate_id]
+            .watchers
+            .retain(|nogood_id| *nogood_id != id);
     }
 }
 
 /// Nogood management
 impl NogoodPropagator {
     /// Removes nogoods if there are too many nogoods with a "high" LBD
-    fn clean_up_learned_nogoods_if_needed(
-        &mut self,
-        context: PropagationContext,
-        reason_store: &ReasonStore,
-    ) {
+    fn clean_up_learned_nogoods_if_needed(&mut self, context: &mut PropagationContextMut) {
         // Only remove learned nogoods if there are too many.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_num_high_lbd_nogoods {
             // The procedure is divided into two parts (for simplicity of implementation).
             //  1. Promote nogoods that are in the high lbd group but got updated to a low lbd.
             //  2. Remove roughly half of the nogoods that have high lbd.
             self.promote_high_lbd_nogoods();
-            self.remove_high_lbd_nogoods(context, reason_store);
+            self.remove_high_lbd_nogoods(context);
         }
     }
 
@@ -1174,7 +626,7 @@ impl NogoodPropagator {
     ///
     /// The idea is that these are likely poor quality nogoods and the overhead of propagating them
     /// is not worth it.
-    fn remove_high_lbd_nogoods(&mut self, context: PropagationContext, reason_store: &ReasonStore) {
+    fn remove_high_lbd_nogoods(&mut self, context: &mut PropagationContextMut) {
         // First we sort the high LBD nogoods based on non-increasing "quality"
         self.sort_high_lbd_nogoods_by_quality_better_first();
 
@@ -1198,19 +650,25 @@ impl NogoodPropagator {
                 continue;
             }
 
-            if self.is_nogood_propagating(context, reason_store, id) {
+            if self.is_nogood_propagating(context.as_readonly(), context.reason_store, id) {
                 continue;
             }
 
             // Remove the nogood from the watch list.
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                self.nogoods[id].predicates[0],
+                context
+                    .domain_faithfulness
+                    .get_id_for_predicate(self.nogoods[id].predicates[0])
+                    .unwrap(),
                 id,
             );
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                self.nogoods[id].predicates[1],
+                context
+                    .domain_faithfulness
+                    .get_id_for_predicate(self.nogoods[id].predicates[1])
+                    .unwrap(),
                 id,
             );
 
@@ -1365,6 +823,19 @@ impl NogoodPropagator {
                 .unwrap()
                 .not();
 
+            // println!(
+            //    "Debug Propagating {propagated_predicate} - {:?}",
+            //    nogood
+            //        .predicates
+            //        .iter()
+            //        .map(|predicate| (
+            //            predicate,
+            //            context.lower_bound(&predicate.get_domain()),
+            //            context.upper_bound(&predicate.get_domain())
+            //        ))
+            //        .collect::<Vec<_>>()
+            //);
+
             assert!(nogood
                 .predicates
                 .iter()
@@ -1388,34 +859,13 @@ impl NogoodPropagator {
     }
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
-    fn debug_is_properly_watched(&self) -> bool {
-        let is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
-            match predicate {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => self.watch_lists[domain_id]
-                    .iter_lower_bound_watchers()
-                    .any(|w| w.right_hand_side == lower_bound && w.nogood_id == nogood_id),
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => self.watch_lists[domain_id]
-                    .iter_upper_bound_watchers()
-                    .any(|w| w.right_hand_side == upper_bound && w.nogood_id == nogood_id),
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => self.watch_lists[domain_id]
-                    .iter_inequality_watchers()
-                    .any(|w| w.right_hand_side == not_equal_constant && w.nogood_id == nogood_id),
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => self.watch_lists[domain_id]
-                    .iter_equality_watchers()
-                    .any(|w| w.right_hand_side == equality_constant && w.nogood_id == nogood_id),
-            }
+    fn debug_is_properly_watched(&self, domain_faithfulness: &mut DomainFaithfulness) -> bool {
+        let mut is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
+            pumpkin_assert_moderate!(domain_faithfulness
+                .get_id_for_predicate(predicate)
+                .is_some());
+            let predicate_id = domain_faithfulness.get_id_for_predicate(predicate).unwrap();
+            self.watch_lists[predicate_id].watchers.contains(&nogood_id)
         };
 
         for nogood in self.nogoods.iter().enumerate() {
@@ -1445,14 +895,6 @@ impl NogoodPropagator {
                     "watching 1: {}",
                     is_watching(nogood.1.predicates[1], nogood_id)
                 );
-                eprintln!(
-                    "watch list 0: {:?}",
-                    self.watch_lists[nogood.1.predicates[0].get_domain()]
-                );
-                eprintln!(
-                    "watch list 1: {:?}",
-                    self.watch_lists[nogood.1.predicates[1].get_domain()]
-                );
             }
 
             assert!(
@@ -1467,11 +909,13 @@ impl NogoodPropagator {
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
+    use crate::basic_types::Trail;
     use crate::conjunction;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
+    use crate::engine::DomainFaithfulness;
     use crate::predicate;
 
     fn downcast_to_nogood_propagator(
@@ -1497,6 +941,8 @@ mod tests {
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
+        let mut domain_faithfulness = DomainFaithfulness::default();
+        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -1504,7 +950,9 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
+                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
@@ -1537,6 +985,8 @@ mod tests {
         let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
+        let mut domain_faithfulness = DomainFaithfulness::default();
+        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -1544,7 +994,9 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
+                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)

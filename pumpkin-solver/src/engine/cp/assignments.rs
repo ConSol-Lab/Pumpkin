@@ -51,6 +51,14 @@ impl Default for Assignments {
 pub struct EmptyDomain;
 
 impl Assignments {
+    pub(crate) fn get_holes_on_decision_level(
+        &self,
+        domain_id: DomainId,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id].get_holes_from_decision_level(decision_level)
+    }
+
     pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
@@ -657,6 +665,10 @@ impl Assignments {
         }
     }
 
+    pub(crate) fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
+        self.evaluate_predicate(predicate).is_some()
+    }
+
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
@@ -734,23 +746,17 @@ impl Assignments {
                 }
             }
         });
+
         // Drain does not remove the events from the internal data structure. Elements are removed
         // lazily, as the iterator gets executed. For this reason we go through the entire iterator.
         let iter = self.events.drain();
         let _ = iter.count();
-        // println!("ASSIGN AFTER SYNC PRESENT: {:?}", self.events.present);
-        // println!("others: {:?}", self.events.events);
         unfixed_variables
     }
 
     /// todo: This is a temporary hack, not to be used in general.
     pub(crate) fn remove_last_trail_element(&mut self) {
         let entry = self.trail.pop().unwrap();
-        // println!(
-        // "\tHacky remova: {} {}",
-        // entry.predicate,
-        // entry.reason.is_none()
-        // );
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
     }
@@ -1335,6 +1341,16 @@ impl IntegerDomain {
                 }
             }
         }
+    }
+
+    pub(crate) fn get_holes_from_decision_level(
+        &self,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.hole_updates
+            .iter()
+            .filter(move |entry| entry.decision_level == decision_level)
+            .map(|entry| entry.removed_value)
     }
 }
 

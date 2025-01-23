@@ -6,6 +6,7 @@ use super::insertion;
 use super::removal;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -363,7 +364,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -379,7 +380,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context,
+            context.as_readonly(),
             self.time_table.is_empty(),
         );
 
@@ -388,7 +389,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         insert_update(&updated_task, &mut self.updatable_structures, result.update);
 
         update_bounds_task(
-            context,
+            context.as_readonly(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
