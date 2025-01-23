@@ -4,10 +4,10 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::brancher::BrancherEvents;
-use crate::branching::value_selection::InDomainMin;
-use crate::branching::variable_selection::Smallest;
+use crate::branching::value_selection::InDomainSplitRandom;
+use crate::branching::variable_selection::RandomSelector;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvents;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
@@ -110,9 +110,8 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`Smallest`] with [`InDomainMin`].
+    /// [`RandomSelector`] with [`InDomainSplitRandom`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
-        let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -122,8 +121,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                Smallest::new(&variables),
-                InDomainMin,
+                RandomSelector::default_over_all_variables(assignments),
+                InDomainSplitRandom,
             ),
             statistics: Default::default(),
         }
