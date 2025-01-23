@@ -11,6 +11,7 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
+use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
@@ -261,19 +262,32 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
                 true
             }
         });
+        self.backup_brancher.synchronise(assignments);
     }
 
     fn on_conflict(&mut self) {
         self.decay_activities();
+        self.backup_brancher.on_conflict();
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
         self.best_known_solution = Some(solution.into());
+        self.backup_brancher.on_solution(solution);
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.bump_activity(predicate)
+        self.bump_activity(predicate);
+        self.backup_brancher
+            .on_appearance_in_conflict_predicate(predicate);
+    }
+
+    fn on_restart(&mut self) {
+        self.backup_brancher.on_restart();
+    }
+
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.backup_brancher.on_unassign_integer(variable, value)
     }
 
     fn is_restart_pointless(&mut self) -> bool {
