@@ -53,6 +53,10 @@ impl VariableSelector<DomainId> for RandomSelector {
     fn on_unassign_integer(&mut self, variable: DomainId, _value: i32) {
         self.variables.insert(variable);
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
