@@ -254,7 +254,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
                 if value
                     < self.get_values()
-                        [stateful_assignments.read(self.get_min_unassigned()) as usize]
+                        [stateful_assignments.read(self.get_max_unassigned()) as usize]
                 {
                     stateful_assignments.assign(self.get_max_unassigned(), new_index);
                 }
