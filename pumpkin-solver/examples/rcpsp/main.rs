@@ -112,37 +112,8 @@ pub fn main() {
     }
 }
 
-fn create_transitive_closure_of_graph(
-    edges: &[Vec<usize>],
-    number_of_tasks: u32,
-) -> (List<(), usize>, Vec<usize>) {
-    let mut graph: Graph<usize, usize, Directed, usize> = Graph::from_edges(
-        edges
-            .iter()
-            .enumerate()
-            .filter_map(|(index, dependencies)| {
-                if dependencies.is_empty() {
-                    return None;
-                }
-                Some(
-                    dependencies
-                        .iter()
-                        .map(|dependency| (index, *dependency))
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .flatten(),
-    );
-
-    while graph.node_count() != number_of_tasks as usize {
-        let _ = graph.add_node(1);
-    }
-
-    let (toposorted_map, rev_map): (List<(), usize>, Vec<usize>) =
-        dag_to_toposorted_adjacency_list(&graph, &toposort(&graph, None).unwrap());
-
-    let (_, transitive_closure) = dag_transitive_reduction_closure(&toposorted_map);
-    (transitive_closure, rev_map)
+fn distance_closure(dependencies: &[Precedence]) -> Vec<Precedence> {
+    todo!()
 }
 
 fn run() -> SchedulingResult<()> {
@@ -249,58 +220,69 @@ fn run() -> SchedulingResult<()> {
         panic!("Adding precedence for makespan led to unsatisfiability");
     }
 
-    // let (transitive_closure, rev_map) = create_transitive_closure_of_graph(
-    //     &rcpsp_instance.dependencies,
-    //     rcpsp_instance.processing_times.len() as u32,
-    // );
+    let precedence_closure = distance_closure(
+        &rcpsp_instance
+            .dependencies
+            .iter()
+            .flat_map(|(_, v)| v.iter())
+            .cloned()
+            .collect_vec(),
+    );
 
     let mut incompatibility_matrix: Vec<Vec<Literal>> =
         Vec::with_capacity(rcpsp_instance.processing_times.len());
 
     let mut mapping: KeyedVec<DomainId, usize> = KeyedVec::default();
 
-    // for index in 0..rcpsp_instance.processing_times.len() {
-    //     while mapping.len() <= start_variables[index].index() {
-    //         let _ = mapping.push(usize::MAX);
-    //     }
-    //     mapping[start_variables[index]] = index;
+    for index in 0..rcpsp_instance.processing_times.len() {
+        while mapping.len() <= start_variables[index].index() {
+            let _ = mapping.push(usize::MAX);
+        }
+        mapping[start_variables[index]] = index;
+        let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
+        for other_index in 0..rcpsp_instance.processing_times.len() {
+            let result = match index.cmp(&other_index) {
+                std::cmp::Ordering::Less => {
+                    let mut is_resource_infeasible = false;
+                    for resource_index in 0..rcpsp_instance.resource_capacities.len() {
+                        if rcpsp_instance.resource_requirements[resource_index][index]
+                            + rcpsp_instance.resource_requirements[resource_index][other_index]
+                            > rcpsp_instance.resource_capacities[resource_index]
+                        {
+                            is_resource_infeasible = true;
+                            break;
+                        }
+                    }
+                    let mut is_connected_by_precedence = false;
+                    if !is_resource_infeasible
+                        && precedence_closure.iter().any(|precedence| {
+                            let index_precedes = (precedence.predecessor == index)
+                                && (precedence.successor == other_index)
+                                && (precedence.gap
+                                    >= rcpsp_instance.processing_times[index] as i32);
+                            let index_follows = (precedence.predecessor == other_index)
+                                && (precedence.successor == index)
+                                && (precedence.gap
+                                    >= rcpsp_instance.processing_times[other_index] as i32);
+                            index_precedes || index_follows
+                        })
+                    {
+                        is_connected_by_precedence = true;
+                    }
 
-    //     let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
-    //     for other_index in 0..rcpsp_instance.processing_times.len() {
-    //         let result = match index.cmp(&other_index) {
-    //             std::cmp::Ordering::Less => {
-    //                 let mut is_resource_infeasible = false;
-    //                 for resource_index in 0..rcpsp_instance.resource_capacities.len() {
-    //                     if rcpsp_instance.resource_requirements[resource_index][index]
-    //                         + rcpsp_instance.resource_requirements[resource_index][other_index]
-    //                         > rcpsp_instance.resource_capacities[resource_index]
-    //                     {
-    //                         is_resource_infeasible = true;
-    //                         break;
-    //                     }
-    //                 }
-    //                 let mut is_connected_by_precedence = false;
-    //                 if !is_resource_infeasible
-    //                     && (transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
-    //                         || transitive_closure
-    //                             .contains_edge(rev_map[other_index], rev_map[index]))
-    //                 {
-    //                     is_connected_by_precedence = true;
-    //                 }
-
-    //                 if is_resource_infeasible || is_connected_by_precedence {
-    //                     solver.get_true_literal()
-    //                 } else {
-    //                     solver.new_literal()
-    //                 }
-    //             }
-    //             std::cmp::Ordering::Equal => solver.get_false_literal(),
-    //             std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
-    //         };
-    //         new_vec.push(result);
-    //     }
-    //     incompatibility_matrix.push(new_vec)
-    // }
+                    if is_resource_infeasible || is_connected_by_precedence {
+                        solver.get_true_literal()
+                    } else {
+                        solver.new_literal()
+                    }
+                }
+                std::cmp::Ordering::Equal => solver.get_false_literal(),
+                std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
+            };
+            new_vec.push(result);
+        }
+        incompatibility_matrix.push(new_vec)
+    }
 
     if args.use_node_packing && args.use_nogood_disjointness {
         solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
