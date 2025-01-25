@@ -5,11 +5,19 @@ use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
+#[derive(Default, Debug, Copy, Clone)]
+pub enum TrivialCriterion {
+    #[default]
+    First,
+    Random,
+}
+
 pub fn node_packing<Var: IntegerVariable + 'static>(
     start_times: &[Var],
     durations: &[i32],
     makespan_variable: Var,
     disjointness: Vec<Vec<Literal>>,
+    trivial_criterion: TrivialCriterion,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
         start_times.len() == durations.len(),
@@ -30,5 +38,6 @@ same!"
             .collect::<Vec<_>>(),
         makespan_variable,
         disjointness,
+        trivial_criterion,
     )
 }

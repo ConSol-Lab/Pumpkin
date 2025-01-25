@@ -90,6 +90,9 @@ struct Args {
 
     #[arg(short = 'l', long = "use-lower-bounding-search")]
     use_lower_bounding_search: bool,
+
+    #[arg(long)]
+    custom_trivial_strategy: bool,
 }
 
 pub fn main() {
@@ -353,6 +356,11 @@ fn run() -> SchedulingResult<()> {
                     .collect::<Vec<_>>(),
                 makespan,
                 incompatibility_matrix.clone(),
+                if args.custom_trivial_strategy {
+                    constraints::TrivialCriterion::Random
+                } else {
+                    constraints::TrivialCriterion::default()
+                },
             ))
             .post();
         if result.is_err() {
