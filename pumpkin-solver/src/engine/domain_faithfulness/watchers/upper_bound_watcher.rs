@@ -49,7 +49,7 @@ impl DomainWatcher for UpperBoundWatcher {
             } => {
                 let mut larger =
                     self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
-                while larger != i64::MAX && lower_bound >= self.watcher.values[larger as usize] {
+                while larger != i64::MAX && lower_bound > self.watcher.values[larger as usize] {
                     self.predicate_has_been_falsified(larger as usize, falsified_predicates);
                     stateful_assignments.assign(self.watcher.min_unassigned, larger);
                     larger = self.watcher.g[larger as usize];

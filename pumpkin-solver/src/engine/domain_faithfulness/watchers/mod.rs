@@ -75,6 +75,8 @@ pub(crate) trait DomainWatcherInformation {
     fn get_max_unassigned(&self) -> StatefulInteger;
 
     fn is_empty(&self) -> bool;
+
+    fn get_domain_id(&self) -> DomainId;
 }
 
 impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
@@ -89,8 +91,8 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
         }
         self.get_watcher_mut().domain_id = domain_id;
 
-        self.get_values_mut().push(initial_lower_bound);
-        self.get_values_mut().push(initial_upper_bound);
+        self.get_values_mut().push(initial_lower_bound - 1);
+        self.get_values_mut().push(initial_upper_bound + 1);
 
         // These should never be queried
         self.get_ids_mut().push(PredicateId { id: u32::MAX });
@@ -145,6 +147,10 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
 
     fn is_empty(&self) -> bool {
         self.get_watcher().values.is_empty()
+    }
+
+    fn get_domain_id(&self) -> DomainId {
+        self.get_watcher().domain_id
     }
 }
 
@@ -204,14 +210,14 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         let mut index_smallest_value_larger_than = i64::MAX;
         let mut smallest_value_larger_than = i32::MAX;
 
-        let mut same_value = None;
-
         for index in 0..self.get_values().len() {
             let index_value = self.get_values()[index];
-
-            if index_value == value {
-                same_value = Some(index);
-            }
+            pumpkin_assert_simple!(
+                index_value != value,
+                "Found {value} already exists for {index_value} with bounds {}, {}",
+                assignments.get_initial_lower_bound(self.get_domain_id()),
+                assignments.get_initial_upper_bound(self.get_domain_id())
+            );
 
             // First we check whether we can update the indices for the newly added id
             if index_value < value && index_value > largest_value_smaller_than {
@@ -240,33 +246,27 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             }
         }
 
-        if let Some(same_index) = same_value {
-            self.get_ids_mut()[same_index] = predicate_id;
-        } else {
-            // We might need to update the sentinels
-            if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
-                if value
-                    > self.get_values()
-                        [stateful_assignments.read(self.get_min_unassigned()) as usize]
-                {
-                    stateful_assignments.assign(self.get_min_unassigned(), new_index);
-                }
-
-                if value
-                    < self.get_values()
-                        [stateful_assignments.read(self.get_max_unassigned()) as usize]
-                {
-                    stateful_assignments.assign(self.get_max_unassigned(), new_index);
-                }
+        // We might need to update the sentinels
+        if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
+            if value
+                > self.get_values()[stateful_assignments.read(self.get_min_unassigned()) as usize]
+            {
+                stateful_assignments.assign(self.get_min_unassigned(), new_index);
             }
 
-            self.get_values_mut().push(value);
-            self.get_ids_mut().push(predicate_id);
-            self.get_smaller_mut()
-                .push(index_largest_value_smaller_than);
-            self.get_greater_mut()
-                .push(index_smallest_value_larger_than);
+            if value
+                < self.get_values()[stateful_assignments.read(self.get_max_unassigned()) as usize]
+            {
+                stateful_assignments.assign(self.get_max_unassigned(), new_index);
+            }
         }
+
+        self.get_values_mut().push(value);
+        self.get_ids_mut().push(predicate_id);
+        self.get_smaller_mut()
+            .push(index_largest_value_smaller_than);
+        self.get_greater_mut()
+            .push(index_smallest_value_larger_than);
 
         pumpkin_assert_simple!(
             self.get_smaller().len() == self.get_greater().len()
