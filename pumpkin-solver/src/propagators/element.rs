@@ -99,7 +99,7 @@ where
         self.rhs_reason_buffer.clear();
         self.rhs_reason_buffer
             .extend(self.array.iter().enumerate().map(|(idx, variable)| {
-                if self.index.contains(context.assignments(), idx as i32) {
+                if context.contains(&self.index, idx as i32) {
                     match payload.bound() {
                         Bound::Lower => predicate![variable >= payload.value()],
                         Bound::Upper => predicate![variable <= payload.value()],
@@ -359,6 +359,41 @@ mod tests {
         assert_eq!(
             solver.get_reason_int(predicate![x_1 <= 9]),
             conjunction!([index == 1] & [rhs <= 9])
+        );
+    }
+
+    #[test]
+    fn index_hole_propagates_bounds_on_rhs() {
+        let mut solver = TestSolver::default();
+
+        let x_0 = solver.new_variable(3, 10);
+        let x_1 = solver.new_variable(0, 15);
+        let x_2 = solver.new_variable(7, 9);
+        let x_3 = solver.new_variable(14, 15);
+
+        let index = solver.new_variable(0, 3);
+        solver.remove(index, 1).expect("Value can be removed");
+
+        let rhs = solver.new_variable(-10, 30);
+
+        let _ = solver
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
+                index,
+                rhs,
+            ))
+            .expect("no empty domains");
+
+        solver.assert_bounds(rhs, 3, 15);
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs >= 3]),
+            conjunction!([x_0 >= 3] & [x_2 >= 3] & [x_3 >= 3] & [index != 1])
+        );
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs <= 15]),
+            conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1])
         );
     }
 }

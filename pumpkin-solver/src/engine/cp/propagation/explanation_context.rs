@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
+use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 
@@ -45,6 +46,12 @@ impl<'a> ExplanationContext<'a> {
     #[allow(unused, reason = "it will be part of the public API at some point")]
     pub(crate) fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.current_nogood.iter()
+    }
+}
+
+impl HasAssignments for ExplanationContext<'_> {
+    fn assignments(&self) -> &Assignments {
+        self.assignments
     }
 }
 
