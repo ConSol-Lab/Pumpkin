@@ -187,10 +187,11 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
     fn predicate_has_been_falsified(
         &self,
-        index: usize,
-        falsified_predicates: &mut Vec<PredicateId>,
+        _index: usize,
+        _falsified_predicates: &mut Vec<PredicateId>,
     ) {
-        falsified_predicates.push(self.get_ids()[index])
+        // TODO: At the moment, no propagator is interested
+        // falsified_predicates.push(self.get_ids()[index])
     }
 
     fn add(
