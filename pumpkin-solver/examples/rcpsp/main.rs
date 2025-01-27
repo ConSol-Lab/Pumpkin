@@ -9,9 +9,14 @@ use itertools::Itertools;
 use log::info;
 use log::LevelFilter;
 use petgraph::adj::List;
+use petgraph::algo::floyd_warshall;
 use petgraph::algo::toposort;
 use petgraph::algo::tred::dag_to_toposorted_adjacency_list;
 use petgraph::algo::tred::dag_transitive_reduction_closure;
+use petgraph::algo::NegativeCycle;
+use petgraph::data::Build;
+use petgraph::data::DataMap;
+use petgraph::visit::EdgeRef;
 use petgraph::Directed;
 use petgraph::Graph;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingBrancher;
@@ -112,8 +117,33 @@ pub fn main() {
     }
 }
 
-fn distance_closure(dependencies: &[Precedence]) -> Vec<Precedence> {
-    todo!()
+fn distance_closure(
+    n_tasks: usize,
+    dependencies: &[Precedence],
+) -> Result<Vec<Precedence>, NegativeCycle> {
+    let mut graph = Graph::<usize, i32, Directed>::new();
+    let nodes = (0..n_tasks).map(|ix| graph.add_node(ix)).collect_vec();
+    for &d in dependencies {
+        graph.add_edge(nodes[d.predecessor], nodes[d.successor], -d.gap);
+    }
+    let closure = floyd_warshall(&graph, |edge| *edge.weight())?;
+    let mut result = vec![];
+    for ((from, to), weight) in closure {
+        let predecessor = graph
+            .node_weight(from)
+            .cloned()
+            .expect("cannot find the graph node index");
+        let successor = graph
+            .node_weight(to)
+            .cloned()
+            .expect("cannot find the graph node index");
+        result.push(Precedence {
+            predecessor,
+            successor,
+            gap: -weight,
+        });
+    }
+    Ok(result)
 }
 
 fn run() -> SchedulingResult<()> {
@@ -220,14 +250,21 @@ fn run() -> SchedulingResult<()> {
         panic!("Adding precedence for makespan led to unsatisfiability");
     }
 
-    let precedence_closure = distance_closure(
+    let precedence_closure = match distance_closure(
+        rcpsp_instance.processing_times.len(),
         &rcpsp_instance
             .dependencies
             .iter()
             .flat_map(|(_, v)| v.iter())
             .cloned()
             .collect_vec(),
-    );
+    ) {
+        Ok(closure) => closure,
+        Err(NegativeCycle(_)) => {
+            println!("Unsatisfiable");
+            return Ok(());
+        }
+    };
 
     let mut incompatibility_matrix: Vec<Vec<Literal>> =
         Vec::with_capacity(rcpsp_instance.processing_times.len());
@@ -253,9 +290,8 @@ fn run() -> SchedulingResult<()> {
                             break;
                         }
                     }
-                    let mut is_connected_by_precedence = false;
-                    if !is_resource_infeasible
-                        && precedence_closure.iter().any(|precedence| {
+                    let mut is_connected_by_precedence =
+                        precedence_closure.iter().any(|precedence| {
                             let index_precedes = (precedence.predecessor == index)
                                 && (precedence.successor == other_index)
                                 && (precedence.gap
@@ -265,11 +301,7 @@ fn run() -> SchedulingResult<()> {
                                 && (precedence.gap
                                     >= rcpsp_instance.processing_times[other_index] as i32);
                             index_precedes || index_follows
-                        })
-                    {
-                        is_connected_by_precedence = true;
-                    }
-
+                        });
                     if is_resource_infeasible || is_connected_by_precedence {
                         solver.get_true_literal()
                     } else {
