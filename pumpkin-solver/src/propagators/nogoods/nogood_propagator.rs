@@ -153,7 +153,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        info!("Nogood Propagator Propagating");
+        info!("Nogood Propagator Propagating ",);
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -195,19 +195,27 @@ impl Propagator for NogoodPropagator {
             let mut index = 0;
             while index < self.watch_lists[predicate_id].watchers.len() {
                 let nogood_id = self.watch_lists[predicate_id].watchers[index];
-                let nogood = &mut self.nogoods[nogood_id].predicates;
+
+                // We first check whether the cached predicate might already make the nogood
+                // satisfied
+                if context.is_predicate_falsified(self.nogoods[nogood_id].cached_predicate) {
+                    index += 1;
+                    continue;
+                }
+                let nogood_predicates = &mut self.nogoods[nogood_id].predicates;
 
                 // Place the watched predicate at position 1 for simplicity.
-                if Self::is_watched_predicate(nogood[0], &predicate_id, &mut context) {
-                    nogood.swap(0, 1);
+                if Self::is_watched_predicate(nogood_predicates[0], &predicate_id, &mut context) {
+                    nogood_predicates.swap(0, 1);
                 }
 
-                pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
+                pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood_predicates[1]));
 
                 // Check the other watched predicate is already falsified, in which case
                 // no propagation can take place. Recall that the other watched
                 // predicate is at position 0 due to previous code.
-                if context.is_predicate_falsified(nogood[0]) {
+                if context.is_predicate_falsified(nogood_predicates[0]) {
+                    self.nogoods[nogood_id].cached_predicate = nogood_predicates[0];
                     index += 1;
                     continue;
                 }
@@ -216,23 +224,23 @@ impl Propagator for NogoodPropagator {
                 // to replace the watched predicate.
                 let mut found_new_watch = false;
                 // Start from index 2 since we are skipping watched predicates.
-                for i in 2..nogood.len() {
+                for i in 2..nogood_predicates.len() {
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
-                    if !context.is_predicate_satisfied(nogood[i]) {
+                    if !context.is_predicate_satisfied(nogood_predicates[i]) {
                         // Found another predicate that can be the watcher.
                         found_new_watch = true;
                         // todo: does it make sense to replace the cached predicate with
                         // this new predicate?
 
                         // Replace the current watcher with the new predicate watcher.
-                        nogood.swap(1, i);
+                        nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
                             context.domain_faithfulness,
                             context.stateful_assignments,
                             &mut self.watch_lists,
-                            nogood[1],
+                            nogood_predicates[1],
                             nogood_id,
                             context.assignments,
                         );
@@ -249,7 +257,7 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // At this point, nonwatched predicates and nogood[1] are falsified.
-                pumpkin_assert_advanced!(nogood
+                pumpkin_assert_advanced!(nogood_predicates
                     .iter()
                     .skip(1)
                     .all(|p| context.is_predicate_satisfied(*p)));
@@ -259,7 +267,7 @@ impl Propagator for NogoodPropagator {
                 // nogood[0] is assigned true -> conflict.
                 let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                let result = context.post_predicate(!nogood[0], reason);
+                let result = context.post_predicate(!nogood_predicates[0], reason);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
                     return Err(e.into());
@@ -784,6 +792,10 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogoods[nogood_id];
 
+        if nogood.is_deleted {
+            return Ok(());
+        }
+
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood
             .predicates
@@ -823,7 +835,7 @@ impl NogoodPropagator {
                 .not();
 
             // println!(
-            //    "Debug Propagating {propagated_predicate} - {:?}",
+            //    "Debug Propagating {propagated_predicate} for nogood {nogood_id:?} - {:?}",
             //    nogood
             //        .predicates
             //        .iter()

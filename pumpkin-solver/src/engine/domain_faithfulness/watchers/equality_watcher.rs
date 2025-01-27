@@ -126,7 +126,7 @@ impl DomainWatcher for EqualityWatcher {
                 let mut current_index =
                     self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
                 while current_index != i64::MAX {
-                    if not_equal_constant > self.watcher.values[current_index as usize] {
+                    if not_equal_constant < self.watcher.values[current_index as usize] {
                         break;
                     }
                     if not_equal_constant == self.watcher.values[current_index as usize] {
