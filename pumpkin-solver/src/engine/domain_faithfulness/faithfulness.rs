@@ -90,7 +90,7 @@ impl DomainFaithfulness {
         let id = self.predicate_to_id.get_id(predicate);
 
         if !has_id_for_predicate {
-            info!("Adding watcher for {predicate} with id {id:?}");
+            info!("Adding watcher for {predicate} with id {id:?}",);
 
             while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
                 let _ = self

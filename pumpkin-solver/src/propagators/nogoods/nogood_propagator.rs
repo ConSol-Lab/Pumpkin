@@ -153,7 +153,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        info!("Nogood Propagator Propagating");
+        info!("Nogood Propagator Propagating ",);
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -195,6 +195,7 @@ impl Propagator for NogoodPropagator {
             let mut index = 0;
             while index < self.watch_lists[predicate_id].watchers.len() {
                 let nogood_id = self.watch_lists[predicate_id].watchers[index];
+
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
                 if context.is_predicate_falsified(self.nogoods[nogood_id].cached_predicate) {
@@ -791,6 +792,10 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogoods[nogood_id];
 
+        if nogood.is_deleted {
+            return Ok(());
+        }
+
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood
             .predicates
@@ -830,7 +835,7 @@ impl NogoodPropagator {
                 .not();
 
             // println!(
-            //    "Debug Propagating {propagated_predicate} - {:?}",
+            //    "Debug Propagating {propagated_predicate} for nogood {nogood_id:?} - {:?}",
             //    nogood
             //        .predicates
             //        .iter()

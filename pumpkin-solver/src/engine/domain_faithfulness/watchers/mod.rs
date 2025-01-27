@@ -191,6 +191,14 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         _falsified_predicates: &mut Vec<PredicateId>,
     ) {
         // TODO: At the moment, no propagator is interested
+        // let predicate_id = self.get_ids()[index];
+        // if predicate_id.id == u32::MAX {
+        //    return;
+        //}
+        // info!(
+        //    "Falsified: {:?}",
+        //    self.get_predicate_for_value(self.get_values()[index])
+        //);
         // falsified_predicates.push(self.get_ids()[index])
     }
 
@@ -247,8 +255,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             }
         }
 
-        // We might need to update the sentinels
-        if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
+        // We might need to update the sentinels - Note that we only check whether it is implied by
+        // the bounds since these are what are representd by the indices. This is especially
+        // important when considering holes in the domain
+        if assignments.is_implied_by_bounds(self.get_predicate_for_value(value)) {
             if value
                 > self.get_values()[stateful_assignments.read(self.get_min_unassigned()) as usize]
             {
