@@ -35,6 +35,7 @@ use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::statistics::configure_statistic_logging;
+use pumpkin_solver::statistics::log_statistic;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::DecisionBudget;
 use pumpkin_solver::termination::OsSignal;
@@ -46,11 +47,22 @@ use pumpkin_solver::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use rcpsp_instance::parse_rcpsp_dzn;
+use rcpsp_instance::RcpspInstance;
 use rcpsp_instance::SchedulingError;
 use rcpsp_instance::SchedulingResult;
+use rcpsp_statistics::calculate_disjunction_ratio;
+use rcpsp_statistics::calculate_free_float_ratio;
+use rcpsp_statistics::calculate_mandatory_constrainedness;
+use rcpsp_statistics::calculate_mandatory_ratio;
+use rcpsp_statistics::calculate_order_strength;
+use rcpsp_statistics::calculate_process_range;
+use rcpsp_statistics::calculate_resource_constrainedness;
+use rcpsp_statistics::calculate_resource_factor;
+use rcpsp_statistics::calculate_resource_strength;
 
 mod minizinc_data_parser;
 mod rcpsp_instance;
+mod rcpsp_statistics;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -90,6 +102,12 @@ struct Args {
 
     #[arg(short = 'l', long = "use-lower-bounding-search")]
     use_lower_bounding_search: bool,
+
+    #[arg(short = 's', long = "collect-instance-statistics")]
+    collect_instance_statistics: bool,
+
+    #[arg(short = 'x', long = "only-collect-statistics")]
+    only_collect_statistics: bool,
 }
 
 pub fn main() {
@@ -102,41 +120,9 @@ pub fn main() {
     }
 }
 
-fn create_transitive_closure_of_graph(
-    edges: &[Vec<usize>],
-    number_of_tasks: u32,
-) -> (List<(), usize>, Vec<usize>) {
-    let mut graph: Graph<usize, usize, Directed, usize> = Graph::from_edges(
-        edges
-            .iter()
-            .enumerate()
-            .filter_map(|(index, dependencies)| {
-                if dependencies.is_empty() {
-                    return None;
-                }
-                Some(
-                    dependencies
-                        .iter()
-                        .map(|dependency| (index, *dependency))
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .flatten(),
-    );
-
-    while graph.node_count() != number_of_tasks as usize {
-        let _ = graph.add_node(1);
-    }
-
-    let (toposorted_map, rev_map): (List<(), usize>, Vec<usize>) =
-        dag_to_toposorted_adjacency_list(&graph, &toposort(&graph, None).unwrap());
-
-    let (_, transitive_closure) = dag_transitive_reduction_closure(&toposorted_map);
-    (transitive_closure, rev_map)
-}
-
 fn run() -> SchedulingResult<()> {
     let args = Args::parse();
+    configure_logging(args.verbose);
 
     if !args.use_node_packing && (args.use_cumulative_disjointness || args.use_nogood_disjointness)
     {
@@ -162,29 +148,6 @@ fn run() -> SchedulingResult<()> {
     let instance_file = File::open(instance_path)?;
     let rcpsp_instance = parse_rcpsp_dzn(instance_file)?;
 
-    configure_statistic_logging(
-        "%%%mzn-stat:",
-        Some("%%%mzn-stat-end"),
-        Some(Case::Camel),
-        None,
-    );
-    let level_filter = if args.verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
-
-    env_logger::Builder::new()
-        .format(move |buf, record| {
-            write!(buf, "% ")?;
-
-            writeln!(buf, "{}", record.args())
-        })
-        .filter_level(level_filter)
-        .target(env_logger::Target::Stdout)
-        .init();
-    info!("Logging successfully configured");
-
     let mut solver = Solver::with_options(SolverOptions {
         restart_options: RestartOptions::default(),
         learning_clause_minimisation: true,
@@ -205,158 +168,55 @@ fn run() -> SchedulingResult<()> {
         },
     });
 
-    let ub_variables: i32 = rcpsp_instance
-        .processing_times
-        .iter()
-        .map(|&processing_time| processing_time as i32)
-        .sum();
-
-    let makespan = solver.new_bounded_integer(0, ub_variables);
-    let start_variables = (0..rcpsp_instance.processing_times.len())
-        .map(|task_index| {
-            solver.new_bounded_integer(
-                0,
-                ub_variables - rcpsp_instance.processing_times[task_index] as i32,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let result = solver
-        .add_constraint(constraints::maximum(
-            start_variables
-                .iter()
-                .enumerate()
-                .map(|(index, start_variable)| {
-                    start_variable.offset(rcpsp_instance.processing_times[index] as i32)
-                }),
-            makespan,
-        ))
-        .post();
-    if result.is_err() {
-        panic!("Adding precedence for makespan led to unsatisfiability");
-    }
+    let (start_variables, makespan, horizon) = create_variables(&rcpsp_instance, &mut solver);
 
     let (transitive_closure, rev_map) = create_transitive_closure_of_graph(
         &rcpsp_instance.dependencies,
         rcpsp_instance.processing_times.len() as u32,
     );
+    let (incompatibility_matrix, mapping) = create_incompatability_matrix(
+        &mut solver,
+        &rcpsp_instance,
+        &start_variables,
+        &transitive_closure,
+        &rev_map,
+    );
 
-    let mut incompatibility_matrix: Vec<Vec<Literal>> =
-        Vec::with_capacity(rcpsp_instance.processing_times.len());
-
-    let mut mapping: KeyedVec<DomainId, usize> = KeyedVec::default();
-
-    for index in 0..rcpsp_instance.processing_times.len() {
-        while mapping.len() <= start_variables[index].index() {
-            let _ = mapping.push(usize::MAX);
-        }
-        mapping[start_variables[index]] = index;
-
-        let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
-        for other_index in 0..rcpsp_instance.processing_times.len() {
-            let result = match index.cmp(&other_index) {
-                std::cmp::Ordering::Less => {
-                    let mut is_resource_infeasible = false;
-                    for resource_index in 0..rcpsp_instance.resource_capacities.len() {
-                        if rcpsp_instance.resource_requirements[resource_index][index]
-                            + rcpsp_instance.resource_requirements[resource_index][other_index]
-                            > rcpsp_instance.resource_capacities[resource_index]
-                        {
-                            is_resource_infeasible = true;
-                            break;
-                        }
-                    }
-                    let mut is_connected_by_precedence = false;
-                    if !is_resource_infeasible
-                        && (transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
-                            || transitive_closure
-                                .contains_edge(rev_map[other_index], rev_map[index]))
-                    {
-                        is_connected_by_precedence = true;
-                    }
-
-                    if is_resource_infeasible || is_connected_by_precedence {
-                        solver.get_true_literal()
-                    } else {
-                        solver.new_literal()
-                    }
-                }
-                std::cmp::Ordering::Equal => solver.get_false_literal(),
-                std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
-            };
-            new_vec.push(result);
-        }
-        incompatibility_matrix.push(new_vec)
-    }
-
-    if args.use_node_packing && args.use_nogood_disjointness {
-        solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
-    }
-
-    for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
-        for dependency in dependencies.iter() {
-            let result = solver
-                .add_constraint(constraints::binary_less_than_or_equals(
-                    start_variables[*dependency]
-                        .offset(rcpsp_instance.processing_times[*dependency] as i32),
-                    start_variables[task_index].scaled(1),
-                ))
-                .post();
-            if result.is_err() {
-                panic!("Adding precedence led to unsatisfiability");
-            }
+    add_objective_function(&mut solver, &rcpsp_instance, &start_variables, makespan);
+    add_precedences(&mut solver, &rcpsp_instance, &start_variables);
+    // We calculate the statistics after performing root-level propagation to ensure that the
+    // precedence constraints have propagated
+    if args.collect_instance_statistics {
+        create_instance_statistics(
+            &mut solver,
+            &rcpsp_instance,
+            &transitive_closure,
+            &rev_map,
+            &start_variables,
+            horizon,
+        );
+        if args.only_collect_statistics {
+            return Ok(());
         }
     }
-
-    for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
-    {
-        let result = solver
-            .add_constraint(constraints::cumulative_with_options(
-                start_variables.clone(),
-                rcpsp_instance
-                    .processing_times
-                    .iter()
-                    .map(|&value| value as i32)
-                    .collect::<Vec<_>>(),
-                resource_usages
-                    .iter()
-                    .map(|&value| value as i32)
-                    .collect::<Vec<_>>(),
-                rcpsp_instance.resource_capacities[resource_index] as i32,
-                CumulativeOptions::new(
-                    false,
-                    pumpkin_solver::options::CumulativeExplanationType::BigStep,
-                    false,
-                    CumulativePropagationMethod::default(),
-                    false,
-                    if args.use_cumulative_disjointness {
-                        Some(incompatibility_matrix.clone())
-                    } else {
-                        None
-                    },
-                ),
-            ))
-            .post();
-        if result.is_err() {
-            panic!("Adding cumulative led to unsatisfiability");
-        }
-    }
+    add_cumulatives(
+        &mut solver,
+        &rcpsp_instance,
+        &start_variables,
+        &incompatibility_matrix,
+        args.use_cumulative_disjointness,
+    );
 
     if args.use_node_packing {
-        let result = solver
-            .add_constraint(constraints::node_packing(
-                &start_variables,
-                &rcpsp_instance
-                    .processing_times
-                    .iter()
-                    .map(|&value| value as i32)
-                    .collect::<Vec<_>>(),
-                makespan,
-                incompatibility_matrix.clone(),
-            ))
-            .post();
-        if result.is_err() {
-            panic!("Adding node packing bound led to unsatisfiability");
+        add_node_packing(
+            &mut solver,
+            &rcpsp_instance,
+            &start_variables,
+            makespan,
+            &incompatibility_matrix,
+        );
+        if args.use_nogood_disjointness {
+            solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
         }
     }
 
@@ -475,4 +335,348 @@ fn run() -> SchedulingResult<()> {
         }
     }
     Ok(())
+}
+
+fn create_instance_statistics(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    transitive_closure: &List<(), usize>,
+    rev_map: &Vec<usize>,
+    start_variables: &Vec<DomainId>,
+    horizon: u32,
+) {
+    log_statistic(
+        "orderStrength",
+        calculate_order_strength(
+            transitive_closure,
+            rcpsp_instance.processing_times.len() as u32,
+        ),
+    );
+    for (resource_index, resource_strength) in calculate_resource_strength(
+        &rcpsp_instance.resource_requirements,
+        &rcpsp_instance.resource_capacities,
+        solver,
+        &start_variables,
+        &rcpsp_instance.processing_times,
+        horizon,
+    )
+    .iter()
+    .enumerate()
+    {
+        log_statistic(
+            format!("resourceStrengthResouce{resource_index}"),
+            resource_strength,
+        )
+    }
+
+    log_statistic(
+        "disjunctionRatio",
+        calculate_disjunction_ratio(
+            transitive_closure,
+            rcpsp_instance.processing_times.len() as u32,
+            &rcpsp_instance.resource_requirements,
+            &rcpsp_instance.resource_capacities,
+        ),
+    );
+
+    log_statistic(
+        "processRange",
+        calculate_process_range(&rcpsp_instance.processing_times),
+    );
+
+    log_statistic(
+        "mandatoryRatio",
+        calculate_mandatory_ratio(&start_variables, &rcpsp_instance.processing_times, solver),
+    );
+    for (index, mandatory_constrainedness) in calculate_mandatory_constrainedness(
+        &start_variables,
+        &rcpsp_instance.processing_times,
+        &rcpsp_instance.resource_requirements,
+        solver,
+        &rcpsp_instance.resource_capacities,
+        horizon,
+    )
+    .into_iter()
+    .enumerate()
+    {
+        log_statistic(
+            format!("mandatoryConstrainednessResource{index}"),
+            mandatory_constrainedness,
+        )
+    }
+
+    log_statistic(
+        "freeFloatRatio",
+        calculate_free_float_ratio(
+            &transitive_closure,
+            &rcpsp_instance.processing_times,
+            &start_variables,
+            solver,
+            &rev_map,
+        ),
+    );
+
+    for (index, resource_constrainedness) in calculate_resource_constrainedness(
+        &rcpsp_instance.resource_requirements,
+        &rcpsp_instance.resource_capacities,
+        rcpsp_instance.processing_times.len() as u32,
+    )
+    .into_iter()
+    .enumerate()
+    {
+        log_statistic(
+            format!("resourceConstrainednessResource{index}"),
+            resource_constrainedness,
+        )
+    }
+
+    log_statistic(
+        "resourceFactor",
+        calculate_resource_factor(
+            &rcpsp_instance.resource_requirements,
+            rcpsp_instance.processing_times.len() as u32,
+        ),
+    )
+}
+
+fn add_node_packing(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    start_variables: &Vec<DomainId>,
+    makespan: DomainId,
+    incompatibility_matrix: &Vec<Vec<Literal>>,
+) {
+    let result = solver
+        .add_constraint(constraints::node_packing(
+            &start_variables,
+            &rcpsp_instance
+                .processing_times
+                .iter()
+                .map(|&value| value as i32)
+                .collect::<Vec<_>>(),
+            makespan,
+            incompatibility_matrix.clone(),
+        ))
+        .post();
+    if result.is_err() {
+        panic!("Adding node packing bound led to unsatisfiability");
+    }
+}
+
+fn add_cumulatives(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    start_variables: &Vec<DomainId>,
+    incompatibility_matrix: &Vec<Vec<Literal>>,
+    use_cumulative_disjointness: bool,
+) {
+    for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
+    {
+        let result = solver
+            .add_constraint(constraints::cumulative_with_options(
+                start_variables.clone(),
+                rcpsp_instance
+                    .processing_times
+                    .iter()
+                    .map(|&value| value as i32)
+                    .collect::<Vec<_>>(),
+                resource_usages
+                    .iter()
+                    .map(|&value| value as i32)
+                    .collect::<Vec<_>>(),
+                rcpsp_instance.resource_capacities[resource_index] as i32,
+                CumulativeOptions::new(
+                    false,
+                    pumpkin_solver::options::CumulativeExplanationType::BigStep,
+                    false,
+                    CumulativePropagationMethod::default(),
+                    false,
+                    if use_cumulative_disjointness {
+                        Some(incompatibility_matrix.clone())
+                    } else {
+                        None
+                    },
+                ),
+            ))
+            .post();
+        if result.is_err() {
+            panic!("Adding cumulative led to unsatisfiability");
+        }
+    }
+}
+fn add_precedences(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    start_variables: &Vec<DomainId>,
+) {
+    for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
+        for dependency in dependencies.iter() {
+            let result = solver
+                .add_constraint(constraints::binary_less_than_or_equals(
+                    start_variables[*dependency]
+                        .offset(rcpsp_instance.processing_times[*dependency] as i32),
+                    start_variables[task_index].scaled(1),
+                ))
+                .post();
+            if result.is_err() {
+                panic!("Adding precedence led to unsatisfiability");
+            }
+        }
+    }
+}
+fn create_incompatability_matrix(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    start_variables: &Vec<DomainId>,
+    transitive_closure: &List<(), usize>,
+    rev_map: &Vec<usize>,
+) -> (Vec<Vec<Literal>>, KeyedVec<DomainId, usize>) {
+    let mut incompatibility_matrix: Vec<Vec<Literal>> =
+        Vec::with_capacity(rcpsp_instance.processing_times.len());
+    let mut mapping: KeyedVec<DomainId, usize> = KeyedVec::default();
+
+    for index in 0..rcpsp_instance.processing_times.len() {
+        while mapping.len() <= start_variables[index].index() {
+            let _ = mapping.push(usize::MAX);
+        }
+        mapping[start_variables[index]] = index;
+
+        let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
+        for other_index in 0..rcpsp_instance.processing_times.len() {
+            let result = match index.cmp(&other_index) {
+                std::cmp::Ordering::Less => {
+                    let mut is_resource_infeasible = false;
+                    for resource_index in 0..rcpsp_instance.resource_capacities.len() {
+                        if rcpsp_instance.resource_requirements[resource_index][index]
+                            + rcpsp_instance.resource_requirements[resource_index][other_index]
+                            > rcpsp_instance.resource_capacities[resource_index]
+                        {
+                            is_resource_infeasible = true;
+                            break;
+                        }
+                    }
+                    let mut is_connected_by_precedence = false;
+                    if !is_resource_infeasible
+                        && (transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
+                            || transitive_closure
+                                .contains_edge(rev_map[other_index], rev_map[index]))
+                    {
+                        is_connected_by_precedence = true;
+                    }
+
+                    if is_resource_infeasible || is_connected_by_precedence {
+                        solver.get_true_literal()
+                    } else {
+                        solver.new_literal()
+                    }
+                }
+                std::cmp::Ordering::Equal => solver.get_false_literal(),
+                std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
+            };
+            new_vec.push(result);
+        }
+        incompatibility_matrix.push(new_vec)
+    }
+    (incompatibility_matrix, mapping)
+}
+
+fn add_objective_function(
+    solver: &mut Solver,
+    rcpsp_instance: &RcpspInstance,
+    start_variables: &Vec<DomainId>,
+    makespan: DomainId,
+) {
+    let result = solver
+        .add_constraint(constraints::maximum(
+            start_variables
+                .iter()
+                .enumerate()
+                .map(|(index, start_variable)| {
+                    start_variable.offset(rcpsp_instance.processing_times[index] as i32)
+                }),
+            makespan,
+        ))
+        .post();
+    if result.is_err() {
+        panic!("Adding precedence for makespan led to unsatisfiability");
+    }
+}
+
+fn create_variables(
+    rcpsp_instance: &RcpspInstance,
+    solver: &mut Solver,
+) -> (Vec<DomainId>, DomainId, u32) {
+    let ub_variables: i32 = rcpsp_instance
+        .processing_times
+        .iter()
+        .map(|&processing_time| processing_time as i32)
+        .sum();
+    let makespan = solver.new_bounded_integer(0, ub_variables);
+    let start_variables = (0..rcpsp_instance.processing_times.len())
+        .map(|task_index| {
+            solver.new_bounded_integer(
+                0,
+                ub_variables - rcpsp_instance.processing_times[task_index] as i32,
+            )
+        })
+        .collect::<Vec<_>>();
+    (start_variables, makespan, ub_variables as u32)
+}
+
+fn configure_logging(verbose: bool) {
+    configure_statistic_logging(
+        "%%%mzn-stat:",
+        Some("%%%mzn-stat-end"),
+        Some(Case::Camel),
+        None,
+    );
+    let level_filter = if verbose {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Warn
+    };
+
+    env_logger::Builder::new()
+        .format(move |buf, record| {
+            write!(buf, "% ")?;
+
+            writeln!(buf, "{}", record.args())
+        })
+        .filter_level(level_filter)
+        .target(env_logger::Target::Stdout)
+        .init();
+    info!("Logging successfully configured");
+}
+
+fn create_transitive_closure_of_graph(
+    edges: &[Vec<usize>],
+    number_of_tasks: u32,
+) -> (List<(), usize>, Vec<usize>) {
+    let mut graph: Graph<usize, usize, Directed, usize> = Graph::from_edges(
+        edges
+            .iter()
+            .enumerate()
+            .filter_map(|(index, dependencies)| {
+                if dependencies.is_empty() {
+                    return None;
+                }
+                Some(
+                    dependencies
+                        .iter()
+                        .map(|dependency| (index, *dependency))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .flatten(),
+    );
+
+    while graph.node_count() != number_of_tasks as usize {
+        let _ = graph.add_node(1);
+    }
+
+    let (toposorted_map, rev_map): (List<(), usize>, Vec<usize>) =
+        dag_to_toposorted_adjacency_list(&graph, &toposort(&graph, None).unwrap());
+
+    let (_, transitive_closure) = dag_transitive_reduction_closure(&toposorted_map);
+    (transitive_closure, rev_map)
 }
