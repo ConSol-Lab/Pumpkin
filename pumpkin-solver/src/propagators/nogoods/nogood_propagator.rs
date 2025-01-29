@@ -3,8 +3,6 @@ use std::ops::Not;
 use itertools::Itertools;
 use log::info;
 use log::warn;
-use range_collections::RangeSet;
-use range_collections::RangeSet2;
 
 use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
@@ -174,7 +172,7 @@ impl NogoodPropagator {
     ) -> PropagationStatusCP {
         if let Some(incompatability_matrix) = incompatibility_matrix {
             if let Some(mapping) = mapping {
-                let filter = nogood_predicates
+                let unassigned_predicates = nogood_predicates
                     .iter()
                     .filter(|predicate| {
                         !context.is_predicate_satisfied(**predicate)
@@ -182,52 +180,67 @@ impl NogoodPropagator {
                     })
                     .map(|predicate| !(*predicate))
                     .collect_vec();
-                if filter.len() == 2
+                // First we check whether there are 2 falsified predicates and whether the nogood
+                // is not already falsified
+                if unassigned_predicates.len() == 2
                     && !nogood_predicates
                         .iter()
                         .any(|predicate| context.is_predicate_falsified(*predicate))
                 {
-                    if filter[0].get_domain().index() >= mapping.len()
-                        || mapping[filter[0].get_domain()] == usize::MAX
-                        || filter[1].get_domain().index() >= mapping.len()
-                        || mapping[filter[1].get_domain()] == usize::MAX
+                    // First we check whether the unassigned predicates are both start variables
+                    // (i.e. domain ids in the incompatibility_matrix)
+                    //
+                    // If this is true then we check whether the disjointness has already been
+                    // assigned
+                    if unassigned_predicates[0].get_domain().index() >= mapping.len()
+                        || mapping[unassigned_predicates[0].get_domain()] == usize::MAX
+                        || unassigned_predicates[1].get_domain().index() >= mapping.len()
+                        || mapping[unassigned_predicates[1].get_domain()] == usize::MAX
                         || context.is_literal_true(
-                            &incompatability_matrix[mapping[filter[0].get_domain()]]
-                                [mapping[filter[1].get_domain()]],
+                            &incompatability_matrix[mapping[unassigned_predicates[0].get_domain()]]
+                                [mapping[unassigned_predicates[1].get_domain()]],
                         )
                     {
+                        // If the conditions hold then we simply return
                         return Ok(());
                     }
 
-                    let task_range: RangeSet2<i32> = RangeSet::from(
-                        context.lower_bound(&filter[0].get_domain())
-                            ..context.upper_bound(&filter[0].get_domain()),
+                    let task_range = BoundDomain::new(
+                        context.lower_bound(&unassigned_predicates[0].get_domain()),
+                        context.upper_bound(&unassigned_predicates[0].get_domain()),
                     );
-                    let other_task_range: RangeSet2<i32> = RangeSet::from(
-                        context.lower_bound(&filter[1].get_domain())
-                            ..context.upper_bound(&filter[1].get_domain()),
+                    let other_task_range = BoundDomain::new(
+                        context.lower_bound(&unassigned_predicates[1].get_domain()),
+                        context.upper_bound(&unassigned_predicates[1].get_domain()),
                     );
-                    let intersection: RangeSet2<i32> = task_range.intersection(&other_task_range);
-                    if intersection.is_empty() {
+                    if !task_range.overlaps_with(&other_task_range) {
                         return Ok(());
                     }
 
-                    if filter[0].get_domain() != filter[1].get_domain() {
-                        if filter[0].is_lower_bound_predicate()
-                            && filter[0].get_right_hand_side()
-                                > context.upper_bound(&filter[1].get_domain())
-                            && filter[1].is_upper_bound_predicate()
-                            && filter[1].get_right_hand_side()
-                                < context.lower_bound(&filter[0].get_domain())
+                    // First of all, we do not want to check for disjointness if the predicates
+                    // concern the same domain id
+                    if unassigned_predicates[0].get_domain()
+                        != unassigned_predicates[1].get_domain()
+                    {
+                        // Then we check whether applying the first predicate causes disjointness
+                        // and we check whether applying the second predicate causes disjointness
+                        //
+                        // If this is the case then we propagate the disjointness
+                        if !task_range
+                            .apply_predicate(unassigned_predicates[0])
+                            .overlaps_with(&other_task_range)
+                            && !other_task_range
+                                .apply_predicate(unassigned_predicates[1])
+                                .overlaps_with(&task_range)
                         {
                             info!(
-                                "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                filter[0].get_domain(),
-                                context.lower_bound(&filter[0].get_domain()),
-                                context.upper_bound(&filter[0].get_domain()),
-                                filter[1].get_domain(),
-                                context.lower_bound(&filter[1].get_domain()),
-                                context.upper_bound(&filter[1].get_domain())
+                                "{unassigned_predicates:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                unassigned_predicates[0].get_domain(),
+                                context.lower_bound(&unassigned_predicates[0].get_domain()),
+                                context.upper_bound(&unassigned_predicates[0].get_domain()),
+                                unassigned_predicates[1].get_domain(),
+                                context.lower_bound(&unassigned_predicates[1].get_domain()),
+                                context.upper_bound(&unassigned_predicates[1].get_domain())
                             );
                             statistics.found_disjointness += 1;
                             let explanation: PropositionalConjunction = nogood_predicates
@@ -236,37 +249,9 @@ impl NogoodPropagator {
                                 .cloned()
                                 .collect();
                             context.assign_literal(
-                                &incompatability_matrix[mapping[filter[0].get_domain()]]
-                                    [mapping[filter[1].get_domain()]],
-                                true,
-                                explanation,
-                            )?;
-                        }
-                        if filter[1].is_lower_bound_predicate()
-                            && filter[1].get_right_hand_side()
-                                > context.upper_bound(&filter[0].get_domain())
-                            && filter[0].is_upper_bound_predicate()
-                            && filter[0].get_right_hand_side()
-                                < context.lower_bound(&filter[1].get_domain())
-                        {
-                            info!(
-                                "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                filter[0].get_domain(),
-                                context.lower_bound(&filter[0].get_domain()),
-                                context.upper_bound(&filter[0].get_domain()),
-                                filter[1].get_domain(),
-                                context.lower_bound(&filter[1].get_domain()),
-                                context.upper_bound(&filter[1].get_domain())
-                            );
-                            statistics.found_disjointness += 1;
-                            let explanation: PropositionalConjunction = nogood_predicates
-                                .iter()
-                                .filter(|predicate| context.is_predicate_satisfied(**predicate))
-                                .cloned()
-                                .collect();
-                            context.assign_literal(
-                                &incompatability_matrix[mapping[filter[0].get_domain()]]
-                                    [mapping[filter[1].get_domain()]],
+                                &incompatability_matrix
+                                    [mapping[unassigned_predicates[0].get_domain()]]
+                                    [mapping[unassigned_predicates[1].get_domain()]],
                                 true,
                                 explanation,
                             )?;
@@ -276,6 +261,58 @@ impl NogoodPropagator {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct BoundDomain {
+    lower_bound: i32,
+    upper_bound: i32,
+}
+
+impl BoundDomain {
+    fn new(lower_bound: i32, upper_bound: i32) -> Self {
+        Self {
+            lower_bound,
+            upper_bound,
+        }
+    }
+
+    fn apply_predicate(&self, predicate: Predicate) -> Self {
+        let mut result = self.clone();
+        match predicate {
+            Predicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => result.lower_bound = self.lower_bound.max(lower_bound),
+            Predicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => result.upper_bound = self.upper_bound.min(upper_bound),
+            Predicate::NotEqual {
+                domain_id: _,
+                not_equal_constant,
+            } => {
+                if not_equal_constant == self.lower_bound {
+                    result.lower_bound += 1
+                }
+                if not_equal_constant == self.upper_bound {
+                    result.upper_bound -= 1
+                }
+            }
+            Predicate::Equal {
+                domain_id: _,
+                equality_constant,
+            } => {
+                result.lower_bound = equality_constant;
+                result.upper_bound = equality_constant
+            }
+        }
+        result
+    }
+
+    fn overlaps_with(&self, other: &Self) -> bool {
+        self.lower_bound <= other.upper_bound && other.lower_bound <= self.upper_bound
     }
 }
 
@@ -527,7 +564,7 @@ impl Propagator for NogoodPropagator {
 impl NogoodPropagator {
     pub(crate) fn add_conflicting_nogood(
         &mut self,
-        nogood: Vec<Predicate>,
+        mut nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
         _statistics: &mut SolverStatistics,
     ) {
@@ -536,6 +573,13 @@ impl NogoodPropagator {
         if nogood.len() == 1 {
             panic!("Cannot be unit")
         }
+
+        nogood.retain(|predicate| {
+            context
+                .assignments
+                .get_decision_level_for_predicate(predicate)
+                .is_some_and(|decision_level| decision_level > 0)
+        });
 
         // Add the nogood to the database.
         //

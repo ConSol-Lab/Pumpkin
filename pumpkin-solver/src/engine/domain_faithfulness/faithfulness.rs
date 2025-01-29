@@ -8,6 +8,7 @@ use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::StatefulAssignments;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 #[derive(Default, Debug)]
@@ -83,6 +84,13 @@ impl DomainFaithfulness {
         stateful_assignments: &mut StatefulAssignments,
         assignments: &Assignments,
     ) -> PredicateId {
+        pumpkin_assert_simple!(
+            predicate.get_right_hand_side()
+                <= assignments.get_initial_upper_bound(predicate.get_domain())
+                || predicate.get_right_hand_side()
+                    >= assignments.get_initial_lower_bound(predicate.get_domain()),
+            "Attempted to create watcher for predicate {predicate:?}"
+        );
         // If it is already watched then at the moment we do nothing
         let has_id_for_predicate = self.predicate_to_id.has_id_for_predicate(predicate);
 
