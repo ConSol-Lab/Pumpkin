@@ -15,6 +15,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -163,6 +164,119 @@ impl NogoodPropagator {
                 .get_id(predicate)
                 == *predicate_id
     }
+
+    fn find_disjointness(
+        nogood_predicates: &PropositionalConjunction,
+        incompatibility_matrix: &Option<Vec<Vec<Literal>>>,
+        mapping: &Option<KeyedVec<DomainId, usize>>,
+        context: &mut PropagationContextMut,
+        statistics: &mut NogoodStatistics,
+    ) -> PropagationStatusCP {
+        if let Some(incompatability_matrix) = incompatibility_matrix {
+            if let Some(mapping) = mapping {
+                let filter = nogood_predicates
+                    .iter()
+                    .filter(|predicate| {
+                        !context.is_predicate_satisfied(**predicate)
+                            && !context.is_predicate_falsified(**predicate)
+                    })
+                    .map(|predicate| !(*predicate))
+                    .collect_vec();
+                if filter.len() == 2
+                    && !nogood_predicates
+                        .iter()
+                        .any(|predicate| context.is_predicate_falsified(*predicate))
+                {
+                    if filter[0].get_domain().index() >= mapping.len()
+                        || mapping[filter[0].get_domain()] == usize::MAX
+                        || filter[1].get_domain().index() >= mapping.len()
+                        || mapping[filter[1].get_domain()] == usize::MAX
+                        || context.is_literal_true(
+                            &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                [mapping[filter[1].get_domain()]],
+                        )
+                    {
+                        return Ok(());
+                    }
+
+                    let task_range: RangeSet2<i32> = RangeSet::from(
+                        context.lower_bound(&filter[0].get_domain())
+                            ..context.upper_bound(&filter[0].get_domain()),
+                    );
+                    let other_task_range: RangeSet2<i32> = RangeSet::from(
+                        context.lower_bound(&filter[1].get_domain())
+                            ..context.upper_bound(&filter[1].get_domain()),
+                    );
+                    let intersection: RangeSet2<i32> = task_range.intersection(&other_task_range);
+                    if intersection.is_empty() {
+                        return Ok(());
+                    }
+
+                    if filter[0].get_domain() != filter[1].get_domain() {
+                        if filter[0].is_lower_bound_predicate()
+                            && filter[0].get_right_hand_side()
+                                > context.upper_bound(&filter[1].get_domain())
+                            && filter[1].is_upper_bound_predicate()
+                            && filter[1].get_right_hand_side()
+                                < context.lower_bound(&filter[0].get_domain())
+                        {
+                            info!(
+                                "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                filter[0].get_domain(),
+                                context.lower_bound(&filter[0].get_domain()),
+                                context.upper_bound(&filter[0].get_domain()),
+                                filter[1].get_domain(),
+                                context.lower_bound(&filter[1].get_domain()),
+                                context.upper_bound(&filter[1].get_domain())
+                            );
+                            statistics.found_disjointness += 1;
+                            let explanation: PropositionalConjunction = nogood_predicates
+                                .iter()
+                                .filter(|predicate| context.is_predicate_satisfied(**predicate))
+                                .cloned()
+                                .collect();
+                            context.assign_literal(
+                                &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                    [mapping[filter[1].get_domain()]],
+                                true,
+                                explanation,
+                            )?;
+                        }
+                        if filter[1].is_lower_bound_predicate()
+                            && filter[1].get_right_hand_side()
+                                > context.upper_bound(&filter[0].get_domain())
+                            && filter[0].is_upper_bound_predicate()
+                            && filter[0].get_right_hand_side()
+                                < context.lower_bound(&filter[1].get_domain())
+                        {
+                            info!(
+                                "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                filter[0].get_domain(),
+                                context.lower_bound(&filter[0].get_domain()),
+                                context.upper_bound(&filter[0].get_domain()),
+                                filter[1].get_domain(),
+                                context.lower_bound(&filter[1].get_domain()),
+                                context.upper_bound(&filter[1].get_domain())
+                            );
+                            statistics.found_disjointness += 1;
+                            let explanation: PropositionalConjunction = nogood_predicates
+                                .iter()
+                                .filter(|predicate| context.is_predicate_satisfied(**predicate))
+                                .cloned()
+                                .collect();
+                            context.assign_literal(
+                                &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                    [mapping[filter[1].get_domain()]],
+                                true,
+                                explanation,
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Propagator for NogoodPropagator {
@@ -292,118 +406,13 @@ impl Propagator for NogoodPropagator {
                 if found_new_watch {
                     // We remove the current watcher
                     let _ = self.watch_lists[predicate_id].watchers.swap_remove(index);
-                    if let Some(incompatability_matrix) = &self.incompatibility_matrix {
-                        if let Some(mapping) = &self.mapping {
-                            let filter = nogood_predicates
-                                .iter()
-                                .filter(|predicate| {
-                                    !context.is_predicate_satisfied(**predicate)
-                                        && !context.is_predicate_falsified(**predicate)
-                                })
-                                .map(|predicate| !(*predicate))
-                                .collect_vec();
-                            if filter.len() == 2
-                                && !nogood_predicates
-                                    .iter()
-                                    .any(|predicate| context.is_predicate_falsified(*predicate))
-                            {
-                                if filter[0].get_domain().index() >= mapping.len()
-                                    || mapping[filter[0].get_domain()] == usize::MAX
-                                    || filter[1].get_domain().index() >= mapping.len()
-                                    || mapping[filter[1].get_domain()] == usize::MAX
-                                    || context.is_literal_true(
-                                        &incompatability_matrix[mapping[filter[0].get_domain()]]
-                                            [mapping[filter[1].get_domain()]],
-                                    )
-                                {
-                                    continue;
-                                }
-
-                                let task_range: RangeSet2<i32> = RangeSet::from(
-                                    context.lower_bound(&filter[0].get_domain())
-                                        ..context.upper_bound(&filter[0].get_domain()),
-                                );
-                                let other_task_range: RangeSet2<i32> = RangeSet::from(
-                                    context.lower_bound(&filter[1].get_domain())
-                                        ..context.upper_bound(&filter[1].get_domain()),
-                                );
-                                let intersection: RangeSet2<i32> =
-                                    task_range.intersection(&other_task_range);
-                                if intersection.is_empty() {
-                                    continue;
-                                }
-
-                                if filter[0].get_domain() != filter[1].get_domain() {
-                                    if filter[0].is_lower_bound_predicate()
-                                        && filter[0].get_right_hand_side()
-                                            > context.upper_bound(&filter[1].get_domain())
-                                        && filter[1].is_upper_bound_predicate()
-                                        && filter[1].get_right_hand_side()
-                                            < context.lower_bound(&filter[0].get_domain())
-                                    {
-                                        info!(
-                                            "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                            filter[0].get_domain(),
-                                            context.lower_bound(&filter[0].get_domain()),
-                                            context.upper_bound(&filter[0].get_domain()),
-                                            filter[1].get_domain(),
-                                            context.lower_bound(&filter[1].get_domain()),
-                                            context.upper_bound(&filter[1].get_domain())
-                                        );
-                                        self.statistics.found_disjointness += 1;
-                                        let explanation: PropositionalConjunction =
-                                            nogood_predicates
-                                                .iter()
-                                                .filter(|predicate| {
-                                                    context.is_predicate_satisfied(**predicate)
-                                                })
-                                                .cloned()
-                                                .collect();
-                                        context.assign_literal(
-                                            &incompatability_matrix
-                                                [mapping[filter[0].get_domain()]]
-                                                [mapping[filter[1].get_domain()]],
-                                            true,
-                                            explanation,
-                                        )?;
-                                    }
-                                    if filter[1].is_lower_bound_predicate()
-                                        && filter[1].get_right_hand_side()
-                                            > context.upper_bound(&filter[0].get_domain())
-                                        && filter[0].is_upper_bound_predicate()
-                                        && filter[0].get_right_hand_side()
-                                            < context.lower_bound(&filter[1].get_domain())
-                                    {
-                                        info!(
-                                            "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                            filter[0].get_domain(),
-                                            context.lower_bound(&filter[0].get_domain()),
-                                            context.upper_bound(&filter[0].get_domain()),
-                                            filter[1].get_domain(),
-                                            context.lower_bound(&filter[1].get_domain()),
-                                            context.upper_bound(&filter[1].get_domain())
-                                        );
-                                        self.statistics.found_disjointness += 1;
-                                        let explanation: PropositionalConjunction =
-                                            nogood_predicates
-                                                .iter()
-                                                .filter(|predicate| {
-                                                    context.is_predicate_satisfied(**predicate)
-                                                })
-                                                .cloned()
-                                                .collect();
-                                        context.assign_literal(
-                                            &incompatability_matrix
-                                                [mapping[filter[0].get_domain()]]
-                                                [mapping[filter[1].get_domain()]],
-                                            true,
-                                            explanation,
-                                        )?;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Self::find_disjointness(
+                        nogood_predicates,
+                        &self.incompatibility_matrix,
+                        &self.mapping,
+                        &mut context,
+                        &mut self.statistics,
+                    )?;
                     continue;
                 }
 
