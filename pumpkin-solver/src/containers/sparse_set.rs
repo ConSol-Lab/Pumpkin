@@ -25,6 +25,7 @@
 //! implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 //! (TRICS), 2013, pp. 1–10.
 
+use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 /// A set for keeping track of which values are still part of the original domain based on [\[1\]](https://hal.science/hal-01339250/document).
@@ -116,7 +117,7 @@ impl<T> SparseSet<T> {
                 self.domain.len() - 1,
             );
             let element = self.domain.pop().expect("Has to have something to pop.");
-            pumpkin_assert_simple!((self.mapping)(&element) == (self.mapping)(to_remove));
+            pumpkin_assert_moderate!((self.mapping)(&element) == (self.mapping)(to_remove));
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         } else if self.indices[(self.mapping)(to_remove)] < self.domain.len() {
             self.swap(
@@ -124,7 +125,7 @@ impl<T> SparseSet<T> {
                 self.domain.len() - 1,
             );
             let element = self.domain.pop().expect("Has to have something to pop.");
-            pumpkin_assert_simple!((self.mapping)(&element) == (self.mapping)(to_remove));
+            pumpkin_assert_moderate!((self.mapping)(&element) == (self.mapping)(to_remove));
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
         pumpkin_assert_simple!(
@@ -146,6 +147,12 @@ impl<T> SparseSet<T> {
 
     pub(crate) fn restore_temporarily_removed(&mut self) {
         self.size = self.domain.len();
+    }
+
+    /// Determines whehter the `element` is contained in the domain of the sparse-set.
+    pub(crate) fn contains(&self, element: &T) -> bool {
+        (self.mapping)(element) < self.indices.len()
+            && self.indices[(self.mapping)(element)] < self.size
     }
 
     /// Accomodates the `element`.

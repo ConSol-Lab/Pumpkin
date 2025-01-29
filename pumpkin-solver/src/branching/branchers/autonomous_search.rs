@@ -95,7 +95,7 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`FirstFail`] with [`InDomainSplit`].
+    /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
@@ -409,13 +409,14 @@ mod tests {
         let result = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom {
-                usizes: vec![],
+                integers: vec![2],
+                usizes: vec![0],
+                bools: vec![false],
                 weighted_choice: |_| unreachable!(),
-                ..Default::default()
             },
         ));
 
-        assert_eq!(result, Some(predicate!(x <= 0)));
+        assert_eq!(result, Some(predicate!(x <= 2)));
     }
 
     #[test]
