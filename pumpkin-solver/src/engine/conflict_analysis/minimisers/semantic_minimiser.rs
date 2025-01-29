@@ -6,6 +6,7 @@ use crate::containers::SparseSet;
 use crate::engine::Assignments;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 #[derive(Clone, Debug)]
@@ -35,6 +36,80 @@ pub(crate) enum Mode {
 }
 
 impl SemanticMinimiser {
+    pub(crate) fn maximise(
+        &mut self,
+        explanation: &Vec<Predicate>,
+        assignments: &Assignments,
+    ) -> Vec<Predicate> {
+        self.accommodate(assignments);
+        self.clean_up();
+        for predicate in explanation {
+            if !self.present_ids.contains(&predicate.get_domain()) {
+                self.domains[predicate.get_domain()].lower_bound = i32::MAX;
+                self.domains[predicate.get_domain()].upper_bound = i32::MIN;
+            }
+            self.present_ids.insert(predicate.get_domain());
+
+            match *predicate {
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => {
+                    self.domains[domain_id].lower_bound =
+                        self.domains[domain_id].lower_bound.min(lower_bound);
+                }
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => {
+                    self.domains[domain_id].upper_bound =
+                        self.domains[domain_id].upper_bound.max(upper_bound);
+                }
+                Predicate::NotEqual {
+                    domain_id: _,
+                    not_equal_constant: _,
+                } => {
+                    unreachable!()
+                }
+                Predicate::Equal {
+                    domain_id: _,
+                    equality_constant: _,
+                } => {
+                    unreachable!()
+                }
+            }
+        }
+
+        // Compile the nogood based on the internal state.
+        // Add domain description to the helper.
+        for domain_id in self.present_ids.iter() {
+            let original_domain = &self.original_domains[domain_id];
+            let lower_bound = self.domains[domain_id].lower_bound;
+            let upper_bound = self.domains[domain_id].upper_bound;
+
+            // If the domain assigned at a nonroot level, this is just one predicate.
+            if lower_bound == upper_bound
+                && lower_bound != original_domain.lower_bound
+                && upper_bound != original_domain.upper_bound
+            {
+                self.helper.push(predicate![domain_id == lower_bound]);
+                continue;
+            }
+
+            // Add bounds but avoid root assignments.
+            if lower_bound != i32::MAX && lower_bound != original_domain.lower_bound {
+                self.helper.push(predicate![domain_id >= lower_bound]);
+            }
+
+            if upper_bound != i32::MIN && upper_bound != original_domain.upper_bound {
+                self.helper.push(predicate![domain_id <= upper_bound]);
+            }
+        }
+
+        pumpkin_assert_simple!(self.helper.len() <= explanation.len());
+        self.helper.clone()
+    }
+
     pub(crate) fn minimise(
         &mut self,
         nogood: &Vec<Predicate>,

@@ -93,9 +93,6 @@ impl DefaultBrancher {
     /// Creates a new instance with default values for
     /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
-    ///
-    /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {

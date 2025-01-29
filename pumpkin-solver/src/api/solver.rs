@@ -605,9 +605,7 @@ impl Display for SearchMode {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`] using [`RandomSelector`] for variable selection
-/// (over the variables in the order in which they were defined) and [`RandomSplitter`] for
-/// value selection.
+/// [`IndependentVariableValueBrancher`]
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an

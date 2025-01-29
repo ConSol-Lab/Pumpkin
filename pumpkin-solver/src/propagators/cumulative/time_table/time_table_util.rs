@@ -404,9 +404,18 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                     for profile in profiles_contributing_to_disjointness.iter() {
                         let profile_explanation =
                             create_big_step_propagation_explanation(time_table[*profile]);
-                        explanation = explanation
-                            .extend_and_remove_duplicates(profile_explanation.into_iter());
+                        explanation.extend(profile_explanation.into_iter());
                     }
+                    let size_before = explanation.len();
+                    explanation = context
+                        .semantic_minimiser
+                        .maximise(&explanation.predicates_in_conjunction, context.assignments)
+                        .into();
+                    updatable_structures
+                        .statistics
+                        .average_number_of_elements_removed_when_maximising
+                        .add_term(size_before - explanation.len());
+
                     info!(
                         "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage {} were found to be disjoint due to {:?} - Explanation: {:?}",
                         parameters.capacity,
