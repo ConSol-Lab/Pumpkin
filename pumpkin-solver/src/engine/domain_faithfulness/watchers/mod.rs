@@ -1,10 +1,9 @@
 use log::info;
 
 use crate::basic_types::PredicateId;
-use crate::basic_types::Trail;
 use crate::engine::Assignments;
-use crate::engine::StateChange;
-use crate::engine::StatefulInt;
+use crate::engine::StatefulAssignments;
+use crate::engine::StatefulInteger;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -23,19 +22,21 @@ pub(crate) struct FaithfullnessWatcher {
     domain_id: DomainId,
     s: Vec<i64>,
     g: Vec<i64>,
-    min_unassigned: StatefulInt,
-    max_unassigned: StatefulInt,
+    min_unassigned: StatefulInteger,
+    max_unassigned: StatefulInteger,
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
 }
 
-impl Default for FaithfullnessWatcher {
-    fn default() -> Self {
+impl FaithfullnessWatcher {
+    pub(super) fn new(stateful_assignments: &mut StatefulAssignments) -> Self {
+        let min_unassigned = stateful_assignments.grow(0);
+        let max_unassigned = stateful_assignments.grow(1);
         Self {
             domain_id: DomainId { id: 0 },
-            min_unassigned: StatefulInt::new(0),
-            max_unassigned: StatefulInt::new(1),
+            min_unassigned,
+            max_unassigned,
             s: Vec::default(),
             g: Vec::default(),
             values: Vec::default(),
@@ -69,13 +70,13 @@ pub(crate) trait DomainWatcherInformation {
     fn get_greater(&self) -> &Vec<i64>;
     fn get_greater_mut(&mut self) -> &mut Vec<i64>;
 
-    fn get_min_unassigned(&self) -> &StatefulInt;
-    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt;
+    fn get_min_unassigned(&self) -> StatefulInteger;
 
-    fn get_max_unassigned(&self) -> &StatefulInt;
-    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt;
+    fn get_max_unassigned(&self) -> StatefulInteger;
 
     fn is_empty(&self) -> bool;
+
+    fn get_domain_id(&self) -> DomainId;
 }
 
 impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
@@ -90,8 +91,8 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
         }
         self.get_watcher_mut().domain_id = domain_id;
 
-        self.get_values_mut().push(initial_lower_bound);
-        self.get_values_mut().push(initial_upper_bound);
+        self.get_values_mut().push(initial_lower_bound - 1);
+        self.get_values_mut().push(initial_upper_bound + 1);
 
         // These should never be queried
         self.get_ids_mut().push(PredicateId { id: u32::MAX });
@@ -136,24 +137,20 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
         &mut self.get_watcher_mut().g
     }
 
-    fn get_min_unassigned(&self) -> &StatefulInt {
-        &self.get_watcher().min_unassigned
+    fn get_min_unassigned(&self) -> StatefulInteger {
+        self.get_watcher().min_unassigned
     }
 
-    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.get_watcher_mut().min_unassigned
-    }
-
-    fn get_max_unassigned(&self) -> &StatefulInt {
-        &self.get_watcher().max_unassigned
-    }
-
-    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.get_watcher_mut().max_unassigned
+    fn get_max_unassigned(&self) -> StatefulInteger {
+        self.get_watcher().max_unassigned
     }
 
     fn is_empty(&self) -> bool {
         self.get_watcher().values.is_empty()
+    }
+
+    fn get_domain_id(&self) -> DomainId {
+        self.get_watcher().domain_id
     }
 }
 
@@ -190,17 +187,26 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
     fn predicate_has_been_falsified(
         &self,
-        index: usize,
-        falsified_predicates: &mut Vec<PredicateId>,
+        _index: usize,
+        _falsified_predicates: &mut Vec<PredicateId>,
     ) {
-        falsified_predicates.push(self.get_ids()[index])
+        // TODO: At the moment, no propagator is interested
+        // let predicate_id = self.get_ids()[index];
+        // if predicate_id.id == u32::MAX {
+        //    return;
+        //}
+        // info!(
+        //    "Falsified: {:?}",
+        //    self.get_predicate_for_value(self.get_values()[index])
+        //);
+        // falsified_predicates.push(self.get_ids()[index])
     }
 
     fn add(
         &mut self,
         value: i32,
         predicate_id: PredicateId,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
         assignments: &Assignments,
     ) {
         pumpkin_assert_simple!(self.get_values().len() >= 2);
@@ -213,14 +219,14 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         let mut index_smallest_value_larger_than = i64::MAX;
         let mut smallest_value_larger_than = i32::MAX;
 
-        let mut same_value = None;
-
         for index in 0..self.get_values().len() {
             let index_value = self.get_values()[index];
-
-            if index_value == value {
-                same_value = Some(index);
-            }
+            pumpkin_assert_simple!(
+                index_value != value,
+                "Found {value} already exists for {index_value} with bounds {}, {}",
+                assignments.get_initial_lower_bound(self.get_domain_id()),
+                assignments.get_initial_upper_bound(self.get_domain_id())
+            );
 
             // First we check whether we can update the indices for the newly added id
             if index_value < value && index_value > largest_value_smaller_than {
@@ -249,29 +255,29 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             }
         }
 
-        if let Some(same_index) = same_value {
-            self.get_ids_mut()[same_index] = predicate_id;
-        } else {
-            // We might need to update the sentinels
-            if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
-                if value > self.get_values()[self.get_min_unassigned().read() as usize] {
-                    self.get_min_unassigned_mut()
-                        .assign(new_index, stateful_trail);
-                }
-
-                if value < self.get_values()[self.get_max_unassigned().read() as usize] {
-                    self.get_max_unassigned_mut()
-                        .assign(new_index, stateful_trail);
-                }
+        // We might need to update the sentinels - Note that we only check whether it is implied by
+        // the bounds since these are what are representd by the indices. This is especially
+        // important when considering holes in the domain
+        if assignments.is_implied_by_bounds(self.get_predicate_for_value(value)) {
+            if value
+                > self.get_values()[stateful_assignments.read(self.get_min_unassigned()) as usize]
+            {
+                stateful_assignments.assign(self.get_min_unassigned(), new_index);
             }
 
-            self.get_values_mut().push(value);
-            self.get_ids_mut().push(predicate_id);
-            self.get_smaller_mut()
-                .push(index_largest_value_smaller_than);
-            self.get_greater_mut()
-                .push(index_smallest_value_larger_than);
+            if value
+                < self.get_values()[stateful_assignments.read(self.get_max_unassigned()) as usize]
+            {
+                stateful_assignments.assign(self.get_max_unassigned(), new_index);
+            }
         }
+
+        self.get_values_mut().push(value);
+        self.get_ids_mut().push(predicate_id);
+        self.get_smaller_mut()
+            .push(index_largest_value_smaller_than);
+        self.get_greater_mut()
+            .push(index_smallest_value_larger_than);
 
         pumpkin_assert_simple!(
             self.get_smaller().len() == self.get_greater().len()
@@ -283,7 +289,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         predicate_id: Option<PredicateId>,

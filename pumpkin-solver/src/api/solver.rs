@@ -13,13 +13,10 @@ use crate::basic_types::Solution;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::tie_breaking::InOrderTieBreaker;
-use crate::branching::value_selection::InDomainMin;
 use crate::branching::value_selection::InDomainSplit;
-use crate::branching::value_selection::ReverseInDomainSplit;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::FirstFail;
-use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
@@ -608,8 +605,8 @@ impl Display for SearchMode {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`] using [`Smallest`] for variable selection
-/// (over the variables in the order in which they were defined) and [`InDomainMin`] for value
+/// [`IndependentVariableValueBrancher`] using [`FirstFail`] for variable selection
+/// (over the variables in the order in which they were defined) and [`InDomainSplit`] for value
 /// selection.
 ///
 /// # Bibliography

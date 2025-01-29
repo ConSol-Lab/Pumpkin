@@ -665,10 +665,6 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
-        self.evaluate_predicate(predicate).is_some()
-    }
-
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
@@ -677,6 +673,33 @@ impl Assignments {
     pub(crate) fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
+    }
+
+    pub(crate) fn is_implied_by_bounds(&self, predicate: Predicate) -> bool {
+        match predicate {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => self.get_lower_bound(domain_id) >= lower_bound,
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => self.get_upper_bound(domain_id) <= upper_bound,
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                self.get_lower_bound(domain_id) > not_equal_constant
+                    || self.get_upper_bound(domain_id) < not_equal_constant
+            }
+            Predicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                self.get_lower_bound(domain_id) == equality_constant
+                    && equality_constant == self.get_upper_bound(domain_id)
+            }
+        }
     }
 
     /// Synchronises the internal structures of [`Assignments`] based on the fact that

@@ -1,10 +1,11 @@
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 
 /// A struct which represents a nogood (i.e. a list of [`Predicate`]s which cannot all be true at
 /// the same time).
 ///
 /// It additionally contains certain fields related to how the clause was created/activity.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Nogood {
     /// The predicates which are part of the nogood.
     pub(crate) predicates: PropositionalConjunction,
@@ -21,6 +22,25 @@ pub(crate) struct Nogood {
     pub(crate) block_bumps: bool,
     /// The activity score of the nogood.
     pub(crate) activity: f32,
+    /// The predicate which was last found to be falsified; we store this predicate to allow for
+    /// simple checking of whether a nogood might be satisfied
+    pub(crate) cached_predicate: Predicate,
+}
+
+impl Default for Nogood {
+    fn default() -> Self {
+        Self {
+            predicates: Default::default(),
+            is_learned: Default::default(),
+            lbd: Default::default(),
+            is_protected: Default::default(),
+            is_deleted: Default::default(),
+            block_bumps: Default::default(),
+            activity: Default::default(),
+            // We select a predicate which is always satified as the default
+            cached_predicate: Predicate::trivially_true(),
+        }
+    }
 }
 
 impl Nogood {

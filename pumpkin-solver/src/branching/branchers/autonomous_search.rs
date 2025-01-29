@@ -2,11 +2,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::InDomainMin;
 use crate::branching::value_selection::InDomainSplit;
-use crate::branching::value_selection::ReverseInDomainSplit;
 use crate::branching::variable_selection::FirstFail;
-use crate::branching::variable_selection::Smallest;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
@@ -98,7 +95,7 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`Smallest`] with [`InDomainMin`].
+    /// [`FirstFail`] with [`InDomainSplit`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
