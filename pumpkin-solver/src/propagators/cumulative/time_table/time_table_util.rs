@@ -423,6 +423,10 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                             .collect::<Vec<_>>()
                             , explanation
                     );
+                    updatable_structures
+                        .statistics
+                        .average_explanation_size_when_finding_disjointness
+                        .add_term(explanation.len());
                     context.assign_literal(
                         &incompatibility_matrix[parameters.mapping[task.id]]
                             [parameters.mapping[other_task.id]],

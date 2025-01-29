@@ -13,7 +13,8 @@ use crate::variables::IntegerVariable;
 
 create_statistics_struct!(CumulativeStatistics {
     num_disjointess_found: usize,
-    average_number_of_profiles_in_disjointness: CumulativeMovingAverage<usize>
+    average_number_of_profiles_in_disjointness: CumulativeMovingAverage<usize>,
+    average_explanation_size_when_finding_disjointness: CumulativeMovingAverage<usize>
 });
 
 /// Structures which are adjusted during search; either due to incrementality or to keep track of
