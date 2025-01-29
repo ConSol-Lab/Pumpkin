@@ -1345,7 +1345,7 @@ impl ConstraintSatisfactionSolver {
                                 &mut self.domain_faithfulness,
                                 propagator_id,
                             );
-                            let _ = Self::add_conflicting_nogood(
+                            Self::add_conflicting_nogood(
                                 &mut self.propagators[Self::get_nogood_propagator_id()],
                                 conflict_nogood.clone().into(),
                                 &mut context,

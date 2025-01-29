@@ -26,9 +26,8 @@ impl<T: TerminationCondition> TerminationCondition for Option<T> {
     }
 
     fn decision_has_been_made(&mut self) {
-        match self {
-            Some(t) => t.decision_has_been_made(),
-            None => {}
+        if let Some(t) = self {
+            t.decision_has_been_made()
         }
     }
 }

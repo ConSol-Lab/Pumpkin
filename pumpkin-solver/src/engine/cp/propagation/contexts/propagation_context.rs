@@ -204,10 +204,6 @@ pub(crate) trait ManipulateStatefulIntegers: HasStatefulAssignments {
 impl<T: HasStatefulAssignments> ManipulateStatefulIntegers for T {}
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_predicate_unassigned(&self, predicate: Predicate) -> bool {
-        self.assignments().evaluate_predicate(predicate).is_none()
-    }
-
     fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.assignments()
             .evaluate_predicate(predicate)

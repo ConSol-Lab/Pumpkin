@@ -1,7 +1,4 @@
-use std::cmp::max;
-use std::collections::VecDeque;
 use std::rc::Rc;
-use std::usize;
 
 use itertools::Itertools;
 use log::info;
@@ -13,7 +10,6 @@ use crate::conjunction;
 use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
@@ -25,6 +21,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
+use crate::pumpkin_assert_simple;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::IntegerVariable;
@@ -41,7 +38,7 @@ create_statistics_struct!(NodePackingStatistics {
 
 pub(crate) struct NodePackingPropagator<Var> {
     parameters: NodePackingParameters<Var>,
-    makespan_variable: Var,
+    _makespan_variable: Var,
     statistics: NodePackingStatistics,
 }
 
@@ -77,13 +74,9 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
 
         NodePackingPropagator {
             parameters: parameters.clone(),
-            makespan_variable: makespan_variable.clone(),
+            _makespan_variable: makespan_variable.clone(),
             statistics: NodePackingStatistics::default(),
         }
-    }
-
-    fn create_initial_activity_list(&self) -> VecDeque<Rc<Task<Var>>> {
-        self.parameters.tasks.to_vec().into()
     }
 
     fn find_conflict(
@@ -337,7 +330,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         context: &mut PropagationContextMut<'_>,
         task_lhs: &Rc<Task<Var>>,
         task_rhs: &Rc<Task<Var>>,
-        intervals: &Vec<(i32, i32)>,
+        intervals: &[(i32, i32)],
     ) -> Result<bool, EmptyDomain> {
         let is_literal_true = context.is_literal_true(
             &self.parameters.disjointness[self.parameters.mapping[task_lhs.id]]
@@ -386,27 +379,37 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                 self.statistics.n_trivial_conflicts += 1;
             }
             self.statistics.average_clique_size.add_term(clique.len());
-            let tasks = self.create_initial_activity_list();
-            let est = clique
-                .iter()
-                .map(|&task_ix| context.lower_bound(&tasks[task_ix].start_variable))
-                .min()
-                .expect("Empty clique");
-            let lft = clique
-                .iter()
-                .map(|&task_ix| {
-                    let task = &tasks[task_ix];
-                    context.upper_bound(&task.start_variable) + task.processing_time
-                })
-                .max()
-                .expect("Empty clique");
+
+            let (est, lft, sum_of_durations) =
+                clique
+                    .iter()
+                    .fold((i32::MAX, 0, 0), |(est, lft, sum_of_durations), task_ix| {
+                        let task = &self.parameters.tasks[*task_ix];
+                        (
+                            est.min(context.lower_bound(&task.start_variable)),
+                            lft.max(
+                                context.upper_bound(&task.start_variable) + task.processing_time,
+                            ),
+                            sum_of_durations + task.processing_time,
+                        )
+                    });
+
+            pumpkin_assert_simple!(lft - est < sum_of_durations);
+
+            // Based on "Computing Explanations for the Unary Resource Constraint - Petr Vilim"
+            let delta = sum_of_durations - (lft - est) - 1;
             let nogood = clique
                 .iter()
                 .flat_map(|&task_ix| {
-                    let task = &tasks[task_ix];
+                    let task = &self.parameters.tasks[task_ix];
                     [
-                        predicate!(task.start_variable >= est),
-                        predicate!(task.start_variable <= lft - task.processing_time),
+                        predicate!(
+                            task.start_variable >= est - (delta as f64 / 2.0).floor() as i32
+                        ),
+                        predicate!(
+                            task.start_variable
+                                <= lft + (delta as f64 / 2.0).ceil() as i32 - task.processing_time
+                        ),
                     ]
                 })
                 .chain(clique.iter().tuple_combinations::<(_, _)>().map(
@@ -425,47 +428,44 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         }
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, _context: PropagationContextMut) -> PropagationStatusCP {
         todo!();
-        if let Some(clique) = self.find_conflict(&mut context)? {
-            let tasks = self.create_initial_activity_list();
-            let est = clique
-                .iter()
-                .map(|&task_ix| context.lower_bound(&tasks[task_ix].start_variable))
-                .min()
-                .expect("Empty clique");
-            let lft = clique
-                .iter()
-                .map(|&task_ix| {
-                    let task = &tasks[task_ix];
-                    context.upper_bound(&task.start_variable) + task.processing_time
-                })
-                .max()
-                .expect("Empty clique");
-            Err(crate::basic_types::Inconsistency::Conflict(
-                clique
-                    .iter()
-                    .flat_map(|&task_ix| {
-                        let task = &tasks[task_ix];
-                        [
-                            predicate!(task.start_variable >= est),
-                            predicate!(task.start_variable <= lft - task.processing_time),
-                        ]
-                    })
-                    .chain(clique.iter().tuple_combinations::<(_, _)>().map(
-                        |(&task_lhs_ix, &task_rhs_ix)| {
-                            let disjoint = self.parameters.disjointness[task_lhs_ix][task_rhs_ix];
-                            predicate!(disjoint == 1)
-                        },
-                    ))
-                    .collect(),
-            ))
-        } else {
-            Ok(())
-        }
+        // if let Some(clique) = self.find_conflict(&mut context)? {
+        //    let tasks = self.create_initial_activity_list();
+        //    let est = clique
+        //        .iter()
+        //        .map(|&task_ix| context.lower_bound(&tasks[task_ix].start_variable))
+        //        .min()
+        //        .expect("Empty clique");
+        //    let lft = clique
+        //        .iter()
+        //        .map(|&task_ix| {
+        //            let task = &tasks[task_ix];
+        //            context.upper_bound(&task.start_variable) + task.processing_time
+        //        })
+        //        .max()
+        //        .expect("Empty clique");
+        //    Err(crate::basic_types::Inconsistency::Conflict(
+        //        clique
+        //            .iter()
+        //            .flat_map(|&task_ix| {
+        //                let task = &tasks[task_ix];
+        //                [
+        //                    predicate!(task.start_variable >= est),
+        //                    predicate!(task.start_variable <= lft - task.processing_time),
+        //                ]
+        //            })
+        //            .chain(clique.iter().tuple_combinations::<(_, _)>().map(
+        //                |(&task_lhs_ix, &task_rhs_ix)| {
+        //                    let disjoint = self.parameters.disjointness[task_lhs_ix][task_rhs_ix];
+        //                    predicate!(disjoint == 1)
+        //                },
+        //            ))
+        //            .collect(),
+        //    ))
+        //} else {
+        //    Ok(())
+        //}
     }
 
     fn initialise_at_root(

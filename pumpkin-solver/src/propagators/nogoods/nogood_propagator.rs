@@ -509,7 +509,7 @@ impl Propagator for NogoodPropagator {
         _context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         // There should be no nogoods yet
-        pumpkin_assert_simple!(self.nogoods.len() == 0);
+        pumpkin_assert_simple!(self.nogoods.is_empty());
         Ok(())
     }
 }

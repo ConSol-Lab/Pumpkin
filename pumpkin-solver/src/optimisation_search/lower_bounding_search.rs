@@ -1,5 +1,3 @@
-use log::info;
-
 use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;

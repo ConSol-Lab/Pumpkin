@@ -236,8 +236,7 @@ fn run() -> SchedulingResult<()> {
     });
 
     let mut termination = Combinator::new(
-        args.decision_limit
-            .map(|decision_limit| DecisionBudget::new(decision_limit)),
+        args.decision_limit.map(DecisionBudget::new),
         Combinator::new(
             OsSignal::install(),
             args.time_limit
@@ -341,8 +340,8 @@ fn create_instance_statistics(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
     transitive_closure: &List<(), usize>,
-    rev_map: &Vec<usize>,
-    start_variables: &Vec<DomainId>,
+    rev_map: &[usize],
+    start_variables: &[DomainId],
     horizon: u32,
 ) {
     log_statistic(
@@ -356,7 +355,7 @@ fn create_instance_statistics(
         &rcpsp_instance.resource_requirements,
         &rcpsp_instance.resource_capacities,
         solver,
-        &start_variables,
+        start_variables,
         &rcpsp_instance.processing_times,
         horizon,
     )
@@ -386,10 +385,10 @@ fn create_instance_statistics(
 
     log_statistic(
         "mandatoryRatio",
-        calculate_mandatory_ratio(&start_variables, &rcpsp_instance.processing_times, solver),
+        calculate_mandatory_ratio(start_variables, &rcpsp_instance.processing_times, solver),
     );
     for (index, mandatory_constrainedness) in calculate_mandatory_constrainedness(
-        &start_variables,
+        start_variables,
         &rcpsp_instance.processing_times,
         &rcpsp_instance.resource_requirements,
         solver,
@@ -408,11 +407,11 @@ fn create_instance_statistics(
     log_statistic(
         "freeFloatRatio",
         calculate_free_float_ratio(
-            &transitive_closure,
+            transitive_closure,
             &rcpsp_instance.processing_times,
-            &start_variables,
+            start_variables,
             solver,
-            &rev_map,
+            rev_map,
         ),
     );
 
@@ -442,20 +441,20 @@ fn create_instance_statistics(
 fn add_node_packing(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
-    start_variables: &Vec<DomainId>,
+    start_variables: &[DomainId],
     makespan: DomainId,
-    incompatibility_matrix: &Vec<Vec<Literal>>,
+    incompatibility_matrix: &[Vec<Literal>],
 ) {
     let result = solver
         .add_constraint(constraints::node_packing(
-            &start_variables,
+            start_variables,
             &rcpsp_instance
                 .processing_times
                 .iter()
                 .map(|&value| value as i32)
                 .collect::<Vec<_>>(),
             makespan,
-            incompatibility_matrix.clone(),
+            incompatibility_matrix.to_owned(),
         ))
         .post();
     if result.is_err() {
@@ -466,15 +465,15 @@ fn add_node_packing(
 fn add_cumulatives(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
-    start_variables: &Vec<DomainId>,
-    incompatibility_matrix: &Vec<Vec<Literal>>,
+    start_variables: &[DomainId],
+    incompatibility_matrix: &[Vec<Literal>],
     use_cumulative_disjointness: bool,
 ) {
     for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
     {
         let result = solver
             .add_constraint(constraints::cumulative_with_options(
-                start_variables.clone(),
+                start_variables.to_owned(),
                 rcpsp_instance
                     .processing_times
                     .iter()
@@ -492,7 +491,7 @@ fn add_cumulatives(
                     CumulativePropagationMethod::default(),
                     false,
                     if use_cumulative_disjointness {
-                        Some(incompatibility_matrix.clone())
+                        Some(incompatibility_matrix.to_owned())
                     } else {
                         None
                     },
@@ -507,7 +506,7 @@ fn add_cumulatives(
 fn add_precedences(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
-    start_variables: &Vec<DomainId>,
+    start_variables: &[DomainId],
 ) {
     for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
         for dependency in dependencies.iter() {
@@ -527,9 +526,9 @@ fn add_precedences(
 fn create_incompatability_matrix(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
-    start_variables: &Vec<DomainId>,
+    start_variables: &[DomainId],
     transitive_closure: &List<(), usize>,
-    rev_map: &Vec<usize>,
+    rev_map: &[usize],
 ) -> (Vec<Vec<Literal>>, KeyedVec<DomainId, usize>) {
     let mut incompatibility_matrix: Vec<Vec<Literal>> =
         Vec::with_capacity(rcpsp_instance.processing_times.len());
@@ -583,7 +582,7 @@ fn create_incompatability_matrix(
 fn add_objective_function(
     solver: &mut Solver,
     rcpsp_instance: &RcpspInstance,
-    start_variables: &Vec<DomainId>,
+    start_variables: &[DomainId],
     makespan: DomainId,
 ) {
     let result = solver

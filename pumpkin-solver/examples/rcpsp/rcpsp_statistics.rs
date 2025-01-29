@@ -4,8 +4,6 @@ use petgraph::visit::IntoEdges;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::Solver;
 
-use crate::rcpsp_instance::RcpspInstance;
-
 // The density of the transitive closure of the precedence graph - a value of 0 means total
 // parallelism and 1 means that they are totally ordered
 /// A higher value can indicate that the instance is easier (since the size of the search space
@@ -21,7 +19,7 @@ pub(crate) fn calculate_order_strength(
 
 /// The average number of required resources
 pub(crate) fn calculate_resource_factor(
-    resource_requirements: &Vec<Vec<u32>>,
+    resource_requirements: &[Vec<u32>],
     number_of_tasks: u32,
 ) -> f64 {
     resource_requirements
@@ -40,8 +38,8 @@ pub(crate) fn calculate_resource_factor(
 /// resource) According to [De Reyck & Herroelen (1996)], the required CPU time of an instance
 /// varies according to an easy-hard-easy bell curve as a function of this metric
 pub(crate) fn calculate_resource_constrainedness(
-    resource_requirements: &Vec<Vec<u32>>,
-    resource_capacities: &Vec<u32>,
+    resource_requirements: &[Vec<u32>],
+    resource_capacities: &[u32],
     number_of_tasks: u32,
 ) -> Vec<f64> {
     assert_eq!(resource_requirements.len(), resource_capacities.len());
@@ -174,7 +172,7 @@ pub(crate) fn calculate_resource_strength(
 pub(crate) fn calculate_disjunction_ratio(
     transitive_closure: &List<(), usize>,
     number_of_tasks: u32,
-    resource_requirements: &Vec<Vec<u32>>,
+    resource_requirements: &[Vec<u32>],
     resource_capacities: &[u32],
 ) -> f64 {
     assert_eq!(
