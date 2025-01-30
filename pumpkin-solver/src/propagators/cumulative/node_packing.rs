@@ -96,25 +96,31 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             return Ok(());
         }
 
-        let num_entries_before = context.assignments.num_trail_entries();
-        let result = Disjunctive::new(
-            clique
-                .iter()
-                .map(|index| (*tasks[*index]).clone())
-                .collect::<Vec<_>>(),
-        )
-        .propagate(PropagationContextMut::new(
-            context.stateful_assignments,
-            context.assignments,
-            context.reason_store,
-            context.semantic_minimiser,
-            context.domain_faithfulness,
-            context.propagator_id,
-        ));
-        statistics.num_disjunctive_propagations +=
-            context.assignments.num_trail_entries() - num_entries_before;
-        statistics.num_disjunctive_conflicts += result.is_err() as usize;
-        result
+        loop {
+            let num_entries_before = context.assignments.num_trail_entries();
+            let result = Disjunctive::new(
+                clique
+                    .iter()
+                    .map(|index| (*tasks[*index]).clone())
+                    .collect::<Vec<_>>(),
+            )
+            .propagate(PropagationContextMut::new(
+                context.stateful_assignments,
+                context.assignments,
+                context.reason_store,
+                context.semantic_minimiser,
+                context.domain_faithfulness,
+                context.propagator_id,
+            ));
+            statistics.num_disjunctive_propagations +=
+                context.assignments.num_trail_entries() - num_entries_before;
+            statistics.num_disjunctive_conflicts += result.is_err() as usize;
+            if num_entries_before == context.assignments.num_trail_entries() {
+                break;
+            }
+            result?;
+        }
+        Ok(())
     }
 
     fn find_conflict(
