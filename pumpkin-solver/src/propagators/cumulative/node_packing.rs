@@ -28,6 +28,7 @@ use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
+use crate::variables::TransformableVariable;
 
 create_statistics_struct!(NodePackingStatistics {
     n_calls: usize,
@@ -36,7 +37,8 @@ create_statistics_struct!(NodePackingStatistics {
     average_clique_size: CumulativeMovingAverage<usize>,
     average_backjump_height: CumulativeMovingAverage<usize>,
 
-    num_disjunctive_propagations: usize,
+    num_disjunctive_propagations_lower_bound: usize,
+    num_disjunctive_propagations_upper_bound: usize,
     num_disjunctive_conflicts: usize,
 });
 
@@ -112,7 +114,37 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 context.domain_faithfulness,
                 context.propagator_id,
             ));
-            statistics.num_disjunctive_propagations +=
+            statistics.num_disjunctive_propagations_lower_bound +=
+                context.assignments.num_trail_entries() - num_entries_before;
+            statistics.num_disjunctive_conflicts += result.is_err() as usize;
+            result?;
+            let num_entries_before = context.assignments.num_trail_entries();
+            let result = Disjunctive::new(
+                clique
+                    .iter()
+                    .map(|index| {
+                        let task = &tasks[*index];
+                        Task {
+                            start_variable: task
+                                .start_variable
+                                .offset(task.processing_time)
+                                .scaled(-1),
+                            processing_time: task.processing_time,
+                            resource_usage: task.processing_time,
+                            id: task.id,
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .propagate(PropagationContextMut::new(
+                context.stateful_assignments,
+                context.assignments,
+                context.reason_store,
+                context.semantic_minimiser,
+                context.domain_faithfulness,
+                context.propagator_id,
+            ));
+            statistics.num_disjunctive_propagations_upper_bound +=
                 context.assignments.num_trail_entries() - num_entries_before;
             statistics.num_disjunctive_conflicts += result.is_err() as usize;
             if num_entries_before == context.assignments.num_trail_entries() {
