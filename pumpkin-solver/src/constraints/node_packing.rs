@@ -10,6 +10,7 @@ pub fn node_packing<Var: IntegerVariable + 'static>(
     durations: &[i32],
     makespan_variable: Var,
     disjointness: Vec<Vec<Literal>>,
+    use_disjunctive_propagation: bool,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
         start_times.len() == durations.len(),
@@ -30,5 +31,6 @@ same!"
             .collect::<Vec<_>>(),
         makespan_variable,
         disjointness,
+        use_disjunctive_propagation,
     )
 }

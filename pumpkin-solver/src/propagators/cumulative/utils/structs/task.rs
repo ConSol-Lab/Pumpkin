@@ -7,6 +7,7 @@ use crate::variables::IntegerVariable;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
+#[derive(Clone)]
 pub(crate) struct Task<Var> {
     /// The variable representing the start time of a task
     pub(crate) start_variable: Var,

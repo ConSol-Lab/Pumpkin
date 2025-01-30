@@ -108,6 +108,9 @@ struct Args {
 
     #[arg(short = 'x', long = "only-collect-statistics")]
     only_collect_statistics: bool,
+
+    #[arg(short = 'u', long = "use-disjunctive-propagation")]
+    use_disjunctive_propagation: bool,
 }
 
 pub fn main() {
@@ -214,6 +217,7 @@ fn run() -> SchedulingResult<()> {
             &start_variables,
             makespan,
             &incompatibility_matrix,
+            args.use_disjunctive_propagation,
         );
         if args.use_nogood_disjointness {
             solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
@@ -444,6 +448,7 @@ fn add_node_packing(
     start_variables: &[DomainId],
     makespan: DomainId,
     incompatibility_matrix: &[Vec<Literal>],
+    use_disjunctive_propagation: bool,
 ) {
     let result = solver
         .add_constraint(constraints::node_packing(
@@ -455,6 +460,7 @@ fn add_node_packing(
                 .collect::<Vec<_>>(),
             makespan,
             incompatibility_matrix.to_owned(),
+            use_disjunctive_propagation,
         ))
         .post();
     if result.is_err() {

@@ -5,6 +5,7 @@ use log::info;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::containers::KeyedVec;
@@ -18,6 +19,7 @@ use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::disjunctive::disjunctive_propagator::Disjunctive;
 use crate::propagators::util::create_tasks;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
@@ -34,6 +36,8 @@ create_statistics_struct!(NodePackingStatistics {
     average_clique_size: CumulativeMovingAverage<usize>,
     average_backjump_height: CumulativeMovingAverage<usize>,
 
+    num_disjunctive_propagations: usize,
+    num_disjunctive_conflicts: usize,
 });
 
 pub(crate) struct NodePackingPropagator<Var> {
@@ -52,6 +56,7 @@ pub(crate) struct NodePackingParameters<Var> {
     /// accomodated at each time point)
     pub(crate) disjointness: Vec<Vec<Literal>>,
     pub(crate) mapping: KeyedVec<LocalId, usize>,
+    pub(crate) use_disjunctive_propagation: bool,
 }
 
 impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
@@ -59,6 +64,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         arg_tasks: &[ArgTask<Var>],
         makespan_variable: Var,
         disjointness: Vec<Vec<Literal>>,
+        use_disjunctive_propagation: bool,
     ) -> Self {
         let (tasks, mapping) = create_tasks(arg_tasks);
         let parameters = NodePackingParameters {
@@ -70,6 +76,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
 
             disjointness,
             mapping,
+            use_disjunctive_propagation,
         };
 
         NodePackingPropagator {
@@ -79,10 +86,41 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         }
     }
 
+    fn update_bounds(
+        tasks: &[Rc<Task<Var>>],
+        clique: &[usize],
+        context: &mut PropagationContextMut,
+        statistics: &mut NodePackingStatistics,
+    ) -> PropagationStatusCP {
+        if clique.len() == 1 {
+            return Ok(());
+        }
+
+        let num_entries_before = context.assignments.num_trail_entries();
+        let result = Disjunctive::new(
+            clique
+                .iter()
+                .map(|index| (*tasks[*index]).clone())
+                .collect::<Vec<_>>(),
+        )
+        .propagate(PropagationContextMut::new(
+            context.stateful_assignments,
+            context.assignments,
+            context.reason_store,
+            context.semantic_minimiser,
+            context.domain_faithfulness,
+            context.propagator_id,
+        ));
+        statistics.num_disjunctive_propagations +=
+            context.assignments.num_trail_entries() - num_entries_before;
+        statistics.num_disjunctive_conflicts += result.is_err() as usize;
+        result
+    }
+
     fn find_conflict(
         &mut self,
         context: &mut PropagationContextMut<'_>,
-    ) -> Result<Option<Vec<usize>>, EmptyDomain> {
+    ) -> Result<Option<Vec<usize>>, Inconsistency> {
         let intervals = self
             .parameters
             .tasks
@@ -103,11 +141,19 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 }
                 let rhs = &self.parameters.tasks[index_rhs];
 
-                if self.are_disjoint(context, lhs, rhs, &intervals)?
-                    && lhs.processing_time + rhs.processing_time
+                if self.are_disjoint(context, lhs, rhs, &intervals)? {
+                    if lhs.processing_time + rhs.processing_time
                         > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
-                {
-                    return Ok(Some([index_lhs, index_rhs].to_vec()));
+                    {
+                        return Ok(Some([index_lhs, index_rhs].to_vec()));
+                    } else if self.parameters.use_disjunctive_propagation {
+                        Self::update_bounds(
+                            &self.parameters.tasks,
+                            &[index_lhs, index_rhs],
+                            context,
+                            &mut self.statistics,
+                        )?;
+                    }
                 }
             }
         }
@@ -174,6 +220,13 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 > finish - start
             {
                 return Ok(Some(clique));
+            } else if self.parameters.use_disjunctive_propagation {
+                Self::update_bounds(
+                    &self.parameters.tasks,
+                    &clique,
+                    context,
+                    &mut self.statistics,
+                )?;
             }
         }
         Ok(None)
@@ -420,9 +473,7 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                 ))
                 .collect_vec();
             info!("Found cluster with explanation: {nogood:?}");
-            Err(crate::basic_types::Inconsistency::Conflict(
-                nogood.into_iter().collect(),
-            ))
+            Err(Inconsistency::Conflict(nogood.into_iter().collect()))
         } else {
             Ok(())
         }
