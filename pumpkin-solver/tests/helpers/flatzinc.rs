@@ -14,6 +14,7 @@ pub(crate) enum Value {
     Int(i32),
     Bool(bool),
     IntArray(Vec<i32>),
+    BoolArray(Vec<bool>),
 }
 
 impl FromStr for Value {
@@ -31,31 +32,49 @@ impl FromStr for Value {
     }
 }
 
-struct IntArrayError;
-impl Display for IntArrayError {
+struct ArrayError;
+impl Display for ArrayError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Could not parse int array")
+        f.write_str("Could not parse array")
     }
 }
 
-fn create_array_from_string(s: &str) -> Result<Value, IntArrayError> {
-    let captures = Regex::new(r"array1d\([0-9]+\.\.[0-9]+,\s*\[(\d+(?:,\s\d+)*\d*)\]\)")
+fn create_array_from_string(s: &str) -> Result<Value, ArrayError> {
+    let int_captures = Regex::new(r"array1d\([0-9]+\.\.[0-9]+,\s*\[(-?\d+(?:,\s-?\d+)*-?\d*)\]\)")
         .unwrap()
         .captures_iter(s)
         .next();
-    if let Some(captures) = captures {
-        Ok(Value::IntArray(
-            captures
+    if let Some(int_captures) = int_captures {
+        return Ok(Value::IntArray(
+            int_captures
                 .get(1)
                 .unwrap()
                 .as_str()
                 .split(", ")
                 .map(|integer| integer.parse::<i32>().unwrap())
                 .collect::<Vec<_>>(),
-        ))
-    } else {
-        Err(IntArrayError)
+        ));
     }
+
+    let bool_captures = Regex::new(
+        r"array1d\([0-9]+\.\.[0-9]+,\s*\[((true|false)(?:,\s(true|false))*(true|false)*)\]\)",
+    )
+    .unwrap()
+    .captures_iter(s)
+    .next();
+    if let Some(bool_captures) = bool_captures {
+        return Ok(Value::BoolArray(
+            bool_captures
+                .get(1)
+                .unwrap()
+                .as_str()
+                .split(", ")
+                .map(|bool| bool.parse::<bool>().unwrap())
+                .collect::<Vec<_>>(),
+        ));
+    }
+
+    Err(ArrayError)
 }
 
 #[derive(Debug)]
