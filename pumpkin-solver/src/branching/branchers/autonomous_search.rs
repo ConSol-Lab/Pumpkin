@@ -2,8 +2,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::InDomainMin;
-use crate::branching::variable_selection::Smallest;
+use crate::branching::value_selection::RandomSplitter;
+use crate::branching::variable_selection::RandomSelector;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
@@ -11,6 +11,7 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
+use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
@@ -94,9 +95,8 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`Smallest`] with [`InDomainMin`].
+    /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
-        let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -106,8 +106,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                Smallest::new(&variables),
-                InDomainMin,
+                RandomSelector::new(assignments.get_domains()),
+                RandomSplitter,
             ),
         }
     }
@@ -132,10 +132,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         }
     }
 
-    fn minimum_activity_threshold(&self) -> f64 {
-        1_f64 / self.increment
-    }
-
     /// Resizes the heap to accommodate for the id.
     /// Recall that the underlying heap uses direct hashing.
     fn resize_heap(&mut self, id: PredicateId) {
@@ -149,6 +145,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     fn bump_activity(&mut self, predicate: Predicate) {
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
+        self.heap.restore_key(id);
 
         // Scale the activities if the values are too large.
         // Also remove predicates that have activities close to zero.
@@ -157,21 +154,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             // Adjust heap values.
             self.heap.divide_values(self.max_threshold);
 
-            // Remove inactive predicates from the heap,
-            // and stage the ids for removal from the id generator.
-            self.predicate_id_info.iter().for_each(|predicate_id| {
-                // If the predicate does not reach the minimum activity threshold then we remove it
-                // from the heap and we remove its id from the generator
-                //
-                // Note that we check whether the current predicate being removed is not the
-                // predicate is being bumped, this is to prevent multiple IDs from being assigned.
-                if *self.heap.get_value(predicate_id) <= self.minimum_activity_threshold()
-                    && predicate_id != id
-                {
-                    self.heap.delete_key(predicate_id);
-                    self.predicate_id_info.delete_id(predicate_id);
-                }
-            });
             // Adjust increment. It is important to adjust the increment after the above code.
             self.increment /= self.max_threshold;
         }
@@ -279,19 +261,32 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
                 true
             }
         });
+        self.backup_brancher.synchronise(assignments);
     }
 
     fn on_conflict(&mut self) {
         self.decay_activities();
+        self.backup_brancher.on_conflict();
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
         self.best_known_solution = Some(solution.into());
+        self.backup_brancher.on_solution(solution);
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.bump_activity(predicate)
+        self.bump_activity(predicate);
+        self.backup_brancher
+            .on_appearance_in_conflict_predicate(predicate);
+    }
+
+    fn on_restart(&mut self) {
+        self.backup_brancher.on_restart();
+    }
+
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.backup_brancher.on_unassign_integer(variable, value)
     }
 
     fn is_restart_pointless(&mut self) -> bool {
@@ -303,7 +298,6 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 mod tests {
     use super::AutonomousSearch;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::branchers::autonomous_search::DEFAULT_VSIDS_MAX_THRESHOLD;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
     use crate::engine::Assignments;
@@ -322,28 +316,6 @@ mod tests {
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
 
         (0..100).for_each(|_| brancher.on_conflict());
-    }
-
-    #[test]
-    fn value_removed_if_threshold_too_small() {
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        let y = assignments.grow(-10, 0);
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
-        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        brancher.increment = DEFAULT_VSIDS_MAX_THRESHOLD;
-
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        assert!(!brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(x >= 5)));
-        assert!(brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(y >= -5)));
     }
 
     #[test]
@@ -413,13 +385,14 @@ mod tests {
         let result = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom {
-                usizes: vec![],
+                integers: vec![2],
+                usizes: vec![0],
+                bools: vec![false],
                 weighted_choice: |_| unreachable!(),
-                ..Default::default()
             },
         ));
 
-        assert_eq!(result, Some(predicate!(x <= 0)));
+        assert_eq!(result, Some(predicate!(x <= 2)));
     }
 
     #[test]
