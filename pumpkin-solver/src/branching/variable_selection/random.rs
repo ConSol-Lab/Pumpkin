@@ -2,7 +2,6 @@ use super::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::containers::SparseSet;
 use crate::containers::StorageKey;
-use crate::engine::Assignments;
 use crate::variables::DomainId;
 
 /// A [`VariableSelector`] which selects a random unfixed variable.
@@ -12,10 +11,10 @@ pub struct RandomSelector {
 }
 
 impl RandomSelector {
-    pub fn default_over_all_variables(assignments: &Assignments) -> Self {
+    pub fn new(variables: impl IntoIterator<Item = DomainId>) -> Self {
         // Note the -1 due to the fact that the indices of the domain ids start at 1
         Self {
-            variables: SparseSet::new(assignments.get_domains().collect::<Vec<_>>(), |element| {
+            variables: SparseSet::new(variables.into_iter().collect(), |element| {
                 element.index() - 1
             }),
         }
@@ -74,7 +73,7 @@ mod tests {
             ..Default::default()
         };
         let integer_variables = assignments.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::default_over_all_variables(&assignments);
+        let mut strategy = RandomSelector::new(assignments.get_domains());
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
@@ -91,7 +90,7 @@ mod tests {
             ..Default::default()
         };
         let integer_variables = assignments.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::default_over_all_variables(&assignments);
+        let mut strategy = RandomSelector::new(assignments.get_domains());
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
@@ -107,7 +106,7 @@ mod tests {
             usizes: vec![1, 0, 0],
             ..Default::default()
         };
-        let mut strategy = RandomSelector::default_over_all_variables(&assignments);
+        let mut strategy = RandomSelector::new(assignments.get_domains());
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
@@ -123,7 +122,7 @@ mod tests {
             ..Default::default()
         };
         let integer_variables = assignments.get_domains().collect::<Vec<_>>();
-        let mut strategy = RandomSelector::default_over_all_variables(&assignments);
+        let mut strategy = RandomSelector::new(assignments.get_domains());
 
         {
             let mut context = SelectionContext::new(&assignments, &mut test_rng);

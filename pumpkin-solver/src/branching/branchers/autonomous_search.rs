@@ -106,7 +106,7 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::default_over_all_variables(assignments),
+                RandomSelector::new(assignments.get_domains()),
                 RandomSplitter,
             ),
         }
