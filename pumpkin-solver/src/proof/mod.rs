@@ -35,9 +35,7 @@ pub struct ProofLog {
 }
 
 /// A dummy proof step ID. Used when there is proof logging is not enabled.
-// Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
-// context.
-const DUMMY_STEP_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+const DUMMY_STEP_ID: NonZeroU64 = NonZeroU64::new(1).unwrap();
 
 impl ProofLog {
     /// Create a CP proof logger.
