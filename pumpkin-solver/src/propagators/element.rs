@@ -93,14 +93,20 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let payload = RightHandSideReason::from_bits(code);
 
         self.rhs_reason_buffer.clear();
         self.rhs_reason_buffer
-            .extend(self.array.iter().map(|variable| match payload.bound() {
-                Bound::Lower => predicate![variable >= payload.value()],
-                Bound::Upper => predicate![variable <= payload.value()],
+            .extend(self.array.iter().enumerate().map(|(idx, variable)| {
+                if context.contains(&self.index, idx as i32) {
+                    match payload.bound() {
+                        Bound::Lower => predicate![variable >= payload.value()],
+                        Bound::Upper => predicate![variable <= payload.value()],
+                    }
+                } else {
+                    predicate![self.index != idx as i32]
+                }
             }));
 
         &self.rhs_reason_buffer
@@ -129,15 +135,17 @@ where
         &self,
         context: &mut PropagationContextMut<'_>,
     ) -> PropagationStatusCP {
-        let (rhs_lb, rhs_ub) =
-            self.array
-                .iter()
-                .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), element| {
-                    (
-                        i32::min(rhs_lb, context.lower_bound(element)),
-                        i32::max(rhs_ub, context.upper_bound(element)),
-                    )
-                });
+        let (rhs_lb, rhs_ub) = self
+            .array
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| context.contains(&self.index, *idx as i32))
+            .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), (_, element)| {
+                (
+                    i32::min(rhs_lb, context.lower_bound(element)),
+                    i32::max(rhs_ub, context.upper_bound(element)),
+                )
+            });
 
         context.set_lower_bound(
             &self.rhs,
@@ -351,6 +359,41 @@ mod tests {
         assert_eq!(
             solver.get_reason_int(predicate![x_1 <= 9]),
             conjunction!([index == 1] & [rhs <= 9])
+        );
+    }
+
+    #[test]
+    fn index_hole_propagates_bounds_on_rhs() {
+        let mut solver = TestSolver::default();
+
+        let x_0 = solver.new_variable(3, 10);
+        let x_1 = solver.new_variable(0, 15);
+        let x_2 = solver.new_variable(7, 9);
+        let x_3 = solver.new_variable(14, 15);
+
+        let index = solver.new_variable(0, 3);
+        solver.remove(index, 1).expect("Value can be removed");
+
+        let rhs = solver.new_variable(-10, 30);
+
+        let _ = solver
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
+                index,
+                rhs,
+            ))
+            .expect("no empty domains");
+
+        solver.assert_bounds(rhs, 3, 15);
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs >= 3]),
+            conjunction!([x_0 >= 3] & [x_2 >= 3] & [x_3 >= 3] & [index != 1])
+        );
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs <= 15]),
+            conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1])
         );
     }
 }
