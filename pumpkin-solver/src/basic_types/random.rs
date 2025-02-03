@@ -59,6 +59,10 @@ pub trait Random: Debug {
     /// ```
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize;
 
+    /// Generates a random i32 in the provided range with equal probability; this can be seen as
+    /// sampling from a uniform distribution in the range `[range.start, range.end)`
+    fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32;
+
     /// Generate a random float in the range 0..1.
     fn generate_f64(&mut self) -> f64;
 
@@ -84,6 +88,10 @@ where
     }
 
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize {
+        self.gen_range(range)
+    }
+
+    fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32 {
         self.gen_range(range)
     }
 
@@ -127,6 +135,7 @@ pub(crate) mod tests {
     #[derive(Debug)]
     pub(crate) struct TestRandom {
         pub(crate) usizes: Vec<usize>,
+        pub(crate) integers: Vec<i32>,
         pub(crate) bools: Vec<bool>,
         pub(crate) weighted_choice: fn(&[f64]) -> Option<usize>,
     }
@@ -134,9 +143,10 @@ pub(crate) mod tests {
     impl Default for TestRandom {
         fn default() -> Self {
             TestRandom {
-                usizes: vec![],
-                bools: vec![],
                 weighted_choice: |_| unimplemented!(),
+                usizes: vec![],
+                integers: vec![],
+                bools: vec![],
             }
         }
     }
@@ -153,6 +163,15 @@ pub(crate) mod tests {
                     true
                 },
                 "The probability is {probability} but the selected value is {selected}, this should not be possible, please ensure that your test cases are correctly defined"
+            );
+            selected
+        }
+
+        fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32 {
+            let selected = self.integers.remove(0);
+            pumpkin_assert_simple!(
+                range.contains(&selected),
+                "The selected element by `TestRandom` ({selected}) is not in the provided range ({range:?}) and thus should not be returned, please ensure that your test cases are correctly defined"
             );
             selected
         }
