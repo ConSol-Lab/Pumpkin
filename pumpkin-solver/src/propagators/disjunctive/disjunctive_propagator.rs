@@ -18,6 +18,7 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::variables::IntegerVariable;
+use crate::variables::TransformableVariable;
 
 pub(crate) struct Disjunctive<Var: IntegerVariable + 'static> {
     tasks: Box<[DisjunctiveTask<Var>]>,
@@ -143,7 +144,7 @@ impl<Var: IntegerVariable + 'static> Propagator for Disjunctive<Var> {
             .tasks
             .iter()
             .map(|task| DisjunctiveTask {
-                start_variable: task.start_variable.clone(),
+                start_variable: task.start_variable.offset(task.processing_time).scaled(-1),
                 processing_time: task.processing_time,
                 id: task.id,
             })
