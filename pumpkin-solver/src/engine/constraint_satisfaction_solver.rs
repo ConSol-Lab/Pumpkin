@@ -24,7 +24,7 @@ use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::ResolutionResolver;
-use super::StatefulAssignments;
+use super::TrailedAssignments;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
@@ -145,7 +145,7 @@ pub struct ConstraintSatisfactionSolver {
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
 
-    pub(crate) stateful_assignments: StatefulAssignments,
+    pub(crate) stateful_assignments: TrailedAssignments,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -254,7 +254,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         pumpkin_assert_moderate!(
             propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
@@ -282,7 +282,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         let context = StatefulPropagationContext::new(stateful_assignments, assignments);
 
@@ -420,7 +420,7 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
             },
             internal_parameters: solver_options,
-            stateful_assignments: StatefulAssignments::default(),
+            stateful_assignments: TrailedAssignments::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -1067,7 +1067,7 @@ impl ConstraintSatisfactionSolver {
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 

@@ -7,7 +7,7 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
-use super::StatefulAssignments;
+use super::TrailedAssignments;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -34,7 +34,7 @@ pub(crate) struct TestSolver {
     pub propagator_store: PropagatorStore,
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
-    pub stateful_assignments: StatefulAssignments,
+    pub stateful_assignments: TrailedAssignments,
     watch_list: WatchListCP,
 }
 

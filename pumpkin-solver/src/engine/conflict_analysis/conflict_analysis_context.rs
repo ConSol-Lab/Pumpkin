@@ -18,7 +18,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
-use crate::engine::StatefulAssignments;
+use crate::engine::TrailedAssignments;
 use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::ProofLog;
@@ -49,7 +49,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
 
     pub(crate) is_completing_proof: bool,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
-    pub(crate) stateful_assignments: &'a mut StatefulAssignments,
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
