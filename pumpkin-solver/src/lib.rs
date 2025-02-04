@@ -148,7 +148,7 @@
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
-//!     LSU::new(OptimisationDirection::Minimise, objective, |_| {}),
+//!     LSU::new(OptimisationDirection::Minimise, objective, |_, _| {}),
 //! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
@@ -210,7 +210,7 @@
 //!
 //! loop {
 //!     match solution_iterator.next_solution() {
-//!         IteratedSolution::Solution(solution) => {
+//!         IteratedSolution::Solution(solution, _) => {
 //!             number_of_solutions += 1;
 //!             // We have found another solution, the same invariant should hold
 //!             let value_x = solution.get_integer_value(x);
