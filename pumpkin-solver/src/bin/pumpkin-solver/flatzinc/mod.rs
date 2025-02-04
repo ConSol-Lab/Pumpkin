@@ -14,19 +14,21 @@ use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrat
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
-use pumpkin_solver::optimisation::LowerBoundingSearch;
+use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
+use pumpkin_solver::optimisation::linear_unsat_sat::LUS;
 use pumpkin_solver::optimisation::OptimisationDirection;
+use pumpkin_solver::optimisation::OptimisationProcedure;
 use pumpkin_solver::optimisation::SearchMode;
-use pumpkin_solver::optimisation::UpperBoundingSearch;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
+use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::Solver;
 
 use self::instance::FlatZincInstance;
@@ -51,6 +53,23 @@ pub(crate) struct FlatZincOptions {
 
     /// Determines which type of search is performed by the solver
     pub(crate) search_mode: SearchMode,
+}
+
+fn solution_callback(
+    instance_objective_function: Option<DomainId>,
+    options_all_solutions: bool,
+    outputs: &[Output],
+    solver: &Solver,
+) {
+    if options_all_solutions || instance_objective_function.is_none() {
+        let solution = solver.get_solution_reference();
+        if let Some(objective) = instance_objective_function {
+            solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
+        } else {
+            solver.log_statistics()
+        }
+        print_solution_from_solver(solution, outputs);
+    }
 }
 
 pub(crate) fn solve(
@@ -80,45 +99,58 @@ pub(crate) fn solve(
         instance.search.expect("Expected a search to be defined")
     };
 
-    solver.with_solution_callback(move |solution_callback_arguments| {
-        if options.all_solutions || instance.objective_function.is_none() {
-            solution_callback_arguments.log_statistics();
-            print_solution_from_solver(solution_callback_arguments.solution, &outputs);
-        }
-    });
-
     let value = if let Some(objective_function) = &instance.objective_function {
         let result = match objective_function {
             FlatzincObjective::Maximize(domain_id) => match options.search_mode {
                 SearchMode::UpperBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    *domain_id,
-                    OptimisationDirection::Maximise,
-                    UpperBoundingSearch,
+                    LSU::new(OptimisationDirection::Maximise, *domain_id, |solver| {
+                        solution_callback(
+                            Some(*domain_id),
+                            options.all_solutions,
+                            &outputs,
+                            solver,
+                        );
+                    }),
                 ),
                 SearchMode::LowerBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    *domain_id,
-                    OptimisationDirection::Maximise,
-                    LowerBoundingSearch,
+                    LUS::new(OptimisationDirection::Maximise, *domain_id, |solver| {
+                        solution_callback(
+                            Some(*domain_id),
+                            options.all_solutions,
+                            &outputs,
+                            solver,
+                        );
+                    }),
                 ),
             },
             FlatzincObjective::Minimize(domain_id) => match options.search_mode {
                 SearchMode::UpperBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    *domain_id,
-                    OptimisationDirection::Minimise,
-                    UpperBoundingSearch,
+                    LSU::new(OptimisationDirection::Minimise, *domain_id, |solver| {
+                        solution_callback(
+                            Some(*domain_id),
+                            options.all_solutions,
+                            &outputs,
+                            solver,
+                        );
+                    }),
                 ),
                 SearchMode::LowerBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    *domain_id,
-                    OptimisationDirection::Minimise,
-                    LowerBoundingSearch,
+                    LUS::new(OptimisationDirection::Minimise, *domain_id, |solver| {
+                        solution_callback(
+                            Some(*domain_id),
+                            options.all_solutions,
+                            &outputs,
+                            solver,
+                        );
+                    }),
                 ),
             },
         };
@@ -129,7 +161,7 @@ pub(crate) fn solve(
                     optimal_solution.get_integer_value(*objective_function.get_domain());
                 if !options.all_solutions {
                     solver.log_statistics();
-                    print_solution_from_solver(&optimal_solution, &instance.outputs)
+                    print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
                 }
                 println!("==========");
                 Some(optimal_objective_value)
@@ -202,7 +234,7 @@ fn parse_and_compile(
 }
 
 /// Prints the current solution.
-fn print_solution_from_solver(solution: &Solution, outputs: &[Output]) {
+fn print_solution_from_solver(solution: SolutionReference, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => {

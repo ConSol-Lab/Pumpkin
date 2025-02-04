@@ -3,6 +3,7 @@ use log::info;
 use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
+use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
@@ -11,17 +12,34 @@ use crate::variables::IntegerVariable;
 use crate::Solver;
 
 #[derive(Debug, Clone, Copy)]
-pub struct LowerBoundingSearch;
+pub struct LUS<Var: IntegerVariable, Callback> {
+    direction: OptimisationDirection,
+    objective: Var,
+    solution_callback: Callback,
+}
 
-impl OptimisationProcedure for LowerBoundingSearch {
-    fn minimise(
+impl<Var: IntegerVariable, Callback: Fn(&Solver)> OptimisationProcedure<Var, Callback>
+    for LUS<Var, Callback>
+{
+    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
+        Self {
+            direction,
+            objective,
+            solution_callback,
+        }
+    }
+
+    fn optimise(
         &mut self,
         brancher: &mut impl Brancher,
         termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-        is_maximising: bool,
         solver: &mut Solver,
     ) -> OptimisationResult {
+        let is_maximising = matches!(self.direction, OptimisationDirection::Maximise);
+        let objective = match self.direction {
+            OptimisationDirection::Maximise => self.objective.scaled(-1),
+            OptimisationDirection::Minimise => self.objective.scaled(1),
+        };
         // If we are maximising then when we simply scale the variable by -1, however, this will
         // lead to the printed objective value in the statistics to be multiplied by -1; this
         // objective_multiplier ensures that the objective is correctly logged.
@@ -48,7 +66,7 @@ impl OptimisationProcedure for LowerBoundingSearch {
 
         self.update_best_solution_and_process(
             objective_multiplier,
-            &objective_variable,
+            &objective,
             &mut best_objective_value,
             &mut best_solution,
             brancher,
@@ -57,8 +75,7 @@ impl OptimisationProcedure for LowerBoundingSearch {
         solver.satisfaction_solver.restore_state_at_root(brancher);
 
         loop {
-            let assumption =
-                predicate!(objective_variable <= solver.lower_bound(&objective_variable));
+            let assumption = predicate!(objective <= solver.lower_bound(&objective));
 
             info!(
                 "Lower-Bounding Search - Attempting to find solution with assumption {assumption}"
@@ -74,7 +91,7 @@ impl OptimisationProcedure for LowerBoundingSearch {
                 CSPSolverExecutionFlag::Feasible => {
                     self.update_best_solution_and_process(
                         objective_multiplier,
-                        &objective_variable,
+                        &objective,
                         &mut best_objective_value,
                         &mut best_solution,
                         brancher,
@@ -87,15 +104,9 @@ impl OptimisationProcedure for LowerBoundingSearch {
                     // We create a predicate specifying the best-found solution for the proof
                     // logging
                     let objective_bound_predicate = if is_maximising {
-                        predicate![
-                            objective_variable
-                                >= best_objective_value as i32 * objective_multiplier
-                        ]
+                        predicate![objective >= best_objective_value as i32 * objective_multiplier]
                     } else {
-                        predicate![
-                            objective_variable
-                                <= best_objective_value as i32 * objective_multiplier
-                        ]
+                        predicate![objective <= best_objective_value as i32 * objective_multiplier]
                     };
                     let _ = solver
                         .satisfaction_solver
@@ -116,5 +127,9 @@ impl OptimisationProcedure for LowerBoundingSearch {
                 }
             }
         }
+    }
+
+    fn on_solution_callback(&self, solver: &Solver) {
+        (self.solution_callback)(solver)
     }
 }

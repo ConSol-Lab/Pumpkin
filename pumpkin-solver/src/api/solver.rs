@@ -1,8 +1,6 @@
-use std::fmt::Display;
 use std::num::NonZero;
 
-use clap::ValueEnum;
-
+use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -28,16 +26,15 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
-use crate::optimisation_search::lower_bounding_search::LowerBoundingSearch;
+use crate::optimisation::linear_sat_unsat::LSU;
 #[cfg(doc)]
-use crate::optimisation_search::upper_bounding_search::UpperBoundingSearch;
-use crate::optimisation_search::OptimisationProcedure;
+use crate::optimisation::linear_unsat_sat::LUS;
+use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::results::SolutionCallbackArguments;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 
@@ -93,9 +90,6 @@ use crate::statistics::log_statistic_postfix;
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     pub(crate) satisfaction_solver: ConstraintSatisfactionSolver,
-    /// The function is called whenever an optimisation function finds a solution; see
-    /// [`Solver::with_solution_callback`].
-    pub(crate) solution_callback: Box<dyn Fn(SolutionCallbackArguments)>,
     true_literal: Literal,
 }
 
@@ -105,15 +99,9 @@ impl Default for Solver {
         let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            solution_callback: create_empty_function(),
             true_literal,
         }
     }
-}
-
-/// Creates a place-holder empty function which does not do anything when a solution is found.
-fn create_empty_function() -> Box<dyn Fn(SolutionCallbackArguments)> {
-    Box::new(|_| {})
 }
 
 impl std::fmt::Debug for Solver {
@@ -131,22 +119,8 @@ impl Solver {
         let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            solution_callback: create_empty_function(),
             true_literal,
         }
-    }
-
-    /// Adds a call-back to the [`Solver`] which is called every time that a solution is found when
-    /// optimising using [`Solver::optimise`].
-    ///
-    /// Note that this will also
-    /// perform the call-back on the optimal solution which is returned in
-    /// [`OptimisationResult::Optimal`].
-    pub fn with_solution_callback(
-        &mut self,
-        solution_callback: impl Fn(SolutionCallbackArguments) + 'static,
-    ) {
-        self.solution_callback = Box::new(solution_callback);
     }
 
     /// Logs the statistics currently present in the solver with the provided objective value.
@@ -163,6 +137,10 @@ impl Solver {
 
     pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
         &mut self.satisfaction_solver
+    }
+
+    pub fn get_solution_reference(&self) -> SolutionReference {
+        self.satisfaction_solver.get_solution_reference()
     }
 }
 
@@ -343,7 +321,6 @@ impl Solver {
                 self.satisfaction_solver.restore_state_at_root(brancher);
 
                 brancher.on_solution(solution.as_reference());
-                (self.solution_callback)(SolutionCallbackArguments::new(self, &solution, None));
 
                 SatisfactionResult::Satisfiable(solution)
             }
@@ -431,43 +408,19 @@ impl Solver {
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is optimised as indicated by the `direction` (or is indicated to
     /// terminate by the provided [`TerminationCondition`]). Uses a search strategy based on the
-    /// provided [`OptimisationProcedure`], currently [`LowerBoundingSearch`] and
-    /// [`UpperBoundingSearch`] are supported.
+    /// provided [`OptimisationProcedure`], currently [`LSU`] and
+    /// [`LUS`] are supported.
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise(
+    pub fn optimise<Var: IntegerVariable, Callback: Fn(&Solver)>(
         &mut self,
         brancher: &mut impl Brancher,
         termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-        direction: OptimisationDirection,
-        mut optimisation_procedure: impl OptimisationProcedure,
+        mut optimisation_procedure: impl OptimisationProcedure<Var, Callback>,
     ) -> OptimisationResult {
-        match direction {
-            OptimisationDirection::Maximise => optimisation_procedure.maximise(
-                brancher,
-                termination,
-                objective_variable,
-                false,
-                self,
-            ),
-            OptimisationDirection::Minimise => optimisation_procedure.minimise(
-                brancher,
-                termination,
-                objective_variable,
-                false,
-                self,
-            ),
-        }
+        optimisation_procedure.optimise(brancher, termination, self)
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-/// The direction of the optimisation, either maximising or minimising.
-pub enum OptimisationDirection {
-    Maximise,
-    Minimise,
 }
 
 /// Functions for adding new constraints to the solver.
@@ -563,27 +516,6 @@ impl Solver {
         let _ = self
             .satisfaction_solver
             .conclude_proof_optimal(bound.get_true_predicate());
-    }
-}
-
-/// The type of search which is performed by the solver.
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
-pub enum SearchMode {
-    /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
-    /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
-    #[default]
-    UpperBounding,
-    /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
-    /// objective variable until a SAT result is reached. Can be seen as lower-bounding search.
-    LowerBounding,
-}
-
-impl Display for SearchMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SearchMode::UpperBounding => write!(f, "upper-bounding"),
-            SearchMode::LowerBounding => write!(f, "lower-bounding"),
-        }
     }
 }
 

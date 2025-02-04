@@ -10,13 +10,13 @@
 //!   same lower-bound; one tie-breaking strategy could be to simply pick the first element that was
 //!   encountered (implemented in [`InOrderTieBreaker`]) but others could be considered.
 //! - Secondly, it should keep track of which variable to consider based on the value (and based on
-//!   the [`Direction`]); if we once again look at the example of [`Smallest`] then the
+//!   the [`OptimisationDirection`]); if we once again look at the example of [`Smallest`] then the
 //!   [`TieBreaker`] should only consider tie-breaking between variables with the same value or
 //!   update the "best" variable found so far. For example, considering the [`Smallest`]
 //!   [`VariableSelector`], if we have two variables, `x` with lower-bound 5 and `y` with
 //!   lower-bound 6 then the [`TieBreaker`] should only consider `x` as potential candidate since it
 //!   has a strictly lower value and the direction of this [`VariableSelector`] is
-//!   [`Direction::Minimum`].
+//!   [`OptimisationDirection::Minimise`].
 //!
 //! The following example shows how a simple [`TieBreaker`] ([`InOrderTieBreaker`]) will
 //! select the first variable with the lowest-value that it has found.
@@ -24,9 +24,9 @@
 //! ```rust
 //! # use pumpkin_solver::branching::tie_breaking::InOrderTieBreaker;
 //! # use pumpkin_solver::variables::DomainId;
-//! # use pumpkin_solver::branching::tie_breaking::Direction;
+//! # use pumpkin_solver::optimisation::OptimisationDirection;
 //! # use pumpkin_solver::branching::tie_breaking::TieBreaker;
-//! let mut breaker = InOrderTieBreaker::new(Direction::Minimum);
+//! let mut breaker = InOrderTieBreaker::new(OptimisationDirection::Minimise);
 //!
 //! // We consider 3 variables, where only variables with ID 1 and ID 2 should be considered.
 //! // We expect the variable with ID 1 to be selected since it was the first one with
@@ -52,3 +52,5 @@ pub use tie_breaker::*;
 use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
+#[cfg(doc)]
+use crate::optimisation::OptimisationDirection;

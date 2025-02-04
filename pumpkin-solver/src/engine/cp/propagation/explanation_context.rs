@@ -32,12 +32,6 @@ impl<'a> ExplanationContext<'a> {
         }
     }
 
-    /// Get the underlying assignments.
-    #[deprecated = "using the assignments directly is not ideal, and we should develop this context API further instead"]
-    pub(crate) fn assignments(&self) -> &'a Assignments {
-        self.assignments
-    }
-
     /// Get the current working nogood.
     ///
     /// The working nogood does not necessarily contain the predicate that is being explained.

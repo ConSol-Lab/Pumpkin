@@ -1,11 +1,11 @@
 use log::warn;
 
-use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
+use crate::optimisation::OptimisationDirection;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the largest value in its domain.
@@ -30,12 +30,12 @@ impl<Var: Clone + 'static> Largest<Var, InOrderTieBreaker<Var, i32>> {
             warn!("The Largest variable selector was not provided with any variables");
             return Largest {
                 variables: vec![],
-                tie_breaker: InOrderTieBreaker::new(Direction::Maximum),
+                tie_breaker: InOrderTieBreaker::new(OptimisationDirection::Maximise),
             };
         }
         Self {
             variables: variables.to_vec(),
-            tie_breaker: InOrderTieBreaker::new(Direction::Maximum),
+            tie_breaker: InOrderTieBreaker::new(OptimisationDirection::Maximise),
         }
     }
 }
@@ -44,7 +44,7 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Largest<Var, TieBr
     pub fn with_tie_breaker(variables: &[Var], tie_breaker: TieBreaking) -> Self {
         pumpkin_assert_eq_simple!(
             tie_breaker.get_direction(),
-            Direction::Maximum,
+            OptimisationDirection::Maximise,
             "The provided tie-breaker to Largest attempts to find the Minimum value
              instead of the Maximum value, please ensure that you have passed the correct tie-breaker");
         if variables.is_empty() {

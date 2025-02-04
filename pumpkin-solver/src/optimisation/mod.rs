@@ -1,40 +1,29 @@
+//! Contains structures related to optimissation.
+use std::fmt::Display;
+
+use clap::ValueEnum;
+
 use crate::branching::Brancher;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
-use crate::results::SolutionCallbackArguments;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
 
-pub(crate) mod lower_bounding_search;
-pub(crate) mod upper_bounding_search;
+pub mod linear_sat_unsat;
+pub mod linear_unsat_sat;
 
-pub trait OptimisationProcedure {
-    fn minimise(
+pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver)> {
+    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self;
+
+    fn optimise(
         &mut self,
         brancher: &mut impl Brancher,
         termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-        is_maximising: bool,
         solver: &mut Solver,
     ) -> OptimisationResult;
 
-    fn maximise(
-        &mut self,
-        brancher: &mut impl Brancher,
-        termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-        _is_minimising: bool,
-        solver: &mut Solver,
-    ) -> OptimisationResult {
-        self.minimise(
-            brancher,
-            termination,
-            objective_variable.scaled(-1),
-            true,
-            solver,
-        )
-    }
+    fn on_solution_callback(&self, solver: &Solver);
 
     /// Processes a solution when it is found, it consists of the following procedure:
     /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
@@ -42,7 +31,7 @@ pub trait OptimisationProcedure {
     /// - Storing the new best solution in `best_solution`.
     /// - Calling [`Brancher::on_solution`] on the provided `brancher`.
     /// - Logging the statistics using [`Solver::log_statistics_with_objective`].
-    /// - Calling the solution callback stored with [`Solver::with_solution_callback`].
+    /// - Calling the solution callback.
     fn update_best_solution_and_process(
         &self,
         objective_multiplier: i32,
@@ -59,22 +48,45 @@ pub trait OptimisationProcedure {
                 .expect("expected variable to be assigned")) as i64;
         *best_solution = solver.satisfaction_solver.get_solution_reference().into();
 
-        self.internal_process_solution(best_solution, brancher, Some(*best_objective_value), solver)
+        self.internal_process_solution(best_solution, brancher, solver)
     }
 
     fn internal_process_solution(
         &self,
         solution: &Solution,
         brancher: &mut impl Brancher,
-        objective_value: Option<i64>,
         solver: &Solver,
     ) {
         brancher.on_solution(solution.as_reference());
 
-        (solver.solution_callback)(SolutionCallbackArguments::new(
-            solver,
-            solution,
-            objective_value,
-        ));
+        self.on_solution_callback(solver)
     }
+}
+
+/// The type of search which is performed by the solver.
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+pub enum SearchMode {
+    /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
+    /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
+    #[default]
+    UpperBounding,
+    /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
+    /// objective variable until a SAT result is reached. Can be seen as lower-bounding search.
+    LowerBounding,
+}
+
+impl Display for SearchMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SearchMode::UpperBounding => write!(f, "upper-bounding"),
+            SearchMode::LowerBounding => write!(f, "lower-bounding"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+/// The direction of the optimisation, either maximising or minimising.
+pub enum OptimisationDirection {
+    Maximise,
+    Minimise,
 }

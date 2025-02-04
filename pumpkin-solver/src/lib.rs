@@ -132,8 +132,9 @@
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
 //! # use pumpkin_solver::optimisation::OptimisationDirection;
-//! # use pumpkin_solver::optimisation::UpperBoundingSearch;
+//! # use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
 //! # use std::cmp::max;
+//! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -147,9 +148,7 @@
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
-//!     objective,
-//!     OptimisationDirection::Minimise,
-//!     UpperBoundingSearch,
+//!     LSU::new(OptimisationDirection::Minimise, objective, |_| {}),
 //! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
@@ -293,7 +292,6 @@ pub(crate) mod basic_types;
 pub mod containers;
 pub(crate) mod engine;
 pub(crate) mod math;
-pub(crate) mod optimisation_search;
 pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
 pub(crate) mod variable_names;
@@ -305,6 +303,7 @@ use crate::termination::TerminationCondition;
 
 pub mod branching;
 pub mod constraints;
+pub mod optimisation;
 pub mod proof;
 pub mod statistics;
 
