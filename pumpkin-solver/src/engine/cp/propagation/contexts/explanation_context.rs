@@ -1,9 +1,9 @@
 use std::sync::LazyLock;
 
+use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
-use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 
@@ -30,12 +30,6 @@ impl<'a> ExplanationContext<'a> {
             assignments,
             current_nogood,
         }
-    }
-
-    /// Get the underlying assignments.
-    #[deprecated = "using the assignments directly is not ideal, and we should develop this context API further instead"]
-    pub(crate) fn assignments(&self) -> &'a Assignments {
-        self.assignments
     }
 
     /// Get the current working nogood.
