@@ -7,6 +7,7 @@ use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
+use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
@@ -18,8 +19,8 @@ pub struct LUS<Var: IntegerVariable, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var: IntegerVariable, Callback: Fn(&Solver)> OptimisationProcedure<Var, Callback>
-    for LUS<Var, Callback>
+impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
+    OptimisationProcedure<Var, Callback> for LUS<Var, Callback>
 {
     fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
         Self {
@@ -129,7 +130,7 @@ impl<Var: IntegerVariable, Callback: Fn(&Solver)> OptimisationProcedure<Var, Cal
         }
     }
 
-    fn on_solution_callback(&self, solver: &Solver) {
-        (self.solution_callback)(solver)
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference) {
+        (self.solution_callback)(solver, solution)
     }
 }

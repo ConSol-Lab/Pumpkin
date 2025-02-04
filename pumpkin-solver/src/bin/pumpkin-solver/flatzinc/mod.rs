@@ -60,9 +60,9 @@ fn solution_callback(
     options_all_solutions: bool,
     outputs: &[Output],
     solver: &Solver,
+    solution: SolutionReference,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
-        let solution = solver.get_solution_reference();
         if let Some(objective) = instance_objective_function {
             solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
         } else {
@@ -105,52 +105,72 @@ pub(crate) fn solve(
                 SearchMode::UpperBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    LSU::new(OptimisationDirection::Maximise, *domain_id, |solver| {
-                        solution_callback(
-                            Some(*domain_id),
-                            options.all_solutions,
-                            &outputs,
-                            solver,
-                        );
-                    }),
+                    LSU::new(
+                        OptimisationDirection::Maximise,
+                        *domain_id,
+                        |solver, solution| {
+                            solution_callback(
+                                Some(*domain_id),
+                                options.all_solutions,
+                                &outputs,
+                                solver,
+                                solution,
+                            );
+                        },
+                    ),
                 ),
                 SearchMode::LowerBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    LUS::new(OptimisationDirection::Maximise, *domain_id, |solver| {
-                        solution_callback(
-                            Some(*domain_id),
-                            options.all_solutions,
-                            &outputs,
-                            solver,
-                        );
-                    }),
+                    LUS::new(
+                        OptimisationDirection::Maximise,
+                        *domain_id,
+                        |solver, solution| {
+                            solution_callback(
+                                Some(*domain_id),
+                                options.all_solutions,
+                                &outputs,
+                                solver,
+                                solution,
+                            );
+                        },
+                    ),
                 ),
             },
             FlatzincObjective::Minimize(domain_id) => match options.search_mode {
                 SearchMode::UpperBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    LSU::new(OptimisationDirection::Minimise, *domain_id, |solver| {
-                        solution_callback(
-                            Some(*domain_id),
-                            options.all_solutions,
-                            &outputs,
-                            solver,
-                        );
-                    }),
+                    LSU::new(
+                        OptimisationDirection::Minimise,
+                        *domain_id,
+                        |solver, solution| {
+                            solution_callback(
+                                Some(*domain_id),
+                                options.all_solutions,
+                                &outputs,
+                                solver,
+                                solution,
+                            );
+                        },
+                    ),
                 ),
                 SearchMode::LowerBounding => solver.optimise(
                     &mut brancher,
                     &mut termination,
-                    LUS::new(OptimisationDirection::Minimise, *domain_id, |solver| {
-                        solution_callback(
-                            Some(*domain_id),
-                            options.all_solutions,
-                            &outputs,
-                            solver,
-                        );
-                    }),
+                    LUS::new(
+                        OptimisationDirection::Minimise,
+                        *domain_id,
+                        |solver, solution| {
+                            solution_callback(
+                                Some(*domain_id),
+                                options.all_solutions,
+                                &outputs,
+                                solver,
+                                solution,
+                            );
+                        },
+                    ),
                 ),
             },
         };
@@ -186,7 +206,15 @@ pub(crate) fn solve(
                 solver.get_solution_iterator(&mut brancher, &mut termination);
             loop {
                 match solution_iterator.next_solution() {
-                    IteratedSolution::Solution(_) => {}
+                    IteratedSolution::Solution(solution, solver) => {
+                        solution_callback(
+                            None,
+                            options.all_solutions,
+                            &outputs,
+                            solver,
+                            solution.as_reference(),
+                        );
+                    }
                     IteratedSolution::Finished => {
                         println!("==========");
                         break;
@@ -202,7 +230,13 @@ pub(crate) fn solve(
             }
         } else {
             match solver.satisfy(&mut brancher, &mut termination) {
-                SatisfactionResult::Satisfiable(_) => {}
+                SatisfactionResult::Satisfiable(solution) => solution_callback(
+                    None,
+                    options.all_solutions,
+                    &outputs,
+                    &solver,
+                    solution.as_reference(),
+                ),
                 SatisfactionResult::Unsatisfiable => {
                     println!("{MSG_UNSATISFIABLE}");
                 }

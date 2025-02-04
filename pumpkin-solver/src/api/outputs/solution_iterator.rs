@@ -53,7 +53,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(solution)
+                IteratedSolution::Solution(solution, self.solver)
             }
             Unsatisfiable => {
                 if self.has_solution {
@@ -84,9 +84,9 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
 #[derive(Debug)]
-pub enum IteratedSolution {
+pub enum IteratedSolution<'a> {
     /// A new solution was identified.
-    Solution(Solution),
+    Solution(Solution, &'a Solver),
 
     /// No more solutions exist.
     Finished,

@@ -413,7 +413,7 @@ impl Solver {
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise<Var: IntegerVariable, Callback: Fn(&Solver)>(
+    pub fn optimise<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>(
         &mut self,
         brancher: &mut impl Brancher,
         termination: &mut impl TerminationCondition,

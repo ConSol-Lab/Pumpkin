@@ -6,6 +6,7 @@ use clap::ValueEnum;
 use crate::branching::Brancher;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
+use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
@@ -13,7 +14,7 @@ use crate::Solver;
 pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
 
-pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver)> {
+pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)> {
     fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self;
 
     fn optimise(
@@ -23,7 +24,7 @@ pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver)> {
         solver: &mut Solver,
     ) -> OptimisationResult;
 
-    fn on_solution_callback(&self, solver: &Solver);
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference);
 
     /// Processes a solution when it is found, it consists of the following procedure:
     /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
@@ -59,7 +60,7 @@ pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver)> {
     ) {
         brancher.on_solution(solution.as_reference());
 
-        self.on_solution_callback(solver)
+        self.on_solution_callback(solver, solution.as_reference())
     }
 }
 

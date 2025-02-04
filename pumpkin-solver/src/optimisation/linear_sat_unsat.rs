@@ -6,6 +6,7 @@ use crate::predicate;
 use crate::pumpkin_assert_simple;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
+use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
@@ -61,7 +62,7 @@ impl<Var: IntegerVariable, Callback> LSU<Var, Callback> {
 impl<Var, Callback> OptimisationProcedure<Var, Callback> for LSU<Var, Callback>
 where
     Var: IntegerVariable,
-    Callback: Fn(&Solver),
+    Callback: Fn(&Solver, SolutionReference),
 {
     fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
         Self {
@@ -175,7 +176,7 @@ where
         }
     }
 
-    fn on_solution_callback(&self, solver: &Solver) {
-        (self.solution_callback)(solver)
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference) {
+        (self.solution_callback)(solver, solution)
     }
 }
