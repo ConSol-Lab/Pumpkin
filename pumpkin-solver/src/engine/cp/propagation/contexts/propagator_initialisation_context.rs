@@ -1,5 +1,6 @@
 use super::PropagationContext;
 use super::ReadDomains;
+use super::StatefulPropagationContext;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -8,6 +9,7 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
+use crate::engine::TrailedAssignments;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
 
@@ -19,29 +21,39 @@ use crate::engine::Watchers;
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
-    context: PropagationContext<'a>,
+    pub assignments: &'a mut Assignments,
 }
 
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
+        stateful_assignments: &'a mut TrailedAssignments,
         propagator_id: PropagatorId,
-        assignments: &'a Assignments,
+        assignments: &'a mut Assignments,
     ) -> PropagatorInitialisationContext<'a> {
         PropagatorInitialisationContext {
             watch_list,
+            stateful_assignments,
             propagator_id,
             next_local_id: LocalId::from(0),
 
-            context: PropagationContext::new(assignments),
+            assignments,
+        }
+    }
+
+    pub(crate) fn as_stateful_readonly(&mut self) -> StatefulPropagationContext {
+        StatefulPropagationContext {
+            stateful_assignments: self.stateful_assignments,
+            assignments: self.assignments,
         }
     }
 
     pub(crate) fn as_readonly(&self) -> PropagationContext {
-        self.context
+        PropagationContext::new(self.assignments)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -61,7 +73,7 @@ impl PropagatorInitialisationContext<'_> {
         domain_events: DomainEvents,
         local_id: LocalId,
     ) -> Var {
-        if self.context.is_fixed(&var) {
+        if PropagationContext::new(self.assignments).is_fixed(&var) {
             return var;
         }
         let propagator_var = PropagatorVarId {
@@ -116,11 +128,22 @@ impl PropagatorInitialisationContext<'_> {
 
 mod private {
     use super::*;
-    use crate::engine::propagation::propagation_context::HasAssignments;
+    use crate::engine::propagation::contexts::HasAssignments;
+    use crate::engine::propagation::contexts::HasStatefulAssignments;
 
     impl HasAssignments for PropagatorInitialisationContext<'_> {
         fn assignments(&self) -> &Assignments {
-            self.context.assignments
+            self.assignments
+        }
+    }
+
+    impl HasStatefulAssignments for PropagatorInitialisationContext<'_> {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
+            self.stateful_assignments
+        }
+
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
+            self.stateful_assignments
         }
     }
 }
