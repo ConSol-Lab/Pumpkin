@@ -12,6 +12,7 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
+use super::TrailedAssignments;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
@@ -49,10 +50,12 @@ impl DebugHelper {
     /// Additionally checks whether the internal data structures of the clausal propagator are okay
     /// and consistent with the assignments_propositional
     pub(crate) fn debug_fixed_point_propagation(
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         propagators: &PropagatorStore,
     ) -> bool {
         let mut assignments_clone = assignments.clone();
+        let mut stateful_assignments_clone = stateful_assignments.clone();
         // Check whether constraint programming propagators missed anything
         //
         //  It works by asking each propagator to propagate from scratch, and checking whether any
@@ -73,6 +76,7 @@ impl DebugHelper {
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
+                &mut stateful_assignments_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
@@ -113,12 +117,14 @@ impl DebugHelper {
     }
 
     pub(crate) fn debug_reported_failure(
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
+            stateful_assignments,
             assignments,
             failure_reason,
             propagator,
@@ -126,6 +132,7 @@ impl DebugHelper {
         );
 
         DebugHelper::debug_reported_propagations_negate_failure_and_check(
+            stateful_assignments,
             assignments,
             failure_reason,
             propagator,
@@ -143,6 +150,7 @@ impl DebugHelper {
     pub(crate) fn debug_check_propagations(
         num_trail_entries_before: usize,
         propagator_id: PropagatorId,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
@@ -168,6 +176,7 @@ impl DebugHelper {
             result &= Self::debug_propagator_reason(
                 trail_entry.predicate,
                 &reason,
+                stateful_assignments,
                 assignments,
                 &propagators[propagator_id],
                 propagator_id,
@@ -179,6 +188,7 @@ impl DebugHelper {
     fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &[Predicate],
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -209,6 +219,7 @@ impl DebugHelper {
         // Does setting the predicates from the reason indeed lead to the propagation?
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
+            let mut stateful_assignments_clone = stateful_assignments.debug_create_empty_clone();
 
             let reason_predicates: Vec<Predicate> = reason.to_vec();
             let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
@@ -221,6 +232,7 @@ impl DebugHelper {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
+                    &mut stateful_assignments_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
@@ -304,6 +316,7 @@ impl DebugHelper {
         // related to reverse unit propagation
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
+            let mut stateful_assignments_clone = stateful_assignments.debug_create_empty_clone();
 
             let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
                 .chain(reason.iter().copied())
@@ -330,6 +343,7 @@ impl DebugHelper {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
                     let context = PropagationContextMut::new(
+                        &mut stateful_assignments_clone,
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut semantic_minimiser,
@@ -369,6 +383,7 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_reproduce_failure(
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
@@ -378,6 +393,7 @@ impl DebugHelper {
             return;
         }
         let mut assignments_clone = assignments.debug_create_empty_clone();
+        let mut stateful_assignments_clone = stateful_assignments.debug_create_empty_clone();
 
         let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
@@ -390,6 +406,7 @@ impl DebugHelper {
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
+                &mut stateful_assignments_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
@@ -414,6 +431,7 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_negate_failure_and_check(
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
@@ -440,6 +458,7 @@ impl DebugHelper {
         let mut found_nonconflicting_state_at_root = false;
         for predicate in &reason_predicates {
             let mut assignments_clone = assignments.debug_create_empty_clone();
+            let mut stateful_assignments_clone = stateful_assignments.debug_create_empty_clone();
 
             let negated_predicate = predicate.not();
             let outcome = assignments_clone.post_predicate(negated_predicate, None);
@@ -448,6 +467,7 @@ impl DebugHelper {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
+                    &mut stateful_assignments_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,

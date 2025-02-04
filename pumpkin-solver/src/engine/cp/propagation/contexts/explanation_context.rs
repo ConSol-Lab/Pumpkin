@@ -1,9 +1,9 @@
 use std::sync::LazyLock;
 
+use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
-use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 
