@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use crate::engine::cp::propagation::propagation_context::ReadDomains;
-use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::engine::propagation::contexts::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
 use crate::options::CumulativeExplanationType;
 use crate::predicate;

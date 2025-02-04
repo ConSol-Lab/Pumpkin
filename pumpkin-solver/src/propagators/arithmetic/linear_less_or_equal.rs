@@ -1,8 +1,12 @@
+use itertools::Itertools;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::contexts::ManipulateStatefulIntegers;
+use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -10,6 +14,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::TrailedInt;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
 
@@ -20,9 +25,9 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     c: i32,
 
     /// The lower bound of the sum of the left-hand side. This is incremental state.
-    lower_bound_left_hand_side: i64,
+    lower_bound_left_hand_side: TrailedInt,
     /// The value at index `i` is the bound for `x[i]`.
-    current_bounds: Box<[i32]>,
+    current_bounds: Box<[TrailedInt]>,
 }
 
 impl<Var> LinearLessOrEqualPropagator<Var>
@@ -30,31 +35,18 @@ where
     Var: IntegerVariable,
 {
     pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
-        let current_bounds = vec![0; x.len()].into();
+        let current_bounds = (0..x.len())
+            .map(|_| TrailedInt::default())
+            .collect_vec()
+            .into();
 
         // incremental state will be properly initialized in `Propagator::initialise_at_root`.
         LinearLessOrEqualPropagator::<Var> {
             x,
             c,
-            lower_bound_left_hand_side: 0,
+            lower_bound_left_hand_side: TrailedInt::default(),
             current_bounds,
         }
-    }
-
-    /// Recalculates the incremental state from scratch.
-    fn recalculate_incremental_state(&mut self, context: PropagationContext) {
-        self.lower_bound_left_hand_side = self
-            .x
-            .iter()
-            .map(|var| context.lower_bound(var) as i64)
-            .sum();
-
-        self.current_bounds
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, bound)| {
-                *bound = context.lower_bound(&self.x[index]);
-            });
     }
 
     fn create_conflict_reason(&self, context: PropagationContext) -> PropositionalConjunction {
@@ -73,17 +65,19 @@ where
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        let mut lower_bound_left_hand_side = 0_i64;
         self.x.iter().enumerate().for_each(|(i, x_i)| {
             let _ = context.register(
                 x_i.clone(),
                 DomainEvents::LOWER_BOUND,
                 LocalId::from(i as u32),
             );
+            lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
+            self.current_bounds[i] = context.new_stateful_integer(context.lower_bound(x_i) as i64);
         });
+        self.lower_bound_left_hand_side = context.new_stateful_integer(lower_bound_left_hand_side);
 
-        self.recalculate_incremental_state(context.as_readonly());
-
-        if let Some(conjunction) = self.detect_inconsistency(context.as_readonly()) {
+        if let Some(conjunction) = self.detect_inconsistency(context.as_stateful_readonly()) {
             Err(conjunction)
         } else {
             Ok(())
@@ -92,10 +86,10 @@ where
 
     fn detect_inconsistency(
         &self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
     ) -> Option<PropositionalConjunction> {
-        if (self.c as i64) < self.lower_bound_left_hand_side {
-            Some(self.create_conflict_reason(context))
+        if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
+            Some(self.create_conflict_reason(context.as_readonly()))
         } else {
             None
         }
@@ -103,29 +97,25 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        mut context: StatefulPropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let index = local_id.unpack() as usize;
-
         let x_i = &self.x[index];
-        let old_bound = self.current_bounds[index];
-        let new_bound = context.lower_bound(x_i);
+
+        let old_bound = context.value(self.current_bounds[index]);
+        let new_bound = context.lower_bound(x_i) as i64;
 
         pumpkin_assert_simple!(
             old_bound < new_bound,
             "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
         );
 
-        self.current_bounds[index] = new_bound;
-        self.lower_bound_left_hand_side += (new_bound - old_bound) as i64;
+        context.add_assign(self.lower_bound_left_hand_side, new_bound - old_bound);
+        context.assign(self.current_bounds[index], new_bound);
 
         EnqueueDecision::Enqueue
-    }
-
-    fn synchronise(&mut self, context: PropagationContext) {
-        self.recalculate_incremental_state(context);
     }
 
     fn priority(&self) -> u32 {
@@ -137,14 +127,14 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conjunction) = self.detect_inconsistency(context.as_readonly()) {
+        if let Some(conjunction) = self.detect_inconsistency(context.as_stateful_readonly()) {
             return Err(conjunction.into());
         }
 
         let lower_bound_left_hand_side =
-            match TryInto::<i32>::try_into(self.lower_bound_left_hand_side) {
+            match TryInto::<i32>::try_into(context.value(self.lower_bound_left_hand_side)) {
                 Ok(bound) => bound,
-                Err(_) if self.lower_bound_left_hand_side.is_positive() => {
+                Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
                     // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
                     // overflow (hence the check that the lower-bound on the left-hand side is
                     // positive)
@@ -200,7 +190,7 @@ where
         let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
         {
             Ok(bound) => bound,
-            Err(_) if self.lower_bound_left_hand_side.is_positive() => {
+            Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
                 // overflow (hence the check that the lower-bound on the left-hand side is
                 // positive)

@@ -76,25 +76,23 @@
 //! International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
 //! 118–132.
 
-mod explanation_context;
+pub(crate) mod contexts;
 pub(crate) mod local_id;
-pub(crate) mod propagation_context;
 pub(crate) mod propagator;
 pub(crate) mod propagator_id;
-pub(crate) mod propagator_initialisation_context;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
-pub(crate) use explanation_context::CurrentNogood;
-pub(crate) use explanation_context::ExplanationContext;
+pub(crate) use contexts::explanation_context::CurrentNogood;
+pub(crate) use contexts::explanation_context::ExplanationContext;
+pub(crate) use contexts::propagation_context::PropagationContext;
+pub(crate) use contexts::propagation_context::PropagationContextMut;
+pub(crate) use contexts::propagation_context::ReadDomains;
+pub(crate) use contexts::propagator_initialisation_context::PropagatorInitialisationContext;
 pub(crate) use local_id::LocalId;
-pub(crate) use propagation_context::PropagationContext;
-pub(crate) use propagation_context::PropagationContextMut;
-pub(crate) use propagation_context::ReadDomains;
 pub(crate) use propagator::EnqueueDecision;
 pub(crate) use propagator::Propagator;
 pub(crate) use propagator_id::PropagatorId;
-pub(crate) use propagator_initialisation_context::PropagatorInitialisationContext;
 pub(crate) use propagator_var_id::PropagatorVarId;
 
 #[cfg(doc)]

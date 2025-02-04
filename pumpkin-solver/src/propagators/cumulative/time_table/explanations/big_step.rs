@@ -1,8 +1,8 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::ReadDomains;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
