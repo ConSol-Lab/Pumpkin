@@ -25,7 +25,7 @@ impl ValueSelector<DomainId> for RandomSplitter {
         //
         // 1. If the bound is equal to the lower-bound then we need to assign it to this bound since
         //    [x >= lb] is currently true
-        // 2. If the bound is equal to the upper-bound then we need to assin it to this bound since
+        // 2. If the bound is equal to the upper-bound then we need to assign it to this bound since
         //    [x <= ub] is currentl true
         if bound == context.lower_bound(decision_variable) {
             return predicate!(decision_variable <= bound);
