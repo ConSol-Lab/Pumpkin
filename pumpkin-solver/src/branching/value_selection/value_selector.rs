@@ -1,5 +1,5 @@
 use crate::basic_types::SolutionReference;
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
@@ -30,11 +30,17 @@ pub trait ValueSelector<Var> {
     /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
     /// previously fixed. This method could thus be called multiple times in a single
     /// backtracking operation by the solver.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::UnassignInteger`] in
+    /// [`Self::subscribe_to_events`]
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// This method is called when a solution is found; either when iterating over all solutions in
     /// the case of a satisfiable problem or on solutions of increasing quality when solving an
     /// optimisation problem.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Solution`] in
+    /// [`Self::subscribe_to_events`]
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
     /// This method returns whether a restart is *currently* pointless for the [`ValueSelector`].
@@ -49,21 +55,9 @@ pub trait ValueSelector<Var> {
         true
     }
 
-    /// Indicates which [`BrancherEvents`] are relevant for this particular [`ValueSelector`].
+    /// Indicates which [`BrancherEvent`] are relevant for this particular [`ValueSelector`].
     ///
-    /// This can be used by [`Brancher`]s such as the [`DynamicBrancher`] to determine upon which
+    /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which [`ValueSelector`] should be called.
-    ///
-    /// By default, a [`ValueSelector`] is subscribed to all events.
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![
-            BrancherEvents::Conflict,
-            BrancherEvents::Backtrack,
-            BrancherEvents::Solution,
-            BrancherEvents::UnassignInteger,
-            BrancherEvents::AppearanceInConflictPredicate,
-            BrancherEvents::Restart,
-            BrancherEvents::Synchronise,
-        ]
-    }
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }

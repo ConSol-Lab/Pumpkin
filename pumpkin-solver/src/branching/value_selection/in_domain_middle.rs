@@ -1,4 +1,4 @@
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::value_selection::InDomainMedian;
 use crate::branching::value_selection::ValueSelector;
@@ -47,7 +47,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMiddle {
         unreachable!("There should be at least 1 selectable variable in the domain");
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }

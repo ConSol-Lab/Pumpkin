@@ -18,6 +18,7 @@ mod out_domain_max;
 mod out_domain_median;
 mod out_domain_min;
 mod out_domain_random;
+mod random_splitter;
 mod reverse_in_domain_split;
 mod value_selector;
 
@@ -34,5 +35,6 @@ pub use out_domain_max::*;
 pub use out_domain_median::*;
 pub use out_domain_min::*;
 pub use out_domain_random::*;
+pub use random_splitter::*;
 pub use reverse_in_domain_split::*;
 pub use value_selector::ValueSelector;

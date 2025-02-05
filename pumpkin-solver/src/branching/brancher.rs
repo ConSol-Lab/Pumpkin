@@ -43,15 +43,24 @@ pub trait Brancher {
 
     /// A function which is called after a conflict has been found and processed but (currently)
     /// does not provide any additional information.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Conflict`] in
+    /// [`Self::subscribe_to_events`]
     fn on_conflict(&mut self) {}
 
     /// A function which is called whenever a backtrack occurs in the [`Solver`].
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Backtrack`] in
+    /// [`Self::subscribe_to_events`]
     fn on_backtrack(&mut self) {}
 
     /// This method is called when a solution is found; this will either be called when a new
     /// incumbent solution is found (i.e. a solution with a better objective value than previously
     /// known) or when a new solution is found when iterating over solutions using
     /// [`SolutionIterator`].
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Solution`] in
+    /// [`Self::subscribe_to_events`]
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
@@ -59,17 +68,28 @@ pub trait Brancher {
     /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
     /// previously fixed. This method could thus be called multiple times in a single
     /// backtracking operation by the solver.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::UnassignInteger`] in
+    /// [`Self::subscribe_to_events`]
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// A function which is called when a [`Predicate`] appears in a conflict during conflict
     /// analysis.
+    ///
+    /// To receive information about this event, use
+    /// [`BrancherEvent::AppearanceInConflictPredicate`] in [`Self::subscribe_to_events`]
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
     /// This method is called whenever a restart is performed.
+    /// To receive information about this event, use [`BrancherEvent::Restart`] in
+    /// [`Self::subscribe_to_events`]
     fn on_restart(&mut self) {}
 
     /// Called after backtracking.
     /// Used to reset internal data structures to account for the backtrack.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Synchronise`] in
+    /// [`Self::subscribe_to_events`]
     fn synchronise(&mut self, _assignments: &Assignments) {}
 
     /// This method returns whether a restart is *currently* pointless for the [`Brancher`].
@@ -86,30 +106,18 @@ pub trait Brancher {
         true
     }
 
-    /// Indicates which [`BrancherEvents`] are relevant for this particular [`Brancher`].
+    /// Indicates which [`BrancherEvent`] are relevant for this particular [`Brancher`].
     ///
-    /// This can be used by [`Brancher`]s such as the [`DynamicBrancher`] to determine upon which
-    /// events which [`Brancher`] should be called.
-    ///
-    /// By default, a [`Brancher`] is subscribed to all events.
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![
-            BrancherEvents::Conflict,
-            BrancherEvents::Backtrack,
-            BrancherEvents::Solution,
-            BrancherEvents::UnassignInteger,
-            BrancherEvents::AppearanceInConflictPredicate,
-            BrancherEvents::Restart,
-            BrancherEvents::Synchronise,
-        ]
-    }
+    /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
+    /// events which [`VariableSelector`] should be called.
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }
 
 /// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
-/// [`Brancher::get_relevant_brancher_events`], [`VariableSelector::get_relevant_brancher_events`],
-/// and [`ValueSelector::get_relevant_brancher_events`].
+/// [`Brancher::subscribe_to_events`], [`VariableSelector::subscribe_to_events`],
+/// and [`ValueSelector::subscribe_to_events`].
 #[derive(Debug, Clone, Copy, Enum, Hash, PartialEq, Eq)]
-pub enum BrancherEvents {
+pub enum BrancherEvent {
     /// Event for when a conflict is detected
     Conflict,
     /// Event for when a backtrack is performed

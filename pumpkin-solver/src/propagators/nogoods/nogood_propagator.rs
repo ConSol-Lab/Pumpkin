@@ -15,7 +15,8 @@ use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::engine::propagation::contexts::HasAssignments;
+use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -777,7 +778,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        _context: PropagationContext,
+        _context: StatefulPropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -1501,6 +1502,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
@@ -1541,6 +1543,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,

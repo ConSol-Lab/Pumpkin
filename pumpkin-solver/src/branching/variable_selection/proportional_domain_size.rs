@@ -1,5 +1,5 @@
 use super::VariableSelector;
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::pumpkin_assert_extreme;
 use crate::variables::DomainId;
@@ -69,7 +69,7 @@ impl VariableSelector<DomainId> for ProportionalDomainSize {
         }
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![BrancherEvents::Backtrack]
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![BrancherEvent::Backtrack]
     }
 }

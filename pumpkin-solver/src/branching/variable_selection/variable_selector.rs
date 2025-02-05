@@ -1,4 +1,4 @@
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
@@ -23,19 +23,31 @@ pub trait VariableSelector<Var> {
 
     /// A function which is called after a conflict has been found and processed but (currently)
     /// does not provide any additional information.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Conflict`] in
+    /// [`Self::subscribe_to_events`]
     fn on_conflict(&mut self) {}
 
     /// A function which is called whenever a backtrack occurs in the solver.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::Backtrack`] in
+    /// [`Self::subscribe_to_events`]
     fn on_backtrack(&mut self) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
     /// [`DomainId`] which has been reset. This method could thus be called multiple times in a
     /// single backtracking operation by the solver.
+    ///
+    /// To receive information about this event, use [`BrancherEvent::UnassignInteger`] in
+    /// [`Self::subscribe_to_events`]
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// A function which is called when a [`Predicate`] appears in a conflict during conflict
     /// analysis.
+    ///
+    /// To receive information about this event, use
+    /// [`BrancherEvent::AppearanceInConflictPredicate`] in [`Self::subscribe_to_events`]
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
     /// This method returns whether a restart is *currently* pointless for the [`VariableSelector`].
@@ -50,21 +62,9 @@ pub trait VariableSelector<Var> {
         true
     }
 
-    /// Indicates which [`BrancherEvents`] are relevant for this particular [`VariableSelector`].
+    /// Indicates which [`BrancherEvent`] are relevant for this particular [`VariableSelector`].
     ///
-    /// This can be used by [`Brancher`]s such as the [`DynamicBrancher`] to determine upon which
+    /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which [`VariableSelector`] should be called.
-    ///
-    /// By default, a [`VariableSelector`] is subscribed to all events.
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![
-            BrancherEvents::Conflict,
-            BrancherEvents::Backtrack,
-            BrancherEvents::Solution,
-            BrancherEvents::UnassignInteger,
-            BrancherEvents::AppearanceInConflictPredicate,
-            BrancherEvents::Restart,
-            BrancherEvents::Synchronise,
-        ]
-    }
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }

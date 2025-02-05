@@ -1,4 +1,4 @@
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -18,7 +18,7 @@ impl ValueSelector<DomainId> for OutDomainMin {
         predicate!(decision_variable >= context.lower_bound(decision_variable) + 1)
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }

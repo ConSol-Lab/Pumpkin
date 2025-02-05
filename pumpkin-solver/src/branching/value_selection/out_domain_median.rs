@@ -1,4 +1,4 @@
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -22,7 +22,7 @@ impl ValueSelector<DomainId> for OutDomainMedian {
         predicate!(decision_variable != values_in_domain[values_in_domain.len() / 2])
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }

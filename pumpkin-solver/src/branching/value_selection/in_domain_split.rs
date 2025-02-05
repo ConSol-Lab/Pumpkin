@@ -1,4 +1,4 @@
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -23,7 +23,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainSplit {
         InDomainSplit::get_predicate_excluding_upper_half(context, decision_variable)
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }

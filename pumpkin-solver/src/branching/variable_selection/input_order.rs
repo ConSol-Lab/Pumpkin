@@ -1,6 +1,6 @@
 use log::warn;
 
-use crate::branching::brancher::BrancherEvents;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
@@ -32,7 +32,7 @@ impl VariableSelector<DomainId> for InputOrder<DomainId> {
             .copied()
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }
@@ -45,7 +45,7 @@ impl VariableSelector<Literal> for InputOrder<Literal> {
             .copied()
     }
 
-    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         vec![]
     }
 }
