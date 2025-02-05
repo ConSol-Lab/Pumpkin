@@ -73,9 +73,11 @@ impl TrailedAssignments {
     pub(crate) fn debug_create_empty_clone(&self) -> Self {
         let mut new_trail = self.trail.clone();
         let mut new_values = self.values.clone();
-        new_trail
-            .synchronise(0)
-            .for_each(|state_change| new_values[state_change.reference] = state_change.old_value);
+        if new_trail.get_decision_level() > 0 {
+            new_trail.synchronise(0).for_each(|state_change| {
+                new_values[state_change.reference] = state_change.old_value
+            });
+        }
         Self {
             trail: new_trail,
             values: new_values,
