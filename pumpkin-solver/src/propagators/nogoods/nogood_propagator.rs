@@ -1328,6 +1328,13 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogoods[nogood_id];
 
+        if nogood.is_deleted {
+            // The nogood has already been deleted, meaning that it could be that the call to
+            // `propagate` would not find any propagations using it due to the watchers being
+            // deleted
+            return Ok(());
+        }
+
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood
             .predicates
