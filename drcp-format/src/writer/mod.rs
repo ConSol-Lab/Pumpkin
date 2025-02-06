@@ -293,9 +293,7 @@ impl WritableProofStep for Deletion {
 mod tests {
     use super::*;
 
-    // Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
-    // context.
-    const TEST_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+    const TEST_ID: NonZeroU64 = NonZeroU64::new(1).unwrap();
 
     #[test]
     fn write_basic_inference() {

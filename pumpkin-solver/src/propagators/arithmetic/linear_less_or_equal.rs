@@ -14,7 +14,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::StatefulInteger;
+use crate::engine::TrailedInt;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
 
@@ -25,9 +25,9 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     c: i32,
 
     /// The lower bound of the sum of the left-hand side. This is incremental state.
-    lower_bound_left_hand_side: StatefulInteger,
+    lower_bound_left_hand_side: TrailedInt,
     /// The value at index `i` is the bound for `x[i]`.
-    current_bounds: Box<[StatefulInteger]>,
+    current_bounds: Box<[TrailedInt]>,
 }
 
 impl<Var> LinearLessOrEqualPropagator<Var>
@@ -36,7 +36,7 @@ where
 {
     pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
         let current_bounds = (0..x.len())
-            .map(|_| StatefulInteger::default())
+            .map(|_| TrailedInt::default())
             .collect_vec()
             .into();
 
@@ -44,7 +44,7 @@ where
         LinearLessOrEqualPropagator::<Var> {
             x,
             c,
-            lower_bound_left_hand_side: StatefulInteger::default(),
+            lower_bound_left_hand_side: TrailedInt::default(),
             current_bounds,
         }
     }

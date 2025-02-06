@@ -148,7 +148,7 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
 
         // A sanity check, there is a new profile to create consisting
         // of a combination of the previous profile and the updated task
-        if profile.height + task.resource_usage + task.resource_usage > capacity {
+        if profile.height + task.resource_usage > capacity {
             // The addition of the new mandatory part to the profile
             // caused an overflow of the resource
             return Err(ResourceProfile {

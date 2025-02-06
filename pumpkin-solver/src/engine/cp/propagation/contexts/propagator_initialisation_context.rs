@@ -9,7 +9,7 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
-use crate::engine::StatefulAssignments;
+use crate::engine::TrailedAssignments;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
 
@@ -21,7 +21,7 @@ use crate::engine::Watchers;
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
-    pub(crate) stateful_assignments: &'a mut StatefulAssignments,
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
@@ -31,7 +31,7 @@ pub(crate) struct PropagatorInitialisationContext<'a> {
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
-        stateful_assignments: &'a mut StatefulAssignments,
+        stateful_assignments: &'a mut TrailedAssignments,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorInitialisationContext<'a> {
@@ -138,11 +138,11 @@ mod private {
     }
 
     impl HasStatefulAssignments for PropagatorInitialisationContext<'_> {
-        fn stateful_assignments(&self) -> &StatefulAssignments {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
             self.stateful_assignments
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut StatefulAssignments {
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
             self.stateful_assignments
         }
     }

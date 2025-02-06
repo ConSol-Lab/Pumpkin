@@ -5,14 +5,14 @@ pub(crate) mod opaque_domain_event;
 pub(crate) mod propagation;
 mod propagator_queue;
 pub(crate) mod reason;
-mod stateful;
 pub(crate) mod test_solver;
+mod trailed;
 mod watch_list_cp;
 
 pub(crate) use assignments::Assignments;
 pub(crate) use assignments::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
-pub(crate) use stateful::*;
+pub(crate) use trailed::*;
 pub(crate) use watch_list_cp::IntDomainEvent;
 pub(crate) use watch_list_cp::WatchListCP;
 pub(crate) use watch_list_cp::Watchers;
@@ -28,12 +28,12 @@ mod tests {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
     use crate::engine::DomainFaithfulness;
-    use crate::engine::StatefulAssignments;
+    use crate::engine::TrailedAssignments;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {
         let mut assignments = Assignments::default();
-        let mut stateful_assignments = StatefulAssignments::default();
+        let mut stateful_assignments = TrailedAssignments::default();
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn test_no_update_reason_store_if_no_update_upper_bound() {
         let mut assignments = Assignments::default();
-        let mut stateful_assignments = StatefulAssignments::default();
+        let mut stateful_assignments = TrailedAssignments::default();
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn test_no_update_reason_store_if_no_update_remove() {
         let mut assignments = Assignments::default();
-        let mut stateful_assignments = StatefulAssignments::default();
+        let mut stateful_assignments = TrailedAssignments::default();
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();

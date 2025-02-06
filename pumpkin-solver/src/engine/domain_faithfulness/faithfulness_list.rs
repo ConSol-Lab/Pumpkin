@@ -6,7 +6,7 @@ use super::watchers::LowerBoundWatcher;
 use super::watchers::UpperBoundWatcher;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
-use crate::engine::StatefulAssignments;
+use crate::engine::TrailedAssignments;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
@@ -19,7 +19,7 @@ pub(crate) struct Faithfullness {
 }
 
 impl Faithfullness {
-    pub(crate) fn new(stateful_assignments: &mut StatefulAssignments) -> Self {
+    pub(crate) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
         Self {
             lower_bound: LowerBoundWatcher::new(stateful_assignments),
             upper_bound: UpperBoundWatcher::new(stateful_assignments),
@@ -34,7 +34,7 @@ impl Faithfullness {
         &mut self,
         predicate: Predicate,
         id: PredicateId,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) {
         match predicate {
@@ -68,7 +68,7 @@ impl Faithfullness {
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut StatefulAssignments,
+        stateful_trail: &mut TrailedAssignments,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         predicate_id: Option<PredicateId>,

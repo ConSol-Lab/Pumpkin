@@ -2,8 +2,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::InDomainSplit;
-use crate::branching::variable_selection::FirstFail;
+use crate::branching::value_selection::RandomSplitter;
+use crate::branching::variable_selection::RandomSelector;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
@@ -11,6 +11,7 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
+use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
@@ -94,9 +95,8 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`FirstFail`] with [`InDomainSplit`].
+    /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
-        let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -106,8 +106,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                FirstFail::new(&variables),
-                InDomainSplit,
+                RandomSelector::new(assignments.get_domains()),
+                RandomSplitter,
             ),
         }
     }
@@ -261,19 +261,32 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
                 true
             }
         });
+        self.backup_brancher.synchronise(assignments);
     }
 
     fn on_conflict(&mut self) {
         self.decay_activities();
+        self.backup_brancher.on_conflict();
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
         self.best_known_solution = Some(solution.into());
+        self.backup_brancher.on_solution(solution);
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.bump_activity(predicate)
+        self.bump_activity(predicate);
+        self.backup_brancher
+            .on_appearance_in_conflict_predicate(predicate);
+    }
+
+    fn on_restart(&mut self) {
+        self.backup_brancher.on_restart();
+    }
+
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.backup_brancher.on_unassign_integer(variable, value)
     }
 
     fn is_restart_pointless(&mut self) -> bool {
@@ -372,13 +385,14 @@ mod tests {
         let result = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom {
-                usizes: vec![],
+                integers: vec![2],
+                usizes: vec![0],
+                bools: vec![false],
                 weighted_choice: |_| unreachable!(),
-                ..Default::default()
             },
         ));
 
-        assert_eq!(result, Some(predicate!(x <= 0)));
+        assert_eq!(result, Some(predicate!(x <= 2)));
     }
 
     #[test]

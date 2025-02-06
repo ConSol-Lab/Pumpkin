@@ -2,7 +2,7 @@ use super::DomainWatcher;
 use super::FaithfullnessWatcher;
 use super::HasWatcher;
 use super::PredicateId;
-use super::StatefulAssignments;
+use super::TrailedAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -12,7 +12,7 @@ pub(crate) struct UpperBoundWatcher {
 }
 
 impl UpperBoundWatcher {
-    pub(crate) fn new(stateful_assignments: &mut StatefulAssignments) -> Self {
+    pub(crate) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
         Self {
             watcher: FaithfullnessWatcher::new(stateful_assignments),
         }
@@ -37,7 +37,7 @@ impl DomainWatcher for UpperBoundWatcher {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         _predicate_id: Option<PredicateId>,

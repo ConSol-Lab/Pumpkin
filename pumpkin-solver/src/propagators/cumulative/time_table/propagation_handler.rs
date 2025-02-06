@@ -436,7 +436,7 @@ pub(crate) mod test_propagation_handler {
     use crate::engine::reason::ReasonStore;
     use crate::engine::Assignments;
     use crate::engine::DomainFaithfulness;
-    use crate::engine::StatefulAssignments;
+    use crate::engine::TrailedAssignments;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
@@ -448,7 +448,7 @@ pub(crate) mod test_propagation_handler {
         propagation_handler: CumulativePropagationHandler,
         reason_store: ReasonStore,
         assignments: Assignments,
-        stateful_assignments: StatefulAssignments,
+        stateful_assignments: TrailedAssignments,
     }
 
     impl TestPropagationHandler {
@@ -457,7 +457,7 @@ pub(crate) mod test_propagation_handler {
 
             let reason_store = ReasonStore::default();
             let assignments = Assignments::default();
-            let stateful_assignments = StatefulAssignments::default();
+            let stateful_assignments = TrailedAssignments::default();
             Self {
                 propagation_handler,
                 reason_store,
