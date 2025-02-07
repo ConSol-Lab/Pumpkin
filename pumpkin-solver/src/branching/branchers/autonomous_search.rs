@@ -2,8 +2,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::RandomSplitter;
-use crate::branching::variable_selection::RandomSelector;
+use crate::branching::value_selection::InDomainMin;
+use crate::branching::variable_selection::Smallest;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
@@ -106,8 +106,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::new(assignments.get_domains()),
-                RandomSplitter,
+                Smallest::new(&assignments.get_domains().collect::<Vec<_>>()),
+                InDomainMin,
             ),
         }
     }
@@ -129,8 +129,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::new(variables),
-                RandomSplitter,
+                Smallest::new(&variables),
+                InDomainMin,
             ),
         }
     }
