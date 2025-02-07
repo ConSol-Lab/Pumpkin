@@ -333,14 +333,14 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     if let Some(incompatibility_matrix) = &parameters.options.incompatibility_matrix {
-        for task in parameters.tasks.iter() {
-            for other_task in parameters.tasks.iter() {
-                if task.id <= other_task.id
-                    || context.is_literal_true(
-                        &incompatibility_matrix[parameters.mapping[task.id]]
-                            [parameters.mapping[other_task.id]],
-                    )
-                {
+        for index in 0..parameters.tasks.len() {
+            for other_index in index + 1..parameters.tasks.len() {
+                let task = &parameters.tasks[index];
+                let other_task = &parameters.tasks[other_index];
+                if context.is_literal_true(
+                    &incompatibility_matrix[parameters.mapping[task.id]]
+                        [parameters.mapping[other_task.id]],
+                ) {
                     continue;
                 }
 
