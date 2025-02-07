@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
@@ -31,12 +32,6 @@ impl<'a> ExplanationContext<'a> {
         }
     }
 
-    /// Get the underlying assignments.
-    #[deprecated = "using the assignments directly is not ideal, and we should develop this context API further instead"]
-    pub(crate) fn assignments(&self) -> &'a Assignments {
-        self.assignments
-    }
-
     /// Get the current working nogood.
     ///
     /// The working nogood does not necessarily contain the predicate that is being explained.
@@ -45,6 +40,12 @@ impl<'a> ExplanationContext<'a> {
     #[allow(unused, reason = "Will be part of the public API")]
     pub(crate) fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.current_nogood.iter()
+    }
+}
+
+impl HasAssignments for ExplanationContext<'_> {
+    fn assignments(&self) -> &Assignments {
+        self.assignments
     }
 }
 

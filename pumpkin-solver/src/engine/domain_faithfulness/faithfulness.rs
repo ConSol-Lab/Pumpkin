@@ -6,7 +6,7 @@ use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
-use crate::engine::StatefulAssignments;
+use crate::engine::TrailedAssignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -52,7 +52,7 @@ impl DomainFaithfulness {
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) {
         if self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
@@ -81,7 +81,7 @@ impl DomainFaithfulness {
     pub(crate) fn watch_predicate(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) -> PredicateId {
         pumpkin_assert_simple!(

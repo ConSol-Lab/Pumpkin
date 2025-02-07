@@ -12,11 +12,10 @@ use crate::basic_types::HashSet;
 use crate::basic_types::Solution;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::branching::tie_breaking::InOrderTieBreaker;
-use crate::branching::value_selection::InDomainSplit;
+use crate::branching::value_selection::RandomSplitter;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::FirstFail;
+use crate::branching::variable_selection::RandomSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
@@ -605,7 +604,9 @@ impl Display for SearchMode {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`]
+/// [`IndependentVariableValueBrancher`] using [`RandomSelector`] for variable selection
+/// (over the variables in the order in which they were defined) and [`RandomSplitter`] for
+/// value selection.
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
@@ -614,10 +615,5 @@ impl Display for SearchMode {
 /// \[2\] E. Demirović, G. Chu, and P. J. Stuckey, ‘Solution-based phase saving for CP: A
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
-pub type DefaultBrancher = AutonomousSearch<
-    IndependentVariableValueBrancher<
-        DomainId,
-        FirstFail<DomainId, InOrderTieBreaker<DomainId, i32>>,
-        InDomainSplit,
-    >,
->;
+pub type DefaultBrancher =
+    AutonomousSearch<IndependentVariableValueBrancher<DomainId, RandomSelector, RandomSplitter>>;

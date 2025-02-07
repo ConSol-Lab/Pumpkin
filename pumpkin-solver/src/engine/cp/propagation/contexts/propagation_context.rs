@@ -8,18 +8,18 @@ use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
-use crate::engine::StatefulAssignments;
-use crate::engine::StatefulInteger;
+use crate::engine::TrailedAssignments;
+use crate::engine::TrailedInt;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct StatefulPropagationContext<'a> {
-    pub(crate) stateful_assignments: &'a mut StatefulAssignments,
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     pub(crate) assignments: &'a Assignments,
 }
 
 impl<'a> StatefulPropagationContext<'a> {
     pub(crate) fn new(
-        stateful_assignments: &'a mut StatefulAssignments,
+        stateful_assignments: &'a mut TrailedAssignments,
         assignments: &'a Assignments,
     ) -> Self {
         Self {
@@ -56,7 +56,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub(crate) struct PropagationContextMut<'a> {
-    pub(crate) stateful_assignments: &'a mut StatefulAssignments,
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -67,7 +67,7 @@ pub(crate) struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
-        stateful_assignments: &'a mut StatefulAssignments,
+        stateful_assignments: &'a mut TrailedAssignments,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
@@ -135,29 +135,29 @@ pub trait HasAssignments {
 }
 
 pub(crate) trait HasStatefulAssignments {
-    fn stateful_assignments(&self) -> &StatefulAssignments;
-    fn stateful_assignments_mut(&mut self) -> &mut StatefulAssignments;
+    fn stateful_assignments(&self) -> &TrailedAssignments;
+    fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments;
 }
 
 mod private {
     use super::*;
 
     impl HasStatefulAssignments for StatefulPropagationContext<'_> {
-        fn stateful_assignments(&self) -> &StatefulAssignments {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
             self.stateful_assignments
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut StatefulAssignments {
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
             self.stateful_assignments
         }
     }
 
     impl HasStatefulAssignments for PropagationContextMut<'_> {
-        fn stateful_assignments(&self) -> &StatefulAssignments {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
             self.stateful_assignments
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut StatefulAssignments {
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
             self.stateful_assignments
         }
     }
@@ -182,20 +182,20 @@ mod private {
 }
 
 pub(crate) trait ManipulateStatefulIntegers: HasStatefulAssignments {
-    fn new_stateful_integer(&mut self, initial_value: i64) -> StatefulInteger {
+    fn new_stateful_integer(&mut self, initial_value: i64) -> TrailedInt {
         self.stateful_assignments_mut().grow(initial_value)
     }
 
-    fn value(&self, stateful_integer: StatefulInteger) -> i64 {
+    fn value(&self, stateful_integer: TrailedInt) -> i64 {
         self.stateful_assignments().read(stateful_integer)
     }
 
-    fn add_assign(&mut self, stateful_integer: StatefulInteger, addition: i64) {
+    fn add_assign(&mut self, stateful_integer: TrailedInt, addition: i64) {
         self.stateful_assignments_mut()
             .add_assign(stateful_integer, addition);
     }
 
-    fn assign(&mut self, stateful_integer: StatefulInteger, value: i64) {
+    fn assign(&mut self, stateful_integer: TrailedInt, value: i64) {
         self.stateful_assignments_mut()
             .assign(stateful_integer, value);
     }

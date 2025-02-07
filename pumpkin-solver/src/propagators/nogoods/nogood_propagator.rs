@@ -34,7 +34,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
 use crate::engine::SolverStatistics;
-use crate::engine::StatefulAssignments;
+use crate::engine::TrailedAssignments;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -816,7 +816,7 @@ impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
         domain_faithfulness: &mut DomainFaithfulness,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
         watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,

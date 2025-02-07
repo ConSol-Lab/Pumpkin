@@ -13,7 +13,7 @@ use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
 use super::DomainFaithfulness;
-use super::StatefulAssignments;
+use super::TrailedAssignments;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
@@ -51,7 +51,7 @@ impl DebugHelper {
     /// Additionally checks whether the internal data structures of the clausal propagator are okay
     /// and consistent with the assignments_propositional
     pub(crate) fn debug_fixed_point_propagation(
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         propagators: &PropagatorStore,
     ) -> bool {
@@ -120,7 +120,7 @@ impl DebugHelper {
     }
 
     pub(crate) fn debug_reported_failure(
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
@@ -153,7 +153,7 @@ impl DebugHelper {
     pub(crate) fn debug_check_propagations(
         num_trail_entries_before: usize,
         propagator_id: PropagatorId,
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
@@ -191,7 +191,7 @@ impl DebugHelper {
     fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &[Predicate],
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -390,7 +390,7 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_reproduce_failure(
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
@@ -440,7 +440,7 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_negate_failure_and_check(
-        stateful_assignments: &StatefulAssignments,
+        stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,

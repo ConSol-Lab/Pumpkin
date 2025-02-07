@@ -26,7 +26,7 @@ use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::DomainFaithfulness;
 use super::ResolutionResolver;
-use super::StatefulAssignments;
+use super::TrailedAssignments;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
@@ -149,7 +149,7 @@ pub struct ConstraintSatisfactionSolver {
     conflict_resolver: Box<dyn Resolver>,
 
     pub(crate) domain_faithfulness: DomainFaithfulness,
-    pub(crate) stateful_assignments: StatefulAssignments,
+    pub(crate) stateful_assignments: TrailedAssignments,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -258,7 +258,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         pumpkin_assert_moderate!(
             propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
@@ -286,7 +286,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         let context = StatefulPropagationContext::new(stateful_assignments, assignments);
 
@@ -483,7 +483,7 @@ impl ConstraintSatisfactionSolver {
             },
             internal_parameters: solver_options,
             domain_faithfulness: DomainFaithfulness::default(),
-            stateful_assignments: StatefulAssignments::default(),
+            stateful_assignments: TrailedAssignments::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -1182,7 +1182,7 @@ impl ConstraintSatisfactionSolver {
         backtrack_level: usize,
         brancher: &mut BrancherType,
         domain_faithfulness: &mut DomainFaithfulness,
-        stateful_assignments: &mut StatefulAssignments,
+        stateful_assignments: &mut TrailedAssignments,
     ) {
         info!("Backtracking to level {backtrack_level}");
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
