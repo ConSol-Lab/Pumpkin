@@ -2,6 +2,7 @@ use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
 use crate::predicate;
+use crate::pumpkin_assert_simple;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
 use crate::results::SolutionCallbackArguments;
@@ -54,6 +55,11 @@ impl OptimisationProcedure for LowerBoundingSearch {
             solver,
         );
         solver.satisfaction_solver.restore_state_at_root(brancher);
+
+        let result = solver.add_clause([predicate!(
+            objective_variable <= best_objective_value as i32
+        )]);
+        pumpkin_assert_simple!(result.is_ok());
 
         loop {
             let assumption =
