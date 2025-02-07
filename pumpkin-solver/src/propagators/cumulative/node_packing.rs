@@ -479,6 +479,17 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                 LocalId::from(index as u32),
             );
         }
+        let mut current_index = self.parameters.tasks.len();
+        for index in 0..self.parameters.disjointness.len() {
+            for other_index in index + 1..self.parameters.disjointness.len() {
+                let _ = context.register(
+                    self.parameters.disjointness[index][other_index],
+                    DomainEvents::BOUNDS,
+                    LocalId::from(current_index as u32),
+                );
+                current_index += 1;
+            }
+        }
         Ok(())
     }
 }
