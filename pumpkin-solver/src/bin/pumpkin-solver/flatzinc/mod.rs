@@ -15,8 +15,8 @@ use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
-use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
-use pumpkin_solver::optimisation::linear_unsat_sat::LUS;
+use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationProcedure;
 use pumpkin_solver::optimisation::OptimisationStrategy;
@@ -125,15 +125,15 @@ pub(crate) fn solve(
     };
 
     let result = match options.optimisation_strategy {
-        OptimisationStrategy::SatUnsat => solver.optimise(
+        OptimisationStrategy::LinearSatUnsat => solver.optimise(
             &mut brancher,
             &mut termination,
-            LSU::new(direction, objective, callback),
+            LinearSatUnsat::new(direction, objective, callback),
         ),
-        OptimisationStrategy::UnsatSat => solver.optimise(
+        OptimisationStrategy::LinearUnsatSat => solver.optimise(
             &mut brancher,
             &mut termination,
-            LUS::new(direction, objective, callback),
+            LinearUnsatSat::new(direction, objective, callback),
         ),
     };
 

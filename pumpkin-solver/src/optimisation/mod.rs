@@ -70,17 +70,17 @@ pub enum OptimisationStrategy {
     /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
     /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
     #[default]
-    SatUnsat,
+    LinearSatUnsat,
     /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
     /// objective variable until a SAT result is reached. Can be seen as lower-bounding search.
-    UnsatSat,
+    LinearUnsatSat,
 }
 
 impl Display for OptimisationStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OptimisationStrategy::SatUnsat => write!(f, "sat-unsat"),
-            OptimisationStrategy::UnsatSat => write!(f, "unsat-sat"),
+            OptimisationStrategy::LinearSatUnsat => write!(f, "sat-unsat"),
+            OptimisationStrategy::LinearUnsatSat => write!(f, "unsat-sat"),
         }
     }
 }

@@ -13,13 +13,13 @@ use crate::ConstraintOperationError;
 use crate::Solver;
 
 #[derive(Debug, Clone, Copy)]
-pub struct LSU<Var: IntegerVariable, Callback> {
+pub struct LinearSatUnsat<Var: IntegerVariable, Callback> {
     direction: OptimisationDirection,
     objective: Var,
     solution_callback: Callback,
 }
 
-impl<Var: IntegerVariable, Callback> LSU<Var, Callback> {
+impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
     /// Given the current objective value `best_objective_value`, it adds a constraint specifying
     /// that the objective value should be at most `best_objective_value - 1`. Note that it is
     /// assumed that we are always minimising the variable.
@@ -59,7 +59,7 @@ impl<Var: IntegerVariable, Callback> LSU<Var, Callback> {
     }
 }
 
-impl<Var, Callback> OptimisationProcedure<Var, Callback> for LSU<Var, Callback>
+impl<Var, Callback> OptimisationProcedure<Var, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
     Callback: Fn(&Solver, SolutionReference),

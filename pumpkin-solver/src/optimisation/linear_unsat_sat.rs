@@ -13,14 +13,14 @@ use crate::variables::IntegerVariable;
 use crate::Solver;
 
 #[derive(Debug, Clone, Copy)]
-pub struct LUS<Var: IntegerVariable, Callback> {
+pub struct LinearUnsatSat<Var: IntegerVariable, Callback> {
     direction: OptimisationDirection,
     objective: Var,
     solution_callback: Callback,
 }
 
 impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
-    OptimisationProcedure<Var, Callback> for LUS<Var, Callback>
+    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
 {
     fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
         Self {

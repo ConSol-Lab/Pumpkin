@@ -26,9 +26,9 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
-use crate::optimisation::linear_sat_unsat::LSU;
+use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
 #[cfg(doc)]
-use crate::optimisation::linear_unsat_sat::LUS;
+use crate::optimisation::linear_unsat_sat::LinearUnsatSat;
 use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
@@ -401,8 +401,8 @@ impl Solver {
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is optimised as indicated by the `direction` (or is indicated to
     /// terminate by the provided [`TerminationCondition`]). Uses a search strategy based on the
-    /// provided [`OptimisationProcedure`], currently [`LSU`] and
-    /// [`LUS`] are supported.
+    /// provided [`OptimisationProcedure`], currently [`LinearSatUnsat`] and
+    /// [`LinearUnsatSat`] are supported.
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
