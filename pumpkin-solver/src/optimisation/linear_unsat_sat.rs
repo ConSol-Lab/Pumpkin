@@ -12,24 +12,32 @@ use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
 
+/// Implements the linear UNSAT-SAT (LUS) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
-pub struct LinearUnsatSat<Var: IntegerVariable, Callback> {
+pub struct LinearUnsatSat<Var, Callback> {
     direction: OptimisationDirection,
     objective: Var,
     solution_callback: Callback,
 }
 
-impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
-    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
-{
-    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
+impl<Var, Callback> LinearUnsatSat<Var, Callback> {
+    /// Create a new instance of [`LinearUnsatSat`].
+    pub fn new(
+        direction: OptimisationDirection,
+        objective: Var,
+        solution_callback: Callback,
+    ) -> Self {
         Self {
             direction,
             objective,
             solution_callback,
         }
     }
+}
 
+impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
+    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
+{
     fn optimise(
         &mut self,
         brancher: &mut impl Brancher,

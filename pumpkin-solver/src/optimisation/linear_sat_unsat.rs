@@ -12,11 +12,27 @@ use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
+/// Implements the linear SAT-UNSAT (LSU) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
-pub struct LinearSatUnsat<Var: IntegerVariable, Callback> {
+pub struct LinearSatUnsat<Var, Callback> {
     direction: OptimisationDirection,
     objective: Var,
     solution_callback: Callback,
+}
+
+impl<Var, Callback> LinearSatUnsat<Var, Callback> {
+    /// Create a new instance of [`LinearSatUnsat`].
+    pub fn new(
+        direction: OptimisationDirection,
+        objective: Var,
+        solution_callback: Callback,
+    ) -> Self {
+        Self {
+            direction,
+            objective,
+            solution_callback,
+        }
+    }
 }
 
 impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
@@ -64,14 +80,6 @@ where
     Var: IntegerVariable,
     Callback: Fn(&Solver, SolutionReference),
 {
-    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
-        Self {
-            direction,
-            objective,
-            solution_callback,
-        }
-    }
-
     fn optimise(
         &mut self,
         brancher: &mut impl Brancher,
