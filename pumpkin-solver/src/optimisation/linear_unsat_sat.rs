@@ -12,24 +12,46 @@ use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
 
+/// Implements the linear UNSAT-SAT (LUS) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
-pub struct LinearUnsatSat<Var: IntegerVariable, Callback> {
+pub struct LinearUnsatSat<Var, Callback> {
     direction: OptimisationDirection,
     objective: Var,
     solution_callback: Callback,
 }
 
-impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
-    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
+impl<Var, Callback> LinearUnsatSat<Var, Callback>
+where
+    // The trait bound here is contrary to common
+    // practice; typically the bounds are only enforced
+    // where they are required (in this case, in the
+    // implementation of OptimisationProcedure).
+    //
+    // However, if we don't have the trait bound here,
+    // the compiler may implement `FnOnce` for the
+    // empty closure, which causes problems. So, we
+    // have the hint here.
+    //
+    // Similar is also the case in linear SAT-UNSAT.
+    Callback: Fn(&Solver, SolutionReference),
 {
-    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self {
+    /// Create a new instance of [`LinearUnsatSat`].
+    pub fn new(
+        direction: OptimisationDirection,
+        objective: Var,
+        solution_callback: Callback,
+    ) -> Self {
         Self {
             direction,
             objective,
             solution_callback,
         }
     }
+}
 
+impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>
+    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
+{
     fn optimise(
         &mut self,
         brancher: &mut impl Brancher,

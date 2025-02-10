@@ -15,8 +15,6 @@ pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
 
 pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)> {
-    fn new(direction: OptimisationDirection, objective: Var, solution_callback: Callback) -> Self;
-
     fn optimise(
         &mut self,
         brancher: &mut impl Brancher,

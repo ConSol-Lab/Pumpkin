@@ -1,5 +1,6 @@
 mod constraints;
 mod model;
+mod optimisation;
 mod result;
 mod variables;
 
@@ -33,6 +34,7 @@ fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<result::Solution>()?;
 
     submodule!(constraints, python, m);
+    submodule!(optimisation, python, m);
 
     Ok(())
 }

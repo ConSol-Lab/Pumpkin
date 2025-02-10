@@ -18,7 +18,6 @@ use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
-use pumpkin_solver::optimisation::OptimisationProcedure;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
