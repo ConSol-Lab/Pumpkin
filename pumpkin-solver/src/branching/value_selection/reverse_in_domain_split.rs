@@ -1,3 +1,4 @@
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -31,6 +32,10 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for ReverseInDomainSplit {
             context.upper_bound(decision_variable)
         );
         predicate!(decision_variable >= bound)
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
     }
 }
 

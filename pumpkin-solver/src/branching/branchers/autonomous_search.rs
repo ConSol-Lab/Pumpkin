@@ -5,6 +5,7 @@ use crate::basic_types::SolutionReference;
 use crate::branching::value_selection::RandomSplitter;
 use crate::branching::variable_selection::RandomSelector;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
@@ -291,6 +292,19 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     fn is_restart_pointless(&mut self) -> bool {
         false
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        [
+            BrancherEvent::Solution,
+            BrancherEvent::Conflict,
+            BrancherEvent::Backtrack,
+            BrancherEvent::Synchronise,
+            BrancherEvent::AppearanceInConflictPredicate,
+        ]
+        .into_iter()
+        .chain(self.backup_brancher.subscribe_to_events())
+        .collect()
     }
 }
 
