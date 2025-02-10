@@ -12,6 +12,7 @@ use std::time::Duration;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
@@ -27,6 +28,7 @@ use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
+use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::Solver;
@@ -99,163 +101,127 @@ pub(crate) fn solve(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let value = if let Some(objective_function) = &instance.objective_function {
-        let result = match objective_function {
-            FlatzincObjective::Maximize(domain_id) => match options.optimisation_strategy {
-                OptimisationStrategy::SatUnsat => solver.optimise(
-                    &mut brancher,
-                    &mut termination,
-                    LSU::new(
-                        OptimisationDirection::Maximise,
-                        *domain_id,
-                        |solver, solution| {
-                            solution_callback(
-                                Some(*domain_id),
-                                options.all_solutions,
-                                &outputs,
-                                solver,
-                                solution,
-                            );
-                        },
-                    ),
-                ),
-                OptimisationStrategy::UnsatSat => solver.optimise(
-                    &mut brancher,
-                    &mut termination,
-                    LUS::new(
-                        OptimisationDirection::Maximise,
-                        *domain_id,
-                        |solver, solution| {
-                            solution_callback(
-                                Some(*domain_id),
-                                options.all_solutions,
-                                &outputs,
-                                solver,
-                                solution,
-                            );
-                        },
-                    ),
-                ),
-            },
-            FlatzincObjective::Minimize(domain_id) => match options.optimisation_strategy {
-                OptimisationStrategy::SatUnsat => solver.optimise(
-                    &mut brancher,
-                    &mut termination,
-                    LSU::new(
-                        OptimisationDirection::Minimise,
-                        *domain_id,
-                        |solver, solution| {
-                            solution_callback(
-                                Some(*domain_id),
-                                options.all_solutions,
-                                &outputs,
-                                solver,
-                                solution,
-                            );
-                        },
-                    ),
-                ),
-                OptimisationStrategy::UnsatSat => solver.optimise(
-                    &mut brancher,
-                    &mut termination,
-                    LUS::new(
-                        OptimisationDirection::Minimise,
-                        *domain_id,
-                        |solver, solution| {
-                            solution_callback(
-                                Some(*domain_id),
-                                options.all_solutions,
-                                &outputs,
-                                solver,
-                                solution,
-                            );
-                        },
-                    ),
-                ),
-            },
-        };
-
-        match result {
-            OptimisationResult::Optimal(optimal_solution) => {
-                let optimal_objective_value =
-                    optimal_solution.get_integer_value(*objective_function.get_domain());
-                if !options.all_solutions {
-                    solver.log_statistics();
-                    print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
-                }
-                println!("==========");
-                Some(optimal_objective_value)
-            }
-            OptimisationResult::Satisfiable(solution) => {
-                let best_found_objective_value =
-                    solution.get_integer_value(*objective_function.get_domain());
-                Some(best_found_objective_value)
-            }
-            OptimisationResult::Unsatisfiable => {
-                println!("{MSG_UNSATISFIABLE}");
-                None
-            }
-            OptimisationResult::Unknown => {
-                println!("{MSG_UNKNOWN}");
-                None
-            }
+    let (direction, objective) = match instance.objective_function {
+        Some(FlatzincObjective::Maximize(domain_id)) => {
+            (OptimisationDirection::Maximise, domain_id)
         }
-    } else {
-        if options.all_solutions {
-            let mut solution_iterator =
-                solver.get_solution_iterator(&mut brancher, &mut termination);
-            loop {
-                match solution_iterator.next_solution() {
-                    IteratedSolution::Solution(solution, solver) => {
-                        solution_callback(
-                            None,
-                            options.all_solutions,
-                            &outputs,
-                            solver,
-                            solution.as_reference(),
-                        );
-                    }
-                    IteratedSolution::Finished => {
-                        println!("==========");
-                        break;
-                    }
-                    IteratedSolution::Unknown => {
-                        break;
-                    }
-                    IteratedSolution::Unsatisfiable => {
-                        println!("{MSG_UNSATISFIABLE}");
-                        break;
-                    }
-                }
-            }
-        } else {
-            match solver.satisfy(&mut brancher, &mut termination) {
-                SatisfactionResult::Satisfiable(solution) => solution_callback(
-                    None,
-                    options.all_solutions,
-                    &outputs,
-                    &solver,
-                    solution.as_reference(),
-                ),
-                SatisfactionResult::Unsatisfiable => {
-                    println!("{MSG_UNSATISFIABLE}");
-                }
-                SatisfactionResult::Unknown => {
-                    println!("{MSG_UNKNOWN}");
-                }
-            }
+        Some(FlatzincObjective::Minimize(domain_id)) => {
+            (OptimisationDirection::Minimise, domain_id)
         }
-
-        None
+        None => {
+            satisfy(options, &mut solver, brancher, termination, outputs);
+            return Ok(());
+        }
     };
 
-    if let Some(value) = value {
+    let callback = |solver: &Solver, solution: SolutionReference<'_>| {
+        solution_callback(
+            Some(objective),
+            options.all_solutions,
+            &outputs,
+            solver,
+            solution,
+        );
+    };
+
+    let result = match options.optimisation_strategy {
+        OptimisationStrategy::SatUnsat => solver.optimise(
+            &mut brancher,
+            &mut termination,
+            LSU::new(direction, objective, callback),
+        ),
+        OptimisationStrategy::UnsatSat => solver.optimise(
+            &mut brancher,
+            &mut termination,
+            LUS::new(direction, objective, callback),
+        ),
+    };
+
+    let objective_value = match result {
+        OptimisationResult::Optimal(optimal_solution) => {
+            let optimal_objective_value = optimal_solution.get_integer_value(objective);
+            if !options.all_solutions {
+                solver.log_statistics();
+                print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
+            }
+            println!("==========");
+            Some(optimal_objective_value)
+        }
+        OptimisationResult::Satisfiable(solution) => {
+            let best_found_objective_value = solution.get_integer_value(objective);
+            Some(best_found_objective_value)
+        }
+        OptimisationResult::Unsatisfiable => {
+            println!("{MSG_UNSATISFIABLE}");
+            None
+        }
+        OptimisationResult::Unknown => {
+            println!("{MSG_UNKNOWN}");
+            None
+        }
+    };
+
+    if let Some(value) = objective_value {
         solver.log_statistics_with_objective(value as i64)
     } else {
         solver.log_statistics()
     }
 
     Ok(())
+}
+
+fn satisfy(
+    options: FlatZincOptions,
+    solver: &mut Solver,
+    mut brancher: impl Brancher,
+    mut termination: impl TerminationCondition,
+    outputs: Vec<Output>,
+) {
+    if options.all_solutions {
+        let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
+        loop {
+            match solution_iterator.next_solution() {
+                IteratedSolution::Solution(solution, solver) => {
+                    solution_callback(
+                        None,
+                        options.all_solutions,
+                        &outputs,
+                        solver,
+                        solution.as_reference(),
+                    );
+                }
+                IteratedSolution::Finished => {
+                    println!("==========");
+                    break;
+                }
+                IteratedSolution::Unknown => {
+                    break;
+                }
+                IteratedSolution::Unsatisfiable => {
+                    println!("{MSG_UNSATISFIABLE}");
+                    break;
+                }
+            }
+        }
+    } else {
+        match solver.satisfy(&mut brancher, &mut termination) {
+            SatisfactionResult::Satisfiable(solution) => solution_callback(
+                None,
+                options.all_solutions,
+                &outputs,
+                &*solver,
+                solution.as_reference(),
+            ),
+            SatisfactionResult::Unsatisfiable => {
+                println!("{MSG_UNSATISFIABLE}");
+            }
+            SatisfactionResult::Unknown => {
+                println!("{MSG_UNKNOWN}");
+            }
+        }
+    }
+
+    solver.log_statistics();
 }
 
 fn parse_and_compile(
