@@ -9,7 +9,6 @@ use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
@@ -219,12 +218,12 @@ impl Model {
             Optimiser::LinearSatUnsat => solver.optimise(
                 &mut brancher,
                 &mut Indefinite,
-                LinearSatUnsat::new(direction, objective, |_: &Solver, _: SolutionReference| {}),
+                LinearSatUnsat::new(direction, objective, |_, _| {}),
             ),
             Optimiser::LinearUnsatSat => solver.optimise(
                 &mut brancher,
                 &mut Indefinite,
-                LinearUnsatSat::new(direction, objective, |_: &Solver, _: SolutionReference| {}),
+                LinearUnsatSat::new(direction, objective, |_, _| {}),
             ),
         };
 

@@ -20,7 +20,12 @@ pub struct LinearSatUnsat<Var, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var, Callback> LinearSatUnsat<Var, Callback> {
+impl<Var, Callback> LinearSatUnsat<Var, Callback>
+where
+    // The trait bound here is not common; see
+    // linear_unsat_sat for more info.
+    Callback: Fn(&Solver, SolutionReference),
+{
     /// Create a new instance of [`LinearSatUnsat`].
     pub fn new(
         direction: OptimisationDirection,

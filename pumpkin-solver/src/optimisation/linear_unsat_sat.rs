@@ -20,7 +20,21 @@ pub struct LinearUnsatSat<Var, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var, Callback> LinearUnsatSat<Var, Callback> {
+impl<Var, Callback> LinearUnsatSat<Var, Callback>
+where
+    // The trait bound here is contrary to common
+    // practice; typically the bounds are only enforced
+    // where they are required (in this case, in the
+    // implementation of OptimisationProcedure).
+    //
+    // However, if we don't have the trait bound here,
+    // the compiler may implement `FnOnce` for the
+    // empty closure, which causes problems. So, we
+    // have the hint here.
+    //
+    // Similar is also the case in linear SAT-UNSAT.
+    Callback: Fn(&Solver, SolutionReference),
+{
     /// Create a new instance of [`LinearUnsatSat`].
     pub fn new(
         direction: OptimisationDirection,
