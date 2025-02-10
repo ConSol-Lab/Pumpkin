@@ -79,8 +79,8 @@ pub enum OptimisationStrategy {
 impl Display for OptimisationStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OptimisationStrategy::LinearSatUnsat => write!(f, "sat-unsat"),
-            OptimisationStrategy::LinearUnsatSat => write!(f, "unsat-sat"),
+            OptimisationStrategy::LinearSatUnsat => write!(f, "linear-sat-unsat"),
+            OptimisationStrategy::LinearUnsatSat => write!(f, "linear-unsat-sat"),
         }
     }
 }
