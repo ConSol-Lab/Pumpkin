@@ -2,10 +2,14 @@ use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
+use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
@@ -14,6 +18,9 @@ use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
 use crate::constraints::Constraint;
+use crate::optimisation::Direction;
+use crate::optimisation::OptimisationResult;
+use crate::optimisation::Optimiser;
 use crate::result::SatisfactionResult;
 use crate::result::Solution;
 use crate::variables::BoolExpression;
@@ -163,27 +170,9 @@ impl Model {
 
     #[pyo3(signature = (proof=None))]
     fn satisfy(&self, proof: Option<PathBuf>) -> SatisfactionResult {
-        let proof_log = proof
-            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
-            .transpose()
-            .map(|proof| proof.unwrap_or_default())
-            .expect("failed to create proof file");
+        let solver_setup = self.create_solver(proof);
 
-        let options = SolverOptions {
-            proof_log,
-            ..Default::default()
-        };
-
-        let mut solver = Solver::with_options(options);
-
-        let solver_setup = self
-            .create_variable_map(&mut solver)
-            .and_then(|variable_map| {
-                self.post_constraints(&mut solver, &variable_map)?;
-                Ok(variable_map)
-            });
-
-        let Ok(variable_map) = solver_setup else {
+        let Ok((mut solver, variable_map)) = solver_setup else {
             return SatisfactionResult::Unsatisfiable();
         };
 
@@ -200,6 +189,62 @@ impl Model {
                 SatisfactionResult::Unsatisfiable()
             }
             pumpkin_solver::results::SatisfactionResult::Unknown => SatisfactionResult::Unknown(),
+        }
+    }
+
+    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None))]
+    fn optimise(
+        &self,
+        objective: IntExpression,
+        optimiser: Optimiser,
+        direction: Direction,
+        proof: Option<PathBuf>,
+    ) -> OptimisationResult {
+        let solver_setup = self.create_solver(proof);
+
+        let Ok((mut solver, variable_map)) = solver_setup else {
+            return OptimisationResult::Unsatisfiable();
+        };
+
+        let mut brancher = solver.default_brancher();
+
+        let direction = match direction {
+            Direction::Minimise => OptimisationDirection::Minimise,
+            Direction::Maximise => OptimisationDirection::Maximise,
+        };
+
+        let objective = objective.to_affine_view(&variable_map);
+
+        let result = match optimiser {
+            Optimiser::LinearSatUnsat => solver.optimise(
+                &mut brancher,
+                &mut Indefinite,
+                LinearSatUnsat::new(direction, objective, |_: &Solver, _: SolutionReference| {}),
+            ),
+            Optimiser::LinearUnsatSat => solver.optimise(
+                &mut brancher,
+                &mut Indefinite,
+                LinearUnsatSat::new(direction, objective, |_: &Solver, _: SolutionReference| {}),
+            ),
+        };
+
+        match result {
+            pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
+                OptimisationResult::Satisfiable(Solution {
+                    solver_solution: solution,
+                    variable_map,
+                })
+            }
+            pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
+                OptimisationResult::Optimal(Solution {
+                    solver_solution: solution,
+                    variable_map,
+                })
+            }
+            pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
+                OptimisationResult::Unsatisfiable()
+            }
+            pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
         }
     }
 }
@@ -251,6 +296,33 @@ impl Model {
         }
 
         Ok(())
+    }
+
+    fn create_solver(
+        &self,
+        proof: Option<PathBuf>,
+    ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
+        let proof_log = proof
+            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
+            .transpose()
+            .map(|proof| proof.unwrap_or_default())
+            .expect("failed to create proof file");
+
+        let options = SolverOptions {
+            proof_log,
+            ..Default::default()
+        };
+
+        let mut solver = Solver::with_options(options);
+
+        let variable_map = self
+            .create_variable_map(&mut solver)
+            .and_then(|variable_map| {
+                self.post_constraints(&mut solver, &variable_map)?;
+                Ok(variable_map)
+            })?;
+
+        Ok((solver, variable_map))
     }
 }
 
