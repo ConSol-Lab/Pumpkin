@@ -1,9 +1,8 @@
+use super::Direction;
 use super::TieBreaker;
 use crate::basic_types::Random;
-use crate::optimisation::OptimisationDirection;
 
-/// A tie breaker which selects the variable with the "best" value (according to the
-/// [`OptimisationDirection`]),
+/// A tie breaker which selects the variable with the "best" value (according to the [`Direction`]),
 /// if there is a tie then it will select any of the variables part of this tie with equal
 /// probability.
 ///
@@ -11,12 +10,12 @@ use crate::optimisation::OptimisationDirection;
 /// - If no variable has been considered yet then this is the one which is currently considered to
 ///   be selected
 /// - If a variable has previously been considered then we can split into 3 cases:
-///     - If the direction is [`OptimisationDirection::Maximise`] and the value of the newly
-///       provided variable is stricly bigger than that of the currently selected variable then we
-///       update the currently selected variable
-///     - If the direction is [`OptimisationDirection::Minimise`] and the value of the newly
-///       provided variable is stricly smaller than that of the currently selected variable then we
-///       update the currently selected variable
+///     - If the direction is [`Direction::Maximum`] and the value of the newly provided variable is
+///       stricly bigger than that of the currently selected variable then we update the currently
+///       selected variable
+///     - If the direction is [`Direction::Minimum`] and the value of the newly provided variable is
+///       stricly smaller than that of the currently selected variable then we update the currently
+///       selected variable
 ///     - If the values are equal then we randomly select the newly considered variable with
 ///       probability `1 / num_previously_seen_variables` where `num_previously_seen_variables` is
 ///       the number of variables which have been previously considered with the same value
@@ -31,7 +30,7 @@ pub struct RandomTieBreaker<Var, Value> {
     /// [`selected_value`][RandomTieBreaker::selected_value]
     num_variables_considered: usize,
     /// Whether the tie-breaker should find the variable with the maximum or minimum value
-    direction: OptimisationDirection,
+    direction: Direction,
 }
 
 impl<Var, Value> std::fmt::Debug for RandomTieBreaker<Var, Value> {
@@ -42,7 +41,7 @@ impl<Var, Value> std::fmt::Debug for RandomTieBreaker<Var, Value> {
 
 impl<Var, Value> RandomTieBreaker<Var, Value> {
     // Currently the struct is not used
-    pub fn new(direction: OptimisationDirection, rng: Box<dyn Random>) -> Self {
+    pub fn new(direction: Direction, rng: Box<dyn Random>) -> Self {
         Self {
             selected_variable: None,
             selected_value: None,
@@ -68,7 +67,7 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
                 .as_ref()
                 .expect("The random tie breaker selected a variable but not a value...");
             match self.direction {
-                OptimisationDirection::Maximise => {
+                Direction::Maximum => {
                     // The current value is larger than the selected one, reset to this
                     // variable/value
                     if value > *selected_value {
@@ -78,7 +77,7 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
                         return;
                     }
                 }
-                OptimisationDirection::Minimise => {
+                Direction::Minimum => {
                     // The current value is larger than the selected one, reset to this
                     // variable/value
                     if value < *selected_value {
@@ -114,7 +113,7 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
         selected
     }
 
-    fn get_direction(&self) -> OptimisationDirection {
+    fn get_direction(&self) -> Direction {
         self.direction
     }
 }
@@ -123,14 +122,14 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
 mod tests {
     use super::RandomTieBreaker;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::tie_breaking::random_tie_breaker::OptimisationDirection;
+    use crate::branching::tie_breaking::random_tie_breaker::Direction;
     use crate::branching::tie_breaking::TieBreaker;
 
     #[test]
     fn test_selection_new_value() {
         let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
-            RandomTieBreaker::new(OptimisationDirection::Minimise, Box::new(rng));
+            RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
         assert!(breaker.select().is_none());
 
@@ -146,7 +145,7 @@ mod tests {
     fn test_selection_between_values_chooses_maximum() {
         let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
-            RandomTieBreaker::new(OptimisationDirection::Maximise, Box::new(rng));
+            RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
 
         breaker.consider(0, 5);
         breaker.consider(1, 10);
@@ -161,7 +160,7 @@ mod tests {
     fn test_selection_between_values_chooses_minimum() {
         let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
-            RandomTieBreaker::new(OptimisationDirection::Minimise, Box::new(rng));
+            RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
         breaker.consider(0, 5);
         breaker.consider(1, 10);
@@ -179,7 +178,7 @@ mod tests {
             ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
-            RandomTieBreaker::new(OptimisationDirection::Maximise, Box::new(rng));
+            RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
 
         breaker.consider(0, 5);
         breaker.consider(1, 5);
@@ -198,7 +197,7 @@ mod tests {
             ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
-            RandomTieBreaker::new(OptimisationDirection::Maximise, Box::new(rng));
+            RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
 
         breaker.consider(0, 5);
         breaker.consider(1, 5);

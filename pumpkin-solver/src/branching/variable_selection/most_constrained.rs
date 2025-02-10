@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use log::warn;
 
+use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 #[cfg(doc)]
@@ -9,7 +10,6 @@ use crate::branching::variable_selection::FirstFail;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
-use crate::optimisation::OptimisationDirection;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest domain (similar to
@@ -62,7 +62,7 @@ impl<Var: Copy + 'static> MostConstrained<Var, InOrderTieBreaker<Var, MostConstr
         }
         MostConstrained {
             variables: variables.to_vec(),
-            tie_breaker: InOrderTieBreaker::new(OptimisationDirection::Minimise),
+            tie_breaker: InOrderTieBreaker::new(Direction::Minimum),
             num_occurrences: num_occurrences.to_vec(),
         }
     }

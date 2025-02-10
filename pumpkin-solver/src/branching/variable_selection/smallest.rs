@@ -1,11 +1,11 @@
 use log::warn;
 
 use super::VariableSelector;
+use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
-use crate::optimisation::OptimisationDirection;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest value in its domain.
@@ -31,7 +31,7 @@ impl<Var: Clone> Smallest<Var, InOrderTieBreaker<Var, i32>> {
         }
         Smallest {
             variables: variables.to_vec(),
-            tie_breaker: InOrderTieBreaker::new(OptimisationDirection::Minimise),
+            tie_breaker: InOrderTieBreaker::new(Direction::Minimum),
         }
     }
 }
@@ -40,7 +40,7 @@ impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Smallest<Var, TieB
     pub fn with_tie_breaker(variables: &[Var], tie_breaker: TieBreaking) -> Self {
         pumpkin_assert_eq_simple!(
             tie_breaker.get_direction(),
-            OptimisationDirection::Minimise,
+            Direction::Minimum,
             "The provided tie-breaker to Smallest attempts to find the Maximum value
              instead of the Minimum value, please ensure that you have passed the correct tie-breaker");
         if variables.is_empty() {

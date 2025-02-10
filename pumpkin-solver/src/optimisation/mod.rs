@@ -85,8 +85,8 @@ impl Display for OptimisationStrategy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
 /// The direction of the optimisation, either maximising or minimising.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OptimisationDirection {
     Maximise,
     Minimise,

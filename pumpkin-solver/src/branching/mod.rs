@@ -11,8 +11,7 @@
 //!   hooks into the solver); the main method of this trait is the [`ValueSelector::select_value`]
 //!   method.
 //!
-//! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`].
-//!
+//! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::variables::Literal;
