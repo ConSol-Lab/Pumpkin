@@ -1,4 +1,7 @@
 import glob
+import pathlib
+from tqdm import tqdm
+import os
 
 def read_file(instance):
     lines = instance.readlines()
@@ -81,9 +84,20 @@ def convert_to_dzn(n_tasks, n_resources, precedences, resource_usages, resource_
 
     return "".join(dzn)
 
+files = list(glob.glob("**/*.sch"))
+files.extend(list(glob.glob("**/*.SCH", recursive = True)))
+directories = set()
 
-for file in glob.glob("./*.sch"):
+for file in tqdm(files):
     with open(file, "r") as instance:
         n_tasks, n_resources, precedences, resource_usages, resource_capacities, processing_times = read_file(instance)
         dzn = convert_to_dzn(n_tasks, n_resources, precedences, resource_usages, resource_capacities, processing_times)
-        print(dzn)
+    path = pathlib.Path(file)
+
+    converted = "/".join(list(map(lambda x: f"{x}_converted", path.parts[:-1])))
+    directories.add(converted)
+    if not os.path.exists(converted):
+        os.makedirs(converted)
+    with open(f"{converted}/{path.stem}.dzn", "w+") as dzn_file:
+        dzn_file.write(dzn)
+print(directories)
