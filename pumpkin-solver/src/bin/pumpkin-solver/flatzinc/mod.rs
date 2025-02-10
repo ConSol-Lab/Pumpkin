@@ -52,7 +52,7 @@ pub(crate) struct FlatZincOptions {
     pub(crate) cumulative_options: CumulativeOptions,
 
     /// Determines which type of search is performed by the solver
-    pub(crate) search_mode: OptimisationStrategy,
+    pub(crate) optimisation_strategy: OptimisationStrategy,
 }
 
 fn solution_callback(
@@ -101,7 +101,7 @@ pub(crate) fn solve(
 
     let value = if let Some(objective_function) = &instance.objective_function {
         let result = match objective_function {
-            FlatzincObjective::Maximize(domain_id) => match options.search_mode {
+            FlatzincObjective::Maximize(domain_id) => match options.optimisation_strategy {
                 OptimisationStrategy::SatUnsat => solver.optimise(
                     &mut brancher,
                     &mut termination,
@@ -137,7 +137,7 @@ pub(crate) fn solve(
                     ),
                 ),
             },
-            FlatzincObjective::Minimize(domain_id) => match options.search_mode {
+            FlatzincObjective::Minimize(domain_id) => match options.optimisation_strategy {
                 OptimisationStrategy::SatUnsat => solver.optimise(
                     &mut brancher,
                     &mut termination,

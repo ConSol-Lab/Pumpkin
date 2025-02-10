@@ -347,9 +347,9 @@ struct Args {
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
 
-    /// Determine what type of search is used by the solver
-    #[arg(long = "search-mode", default_value_t)]
-    search_mode: OptimisationStrategy,
+    /// Determine what type of optimisation strategy is used by the solver
+    #[arg(long = "optimisation-strategy", default_value_t)]
+    optimisation_strategy: OptimisationStrategy,
 }
 
 fn configure_logging(
@@ -553,7 +553,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
                 ),
-                search_mode: args.search_mode,
+                optimisation_strategy: args.optimisation_strategy,
             },
         )?,
     }
