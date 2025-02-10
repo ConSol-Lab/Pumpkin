@@ -18,7 +18,7 @@ use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
 use pumpkin_solver::optimisation::linear_unsat_sat::LUS;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationProcedure;
-use pumpkin_solver::optimisation::SearchMode;
+use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
@@ -52,7 +52,7 @@ pub(crate) struct FlatZincOptions {
     pub(crate) cumulative_options: CumulativeOptions,
 
     /// Determines which type of search is performed by the solver
-    pub(crate) search_mode: SearchMode,
+    pub(crate) search_mode: OptimisationStrategy,
 }
 
 fn solution_callback(
@@ -102,7 +102,7 @@ pub(crate) fn solve(
     let value = if let Some(objective_function) = &instance.objective_function {
         let result = match objective_function {
             FlatzincObjective::Maximize(domain_id) => match options.search_mode {
-                SearchMode::UpperBounding => solver.optimise(
+                OptimisationStrategy::SatUnsat => solver.optimise(
                     &mut brancher,
                     &mut termination,
                     LSU::new(
@@ -119,7 +119,7 @@ pub(crate) fn solve(
                         },
                     ),
                 ),
-                SearchMode::LowerBounding => solver.optimise(
+                OptimisationStrategy::UnsatSat => solver.optimise(
                     &mut brancher,
                     &mut termination,
                     LUS::new(
@@ -138,7 +138,7 @@ pub(crate) fn solve(
                 ),
             },
             FlatzincObjective::Minimize(domain_id) => match options.search_mode {
-                SearchMode::UpperBounding => solver.optimise(
+                OptimisationStrategy::SatUnsat => solver.optimise(
                     &mut brancher,
                     &mut termination,
                     LSU::new(
@@ -155,7 +155,7 @@ pub(crate) fn solve(
                         },
                     ),
                 ),
-                SearchMode::LowerBounding => solver.optimise(
+                OptimisationStrategy::UnsatSat => solver.optimise(
                     &mut brancher,
                     &mut termination,
                     LUS::new(

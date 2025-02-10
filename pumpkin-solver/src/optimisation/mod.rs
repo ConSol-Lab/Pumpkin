@@ -66,21 +66,21 @@ pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, Solu
 
 /// The type of search which is performed by the solver.
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
-pub enum SearchMode {
+pub enum OptimisationStrategy {
     /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
     /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
     #[default]
-    UpperBounding,
+    SatUnsat,
     /// Linear UNSAT-SAT - Starts with an unsatisfiable solution and tightens the bound on the
     /// objective variable until a SAT result is reached. Can be seen as lower-bounding search.
-    LowerBounding,
+    UnsatSat,
 }
 
-impl Display for SearchMode {
+impl Display for OptimisationStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SearchMode::UpperBounding => write!(f, "upper-bounding"),
-            SearchMode::LowerBounding => write!(f, "lower-bounding"),
+            OptimisationStrategy::SatUnsat => write!(f, "sat-unsat"),
+            OptimisationStrategy::UnsatSat => write!(f, "unsat-sat"),
         }
     }
 }

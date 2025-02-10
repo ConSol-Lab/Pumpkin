@@ -26,7 +26,7 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::optimisation::SearchMode;
+use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
@@ -349,7 +349,7 @@ struct Args {
 
     /// Determine what type of search is used by the solver
     #[arg(long = "search-mode", default_value_t)]
-    search_mode: SearchMode,
+    search_mode: OptimisationStrategy,
 }
 
 fn configure_logging(
