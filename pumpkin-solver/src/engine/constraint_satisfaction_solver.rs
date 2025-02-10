@@ -448,7 +448,8 @@ impl ConstraintSatisfactionSolver {
         let result = self
             .conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context)
-            .expect("Should have a nogood");
+            .expect("Should not have been infeasible")
+            .expect("Expected nogood");
 
         let _ = self
             .internal_parameters
@@ -692,53 +693,7 @@ impl ConstraintSatisfactionSolver {
     /// }
     /// ```
     pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
-        if self.state.is_infeasible() {
-            return CoreExtractionResult::Core(vec![]);
-        }
-
-        self.assumptions
-            .iter()
-            .enumerate()
-            .find(|(index, assumption)| {
-                self.assumptions
-                    .iter()
-                    .skip(index + 1)
-                    .any(|other_assumptiion| {
-                        assumption.is_mutually_exclusive_with(*other_assumptiion)
-                    })
-            })
-            .map(|(_, conflicting_assumption)| {
-                CoreExtractionResult::ConflictingAssumption(*conflicting_assumption)
-            })
-            .unwrap_or_else(|| {
-                let mut conflict_analysis_context = ConflictAnalysisContext {
-                    assignments: &mut self.assignments,
-                    counters: &mut self.solver_statistics,
-                    solver_state: &mut self.state,
-                    reason_store: &mut self.reason_store,
-                    brancher,
-                    semantic_minimiser: &mut self.semantic_minimiser,
-                    propagators: &mut self.propagators,
-                    last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-                    watch_list_cp: &mut self.watch_list_cp,
-                    propagator_queue: &mut self.propagator_queue,
-                    event_drain: &mut self.event_drain,
-                    backtrack_event_drain: &mut self.backtrack_event_drain,
-                    should_minimise: self.internal_parameters.learning_clause_minimisation,
-                    proof_log: &mut self.internal_parameters.proof_log,
-                    is_completing_proof: false,
-                    unit_nogood_step_ids: &self.unit_nogood_step_ids,
-                    domain_faithfulness: &mut self.domain_faithfulness,
-                    stateful_assignments: &mut self.stateful_assignments,
-                };
-
-                let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
-                let learned_nogood = resolver
-                    .resolve_conflict(&mut conflict_analysis_context)
-                    .expect("Expected core extraction to be able to extract a core");
-
-                CoreExtractionResult::Core(learned_nogood.predicates.clone())
-            })
+        todo!()
     }
 
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
@@ -851,7 +806,7 @@ impl ConstraintSatisfactionSolver {
                     return flag;
                 }
             } else {
-                if self.get_decision_level() == 0 {
+                if self.get_decision_level() == 0 || !self.resolve_conflict_with_nogood(brancher) {
                     if self.assumptions.is_empty() {
                         // Only complete the proof when _not_ solving under assumptions. It is
                         // unclear what a proof would look like with assumptions, as there is extra
@@ -864,8 +819,6 @@ impl ConstraintSatisfactionSolver {
 
                     return CSPSolverExecutionFlag::Infeasible;
                 }
-
-                self.resolve_conflict_with_nogood(brancher);
 
                 brancher.on_conflict();
                 self.decay_nogood_activities();
@@ -959,7 +912,7 @@ impl ConstraintSatisfactionSolver {
     ///
     /// # Note
     /// This method performs no propagation, this is left up to the solver afterwards.
-    fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
+    fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) -> bool {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
         let current_decision_level = self.get_decision_level();
@@ -992,6 +945,12 @@ impl ConstraintSatisfactionSolver {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
         // conflict happened
+        if learned_nogood.is_err() {
+            return false;
+        }
+
+        let learned_nogood = learned_nogood.unwrap();
+
         if let Some(learned_nogood) = learned_nogood.as_ref() {
             conflict_analysis_context
                 .counters
@@ -1047,6 +1006,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         self.state.declare_solving();
+        true
     }
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {

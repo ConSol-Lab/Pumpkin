@@ -595,6 +595,11 @@ impl NogoodPropagator {
                 .is_some_and(|decision_level| decision_level > 0)
         });
 
+        // We pre-processed out the entirety of the nogood
+        if nogood.is_empty() {
+            return;
+        }
+
         // Add the nogood to the database.
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.

@@ -11,8 +11,8 @@ impl ConflictResolver for NoLearningResolver {
     fn resolve_conflict(
         &mut self,
         _context: &mut ConflictAnalysisContext,
-    ) -> Option<LearnedNogood> {
-        None
+    ) -> Result<Option<LearnedNogood>, ()> {
+        Ok(None)
     }
 
     fn process(
