@@ -137,35 +137,27 @@ pub(crate) fn solve(
         ),
     };
 
-    let objective_value = match result {
+    match result {
         OptimisationResult::Optimal(optimal_solution) => {
-            let optimal_objective_value = optimal_solution.get_integer_value(objective);
             if !options.all_solutions {
                 solver.log_statistics();
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
             }
             println!("==========");
-            Some(optimal_objective_value)
         }
-        OptimisationResult::Satisfiable(solution) => {
-            let best_found_objective_value = solution.get_integer_value(objective);
-            Some(best_found_objective_value)
+        OptimisationResult::Satisfiable(_) => {
+            // Solutions are printed in the callback.
+            solver.log_statistics();
         }
         OptimisationResult::Unsatisfiable => {
+            solver.log_statistics();
             println!("{MSG_UNSATISFIABLE}");
-            None
         }
         OptimisationResult::Unknown => {
+            solver.log_statistics();
             println!("{MSG_UNKNOWN}");
-            None
         }
     };
-
-    if let Some(value) = objective_value {
-        solver.log_statistics_with_objective(value as i64)
-    } else {
-        solver.log_statistics()
-    }
 
     Ok(())
 }
@@ -195,9 +187,11 @@ fn satisfy(
                     break;
                 }
                 IteratedSolution::Unknown => {
+                    solver.log_statistics();
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
+                    solver.log_statistics();
                     println!("{MSG_UNSATISFIABLE}");
                     break;
                 }
@@ -213,15 +207,15 @@ fn satisfy(
                 solution.as_reference(),
             ),
             SatisfactionResult::Unsatisfiable => {
+                solver.log_statistics();
                 println!("{MSG_UNSATISFIABLE}");
             }
             SatisfactionResult::Unknown => {
+                solver.log_statistics();
                 println!("{MSG_UNKNOWN}");
             }
         }
     }
-
-    solver.log_statistics();
 }
 
 fn parse_and_compile(
