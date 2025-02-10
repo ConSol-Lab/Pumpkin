@@ -132,7 +132,7 @@
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
 //! # use pumpkin_solver::optimisation::OptimisationDirection;
-//! # use pumpkin_solver::optimisation::linear_sat_unsat::LSU;
+//! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
 //! # let mut solver = Solver::default();
@@ -148,7 +148,7 @@
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
-//!     LSU::new(OptimisationDirection::Minimise, objective, |_, _| {}),
+//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, |_, _| {}),
 //! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
