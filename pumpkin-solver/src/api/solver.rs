@@ -1,5 +1,6 @@
 use std::num::NonZero;
 
+use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -24,12 +25,16 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+#[cfg(doc)]
+use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
+#[cfg(doc)]
+use crate::optimisation::linear_unsat_sat::LinearUnsatSat;
+use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
-use crate::predicate;
-use crate::pumpkin_assert_simple;
+#[cfg(doc)]
+use crate::predicates;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::results::SolutionCallbackArguments;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 
@@ -82,12 +87,10 @@ use crate::statistics::log_statistic_postfix;
 ///
 /// # Using the Solver
 /// For examples on how to use the solver, see the [root-level crate documentation](crate) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/master/pumpkin-lib/examples).
+#[derive(Debug)]
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
-    satisfaction_solver: ConstraintSatisfactionSolver,
-    /// The function is called whenever an optimisation function finds a solution; see
-    /// [`Solver::with_solution_callback`].
-    solution_callback: Box<dyn Fn(SolutionCallbackArguments)>,
+    pub(crate) satisfaction_solver: ConstraintSatisfactionSolver,
     true_literal: Literal,
 }
 
@@ -97,22 +100,8 @@ impl Default for Solver {
         let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            solution_callback: create_empty_function(),
             true_literal,
         }
-    }
-}
-
-/// Creates a place-holder empty function which does not do anything when a solution is found.
-fn create_empty_function() -> Box<dyn Fn(SolutionCallbackArguments)> {
-    Box::new(|_| {})
-}
-
-impl std::fmt::Debug for Solver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Solver")
-            .field("satisfaction_solver", &self.satisfaction_solver)
-            .finish()
     }
 }
 
@@ -123,22 +112,8 @@ impl Solver {
         let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            solution_callback: create_empty_function(),
             true_literal,
         }
-    }
-
-    /// Adds a call-back to the [`Solver`] which is called every time that a solution is found when
-    /// optimising using [`Solver::maximise`] or [`Solver::minimise`].
-    ///
-    /// Note that this will also
-    /// perform the call-back on the optimal solution which is returned in
-    /// [`OptimisationResult::Optimal`].
-    pub fn with_solution_callback(
-        &mut self,
-        solution_callback: impl Fn(SolutionCallbackArguments) + 'static,
-    ) {
-        self.solution_callback = Box::new(solution_callback);
     }
 
     /// Logs the statistics currently present in the solver with the provided objective value.
@@ -155,6 +130,10 @@ impl Solver {
 
     pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
         &mut self.satisfaction_solver
+    }
+
+    pub fn get_solution_reference(&self) -> SolutionReference {
+        self.satisfaction_solver.get_solution_reference()
     }
 }
 
@@ -333,7 +312,9 @@ impl Solver {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                self.process_solution(&solution, brancher);
+
+                brancher.on_solution(solution.as_reference());
+
                 SatisfactionResult::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
@@ -370,7 +351,7 @@ impl Solver {
     /// which can be used to obtain the found solution or find other solutions.
     ///
     /// This method takes as input a list of [`Predicate`]s which represent so-called assumptions
-    /// (see \[1\] for a more detailed explanation). See the [`predicate`] documentation for how
+    /// (see \[1\] for a more detailed explanation). See the [`predicates`] documentation for how
     /// to construct these predicates.
     ///
     /// # Bibliography
@@ -418,215 +399,20 @@ impl Solver {
     }
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is minimised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]).
+    /// `objective_variable` is optimised as indicated by the `direction` (or is indicated to
+    /// terminate by the provided [`TerminationCondition`]). Uses a search strategy based on the
+    /// provided [`OptimisationProcedure`], currently [`LinearSatUnsat`] and
+    /// [`LinearUnsatSat`] are supported.
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn minimise(
+    pub fn optimise<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>(
         &mut self,
         brancher: &mut impl Brancher,
         termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
+        mut optimisation_procedure: impl OptimisationProcedure<Var, Callback>,
     ) -> OptimisationResult {
-        self.minimise_internal(brancher, termination, objective_variable, false)
-    }
-
-    /// Solves the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]).
-    ///
-    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
-    /// it exists.
-    pub fn maximise(
-        &mut self,
-        brancher: &mut impl Brancher,
-        termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-    ) -> OptimisationResult {
-        self.minimise_internal(brancher, termination, objective_variable.scaled(-1), true)
-    }
-
-    /// The internal method which optimizes the objective function, this function takes an extra
-    /// argument (`is_maximising`) as compared to [`Solver::maximise`] and [`Solver::minimise`]
-    /// which determines whether the logged objective value should be scaled by `-1` or not.
-    ///
-    /// This is necessary due to the fact that [`Solver::maximise`] simply calls minimise with
-    /// the objective variable scaled with `-1` which would lead to incorrect statistic if not
-    /// scaled back.
-    fn minimise_internal(
-        &mut self,
-        brancher: &mut impl Brancher,
-        termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-        is_maximising: bool,
-    ) -> OptimisationResult {
-        // If we are maximising then when we simply scale the variable by -1, however, this will
-        // lead to the printed objective value in the statistics to be multiplied by -1; this
-        // objective_multiplier ensures that the objective is correctly logged.
-        let objective_multiplier = if is_maximising { -1 } else { 1 };
-
-        let initial_solve = self.satisfaction_solver.solve(termination, brancher);
-        match initial_solve {
-            CSPSolverExecutionFlag::Feasible => {}
-            CSPSolverExecutionFlag::Infeasible => {
-                // Reset the state whenever we return a result
-                self.satisfaction_solver.restore_state_at_root(brancher);
-                let _ = self.satisfaction_solver.conclude_proof_unsat();
-                return OptimisationResult::Unsatisfiable;
-            }
-            CSPSolverExecutionFlag::Timeout => {
-                // Reset the state whenever we return a result
-                self.satisfaction_solver.restore_state_at_root(brancher);
-                return OptimisationResult::Unknown;
-            }
-        }
-        let mut best_objective_value = Default::default();
-        let mut best_solution = Solution::default();
-
-        self.update_best_solution_and_process(
-            objective_multiplier,
-            &objective_variable,
-            &mut best_objective_value,
-            &mut best_solution,
-            brancher,
-        );
-
-        loop {
-            self.satisfaction_solver.restore_state_at_root(brancher);
-
-            let objective_bound_predicate = if is_maximising {
-                predicate![objective_variable >= best_objective_value as i32 * objective_multiplier]
-            } else {
-                predicate![objective_variable <= best_objective_value as i32 * objective_multiplier]
-            };
-
-            if self
-                .strengthen(
-                    &objective_variable,
-                    best_objective_value * objective_multiplier as i64,
-                )
-                .is_err()
-            {
-                // Reset the state whenever we return a result
-                self.satisfaction_solver.restore_state_at_root(brancher);
-                let _ = self
-                    .satisfaction_solver
-                    .conclude_proof_optimal(objective_bound_predicate);
-                return OptimisationResult::Optimal(best_solution);
-            }
-
-            let solve_result = self.satisfaction_solver.solve(termination, brancher);
-            match solve_result {
-                CSPSolverExecutionFlag::Feasible => {
-                    self.debug_bound_change(
-                        &objective_variable,
-                        best_objective_value * objective_multiplier as i64,
-                    );
-                    self.update_best_solution_and_process(
-                        objective_multiplier,
-                        &objective_variable,
-                        &mut best_objective_value,
-                        &mut best_solution,
-                        brancher,
-                    );
-                }
-                CSPSolverExecutionFlag::Infeasible => {
-                    {
-                        // Reset the state whenever we return a result
-                        self.satisfaction_solver.restore_state_at_root(brancher);
-                        let _ = self
-                            .satisfaction_solver
-                            .conclude_proof_optimal(objective_bound_predicate);
-                        return OptimisationResult::Optimal(best_solution);
-                    }
-                }
-                CSPSolverExecutionFlag::Timeout => {
-                    // Reset the state whenever we return a result
-                    self.satisfaction_solver.restore_state_at_root(brancher);
-                    return OptimisationResult::Satisfiable(best_solution);
-                }
-            }
-        }
-    }
-
-    /// Processes a solution when it is found, it consists of the following procedure:
-    /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
-    ///   `objective_multiplier`).
-    /// - Storing the new best solution in `best_solution`.
-    /// - Calling [`Brancher::on_solution`] on the provided `brancher`.
-    /// - Logging the statistics using [`Solver::log_statistics_with_objective`].
-    /// - Calling the solution callback stored in [`Solver::solution_callback`].
-    fn update_best_solution_and_process(
-        &self,
-        objective_multiplier: i32,
-        objective_variable: &impl IntegerVariable,
-        best_objective_value: &mut i64,
-        best_solution: &mut Solution,
-        brancher: &mut impl Brancher,
-    ) {
-        *best_objective_value = (objective_multiplier
-            * self
-                .satisfaction_solver
-                .get_assigned_integer_value(objective_variable)
-                .expect("expected variable to be assigned")) as i64;
-        *best_solution = self.satisfaction_solver.get_solution_reference().into();
-
-        self.internal_process_solution(best_solution, brancher, Some(*best_objective_value))
-    }
-
-    pub(crate) fn process_solution(&self, solution: &Solution, brancher: &mut impl Brancher) {
-        self.internal_process_solution(solution, brancher, None)
-    }
-
-    fn internal_process_solution(
-        &self,
-        solution: &Solution,
-        brancher: &mut impl Brancher,
-        objective_value: Option<i64>,
-    ) {
-        brancher.on_solution(solution.as_reference());
-
-        (self.solution_callback)(SolutionCallbackArguments::new(
-            self,
-            solution,
-            objective_value,
-        ));
-    }
-
-    /// Given the current objective value `best_objective_value`, it adds a constraint specifying
-    /// that the objective value should be at most `best_objective_value - 1`. Note that it is
-    /// assumed that we are always minimising the variable.
-    fn strengthen(
-        &mut self,
-        objective_variable: &impl IntegerVariable,
-        best_objective_value: i64,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause([predicate!(
-            objective_variable <= (best_objective_value - 1) as i32
-        )])
-    }
-
-    fn debug_bound_change(
-        &self,
-        objective_variable: &impl IntegerVariable,
-        best_objective_value: i64,
-    ) {
-        pumpkin_assert_simple!(
-            (self
-                .satisfaction_solver
-                .get_assigned_integer_value(objective_variable)
-                .expect("expected variable to be assigned") as i64)
-                < best_objective_value,
-            "{}",
-            format!(
-                "The current bound {} should be smaller than the previous bound {}",
-                self.satisfaction_solver
-                    .get_assigned_integer_value(objective_variable)
-                    .expect("expected variable to be assigned"),
-                best_objective_value
-            )
-        );
+        optimisation_procedure.optimise(brancher, termination, self)
     }
 }
 

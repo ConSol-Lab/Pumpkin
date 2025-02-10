@@ -15,16 +15,6 @@ pub(crate) enum FlatzincObjective {
     Minimize(DomainId),
 }
 
-impl FlatzincObjective {
-    /// Returns the [DomainId] of the objective function
-    pub(crate) fn get_domain(&self) -> &DomainId {
-        match self {
-            FlatzincObjective::Maximize(domain) => domain,
-            FlatzincObjective::Minimize(domain) => domain,
-        }
-    }
-}
-
 #[derive(Default)]
 pub(crate) struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
