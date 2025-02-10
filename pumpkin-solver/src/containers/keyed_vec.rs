@@ -46,6 +46,10 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Add a new value to the vector.
     ///
     /// Returns the key for the inserted value.

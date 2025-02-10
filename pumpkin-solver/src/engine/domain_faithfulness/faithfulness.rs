@@ -3,12 +3,12 @@ use log::info;
 use super::faithfulness_list::Faithfullness;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
-use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
-use crate::engine::StateChange;
+use crate::engine::TrailedAssignments;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 #[derive(Default, Debug)]
@@ -28,7 +28,7 @@ impl DomainFaithfulness {
         self.last_updated += 1;
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Will be part of the public API")]
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }
@@ -52,7 +52,7 @@ impl DomainFaithfulness {
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) {
         if self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
@@ -69,7 +69,7 @@ impl DomainFaithfulness {
         // Otherwise we update the structures
         self.domain_id_to_faithfullness[predicate.get_domain()].has_been_updated(
             predicate,
-            stateful_trail,
+            stateful_assignments,
             &mut self.falsified_predicates,
             &mut self.satisfied_predicates,
             self.predicate_to_id
@@ -81,9 +81,16 @@ impl DomainFaithfulness {
     pub(crate) fn watch_predicate(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) -> PredicateId {
+        pumpkin_assert_simple!(
+            predicate.get_right_hand_side()
+                <= assignments.get_initial_upper_bound(predicate.get_domain())
+                || predicate.get_right_hand_side()
+                    >= assignments.get_initial_lower_bound(predicate.get_domain()),
+            "Attempted to create watcher for predicate {predicate:?}"
+        );
         // If it is already watched then at the moment we do nothing
         let has_id_for_predicate = self.predicate_to_id.has_id_for_predicate(predicate);
 
@@ -91,12 +98,12 @@ impl DomainFaithfulness {
         let id = self.predicate_to_id.get_id(predicate);
 
         if !has_id_for_predicate {
-            info!("Adding watcher for {predicate} with id {id:?}");
+            info!("Adding watcher for {predicate} with id {id:?}",);
 
             while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
                 let _ = self
                     .domain_id_to_faithfullness
-                    .push(Faithfullness::default());
+                    .push(Faithfullness::new(stateful_assignments));
             }
 
             self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
@@ -109,7 +116,7 @@ impl DomainFaithfulness {
             self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
                 predicate,
                 id,
-                stateful_trail,
+                stateful_assignments,
                 assignments,
             );
         } else {

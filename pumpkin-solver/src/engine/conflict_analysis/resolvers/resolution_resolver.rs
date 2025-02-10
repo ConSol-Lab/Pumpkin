@@ -1,5 +1,3 @@
-use log::info;
-
 use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PredicateId;

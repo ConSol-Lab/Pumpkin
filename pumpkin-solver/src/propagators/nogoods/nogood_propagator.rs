@@ -3,8 +3,6 @@ use std::ops::Not;
 use itertools::Itertools;
 use log::info;
 use log::warn;
-use range_collections::RangeSet;
-use range_collections::RangeSet2;
 
 use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
@@ -15,8 +13,8 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
@@ -36,7 +34,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
 use crate::engine::SolverStatistics;
-use crate::engine::StateChange;
+use crate::engine::TrailedAssignments;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -87,6 +85,7 @@ pub(crate) struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
     incompatibility_matrix: Option<Vec<Vec<Literal>>>,
     mapping: Option<KeyedVec<DomainId, usize>>,
+    processing_times: Option<Vec<u32>>,
     statistics: NogoodStatistics,
 }
 
@@ -144,9 +143,11 @@ impl NogoodPropagator {
         &mut self,
         incompatibility_matrix: Option<Vec<Vec<Literal>>>,
         mapping: Option<KeyedVec<DomainId, usize>>,
+        processing_times: Option<Vec<u32>>,
     ) {
         self.incompatibility_matrix = incompatibility_matrix;
         self.mapping = mapping;
+        self.processing_times = processing_times;
     }
 
     fn is_watched_predicate(
@@ -163,6 +164,168 @@ impl NogoodPropagator {
                 .predicate_to_id
                 .get_id(predicate)
                 == *predicate_id
+    }
+
+    fn find_disjointness(
+        nogood_predicates: &PropositionalConjunction,
+        incompatibility_matrix: &Option<Vec<Vec<Literal>>>,
+        mapping: &Option<KeyedVec<DomainId, usize>>,
+        processing_times: &Option<Vec<u32>>,
+        context: &mut PropagationContextMut,
+        statistics: &mut NogoodStatistics,
+    ) -> PropagationStatusCP {
+        if let Some(incompatability_matrix) = incompatibility_matrix {
+            if let Some(mapping) = mapping {
+                if let Some(processing_times) = processing_times {
+                    let unassigned_predicates = nogood_predicates
+                        .iter()
+                        .filter(|predicate| {
+                            !context.is_predicate_satisfied(**predicate)
+                                && !context.is_predicate_falsified(**predicate)
+                        })
+                        .map(|predicate| !(*predicate))
+                        .collect_vec();
+                    // First we check whether there are 2 falsified predicates and whether the
+                    // nogood is not already falsified
+                    if unassigned_predicates.len() == 2
+                        && !nogood_predicates
+                            .iter()
+                            .any(|predicate| context.is_predicate_falsified(*predicate))
+                    {
+                        // First we check whether the unassigned predicates are both start variables
+                        // (i.e. domain ids in the incompatibility_matrix)
+                        //
+                        // If this is true then we check whether the disjointness has already been
+                        // assigned
+                        if unassigned_predicates[0].get_domain().index() >= mapping.len()
+                            || mapping[unassigned_predicates[0].get_domain()] == usize::MAX
+                            || unassigned_predicates[1].get_domain().index() >= mapping.len()
+                            || mapping[unassigned_predicates[1].get_domain()] == usize::MAX
+                            || context.is_literal_true(
+                                &incompatability_matrix
+                                    [mapping[unassigned_predicates[0].get_domain()]]
+                                    [mapping[unassigned_predicates[1].get_domain()]],
+                            )
+                        {
+                            // If the conditions hold then we simply return
+                            return Ok(());
+                        }
+
+                        let task_range = BoundDomain::new(
+                            context.lower_bound(&unassigned_predicates[0].get_domain()),
+                            context.upper_bound(&unassigned_predicates[0].get_domain()),
+                            processing_times[mapping[unassigned_predicates[0].get_domain()]],
+                        );
+                        let other_task_range = BoundDomain::new(
+                            context.lower_bound(&unassigned_predicates[1].get_domain()),
+                            context.upper_bound(&unassigned_predicates[1].get_domain()),
+                            processing_times[mapping[unassigned_predicates[1].get_domain()]],
+                        );
+                        if !task_range.overlaps_with(&other_task_range) {
+                            return Ok(());
+                        }
+
+                        // First of all, we do not want to check for disjointness if the predicates
+                        // concern the same domain id
+                        if unassigned_predicates[0].get_domain()
+                            != unassigned_predicates[1].get_domain()
+                        {
+                            // Then we check whether applying the first predicate causes
+                            // disjointness and we check whether
+                            // applying the second predicate causes disjointness
+                            //
+                            // If this is the case then we propagate the disjointness
+                            if !task_range
+                                .apply_predicate(unassigned_predicates[0])
+                                .overlaps_with(&other_task_range)
+                                && !other_task_range
+                                    .apply_predicate(unassigned_predicates[1])
+                                    .overlaps_with(&task_range)
+                            {
+                                info!(
+                                    "{unassigned_predicates:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                    unassigned_predicates[0].get_domain(),
+                                    context.lower_bound(&unassigned_predicates[0].get_domain()),
+                                    context.upper_bound(&unassigned_predicates[0].get_domain()),
+                                    unassigned_predicates[1].get_domain(),
+                                    context.lower_bound(&unassigned_predicates[1].get_domain()),
+                                    context.upper_bound(&unassigned_predicates[1].get_domain())
+                                );
+                                statistics.found_disjointness += 1;
+                                let explanation: PropositionalConjunction = nogood_predicates
+                                    .iter()
+                                    .filter(|predicate| context.is_predicate_satisfied(**predicate))
+                                    .cloned()
+                                    .collect();
+                                context.assign_literal(
+                                    &incompatability_matrix
+                                        [mapping[unassigned_predicates[0].get_domain()]]
+                                        [mapping[unassigned_predicates[1].get_domain()]],
+                                    true,
+                                    explanation,
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct BoundDomain {
+    lower_bound: i32,
+    upper_bound: i32,
+    processing_time: u32,
+}
+
+impl BoundDomain {
+    fn new(lower_bound: i32, upper_bound: i32, processing_time: u32) -> Self {
+        Self {
+            lower_bound,
+            upper_bound,
+            processing_time,
+        }
+    }
+
+    fn apply_predicate(&self, predicate: Predicate) -> Self {
+        let mut result = self.clone();
+        match predicate {
+            Predicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => result.lower_bound = self.lower_bound.max(lower_bound),
+            Predicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => result.upper_bound = self.upper_bound.min(upper_bound),
+            Predicate::NotEqual {
+                domain_id: _,
+                not_equal_constant,
+            } => {
+                if not_equal_constant == self.lower_bound {
+                    result.lower_bound += 1
+                }
+                if not_equal_constant == self.upper_bound {
+                    result.upper_bound -= 1
+                }
+            }
+            Predicate::Equal {
+                domain_id: _,
+                equality_constant,
+            } => {
+                result.lower_bound = equality_constant;
+                result.upper_bound = equality_constant
+            }
+        }
+        result
+    }
+
+    fn overlaps_with(&self, other: &Self) -> bool {
+        self.lower_bound <= other.upper_bound + other.processing_time as i32
+            && other.lower_bound <= self.upper_bound + self.processing_time as i32
     }
 }
 
@@ -186,7 +349,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        info!("Nogood Propagator Propagating");
+        info!("Nogood Propagator Propagating ",);
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -235,19 +398,27 @@ impl Propagator for NogoodPropagator {
             let mut index = 0;
             while index < self.watch_lists[predicate_id].watchers.len() {
                 let nogood_id = self.watch_lists[predicate_id].watchers[index];
-                let nogood = &mut self.nogoods[nogood_id].predicates;
+
+                // We first check whether the cached predicate might already make the nogood
+                // satisfied
+                if context.is_predicate_falsified(self.nogoods[nogood_id].cached_predicate) {
+                    index += 1;
+                    continue;
+                }
+                let nogood_predicates = &mut self.nogoods[nogood_id].predicates;
 
                 // Place the watched predicate at position 1 for simplicity.
-                if Self::is_watched_predicate(nogood[0], &predicate_id, &mut context) {
-                    nogood.swap(0, 1);
+                if Self::is_watched_predicate(nogood_predicates[0], &predicate_id, &mut context) {
+                    nogood_predicates.swap(0, 1);
                 }
 
-                pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood[1]));
+                pumpkin_assert_moderate!(context.is_predicate_satisfied(nogood_predicates[1]));
 
                 // Check the other watched predicate is already falsified, in which case
                 // no propagation can take place. Recall that the other watched
                 // predicate is at position 0 due to previous code.
-                if context.is_predicate_falsified(nogood[0]) {
+                if context.is_predicate_falsified(nogood_predicates[0]) {
+                    self.nogoods[nogood_id].cached_predicate = nogood_predicates[0];
                     index += 1;
                     continue;
                 }
@@ -256,23 +427,23 @@ impl Propagator for NogoodPropagator {
                 // to replace the watched predicate.
                 let mut found_new_watch = false;
                 // Start from index 2 since we are skipping watched predicates.
-                for i in 2..nogood.len() {
+                for i in 2..nogood_predicates.len() {
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
-                    if !context.is_predicate_satisfied(nogood[i]) {
+                    if !context.is_predicate_satisfied(nogood_predicates[i]) {
                         // Found another predicate that can be the watcher.
                         found_new_watch = true;
                         // todo: does it make sense to replace the cached predicate with
                         // this new predicate?
 
                         // Replace the current watcher with the new predicate watcher.
-                        nogood.swap(1, i);
+                        nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
                             context.domain_faithfulness,
-                            context.stateful_trail,
+                            context.stateful_assignments,
                             &mut self.watch_lists,
-                            nogood[1],
+                            nogood_predicates[1],
                             nogood_id,
                             context.assignments,
                         );
@@ -285,121 +456,19 @@ impl Propagator for NogoodPropagator {
                 if found_new_watch {
                     // We remove the current watcher
                     let _ = self.watch_lists[predicate_id].watchers.swap_remove(index);
-                    if let Some(incompatability_matrix) = &self.incompatibility_matrix {
-                        if let Some(mapping) = &self.mapping {
-                            let filter = nogood
-                                .iter()
-                                .filter(|predicate| {
-                                    !context.is_predicate_satisfied(**predicate)
-                                        && !context.is_predicate_falsified(**predicate)
-                                })
-                                .map(|predicate| !(*predicate))
-                                .collect_vec();
-                            if filter.len() == 2
-                                && !nogood
-                                    .iter()
-                                    .any(|predicate| context.is_predicate_falsified(*predicate))
-                            {
-                                if filter[0].get_domain().index() >= mapping.len()
-                                    || mapping[filter[0].get_domain()] == usize::MAX
-                                    || filter[1].get_domain().index() >= mapping.len()
-                                    || mapping[filter[1].get_domain()] == usize::MAX
-                                    || context.is_literal_true(
-                                        &incompatability_matrix[mapping[filter[0].get_domain()]]
-                                            [mapping[filter[1].get_domain()]],
-                                    )
-                                {
-                                    continue;
-                                }
-
-                                let task_range: RangeSet2<i32> = RangeSet::from(
-                                    context.lower_bound(&filter[0].get_domain())
-                                        ..context.upper_bound(&filter[0].get_domain()),
-                                );
-                                let other_task_range: RangeSet2<i32> = RangeSet::from(
-                                    context.lower_bound(&filter[1].get_domain())
-                                        ..context.upper_bound(&filter[1].get_domain()),
-                                );
-                                let intersection: RangeSet2<i32> =
-                                    task_range.intersection(&other_task_range);
-                                if intersection.is_empty() {
-                                    continue;
-                                }
-
-                                if filter[0].get_domain() != filter[1].get_domain() {
-                                    if filter[0].is_lower_bound_predicate()
-                                        && filter[0].get_right_hand_side()
-                                            > context.upper_bound(&filter[1].get_domain())
-                                        && filter[1].is_upper_bound_predicate()
-                                        && filter[1].get_right_hand_side()
-                                            < context.lower_bound(&filter[0].get_domain())
-                                    {
-                                        info!(
-                                            "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                            filter[0].get_domain(),
-                                            context.lower_bound(&filter[0].get_domain()),
-                                            context.upper_bound(&filter[0].get_domain()),
-                                            filter[1].get_domain(),
-                                            context.lower_bound(&filter[1].get_domain()),
-                                            context.upper_bound(&filter[1].get_domain())
-                                        );
-                                        self.statistics.found_disjointness += 1;
-                                        let explanation: PropositionalConjunction = nogood
-                                            .iter()
-                                            .filter(|predicate| {
-                                                context.is_predicate_satisfied(**predicate)
-                                            })
-                                            .cloned()
-                                            .collect();
-                                        context.assign_literal(
-                                            &incompatability_matrix
-                                                [mapping[filter[0].get_domain()]]
-                                                [mapping[filter[1].get_domain()]],
-                                            true,
-                                            explanation,
-                                        )?;
-                                    }
-                                    if filter[1].is_lower_bound_predicate()
-                                        && filter[1].get_right_hand_side()
-                                            > context.upper_bound(&filter[0].get_domain())
-                                        && filter[0].is_upper_bound_predicate()
-                                        && filter[0].get_right_hand_side()
-                                            < context.lower_bound(&filter[1].get_domain())
-                                    {
-                                        info!(
-                                            "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
-                                            filter[0].get_domain(),
-                                            context.lower_bound(&filter[0].get_domain()),
-                                            context.upper_bound(&filter[0].get_domain()),
-                                            filter[1].get_domain(),
-                                            context.lower_bound(&filter[1].get_domain()),
-                                            context.upper_bound(&filter[1].get_domain())
-                                        );
-                                        self.statistics.found_disjointness += 1;
-                                        let explanation: PropositionalConjunction = nogood
-                                            .iter()
-                                            .filter(|predicate| {
-                                                context.is_predicate_satisfied(**predicate)
-                                            })
-                                            .cloned()
-                                            .collect();
-                                        context.assign_literal(
-                                            &incompatability_matrix
-                                                [mapping[filter[0].get_domain()]]
-                                                [mapping[filter[1].get_domain()]],
-                                            true,
-                                            explanation,
-                                        )?;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Self::find_disjointness(
+                        nogood_predicates,
+                        &self.incompatibility_matrix,
+                        &self.mapping,
+                        &self.processing_times,
+                        &mut context,
+                        &mut self.statistics,
+                    )?;
                     continue;
                 }
 
                 // At this point, nonwatched predicates and nogood[1] are falsified.
-                pumpkin_assert_advanced!(nogood
+                pumpkin_assert_advanced!(nogood_predicates
                     .iter()
                     .skip(1)
                     .all(|p| context.is_predicate_satisfied(*p)));
@@ -409,7 +478,7 @@ impl Propagator for NogoodPropagator {
                 // nogood[0] is assigned true -> conflict.
                 let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                let result = context.post_predicate(!nogood[0], reason);
+                let result = context.post_predicate(!nogood_predicates[0], reason);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
                     return Err(e.into());
@@ -464,7 +533,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated, reason = "Should be refactored")]
+                #[allow(deprecated, reason = "Should be changed when the API is changed")]
                 context.assignments(),
             );
 
@@ -500,7 +569,7 @@ impl Propagator for NogoodPropagator {
         _context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         // There should be no nogoods yet
-        pumpkin_assert_simple!(self.nogoods.len() == 0);
+        pumpkin_assert_simple!(self.nogoods.is_empty());
         Ok(())
     }
 }
@@ -509,15 +578,22 @@ impl Propagator for NogoodPropagator {
 impl NogoodPropagator {
     pub(crate) fn add_conflicting_nogood(
         &mut self,
-        nogood: Vec<Predicate>,
+        mut nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-        statistics: &mut SolverStatistics,
+        _statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
         // root-level; this is essentially the same as adding a predicate at the root level
         if nogood.len() == 1 {
             panic!("Cannot be unit")
         }
+
+        nogood.retain(|predicate| {
+            context
+                .assignments
+                .get_decision_level_for_predicate(predicate)
+                .is_some_and(|decision_level| decision_level > 0)
+        });
 
         // Add the nogood to the database.
         //
@@ -538,7 +614,7 @@ impl NogoodPropagator {
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
@@ -546,7 +622,7 @@ impl NogoodPropagator {
         );
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
@@ -608,7 +684,7 @@ impl NogoodPropagator {
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
@@ -616,7 +692,7 @@ impl NogoodPropagator {
         );
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
@@ -729,7 +805,7 @@ impl NogoodPropagator {
 
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_trail,
+                context.stateful_assignments,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
@@ -737,7 +813,7 @@ impl NogoodPropagator {
             );
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_trail,
+                context.stateful_assignments,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
@@ -754,7 +830,7 @@ impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
         domain_faithfulness: &mut DomainFaithfulness,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut TrailedAssignments,
         watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
@@ -769,7 +845,7 @@ impl NogoodPropagator {
         }
 
         let predicate_id =
-            domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
+            domain_faithfulness.watch_predicate(predicate, stateful_assignments, assignments);
         while watch_lists.len() <= predicate_id.index() {
             let _ = watch_lists.push(NogoodWatchList::default());
         }
@@ -983,6 +1059,10 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogoods[nogood_id];
 
+        if nogood.is_deleted {
+            return Ok(());
+        }
+
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood
             .predicates
@@ -1022,7 +1102,7 @@ impl NogoodPropagator {
                 .not();
 
             // println!(
-            //    "Debug Propagating {propagated_predicate} - {:?}",
+            //    "Debug Propagating {propagated_predicate} for nogood {nogood_id:?} - {:?}",
             //    nogood
             //        .predicates
             //        .iter()
@@ -1112,6 +1192,7 @@ mod tests {
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
+    use crate::engine::DomainFaithfulness;
     use crate::predicate;
 
     fn downcast_to_nogood_propagator(
@@ -1137,13 +1218,16 @@ mod tests {
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
+        let mut domain_faithfulness = DomainFaithfulness::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
             );
 
@@ -1177,13 +1261,16 @@ mod tests {
         let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
+        let mut domain_faithfulness = DomainFaithfulness::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
             );
 

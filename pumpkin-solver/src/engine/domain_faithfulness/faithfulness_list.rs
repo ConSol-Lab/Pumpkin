@@ -5,13 +5,12 @@ use super::watchers::InequalityWatcher;
 use super::watchers::LowerBoundWatcher;
 use super::watchers::UpperBoundWatcher;
 use crate::basic_types::PredicateId;
-use crate::basic_types::Trail;
 use crate::engine::Assignments;
-use crate::engine::StateChange;
+use crate::engine::TrailedAssignments;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct Faithfullness {
     lower_bound: LowerBoundWatcher,
     upper_bound: UpperBoundWatcher,
@@ -20,11 +19,22 @@ pub(crate) struct Faithfullness {
 }
 
 impl Faithfullness {
+    pub(crate) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
+        Self {
+            lower_bound: LowerBoundWatcher::new(stateful_assignments),
+            upper_bound: UpperBoundWatcher::new(stateful_assignments),
+            inequality: InequalityWatcher::new(stateful_assignments),
+            equality: EqualityWatcher::new(stateful_assignments),
+        }
+    }
+}
+
+impl Faithfullness {
     pub(crate) fn watch_predicate(
         &mut self,
         predicate: Predicate,
         id: PredicateId,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
     ) {
         match predicate {
@@ -33,32 +43,32 @@ impl Faithfullness {
                 lower_bound,
             } => self
                 .lower_bound
-                .add(lower_bound, id, stateful_trail, assignments),
+                .add(lower_bound, id, stateful_assignments, assignments),
             Predicate::UpperBound {
                 domain_id: _,
                 upper_bound,
             } => self
                 .upper_bound
-                .add(upper_bound, id, stateful_trail, assignments),
+                .add(upper_bound, id, stateful_assignments, assignments),
             Predicate::NotEqual {
                 domain_id: _,
                 not_equal_constant,
             } => self
                 .inequality
-                .add(not_equal_constant, id, stateful_trail, assignments),
+                .add(not_equal_constant, id, stateful_assignments, assignments),
             Predicate::Equal {
                 domain_id: _,
                 equality_constant,
             } => self
                 .equality
-                .add(equality_constant, id, stateful_trail, assignments),
+                .add(equality_constant, id, stateful_assignments, assignments),
         }
     }
 
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_trail: &mut TrailedAssignments,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         predicate_id: Option<PredicateId>,

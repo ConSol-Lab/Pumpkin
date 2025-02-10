@@ -1,9 +1,8 @@
-use log::info;
-
 use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
 use crate::predicate;
+use crate::pumpkin_assert_simple;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
 use crate::results::SolutionCallbackArguments;
@@ -57,9 +56,37 @@ impl OptimisationProcedure for LowerBoundingSearch {
         );
         solver.satisfaction_solver.restore_state_at_root(brancher);
 
+        let result = solver.add_clause([predicate!(
+            objective_variable <= best_objective_value as i32
+        )]);
+        pumpkin_assert_simple!(result.is_ok());
+
         loop {
             let assumption =
                 predicate!(objective_variable <= solver.lower_bound(&objective_variable));
+
+            // We check whether the lower-bound is now equal to the solution that we have found
+            // previously
+            if objective_multiplier * solver.lower_bound(&objective_variable)
+                == best_objective_value as i32
+            {
+                // We create a predicate specifying the best-found solution for the proof
+                // logging
+                let objective_bound_predicate = if is_maximising {
+                    predicate![
+                        objective_variable >= best_objective_value as i32 * objective_multiplier
+                    ]
+                } else {
+                    predicate![
+                        objective_variable <= best_objective_value as i32 * objective_multiplier
+                    ]
+                };
+                let _ = solver
+                    .satisfaction_solver
+                    .conclude_proof_optimal(objective_bound_predicate);
+
+                return OptimisationResult::Optimal(best_solution);
+            }
 
             println!(
                 "Lower-Bounding Search - Attempting to find solution with assumption {assumption}"

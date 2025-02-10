@@ -14,11 +14,8 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::value_selection::InDomainMin;
-use crate::branching::value_selection::InDomainSplit;
-use crate::branching::value_selection::ReverseInDomainSplit;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::FirstFail;
 use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
@@ -134,9 +131,13 @@ impl Solver {
         &mut self,
         incompatibility_matrix: Option<Vec<Vec<Literal>>>,
         mapping: Option<KeyedVec<DomainId, usize>>,
+        processing_times: Option<Vec<u32>>,
     ) {
-        self.satisfaction_solver
-            .add_incompatibility(incompatibility_matrix, mapping);
+        self.satisfaction_solver.add_incompatibility(
+            incompatibility_matrix,
+            mapping,
+            processing_times,
+        );
     }
 
     /// Creates a solver with the provided [`SolverOptions`].
@@ -608,9 +609,9 @@ impl Display for SearchMode {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`] using [`Smallest`] for variable selection
-/// (over the variables in the order in which they were defined) and [`InDomainMin`] for value
-/// selection.
+/// [`IndependentVariableValueBrancher`] using [`RandomSelector`] for variable selection
+/// (over the variables in the order in which they were defined) and [`RandomSplitter`] for
+/// value selection.
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
@@ -622,7 +623,7 @@ impl Display for SearchMode {
 pub type DefaultBrancher = AutonomousSearch<
     IndependentVariableValueBrancher<
         DomainId,
-        FirstFail<DomainId, InOrderTieBreaker<DomainId, i32>>,
-        InDomainSplit,
+        Smallest<DomainId, InOrderTieBreaker<DomainId, i32>>,
+        InDomainMin,
     >,
 >;

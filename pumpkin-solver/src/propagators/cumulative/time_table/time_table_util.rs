@@ -333,8 +333,8 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     if let Some(incompatibility_matrix) = &parameters.options.incompatibility_matrix {
-        for task in updatable_structures.unfixed_tasks.iter() {
-            for other_task in updatable_structures.unfixed_tasks.iter() {
+        for task in parameters.tasks.iter() {
+            for other_task in parameters.tasks.iter() {
                 if task.id <= other_task.id
                     || context.is_literal_true(
                         &incompatibility_matrix[parameters.mapping[task.id]]
@@ -359,7 +359,7 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                 }
 
                 let mut profiles_contributing_to_disjointness = Vec::new();
-                for (index, profile) in time_table.iter().enumerate() {
+                'time_table_loop: for (index, profile) in time_table.iter().enumerate() {
                     let profile_range: RangeSet2<i32> =
                         RangeSet::from(profile.start..profile.end + 1);
                     if profile_range.intersects(&intersection)
@@ -381,33 +381,43 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                         profiles_contributing_to_disjointness.push(index);
                         intersection.difference_with(&profile_range);
                     }
-                }
-                if intersection.is_empty() {
-                    updatable_structures.statistics.num_disjointess_found += 1;
-                    updatable_structures
-                        .statistics
-                        .average_number_of_profiles_in_disjointness
-                        .add_term(profiles_contributing_to_disjointness.len());
-                    // context.assign_literal(literal, value, reason);
-                    // predicate!(x >= lb_x) /\ predicate!(x <= ub_x) /\ predicate!(y >= lb_y) /\
-                    // predicate!(y <= ub_y) /\ expl(all_profiles which removed time-points)
-                    let lb_x = context.lower_bound(&task.start_variable);
-                    let ub_x = context.upper_bound(&task.start_variable);
-                    let lb_y = context.lower_bound(&other_task.start_variable);
-                    let ub_y = context.upper_bound(&other_task.start_variable);
-                    let mut explanation = conjunction!(
-                        [task.start_variable >= lb_x]
-                            & [task.start_variable <= ub_x]
-                            & [other_task.start_variable >= lb_y]
-                            & [other_task.start_variable <= ub_y]
-                    );
-                    for profile in profiles_contributing_to_disjointness.iter() {
-                        let profile_explanation =
-                            create_big_step_propagation_explanation(time_table[*profile]);
-                        explanation = explanation
-                            .extend_and_remove_duplicates(profile_explanation.into_iter());
-                    }
-                    info!(
+
+                    if intersection.is_empty() {
+                        updatable_structures.statistics.num_disjointess_found += 1;
+                        updatable_structures
+                            .statistics
+                            .average_number_of_profiles_in_disjointness
+                            .add_term(profiles_contributing_to_disjointness.len());
+                        // context.assign_literal(literal, value, reason);
+                        // predicate!(x >= lb_x) /\ predicate!(x <= ub_x) /\ predicate!(y >= lb_y)
+                        // /\ predicate!(y <= ub_y) /\ expl(all_profiles
+                        // which removed time-points)
+                        let lb_x = context.lower_bound(&task.start_variable);
+                        let ub_x = context.upper_bound(&task.start_variable);
+                        let lb_y = context.lower_bound(&other_task.start_variable);
+                        let ub_y = context.upper_bound(&other_task.start_variable);
+                        let mut explanation = conjunction!(
+                            [task.start_variable >= lb_x]
+                                & [task.start_variable <= ub_x]
+                                & [other_task.start_variable >= lb_y]
+                                & [other_task.start_variable <= ub_y]
+                        );
+                        for profile in profiles_contributing_to_disjointness.iter() {
+                            let profile_explanation =
+                                create_big_step_propagation_explanation(time_table[*profile]);
+                            explanation.extend(profile_explanation.into_iter());
+                        }
+                        let size_before = explanation.len();
+                        explanation = context
+                            .semantic_minimiser
+                            .maximise(&explanation.predicates_in_conjunction, context.assignments)
+                            .into();
+                        updatable_structures
+                            .statistics
+                            .average_number_of_elements_removed_when_maximising
+                            .add_term(size_before - explanation.len());
+
+                        info!(
                         "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage {} were found to be disjoint due to {:?} - Explanation: {:?}",
                         parameters.capacity,
                         context.lower_bound(&task.start_variable),
@@ -423,13 +433,18 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                             .collect::<Vec<_>>()
                             , explanation
                     );
-                    context.assign_literal(
-                        &incompatibility_matrix[parameters.mapping[task.id]]
-                            [parameters.mapping[other_task.id]],
-                        true,
-                        explanation,
-                    )?;
-                    break;
+                        updatable_structures
+                            .statistics
+                            .average_explanation_size_when_finding_disjointness
+                            .add_term(explanation.len());
+                        context.assign_literal(
+                            &incompatibility_matrix[parameters.mapping[task.id]]
+                                [parameters.mapping[other_task.id]],
+                            true,
+                            explanation,
+                        )?;
+                        break 'time_table_loop;
+                    }
                 }
             }
         }

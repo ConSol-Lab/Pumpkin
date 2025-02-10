@@ -79,7 +79,7 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
         .collect::<Vec<_>>()
 }
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
-#[allow(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant, reason = "Will not be stored in bulk")]
 #[derive(Debug)]
 pub enum IteratedSolution {
     /// A new solution was identified.
