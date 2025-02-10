@@ -71,7 +71,7 @@ pub mod tie_breaking;
 pub mod value_selection;
 pub mod variable_selection;
 
-pub use brancher::Brancher;
+pub use brancher::*;
 pub use selection_context::SelectionContext;
 
 #[cfg(doc)]
