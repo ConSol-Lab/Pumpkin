@@ -216,7 +216,11 @@ fn run() -> SchedulingResult<()> {
             &incompatibility_matrix,
         );
         if args.use_nogood_disjointness {
-            solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
+            solver.add_incompatibility(
+                Some(incompatibility_matrix.clone()),
+                Some(mapping.clone()),
+                Some(rcpsp_instance.processing_times),
+            );
         }
     }
 

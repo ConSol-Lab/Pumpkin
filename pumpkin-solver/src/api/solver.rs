@@ -131,9 +131,13 @@ impl Solver {
         &mut self,
         incompatibility_matrix: Option<Vec<Vec<Literal>>>,
         mapping: Option<KeyedVec<DomainId, usize>>,
+        processing_times: Option<Vec<u32>>,
     ) {
-        self.satisfaction_solver
-            .add_incompatibility(incompatibility_matrix, mapping);
+        self.satisfaction_solver.add_incompatibility(
+            incompatibility_matrix,
+            mapping,
+            processing_times,
+        );
     }
 
     /// Creates a solver with the provided [`SolverOptions`].

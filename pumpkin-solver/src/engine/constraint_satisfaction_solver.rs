@@ -1085,11 +1085,13 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         incompatibility_matrix: Option<Vec<Vec<Literal>>>,
         mapping: Option<KeyedVec<DomainId, usize>>,
+        processing_times: Option<Vec<u32>>,
     ) {
         Self::add_incompatibility_to_nogood_propagator(
             &mut self.propagators[Self::get_nogood_propagator_id()],
             incompatibility_matrix,
             mapping,
+            processing_times,
         )
     }
 
@@ -1097,11 +1099,14 @@ impl ConstraintSatisfactionSolver {
         nogood_propagator: &mut dyn Propagator,
         incompatibility_matrix: Option<Vec<Vec<Literal>>>,
         mapping: Option<KeyedVec<DomainId, usize>>,
+        processing_times: Option<Vec<u32>>,
     ) {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
-            Some(nogood_propagator) => {
-                nogood_propagator.add_incompatability(incompatibility_matrix, mapping)
-            }
+            Some(nogood_propagator) => nogood_propagator.add_incompatability(
+                incompatibility_matrix,
+                mapping,
+                processing_times,
+            ),
             None => panic!("Provided propagator should be the nogood propagator"),
         }
     }
