@@ -35,6 +35,7 @@ use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
@@ -1666,6 +1667,10 @@ impl CSPSolverState {
 struct DummyBrancher;
 impl Brancher for DummyBrancher {
     fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+        todo!()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         todo!()
     }
 }
