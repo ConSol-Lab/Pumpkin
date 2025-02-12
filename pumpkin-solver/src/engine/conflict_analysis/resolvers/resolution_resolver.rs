@@ -39,6 +39,8 @@ pub(crate) struct ResolutionResolver {
     recursive_minimiser: RecursiveMinimiser,
     /// Whether the resolver employs 1-UIP or all-decision learning.
     mode: AnalysisMode,
+    /// Re-usable buffer which reasons are written into.
+    reason_buffer: Vec<Predicate>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -138,7 +140,8 @@ impl ConflictResolver for ResolutionResolver {
                         // However, this can lead to [x <= v] to be processed *before* [x >= v -
                         // y], meaning that these implied predicates should be replaced with their
                         // reason
-                        let reason = ConflictAnalysisContext::get_propagation_reason(
+                        self.reason_buffer.clear();
+                        ConflictAnalysisContext::get_propagation_reason(
                             predicate,
                             context.assignments,
                             CurrentNogood::new(
@@ -150,23 +153,24 @@ impl ConflictResolver for ResolutionResolver {
                             context.propagators,
                             context.proof_log,
                             context.unit_nogood_step_ids,
+                            &mut self.reason_buffer,
                         );
 
-                        if reason.is_empty() {
+                        if self.reason_buffer.is_empty() {
                             // In the case when the proof is being completed, it could be the case
                             // that the reason for a root-level propagation is empty; this
                             // predicate will be filtered out by the semantic minimisation
                             pumpkin_assert_simple!(context.is_completing_proof);
                             predicate
                         } else {
-                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {reason:?}");
+                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
                             pumpkin_assert_simple!(
-                                reason.len() == 1 && reason[0].is_lower_bound_predicate(),
+                                self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
                                 "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
-                                reason
+                                self.reason_buffer,
                             );
 
-                            reason[0]
+                            self.reason_buffer[0]
                         }
                     };
 
@@ -199,7 +203,9 @@ impl ConflictResolver for ResolutionResolver {
                         .is_initial_bound(self.peek_predicate_from_conflict_nogood())
                 {
                     let predicate = self.peek_predicate_from_conflict_nogood();
-                    let reason = ConflictAnalysisContext::get_propagation_reason(
+
+                    self.reason_buffer.clear();
+                    ConflictAnalysisContext::get_propagation_reason(
                         predicate,
                         context.assignments,
                         CurrentNogood::new(
@@ -211,13 +217,14 @@ impl ConflictResolver for ResolutionResolver {
                         context.propagators,
                         context.proof_log,
                         context.unit_nogood_step_ids,
+                        &mut self.reason_buffer,
                     );
                     pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
-                        reason.len() == 1 && reason[0].is_lower_bound_predicate(),
-                        "The reason for the decision predicate should be a lower-bound predicate but was {}", reason[0]
+                        self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
+                        "The reason for the decision predicate should be a lower-bound predicate but was {}", self.reason_buffer[0]
                     );
-                    self.replace_predicate_in_conflict_nogood(predicate, reason[0]);
+                    self.replace_predicate_in_conflict_nogood(predicate, self.reason_buffer[0]);
                 }
 
                 // The final predicate in the heap will get pushed in `extract_final_nogood`
@@ -226,7 +233,8 @@ impl ConflictResolver for ResolutionResolver {
             }
 
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
-            let reason = ConflictAnalysisContext::get_propagation_reason(
+            self.reason_buffer.clear();
+            ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
                 context.assignments,
                 CurrentNogood::new(
@@ -238,17 +246,22 @@ impl ConflictResolver for ResolutionResolver {
                 context.propagators,
                 context.proof_log,
                 context.unit_nogood_step_ids,
+                &mut self.reason_buffer,
             );
 
-            for predicate in reason.iter() {
+            // We do a little swapping of the ownership of the buffer, so we can call
+            // `self.add_predicate_to_conflict_nogood`.
+            let reason = std::mem::take(&mut self.reason_buffer);
+            for predicate in reason.iter().copied() {
                 self.add_predicate_to_conflict_nogood(
-                    *predicate,
+                    predicate,
                     context.assignments,
                     context.brancher,
                     self.mode,
                     context.is_completing_proof,
                 );
             }
+            self.reason_buffer = reason;
         }
         Some(self.extract_final_nogood(context))
     }

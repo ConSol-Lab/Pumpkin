@@ -98,7 +98,10 @@ impl<'a> PropagationContextMut<'a> {
                     conjunction.add(reification_literal.get_true_predicate());
                     Reason::Eager(conjunction)
                 }
-                Reason::DynamicLazy(_) => todo!(),
+                Reason::DynamicLazy(code) => Reason::ReifiedLazy(reification_literal, code),
+                Reason::ReifiedLazy(_, _) => {
+                    unimplemented!("cannot reify an already reified reason")
+                }
             }
         } else {
             reason
