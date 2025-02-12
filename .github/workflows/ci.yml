@@ -71,13 +71,8 @@ jobs:
       - name: Install pytest
         run: pip install pytest
       - name: Install pumpkin-py
-        uses: PyO3/maturin-action@v1
-        with:
-          command: develop
-          target: ${{ matrix.platform.target }}
-          sccache: 'true'
-          manylinux: auto
-          working-directory: pumpkin-py
+        run: pip install -e .
+        working-directory: pumpkin-py
       - name: Run tests
         run: pytest
         working-directory: pumpkin-py
