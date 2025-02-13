@@ -1137,20 +1137,18 @@ impl ConstraintSatisfactionSolver {
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
-        let reason_changing_bound = reason_store
-            .get_or_compute(
-                entry.reason.unwrap(),
-                ExplanationContext::from(&*assignments),
-                propagators,
-            )
-            .unwrap();
-
         let mut empty_domain_reason: Vec<Predicate> = vec![
             predicate!(conflict_domain >= entry.old_lower_bound),
             predicate!(conflict_domain <= entry.old_upper_bound),
         ];
 
-        empty_domain_reason.append(&mut reason_changing_bound.to_vec());
+        let _ = reason_store.get_or_compute(
+            entry.reason.unwrap(),
+            ExplanationContext::from(&*assignments),
+            propagators,
+            &mut empty_domain_reason,
+        );
+
         empty_domain_reason.into()
     }
 
@@ -1269,19 +1267,18 @@ impl ConstraintSatisfactionSolver {
     ) {
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
-            let reason = entry
+            let reason_ref = entry
                 .reason
                 .expect("Added by a propagator and must therefore have a reason");
 
             // Get the conjunction of predicates explaining the propagation.
-            let reason = self
-                .reason_store
-                .get_or_compute(
-                    reason,
-                    ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
-                    &mut self.propagators,
-                )
-                .expect("Reason ref is valid");
+            let mut reason = vec![];
+            let _ = self.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
+                &mut self.propagators,
+                &mut reason,
+            );
 
             let propagated = entry.predicate;
 

@@ -3,6 +3,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
+use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
@@ -91,17 +92,23 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    fn build_reason(&self, reason: Reason) -> Reason {
-        if let Some(reification_literal) = self.reification_literal {
-            match reason {
-                Reason::Eager(mut conjunction) => {
-                    conjunction.add(reification_literal.get_true_predicate());
-                    Reason::Eager(conjunction)
-                }
-                Reason::DynamicLazy(_) => todo!(),
+    fn build_reason(&self, reason: Reason) -> StoredReason {
+        match reason {
+            Reason::Eager(mut conjunction) => {
+                conjunction.extend(
+                    self.reification_literal
+                        .iter()
+                        .map(|lit| lit.get_true_predicate()),
+                );
+                StoredReason::Eager(conjunction)
             }
-        } else {
-            reason
+            Reason::DynamicLazy(code) => {
+                if let Some(reification_literal) = self.reification_literal {
+                    StoredReason::ReifiedLazy(reification_literal, code)
+                } else {
+                    StoredReason::DynamicLazy(code)
+                }
+            }
         }
     }
 
@@ -339,7 +346,8 @@ impl PropagationContextMut<'_> {
                     .is_value_in_domain(domain_id, equality_constant)
                     && !self.assignments.is_domain_assigned(&domain_id)
                 {
-                    let reason = self.reason_store.push(self.propagator_id, reason.into());
+                    let reason = self.build_reason(reason.into());
+                    let reason = self.reason_store.push(self.propagator_id, reason);
                     self.assignments
                         .make_assignment(domain_id, equality_constant, Some(reason))?;
                 }

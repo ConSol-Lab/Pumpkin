@@ -58,7 +58,7 @@ impl Debug for ConflictAnalysisContext<'_> {
     }
 }
 
-impl<'a> ConflictAnalysisContext<'a> {
+impl ConflictAnalysisContext<'_> {
     /// Returns the last decision which was made by the solver.
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
         self.assignments.find_last_decision()
@@ -130,17 +130,24 @@ impl<'a> ConflictAnalysisContext<'a> {
         }
     }
 
-    /// Returns the reason for a propagation; if it is implied then the reason will be the decision
-    /// which implied the predicate.
+    /// Compute the reason for `predicate` being true. The reason will be stored in
+    /// `reason_buffer`.
+    ///
+    /// If `predicate` is not true, or it is a decision, then this function will panic.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "borrow checker complains either here or elsewhere"
+    )]
     pub(crate) fn get_propagation_reason(
         predicate: Predicate,
         assignments: &Assignments,
         current_nogood: CurrentNogood<'_>,
-        reason_store: &'a mut ReasonStore,
-        propagators: &'a mut PropagatorStore,
-        proof_log: &'a mut ProofLog,
+        reason_store: &mut ReasonStore,
+        propagators: &mut PropagatorStore,
+        proof_log: &mut ProofLog,
         unit_nogood_step_ids: &HashMap<Predicate, StepId>,
-    ) -> &'a [Predicate] {
+        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+    ) {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
@@ -156,9 +163,8 @@ impl<'a> ConflictAnalysisContext<'a> {
         // there would be only one predicate from the current decision level. For this
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
-        reason_store.helper.clear();
         if assignments.is_initial_bound(predicate) {
-            return reason_store.helper.as_slice();
+            return;
         }
 
         let trail_position = assignments
@@ -179,11 +185,17 @@ impl<'a> ConflictAnalysisContext<'a> {
 
             let explanation_context = ExplanationContext::new(assignments, current_nogood);
 
-            let reason = reason_store
-                .get_or_compute(reason_ref, explanation_context, propagators)
-                .expect("reason reference should not be stale");
+            let reason_exists = reason_store.get_or_compute(
+                reason_ref,
+                explanation_context,
+                propagators,
+                reason_buffer,
+            );
+
+            assert!(reason_exists, "reason reference should not be stale");
+
             if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id()
-                && reason.is_empty()
+                && reason_buffer.as_ref().is_empty()
             {
                 // This means that a unit nogood was propagated, we indicate that this nogood step
                 // was used
@@ -207,12 +219,10 @@ impl<'a> ConflictAnalysisContext<'a> {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     constraint_tag,
-                    reason.iter().copied(),
+                    reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                 );
             }
-            reason
-        // The predicate is implicitly due as a result of a decision.
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.
         // It is necessary to further analyse what was the reason for setting the predicate true.
@@ -240,7 +250,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                     //  todo: could consider lifting here, since the trail bound
                     //  might be too strong.
                     if trail_lower_bound > input_lower_bound {
-                        reason_store.helper.push(trail_entry.predicate);
+                        reason_buffer.extend(std::iter::once(trail_entry.predicate));
                     }
                     // Otherwise, the input bound is strictly greater than the trailed
                     // bound. This means the reason is due to holes in the domain.
@@ -270,8 +280,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                             domain_id,
                             not_equal_constant: input_lower_bound - 1,
                         };
-                        reason_store.helper.push(one_less_bound_predicate);
-                        reason_store.helper.push(not_equals_predicate);
+                        reason_buffer.extend(std::iter::once(one_less_bound_predicate));
+                        reason_buffer.extend(std::iter::once(not_equals_predicate));
                     }
                 }
                 (
@@ -291,7 +301,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                     // so it safe to take the reason from the trail.
                     // todo: lifting could be used here
                     pumpkin_assert_simple!(trail_lower_bound > not_equal_constant);
-                    reason_store.helper.push(trail_entry.predicate);
+                    reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
                 (
                     Predicate::LowerBound {
@@ -323,8 +333,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                         domain_id,
                         upper_bound: equality_constant,
                     };
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_buffer.extend(std::iter::once(predicate_lb));
+                    reason_buffer.extend(std::iter::once(predicate_ub));
                 }
                 (
                     Predicate::UpperBound {
@@ -344,7 +354,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                     //    reason for the input predicate.
                     // todo: lifting could be applied here.
                     if trail_upper_bound < input_upper_bound {
-                        reason_store.helper.push(trail_entry.predicate);
+                        reason_buffer.extend(std::iter::once(trail_entry.predicate));
                     } else {
                         // I think it cannot be that the bounds are equal, since otherwise we
                         // would have found the predicate explicitly on the trail.
@@ -365,8 +375,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                             domain_id,
                             not_equal_constant: input_upper_bound + 1,
                         };
-                        reason_store.helper.push(new_ub_predicate);
-                        reason_store.helper.push(not_equal_predicate);
+                        reason_buffer.extend(std::iter::once(new_ub_predicate));
+                        reason_buffer.extend(std::iter::once(not_equal_predicate));
                     }
                 }
                 (
@@ -387,7 +397,7 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                     // The bound was set past the not equals, so we can safely returns the trail
                     // reason. todo: can do lifting here.
-                    reason_store.helper.push(trail_entry.predicate);
+                    reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
                 (
                     Predicate::UpperBound {
@@ -422,8 +432,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                         domain_id,
                         upper_bound: equality_constant,
                     };
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_buffer.extend(std::iter::once(predicate_lb));
+                    reason_buffer.extend(std::iter::once(predicate_ub));
                 }
                 (
                     Predicate::NotEqual {
@@ -457,8 +467,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                         not_equal_constant: input_lower_bound - 1,
                     };
 
-                    reason_store.helper.push(new_lb_predicate);
-                    reason_store.helper.push(new_not_equals_predicate);
+                    reason_buffer.extend(std::iter::once(new_lb_predicate));
+                    reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
                 (
                     Predicate::NotEqual {
@@ -492,8 +502,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                         not_equal_constant: input_upper_bound + 1,
                     };
 
-                    reason_store.helper.push(new_ub_predicate);
-                    reason_store.helper.push(new_not_equals_predicate);
+                    reason_buffer.extend(std::iter::once(new_ub_predicate));
+                    reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
                 (
                     Predicate::NotEqual {
@@ -522,15 +532,14 @@ impl<'a> ConflictAnalysisContext<'a> {
                         upper_bound: equality_constant,
                     };
 
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_buffer.extend(std::iter::once(predicate_lb));
+                    reason_buffer.extend(std::iter::once(predicate_ub));
                 }
                 _ => unreachable!(
                     "Unreachable combination of {} and {}",
                     trail_entry.predicate, predicate
                 ),
             };
-            reason_store.helper.as_slice()
         }
     }
 }
