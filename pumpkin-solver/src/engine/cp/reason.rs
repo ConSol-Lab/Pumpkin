@@ -110,7 +110,7 @@ pub(crate) enum StoredReason {
     /// propagation the reason is for. The payload should be enough for the propagator to construct
     /// an explanation based on its internal state.
     DynamicLazy(u64),
-    /// A lazy explanation that has reified.
+    /// A lazy explanation that has been reified.
     ReifiedLazy(Literal, u64),
 }
 
