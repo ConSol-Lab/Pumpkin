@@ -162,16 +162,15 @@ impl DebugHelper {
         for trail_index in num_trail_entries_before..assignments.num_trail_entries() {
             let trail_entry = assignments.get_trail_entry(trail_index);
 
-            let reason = reason_store
-                .get_or_compute(
-                    trail_entry
-                        .reason
-                        .expect("Expected checked propagation to have a reason"),
-                    ExplanationContext::from(assignments),
-                    propagators,
-                )
-                .expect("reason should exist for this propagation")
-                .to_vec();
+            let mut reason = vec![];
+            let _ = reason_store.get_or_compute(
+                trail_entry
+                    .reason
+                    .expect("Expected checked propagation to have a reason"),
+                ExplanationContext::from(assignments),
+                propagators,
+                &mut reason,
+            );
 
             result &= Self::debug_propagator_reason(
                 trail_entry.predicate,
