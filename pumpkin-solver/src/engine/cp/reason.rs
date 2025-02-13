@@ -12,11 +12,11 @@ use crate::variables::Literal;
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 #[derive(Default, Debug)]
 pub(crate) struct ReasonStore {
-    trail: Trail<(PropagatorId, Reason)>,
+    trail: Trail<(PropagatorId, StoredReason)>,
 }
 
 impl ReasonStore {
-    pub(crate) fn push(&mut self, propagator: PropagatorId, reason: Reason) -> ReasonRef {
+    pub(crate) fn push(&mut self, propagator: PropagatorId, reason: StoredReason) -> ReasonRef {
         let index = self.trail.len();
         self.trail.push((propagator, reason));
         pumpkin_assert_simple!(
@@ -48,10 +48,11 @@ impl ReasonStore {
     pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
         match self.trail.get(reference.0 as usize) {
             Some(reason) => match &reason.1 {
-                Reason::Eager(_) => None,
-                Reason::DynamicLazy(code) => Some(code),
-                Reason::ReifiedLazy(_, _) => {
-                    unimplemented!("Getting the code of a reified lazy reason is unsupported.")
+                StoredReason::Eager(_) => None,
+                StoredReason::DynamicLazy(code) => Some(code),
+                StoredReason::ReifiedLazy(_, _) => {
+                    // If this happens, we need to rethink this API.
+                    unimplemented!("cannot get code of reified lazy explanation")
                 }
             },
             None => None,
@@ -94,11 +95,26 @@ pub(crate) enum Reason {
     /// propagation the reason is for. The payload should be enough for the propagator to construct
     /// an explanation based on its internal state.
     DynamicLazy(u64),
+}
+
+/// A reason for CP propagator to make a change
+#[derive(Debug)]
+pub(crate) enum StoredReason {
+    /// An eager reason contains the propositional conjunction with the reason, without the
+    ///   propagated predicate.
+    Eager(PropositionalConjunction),
+    /// A lazy reason, which is computed on-demand rather than up-front. This is also referred to
+    /// as a 'backward' reason.
+    ///
+    /// A lazy reason contains a payload that propagators can use to identify what type of
+    /// propagation the reason is for. The payload should be enough for the propagator to construct
+    /// an explanation based on its internal state.
+    DynamicLazy(u64),
     /// A lazy explanation that has reified.
     ReifiedLazy(Literal, u64),
 }
 
-impl Reason {
+impl StoredReason {
     pub(crate) fn compute(
         &self,
         context: ExplanationContext<'_>,
@@ -110,14 +126,14 @@ impl Reason {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            Reason::DynamicLazy(code) => destination_buffer.extend(
+            StoredReason::DynamicLazy(code) => destination_buffer.extend(
                 propagators[propagator_id]
                     .lazy_explanation(*code, context)
                     .iter()
                     .copied(),
             ),
-            Reason::Eager(result) => destination_buffer.extend(result.iter().copied()),
-            Reason::ReifiedLazy(literal, code) => {
+            StoredReason::Eager(result) => destination_buffer.extend(result.iter().copied()),
+            StoredReason::ReifiedLazy(literal, code) => {
                 destination_buffer.extend(
                     propagators[propagator_id]
                         .lazy_explanation(*code, context)
@@ -153,7 +169,7 @@ mod tests {
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let reason = Reason::Eager(conjunction.clone());
+        let reason = StoredReason::Eager(conjunction.clone());
 
         let mut out_reason = vec![];
         reason.compute(
@@ -175,7 +191,8 @@ mod tests {
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let reason_ref = reason_store.push(PropagatorId(0), Reason::Eager(conjunction.clone()));
+        let reason_ref =
+            reason_store.push(PropagatorId(0), StoredReason::Eager(conjunction.clone()));
 
         assert_eq!(ReasonRef(0), reason_ref);
 
@@ -229,7 +246,7 @@ mod tests {
         let mut propagator_store = PropagatorStore::default();
         let propagator_id =
             propagator_store.alloc(Box::new(TestPropagator(vec![predicate![x >= 2]])), None);
-        let reason_ref = reason_store.push(propagator_id, Reason::ReifiedLazy(reif, 0));
+        let reason_ref = reason_store.push(propagator_id, StoredReason::ReifiedLazy(reif, 0));
 
         assert_eq!(ReasonRef(0), reason_ref);
 
