@@ -27,6 +27,8 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
+    /// Evaluate the reason with the given reference, and write the predicates to
+    /// `destination_buffer`.
     pub(crate) fn get_or_compute(
         &self,
         reference: ReasonRef,
@@ -115,6 +117,7 @@ pub(crate) enum StoredReason {
 }
 
 impl StoredReason {
+    /// Evaluate the reason, and write the predicates to the `destination_buffer`.
     pub(crate) fn compute(
         &self,
         context: ExplanationContext<'_>,
