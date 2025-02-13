@@ -714,16 +714,15 @@ pub(crate) mod test_propagation_handler {
                 .assignments
                 .get_reason_for_predicate_brute_force(predicate);
             let mut propagator_store = PropagatorStore::default();
-            let reason = self
-                .reason_store
-                .get_or_compute(
-                    reason_ref,
-                    ExplanationContext::from(&self.assignments),
-                    &mut propagator_store,
-                )
-                .expect("reason_ref should not be stale");
+            let mut reason = vec![];
+            let _ = self.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::from(&self.assignments),
+                &mut propagator_store,
+                &mut reason,
+            );
 
-            reason.iter().copied().collect()
+            reason.into()
         }
     }
 }
