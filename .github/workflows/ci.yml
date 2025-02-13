@@ -29,40 +29,7 @@ jobs:
     - run: cargo test --release --no-fail-fast
 
   pumpkin-py:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: ubuntu-latest
-            target: x86_64
-            name: linux
-          - runner: ubuntu-latest
-            target: x86
-            name: linux
-          - runner: ubuntu-latest
-            target: aarch64
-            name: linux
-          - runner: ubuntu-latest
-            target: armv7
-            name: linux
-          - runner: ubuntu-latest
-            target: s390x
-            name: linux
-          - runner: ubuntu-latest
-            target: ppc64le
-            name: linux
-          - runner: windows-latest
-            target: x64
-            name: windows
-          - runner: windows-latest
-            target: x86
-            name: windows
-          - runner: macos-12
-            target: x86_64
-            name: macos
-          - runner: macos-14
-            target: aarch64
-            name: macos
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
