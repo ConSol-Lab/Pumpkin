@@ -249,20 +249,17 @@ impl ConflictResolver for ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
-            // We do a little swapping of the ownership of the buffer, so we can call
-            // `self.add_predicate_to_conflict_nogood`.
-            let reason = std::mem::take(&mut self.reason_buffer);
-            for predicate in reason.iter().copied() {
+            for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(
-                    predicate,
+                    self.reason_buffer[i],
                     context.assignments,
                     context.brancher,
                     self.mode,
                     context.is_completing_proof,
                 );
             }
-            self.reason_buffer = reason;
         }
+
         Some(self.extract_final_nogood(context))
     }
 
