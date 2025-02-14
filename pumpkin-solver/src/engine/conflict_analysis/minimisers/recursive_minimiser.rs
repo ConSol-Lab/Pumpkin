@@ -117,7 +117,8 @@ impl RecursiveMinimiser {
 
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
-        let reason = ConflictAnalysisContext::get_propagation_reason(
+        let mut reason = vec![];
+        ConflictAnalysisContext::get_propagation_reason(
             input_predicate,
             context.assignments,
             CurrentNogood::from(current_nogood),
@@ -125,10 +126,10 @@ impl RecursiveMinimiser {
             context.propagators,
             context.proof_log,
             context.unit_nogood_step_ids,
-        )
-        .to_vec();
+            &mut reason,
+        );
 
-        for antecedent_predicate in reason {
+        for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
             if context
                 .assignments

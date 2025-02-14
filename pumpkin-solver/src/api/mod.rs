@@ -1,4 +1,5 @@
 mod outputs;
+
 pub(crate) mod solver;
 
 pub mod results {
@@ -14,7 +15,6 @@ pub mod results {
     //! right state for these operations. For example,
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract
     //! a core consisting of the assumptions using [`UnsatisfiableUnderAssumptions::extract_core`].
-    pub use crate::api::outputs::solution_callback_arguments::SolutionCallbackArguments;
     pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
     pub use crate::api::outputs::OptimisationResult;
@@ -94,7 +94,7 @@ pub mod termination {
 }
 
 pub mod predicates {
-    //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
+    //! Contains structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
     //!
     //! The solver only utilizes the following types of predicates:
     //! - A [`Predicate::LowerBound`] of the form `[x >= v]`

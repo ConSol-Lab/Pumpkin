@@ -1,5 +1,7 @@
 //! Contains the structures corresponding to solution iterations.
 
+use std::fmt::Debug;
+
 use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
@@ -53,7 +55,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(solution)
+                IteratedSolution::Solution(solution, self.solver, self.brancher)
             }
             Unsatisfiable => {
                 if self.has_solution {
@@ -83,10 +85,9 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     clippy::large_enum_variant,
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
-#[derive(Debug)]
-pub enum IteratedSolution {
+pub enum IteratedSolution<'a> {
     /// A new solution was identified.
-    Solution(Solution),
+    Solution(Solution, &'a Solver, &'a dyn Brancher),
 
     /// No more solutions exist.
     Finished,
@@ -96,4 +97,15 @@ pub enum IteratedSolution {
 
     /// There exists no solution
     Unsatisfiable,
+}
+
+impl Debug for IteratedSolution<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IteratedSolution::Solution(solution, _, _) => write!(f, "Solution({solution:?})"),
+            IteratedSolution::Finished => write!(f, "Finished"),
+            IteratedSolution::Unknown => write!(f, "Unknown"),
+            IteratedSolution::Unsatisfiable => write!(f, "Unsatisfiable"),
+        }
+    }
 }

@@ -11,8 +11,7 @@
 //!   hooks into the solver); the main method of this trait is the [`ValueSelector::select_value`]
 //!   method.
 //!
-//! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], [`Solver::maximise`], and
-//! [`Solver::minimise`]:
+//! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::variables::Literal;
@@ -72,7 +71,7 @@ pub mod tie_breaking;
 pub mod value_selection;
 pub mod variable_selection;
 
-pub use brancher::Brancher;
+pub use brancher::*;
 pub use selection_context::SelectionContext;
 
 #[cfg(doc)]
