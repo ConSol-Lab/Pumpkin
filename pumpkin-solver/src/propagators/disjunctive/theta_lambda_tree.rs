@@ -9,6 +9,11 @@ use crate::engine::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
+// A node in the [`ThetaTree`] which keeps track of the ECT and sum of processing times of its
+// children
+//
+// As opposed to the nodes in a Theta tree, the nodes in a ThetaLambdaTree also keep track of the
+// ECT and sum of processing times if a single element from the Lambda set can be added
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Node {
     ect: i32,
@@ -18,6 +23,7 @@ pub(super) struct Node {
 }
 
 impl Node {
+    // Constructs an empty node
     fn empty() -> Self {
         Self {
             ect: i32::MIN,
@@ -27,6 +33,7 @@ impl Node {
         }
     }
 
+    // Construct a new white node with the provided value
     fn new_white_node(ect: i32, sum_of_processing_times: i32) -> Self {
         Self {
             ect,
@@ -36,6 +43,7 @@ impl Node {
         }
     }
 
+    // Construct a new gray node with the provided value
     fn new_gray_node(ect: i32, sum_of_processing_times: i32) -> Self {
         Self {
             ect: i32::MIN,
@@ -46,11 +54,27 @@ impl Node {
     }
 }
 
+/// A structure for efficiently calculating the ECT of a set of tasks while only allowing one
+/// element from another (non-overlapping) set.
+///
+/// The implementation is based on \[1\]. The idea is to have a complete binary tree where the leaf
+/// nodes represent the tasks. These leaf nodes are sorted by EST and this allows the values of the
+/// inner nodes to be calculated using a recursive formula.
+///
+/// # Bibliography
+/// \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
+/// Sciences, vol. 18, no. 2, pp. 159–202, 2008.
 #[derive(Debug)]
 pub(super) struct ThetaLambdaTree {
     pub(super) nodes: Vec<Node>,
+    /// Then we keep track of a mapping from the [`LocalId`] to its position in the tree since the
+    /// methods take as input tasks with [`LocalId`]s.
     mapping: KeyedVec<LocalId, usize>,
+    /// Then we keep track of a mapping from the position in the tree to its corresponding
+    /// [`LocalId`] since [`ThetaLambdaTree`] requires us to return the responsible [`LocalId`].
     reverse_mapping: KeyedVec<usize, LocalId>,
+    /// The number of internal nodes in the tree; used to calculate the leaf node index based on
+    /// the index in the tree
     number_of_internal_nodes: usize,
 }
 
@@ -59,9 +83,12 @@ impl ThetaLambdaTree {
         tasks: &[DisjunctiveTask<Var>],
         context: PropagationContext,
     ) -> Self {
+        // First we sort the tasks by lower-bound
         let mut sorted_tasks = tasks.to_vec();
         sorted_tasks.sort_by_key(|task| context.lower_bound(&task.start_variable));
 
+        // Then we keep track of a mapping from the [`LocalId`] to its position in the tree and a
+        // reverse mapping
         let mut mapping = KeyedVec::default();
         let mut reverse_mapping = KeyedVec::default();
         for (index, task) in sorted_tasks.iter().enumerate() {
@@ -72,6 +99,7 @@ impl ThetaLambdaTree {
             let _ = reverse_mapping.push(task.id);
         }
 
+        // Calculate the number of internal nodes which are required to create the binary tree
         let mut number_of_internal_nodes = 1;
         while number_of_internal_nodes < tasks.len() {
             number_of_internal_nodes <<= 1;
@@ -87,20 +115,29 @@ impl ThetaLambdaTree {
         }
     }
 
+    /// Returns the ECT of Theta
     pub(super) fn ect(&self) -> i32 {
         pumpkin_assert_simple!(!self.nodes.is_empty());
         self.nodes[0].ect
     }
 
+    /// Returns the ECT of Theta while allowing 1 element of Lambda to be added
     pub(super) fn ect_bar(&self) -> i32 {
         self.nodes[0].ect_bar
     }
 
+    /// Returns the index in the tree of the `index`th node
     fn get_leaf_node_index(&self, index: usize) -> usize {
+        pumpkin_assert_simple!(
+            index >= self.number_of_internal_nodes,
+            "Provided index was not a leaf node"
+        );
         index - self.number_of_internal_nodes
     }
 
-    pub(super) fn responsible_ect(&self) -> LocalId {
+    /// Returns the [`LocalId`] for the task corresponding with the task in Lambda which was
+    /// responsible for the value of `ect_bar`
+    pub(super) fn responsible_ect_bar(&self) -> LocalId {
         let index = self
             .responsible_index_ect_internal(0)
             .expect("Expected to be able to get responsible gray task for ect");
@@ -108,6 +145,7 @@ impl ThetaLambdaTree {
     }
 
     fn responsible_index_ect_internal(&self, position: usize) -> Option<usize> {
+        // See \[1\] for the implementation
         if self.is_leaf(position) {
             // Assuming that all tasks have non-zero processing time
             (self.nodes[position].sum_of_processing_times_bar > 0).then_some(position)
@@ -163,6 +201,7 @@ impl ThetaLambdaTree {
         }
     }
 
+    /// Add the provided task to Lambda
     pub(super) fn add_to_lambda<Var: IntegerVariable>(
         &mut self,
         task: &DisjunctiveTask<Var>,
@@ -176,6 +215,8 @@ impl ThetaLambdaTree {
         self.upheap(position);
     }
 
+    /// Remove the provided task from Lambda (this method assumes that the element is already not a
+    /// part of Theta at this point)
     pub(super) fn remove_from_lambda<Var: IntegerVariable>(&mut self, task: &DisjunctiveTask<Var>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
@@ -183,6 +224,7 @@ impl ThetaLambdaTree {
         self.upheap(position)
     }
 
+    /// Add the provided task to Theta
     pub(super) fn add_to_theta<Var: IntegerVariable>(
         &mut self,
         task: &DisjunctiveTask<Var>,
@@ -196,6 +238,7 @@ impl ThetaLambdaTree {
         self.upheap(position)
     }
 
+    /// Remove the provided task from Theta
     pub(super) fn remove_from_theta<Var: IntegerVariable>(&mut self, task: &DisjunctiveTask<Var>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
@@ -203,24 +246,30 @@ impl ThetaLambdaTree {
         self.upheap(position)
     }
 
+    /// Returns the index of the left child of the provided index
     fn get_left_child_index(index: usize) -> usize {
         2 * index + 1
     }
 
+    /// Returns the index of the right child of the provided index
     fn get_right_child_index(index: usize) -> usize {
         2 * index + 2
     }
 
+    /// Returns the index of the parent of the provided index
     fn get_parent(index: usize) -> usize {
         pumpkin_assert_simple!(index > 0);
         (index - 1) / 2
     }
 
+    /// Returns whether the provided index is a leaf node by checking whether its left child is
+    /// outside of the range of the number of nodes
     fn is_leaf(&self, index: usize) -> bool {
         pumpkin_assert_simple!(index < self.nodes.len());
         Self::get_left_child_index(index) >= self.nodes.len()
     }
 
+    /// Calculate the new values for the ancestors of the provided index
     pub(super) fn upheap(&mut self, mut index: usize) {
         while index != 0 {
             let parent = Self::get_parent(index);
