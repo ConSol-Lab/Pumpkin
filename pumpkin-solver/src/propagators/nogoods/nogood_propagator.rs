@@ -596,7 +596,7 @@ impl NogoodPropagator {
         });
 
         // We pre-processed out the entirety of the nogood
-        if nogood.is_empty() {
+        if nogood.len() <= 1 {
             return;
         }
 

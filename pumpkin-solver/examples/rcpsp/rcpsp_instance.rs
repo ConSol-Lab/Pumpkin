@@ -148,7 +148,9 @@ pub(crate) fn parse_rcpsp_max_dzn(instance_file: File) -> SchedulingResult<Rcpsp
         ))
     } else if number_of_precedences
         != instance
-            .dependencies.values().map(|dependencies| dependencies.len() as u32)
+            .dependencies
+            .values()
+            .map(|dependencies| dependencies.len() as u32)
             .sum()
     {
         Err(SchedulingError::InconsistentValues(
@@ -156,7 +158,9 @@ pub(crate) fn parse_rcpsp_max_dzn(instance_file: File) -> SchedulingResult<Rcpsp
             number_of_precedences.into(),
             "length of \"dcons\"".to_owned(),
             instance
-                .dependencies.values().map(|dependencies| dependencies.len() as i64)
+                .dependencies
+                .values()
+                .map(|dependencies| dependencies.len() as i64)
                 .sum(),
         ))
     } else {

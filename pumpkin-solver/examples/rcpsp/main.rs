@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -178,7 +179,8 @@ fn run() -> SchedulingResult<()> {
         },
     });
 
-    let (start_variables, makespan, horizon) = create_variables(&rcpsp_instance, &mut solver);
+    let (start_variables, makespan, horizon) =
+        create_variables(&rcpsp_instance, &mut solver, args.variant);
     let precedences = PrecedenceClosure::new(&rcpsp_instance).unwrap_or_else(|| {
         println!("Unsatisfiable");
         exit(0)
@@ -621,12 +623,30 @@ fn add_objective_function(
 fn create_variables(
     rcpsp_instance: &RcpspInstance,
     solver: &mut Solver,
+    variant: RcpspVariant,
 ) -> (Vec<DomainId>, DomainId, u32) {
-    let ub_variables: i32 = rcpsp_instance
-        .processing_times
-        .iter()
-        .map(|&processing_time| processing_time as i32)
-        .sum();
+    let ub_variables = match variant {
+        RcpspVariant::Std => rcpsp_instance
+            .processing_times
+            .iter()
+            .map(|&processing_time| processing_time as i32)
+            .sum::<i32>(),
+        RcpspVariant::Max => (0..rcpsp_instance.processing_times.len())
+            .map(|ix| {
+                rcpsp_instance
+                    .dependencies
+                    .values()
+                    .flatten()
+                    .filter_map(|precedence| {
+                        (precedence.predecessor == ix).then(|| {
+                            max(precedence.gap, rcpsp_instance.processing_times[ix] as i32)
+                        })
+                    })
+                    .max()
+                    .unwrap_or_default()
+            })
+            .sum(),
+    };
     let makespan = solver.new_bounded_integer(0, ub_variables);
     let start_variables = (0..rcpsp_instance.processing_times.len())
         .map(|task_index| {
