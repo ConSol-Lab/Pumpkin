@@ -1,5 +1,6 @@
 use log::warn;
 
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
@@ -71,6 +72,10 @@ impl<TieBreaking: TieBreaker<DomainId, i32>> VariableSelector<DomainId>
                     .consider(*variable, context.get_size_of_domain(*variable));
             });
         self.tie_breaker.select()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
     }
 }
 

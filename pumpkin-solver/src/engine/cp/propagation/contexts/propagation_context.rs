@@ -1,13 +1,39 @@
-use super::PropagatorId;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
+use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::engine::TrailedAssignments;
+use crate::engine::TrailedInt;
 use crate::pumpkin_assert_simple;
+
+pub(crate) struct StatefulPropagationContext<'a> {
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+    pub(crate) assignments: &'a Assignments,
+}
+
+impl<'a> StatefulPropagationContext<'a> {
+    pub(crate) fn new(
+        stateful_assignments: &'a mut TrailedAssignments,
+        assignments: &'a Assignments,
+    ) -> Self {
+        Self {
+            stateful_assignments,
+            assignments,
+        }
+    }
+
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments: self.assignments,
+        }
+    }
+}
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -30,6 +56,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub(crate) struct PropagationContextMut<'a> {
+    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -39,12 +66,14 @@ pub(crate) struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
+        stateful_assignments: &'a mut TrailedAssignments,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
+            stateful_assignments,
             assignments,
             reason_store,
             propagator_id,
@@ -63,17 +92,30 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    fn build_reason(&self, reason: Reason) -> Reason {
-        if let Some(reification_literal) = self.reification_literal {
-            match reason {
-                Reason::Eager(mut conjunction) => {
-                    conjunction.add(reification_literal.get_true_predicate());
-                    Reason::Eager(conjunction)
-                }
-                Reason::DynamicLazy(_) => todo!(),
+    fn build_reason(&self, reason: Reason) -> StoredReason {
+        match reason {
+            Reason::Eager(mut conjunction) => {
+                conjunction.extend(
+                    self.reification_literal
+                        .iter()
+                        .map(|lit| lit.get_true_predicate()),
+                );
+                StoredReason::Eager(conjunction)
             }
-        } else {
-            reason
+            Reason::DynamicLazy(code) => {
+                if let Some(reification_literal) = self.reification_literal {
+                    StoredReason::ReifiedLazy(reification_literal, code)
+                } else {
+                    StoredReason::DynamicLazy(code)
+                }
+            }
+        }
+    }
+
+    pub(crate) fn as_stateful_readonly(&mut self) -> StatefulPropagationContext {
+        StatefulPropagationContext {
+            stateful_assignments: self.stateful_assignments,
+            assignments: self.assignments,
         }
     }
 
@@ -95,8 +137,33 @@ pub trait HasAssignments {
     fn assignments(&self) -> &Assignments;
 }
 
+pub(crate) trait HasStatefulAssignments {
+    fn stateful_assignments(&self) -> &TrailedAssignments;
+    fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments;
+}
+
 mod private {
     use super::*;
+
+    impl HasStatefulAssignments for StatefulPropagationContext<'_> {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
+            self.stateful_assignments
+        }
+
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
+            self.stateful_assignments
+        }
+    }
+
+    impl HasStatefulAssignments for PropagationContextMut<'_> {
+        fn stateful_assignments(&self) -> &TrailedAssignments {
+            self.stateful_assignments
+        }
+
+        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
+            self.stateful_assignments
+        }
+    }
 
     impl HasAssignments for PropagationContext<'_> {
         fn assignments(&self) -> &Assignments {
@@ -109,7 +176,35 @@ mod private {
             self.assignments
         }
     }
+
+    impl HasAssignments for StatefulPropagationContext<'_> {
+        fn assignments(&self) -> &Assignments {
+            self.assignments
+        }
+    }
 }
+
+pub(crate) trait ManipulateStatefulIntegers: HasStatefulAssignments {
+    fn new_stateful_integer(&mut self, initial_value: i64) -> TrailedInt {
+        self.stateful_assignments_mut().grow(initial_value)
+    }
+
+    fn value(&self, stateful_integer: TrailedInt) -> i64 {
+        self.stateful_assignments().read(stateful_integer)
+    }
+
+    fn add_assign(&mut self, stateful_integer: TrailedInt, addition: i64) {
+        self.stateful_assignments_mut()
+            .add_assign(stateful_integer, addition);
+    }
+
+    fn assign(&mut self, stateful_integer: TrailedInt, value: i64) {
+        self.stateful_assignments_mut()
+            .assign(stateful_integer, value);
+    }
+}
+
+impl<T: HasStatefulAssignments> ManipulateStatefulIntegers for T {}
 
 pub(crate) trait ReadDomains: HasAssignments {
     fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
@@ -251,7 +346,8 @@ impl PropagationContextMut<'_> {
                     .is_value_in_domain(domain_id, equality_constant)
                     && !self.assignments.is_domain_assigned(&domain_id)
                 {
-                    let reason = self.reason_store.push(self.propagator_id, reason.into());
+                    let reason = self.build_reason(reason.into());
+                    let reason = self.reason_store.push(self.propagator_id, reason);
                     self.assignments
                         .make_assignment(domain_id, equality_constant, Some(reason))?;
                 }
