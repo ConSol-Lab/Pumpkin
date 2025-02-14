@@ -27,10 +27,9 @@ pub(crate) struct Disjunctive<Var: IntegerVariable + 'static> {
 }
 
 impl<Var: IntegerVariable + 'static> Disjunctive<Var> {
-    pub(crate) fn new(tasks: &[ArgDisjunctiveTask<Var>]) -> Self {
-        let num_tasks = tasks.len();
+    pub(crate) fn new(tasks: impl IntoIterator<Item = ArgDisjunctiveTask<Var>>) -> Self {
         let tasks = tasks
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(index, task)| DisjunctiveTask {
                 start_variable: task.start_variable.clone(),
@@ -38,6 +37,8 @@ impl<Var: IntegerVariable + 'static> Disjunctive<Var> {
                 id: LocalId::from(index as u32),
             })
             .collect::<Vec<_>>();
+
+        let num_tasks = tasks.len();
         Self {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
@@ -212,28 +213,24 @@ mod tests {
         let f = solver.new_variable(5, 10);
 
         let _ = solver
-            .new_propagator(Disjunctive::new(
-                &[
-                    ArgDisjunctiveTask {
-                        start_variable: c,
-                        processing_time: 4,
-                    },
-                    ArgDisjunctiveTask {
-                        start_variable: d,
-                        processing_time: 5,
-                    },
-                    ArgDisjunctiveTask {
-                        start_variable: e,
-                        processing_time: 3,
-                    },
-                    ArgDisjunctiveTask {
-                        start_variable: f,
-                        processing_time: 3,
-                    },
-                ]
-                .into_iter()
-                .collect::<Vec<_>>(),
-            ))
+            .new_propagator(Disjunctive::new([
+                ArgDisjunctiveTask {
+                    start_variable: c,
+                    processing_time: 4,
+                },
+                ArgDisjunctiveTask {
+                    start_variable: d,
+                    processing_time: 5,
+                },
+                ArgDisjunctiveTask {
+                    start_variable: e,
+                    processing_time: 3,
+                },
+                ArgDisjunctiveTask {
+                    start_variable: f,
+                    processing_time: 3,
+                },
+            ]))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(c), 18);
     }

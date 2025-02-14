@@ -5,7 +5,7 @@ use crate::propagators::disjunctive_propagator::Disjunctive;
 use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
 use crate::variables::IntegerVariable;
 
-/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) [`Constraint`].
+/// Creates the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) [`Constraint`].
 ///
 /// This constraint ensures that at no point in time the provided task can overlap. This can be
 /// seen as a special case of the `cumulative` constraint with capacity 1.
@@ -29,13 +29,12 @@ where
     Durations::IntoIter: ExactSizeIterator,
 {
     Disjunctive::new(
-        &start_times
+        start_times
             .into_iter()
             .zip(durations)
             .map(|(start_time, duration)| ArgDisjunctiveTask {
                 start_variable: start_time,
                 processing_time: duration,
-            })
-            .collect::<Vec<_>>(),
+            }),
     )
 }
