@@ -1,4 +1,5 @@
 use super::VariableSelector;
+use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::SparseSet;
 use crate::containers::StorageKey;
@@ -55,6 +56,10 @@ impl VariableSelector<DomainId> for RandomSelector {
 
     fn is_restart_pointless(&mut self) -> bool {
         false
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![BrancherEvent::UnassignInteger]
     }
 }
 

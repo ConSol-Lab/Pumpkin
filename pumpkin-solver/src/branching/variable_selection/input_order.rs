@@ -1,5 +1,6 @@
 use log::warn;
 
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
@@ -30,6 +31,10 @@ impl VariableSelector<DomainId> for InputOrder<DomainId> {
             .find(|variable| !context.is_integer_fixed(**variable))
             .copied()
     }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
+    }
 }
 
 impl VariableSelector<Literal> for InputOrder<Literal> {
@@ -38,6 +43,10 @@ impl VariableSelector<Literal> for InputOrder<Literal> {
             .iter()
             .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
             .copied()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
     }
 }
 

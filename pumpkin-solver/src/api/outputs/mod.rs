@@ -2,7 +2,6 @@ use self::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub use crate::basic_types::ProblemSolution;
 use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
-pub(crate) mod solution_callback_arguments;
 pub mod solution_iterator;
 pub mod unsatisfiable;
 use crate::branching::Brancher;
@@ -41,7 +40,7 @@ pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
     Unknown,
 }
 
-/// The result of a call to [`Solver::maximise`] or [`Solver::minimise`].
+/// The result of a call to [`Solver::optimise`].
 #[derive(Debug)]
 pub enum OptimisationResult {
     /// Indicates that an optimal solution has been found and proven to be optimal. It provides an

@@ -2,6 +2,9 @@ use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
+use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::Format;
@@ -14,12 +17,17 @@ use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
 use crate::constraints::Constraint;
+use crate::optimisation::Direction;
+use crate::optimisation::OptimisationResult;
+use crate::optimisation::Optimiser;
 use crate::result::SatisfactionResult;
+use crate::result::SatisfactionUnderAssumptionsResult;
 use crate::result::Solution;
 use crate::variables::BoolExpression;
 use crate::variables::BoolVariable;
 use crate::variables::IntExpression;
 use crate::variables::IntVariable;
+use crate::variables::Predicate;
 use crate::variables::VariableMap;
 
 #[pyclass]
@@ -28,15 +36,6 @@ pub struct Model {
     integer_variables: KeyedVec<IntVariable, ModelIntVar>,
     boolean_variables: KeyedVec<BoolVariable, ModelBoolVar>,
     constraints: Vec<ModelConstraint>,
-}
-
-#[pyclass(eq, eq_int)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Comparator {
-    NotEqual,
-    Equal,
-    LessThanOrEqual,
-    GreaterThanOrEqual,
 }
 
 #[pymethods]
@@ -115,23 +114,13 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (integer, comparator, value, name=None))]
-    fn predicate_as_boolean(
-        &mut self,
-        integer: IntExpression,
-        comparator: Comparator,
-        value: i32,
-        name: Option<&str>,
-    ) -> BoolExpression {
+    #[pyo3(signature = (predicate, name=None))]
+    fn predicate_as_boolean(&mut self, predicate: Predicate, name: Option<&str>) -> BoolExpression {
         self.boolean_variables
             .push(ModelBoolVar {
                 name: name.map(|n| n.to_owned()),
                 integer_equivalent: None,
-                predicate: Some(Predicate {
-                    integer,
-                    comparator,
-                    value,
-                }),
+                predicate: Some(predicate),
             })
             .into()
     }
@@ -163,27 +152,9 @@ impl Model {
 
     #[pyo3(signature = (proof=None))]
     fn satisfy(&self, proof: Option<PathBuf>) -> SatisfactionResult {
-        let proof_log = proof
-            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
-            .transpose()
-            .map(|proof| proof.unwrap_or_default())
-            .expect("failed to create proof file");
+        let solver_setup = self.create_solver(proof);
 
-        let options = SolverOptions {
-            proof_log,
-            ..Default::default()
-        };
-
-        let mut solver = Solver::with_options(options);
-
-        let solver_setup = self
-            .create_variable_map(&mut solver)
-            .and_then(|variable_map| {
-                self.post_constraints(&mut solver, &variable_map)?;
-                Ok(variable_map)
-            });
-
-        let Ok(variable_map) = solver_setup else {
+        let Ok((mut solver, variable_map)) = solver_setup else {
             return SatisfactionResult::Unsatisfiable();
         };
 
@@ -200,6 +171,126 @@ impl Model {
                 SatisfactionResult::Unsatisfiable()
             }
             pumpkin_solver::results::SatisfactionResult::Unknown => SatisfactionResult::Unknown(),
+        }
+    }
+
+    #[pyo3(signature = (assumptions))]
+    fn satisfy_under_assumptions(
+        &self,
+        assumptions: Vec<Predicate>,
+    ) -> SatisfactionUnderAssumptionsResult {
+        let solver_setup = self.create_solver(None);
+
+        let Ok((mut solver, variable_map)) = solver_setup else {
+            return SatisfactionUnderAssumptionsResult::Unsatisfiable();
+        };
+
+        let mut brancher = solver.default_brancher();
+
+        let solver_assumptions = assumptions
+            .iter()
+            .map(|pred| pred.to_solver_predicate(&variable_map))
+            .collect::<Vec<_>>();
+
+        // Maarten: I do not understand why it is necessary, but we have to create a local variable
+        // here     that is the result of the `match` statement. Otherwise the compiler
+        // complains that     `solver` and `brancher` potentially do not live long enough.
+        //
+        //     Ideally this would not be necessary, but perhaps it is unavoidable with the setup we
+        //     currently have. Either way, we take the suggestion by the compiler.
+        let result = match solver.satisfy_under_assumptions(&mut brancher, &mut Indefinite, &solver_assumptions) {
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(solution) => {
+                SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
+                    solver_solution: solution,
+                    variable_map,
+                })
+            }
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
+                // Maarten: For now we assume that the core _must_ consist of the predicates that
+                //     were the input to the solve call. In general this is not the case, e.g. when
+                //     the assumptions can be semantically minized (the assumptions [y <= 1],
+                //     [y >= 0] and [y != 0] will be compressed to [y == 1] which would end up in
+                //     the core).
+                //
+                //     In the future, perhaps we should make the distinction between predicates and
+                //     literals in the python wrapper as well. For now, this is the simplest way
+                //     forward. I expect that the situation above almost never happens in practice.
+                let core = result
+                    .extract_core()
+                    .iter()
+                    .map(|predicate| assumptions
+                         .iter()
+                         .find(|pred| pred.to_solver_predicate(&variable_map) == *predicate)
+                         .copied()
+                         .expect("predicates in core must be part of the assumptions"))
+                    .collect();
+
+                SatisfactionUnderAssumptionsResult::UnsatisfiableUnderAssumptions(core)
+            }
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable => {
+                SatisfactionUnderAssumptionsResult::Unsatisfiable()
+            }
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown => {
+                SatisfactionUnderAssumptionsResult::Unknown()
+            }
+        };
+
+        result
+    }
+
+    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None))]
+    fn optimise(
+        &self,
+        objective: IntExpression,
+        optimiser: Optimiser,
+        direction: Direction,
+        proof: Option<PathBuf>,
+    ) -> OptimisationResult {
+        let solver_setup = self.create_solver(proof);
+
+        let Ok((mut solver, variable_map)) = solver_setup else {
+            return OptimisationResult::Unsatisfiable();
+        };
+
+        let mut brancher = solver.default_brancher();
+
+        let direction = match direction {
+            Direction::Minimise => OptimisationDirection::Minimise,
+            Direction::Maximise => OptimisationDirection::Maximise,
+        };
+
+        let objective = objective.to_affine_view(&variable_map);
+
+        let result = match optimiser {
+            Optimiser::LinearSatUnsat => solver.optimise(
+                &mut brancher,
+                &mut Indefinite,
+                LinearSatUnsat::new(direction, objective, |_, _| {}),
+            ),
+            Optimiser::LinearUnsatSat => solver.optimise(
+                &mut brancher,
+                &mut Indefinite,
+                LinearUnsatSat::new(direction, objective, |_, _| {}),
+            ),
+        };
+
+        match result {
+            pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
+                OptimisationResult::Satisfiable(Solution {
+                    solver_solution: solution,
+                    variable_map,
+                })
+            }
+            pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
+                OptimisationResult::Optimal(Solution {
+                    solver_solution: solution,
+                    variable_map,
+                })
+            }
+            pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
+                OptimisationResult::Unsatisfiable()
+            }
+            pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
         }
     }
 }
@@ -251,6 +342,33 @@ impl Model {
         }
 
         Ok(())
+    }
+
+    fn create_solver(
+        &self,
+        proof: Option<PathBuf>,
+    ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
+        let proof_log = proof
+            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
+            .transpose()
+            .map(|proof| proof.unwrap_or_default())
+            .expect("failed to create proof file");
+
+        let options = SolverOptions {
+            proof_log,
+            ..Default::default()
+        };
+
+        let mut solver = Solver::with_options(options);
+
+        let variable_map = self
+            .create_variable_map(&mut solver)
+            .and_then(|variable_map| {
+                self.post_constraints(&mut solver, &variable_map)?;
+                Ok(variable_map)
+            })?;
+
+        Ok((solver, variable_map))
     }
 }
 
@@ -338,28 +456,5 @@ impl ModelBoolVar {
         };
 
         Ok(literal)
-    }
-}
-
-struct Predicate {
-    integer: IntExpression,
-    comparator: Comparator,
-    value: i32,
-}
-
-impl Predicate {
-    /// Convert the predicate in the model domain to a predicate in the solver domain.
-    fn to_solver_predicate(
-        &self,
-        variable_map: &VariableMap,
-    ) -> pumpkin_solver::predicates::Predicate {
-        let affine_view = self.integer.to_affine_view(variable_map);
-
-        match self.comparator {
-            Comparator::NotEqual => predicate![affine_view != self.value],
-            Comparator::Equal => predicate![affine_view == self.value],
-            Comparator::LessThanOrEqual => predicate![affine_view <= self.value],
-            Comparator::GreaterThanOrEqual => predicate![affine_view >= self.value],
-        }
     }
 }

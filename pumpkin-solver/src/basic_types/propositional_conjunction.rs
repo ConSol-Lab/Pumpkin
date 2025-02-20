@@ -77,6 +77,12 @@ impl PropositionalConjunction {
     }
 }
 
+impl Extend<Predicate> for PropositionalConjunction {
+    fn extend<T: IntoIterator<Item = Predicate>>(&mut self, iter: T) {
+        self.predicates_in_conjunction.extend(iter);
+    }
+}
+
 impl IntoIterator for PropositionalConjunction {
     type Item = Predicate;
 

@@ -4,6 +4,7 @@
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
@@ -88,5 +89,13 @@ where
 
     fn is_restart_pointless(&mut self) -> bool {
         self.variable_selector.is_restart_pointless() && self.value_selector.is_restart_pointless()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        self.variable_selector
+            .subscribe_to_events()
+            .into_iter()
+            .chain(self.value_selector.subscribe_to_events())
+            .collect()
     }
 }

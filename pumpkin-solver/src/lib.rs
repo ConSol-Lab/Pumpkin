@@ -103,8 +103,9 @@
 //! }
 //! ```
 //!
-//! **Optimizing an objective** can be done in a similar way using [`Solver::maximise`] or
-//! [`Solver::minimise`]; first the objective variable and a constraint over this value are added:
+//! **Optimizing an objective** can be done in a similar way using [`Solver::optimise`]; first the
+//! objective variable and a constraint over this value are added:
+//!
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::constraints;
@@ -122,7 +123,7 @@
 //!     .post();
 //! ```
 //!
-//! Then we can find the optimal solution using [`Solver::minimise`] or [`Solver::maximise`]:
+//! Then we can find the optimal solution using [`Solver::optimise`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::results::OptimisationResult;
@@ -130,7 +131,10 @@
 //! # use pumpkin_solver::results::ProblemSolution;
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::optimisation::OptimisationDirection;
+//! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
+//! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -141,7 +145,11 @@
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
-//! let result = solver.minimise(&mut brancher, &mut termination, objective);
+//! let result = solver.optimise(
+//!     &mut brancher,
+//!     &mut termination,
+//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, |_, _| {}),
+//! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
 //!     let value_x = optimal_solution.get_integer_value(x);
@@ -202,7 +210,7 @@
 //!
 //! loop {
 //!     match solution_iterator.next_solution() {
-//!         IteratedSolution::Solution(solution) => {
+//!         IteratedSolution::Solution(solution, _) => {
 //!             number_of_solutions += 1;
 //!             // We have found another solution, the same invariant should hold
 //!             let value_x = solution.get_integer_value(x);
@@ -287,6 +295,7 @@ pub(crate) mod math;
 pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
 pub(crate) mod variable_names;
+
 #[cfg(doc)]
 use crate::branching::Brancher;
 #[cfg(doc)]
@@ -294,6 +303,7 @@ use crate::termination::TerminationCondition;
 
 pub mod branching;
 pub mod constraints;
+pub mod optimisation;
 pub mod proof;
 pub mod statistics;
 

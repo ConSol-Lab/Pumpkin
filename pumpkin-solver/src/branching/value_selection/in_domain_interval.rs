@@ -1,4 +1,5 @@
 use super::InDomainSplit;
+use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -37,6 +38,10 @@ impl ValueSelector<DomainId> for InDomainInterval {
             // the domain
             InDomainSplit::get_predicate_excluding_upper_half(context, decision_variable)
         }
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
     }
 }
 

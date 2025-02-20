@@ -250,14 +250,13 @@ impl TestSolver {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
-        let predicates = self
-            .reason_store
-            .get_or_compute(
-                reason_ref,
-                ExplanationContext::from(&self.assignments),
-                &mut self.propagator_store,
-            )
-            .expect("reason_ref should not be stale");
+        let mut predicates = vec![];
+        let _ = self.reason_store.get_or_compute(
+            reason_ref,
+            ExplanationContext::from(&self.assignments),
+            &mut self.propagator_store,
+            &mut predicates,
+        );
 
         PropositionalConjunction::from(predicates)
     }

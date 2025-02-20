@@ -3,12 +3,22 @@ use pyo3::prelude::*;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
+use crate::variables::Predicate;
 use crate::variables::VariableMap;
 
 #[pyclass]
 #[allow(clippy::large_enum_variant)]
 pub enum SatisfactionResult {
     Satisfiable(Solution),
+    Unsatisfiable(),
+    Unknown(),
+}
+
+#[pyclass]
+#[allow(clippy::large_enum_variant)]
+pub enum SatisfactionUnderAssumptionsResult {
+    Satisfiable(Solution),
+    UnsatisfiableUnderAssumptions(Vec<Predicate>),
     Unsatisfiable(),
     Unknown(),
 }
@@ -32,3 +42,7 @@ impl Solution {
             .get_literal_value(variable.to_literal(&self.variable_map))
     }
 }
+
+#[pyclass]
+#[derive(Clone)]
+pub struct CoreExtractor {}

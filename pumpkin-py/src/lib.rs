@@ -1,5 +1,6 @@
 mod constraints;
 mod model;
+mod optimisation;
 mod result;
 mod variables;
 
@@ -27,12 +28,15 @@ macro_rules! submodule {
 fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<variables::IntExpression>()?;
     m.add_class::<variables::BoolExpression>()?;
-    m.add_class::<model::Comparator>()?;
+    m.add_class::<variables::Comparator>()?;
+    m.add_class::<variables::Predicate>()?;
     m.add_class::<model::Model>()?;
     m.add_class::<result::SatisfactionResult>()?;
+    m.add_class::<result::SatisfactionUnderAssumptionsResult>()?;
     m.add_class::<result::Solution>()?;
 
     submodule!(constraints, python, m);
+    submodule!(optimisation, python, m);
 
     Ok(())
 }
