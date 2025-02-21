@@ -3,6 +3,7 @@ pub(crate) mod statistic_logger;
 pub(crate) mod statistic_logging;
 
 use std::fmt::Display;
+use std::ops::AddAssign;
 
 pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
@@ -27,6 +28,21 @@ pub trait Statistic {
 impl<Value: Display> Statistic for Value {
     fn log(&self, statistic_logger: StatisticLogger) {
         statistic_logger.log_statistic(self);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub struct FloatStatistic<const PRECISION: usize = 2>(f64);
+
+impl<const PRECISION: usize> Display for FloatStatistic<PRECISION> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.1$}", self.0, PRECISION)
+    }
+}
+
+impl AddAssign<f64> for FloatStatistic {
+    fn add_assign(&mut self, rhs: f64) {
+        self.0 += rhs
     }
 }
 

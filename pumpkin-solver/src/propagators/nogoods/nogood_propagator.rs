@@ -1,4 +1,5 @@
 use std::ops::Not;
+use std::time::Instant;
 
 use log::warn;
 
@@ -9,6 +10,7 @@ use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::Mode;
@@ -37,6 +39,9 @@ use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::FloatStatistic;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -73,6 +78,9 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+
+    /// Time spent in the nogood propagator.
+    time_spent: FloatStatistic,
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -124,20 +132,8 @@ impl NogoodPropagator {
         }
         false
     }
-}
 
-impl Propagator for NogoodPropagator {
-    fn name(&self) -> &str {
-        // It is important to keep this name exactly this.
-        // In parts of code for debugging, it looks for this particular name.
-        "NogoodPropagator"
-    }
-
-    fn priority(&self) -> u32 {
-        0
-    }
-
-    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
+    fn propagate_impl(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -770,6 +766,28 @@ impl Propagator for NogoodPropagator {
 
         Ok(())
     }
+}
+
+impl Propagator for NogoodPropagator {
+    fn name(&self) -> &str {
+        // It is important to keep this name exactly this.
+        // In parts of code for debugging, it looks for this particular name.
+        "NogoodPropagator"
+    }
+
+    fn priority(&self) -> u32 {
+        0
+    }
+
+    fn propagate(&mut self, context: PropagationContextMut) -> PropagationStatusCP {
+        let start = Instant::now();
+
+        let result = self.propagate_impl(context);
+
+        self.time_spent += start.elapsed().as_secs_f64();
+
+        result
+    }
 
     fn synchronise(&mut self, context: PropagationContext) {
         self.last_index_on_trail = context.assignments().trail.len() - 1;
@@ -881,6 +899,11 @@ impl Propagator for NogoodPropagator {
         // There should be no nogoods yet
         pumpkin_assert_simple!(self.nogoods.len() == 0);
         Ok(())
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.time_spent
+            .log(statistic_logger.attach_to_prefix("nogoodPropagationTime"));
     }
 }
 

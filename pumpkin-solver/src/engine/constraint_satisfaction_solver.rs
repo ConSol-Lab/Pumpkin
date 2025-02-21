@@ -913,9 +913,15 @@ impl ConstraintSatisfactionSolver {
             stateful_assignments: &mut self.stateful_assignments,
         };
 
+        let start_resolving = Instant::now();
         let learned_nogood = self
             .conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
+
+        conflict_analysis_context
+            .counters
+            .engine_statistics
+            .time_spent_in_conflict_analysis += start_resolving.elapsed().as_secs_f64();
 
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
@@ -938,9 +944,14 @@ impl ConstraintSatisfactionSolver {
             );
         }
 
+        let start_restoring = Instant::now();
         let result = self
             .conflict_resolver
             .process(&mut conflict_analysis_context, &learned_nogood);
+        conflict_analysis_context
+            .counters
+            .engine_statistics
+            .time_spent_restoring += start_restoring.elapsed().as_secs_f64();
         if result.is_err() {
             unreachable!("Cannot resolve nogood and reach error")
         }
