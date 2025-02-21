@@ -1187,23 +1187,7 @@ impl ConstraintSatisfactionSolver {
                 Err(inconsistency) => match inconsistency {
                     // A propagator did a change that resulted in an empty domain.
                     Inconsistency::EmptyDomain => {
-                        let empty_domain_reason =
-                            ConstraintSatisfactionSolver::compute_reason_for_empty_domain(
-                                &mut self.assignments,
-                                &mut self.reason_store,
-                                &mut self.propagators,
-                            );
-
-                        // TODO: As a temporary solution, we remove the last trail element.
-                        // This way we guarantee that the assignment is consistent, which is needed
-                        // for the conflict analysis data structures. The proper alternative would
-                        // be to forbid the assignments from getting into an inconsistent state.
-                        self.assignments.remove_last_trail_element();
-
-                        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
-                            conflict_nogood: empty_domain_reason,
-                        };
-                        self.state.declare_conflict(stored_conflict_info);
+                        self.prepare_for_conflict_resolution();
                         break;
                     }
                     // A propagator-specific reason for the current conflict.
@@ -1314,11 +1298,15 @@ impl ConstraintSatisfactionSolver {
                     continue;
                 }
 
-                if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
-                    self.internal_parameters.proof_log.add_propagation(*step_id);
-                } else {
-                    unreachable!()
-                }
+                let possible_step_id = self.unit_nogood_step_ids.get(&trail_entry.predicate);
+                let Some(step_id) = possible_step_id else {
+                    panic!(
+                        "Getting unit nogood step id for {:?} but it does not exist.",
+                        trail_entry.predicate
+                    );
+                };
+
+                self.internal_parameters.proof_log.add_propagation(*step_id);
             }
 
             // Log the nogood which adds the root-level knowledge to the proof.
@@ -1424,6 +1412,8 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
+        let num_trail_entries = self.assignments.num_trail_entries();
+
         let mut propagation_context = PropagationContextMut::new(
             &mut self.stateful_assignments,
             &mut self.assignments,
@@ -1432,19 +1422,52 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
-        ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
+
+        let addition_result = ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
             &mut self.propagators[nogood_propagator_id],
             nogood,
             &mut propagation_context,
-        )?;
+        );
+
+        if addition_result.is_err() {
+            self.prepare_for_conflict_resolution();
+            self.log_root_propagation_to_proof(num_trail_entries, None);
+            self.complete_proof();
+            return Err(ConstraintOperationError::InfeasibleNogood);
+        }
+
+        self.log_root_propagation_to_proof(num_trail_entries, None);
+
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();
+
+        self.log_root_propagation_to_proof(num_trail_entries, None);
+
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
             Ok(())
         }
+    }
+
+    fn prepare_for_conflict_resolution(&mut self) {
+        let empty_domain_reason = ConstraintSatisfactionSolver::compute_reason_for_empty_domain(
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.propagators,
+        );
+
+        // TODO: As a temporary solution, we remove the last trail element.
+        // This way we guarantee that the assignment is consistent, which is needed
+        // for the conflict analysis data structures. The proper alternative would
+        // be to forbid the assignments from getting into an inconsistent state.
+        self.assignments.remove_last_trail_element();
+
+        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
+            conflict_nogood: empty_domain_reason,
+        };
+        self.state.declare_conflict(stored_conflict_info);
     }
 
     fn add_nogood_to_nogood_propagator(
