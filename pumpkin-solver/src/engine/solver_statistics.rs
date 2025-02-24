@@ -25,11 +25,15 @@ create_statistics_struct!(
         /// The average number of (integer) propagations made by the solver
         num_propagations: u64,
         /// The amount of time which is spent in the solver
-        time_spent_in_solver: u64,
+        time_spent_in_solver: FloatStatistic,
         /// The total time spent in conflict analysis, in seconds.
         time_spent_in_conflict_analysis: FloatStatistic,
         /// The total time spent restoring from a conflict.
         time_spent_restoring: FloatStatistic,
+        /// The total time spent in the propagation loop
+        time_spent_propagating: FloatStatistic,
+        /// The total time spent minimising the learnt clause
+        time_spent_minimising: FloatStatistic,
 });
 
 create_statistics_struct!(

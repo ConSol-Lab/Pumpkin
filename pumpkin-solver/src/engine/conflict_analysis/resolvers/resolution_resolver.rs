@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PredicateId;
@@ -424,6 +426,7 @@ impl ResolutionResolver {
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
+        let start_time = Instant::now();
         let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
             &self.processed_nogood_predicates,
             context.assignments,
@@ -456,6 +459,9 @@ impl ResolutionResolver {
                 .average_number_of_removed_literals_semantic
                 .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
         }
+
+        context.counters.engine_statistics.time_spent_minimising +=
+            start_time.elapsed().as_secs_f64();
 
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions

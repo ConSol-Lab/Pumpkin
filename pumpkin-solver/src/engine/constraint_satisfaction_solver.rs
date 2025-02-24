@@ -472,7 +472,7 @@ impl ConstraintSatisfactionSolver {
 
         self.solver_statistics
             .engine_statistics
-            .time_spent_in_solver += start_time.elapsed().as_millis() as u64;
+            .time_spent_in_solver += start_time.elapsed().as_secs_f64();
 
         result
     }
@@ -1165,6 +1165,7 @@ impl ConstraintSatisfactionSolver {
 
     /// Main propagation loop.
     pub(crate) fn propagate(&mut self) {
+        let start_time = Instant::now();
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
@@ -1263,6 +1264,9 @@ impl ConstraintSatisfactionSolver {
                     &self.propagators,
                 )
         );
+        self.solver_statistics
+            .engine_statistics
+            .time_spent_propagating += start_time.elapsed().as_secs_f64();
     }
 
     /// Introduces any root-level propagations to the proof by introducing them as
