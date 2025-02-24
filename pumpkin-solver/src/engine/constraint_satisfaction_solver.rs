@@ -195,6 +195,7 @@ pub struct SatisfactionSolverOptions {
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
+    pub use_recursive_minimisation: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
     /// The proof log for the solver.
@@ -210,6 +211,7 @@ impl Default for SatisfactionSolverOptions {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
             learning_clause_minimisation: true,
+            use_recursive_minimisation: false,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             conflict_resolver: ConflictResolver::default(),
@@ -443,6 +445,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             domain_faithfulness: &mut self.domain_faithfulness,
             stateful_assignments: &mut self.stateful_assignments,
+            use_recursive_minimisation: self.internal_parameters.use_recursive_minimisation,
         };
 
         let result = self
@@ -730,6 +733,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     domain_faithfulness: &mut self.domain_faithfulness,
                     stateful_assignments: &mut self.stateful_assignments,
+                    use_recursive_minimisation: self.internal_parameters.use_recursive_minimisation,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -980,6 +984,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             domain_faithfulness: &mut self.domain_faithfulness,
             stateful_assignments: &mut self.stateful_assignments,
+            use_recursive_minimisation: self.internal_parameters.use_recursive_minimisation,
         };
 
         let start_resolving = Instant::now();

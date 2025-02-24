@@ -427,10 +427,11 @@ impl ResolutionResolver {
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
         let start_time = Instant::now();
+        let size_before = self.processed_nogood_predicates.len();
         let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
             &self.processed_nogood_predicates,
             context.assignments,
-            if !context.should_minimise {
+            if !context.should_minimise || !context.use_recursive_minimisation {
                 // If we do not minimise then we do the equality
                 // merging in the first iteration of removing
                 // duplicates
@@ -439,8 +440,9 @@ impl ResolutionResolver {
                 Mode::DisableEqualityMerging
             },
         );
+        let size_after_first_round_semantic_minimisation = clean_nogood.len();
 
-        if context.should_minimise {
+        if context.should_minimise && context.use_recursive_minimisation {
             // Then we perform recursive minimisation to remove the dominated predicates
             self.recursive_minimiser
                 .remove_dominated_predicates(&mut clean_nogood, context);
@@ -457,7 +459,17 @@ impl ResolutionResolver {
                 .counters
                 .learned_clause_statistics
                 .average_number_of_removed_literals_semantic
-                .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
+                .add_term(
+                    (size_before_semantic_minimisation - clean_nogood.len()
+                        + (size_before - size_after_first_round_semantic_minimisation))
+                        as u64,
+                );
+        } else {
+            context
+                .counters
+                .learned_clause_statistics
+                .average_number_of_removed_literals_semantic
+                .add_term((size_before - size_after_first_round_semantic_minimisation) as u64);
         }
 
         context.counters.engine_statistics.time_spent_minimising +=
