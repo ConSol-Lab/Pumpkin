@@ -1,4 +1,5 @@
 use std::ops::Not;
+use std::time::Instant;
 
 use log::info;
 use log::warn;
@@ -35,6 +36,9 @@ use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::FloatStatistic;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -68,6 +72,9 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+
+    /// Time spent in the noogod propagator
+    time_spent: FloatStatistic,
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -153,6 +160,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
+        let start = Instant::now();
         info!("Nogood Propagator Propagating ",);
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
@@ -270,6 +278,7 @@ impl Propagator for NogoodPropagator {
                 let result = context.post_predicate(!nogood_predicates[0], reason);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
+                    self.time_spent += start.elapsed().as_secs_f64();
                     return Err(e.into());
                 }
                 index += 1;
@@ -278,7 +287,13 @@ impl Propagator for NogoodPropagator {
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
+        self.time_spent += start.elapsed().as_secs_f64();
         Ok(())
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.time_spent
+            .log(statistic_logger.attach_to_prefix("nogoodPropagationTime"))
     }
 
     fn synchronise(&mut self, _context: PropagationContext) {
