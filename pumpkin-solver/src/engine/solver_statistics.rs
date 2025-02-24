@@ -32,6 +32,8 @@ create_statistics_struct!(
         time_spent_restoring: FloatStatistic,
         /// The total time spent in the propagation loop
         time_spent_propagating: FloatStatistic,
+        /// The total time spent minimising the learnt clause
+        time_spent_minimising: FloatStatistic,
 });
 
 create_statistics_struct!(
