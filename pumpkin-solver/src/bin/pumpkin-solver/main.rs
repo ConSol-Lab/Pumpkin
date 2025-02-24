@@ -122,7 +122,10 @@ struct Args {
     ///
     /// Possible values: bool
     #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
-    no_learning_clause_minimisation: bool,
+    no_learnt_minimisation: bool,
+
+    #[arg(long = "use-recursive-minimisation", verbatim_doc_comment)]
+    use_recursive_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     ///
@@ -518,7 +521,8 @@ fn run() -> PumpkinResult<()> {
 
     let solver_options = SolverOptions {
         restart_options,
-        learning_clause_minimisation: !args.no_learning_clause_minimisation,
+        learning_clause_minimisation: !args.no_learnt_minimisation,
+        use_recursive_minimisation: args.use_recursive_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         conflict_resolver: args.conflict_resolver,
