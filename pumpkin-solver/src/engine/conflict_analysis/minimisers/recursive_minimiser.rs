@@ -13,6 +13,9 @@ pub(crate) struct RecursiveMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
+
+    decision_level_cache: HashMap<Predicate, usize>,
+    is_decision_cache: HashMap<Predicate, bool>,
 }
 
 impl RecursiveMinimiser {
@@ -96,7 +99,7 @@ impl RecursiveMinimiser {
         // If the predicate is a decision predicate, it cannot be a predicate from the original
         // learned nogood since those are labelled as part of initialisation.
         // Therefore the decision literal is labelled as poison and then return.
-        if context.assignments.is_decision_predicate(&input_predicate) {
+        if self.is_decision_predicate(input_predicate, context.assignments) {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
@@ -104,12 +107,9 @@ impl RecursiveMinimiser {
 
         // A predicate that is not part of the allowed decision levels
         // (levels from the original learned clause) cannot be removed.
-        if !self.is_decision_level_allowed(
-            context
-                .assignments
-                .get_decision_level_for_predicate(&input_predicate)
-                .unwrap(),
-        ) {
+        let decision_level =
+            self.get_decision_level_for_predicate(input_predicate, context.assignments);
+        if !self.is_decision_level_allowed(decision_level) {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
@@ -131,11 +131,7 @@ impl RecursiveMinimiser {
 
         for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
-            if context
-                .assignments
-                .get_decision_level_for_predicate(&antecedent_predicate)
-                .unwrap()
-                == 0
+            if self.get_decision_level_for_predicate(antecedent_predicate, context.assignments) == 0
             {
                 continue;
             }
@@ -213,6 +209,32 @@ impl RecursiveMinimiser {
         }
     }
 
+    fn get_decision_level_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        assignments: &Assignments,
+    ) -> usize {
+        if let Some(decision_level) = self.decision_level_cache.get(&predicate) {
+            *decision_level
+        } else {
+            let decision_level = assignments
+                .get_decision_level_for_predicate(&predicate)
+                .expect("Expected to be assigned");
+            let _ = self.decision_level_cache.insert(predicate, decision_level);
+            decision_level
+        }
+    }
+
+    fn is_decision_predicate(&mut self, predicate: Predicate, assignments: &Assignments) -> bool {
+        if let Some(is_decision) = self.is_decision_cache.get(&predicate) {
+            *is_decision
+        } else {
+            let is_decision = assignments.is_decision_predicate(&predicate);
+            let _ = self.is_decision_cache.insert(predicate, is_decision);
+            is_decision
+        }
+    }
+
     fn initialise_minimisation_data_structures(
         &mut self,
         nogood: &Vec<Predicate>,
@@ -220,13 +242,14 @@ impl RecursiveMinimiser {
     ) {
         pumpkin_assert_simple!(self.current_depth == 0);
 
+        self.decision_level_cache.clear();
+        self.is_decision_cache.clear();
+
         // Mark literals from the initial learned nogood.
         for &predicate in nogood {
             // Predicates from the current decision level are always kept.
             // This is the analogue of asserting literals.
-            if assignments
-                .get_decision_level_for_predicate(&predicate)
-                .unwrap()
+            if self.get_decision_level_for_predicate(predicate, assignments)
                 == assignments.get_decision_level()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
@@ -234,17 +257,14 @@ impl RecursiveMinimiser {
             }
 
             // Decision predicate must be kept.
-            if assignments.is_decision_predicate(&predicate) {
+            if self.is_decision_predicate(predicate, assignments) {
                 self.assign_predicate_label(predicate, Label::Keep);
             } else {
                 self.assign_predicate_label(predicate, Label::Seen);
             }
 
-            self.mark_decision_level_as_allowed(
-                assignments
-                    .get_decision_level_for_predicate(&predicate)
-                    .unwrap(),
-            );
+            let decision_level = self.get_decision_level_for_predicate(predicate, assignments);
+            self.mark_decision_level_as_allowed(decision_level);
         }
     }
 
