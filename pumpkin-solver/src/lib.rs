@@ -135,6 +135,8 @@
 //! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
+//! # use pumpkin_solver::results::SolutionReference;
+//! # use pumpkin_solver::DefaultBrancher;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -145,10 +147,11 @@
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
+//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
-//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, |_, _, _| {}),
+//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, callback),
 //! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
