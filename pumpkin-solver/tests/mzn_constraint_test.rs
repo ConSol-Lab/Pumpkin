@@ -3,6 +3,7 @@
 mod helpers;
 use helpers::check_statistic_equality;
 use helpers::run_mzn_test_with_options;
+use helpers::TestType;
 use pumpkin_macros::cumulative;
 use pumpkin_macros::cumulative_synchronised;
 
@@ -14,12 +15,14 @@ macro_rules! mzn_test {
     ($name:ident, $file:expr, $options:expr) => {
         #[test]
         fn $name() {
-            run_mzn_test_with_options::<false>(
+            let output = run_mzn_test_with_options::<false>(
                 $file,
                 "mzn_constraints",
+                TestType::SolutionEnumeration,
                 $options,
                 stringify!($name),
             );
+            assert!(output.ends_with("==========\n"));
         }
     };
 }

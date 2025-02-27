@@ -42,10 +42,10 @@ pub(crate) fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> F
     run_solver_with_options(instance_path, with_proof, std::iter::empty(), None)
 }
 
-pub(crate) fn run_solver_with_options<'a>(
+pub(crate) fn run_solver_with_options(
     instance_path: impl AsRef<Path>,
     with_proof: bool,
-    args: impl IntoIterator<Item = &'a str>,
+    args: impl IntoIterator<Item = String>,
     prefix: Option<&str>,
 ) -> Files {
     let args = args.into_iter().collect::<Vec<_>>();
@@ -184,15 +184,19 @@ pub(crate) fn verify_proof(files: Files, checker_output: &Output) -> std::io::Re
     files.cleanup()
 }
 
-pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
-    run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, vec![], "")
+pub(crate) fn run_mzn_test<const ORDERED: bool>(
+    instance_name: &str,
+    folder_name: &str,
+    test_type: TestType,
+) -> String {
+    run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, test_type, vec![], "")
 }
 
 pub(crate) fn check_statistic_equality(
     instance_name: &str,
     folder_name: &str,
-    mut options_first: Vec<&str>,
-    mut options_second: Vec<&str>,
+    mut options_first: Vec<String>,
+    mut options_second: Vec<String>,
     prefix_first: &str,
     prefix_second: &str,
 ) {
@@ -201,8 +205,8 @@ pub(crate) fn check_statistic_equality(
         env!("CARGO_MANIFEST_DIR")
     );
 
-    options_first.push("-sa");
-    options_second.push("-sa");
+    options_first.push("-sa".to_owned());
+    options_second.push("-sa".to_owned());
 
     let files_first = run_solver_with_options(
         instance_path.clone(),
@@ -246,12 +250,20 @@ pub(crate) fn check_statistic_equality(
     )
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TestType {
+    Unsatisfiable,
+    SolutionEnumeration,
+    Optimality,
+}
+
 pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
     instance_name: &str,
     folder_name: &str,
-    mut options: Vec<&str>,
+    test_type: TestType,
+    mut options: Vec<String>,
     prefix: &str,
-) {
+) -> String {
     let instance_path = format!(
         "{}/tests/{folder_name}/{instance_name}.fzn",
         env!("CARGO_MANIFEST_DIR")
@@ -262,7 +274,21 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
         env!("CARGO_MANIFEST_DIR")
     );
 
-    options.push("-a");
+    if matches!(
+        test_type,
+        TestType::SolutionEnumeration | TestType::Optimality
+    ) {
+        // Both for optimisation and enumeration do we want to log all encountered solutions.
+        options.push("-a".to_owned());
+    }
+
+    if matches!(test_type, TestType::Unsatisfiable | TestType::Optimality) {
+        options.push("--proof".to_owned());
+        options.push(format!(
+            "{}/tests/{folder_name}/{instance_name}.drcp",
+            env!("CARGO_MANIFEST_DIR")
+        ));
+    }
 
     let files = run_solver_with_options(instance_path, false, options, Some(prefix));
 
@@ -280,4 +306,6 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
         .expect("Valid solution");
 
     assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
+
+    output
 }

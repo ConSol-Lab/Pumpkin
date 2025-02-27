@@ -2,7 +2,8 @@
 
 mod helpers;
 
-use helpers::run_solver_with_options;
+use helpers::run_mzn_test;
+use helpers::TestType;
 
 macro_rules! mzn_infeasible_test {
     ($name:ident) => {
@@ -15,13 +16,6 @@ macro_rules! mzn_infeasible_test {
 mzn_infeasible_test!(prop_stress);
 
 pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str) {
-    let instance_path = format!(
-        "{}/tests/{folder_name}/{instance_name}.fzn",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    let files = run_solver_with_options(instance_path, false, ["-a"], None);
-
-    let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
+    let output = run_mzn_test::<false>(instance_name, folder_name, TestType::Unsatisfiable);
     assert!(output.ends_with("=====UNSATISFIABLE=====\n"));
 }
