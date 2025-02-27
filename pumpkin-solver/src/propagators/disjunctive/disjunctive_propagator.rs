@@ -15,8 +15,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::DomainEvents;
 use crate::predicate;
-use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
@@ -30,12 +30,24 @@ use crate::variables::TransformableVariable;
 /// # Bibliography
 /// \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
 /// Sciences, vol. 18, no. 2, pp. 159–202, 2008.
-pub(crate) struct Disjunctive<Var: IntegerVariable + 'static> {
+pub(crate) struct Disjunctive<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,
     /// An additional list of tasks which allows us to sort them (we require [`Disjunctive::tasks`]
     /// to keep track of the right indices).
     sorted_tasks: Vec<DisjunctiveTask<Var>>,
+    /// The tasks which are used to propagate the upper-bounds; these are the same as
+    /// [`Disjunctive::tasks`] but reversed (i.e. instead of being from [EST, LCT] these tasks go
+    /// from [-LCT, -EST])
+    reverse_tasks: Box<
+        [DisjunctiveTask<<<Var as IntegerVariable>::AffineView as IntegerVariable>::AffineView>],
+    >,
+    /// An additional list of tasks which allows us to sort them (we require
+    /// [`Disjunctive::reverse_tasks`]
+    /// to keep track of the right indices).
+    sorted_reverse_tasks:
+        Vec<DisjunctiveTask<<<Var as IntegerVariable>::AffineView as IntegerVariable>::AffineView>>,
+
     /// The elements which are currently present in the set Theta used for edge-finding.
     elements_in_theta: FixedBitSet,
 }
@@ -51,32 +63,151 @@ impl<Var: IntegerVariable + 'static> Disjunctive<Var> {
                 id: LocalId::from(index as u32),
             })
             .collect::<Vec<_>>();
+        let reverse_tasks = tasks
+            .iter()
+            .map(|task| DisjunctiveTask {
+                start_variable: task.start_variable.offset(task.processing_time).scaled(-1),
+                processing_time: task.processing_time,
+                id: task.id,
+            })
+            .collect::<Vec<_>>();
 
         let num_tasks = tasks.len();
+
         Self {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
+            reverse_tasks: reverse_tasks.clone().into_boxed_slice(),
+            sorted_reverse_tasks: reverse_tasks,
             elements_in_theta: FixedBitSet::with_capacity(num_tasks),
         }
     }
 }
 
-/// Creates an explanation consisting of the current bounds for all elements in Theta
+/// Creates an explanation consisting of the tasks in the theta-lambda tree which were responsible
+/// for the conflict based on \[1\].
 ///
-/// TODO: this explanation could be lifted and should take into account which subset of tasks was
-/// responsible for the propagation itself.
-fn create_theta_explanation<'a, Var: IntegerVariable>(
+/// # Bibliography
+/// \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
+/// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
+/// Techniques in Constraint Programming, 2005, pp. 396–409.
+fn create_conflict_explanation<'a, Var: IntegerVariable>(
     tasks: &'a [DisjunctiveTask<Var>],
+    theta_lambda_tree: &mut ThetaLambdaTree,
+    context: &'a PropagationContextMut,
+) -> PropositionalConjunction {
+    // First we calculate some data about the set of tasks that caused the overflow
+    let mut est_theta = i32::MAX;
+    let mut lct_theta = i32::MIN;
+    let mut p_theta = 0;
+
+    let reponsible_tasks = theta_lambda_tree
+        .responsible_ect()
+        .inspect(|element| {
+            let task = &tasks[element.index()];
+            est_theta = est_theta.min(context.lower_bound(&task.start_variable));
+            lct_theta =
+                lct_theta.max(context.upper_bound(&task.start_variable) + task.processing_time);
+            p_theta += task.processing_time;
+        })
+        .collect::<Vec<_>>();
+
+    // We check whether we indeed overflow the interval
+    pumpkin_assert_simple!(p_theta > lct_theta - est_theta);
+
+    // Then we calculate the amount by which we can lift the interval; i.e. how much does the
+    // processing time of theta overflow the interval
+    let delta = p_theta - (lct_theta - est_theta) - 1;
+
+    let mut explanation = Vec::new();
+
+    // Then for each element in the responsible tasks, we add that they need to be in this interval
+    // together
+    for element in reponsible_tasks {
+        let task = &tasks[element.index()];
+        explanation.push(predicate!(task.start_variable >= est_theta - delta / 2));
+        explanation.push(predicate!(
+            task.start_variable
+                <= lct_theta - (delta as f64 / 2.0).ceil() as i32 - task.processing_time
+        ))
+    }
+
+    explanation.into()
+}
+
+/// Creates an explanation consisting of the tasks in the theta-lambda tree which were responsible
+/// for the propagation of `propagated_task` based on \[1\].
+///
+/// # Bibliography
+/// \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
+/// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
+/// Techniques in Constraint Programming, 2005, pp. 396–409.
+fn create_propagation_explanation<'a, Var: IntegerVariable>(
+    tasks: &'a [DisjunctiveTask<Var>],
+    propagated_task_id: LocalId,
+    new_bound: i32,
+    theta_lambda_tree: &mut ThetaLambdaTree,
     elements_in_theta: &'a FixedBitSet,
     context: &'a PropagationContextMut,
-) -> impl Iterator<Item = Predicate> + 'a {
-    elements_in_theta.ones().flat_map(move |index| {
-        let task = &tasks[index];
-        [
-            predicate!(task.start_variable >= context.lower_bound(&task.start_variable)),
-            predicate!(task.start_variable <= context.upper_bound(&task.start_variable)),
-        ]
-    })
+) -> PropositionalConjunction {
+    let propagated_task = &tasks[propagated_task_id.index()];
+
+    // First we calculate the required information for the explanations of all tasks in theta
+    let mut earliest_release_time = context.lower_bound(&propagated_task.start_variable);
+    let mut p_theta = 0;
+    let theta = elements_in_theta
+        .ones()
+        .inspect(|theta_element| {
+            let task = &tasks[*theta_element];
+            p_theta += task.processing_time;
+            earliest_release_time =
+                earliest_release_time.min(context.lower_bound(&task.start_variable));
+        })
+        .collect::<Vec<_>>();
+
+    // Then we look at the subset which was responsible for the actual bound on EST
+    let mut p_theta_prime = 0;
+    let theta_prime = theta_lambda_tree
+        .responsible_ect()
+        .inspect(|theta_prime_element| {
+            let task = &tasks[theta_prime_element.index()];
+            p_theta_prime += task.processing_time;
+        })
+        .collect::<Vec<_>>();
+
+    let mut explanation = Vec::new();
+
+    // Now we go over each element in theta prime and explain it using lifted intervals
+    for j in theta_prime.iter() {
+        let task = &tasks[j.index()];
+        explanation.push(predicate!(task.start_variable >= new_bound - p_theta_prime));
+        explanation.push(predicate!(
+            task.start_variable <= earliest_release_time + p_theta - 1
+        ));
+    }
+
+    // then we go over each element which is in theta but not in theta prime and explin it using
+    // lifted intervals
+    for j in theta {
+        if theta_prime.contains(&LocalId::from(j as u32)) {
+            continue;
+        }
+
+        let task = &tasks[j];
+
+        explanation.push(predicate!(task.start_variable >= earliest_release_time));
+        explanation.push(predicate!(
+            task.start_variable <= earliest_release_time + p_theta - 1
+        ));
+    }
+
+    // Finally, we add the bound on the propagated task since this is required to entail the
+    // propagation
+    explanation.push(predicate!(
+        propagated_task.start_variable >= earliest_release_time
+    ));
+
+    explanation.into()
 }
 
 /// Performs the edge-finding algorithm (see [`Disjunctive`] for an intuition and the work on which
@@ -111,9 +242,11 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // (which takes into account `j`) is larger than the LCT of `j` then we can report an
         // overflow
         if theta_lambda_tree.ect() > lct_j {
-            return Err(Inconsistency::Conflict(
-                create_theta_explanation(tasks, elements_in_theta, context).collect(),
-            ));
+            return Err(Inconsistency::Conflict(create_conflict_explanation(
+                tasks,
+                &mut theta_lambda_tree,
+                context,
+            )));
         }
 
         // If there was no overflow then we continue by checking whether we can find a propagation
@@ -146,21 +279,14 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                 context.set_lower_bound(
                     &tasks[i.index()].start_variable,
                     theta_lambda_tree.ect(),
-                    create_theta_explanation(tasks, elements_in_theta, context)
-                        .chain({
-                            let task_i = &tasks[i.index()];
-                            [
-                                predicate!(
-                                    task_i.start_variable
-                                        >= context.lower_bound(&task_i.start_variable)
-                                ),
-                                predicate!(
-                                    task_i.start_variable
-                                        <= context.upper_bound(&task_i.start_variable)
-                                ),
-                            ]
-                        })
-                        .collect::<PropositionalConjunction>(),
+                    create_propagation_explanation(
+                        tasks,
+                        i,
+                        theta_lambda_tree.ect(),
+                        &mut theta_lambda_tree,
+                        elements_in_theta,
+                        context,
+                    ),
                 )?;
             }
             // Then we remove the element from consideration entirely by removing it from Lambda
@@ -189,19 +315,10 @@ impl<Var: IntegerVariable + 'static> Propagator for Disjunctive<Var> {
         // Now we want to also update the upper-bounds
         //
         // We do this by "reversing" the tasks to make the LCT be represented as the EST of a task
-        let reverse_tasks = self
-            .tasks
-            .iter()
-            .map(|task| DisjunctiveTask {
-                start_variable: task.start_variable.offset(task.processing_time).scaled(-1),
-                processing_time: task.processing_time,
-                id: task.id,
-            })
-            .collect::<Vec<_>>();
         edge_finding(
             &mut context,
-            &reverse_tasks,
-            &mut reverse_tasks.clone(),
+            &self.reverse_tasks,
+            &mut self.sorted_reverse_tasks,
             &mut self.elements_in_theta,
         )
     }
@@ -218,19 +335,12 @@ impl<Var: IntegerVariable + 'static> Propagator for Disjunctive<Var> {
             &mut sorted_tasks,
             &mut elements_in_theta,
         )?;
-        let reverse_tasks = self
-            .tasks
-            .iter()
-            .map(|task| DisjunctiveTask {
-                start_variable: task.start_variable.clone(),
-                processing_time: task.processing_time,
-                id: task.id,
-            })
-            .collect::<Vec<_>>();
+
+        let mut sorted_reverse_tasks = self.sorted_reverse_tasks.clone();
         edge_finding(
             &mut context,
-            &reverse_tasks,
-            &mut reverse_tasks.clone(),
+            &self.reverse_tasks,
+            &mut sorted_reverse_tasks,
             &mut elements_in_theta,
         )
     }

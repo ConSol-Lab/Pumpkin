@@ -76,6 +76,9 @@ pub(super) struct ThetaLambdaTree {
     /// The number of internal nodes in the tree; used to calculate the leaf node index based on
     /// the index in the tree
     number_of_internal_nodes: usize,
+
+    /// Used to calculate the reason for the ECT
+    indices: Vec<usize>,
 }
 
 impl ThetaLambdaTree {
@@ -112,6 +115,7 @@ impl ThetaLambdaTree {
             mapping,
             reverse_mapping,
             number_of_internal_nodes: number_of_internal_nodes - 1,
+            indices: Default::default(),
         }
     }
 
@@ -135,16 +139,75 @@ impl ThetaLambdaTree {
         index - self.number_of_internal_nodes
     }
 
+    /// Returns all [`LocalId`]s of the tasks responsible for the value of `ect`
+    pub(super) fn responsible_ect(&mut self) -> impl Iterator<Item = LocalId> + '_ {
+        self.indices.clear();
+        self.responsible_index_ect_internal(0);
+        self.indices
+            .iter()
+            .copied()
+            .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
+    }
+
+    fn responsible_index_ect_internal(&mut self, position: usize) {
+        if self.is_leaf(position) {
+            // If we have reached a leaf then we add it
+            self.indices.push(position)
+        } else {
+            let left_child = Self::get_left_child_index(position);
+            let right_child = Self::get_right_child_index(position);
+
+            // We know that the ECT in the current node is fully due to the right child
+            if self.nodes[right_child] != Node::empty()
+                && self.nodes[position].ect == self.nodes[right_child].ect
+            {
+                self.responsible_index_ect_internal(right_child)
+            } else {
+                // Otherwise, it is due to a combination of the left child and the right child
+                pumpkin_assert_simple!(
+                    self.nodes[position].ect
+                        == self.nodes[left_child].ect
+                            + self.nodes[right_child].sum_of_processing_times
+                );
+                // We get the leaves reponsible for the left child
+                self.responsible_index_ect_internal(left_child);
+
+                // And the leaves of the right side
+                self.get_all_leaf_nodes_rooted_at_index(right_child);
+            }
+        }
+    }
+
+    fn get_all_leaf_nodes_rooted_at_index(&mut self, position: usize) {
+        if self.is_leaf(position) {
+            self.indices.push(position);
+        } else {
+            let left_child = Self::get_left_child_index(position);
+            let right_child = Self::get_right_child_index(position);
+
+            if self.nodes[left_child] != Node::empty() && self.nodes[right_child] != Node::empty() {
+                self.get_all_leaf_nodes_rooted_at_index(left_child);
+                self.get_all_leaf_nodes_rooted_at_index(right_child);
+            } else if self.nodes[left_child] != Node::empty() {
+                self.get_all_leaf_nodes_rooted_at_index(left_child)
+            } else if self.nodes[right_child] != Node::empty() {
+                self.get_all_leaf_nodes_rooted_at_index(right_child)
+            } else {
+                panic!()
+            }
+        }
+    }
+
     /// Returns the [`LocalId`] for the task corresponding with the task in Lambda which was
     /// responsible for the value of `ect_bar`
     pub(super) fn responsible_ect_bar(&self) -> LocalId {
         let index = self
-            .responsible_index_ect_internal(0)
+            .responsible_index_ect_bar_internal(0)
             .expect("Expected to be able to get responsible gray task for ect");
         self.reverse_mapping[self.get_leaf_node_index(index)]
     }
 
-    fn responsible_index_ect_internal(&self, position: usize) -> Option<usize> {
+    fn responsible_index_ect_bar_internal(&self, position: usize) -> Option<usize> {
         // See \[1\] for the implementation
         if self.is_leaf(position) {
             // Assuming that all tasks have non-zero processing time
@@ -156,7 +219,7 @@ impl ThetaLambdaTree {
             if self.nodes[right_child] != Node::empty()
                 && self.nodes[position].ect_bar == self.nodes[right_child].ect_bar
             {
-                self.responsible_index_ect_internal(right_child)
+                self.responsible_index_ect_bar_internal(right_child)
             } else if self.nodes[right_child] != Node::empty()
                 && self.nodes[position].ect_bar
                     == self.nodes[left_child].ect
@@ -168,7 +231,7 @@ impl ThetaLambdaTree {
                     == self.nodes[left_child].ect_bar
                         + self.nodes[right_child].sum_of_processing_times
             {
-                self.responsible_index_ect_internal(left_child)
+                self.responsible_index_ect_bar_internal(left_child)
             } else {
                 None
             }
