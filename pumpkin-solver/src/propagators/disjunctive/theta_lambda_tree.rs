@@ -140,7 +140,7 @@ impl ThetaLambdaTree {
     }
 
     /// Returns all [`LocalId`]s of the tasks responsible for the value of `ect`
-    pub(super) fn responsible_ect(&mut self) -> impl Iterator<Item = LocalId> + '_ {
+    pub(super) fn all_responsible_ect(&mut self) -> impl Iterator<Item = LocalId> + '_ {
         self.indices.clear();
         self.responsible_index_ect_internal(0);
         self.indices
@@ -149,10 +149,88 @@ impl ThetaLambdaTree {
             .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
     }
 
+    /// Returns all [`LocalId`]s of the tasks responsible for the value of `ect_bar`
+    pub(super) fn all_responsible_ect_bar(&mut self) -> impl Iterator<Item = LocalId> + '_ {
+        self.indices.clear();
+        self.all_responsible_index_ect_bar_internal(0);
+        self.indices
+            .iter()
+            .copied()
+            .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
+    }
+
+    fn all_responsible_index_ect_bar_internal(&mut self, position: usize) {
+        if self.is_leaf(position) {
+            // Assuming that all tasks have non-zero processing time
+            if self.nodes[position] != Node::empty()
+                && self.nodes[position].sum_of_processing_times > 0
+            {
+                // If we have reached a leaf then we add it
+                self.indices.push(position)
+            }
+        } else {
+            let left_child = Self::get_left_child_index(position);
+            let right_child = Self::get_right_child_index(position);
+
+            if self.nodes[right_child] != Node::empty()
+                && self.nodes[position].ect_bar == self.nodes[right_child].ect_bar
+            {
+                self.all_responsible_index_ect_bar_internal(right_child)
+            } else if self.nodes[right_child] != Node::empty()
+                && self.nodes[position].ect_bar
+                    == self.nodes[left_child].ect
+                        + self.nodes[right_child].sum_of_processing_times_bar
+            {
+                self.responsible_index_ect_internal(left_child);
+                self.all_responsible_index_p_internal(right_child)
+            } else if self.nodes[left_child] != Node::empty()
+                && self.nodes[position].ect_bar
+                    == self.nodes[left_child].ect_bar
+                        + self.nodes[right_child].sum_of_processing_times
+            {
+                self.all_responsible_index_ect_bar_internal(left_child);
+                self.get_all_leaf_nodes_rooted_at_index(right_child);
+            }
+        }
+    }
+
+    fn all_responsible_index_p_internal(&mut self, position: usize) {
+        if self.is_leaf(position) {
+            // Assuming that all tasks have non-zero processing time
+            if self.nodes[position] != Node::empty()
+                && self.nodes[position].sum_of_processing_times > 0
+            {
+                // If we have reached a leaf then we add it
+                self.indices.push(position)
+            }
+        } else {
+            let left_child = Self::get_left_child_index(position);
+            let right_child = Self::get_right_child_index(position);
+
+            if self.nodes[left_child] != Node::empty()
+                && self.nodes[position].sum_of_processing_times_bar
+                    == self.nodes[left_child].sum_of_processing_times_bar
+                        + self.nodes[right_child].sum_of_processing_times
+            {
+                self.all_responsible_index_p_internal(left_child)
+            } else if self.nodes[right_child] != Node::empty()
+                && self.nodes[position].sum_of_processing_times_bar
+                    == self.nodes[left_child].sum_of_processing_times
+                        + self.nodes[right_child].sum_of_processing_times_bar
+            {
+                self.all_responsible_index_p_internal(right_child)
+            }
+        }
+    }
+
     fn responsible_index_ect_internal(&mut self, position: usize) {
         if self.is_leaf(position) {
-            // If we have reached a leaf then we add it
-            self.indices.push(position)
+            if self.nodes[position] != Node::empty()
+                && self.nodes[position].sum_of_processing_times > 0
+            {
+                // If we have reached a leaf then we add it
+                self.indices.push(position)
+            }
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -165,22 +243,29 @@ impl ThetaLambdaTree {
             } else {
                 // Otherwise, it is due to a combination of the left child and the right child
                 pumpkin_assert_simple!(
-                    self.nodes[position].ect
-                        == self.nodes[left_child].ect
-                            + self.nodes[right_child].sum_of_processing_times
+                    self.nodes[left_child] != Node::empty()
+                        && self.nodes[position].ect
+                            == self.nodes[left_child].ect
+                                + self.nodes[right_child].sum_of_processing_times
                 );
                 // We get the leaves reponsible for the left child
                 self.responsible_index_ect_internal(left_child);
 
-                // And the leaves of the right side
-                self.get_all_leaf_nodes_rooted_at_index(right_child);
+                if self.nodes[right_child].sum_of_processing_times != 0 {
+                    // And the leaves of the right side
+                    self.get_all_leaf_nodes_rooted_at_index(right_child);
+                }
             }
         }
     }
 
     fn get_all_leaf_nodes_rooted_at_index(&mut self, position: usize) {
         if self.is_leaf(position) {
-            self.indices.push(position);
+            if self.nodes[position] != Node::empty()
+                && self.nodes[position].sum_of_processing_times > 0
+            {
+                self.indices.push(position);
+            }
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -192,26 +277,26 @@ impl ThetaLambdaTree {
                 self.get_all_leaf_nodes_rooted_at_index(left_child)
             } else if self.nodes[right_child] != Node::empty() {
                 self.get_all_leaf_nodes_rooted_at_index(right_child)
-            } else {
-                panic!()
             }
         }
     }
 
     /// Returns the [`LocalId`] for the task corresponding with the task in Lambda which was
     /// responsible for the value of `ect_bar`
-    pub(super) fn responsible_ect_bar(&self) -> LocalId {
-        let index = self
-            .responsible_index_ect_bar_internal(0)
-            .expect("Expected to be able to get responsible gray task for ect");
-        self.reverse_mapping[self.get_leaf_node_index(index)]
+    ///
+    /// This can be [`None`] if an overflow occurs and there are no elements in lambda
+    pub(super) fn responsible_ect_bar(&self) -> Option<LocalId> {
+        self.responsible_index_ect_bar_internal(0)
+            .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
     }
 
     fn responsible_index_ect_bar_internal(&self, position: usize) -> Option<usize> {
         // See \[1\] for the implementation
         if self.is_leaf(position) {
             // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0).then_some(position)
+            (self.nodes[position].sum_of_processing_times_bar > 0
+                && self.nodes[position].sum_of_processing_times == 0)
+                .then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -241,7 +326,9 @@ impl ThetaLambdaTree {
     fn responsible_index_p_internal(&self, position: usize) -> Option<usize> {
         if self.is_leaf(position) {
             // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0).then_some(position)
+            (self.nodes[position].sum_of_processing_times_bar > 0
+                && self.nodes[position].sum_of_processing_times == 0)
+                .then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -283,6 +370,7 @@ impl ThetaLambdaTree {
     pub(super) fn remove_from_lambda<Var: IntegerVariable>(&mut self, task: &DisjunctiveTask<Var>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
+        pumpkin_assert_simple!(self.nodes[position].sum_of_processing_times == 0);
         self.nodes[position] = Node::empty();
         self.upheap(position)
     }

@@ -16,6 +16,7 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
@@ -102,7 +103,7 @@ fn create_conflict_explanation<'a, Var: IntegerVariable>(
     let mut p_theta = 0;
 
     let reponsible_tasks = theta_lambda_tree
-        .responsible_ect()
+        .all_responsible_ect()
         .inspect(|element| {
             let task = &tasks[element.index()];
             est_theta = est_theta.min(context.lower_bound(&task.start_variable));
@@ -123,12 +124,20 @@ fn create_conflict_explanation<'a, Var: IntegerVariable>(
 
     // Then for each element in the responsible tasks, we add that they need to be in this interval
     // together
-    for element in reponsible_tasks {
+    for element in reponsible_tasks.iter() {
         let task = &tasks[element.index()];
+
+        pumpkin_assert_moderate!(context
+            .is_predicate_satisfied(predicate!(task.start_variable >= est_theta - delta / 2)));
+        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
+            task.start_variable
+                <= lct_theta + (delta as f64 / 2.0).ceil() as i32 - task.processing_time
+        )),);
+
         explanation.push(predicate!(task.start_variable >= est_theta - delta / 2));
         explanation.push(predicate!(
             task.start_variable
-                <= lct_theta - (delta as f64 / 2.0).ceil() as i32 - task.processing_time
+                <= lct_theta + (delta as f64 / 2.0).ceil() as i32 - task.processing_time
         ))
     }
 
@@ -147,7 +156,6 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     propagated_task_id: LocalId,
     new_bound: i32,
     theta_lambda_tree: &mut ThetaLambdaTree,
-    elements_in_theta: &'a FixedBitSet,
     context: &'a PropagationContextMut,
 ) -> PropositionalConjunction {
     let propagated_task = &tasks[propagated_task_id.index()];
@@ -155,49 +163,79 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     // First we calculate the required information for the explanations of all tasks in theta
     let mut earliest_release_time = context.lower_bound(&propagated_task.start_variable);
     let mut p_theta = 0;
-    let theta = elements_in_theta
-        .ones()
+
+    // First we get the tasks which caused the relation to be detected
+    let theta = theta_lambda_tree
+        .all_responsible_ect_bar()
+        .filter(|index| *index != propagated_task_id)
         .inspect(|theta_element| {
-            let task = &tasks[*theta_element];
+            let task = &tasks[theta_element.index()];
             p_theta += task.processing_time;
             earliest_release_time =
                 earliest_release_time.min(context.lower_bound(&task.start_variable));
         })
         .collect::<Vec<_>>();
+    pumpkin_assert_simple!(!theta.is_empty());
 
-    // Then we look at the subset which was responsible for the actual bound on EST
+    // Then we look at the tasks which propagated the bound
     let mut p_theta_prime = 0;
     let theta_prime = theta_lambda_tree
-        .responsible_ect()
+        .all_responsible_ect()
         .inspect(|theta_prime_element| {
             let task = &tasks[theta_prime_element.index()];
             p_theta_prime += task.processing_time;
         })
         .collect::<Vec<_>>();
 
+    pumpkin_assert_simple!(!theta.is_empty());
+
     let mut explanation = Vec::new();
 
     // Now we go over each element in theta prime and explain it using lifted intervals
     for j in theta_prime.iter() {
         let task = &tasks[j.index()];
+
+        pumpkin_assert_moderate!(context
+            .is_predicate_satisfied(predicate!(task.start_variable >= new_bound - p_theta_prime)),);
+        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
+            task.start_variable
+                <= earliest_release_time + p_theta + propagated_task.processing_time
+                    - task.processing_time
+                    - 1
+        )),);
+
         explanation.push(predicate!(task.start_variable >= new_bound - p_theta_prime));
         explanation.push(predicate!(
-            task.start_variable <= earliest_release_time + p_theta - 1
+            task.start_variable
+                <= earliest_release_time + p_theta + propagated_task.processing_time
+                    - 1
+                    - task.processing_time
         ));
     }
 
-    // then we go over each element which is in theta but not in theta prime and explin it using
-    // lifted intervals
-    for j in theta {
-        if theta_prime.contains(&LocalId::from(j as u32)) {
+    // Then we go over element in theta and explain it using lifted intervals
+    for j in theta.iter() {
+        // We skip it if it was already explained in theta prime
+        if theta_prime.contains(j) {
             continue;
         }
+        let task = &tasks[j.index()];
 
-        let task = &tasks[j];
+        pumpkin_assert_moderate!(context
+            .is_predicate_satisfied(predicate!(task.start_variable >= earliest_release_time)),);
+        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
+            task.start_variable
+                <= earliest_release_time + p_theta + propagated_task.processing_time
+                    - task.processing_time
+                    - 1
+        )),);
 
         explanation.push(predicate!(task.start_variable >= earliest_release_time));
         explanation.push(predicate!(
-            task.start_variable <= earliest_release_time + p_theta - 1
+            task.start_variable
+                <= earliest_release_time + p_theta + propagated_task.processing_time
+                    - 1
+                    - task.processing_time
         ));
     }
 
@@ -270,28 +308,34 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         while theta_lambda_tree.ect_bar() > lct_j {
             // We know that the condition holds and now we need to retrieve the element in Lambda
             // which was responsible for the condition holding
-            let i = theta_lambda_tree.responsible_ect_bar();
+            if let Some(i) = theta_lambda_tree.responsible_ect_bar() {
+                // We calculate the new bound
+                let new_bound = theta_lambda_tree.ect();
 
-            // Then we check whether we can update; if this is the case then we set the new
-            // lower-bound to be after `ECT_{Theta}`
-            if theta_lambda_tree.ect() > context.lower_bound(&tasks[i.index()].start_variable) {
-                // Propagate
-                context.set_lower_bound(
-                    &tasks[i.index()].start_variable,
-                    theta_lambda_tree.ect(),
-                    create_propagation_explanation(
-                        tasks,
-                        i,
-                        theta_lambda_tree.ect(),
-                        &mut theta_lambda_tree,
-                        elements_in_theta,
-                        context,
-                    ),
-                )?;
+                // Then we check whether we can update; if this is the case then we set the new
+                // lower-bound to be after `ECT_{Theta}`
+                if new_bound > context.lower_bound(&tasks[i.index()].start_variable) {
+                    // Propagate
+                    context.set_lower_bound(
+                        &tasks[i.index()].start_variable,
+                        new_bound,
+                        create_propagation_explanation(
+                            tasks,
+                            i,
+                            new_bound,
+                            &mut theta_lambda_tree,
+                            context,
+                        ),
+                    )?;
+                }
+
+                // Then we remove the element from consideration entirely by removing it from Lambda
+                // and continue to see if there are other elements from Lambda which could be
+                // updated
+                theta_lambda_tree.remove_from_lambda(&tasks[i.index()]);
+            } else {
+                break;
             }
-            // Then we remove the element from consideration entirely by removing it from Lambda
-            // and continue to see if there are other elements from Lambda which could be updated
-            theta_lambda_tree.remove_from_lambda(&tasks[i.index()]);
         }
     }
 
