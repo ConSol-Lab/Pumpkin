@@ -16,22 +16,18 @@ pub mod linear_unsat_sat;
 
 pub trait OptimisationProcedure<
     Var: IntegerVariable,
-    Callback: Fn(&Solver, SolutionReference, &dyn Brancher),
+    B: Brancher,
+    Callback: Fn(&Solver, SolutionReference, &B),
 >
 {
     fn optimise(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult;
 
-    fn on_solution_callback(
-        &self,
-        solver: &Solver,
-        solution: SolutionReference,
-        brancher: &impl Brancher,
-    );
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B);
 
     /// Processes a solution when it is found, it consists of the following procedure:
     /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
@@ -46,7 +42,7 @@ pub trait OptimisationProcedure<
         objective_variable: &impl IntegerVariable,
         best_objective_value: &mut i64,
         best_solution: &mut Solution,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         solver: &Solver,
     ) {
         *best_objective_value = (objective_multiplier
@@ -59,12 +55,7 @@ pub trait OptimisationProcedure<
         self.internal_process_solution(best_solution, brancher, solver)
     }
 
-    fn internal_process_solution(
-        &self,
-        solution: &Solution,
-        brancher: &mut impl Brancher,
-        solver: &Solver,
-    ) {
+    fn internal_process_solution(&self, solution: &Solution, brancher: &mut B, solver: &Solver) {
         brancher.on_solution(solution.as_reference());
 
         self.on_solution_callback(solver, solution.as_reference(), brancher)

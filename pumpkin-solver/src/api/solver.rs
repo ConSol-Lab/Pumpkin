@@ -408,12 +408,13 @@ impl Solver {
     /// it exists.
     pub fn optimise<
         Var: IntegerVariable,
-        Callback: Fn(&Solver, SolutionReference, &dyn Brancher),
+        B: Brancher,
+        Callback: Fn(&Solver, SolutionReference, &B),
     >(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        mut optimisation_procedure: impl OptimisationProcedure<Var, Callback>,
+        mut optimisation_procedure: impl OptimisationProcedure<Var, B, Callback>,
     ) -> OptimisationResult {
         optimisation_procedure.optimise(brancher, termination, self)
     }

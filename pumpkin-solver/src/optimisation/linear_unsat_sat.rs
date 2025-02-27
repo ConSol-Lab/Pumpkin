@@ -20,21 +20,7 @@ pub struct LinearUnsatSat<Var, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var, Callback> LinearUnsatSat<Var, Callback>
-where
-    // The trait bound here is contrary to common
-    // practice; typically the bounds are only enforced
-    // where they are required (in this case, in the
-    // implementation of OptimisationProcedure).
-    //
-    // However, if we don't have the trait bound here,
-    // the compiler may implement `FnOnce` for the
-    // empty closure, which causes problems. So, we
-    // have the hint here.
-    //
-    // Similar is also the case in linear SAT-UNSAT.
-    Callback: Fn(&Solver, SolutionReference, &dyn Brancher),
-{
+impl<Var, Callback> LinearUnsatSat<Var, Callback> {
     /// Create a new instance of [`LinearUnsatSat`].
     pub fn new(
         direction: OptimisationDirection,
@@ -49,12 +35,12 @@ where
     }
 }
 
-impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference, &dyn Brancher)>
-    OptimisationProcedure<Var, Callback> for LinearUnsatSat<Var, Callback>
+impl<Var: IntegerVariable, B: Brancher, Callback: Fn(&Solver, SolutionReference, &B)>
+    OptimisationProcedure<Var, B, Callback> for LinearUnsatSat<Var, Callback>
 {
     fn optimise(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
@@ -152,12 +138,7 @@ impl<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference, &dyn Branche
         }
     }
 
-    fn on_solution_callback(
-        &self,
-        solver: &Solver,
-        solution: SolutionReference,
-        brancher: &impl Brancher,
-    ) {
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
         (self.solution_callback)(solver, solution, brancher)
     }
 }

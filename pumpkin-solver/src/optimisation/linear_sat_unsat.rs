@@ -20,12 +20,7 @@ pub struct LinearSatUnsat<Var, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var, Callback> LinearSatUnsat<Var, Callback>
-where
-    // The trait bound here is not common; see
-    // linear_unsat_sat for more info.
-    Callback: Fn(&Solver, SolutionReference, &dyn Brancher),
-{
+impl<Var, Callback> LinearSatUnsat<Var, Callback> {
     /// Create a new instance of [`LinearSatUnsat`].
     pub fn new(
         direction: OptimisationDirection,
@@ -80,14 +75,15 @@ impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
     }
 }
 
-impl<Var, Callback> OptimisationProcedure<Var, Callback> for LinearSatUnsat<Var, Callback>
+impl<Var, Callback, B> OptimisationProcedure<Var, B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
-    Callback: Fn(&Solver, SolutionReference, &dyn Brancher),
+    B: Brancher,
+    Callback: Fn(&Solver, SolutionReference, &B),
 {
     fn optimise(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
@@ -189,12 +185,7 @@ where
         }
     }
 
-    fn on_solution_callback(
-        &self,
-        solver: &Solver,
-        solution: SolutionReference,
-        brancher: &impl Brancher,
-    ) {
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
         (self.solution_callback)(solver, solution, brancher)
     }
 }

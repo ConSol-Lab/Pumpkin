@@ -113,16 +113,17 @@ pub(crate) fn solve(
         }
     };
 
-    let callback = |solver: &Solver, solution: SolutionReference<'_>, brancher: &(dyn Brancher)| {
-        solution_callback(
-            brancher,
-            Some(objective),
-            options.all_solutions,
-            &outputs,
-            solver,
-            solution,
-        );
-    };
+    let callback =
+        |solver: &Solver, solution: SolutionReference<'_>, brancher: &DynamicBrancher| {
+            solution_callback(
+                brancher,
+                Some(objective),
+                options.all_solutions,
+                &outputs,
+                solver,
+                solution,
+            );
+        };
 
     let result = match options.optimisation_strategy {
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
