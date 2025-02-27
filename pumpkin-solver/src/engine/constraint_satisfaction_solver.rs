@@ -1174,11 +1174,11 @@ impl ConstraintSatisfactionSolver {
                 );
                 propagator.propagate(context)
             };
-            if self.assignments.get_decision_level() == 0
-                && self.internal_parameters.proof_log.is_logging_inferences()
-            {
+
+            if self.assignments.get_decision_level() == 0 {
                 self.log_root_propagation_to_proof(num_trail_entries_before, tag);
             }
+
             match propagation_status {
                 Ok(_) => {
                     // Notify other propagators of the propagations and continue.
@@ -1249,6 +1249,10 @@ impl ConstraintSatisfactionSolver {
         start_trail_index: usize,
         tag: Option<NonZero<u32>>,
     ) {
+        if !self.internal_parameters.proof_log.is_logging_inferences() {
+            return;
+        }
+
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
             let reason_ref = entry
