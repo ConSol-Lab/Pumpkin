@@ -42,7 +42,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution {
+    pub fn next_solution(&mut self) -> IteratedSolution<B> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             self.solver
                 .get_satisfaction_solver_mut()
@@ -85,9 +85,9 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     clippy::large_enum_variant,
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
-pub enum IteratedSolution<'a> {
+pub enum IteratedSolution<'a, B: Brancher> {
     /// A new solution was identified.
-    Solution(Solution, &'a Solver, &'a dyn Brancher),
+    Solution(Solution, &'a Solver, &'a B),
 
     /// No more solutions exist.
     Finished,
@@ -99,7 +99,7 @@ pub enum IteratedSolution<'a> {
     Unsatisfiable,
 }
 
-impl Debug for IteratedSolution<'_> {
+impl<B: Brancher> Debug for IteratedSolution<'_, B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             IteratedSolution::Solution(solution, _, _) => write!(f, "Solution({solution:?})"),
