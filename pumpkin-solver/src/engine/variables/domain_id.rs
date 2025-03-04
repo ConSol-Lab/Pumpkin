@@ -9,7 +9,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
+use crate::engine::PropagatorWatchers;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
@@ -95,11 +95,15 @@ impl IntegerVariable for DomainId {
         assignment.tighten_upper_bound(*self, value, reason)
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, watchers: &mut PropagatorWatchers, events: EnumSet<IntDomainEvent>) {
         watchers.watch_all(*self, events);
     }
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all_backtrack(
+        &self,
+        watchers: &mut PropagatorWatchers,
+        events: EnumSet<IntDomainEvent>,
+    ) {
         watchers.watch_all_backtrack(*self, events);
     }
 

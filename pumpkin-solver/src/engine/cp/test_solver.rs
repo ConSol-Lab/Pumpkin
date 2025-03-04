@@ -7,7 +7,10 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
+use super::propagation::PropagatorVarId;
+use super::DomainEventWatchList;
 use super::TrailedAssignments;
+use super::WatchList;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -25,7 +28,6 @@ use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
-use crate::engine::WatchListCP;
 use crate::predicates::PropositionalConjunction;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -37,7 +39,7 @@ pub(crate) struct TestSolver {
     pub semantic_minimiser: SemanticMinimiser,
     pub stateful_assignments: TrailedAssignments,
     domain_faithfulness: DomainFaithfulness,
-    watch_list: WatchListCP,
+    watch_list: DomainEventWatchList<DomainId, PropagatorVarId>,
 }
 
 impl Default for TestSolver {
@@ -231,7 +233,7 @@ impl TestSolver {
                 let local_id = LocalId::from(domain.id);
                 let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
-                for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
+                for propagator_var in self.watch_list.get_affected(event, domain) {
                     let context = StatefulPropagationContext::new(
                         &mut self.stateful_assignments,
                         &self.assignments,
