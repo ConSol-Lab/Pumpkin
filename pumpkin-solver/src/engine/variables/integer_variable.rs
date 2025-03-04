@@ -7,7 +7,7 @@ use crate::engine::reason::ReasonRef;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
+use crate::engine::PropagatorWatchers;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]) or adjusting the bounds
@@ -70,9 +70,13 @@ pub trait IntegerVariable:
     ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+    fn watch_all(&self, watchers: &mut PropagatorWatchers, events: EnumSet<IntDomainEvent>);
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+    fn watch_all_backtrack(
+        &self,
+        watchers: &mut PropagatorWatchers,
+        events: EnumSet<IntDomainEvent>,
+    );
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;

@@ -9,9 +9,10 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
+use crate::engine::DomainEventWatchList;
+use crate::engine::PropagatorWatchers;
 use crate::engine::TrailedAssignments;
-use crate::engine::WatchListCP;
-use crate::engine::Watchers;
+use crate::variables::DomainId;
 
 /// [`PropagatorInitialisationContext`] is used when [`Propagator`]s are initialised after creation.
 ///
@@ -20,7 +21,7 @@ use crate::engine::Watchers;
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
-    watch_list: &'a mut WatchListCP,
+    watch_list: &'a mut DomainEventWatchList<DomainId, PropagatorVarId>,
     pub(crate) stateful_assignments: &'a mut TrailedAssignments,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
@@ -30,7 +31,7 @@ pub(crate) struct PropagatorInitialisationContext<'a> {
 
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
-        watch_list: &'a mut WatchListCP,
+        watch_list: &'a mut DomainEventWatchList<DomainId, PropagatorVarId>,
         stateful_assignments: &'a mut TrailedAssignments,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
@@ -83,7 +84,7 @@ impl PropagatorInitialisationContext<'_> {
 
         self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
 
-        let mut watchers = Watchers::new(propagator_var, self.watch_list);
+        let mut watchers = PropagatorWatchers::new(propagator_var, self.watch_list);
         var.watch_all(&mut watchers, domain_events.get_int_events());
 
         var
@@ -115,7 +116,7 @@ impl PropagatorInitialisationContext<'_> {
 
         self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
 
-        let mut watchers = Watchers::new(propagator_var, self.watch_list);
+        let mut watchers = PropagatorWatchers::new(propagator_var, self.watch_list);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
 
         var

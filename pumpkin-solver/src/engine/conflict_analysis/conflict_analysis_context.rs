@@ -11,15 +11,16 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::ExplanationContext;
+use crate::engine::propagation::PropagatorVarId;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::DomainEventWatchList;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedAssignments;
-use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::ProofLog;
 use crate::pumpkin_assert_simple;
@@ -37,7 +38,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
     pub(crate) last_notified_cp_trail_index: &'a mut usize,
-    pub(crate) watch_list_cp: &'a mut WatchListCP,
+    pub(crate) watch_list_cp: &'a mut DomainEventWatchList<DomainId, PropagatorVarId>,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
     pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
 

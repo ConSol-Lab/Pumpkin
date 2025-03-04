@@ -19,10 +19,12 @@ use super::nogoods::Lbd;
 use super::propagation::contexts::StatefulPropagationContext;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
+use super::propagation::PropagatorVarId;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
+use super::DomainEventWatchList;
 use super::ResolutionResolver;
 use super::TrailedAssignments;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -39,7 +41,7 @@ use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
-use crate::engine::cp::WatchListCP;
+use crate::engine::cp::WatchList;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
@@ -119,7 +121,7 @@ pub struct ConstraintSatisfactionSolver {
     pub(crate) assignments: Assignments,
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
-    watch_list_cp: WatchListCP,
+    watch_list_cp: DomainEventWatchList<DomainId, PropagatorVarId>,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -221,14 +223,14 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn process_backtrack_events(
-        watch_list_cp: &mut WatchListCP,
+        watch_list_cp: &mut DomainEventWatchList<DomainId, PropagatorVarId>,
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         assignments: &mut Assignments,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
-        if watch_list_cp.is_watching_any_backtrack_events() {
+        if watch_list_cp.is_watching_anything_backtrack() {
             backtrack_event_drain.extend(assignments.drain_backtrack_domain_events());
 
             if backtrack_event_drain.is_empty() {
@@ -236,9 +238,7 @@ impl ConstraintSatisfactionSolver {
             }
 
             for (event, domain) in backtrack_event_drain.drain(..) {
-                for propagator_var in
-                    watch_list_cp.get_backtrack_affected_propagators(event, domain)
-                {
+                for propagator_var in watch_list_cp.get_affected_backtrack(event, domain) {
                     let propagator = &mut propagators[propagator_var.propagator];
                     let context = PropagationContext::new(assignments);
 
@@ -317,7 +317,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.stateful_assignments,
             );
             // Now notify other propagators subscribed to this event.
-            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
+            for propagator_var in self.watch_list_cp.get_affected(event, domain) {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
                 Self::notify_propagator(
@@ -404,7 +404,7 @@ impl ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
             assignments: Assignments::default(),
-            watch_list_cp: WatchListCP::default(),
+            watch_list_cp: DomainEventWatchList::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             event_drain: vec![],
@@ -1062,7 +1062,7 @@ impl ConstraintSatisfactionSolver {
         last_notified_cp_trail_index: &mut usize,
         reason_store: &mut ReasonStore,
         propagator_queue: &mut PropagatorQueue,
-        watch_list_cp: &mut WatchListCP,
+        watch_list_cp: &mut DomainEventWatchList<DomainId, PropagatorVarId>,
         propagators: &mut PropagatorStore,
         event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
@@ -1078,7 +1078,7 @@ impl ConstraintSatisfactionSolver {
             .synchronise(
                 backtrack_level,
                 *last_notified_cp_trail_index,
-                watch_list_cp.is_watching_any_backtrack_events(),
+                watch_list_cp.is_watching_anything_backtrack(),
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {

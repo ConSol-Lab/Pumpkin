@@ -12,7 +12,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
+use crate::engine::PropagatorWatchers;
 use crate::math::num_ext::NumExt;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
@@ -181,7 +181,7 @@ where
         }
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, watchers: &mut PropagatorWatchers, mut events: EnumSet<IntDomainEvent>) {
         let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
@@ -192,7 +192,7 @@ where
 
     fn watch_all_backtrack(
         &self,
-        watchers: &mut Watchers<'_>,
+        watchers: &mut PropagatorWatchers,
         mut events: EnumSet<IntDomainEvent>,
     ) {
         let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;

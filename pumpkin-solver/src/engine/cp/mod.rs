@@ -7,16 +7,14 @@ mod propagator_queue;
 pub(crate) mod reason;
 pub(crate) mod test_solver;
 mod trailed;
-mod watch_list_cp;
+mod watch_lists;
 
 pub(crate) use assignments::Assignments;
 pub(crate) use assignments::EmptyDomain;
 pub(crate) use event_sink::*;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use trailed::*;
-pub(crate) use watch_list_cp::IntDomainEvent;
-pub(crate) use watch_list_cp::WatchListCP;
-pub(crate) use watch_list_cp::Watchers;
+pub(crate) use watch_lists::*;
 
 #[cfg(test)]
 mod tests {

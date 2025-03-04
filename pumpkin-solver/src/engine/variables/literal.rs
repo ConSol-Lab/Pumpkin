@@ -13,7 +13,7 @@ use crate::engine::variables::AffineView;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
+use crate::engine::PropagatorWatchers;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
@@ -146,7 +146,7 @@ impl IntegerVariable for Literal {
             .set_upper_bound(assignment, value, reason)
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, watchers: &mut PropagatorWatchers, events: EnumSet<IntDomainEvent>) {
         self.integer_variable.watch_all(watchers, events)
     }
 
@@ -154,7 +154,11 @@ impl IntegerVariable for Literal {
         self.integer_variable.unpack_event(event)
     }
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all_backtrack(
+        &self,
+        watchers: &mut PropagatorWatchers,
+        events: EnumSet<IntDomainEvent>,
+    ) {
         self.integer_variable.watch_all_backtrack(watchers, events)
     }
 }
