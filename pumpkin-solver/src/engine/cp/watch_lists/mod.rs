@@ -1,12 +1,18 @@
 mod domain_event_watch_list;
 mod int_domain_event;
+mod predicate_domain_event;
+mod predicate_event_watch_list;
 mod watch_list_cp;
+mod watch_list_manager;
 
 pub(crate) use domain_event_watch_list::*;
 use enumset::EnumSet;
 use enumset::EnumSetType;
 pub(crate) use int_domain_event::*;
+pub(crate) use predicate_domain_event::*;
+pub(crate) use predicate_event_watch_list::*;
 pub(crate) use watch_list_cp::*;
+pub(crate) use watch_list_manager::*;
 
 /// A trait specifying the behaviour of watch lists.
 ///

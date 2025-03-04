@@ -7,10 +7,9 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
-use super::propagation::PropagatorVarId;
-use super::DomainEventWatchList;
 use super::TrailedAssignments;
 use super::WatchList;
+use super::WatchListManager;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -39,7 +38,7 @@ pub(crate) struct TestSolver {
     pub semantic_minimiser: SemanticMinimiser,
     pub stateful_assignments: TrailedAssignments,
     domain_faithfulness: DomainFaithfulness,
-    watch_list: DomainEventWatchList<DomainId, PropagatorVarId>,
+    watch_list: WatchListManager,
 }
 
 impl Default for TestSolver {
@@ -54,14 +53,14 @@ impl Default for TestSolver {
             stateful_assignments: Default::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
-        solver.watch_list.grow();
+        solver.watch_list.grow_cp();
         solver
     }
 }
 
 impl TestSolver {
     pub(crate) fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
-        self.watch_list.grow();
+        self.watch_list.grow_cp();
         self.assignments.grow(lb, ub)
     }
 
@@ -233,7 +232,7 @@ impl TestSolver {
                 let local_id = LocalId::from(domain.id);
                 let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
-                for propagator_var in self.watch_list.get_affected(event, domain) {
+                for propagator_var in self.watch_list.get_affected_cp(event, domain) {
                     let context = StatefulPropagationContext::new(
                         &mut self.stateful_assignments,
                         &self.assignments,
