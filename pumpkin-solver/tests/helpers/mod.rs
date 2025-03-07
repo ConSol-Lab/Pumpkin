@@ -57,7 +57,7 @@ pub(crate) fn run_solver_with_options(
     let solver = PathBuf::from(env!("CARGO_BIN_EXE_pumpkin-solver"));
 
     let add_extension = |extension: &str| -> PathBuf {
-        if let Some(prefix) = prefix {
+        if let Some(prefix) = prefix.and_then(|s| if s.is_empty() { None } else { Some(s) }) {
             instance_path.with_extension(format!("{prefix}.{extension}"))
         } else {
             instance_path.with_extension(extension)
@@ -282,30 +282,31 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
         options.push("-a".to_owned());
     }
 
-    if matches!(test_type, TestType::Unsatisfiable | TestType::Optimality) {
-        options.push("--proof".to_owned());
-        options.push(format!(
-            "{}/tests/{folder_name}/{instance_name}.drcp",
-            env!("CARGO_MANIFEST_DIR")
-        ));
-    }
-
-    let files = run_solver_with_options(instance_path, false, options, Some(prefix));
+    let files = run_solver_with_options(
+        instance_path,
+        matches!(test_type, TestType::Unsatisfiable | TestType::Optimality),
+        options,
+        Some(prefix),
+    );
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
 
-    let expected_file =
-        std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
+    if test_type == TestType::Unsatisfiable {
+        assert!(output.contains("=====UNSATISFIABLE====="));
+    } else {
+        let expected_file =
+            std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
 
-    let actual_solutions = output
-        .parse::<Solutions<ORDERED>>()
-        .expect("Valid solution");
+        let actual_solutions = output
+            .parse::<Solutions<ORDERED>>()
+            .expect("Valid solution");
 
-    let expected_solutions = expected_file
-        .parse::<Solutions<ORDERED>>()
-        .expect("Valid solution");
+        let expected_solutions = expected_file
+            .parse::<Solutions<ORDERED>>()
+            .expect("Valid solution");
 
-    assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
+        assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
+    }
 
     output
 }
