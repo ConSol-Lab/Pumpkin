@@ -57,6 +57,8 @@ use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::proof::finalize_proof;
+use crate::proof::FinalizingContext;
 use crate::proof::ProofLog;
 use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
@@ -360,39 +362,21 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        pumpkin_assert_simple!(
-            self.is_conflicting(),
-            "Proof attempted to be completed while not in conflicting state"
-        );
-        let mut conflict_analysis_context = ConflictAnalysisContext {
-            assignments: &mut self.assignments,
-            counters: &mut self.solver_statistics,
-            solver_state: &mut self.state,
-            reason_store: &mut self.reason_store,
-            brancher: &mut DummyBrancher,
-            semantic_minimiser: &mut self.semantic_minimiser,
+        let context = FinalizingContext {
+            conflict: &self.state.get_conflict_info(),
             propagators: &mut self.propagators,
-            last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-            watch_list_cp: &mut self.watch_list_cp,
-            propagator_queue: &mut self.propagator_queue,
-            event_drain: &mut self.event_drain,
-            backtrack_event_drain: &mut self.backtrack_event_drain,
-            should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
-            is_completing_proof: true,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
-            stateful_assignments: &mut self.stateful_assignments,
+            assignments: &self.assignments,
+            reason_store: &mut self.reason_store,
         };
 
-        let result = self
-            .conflict_resolver
-            .resolve_conflict(&mut conflict_analysis_context)
-            .expect("Should have a nogood");
+        finalize_proof(context);
 
         let _ = self
             .internal_parameters
             .proof_log
-            .log_learned_clause(result.predicates, &self.variable_names);
+            .log_learned_clause([], &self.variable_names);
     }
 }
 
@@ -511,6 +495,10 @@ impl ConstraintSatisfactionSolver {
         name: Option<String>,
     ) -> Literal {
         let literal = self.create_new_literal(name);
+
+        self.internal_parameters
+            .proof_log
+            .reify_predicate(literal, predicate);
 
         // If literal --> predicate
         let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
@@ -1304,6 +1292,12 @@ impl ConstraintSatisfactionSolver {
 
                 let possible_step_id = self.unit_nogood_step_ids.get(&trail_entry.predicate);
                 let Some(step_id) = possible_step_id else {
+                    dbg!(self
+                        .unit_nogood_step_ids
+                        .iter()
+                        .filter(|(pred, _)| pred.get_domain() == trail_entry.predicate.get_domain())
+                        .collect::<Vec<_>>());
+
                     panic!(
                         "Getting unit nogood step id for {:?} but it does not exist.",
                         trail_entry.predicate

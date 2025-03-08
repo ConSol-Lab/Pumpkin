@@ -1,0 +1,92 @@
+//! Responsible for finalizing the proof in the solver.
+//!
+//! The other resolvers are not fit for this job.
+
+use drcp_format::steps::StepId;
+
+use crate::{
+    basic_types::{HashMap, StoredConflictInfo},
+    engine::{
+        conflict_analysis::ConflictAnalysisContext,
+        propagation::{store::PropagatorStore, CurrentNogood},
+        reason::ReasonStore,
+        Assignments,
+    },
+    predicates::{Predicate, PropositionalConjunction},
+};
+
+use super::ProofLog;
+
+pub(crate) struct FinalizingContext<'a> {
+    pub(crate) conflict: &'a StoredConflictInfo,
+    pub(crate) propagators: &'a mut PropagatorStore,
+    pub(crate) proof_log: &'a mut ProofLog,
+    pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
+    pub(crate) assignments: &'a Assignments,
+    pub(crate) reason_store: &'a mut ReasonStore,
+}
+
+pub(crate) fn finalize_proof(mut context: FinalizingContext<'_>) {
+    if !context.proof_log.is_logging_inferences() {
+        return;
+    }
+
+    let conflict = get_conflict_nogood(&mut context);
+
+    for predicate in conflict {
+        explain(&mut context, predicate);
+    }
+}
+
+fn explain(context: &mut FinalizingContext<'_>, predicate: Predicate) {
+    // If the predicate is a root-level assignment, there is nothing to explain.
+    if context.assignments.is_initial_bound(predicate) {
+        return;
+    }
+
+    // If the predicate is a unit-nogood, we simply add that nogood step as a propagation.
+    if let Some(id) = context.unit_nogood_step_ids.get(&predicate) {
+        context.proof_log.add_propagation(*id);
+        return;
+    }
+
+    // There must be some combination of other factors.
+    let mut reason = vec![];
+    ConflictAnalysisContext::get_propagation_reason(
+        predicate,
+        context.assignments,
+        CurrentNogood::empty(),
+        context.reason_store,
+        context.propagators,
+        context.proof_log,
+        context.unit_nogood_step_ids,
+        &mut reason,
+    );
+
+    assert!(!reason.is_empty());
+
+    for p in reason {
+        explain(context, p);
+    }
+}
+
+fn get_conflict_nogood(context: &mut FinalizingContext<'_>) -> PropositionalConjunction {
+    match context.conflict {
+        StoredConflictInfo::Propagator {
+            conflict_nogood,
+            propagator_id,
+        } => {
+            let _ = context.proof_log.log_inference(
+                context.propagators.get_tag(*propagator_id),
+                conflict_nogood.iter().copied(),
+                None,
+            );
+
+            conflict_nogood.clone()
+        }
+        StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
+        StoredConflictInfo::RootLevelConflict(_) => {
+            unreachable!("There should always be a specified conflicting constraint.")
+        }
+    }
+}

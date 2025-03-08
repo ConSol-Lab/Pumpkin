@@ -6,6 +6,7 @@
 //! has completed.
 mod dimacs;
 mod proof_literals;
+mod finalizer;
 
 use std::fs::File;
 use std::num::NonZero;
@@ -20,8 +21,12 @@ use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
 use crate::predicates::Predicate;
 use crate::variable_names::VariableNames;
+use crate::variables::Literal;
 #[cfg(doc)]
 use crate::Solver;
+
+pub(crate) use finalizer::finalize_proof;
+pub(crate) use finalizer::FinalizingContext;
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
 /// allow the following types of proofs:
@@ -195,6 +200,14 @@ impl ProofLog {
                 ..
             })
         )
+    }
+    
+    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
+        let Some(ProofImpl::CpProof { ref mut writer, .. }) = self.internal_proof else {
+            return;
+        };
+
+        writer.literals_mut().reify_predicate(literal, predicate);
     }
 }
 
