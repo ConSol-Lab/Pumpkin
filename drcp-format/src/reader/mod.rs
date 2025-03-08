@@ -250,7 +250,11 @@ fn nogood_step(input: &str) -> IResult<&str, Nogood<Vec<NonZero<i32>>, Vec<StepI
             step_id,
             tag(" "),
             literal_list,
-            opt(preceded(tag(" 0 "), separated_list0(tag(" "), step_id))),
+            opt(preceded(
+                // Hack! If `literal_list` is empty, then the space will be parsed already.
+                alt((tag("0 "), tag(" 0 "))),
+                separated_list0(tag(" "), step_id),
+            )),
         )),
         |(_, id, _, literals, hints)| Nogood {
             id,

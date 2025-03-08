@@ -1,0 +1,15 @@
+[package]
+name = "drcp-debugger"
+version = "0.1.0"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = "1.0.97"
+clap = { version = "4.5.31", features = ["derive"] }
+drcp-format = { path = "../drcp-format" }
+
+[lints]
+workspace = true
