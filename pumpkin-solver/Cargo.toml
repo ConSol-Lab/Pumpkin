@@ -31,7 +31,6 @@ enum-map = "2.7.3"
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
-paste = "1.0.15"
 regex = "1.11.0"
 stringcase = "0.3.0"
 wait-timeout = "0.2.0"

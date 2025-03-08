@@ -123,18 +123,16 @@ pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
             );
 
             let stream: TokenStream = quote! {
-                paste::item! {
-                    #[test]
-                    fn #test_name() {
-                        check_statistic_equality(
-                            "cumulative",
-                            "mzn_constraints",
-                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#first_name)),"--cumulative-explanation-type", #explanation_type, #options],
-                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#second_name)),"--cumulative-explanation-type", #explanation_type, #options],
-                            &format!("equality_{}_{}_{}", #first_name, #explanation_type, #option_string),
-                            &format!("equality_{}_{}_{}", #second_name, #explanation_type, #option_string),
-                        );
-                    }
+                #[test]
+                fn #test_name() {
+                    check_statistic_equality(
+                        "cumulative",
+                        "mzn_constraints",
+                        vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#first_name)),"--cumulative-explanation-type", #explanation_type, #options],
+                        vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#second_name)),"--cumulative-explanation-type", #explanation_type, #options],
+                        &format!("equality_{}_{}_{}", #first_name, #explanation_type, #option_string),
+                        &format!("equality_{}_{}_{}", #second_name, #explanation_type, #option_string),
+                    );
                 }
             }
             .into();
