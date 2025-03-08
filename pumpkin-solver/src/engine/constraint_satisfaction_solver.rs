@@ -341,10 +341,6 @@ impl ConstraintSatisfactionSolver {
         SolutionReference::new(&self.assignments)
     }
 
-    pub(crate) fn is_conflicting(&self) -> bool {
-        self.state.is_conflicting()
-    }
-
     /// Conclude the proof with the unsatisfiable claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
@@ -1679,17 +1675,6 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         }
-    }
-}
-
-struct DummyBrancher;
-impl Brancher for DummyBrancher {
-    fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
-        todo!()
-    }
-
-    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
-        todo!()
     }
 }
 
