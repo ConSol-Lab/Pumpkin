@@ -4,18 +4,16 @@
 
 use drcp_format::steps::StepId;
 
-use crate::{
-    basic_types::{HashMap, StoredConflictInfo},
-    engine::{
-        conflict_analysis::ConflictAnalysisContext,
-        propagation::{store::PropagatorStore, CurrentNogood},
-        reason::ReasonStore,
-        Assignments,
-    },
-    predicates::{Predicate, PropositionalConjunction},
-};
-
 use super::ProofLog;
+use crate::basic_types::HashMap;
+use crate::basic_types::StoredConflictInfo;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::reason::ReasonStore;
+use crate::engine::Assignments;
+use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
 
 pub(crate) struct FinalizingContext<'a> {
     pub(crate) conflict: &'a StoredConflictInfo,
