@@ -1,3 +1,5 @@
+#![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+
 use std::num::NonZero;
 use std::path::PathBuf;
 
