@@ -1,12 +1,13 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
-use drcp_format::{
-    reader::ProofReader,
-    steps::{Conclusion, Step},
-    LiteralDefinitions,
-};
+use drcp_format::reader::ProofReader;
+use drcp_format::steps::Conclusion;
+use drcp_format::steps::Step;
+use drcp_format::LiteralDefinitions;
 
 #[derive(Parser)]
 struct Cli {
