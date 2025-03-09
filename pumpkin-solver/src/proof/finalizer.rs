@@ -6,7 +6,6 @@ use drcp_format::steps::StepId;
 
 use super::ProofLog;
 use crate::basic_types::HashMap;
-use crate::basic_types::StoredConflictInfo;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
@@ -16,7 +15,7 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 
 pub(crate) struct FinalizingContext<'a> {
-    pub(crate) conflict: &'a StoredConflictInfo,
+    pub(crate) conflict: PropositionalConjunction,
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
@@ -24,14 +23,12 @@ pub(crate) struct FinalizingContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
 }
 
-pub(crate) fn finalize_proof(mut context: FinalizingContext<'_>) {
+pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
     if !context.proof_log.is_logging_inferences() {
         return;
     }
 
-    let conflict = get_conflict_nogood(&mut context);
-
-    for predicate in conflict {
+    for predicate in context.conflict {
         explain_root_assignment(
             &mut RootExplanationContext {
                 propagators: context.propagators,
@@ -92,26 +89,5 @@ pub(crate) fn explain_root_assignment(
 
     for p in reason {
         explain_root_assignment(context, p);
-    }
-}
-
-fn get_conflict_nogood(context: &mut FinalizingContext<'_>) -> PropositionalConjunction {
-    match context.conflict {
-        StoredConflictInfo::Propagator {
-            conflict_nogood,
-            propagator_id,
-        } => {
-            let _ = context.proof_log.log_inference(
-                context.propagators.get_tag(*propagator_id),
-                conflict_nogood.iter().copied(),
-                None,
-            );
-
-            conflict_nogood.clone()
-        }
-        StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
-        StoredConflictInfo::RootLevelConflict(_) => {
-            unreachable!("There should always be a specified conflicting constraint.")
-        }
     }
 }

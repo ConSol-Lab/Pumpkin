@@ -361,8 +361,27 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        let conflict = match self.state.get_conflict_info() {
+            StoredConflictInfo::Propagator {
+                conflict_nogood,
+                propagator_id,
+            } => {
+                let _ = self.internal_parameters.proof_log.log_inference(
+                    self.propagators.get_tag(propagator_id),
+                    conflict_nogood.iter().copied(),
+                    None,
+                );
+
+                conflict_nogood.clone()
+            }
+            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
+            StoredConflictInfo::RootLevelConflict(_) => {
+                unreachable!("There should always be a specified conflicting constraint.")
+            }
+        };
+
         let context = FinalizingContext {
-            conflict: &self.state.get_conflict_info(),
+            conflict,
             propagators: &mut self.propagators,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
@@ -719,6 +738,8 @@ impl ConstraintSatisfactionSolver {
                 &mut self.stateful_assignments,
             );
             self.state.declare_ready();
+        } else {
+            self.state.declare_infeasible();
         }
     }
 }
@@ -1479,19 +1500,47 @@ impl ConstraintSatisfactionSolver {
             "Clauses can only be added in the root"
         );
 
+        if self.state.is_inconsistent() {
+            return Err(ConstraintOperationError::InfeasiblePropagator);
+        }
+
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`
+
+        let mut are_all_falsified_at_root = true;
         let predicates = predicates
             .into_iter()
-            .map(|predicate| !predicate)
+            .map(|predicate| {
+                are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
+                !predicate
+            })
             .collect::<Vec<_>>();
 
         if predicates.is_empty() {
             // This breaks the proof. If it occurs, we should fix up the proof logging.
-            //
             // The main issue is that nogoods are not tagged. In the proof that is problematic.
-            panic!("Adding an empty clause is not supported.");
+            self.state
+                .declare_conflict(StoredConflictInfo::RootLevelConflict(
+                    ConstraintOperationError::InfeasibleClause,
+                ));
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+
+        if are_all_falsified_at_root {
+            finalize_proof(FinalizingContext {
+                conflict: predicates.into(),
+                propagators: &mut self.propagators,
+                proof_log: &mut self.internal_parameters.proof_log,
+                unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                assignments: &self.assignments,
+                reason_store: &mut self.reason_store,
+            });
+            self.state
+                .declare_conflict(StoredConflictInfo::RootLevelConflict(
+                    ConstraintOperationError::InfeasibleClause,
+                ));
+            return Err(ConstraintOperationError::InfeasibleClause);
         }
 
         if let Err(constraint_operation_error) = self.add_nogood(predicates) {
