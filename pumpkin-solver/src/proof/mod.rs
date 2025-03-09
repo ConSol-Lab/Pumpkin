@@ -16,8 +16,8 @@ use std::path::PathBuf;
 
 use drcp_format::writer::ProofWriter;
 pub use drcp_format::Format;
-pub(crate) use finalizer::finalize_proof;
-pub(crate) use finalizer::FinalizingContext;
+
+pub(crate) use finalizer::*;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;

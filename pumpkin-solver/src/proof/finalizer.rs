@@ -32,11 +32,38 @@ pub(crate) fn finalize_proof(mut context: FinalizingContext<'_>) {
     let conflict = get_conflict_nogood(&mut context);
 
     for predicate in conflict {
-        explain(&mut context, predicate);
+        explain_root_assignment(
+            &mut RootExplanationContext {
+                propagators: context.propagators,
+                proof_log: context.proof_log,
+                unit_nogood_step_ids: context.unit_nogood_step_ids,
+                assignments: context.assignments,
+                reason_store: context.reason_store,
+            },
+            predicate,
+        );
     }
 }
 
-fn explain(context: &mut FinalizingContext<'_>, predicate: Predicate) {
+pub(crate) struct RootExplanationContext<'a> {
+    pub(crate) propagators: &'a mut PropagatorStore,
+    pub(crate) proof_log: &'a mut ProofLog,
+    pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
+    pub(crate) assignments: &'a Assignments,
+    pub(crate) reason_store: &'a mut ReasonStore,
+}
+
+pub(crate) fn explain_root_assignment(
+    context: &mut RootExplanationContext<'_>,
+    predicate: Predicate,
+) {
+    assert_eq!(
+        context
+            .assignments
+            .get_decision_level_for_predicate(&predicate),
+        Some(0)
+    );
+
     // If the predicate is a root-level assignment, there is nothing to explain.
     if context.assignments.is_initial_bound(predicate) {
         return;
@@ -64,7 +91,7 @@ fn explain(context: &mut FinalizingContext<'_>, predicate: Predicate) {
     assert!(!reason.is_empty());
 
     for p in reason {
-        explain(context, p);
+        explain_root_assignment(context, p);
     }
 }
 

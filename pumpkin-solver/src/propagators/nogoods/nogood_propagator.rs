@@ -997,7 +997,9 @@ impl NogoodPropagator {
 
         // Unit nogoods are added as root assignments rather than as nogoods.
         if nogood.len() == 1 {
-            // Get the reason for the propagation.
+            // Get the reason for the propagation. Note that preprocessing removes literals from
+            // `nogood` that are still present in `input_nogood`, so this does not necessarily
+            // result in an empty reason.
             input_nogood.retain(|&p| p != nogood[0]);
 
             // Post the negated predicate at the root to respect the nogood.

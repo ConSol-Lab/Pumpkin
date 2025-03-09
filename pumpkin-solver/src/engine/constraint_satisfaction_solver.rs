@@ -58,9 +58,11 @@ use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::proof::FinalizingContext;
 use crate::proof::ProofLog;
+use crate::proof::RootExplanationContext;
 use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
@@ -505,14 +507,6 @@ impl ConstraintSatisfactionSolver {
         let _ = self.add_clause(vec![!literal.get_false_predicate(), !predicate]);
 
         literal
-    }
-
-    pub fn link_literal_to_predicate(&mut self, literal: Literal, predicate: Predicate) {
-        // If literal --> predicate
-        let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
-
-        // If !literal --> !predicate
-        let _ = self.add_clause(vec![!literal.get_false_predicate(), !predicate]);
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
@@ -1235,6 +1229,8 @@ impl ConstraintSatisfactionSolver {
         start_trail_index: usize,
         tag: Option<NonZero<u32>>,
     ) {
+        assert_eq!(self.get_decision_level(), 0);
+
         if !self.internal_parameters.proof_log.is_logging_inferences() {
             return;
         }
@@ -1278,31 +1274,15 @@ impl ConstraintSatisfactionSolver {
             while let Some(premise) = to_explain.pop_front() {
                 pumpkin_assert_simple!(self.assignments.is_predicate_satisfied(premise));
 
-                let index = self
-                    .assignments
-                    .get_trail_position(&premise)
-                    .expect("Expected premise to be true");
-                let trail_entry = self.assignments.get_trail_entry(index);
-
-                if self.assignments.is_initial_bound(trail_entry.predicate) {
-                    continue;
-                }
-
-                let possible_step_id = self.unit_nogood_step_ids.get(&trail_entry.predicate);
-                let Some(step_id) = possible_step_id else {
-                    dbg!(self
-                        .unit_nogood_step_ids
-                        .iter()
-                        .filter(|(pred, _)| pred.get_domain() == trail_entry.predicate.get_domain())
-                        .collect::<Vec<_>>());
-
-                    panic!(
-                        "Getting unit nogood step id for {:?} but it does not exist.",
-                        trail_entry.predicate
-                    );
+                let mut context = RootExplanationContext {
+                    propagators: &mut self.propagators,
+                    proof_log: &mut self.internal_parameters.proof_log,
+                    unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                    assignments: &self.assignments,
+                    reason_store: &mut self.reason_store,
                 };
 
-                self.internal_parameters.proof_log.add_propagation(*step_id);
+                explain_root_assignment(&mut context, premise);
             }
 
             // Log the nogood which adds the root-level knowledge to the proof.
@@ -1522,7 +1502,6 @@ impl ConstraintSatisfactionSolver {
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
                     constraint_operation_error,
                 ));
-
             return Err(constraint_operation_error);
         }
         Ok(())
