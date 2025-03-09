@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use drcp_format::steps::StepId;
-use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
