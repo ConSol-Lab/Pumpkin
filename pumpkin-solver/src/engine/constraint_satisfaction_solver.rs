@@ -662,7 +662,6 @@ impl ConstraintSatisfactionSolver {
                     backtrack_event_drain: &mut self.backtrack_event_drain,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
-                    is_completing_proof: false,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     stateful_assignments: &mut self.stateful_assignments,
                 };
@@ -908,7 +907,6 @@ impl ConstraintSatisfactionSolver {
             backtrack_event_drain: &mut self.backtrack_event_drain,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
-            is_completing_proof: false,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             stateful_assignments: &mut self.stateful_assignments,
         };
