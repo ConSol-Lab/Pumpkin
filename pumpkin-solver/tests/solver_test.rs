@@ -46,7 +46,7 @@ fn proof_with_reified_literals() {
 fn proof_with_equality_unit_nogood_step() {
     let mut solver = Solver::with_options(SolverOptions {
         proof_log: ProofLog::cp(
-            &PathBuf::from("./solver_proof.drcp"),
+            &PathBuf::from("/tmp/solver_proof.drcp"),
             drcp_format::Format::Text,
             true,
             true,
