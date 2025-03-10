@@ -737,8 +737,6 @@ impl ConstraintSatisfactionSolver {
                 &mut self.stateful_assignments,
             );
             self.state.declare_ready();
-        } else {
-            self.state.declare_infeasible();
         }
     }
 }
@@ -1247,7 +1245,7 @@ impl ConstraintSatisfactionSolver {
         start_trail_index: usize,
         tag: Option<NonZero<u32>>,
     ) {
-        assert_eq!(self.get_decision_level(), 0);
+        pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
 
         if !self.internal_parameters.proof_log.is_logging_inferences() {
             return;
