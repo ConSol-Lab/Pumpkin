@@ -45,6 +45,8 @@ impl ProofLiterals {
         definitions.write(sink)
     }
 
+    /// Given a literal, whenever it shows up in a proof step, substitute it with the provided
+    /// predicate.
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
         // Note: This only works because we assume `literal` is a fresh literal and we are given
         // the positive polarity. That assumption holds as the only place this can be called is
@@ -55,6 +57,8 @@ impl ProofLiterals {
         let _ = self.reification_domains.insert(domain, predicate);
     }
 
+    /// The given predicate is a predicate over a literal. This function gets the associated
+    /// predicate that was reified with [`Self::reify_predicate`] if it exists.
     fn get_underlying_predicate(&self, predicate: Predicate) -> Option<Predicate> {
         let domain_id = predicate.get_domain();
         let rhs = predicate.get_right_hand_side();
