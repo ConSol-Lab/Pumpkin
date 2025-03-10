@@ -23,6 +23,13 @@ pub(crate) struct FinalizingContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
 }
 
+/// Finalizes the proof by introducing inferences used to derive root-level unsatisfiability. This
+/// happens by recursively going through the implication graph to explain any predicate that does
+/// not have a nogood step id yet.
+///
+/// This should only include implicit propagations done through the [`Assignments`] struct. If a
+/// predicate is propagated by a propagator, it would have been logged as a root-level propagation
+/// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
     if !context.proof_log.is_logging_inferences() {
         return;
@@ -50,6 +57,7 @@ pub(crate) struct RootExplanationContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
 }
 
+/// Explain why a given predicate is true. We assume that `predicate` is true at the root.
 pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
