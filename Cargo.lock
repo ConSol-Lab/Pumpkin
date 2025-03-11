@@ -223,16 +223,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drcp-format"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3149404eed0a1687455b7548d58544ca1b9e0954bd9a4ff0d8fd2a91a936f012"
-dependencies = [
- "nom",
- "thiserror",
-]
-
-[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -549,7 +539,7 @@ dependencies = [
  "clap",
  "convert_case",
  "downcast-rs",
- "drcp-format 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "drcp-format",
  "enum-map",
  "enumset",
  "env_logger",

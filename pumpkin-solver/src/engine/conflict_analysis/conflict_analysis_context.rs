@@ -47,7 +47,6 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
 
-    pub(crate) is_completing_proof: bool,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) stateful_assignments: &'a mut TrailedAssignments,
 }
@@ -88,9 +87,9 @@ impl ConflictAnalysisContext<'_> {
         )
     }
 
-    /// Returns a nogood which led to the conflict; if `is_completing_proof` is set to true, then
-    /// it will also return predicates from the root decision level.
-    pub(crate) fn get_conflict_nogood(&mut self, is_completing_proof: bool) -> Vec<Predicate> {
+    /// Returns a nogood which led to the conflict, excluding predicates from the root decision
+    /// level.
+    pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
@@ -107,7 +106,7 @@ impl ConflictAnalysisContext<'_> {
                         // filter out root predicates
                         self.assignments
                             .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0 || is_completing_proof)
+                            .is_some_and(|dl| dl > 0)
                     })
                     .copied()
                     .collect()
@@ -119,7 +118,7 @@ impl ConflictAnalysisContext<'_> {
                         // filter out root predicates
                         self.assignments
                             .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0 || is_completing_proof)
+                            .is_some_and(|dl| dl > 0)
                     })
                     .copied()
                     .collect()

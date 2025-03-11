@@ -7,8 +7,8 @@ use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::Mode;
@@ -59,8 +59,6 @@ pub(crate) struct NogoodPropagator {
     delete_ids: Vec<NogoodId>,
     /// The trail index is used to determine the domains of the variables since last time.
     last_index_on_trail: usize,
-    /// Indicates whether the nogood propagator is in an infeasible state
-    is_in_infeasible_state: bool,
     /// Watch lists for the nogood propagator.
     // TODO: could improve the data structure for watching.
     watch_lists: KeyedVec<DomainId, NogoodWatchList>,
@@ -968,14 +966,8 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
-        match self.add_permanent_nogood(nogood, context) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                self.is_in_infeasible_state = true;
-                Err(e)
-            }
-        }
+    ) -> PropagationStatusCP {
+        self.add_permanent_nogood(nogood, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
@@ -983,17 +975,11 @@ impl NogoodPropagator {
         &mut self,
         mut nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
+    ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
             context.get_decision_level() == 0,
             "Only allowed to add nogoods permanently at the root for now."
         );
-
-        // If we are already in an infeasible state then we simply return that we are in an
-        // infeasible state.
-        if self.is_in_infeasible_state {
-            return Err(ConstraintOperationError::InfeasibleState);
-        }
 
         // If the nogood is empty then it is automatically satisfied (though it is unusual!)
         if nogood.is_empty() {
@@ -1011,29 +997,13 @@ impl NogoodPropagator {
 
         // Unit nogoods are added as root assignments rather than as nogoods.
         if nogood.len() == 1 {
-            if context.is_predicate_satisfied(nogood[0]) {
-                // If the predicate is already satisfied then we report a conflict
-                self.is_in_infeasible_state = true;
-                Err(ConstraintOperationError::InfeasibleNogood)
-            } else if context.is_predicate_falsified(nogood[0]) {
-                // If the predicate is already falsified then we don't do anything and simply
-                // return success
-                Ok(())
-            } else {
-                // Get the reason for the propagation.
-                input_nogood.retain(|&p| p != nogood[0]);
+            // Get the reason for the propagation. Note that preprocessing removes literals from
+            // `nogood` that are still present in `input_nogood`, so this does not necessarily
+            // result in an empty reason.
+            input_nogood.retain(|&p| p != nogood[0]);
 
-                // Post the negated predicate at the root to respect the nogood.
-                let result = context
-                    .post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood));
-                match result {
-                    Ok(_) => Ok(()),
-                    Err(_) => {
-                        self.is_in_infeasible_state = true;
-                        Err(ConstraintOperationError::InfeasibleNogood)
-                    }
-                }
-            }
+            // Post the negated predicate at the root to respect the nogood.
+            context.post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood))?;
         }
         // Standard case, nogood is of size at least two.
         //
@@ -1061,9 +1031,9 @@ impl NogoodPropagator {
                 self.nogoods[new_id].predicates[1],
                 new_id,
             );
-
-            Ok(())
         }
+
+        Ok(())
     }
 }
 
