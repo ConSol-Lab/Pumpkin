@@ -91,7 +91,7 @@ struct Args {
     /// Possible values: usize
     #[arg(
         long = "learning-max-num-clauses",
-        default_value_t = 4000,
+        default_value_t = 100_000,
         verbatim_doc_comment
     )]
     learning_max_num_clauses: usize,
