@@ -250,7 +250,11 @@ fn nogood_step(input: &str) -> IResult<&str, Nogood<Vec<NonZero<i32>>, Vec<StepI
             step_id,
             tag(" "),
             literal_list,
-            opt(preceded(tag(" 0 "), separated_list0(tag(" "), step_id))),
+            opt(preceded(
+                // Hack! If `literal_list` is empty, then the space will be parsed already.
+                alt((tag("0 "), tag(" 0 "))),
+                separated_list0(tag(" "), step_id),
+            )),
         )),
         |(_, id, _, literals, hints)| Nogood {
             id,
@@ -338,5 +342,23 @@ mod tests {
             propagated: None,
         };
         assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+    }
+
+    #[test]
+    fn empty_nogood_with_hints() {
+        let source = "n 100 0 1 4 5\n";
+        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+
+        let nogood_step = reader.next_step().expect("valid drcp nogood step");
+        let expected_nogood = Nogood {
+            id: NonZero::new(100).unwrap(),
+            literals: vec![],
+            hints: Some(vec![
+                NonZero::new(1).unwrap(),
+                NonZero::new(4).unwrap(),
+                NonZero::new(5).unwrap(),
+            ]),
+        };
+        assert_eq!(Some(Step::Nogood(expected_nogood)), nogood_step);
     }
 }
