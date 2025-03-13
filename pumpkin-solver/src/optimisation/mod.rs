@@ -2,6 +2,7 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
+use solution_callback::SolutionCallback;
 
 use crate::branching::Brancher;
 use crate::results::OptimisationResult;
@@ -13,8 +14,9 @@ use crate::Solver;
 
 pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
+pub mod solution_callback;
 
-pub trait OptimisationProcedure<B: Brancher, Callback: Fn(&Solver, SolutionReference, &B)> {
+pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
     fn optimise(
         &mut self,
         brancher: &mut B,

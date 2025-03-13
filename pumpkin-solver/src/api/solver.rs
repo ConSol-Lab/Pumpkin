@@ -29,6 +29,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
 #[cfg(doc)]
 use crate::optimisation::linear_unsat_sat::LinearUnsatSat;
+use crate::optimisation::solution_callback::SolutionCallback;
 use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
@@ -414,7 +415,7 @@ impl Solver {
     ) -> OptimisationResult
     where
         B: Brancher,
-        Callback: Fn(&Solver, SolutionReference, &B),
+        Callback: SolutionCallback<B>,
     {
         optimisation_procedure.optimise(brancher, termination, self)
     }

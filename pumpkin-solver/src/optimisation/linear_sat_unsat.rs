@@ -1,3 +1,4 @@
+use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
@@ -79,7 +80,7 @@ impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var
 where
     Var: IntegerVariable,
     B: Brancher,
-    Callback: Fn(&Solver, SolutionReference, &B),
+    Callback: SolutionCallback<B>,
 {
     fn optimise(
         &mut self,
@@ -186,6 +187,7 @@ where
     }
 
     fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
-        (self.solution_callback)(solver, solution, brancher)
+        self.solution_callback
+            .on_solution_callback(solver, solution, brancher)
     }
 }
