@@ -11,6 +11,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::WatchListManager;
+use crate::statistics::StatisticLogger;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -111,6 +112,12 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         } else {
             self.other_brancher.next_decision(context)
         }
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.default_brancher
+            .log_statistics(statistic_logger.clone());
+        self.other_brancher.log_statistics(statistic_logger);
     }
 
     fn on_appearance_in_conflict_predicate(

@@ -19,6 +19,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::WatchListManager;
+use crate::statistics::StatisticLogger;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
 /// sequentially applies [`Brancher::next_decision`] until all of them return [`None`].
@@ -96,6 +97,15 @@ impl Brancher for DynamicBrancher {
                 self.brancher_index += 1;
             }
         }
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.branchers
+            .iter()
+            .enumerate()
+            .for_each(move |(index, brancher)| {
+                brancher.log_statistics(statistic_logger.attach_to_prefix(index))
+            })
     }
 
     fn on_conflict(&mut self) {

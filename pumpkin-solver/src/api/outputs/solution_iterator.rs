@@ -1,5 +1,7 @@
 //! Contains the structures corresponding to solution iterations.
 
+use std::fmt::Debug;
+
 use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
@@ -40,7 +42,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution {
+    pub fn next_solution(&mut self) -> IteratedSolution<B> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             self.solver
                 .get_satisfaction_solver_mut()
@@ -53,7 +55,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(solution, self.solver)
+                IteratedSolution::Solution(solution, self.solver, self.brancher)
             }
             Unsatisfiable => {
                 if self.has_solution {
@@ -81,9 +83,9 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
 #[allow(clippy::large_enum_variant, reason = "Will not be stored in bulk")]
 #[derive(Debug)]
-pub enum IteratedSolution<'a> {
+pub enum IteratedSolution<'a, B: Brancher> {
     /// A new solution was identified.
-    Solution(Solution, &'a Solver),
+    Solution(Solution, &'a Solver, &'a B),
 
     /// No more solutions exist.
     Finished,

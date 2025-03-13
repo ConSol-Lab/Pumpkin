@@ -14,12 +14,15 @@ use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
+#[cfg(doc)]
+use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::WatchListManager;
 #[cfg(doc)]
 use crate::results::solution_iterator::SolutionIterator;
+use crate::statistics::StatisticLogger;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -35,6 +38,11 @@ use crate::Solver;
 /// If the [`Brancher`] (or any component thereof) is implemented incorrectly then the
 /// behaviour of the solver is undefined.
 pub trait Brancher {
+    /// Logs statistics of the brancher using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
+
     /// Returns the next decision concerning a single variable and value; it returns the
     /// [`Predicate`] corresponding to this decision (or [`None`] if all variables under
     /// consideration are assigned).

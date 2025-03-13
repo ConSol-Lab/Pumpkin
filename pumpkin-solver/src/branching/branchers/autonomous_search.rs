@@ -1,6 +1,8 @@
 use enumset::enum_set;
 
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashMap;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
@@ -12,12 +14,15 @@ use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
+use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::engine::PredicateDomainEvent;
 use crate::engine::PredicateWatcher;
 use crate::engine::WatchList;
 use crate::engine::WatchListManager;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
@@ -62,7 +67,6 @@ use crate::DefaultBrancher;
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 #[derive(Debug)]
-
 pub struct AutonomousSearch<BackupBrancher> {
     /// Stores the activities for a predicate, represented with its id.
     heap: KeyValueHeap<PredicateId, f64>,
@@ -85,8 +89,20 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// If the heap does not contain any more unfixed predicates then this backup_brancher will be
     /// used instead.
     backup_brancher: BackupBrancher,
+    /// The polarity of the stored predicates
     polarity: HashMap<PredicateId, bool>,
+    /// The statistics for the brancher
+    statistics: AutonomousSearchStatistics,
 }
+
+create_statistics_struct!(AutonomousSearchStatistics {
+    num_backup_called: usize,
+    num_predicates_removed: usize,
+    num_calls: usize,
+    num_predicates_added: usize,
+    average_size_of_heap: CumulativeMovingAverage<usize>,
+    num_assigned_predicates_encountered: usize,
+});
 
 const DEFAULT_VSIDS_INCREMENT: f64 = 1.0;
 const DEFAULT_VSIDS_MAX_THRESHOLD: f64 = 1e100;
@@ -112,6 +128,7 @@ impl DefaultBrancher {
                 RandomSplitter,
             ),
             polarity: Default::default(),
+            statistics: Default::default(),
         }
     }
 }
@@ -131,6 +148,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             backup_brancher,
             polarity: Default::default(),
+            statistics: Default::default(),
         }
     }
 
@@ -150,23 +168,24 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         watch_lists: &mut WatchListManager,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
-        let knew_before = predicate_id_generator.has_id_for_predicate(predicate);
         let id = predicate_id_generator.get_id(predicate);
         let _ = self.polarity.insert(id, true);
 
-        if !knew_before {
-            watch_lists.watch_list_predicate.watch(
-                PredicateWatcher::Brancher,
-                id,
-                enum_set!(PredicateDomainEvent::AssignTrue | PredicateDomainEvent::AssignFalse),
-            );
-        }
+        watch_lists.watch_list_predicate.watch(
+            PredicateWatcher::Brancher,
+            id,
+            enum_set!(PredicateDomainEvent::AssignTrue | PredicateDomainEvent::AssignFalse),
+        );
+
         self.resize_heap(id);
         self.heap.restore_key(id);
 
         // Scale the activities if the values are too large.
         // Also remove predicates that have activities close to zero.
         let activity = self.heap.get_value(id);
+        if *activity == 0.0 {
+            self.statistics.num_predicates_added += 1;
+        }
         if activity + self.increment >= self.max_threshold {
             // Adjust heap values.
             self.heap.divide_values(self.max_threshold);
@@ -197,6 +216,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                     .get_predicate(*candidate)
                     .expect("We expected present predicates to be registered.");
                 if context.is_predicate_assigned(predicate) {
+                    self.statistics.num_assigned_predicates_encountered += 1;
                     let _ = self.heap.pop_max();
 
                     // We know that this predicate is now dormant
@@ -239,15 +259,25 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
 
 impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        self.statistics.num_calls += 1;
+        self.statistics
+            .average_size_of_heap
+            .add_term(self.heap.num_nonremoved_elements());
         let result = self
             .next_candidate_predicate(context)
             .map(|predicate| self.determine_polarity(predicate, context.predicate_id_generator));
         if result.is_none() && !context.are_all_variables_assigned() {
             // There are variables for which we do not have a predicate, rely on the backup
+            self.statistics.num_backup_called += 1;
             self.backup_brancher.next_decision(context)
         } else {
             result
         }
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        let statistic_logger = statistic_logger.attach_to_prefix("AutonomousSearch");
+        self.statistics.log(statistic_logger);
     }
 
     fn notify_predicate(
