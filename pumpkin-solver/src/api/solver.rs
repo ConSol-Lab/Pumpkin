@@ -406,16 +406,16 @@ impl Solver {
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise<
-        Var: IntegerVariable,
-        B: Brancher,
-        Callback: Fn(&Solver, SolutionReference, &B),
-    >(
+    pub fn optimise<B, Callback>(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        mut optimisation_procedure: impl OptimisationProcedure<Var, B, Callback>,
-    ) -> OptimisationResult {
+        mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
+    ) -> OptimisationResult
+    where
+        B: Brancher,
+        Callback: Fn(&Solver, SolutionReference, &B),
+    {
         optimisation_procedure.optimise(brancher, termination, self)
     }
 }

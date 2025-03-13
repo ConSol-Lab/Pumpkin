@@ -14,12 +14,7 @@ use crate::Solver;
 pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
 
-pub trait OptimisationProcedure<
-    Var: IntegerVariable,
-    B: Brancher,
-    Callback: Fn(&Solver, SolutionReference, &B),
->
-{
+pub trait OptimisationProcedure<B: Brancher, Callback: Fn(&Solver, SolutionReference, &B)> {
     fn optimise(
         &mut self,
         brancher: &mut B,

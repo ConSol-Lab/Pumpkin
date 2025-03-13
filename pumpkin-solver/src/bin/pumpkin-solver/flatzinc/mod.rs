@@ -57,7 +57,7 @@ pub(crate) struct FlatZincOptions {
 }
 
 fn solution_callback(
-    brancher: &dyn Brancher,
+    brancher: &impl Brancher,
     instance_objective_function: Option<DomainId>,
     options_all_solutions: bool,
     outputs: &[Output],
@@ -102,16 +102,14 @@ pub(crate) fn solve(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let (direction, objective) = match instance.objective_function {
-        Some(objective) => {
-            let result: (OptimisationDirection, DomainId) = objective.into();
-            result
-        }
-        None => {
-            satisfy(options, &mut solver, brancher, termination, outputs);
-            return Ok(());
-        }
-    };
+    let (direction, objective): (OptimisationDirection, DomainId) =
+        match instance.objective_function {
+            Some(objective) => objective.into(),
+            None => {
+                satisfy(options, &mut solver, brancher, termination, outputs);
+                return Ok(());
+            }
+        };
 
     let callback =
         |solver: &Solver, solution: SolutionReference<'_>, brancher: &DynamicBrancher| {

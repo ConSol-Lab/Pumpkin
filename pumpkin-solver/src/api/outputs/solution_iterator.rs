@@ -85,6 +85,7 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     clippy::large_enum_variant,
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
+#[derive(Debug)]
 pub enum IteratedSolution<'a, B: Brancher> {
     /// A new solution was identified.
     Solution(Solution, &'a Solver, &'a B),
@@ -97,15 +98,4 @@ pub enum IteratedSolution<'a, B: Brancher> {
 
     /// There exists no solution
     Unsatisfiable,
-}
-
-impl<B: Brancher> Debug for IteratedSolution<'_, B> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IteratedSolution::Solution(solution, _, _) => write!(f, "Solution({solution:?})"),
-            IteratedSolution::Finished => write!(f, "Finished"),
-            IteratedSolution::Unknown => write!(f, "Unknown"),
-            IteratedSolution::Unsatisfiable => write!(f, "Unsatisfiable"),
-        }
-    }
 }

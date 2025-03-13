@@ -35,8 +35,11 @@ impl<Var, Callback> LinearUnsatSat<Var, Callback> {
     }
 }
 
-impl<Var: IntegerVariable, B: Brancher, Callback: Fn(&Solver, SolutionReference, &B)>
-    OptimisationProcedure<Var, B, Callback> for LinearUnsatSat<Var, Callback>
+impl<Var, B, Callback> OptimisationProcedure<B, Callback> for LinearUnsatSat<Var, Callback>
+where
+    Var: IntegerVariable,
+    B: Brancher,
+    Callback: Fn(&Solver, SolutionReference, &B),
 {
     fn optimise(
         &mut self,
