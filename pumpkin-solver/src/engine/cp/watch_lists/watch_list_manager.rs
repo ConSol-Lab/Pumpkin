@@ -15,7 +15,7 @@ pub struct WatchListManager {
 
 impl WatchListManager {
     pub(crate) fn get_affected_cp(
-        &self,
+        &mut self,
         event: IntDomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {

@@ -21,6 +21,7 @@ use crate::engine::PredicateDomainEvent;
 use crate::engine::PredicateWatcher;
 use crate::engine::WatchList;
 use crate::engine::WatchListManager;
+use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
@@ -93,6 +94,8 @@ pub struct AutonomousSearch<BackupBrancher> {
     polarity: HashMap<PredicateId, bool>,
     /// The statistics for the brancher
     statistics: AutonomousSearchStatistics,
+    solution: Solution,
+    found_solution: bool,
 }
 
 create_statistics_struct!(AutonomousSearchStatistics {
@@ -129,6 +132,8 @@ impl DefaultBrancher {
             ),
             polarity: Default::default(),
             statistics: Default::default(),
+            solution: Default::default(),
+            found_solution: false,
         }
     }
 }
@@ -149,6 +154,8 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             backup_brancher,
             polarity: Default::default(),
             statistics: Default::default(),
+            solution: Default::default(),
+            found_solution: false,
         }
     }
 
@@ -169,13 +176,15 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         let id = predicate_id_generator.get_id(predicate);
-        let _ = self.polarity.insert(id, true);
+        if !self.found_solution {
+            let _ = self.polarity.insert(id, true);
 
-        watch_lists.watch_list_predicate.watch(
-            PredicateWatcher::Brancher,
-            id,
-            enum_set!(PredicateDomainEvent::AssignTrue | PredicateDomainEvent::AssignFalse),
-        );
+            watch_lists.watch_list_predicate.watch(
+                PredicateWatcher::Brancher,
+                id,
+                enum_set!(PredicateDomainEvent::AssignTrue | PredicateDomainEvent::AssignFalse),
+            );
+        }
 
         self.resize_heap(id);
         self.heap.restore_key(id);
@@ -241,18 +250,26 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         predicate: Predicate,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> Predicate {
-        let id = predicate_id_generator.get_id(predicate);
-        if let Some(polarity) = self.polarity.get(&id) {
-            if *polarity {
+        if self.found_solution {
+            if self.solution.is_predicate_satisfied(predicate) {
                 predicate
             } else {
                 !predicate
             }
         } else {
-            panic!(
-                "Predicate {predicate:?} ({id:?}) should have been seen before - {:?}",
-                self.polarity
-            )
+            let id = predicate_id_generator.get_id(predicate);
+            if let Some(polarity) = self.polarity.get(&id) {
+                if *polarity {
+                    predicate
+                } else {
+                    !predicate
+                }
+            } else {
+                panic!(
+                    "Predicate {predicate:?} ({id:?}) should have been seen before - {:?}",
+                    self.polarity
+                )
+            }
         }
     }
 }
@@ -277,7 +294,8 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
         let statistic_logger = statistic_logger.attach_to_prefix("AutonomousSearch");
-        self.statistics.log(statistic_logger);
+        self.statistics.log(statistic_logger.clone());
+        self.backup_brancher.log_statistics(statistic_logger);
     }
 
     fn notify_predicate(
@@ -286,7 +304,9 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
         predicate_id_generator: &mut PredicateIdGenerator,
         value: bool,
     ) {
-        let _ = self.polarity.insert(predicate, value);
+        if !self.found_solution {
+            let _ = self.polarity.insert(predicate, value);
+        }
 
         self.backup_brancher
             .notify_predicate(predicate, predicate_id_generator, value);
@@ -332,6 +352,8 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
+        self.found_solution = true;
+        self.solution = solution.into();
         self.backup_brancher.on_solution(solution);
     }
 

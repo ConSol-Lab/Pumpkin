@@ -44,7 +44,7 @@ pub(crate) trait WatchList<WatchingType, StoredType, Event: EnumSetType> {
     fn watches_backtrack(&mut self) {}
 
     /// Returns the affected stored elements if a forward event took place for domain
-    fn get_affected(&self, event: Event, domain: WatchingType) -> &[StoredType];
+    fn get_affected(&mut self, event: Event, domain: WatchingType) -> &[StoredType];
 
     /// Returns the affected stored elements if a backward event took place for domain
 

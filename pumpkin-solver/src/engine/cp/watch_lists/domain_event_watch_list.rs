@@ -42,7 +42,7 @@ impl<WatchingType: StorageKey, StoredType: PartialEq + Clone>
         self.is_watching_anything = true;
     }
 
-    fn get_affected(&self, event: IntDomainEvent, domain: WatchingType) -> &[StoredType] {
+    fn get_affected(&mut self, event: IntDomainEvent, domain: WatchingType) -> &[StoredType] {
         let watcher = &self.watchers[domain];
 
         match event {

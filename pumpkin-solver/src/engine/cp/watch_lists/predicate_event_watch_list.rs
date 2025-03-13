@@ -40,7 +40,11 @@ impl<WatchingType: StorageKey, StoredType: PartialEq + Clone>
         self.is_watching_anything = true;
     }
 
-    fn get_affected(&self, event: PredicateDomainEvent, domain: WatchingType) -> &[StoredType] {
+    fn get_affected(&mut self, event: PredicateDomainEvent, domain: WatchingType) -> &[StoredType] {
+        if domain.index() >= self.watchers.len() {
+            return &[];
+        }
+
         let watcher_predicate = &self.watchers[domain];
 
         match event {
