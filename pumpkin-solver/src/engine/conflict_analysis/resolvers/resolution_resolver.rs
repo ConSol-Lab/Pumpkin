@@ -11,6 +11,7 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
+use crate::engine::WatchListManager;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -80,6 +81,8 @@ impl ConflictResolver for ResolutionResolver {
                 context.brancher,
                 self.mode,
                 context.is_completing_proof,
+                context.watch_list_manager,
+                context.predicate_id_generator,
             );
         }
         // Record conflict nogood size statistics.
@@ -256,6 +259,8 @@ impl ConflictResolver for ResolutionResolver {
                     context.brancher,
                     self.mode,
                     context.is_completing_proof,
+                    context.watch_list_manager,
+                    context.predicate_id_generator,
                 );
             }
         }
@@ -290,6 +295,8 @@ impl ResolutionResolver {
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
         is_logging_complete_proof: bool,
+        watch_list_manager: &mut WatchListManager,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -339,7 +346,11 @@ impl ResolutionResolver {
             if !self.to_process_heap.is_key_present(predicate_id)
                 && *self.to_process_heap.get_value(predicate_id) == 0
             {
-                brancher.on_appearance_in_conflict_predicate(predicate);
+                brancher.on_appearance_in_conflict_predicate(
+                    predicate,
+                    watch_list_manager,
+                    predicate_id_generator,
+                );
 
                 let trail_position = assignments.get_trail_position(&predicate).unwrap();
 
@@ -483,9 +494,11 @@ impl ResolutionResolver {
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
         for predicate in clean_nogood.iter() {
-            context
-                .brancher
-                .on_appearance_in_conflict_predicate(*predicate);
+            context.brancher.on_appearance_in_conflict_predicate(
+                *predicate,
+                context.watch_list_manager,
+                context.predicate_id_generator,
+            );
         }
 
         LearnedNogood {

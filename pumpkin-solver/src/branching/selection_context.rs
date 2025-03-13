@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
@@ -18,13 +19,19 @@ use crate::engine::Assignments;
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
     assignments: &'a Assignments,
+    pub(crate) predicate_id_generator: &'a mut PredicateIdGenerator,
     random_generator: &'a mut dyn Random,
 }
 
 impl<'a> SelectionContext<'a> {
-    pub fn new(assignments: &'a Assignments, rng: &'a mut dyn Random) -> Self {
+    pub fn new(
+        assignments: &'a Assignments,
+        predicate_id_generator: &'a mut PredicateIdGenerator,
+        rng: &'a mut dyn Random,
+    ) -> Self {
         SelectionContext {
             assignments,
+            predicate_id_generator,
             random_generator: rng,
         }
     }

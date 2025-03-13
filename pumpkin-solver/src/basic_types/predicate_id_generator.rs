@@ -4,7 +4,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct PredicateIdGenerator {
+pub struct PredicateIdGenerator {
     /// The value of the next id, provided there are no delete_ids that can be reused.
     next_id: u32,
     /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
@@ -12,7 +12,7 @@ pub(crate) struct PredicateIdGenerator {
     /// Active predicates are stored here.
     /// todo: consider direct hashing.
     id_to_predicate: HashMap<PredicateId, Predicate>,
-    predicate_to_id: HashMap<Predicate, PredicateId>,
+    pub(crate) predicate_to_id: HashMap<Predicate, PredicateId>,
 }
 
 impl PredicateIdGenerator {
@@ -49,6 +49,7 @@ impl PredicateIdGenerator {
         self.id_to_predicate.get(&id).copied()
     }
 
+    #[allow(unused, reason = "Might be used later")]
     pub(crate) fn delete_id(&mut self, id: PredicateId) {
         pumpkin_assert_moderate!(!self.deleted_ids.contains(&id));
         // Add the deleted id for future reuse.
@@ -149,7 +150,7 @@ impl Iterator for PredicateIdIterator {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub(crate) struct PredicateId {
+pub struct PredicateId {
     pub(crate) id: u32,
 }
 

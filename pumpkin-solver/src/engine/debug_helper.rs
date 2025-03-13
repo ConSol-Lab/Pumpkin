@@ -14,7 +14,9 @@ use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
 use super::DomainFaithfulness;
 use super::TrailedAssignments;
+use super::WatchListManager;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
@@ -54,6 +56,7 @@ impl DebugHelper {
         stateful_assignments: &TrailedAssignments,
         assignments: &Assignments,
         propagators: &PropagatorStore,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
         let mut assignments_clone = assignments.clone();
         let mut stateful_assignments_clone = stateful_assignments.clone();
@@ -77,12 +80,15 @@ impl DebugHelper {
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
             let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut watch_list_manager = WatchListManager::default();
             let context = PropagationContextMut::new(
+                predicate_id_generator,
                 &mut stateful_assignments_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
                 &mut domain_faithfulness,
+                &mut watch_list_manager,
                 PropagatorId(propagator_id as u32),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -125,6 +131,7 @@ impl DebugHelper {
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             stateful_assignments,
@@ -132,6 +139,7 @@ impl DebugHelper {
             failure_reason,
             propagator,
             propagator_id,
+            predicate_id_generator,
         );
 
         DebugHelper::debug_reported_propagations_negate_failure_and_check(
@@ -140,6 +148,7 @@ impl DebugHelper {
             failure_reason,
             propagator,
             propagator_id,
+            predicate_id_generator,
         );
         true
     }
@@ -157,6 +166,7 @@ impl DebugHelper {
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
         if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
             return true;
@@ -182,6 +192,7 @@ impl DebugHelper {
                 assignments,
                 &propagators[propagator_id],
                 propagator_id,
+                predicate_id_generator,
             );
         }
         result
@@ -194,6 +205,7 @@ impl DebugHelper {
         assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
         if propagator.name() == "NogoodPropagator" {
             return true;
@@ -234,12 +246,15 @@ impl DebugHelper {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
                 let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut watch_list_manager = WatchListManager::default();
                 let context = PropagationContextMut::new(
+                    predicate_id_generator,
                     &mut stateful_assignments_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
                     &mut domain_faithfulness,
+                    &mut watch_list_manager,
                     propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -347,12 +362,15 @@ impl DebugHelper {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
                     let mut domain_faithfulness = DomainFaithfulness::default();
+                    let mut watch_list_manager = WatchListManager::default();
                     let context = PropagationContextMut::new(
+                        predicate_id_generator,
                         &mut stateful_assignments_clone,
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut semantic_minimiser,
                         &mut domain_faithfulness,
+                        &mut watch_list_manager,
                         propagator_id,
                     );
                     let debug_propagation_status_cp =
@@ -394,6 +412,7 @@ impl DebugHelper {
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         if propagator.name() == "NogoodPropagator" {
             return;
@@ -412,12 +431,16 @@ impl DebugHelper {
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
             let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut watch_list_manager = WatchListManager::default();
+
             let context = PropagationContextMut::new(
+                predicate_id_generator,
                 &mut stateful_assignments_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
                 &mut domain_faithfulness,
+                &mut watch_list_manager,
                 propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -444,6 +467,7 @@ impl DebugHelper {
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         // The nogood propagator is special, so the code below does not necessarily hold.
         // This is because the propagator gets updated during solving.
@@ -475,12 +499,15 @@ impl DebugHelper {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
                 let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut watch_list_manager = WatchListManager::default();
                 let context = PropagationContextMut::new(
+                    predicate_id_generator,
                     &mut stateful_assignments_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
                     &mut domain_faithfulness,
+                    &mut watch_list_manager,
                     propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);

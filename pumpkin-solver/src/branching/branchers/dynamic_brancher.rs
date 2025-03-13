@@ -9,6 +9,8 @@ use std::fmt::Debug;
 use enum_map::EnumMap;
 
 use crate::basic_types::HashSet;
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::Brancher;
@@ -16,6 +18,7 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::WatchListManager;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
 /// sequentially applies [`Brancher::next_decision`] until all of them return [`None`].
@@ -118,11 +121,20 @@ impl Brancher for DynamicBrancher {
             });
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+    fn on_appearance_in_conflict_predicate(
+        &mut self,
+        predicate: Predicate,
+        watch_lists: &mut WatchListManager,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
         self.relevant_event_to_index[BrancherEvent::AppearanceInConflictPredicate]
             .iter()
             .for_each(|&brancher_index| {
-                self.branchers[brancher_index].on_appearance_in_conflict_predicate(predicate)
+                self.branchers[brancher_index].on_appearance_in_conflict_predicate(
+                    predicate,
+                    watch_lists,
+                    predicate_id_generator,
+                )
             });
     }
 
@@ -139,10 +151,16 @@ impl Brancher for DynamicBrancher {
             .for_each(|&brancher_index| self.branchers[brancher_index].on_restart());
     }
 
-    fn synchronise(&mut self, assignments: &Assignments) {
+    fn synchronise(
+        &mut self,
+        assignments: &Assignments,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
         self.relevant_event_to_index[BrancherEvent::Synchronise]
             .iter()
-            .for_each(|&brancher_index| self.branchers[brancher_index].synchronise(assignments));
+            .for_each(|&brancher_index| {
+                self.branchers[brancher_index].synchronise(assignments, predicate_id_generator)
+            });
     }
 
     fn is_restart_pointless(&mut self) -> bool {
@@ -156,5 +174,16 @@ impl Brancher for DynamicBrancher {
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
         self.relevant_events.clone()
+    }
+
+    fn notify_predicate(
+        &mut self,
+        predicate: PredicateId,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        value: bool,
+    ) {
+        self.branchers.iter_mut().for_each(|brancher| {
+            brancher.notify_predicate(predicate, predicate_id_generator, value);
+        })
     }
 }

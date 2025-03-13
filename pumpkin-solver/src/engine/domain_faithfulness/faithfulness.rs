@@ -12,8 +12,6 @@ use crate::variables::DomainId;
 
 #[derive(Default, Debug)]
 pub(crate) struct DomainFaithfulness {
-    pub(crate) predicate_to_id: PredicateIdGenerator,
-
     domain_id_to_faithfullness: KeyedVec<DomainId, Faithfullness>,
 
     falsified_predicates: Vec<PredicateId>,
@@ -27,7 +25,6 @@ impl DomainFaithfulness {
         self.last_updated += 1;
     }
 
-    #[allow(dead_code, reason = "Will be part of the public API")]
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }
@@ -36,23 +33,12 @@ impl DomainFaithfulness {
         self.satisfied_predicates.drain(..)
     }
 
-    pub(crate) fn get_predicate_for_id(&self, predicate_id: PredicateId) -> Predicate {
-        self.predicate_to_id.get_predicate(predicate_id).unwrap()
-    }
-
-    pub(crate) fn get_id_for_predicate(&mut self, predicate: Predicate) -> Option<PredicateId> {
-        if !self.predicate_to_id.has_id_for_predicate(predicate) {
-            return None;
-        }
-
-        Some(self.predicate_to_id.get_id(predicate))
-    }
-
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
         stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
+        predicate_to_id: &mut PredicateIdGenerator,
     ) {
         if self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
             // If no predicate has been registered for this domain id then we do nothing
@@ -71,9 +57,9 @@ impl DomainFaithfulness {
             stateful_assignments,
             &mut self.falsified_predicates,
             &mut self.satisfied_predicates,
-            self.predicate_to_id
+            predicate_to_id
                 .has_id_for_predicate(predicate)
-                .then(|| self.predicate_to_id.get_id(predicate)),
+                .then(|| predicate_to_id.get_id(predicate)),
         );
     }
 
@@ -82,38 +68,32 @@ impl DomainFaithfulness {
         predicate: Predicate,
         stateful_assignments: &mut TrailedAssignments,
         assignments: &Assignments,
+        predicate_to_id: &mut PredicateIdGenerator,
     ) -> PredicateId {
-        // If it is already watched then at the moment we do nothing
-        let has_id_for_predicate = self.predicate_to_id.has_id_for_predicate(predicate);
-
         // We create a new predicate ID for the predicate
-        let id = self.predicate_to_id.get_id(predicate);
+        let id = predicate_to_id.get_id(predicate);
 
-        if !has_id_for_predicate {
-            info!("Adding watcher for {predicate} with id {id:?}",);
+        info!("Adding watcher for {predicate} with id {id:?}",);
 
-            while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
-                let _ = self
-                    .domain_id_to_faithfullness
-                    .push(Faithfullness::new(stateful_assignments));
-            }
-
-            self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
-                predicate.get_domain(),
-                assignments.get_initial_lower_bound(predicate.get_domain()),
-                assignments.get_initial_upper_bound(predicate.get_domain()),
-            );
-
-            // Then we update the structures
-            self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
-                predicate,
-                id,
-                stateful_assignments,
-                assignments,
-            );
-        } else {
-            info!("Adding existing watcher for {predicate} with id {id:?}")
+        while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
+            let _ = self
+                .domain_id_to_faithfullness
+                .push(Faithfullness::new(stateful_assignments));
         }
+
+        self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
+            predicate.get_domain(),
+            assignments.get_initial_lower_bound(predicate.get_domain()),
+            assignments.get_initial_upper_bound(predicate.get_domain()),
+        );
+
+        // Then we update the structures
+        self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
+            predicate,
+            id,
+            stateful_assignments,
+            assignments,
+        );
 
         id
     }

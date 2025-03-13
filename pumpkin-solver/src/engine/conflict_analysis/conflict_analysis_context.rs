@@ -4,6 +4,7 @@ use drcp_format::steps::StepId;
 
 use super::minimisers::SemanticMinimiser;
 use crate::basic_types::HashMap;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
@@ -52,6 +53,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
     pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+
+    pub(crate) predicate_id_generator: &'a mut PredicateIdGenerator,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -88,6 +91,7 @@ impl ConflictAnalysisContext<'_> {
             self.brancher,
             self.domain_faithfulness,
             self.stateful_assignments,
+            self.predicate_id_generator,
         )
     }
 

@@ -4,7 +4,6 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::num::NonZero;
 use std::time::Instant;
-use crate::engine::WatchListManager;
 
 use clap::ValueEnum;
 use drcp_format::steps::StepId;
@@ -26,6 +25,7 @@ use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::DomainFaithfulness;
+use super::PredicateWatcher;
 use super::ResolutionResolver;
 use super::TrailedAssignments;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -33,6 +33,7 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -59,6 +60,7 @@ use crate::engine::DebugHelper;
 use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
+use crate::engine::WatchListManager;
 use crate::predicate;
 use crate::proof::ProofLog;
 use crate::propagators::nogoods::LearningOptions;
@@ -148,6 +150,7 @@ pub struct ConstraintSatisfactionSolver {
     unit_nogood_step_ids: HashMap<Predicate, StepId>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
+    predicate_id_generator: PredicateIdGenerator,
 
     pub(crate) domain_faithfulness: DomainFaithfulness,
     pub(crate) stateful_assignments: TrailedAssignments,
@@ -299,7 +302,7 @@ impl ConstraintSatisfactionSolver {
 
     /// Process the stored domain events that happens as a result of decision/propagation predicates
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
-    fn notify_propagators_about_domain_events(&mut self) {
+    fn notify_propagators_about_domain_events(&mut self, brancher: &mut impl Brancher) {
         assert!(self.event_drain.is_empty());
 
         // Eagerly adding since the drain operation lazily removes elements from internal data
@@ -317,6 +320,7 @@ impl ConstraintSatisfactionSolver {
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
                         &mut self.stateful_assignments,
                         &self.assignments,
+                        &mut self.predicate_id_generator,
                     );
                 }
                 IntDomainEvent::LowerBound => {
@@ -325,6 +329,7 @@ impl ConstraintSatisfactionSolver {
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
                         &mut self.stateful_assignments,
                         &self.assignments,
+                        &mut self.predicate_id_generator,
                     );
                 }
                 IntDomainEvent::UpperBound => {
@@ -333,6 +338,7 @@ impl ConstraintSatisfactionSolver {
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
                         &mut self.stateful_assignments,
                         &self.assignments,
+                        &mut self.predicate_id_generator,
                     );
                 }
                 IntDomainEvent::Removal => {
@@ -344,6 +350,7 @@ impl ConstraintSatisfactionSolver {
                                 predicate!(domain != value),
                                 &mut self.stateful_assignments,
                                 &self.assignments,
+                                &mut self.predicate_id_generator,
                             );
                         })
                 }
@@ -372,24 +379,68 @@ impl ConstraintSatisfactionSolver {
             }
         }
 
-        self.notify_predicate_id_satisfied();
-        self.notify_predicate_id_falsified();
+        self.notify_predicate_id_satisfied(brancher);
+        self.notify_predicate_id_falsified(brancher);
 
         self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
     }
 
-    fn notify_predicate_id_falsified(&mut self) {
+    fn notify_predicate_id_falsified(&mut self, brancher: &mut impl Brancher) {
         // At the moment this does nothing
+        for predicate_id in self
+            .domain_faithfulness
+            .drain_falsified_predicates()
+            .collect::<Vec<_>>()
+        {
+            for stored_type in self
+                .watch_list_manager
+                .watch_list_predicate
+                .get_affected(super::PredicateDomainEvent::AssignFalse, predicate_id)
+            {
+                match stored_type {
+                    PredicateWatcher::Brancher => {
+                        brancher.notify_predicate(
+                            predicate_id,
+                            &mut self.predicate_id_generator,
+                            false,
+                        );
+                    }
+                    PredicateWatcher::NogoodPropagator => {
+                        let nogood_propagator =
+                            &mut self.propagators[Self::get_nogood_propagator_id()];
+                        nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+                    }
+                }
+            }
+        }
     }
 
-    fn notify_predicate_id_satisfied(&mut self) {
+    fn notify_predicate_id_satisfied(&mut self, brancher: &mut impl Brancher) {
         for predicate_id in self
             .domain_faithfulness
             .drain_satisfied_predicates()
             .collect::<Vec<_>>()
         {
-            let nogood_propagator = &mut self.propagators[Self::get_nogood_propagator_id()];
-            nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+            for stored_type in self
+                .watch_list_manager
+                .watch_list_predicate
+                .get_affected(super::PredicateDomainEvent::AssignTrue, predicate_id)
+            {
+                match stored_type {
+                    PredicateWatcher::Brancher => {
+                        brancher.notify_predicate(
+                            predicate_id,
+                            &mut self.predicate_id_generator,
+                            true,
+                        );
+                    }
+                    PredicateWatcher::NogoodPropagator => {
+                        let nogood_propagator =
+                            &mut self.propagators[Self::get_nogood_propagator_id()];
+                        nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+                    }
+                }
+            }
         }
     }
 
@@ -442,6 +493,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             domain_faithfulness: &mut self.domain_faithfulness,
             stateful_assignments: &mut self.stateful_assignments,
+            predicate_id_generator: &mut self.predicate_id_generator,
         };
 
         let result = self
@@ -483,6 +535,7 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             domain_faithfulness: DomainFaithfulness::default(),
             stateful_assignments: TrailedAssignments::default(),
+            predicate_id_generator: Default::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -729,6 +782,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     domain_faithfulness: &mut self.domain_faithfulness,
                     stateful_assignments: &mut self.stateful_assignments,
+                    predicate_id_generator: &mut self.predicate_id_generator,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -801,6 +855,7 @@ impl ConstraintSatisfactionSolver {
                 brancher,
                 &mut self.domain_faithfulness,
                 &mut self.stateful_assignments,
+                &mut self.predicate_id_generator,
             );
             self.state.declare_ready();
         }
@@ -830,7 +885,7 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
-            self.propagate();
+            self.propagate(brancher);
 
             if self.state.no_conflict() {
                 // Restarts should only occur after a new decision level has been declared to
@@ -905,6 +960,7 @@ impl ConstraintSatisfactionSolver {
         // Otherwise proceed with standard branching.
         let context = &mut SelectionContext::new(
             &self.assignments,
+            &mut self.predicate_id_generator,
             &mut self.internal_parameters.random_generator,
         );
 
@@ -979,6 +1035,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             domain_faithfulness: &mut self.domain_faithfulness,
             stateful_assignments: &mut self.stateful_assignments,
+            predicate_id_generator: &mut self.predicate_id_generator,
         };
 
         let learned_nogood = self
@@ -1047,11 +1104,13 @@ impl ConstraintSatisfactionSolver {
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
         let mut context = PropagationContextMut::new(
+            &mut self.predicate_id_generator,
             &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.domain_faithfulness,
+            &mut self.watch_list_manager,
             Self::get_nogood_propagator_id(),
         );
 
@@ -1118,6 +1177,7 @@ impl ConstraintSatisfactionSolver {
             brancher,
             &mut self.domain_faithfulness,
             &mut self.stateful_assignments,
+            &mut self.predicate_id_generator,
         );
 
         self.restart_strategy.notify_restart();
@@ -1140,6 +1200,7 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut BrancherType,
         domain_faithfulness: &mut DomainFaithfulness,
         stateful_assignments: &mut TrailedAssignments,
+        predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         info!("Backtracking to level {backtrack_level}");
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
@@ -1173,7 +1234,7 @@ impl ConstraintSatisfactionSolver {
             propagator.synchronise(context);
         }
 
-        brancher.synchronise(assignments);
+        brancher.synchronise(assignments, predicate_id_generator);
 
         let _ = ConstraintSatisfactionSolver::process_backtrack_events(
             watch_list_manager,
@@ -1226,12 +1287,12 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    pub(crate) fn propagate(&mut self) {
+    pub(crate) fn propagate(&mut self, brancher: &mut impl Brancher) {
         info!("Started propagation loop...");
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
-        self.notify_propagators_about_domain_events();
+        self.notify_propagators_about_domain_events(brancher);
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
             let tag = self.propagators.get_tag(propagator_id);
@@ -1240,11 +1301,13 @@ impl ConstraintSatisfactionSolver {
             let propagation_status = {
                 let propagator = &mut self.propagators[propagator_id];
                 let context = PropagationContextMut::new(
+                    &mut self.predicate_id_generator,
                     &mut self.stateful_assignments,
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
                     &mut self.domain_faithfulness,
+                    &mut self.watch_list_manager,
                     propagator_id,
                 );
                 propagator.propagate(context)
@@ -1257,7 +1320,7 @@ impl ConstraintSatisfactionSolver {
             match propagation_status {
                 Ok(_) => {
                     // Notify other propagators of the propagations and continue.
-                    self.notify_propagators_about_domain_events();
+                    self.notify_propagators_about_domain_events(brancher);
                 }
                 Err(inconsistency) => match inconsistency {
                     // A propagator did a change that resulted in an empty domain.
@@ -1289,6 +1352,7 @@ impl ConstraintSatisfactionSolver {
                             &conflict_nogood,
                             &self.propagators[propagator_id],
                             propagator_id,
+                            &mut self.predicate_id_generator
                         ));
 
                         let stored_conflict_info = StoredConflictInfo::Propagator {
@@ -1307,7 +1371,8 @@ impl ConstraintSatisfactionSolver {
                     &self.stateful_assignments,
                     &self.assignments,
                     &mut self.reason_store,
-                    &mut self.propagators
+                    &mut self.propagators,
+                    &mut self.predicate_id_generator
                 ),
                 "Checking the propagations performed by the propagator led to inconsistencies!"
             );
@@ -1325,6 +1390,7 @@ impl ConstraintSatisfactionSolver {
                     &self.stateful_assignments,
                     &self.assignments,
                     &self.propagators,
+                    &mut self.predicate_id_generator
                 )
         );
         info!("Exited propagation loop...")
@@ -1471,7 +1537,7 @@ impl ConstraintSatisfactionSolver {
             self.propagator_queue
                 .enqueue_propagator(new_propagator_id, new_propagator.priority());
 
-            self.propagate();
+            self.propagate(&mut None::<DummyBrancher>);
 
             if self.state.no_conflict() {
                 Ok(())
@@ -1499,13 +1565,19 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
+    pub fn add_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        brancher: &mut impl Brancher,
+    ) -> Result<(), ConstraintOperationError> {
         let mut propagation_context = PropagationContextMut::new(
+            &mut self.predicate_id_generator,
             &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.domain_faithfulness,
+            &mut self.watch_list_manager,
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
@@ -1516,7 +1588,7 @@ impl ConstraintSatisfactionSolver {
         )?;
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
-        self.propagate();
+        self.propagate(brancher);
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
@@ -1592,7 +1664,7 @@ impl ConstraintSatisfactionSolver {
             let _ = self.unit_nogood_step_ids.insert(!predicates[0], step_id);
         }
 
-        if let Err(constraint_operation_error) = self.add_nogood(predicates) {
+        if let Err(constraint_operation_error) = self.add_nogood(predicates, &mut DummyBrancher) {
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
                     constraint_operation_error,

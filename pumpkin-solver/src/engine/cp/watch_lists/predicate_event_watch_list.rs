@@ -55,6 +55,9 @@ impl<WatchingType: StorageKey, StoredType: PartialEq + Clone>
         watches: WatchingType,
         events: EnumSet<PredicateDomainEvent>,
     ) {
+        while watches.index() >= self.watchers.len() {
+            let _ = self.watchers.push(PredicateEventWatcher::default());
+        }
         let watcher_predicate = &mut self.watchers[watches];
 
         for event in events {

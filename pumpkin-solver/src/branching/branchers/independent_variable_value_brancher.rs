@@ -3,6 +3,8 @@
 
 use std::marker::PhantomData;
 
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
@@ -11,6 +13,7 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
+use crate::engine::WatchListManager;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -78,7 +81,12 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+    fn on_appearance_in_conflict_predicate(
+        &mut self,
+        predicate: Predicate,
+        _watch_lists: &mut WatchListManager,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
         self.variable_selector
             .on_appearance_in_conflict_predicate(predicate)
     }
@@ -97,5 +105,22 @@ where
             .into_iter()
             .chain(self.value_selector.subscribe_to_events())
             .collect()
+    }
+
+    fn on_restart(&mut self) {}
+
+    fn synchronise(
+        &mut self,
+        _assignments: &crate::engine::Assignments,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+    }
+
+    fn notify_predicate(
+        &mut self,
+        _predicate: PredicateId,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+        _value: bool,
+    ) {
     }
 }

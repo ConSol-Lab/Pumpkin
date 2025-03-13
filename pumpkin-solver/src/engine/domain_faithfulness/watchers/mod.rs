@@ -75,8 +75,6 @@ pub(crate) trait DomainWatcherInformation {
     fn get_max_unassigned(&self) -> TrailedInt;
 
     fn is_empty(&self) -> bool;
-
-    fn get_domain_id(&self) -> DomainId;
 }
 
 impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
@@ -148,10 +146,6 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
     fn is_empty(&self) -> bool {
         self.get_watcher().values.is_empty()
     }
-
-    fn get_domain_id(&self) -> DomainId {
-        self.get_watcher().domain_id
-    }
 }
 
 pub(crate) trait DomainWatcher: DomainWatcherInformation {
@@ -187,19 +181,18 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
     fn predicate_has_been_falsified(
         &self,
-        _index: usize,
-        _falsified_predicates: &mut Vec<PredicateId>,
+        index: usize,
+        falsified_predicates: &mut Vec<PredicateId>,
     ) {
-        // TODO: At the moment, no propagator is interested
-        // let predicate_id = self.get_ids()[index];
-        // if predicate_id.id == u32::MAX {
-        //    return;
-        //}
-        // info!(
-        //    "Falsified: {:?}",
-        //    self.get_predicate_for_value(self.get_values()[index])
-        //);
-        // falsified_predicates.push(self.get_ids()[index])
+        let predicate_id = self.get_ids()[index];
+        if predicate_id.id == u32::MAX {
+            return;
+        }
+        info!(
+            "Falsified: {:?}",
+            self.get_predicate_for_value(self.get_values()[index])
+        );
+        falsified_predicates.push(self.get_ids()[index])
     }
 
     fn add(
@@ -221,12 +214,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
         for index in 0..self.get_values().len() {
             let index_value = self.get_values()[index];
-            pumpkin_assert_simple!(
-                index_value != value,
-                "Found {value} already exists for {index_value} with bounds {}, {}",
-                assignments.get_initial_lower_bound(self.get_domain_id()),
-                assignments.get_initial_upper_bound(self.get_domain_id())
-            );
+            if index_value == value {
+                // Value already exists
+                return;
+            }
 
             // First we check whether we can update the indices for the newly added id
             if index_value < value && index_value > largest_value_smaller_than {

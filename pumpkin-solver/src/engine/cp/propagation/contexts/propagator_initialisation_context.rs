@@ -83,7 +83,8 @@ impl PropagatorInitialisationContext<'_> {
 
         self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
 
-        let mut watchers = PropagatorWatchers::new(propagator_var, &mut self.watch_list.watch_list_cp);
+        let mut watchers =
+            PropagatorWatchers::new(propagator_var, &mut self.watch_list.watch_list_cp);
         var.watch_all(&mut watchers, domain_events.get_int_events());
 
         var
@@ -115,7 +116,8 @@ impl PropagatorInitialisationContext<'_> {
 
         self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
 
-        let mut watchers = PropagatorWatchers::new(propagator_var, &mut self.watch_list.watch_list_cp);
+        let mut watchers =
+            PropagatorWatchers::new(propagator_var, &mut self.watch_list.watch_list_cp);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
 
         var

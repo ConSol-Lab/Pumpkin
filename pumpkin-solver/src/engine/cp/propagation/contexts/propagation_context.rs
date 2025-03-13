@@ -1,3 +1,4 @@
+use crate::basic_types::PredicateIdGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
@@ -11,6 +12,7 @@ use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
 use crate::engine::TrailedAssignments;
 use crate::engine::TrailedInt;
+use crate::engine::WatchListManager;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct StatefulPropagationContext<'a> {
@@ -63,24 +65,30 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
+    pub(crate) watch_list_manager: &'a mut WatchListManager,
+    pub(crate) predicate_id_generator: &'a mut PredicateIdGenerator,
     reification_literal: Option<Literal>,
 }
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
+        predicate_id_generator: &'a mut PredicateIdGenerator,
         stateful_assignments: &'a mut TrailedAssignments,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
         domain_faithfulness: &'a mut DomainFaithfulness,
+        watch_list_manager: &'a mut WatchListManager,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
+            predicate_id_generator,
             stateful_assignments,
             assignments,
             reason_store,
             propagator_id,
             domain_faithfulness,
+            watch_list_manager,
             semantic_minimiser,
             reification_literal: None,
         }

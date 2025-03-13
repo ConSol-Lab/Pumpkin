@@ -1,5 +1,7 @@
 use enum_map::Enum;
 
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
 #[cfg(doc)]
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -15,6 +17,7 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::WatchListManager;
 #[cfg(doc)]
 use crate::results::solution_iterator::SolutionIterator;
 #[cfg(doc)]
@@ -78,7 +81,13 @@ pub trait Brancher {
     ///
     /// To receive information about this event, use
     /// [`BrancherEvent::AppearanceInConflictPredicate`] in [`Self::subscribe_to_events`]
-    fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
+    fn on_appearance_in_conflict_predicate(
+        &mut self,
+        _predicate: Predicate,
+        _watch_lists: &mut WatchListManager,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+    }
 
     /// This method is called whenever a restart is performed.
     /// To receive information about this event, use [`BrancherEvent::Restart`] in
@@ -90,7 +99,12 @@ pub trait Brancher {
     ///
     /// To receive information about this event, use [`BrancherEvent::Synchronise`] in
     /// [`Self::subscribe_to_events`]
-    fn synchronise(&mut self, _assignments: &Assignments) {}
+    fn synchronise(
+        &mut self,
+        _assignments: &Assignments,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+    }
 
     /// This method returns whether a restart is *currently* pointless for the [`Brancher`].
     ///
@@ -106,11 +120,111 @@ pub trait Brancher {
         true
     }
 
+    fn notify_predicate(
+        &mut self,
+        _predicate: PredicateId,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+        _value: bool,
+    ) {
+    }
+
     /// Indicates which [`BrancherEvent`] are relevant for this particular [`Brancher`].
     ///
     /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which [`VariableSelector`] should be called.
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
+}
+
+impl<T: Brancher> Brancher for Option<T> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        if let Some(brancher) = self {
+            brancher.next_decision(context)
+        } else {
+            None
+        }
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        if let Some(brancher) = self {
+            brancher.subscribe_to_events()
+        } else {
+            vec![]
+        }
+    }
+
+    fn on_conflict(&mut self) {
+        if let Some(brancher) = self {
+            brancher.on_conflict()
+        }
+    }
+
+    fn on_backtrack(&mut self) {
+        if let Some(brancher) = self {
+            brancher.on_backtrack()
+        }
+    }
+
+    fn on_solution(&mut self, _solution: SolutionReference) {
+        if let Some(brancher) = self {
+            brancher.on_solution(_solution)
+        }
+    }
+
+    fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {
+        if let Some(brancher) = self {
+            brancher.on_unassign_integer(_variable, _value)
+        }
+    }
+
+    fn on_appearance_in_conflict_predicate(
+        &mut self,
+        _predicate: Predicate,
+        _watch_lists: &mut WatchListManager,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+        if let Some(brancher) = self {
+            brancher.on_appearance_in_conflict_predicate(
+                _predicate,
+                _watch_lists,
+                _predicate_id_generator,
+            );
+        }
+    }
+
+    fn on_restart(&mut self) {
+        if let Some(brancher) = self {
+            brancher.on_restart()
+        }
+    }
+
+    fn synchronise(
+        &mut self,
+        _assignments: &Assignments,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+        if let Some(brancher) = self {
+            brancher.synchronise(_assignments, _predicate_id_generator)
+        }
+    }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        if let Some(brancher) = self {
+            brancher.is_restart_pointless()
+        } else {
+            true
+        }
+    }
+
+    fn notify_predicate(
+        &mut self,
+        _predicate: PredicateId,
+        _predicate_id_generator: &mut PredicateIdGenerator,
+        _value: bool,
+    ) {
+        if let Some(brancher) = self {
+            brancher.notify_predicate(_predicate, _predicate_id_generator, _value)
+        }
+    }
 }
 
 /// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
@@ -132,4 +246,5 @@ pub enum BrancherEvent {
     Restart,
     /// Event which is called with the new state after a backtrack has occurred
     Synchronise,
+    NotifyPredicate,
 }

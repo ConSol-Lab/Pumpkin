@@ -1,13 +1,16 @@
-use crate::{basic_types::PredicateId, engine::propagation::PropagatorVarId, variables::DomainId};
-
-use super::{
-    DomainEventWatchList, IntDomainEvent, PredicateEventWatchList, PredicateWatcher, WatchList,
-};
+use super::DomainEventWatchList;
+use super::IntDomainEvent;
+use super::PredicateEventWatchList;
+use super::PredicateWatcher;
+use super::WatchList;
+use crate::basic_types::PredicateId;
+use crate::engine::propagation::PropagatorVarId;
+use crate::variables::DomainId;
 
 #[derive(Debug, Default)]
-pub(crate) struct WatchListManager {
+pub struct WatchListManager {
     pub(crate) watch_list_cp: DomainEventWatchList<DomainId, PropagatorVarId>,
-    watch_list_predicate: PredicateEventWatchList<PredicateId, PredicateWatcher>,
+    pub(crate) watch_list_predicate: PredicateEventWatchList<PredicateId, PredicateWatcher>,
 }
 
 impl WatchListManager {
@@ -24,7 +27,7 @@ impl WatchListManager {
         event: IntDomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {
-        self.watch_list_cp.get_affected(event, domain)
+        self.watch_list_cp.get_affected_backtrack(event, domain)
     }
 
     pub(crate) fn grow_cp(&mut self) {

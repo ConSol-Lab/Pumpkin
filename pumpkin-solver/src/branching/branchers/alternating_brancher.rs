@@ -1,6 +1,8 @@
 //! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
 //! on the strategy specified in [`AlternatingStrategy`].
 
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::Brancher;
@@ -8,6 +10,7 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::WatchListManager;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -110,12 +113,37 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+    fn on_appearance_in_conflict_predicate(
+        &mut self,
+        predicate: Predicate,
+        watch_lists: &mut WatchListManager,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+        self.default_brancher.on_appearance_in_conflict_predicate(
+            predicate,
+            watch_lists,
+            predicate_id_generator,
+        );
+        if !self.will_always_use_default() {
+            self.other_brancher.on_appearance_in_conflict_predicate(
+                predicate,
+                watch_lists,
+                predicate_id_generator,
+            )
+        }
+    }
+
+    fn notify_predicate(
+        &mut self,
+        predicate: PredicateId,
+        predicate_id_generator: &mut PredicateIdGenerator,
+        value: bool,
+    ) {
         self.default_brancher
-            .on_appearance_in_conflict_predicate(predicate);
+            .notify_predicate(predicate, predicate_id_generator, value);
         if !self.will_always_use_default() {
             self.other_brancher
-                .on_appearance_in_conflict_predicate(predicate)
+                .notify_predicate(predicate, predicate_id_generator, value)
         }
     }
 
@@ -203,10 +231,16 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn synchronise(&mut self, assignments: &Assignments) {
-        self.default_brancher.synchronise(assignments);
+    fn synchronise(
+        &mut self,
+        assignments: &Assignments,
+        predicate_id_generator: &mut PredicateIdGenerator,
+    ) {
+        self.default_brancher
+            .synchronise(assignments, predicate_id_generator);
         if !self.will_always_use_default() {
-            self.other_brancher.synchronise(assignments);
+            self.other_brancher
+                .synchronise(assignments, predicate_id_generator);
         }
     }
 
