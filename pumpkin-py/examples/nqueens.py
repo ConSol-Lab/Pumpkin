@@ -10,13 +10,13 @@ def main(n: int, proof: Path | None):
 
     variables = [model.new_integer_variable(0, n - 1, name=f"q{i}") for i in range(n)]
 
-    model.add_constraint(constraints.AllDifferent(variables))
+    model.add_constraint(constraints.AllDifferent(variables), tag=1)
 
     diag1 = [var.offset(i) for (i, var) in enumerate(variables)]
     diag2 = [var.offset(-i) for (i, var) in enumerate(variables)]
 
-    model.add_constraint(constraints.AllDifferent(diag1))
-    model.add_constraint(constraints.AllDifferent(diag2))
+    model.add_constraint(constraints.AllDifferent(diag1), tag=2)
+    model.add_constraint(constraints.AllDifferent(diag2), tag=3)
 
     status = model.satisfy(proof=proof)
     match status:

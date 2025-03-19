@@ -42,13 +42,11 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
     pub fn next_solution(&mut self) -> IteratedSolution {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
-            self.solver
-                .get_satisfaction_solver_mut()
-                .restore_state_at_root(self.brancher);
             if self.solver.add_clause(blocking_clause).is_err() {
                 return IteratedSolution::Finished;
             }
         }
+
         match self.solver.satisfy(self.brancher, self.termination) {
             Satisfiable(solution) => {
                 self.has_solution = true;

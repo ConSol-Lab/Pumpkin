@@ -35,9 +35,7 @@ pub fn cumulative(item: TokenStream) -> TokenStream {
                         stringcase::snake_case(&argument[2..].split("-").skip(1).join("_"))
                     })
                     .join("_");
-                let options = quote! {
-                    #(#options),*
-                };
+
                 let test_name = format_ident!(
                     "{}",
                     stringcase::snake_case(
@@ -53,12 +51,18 @@ pub fn cumulative(item: TokenStream) -> TokenStream {
                     )
                 );
                 let stream: TokenStream = quote! {
-                        mzn_test!(
-                            #test_name,
-                            "cumulative",
-                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(#propagation_method),"--cumulative-explanation-type", #explanation_type, #options]
-                        );
-                    }
+                    mzn_test!(
+                        #test_name,
+                        "cumulative",
+                        vec![
+                            "--cumulative-propagation-method".to_string(),
+                            stringcase::kebab_case(#propagation_method),
+                            "--cumulative-explanation-type".to_string(),
+                            #explanation_type.to_string(),
+                            #(#options.to_string()),*
+                        ]
+                    );
+                }
                 .into();
                 output.extend(stream);
             }
@@ -102,9 +106,6 @@ pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
                 .iter()
                 .map(|argument| stringcase::snake_case(&argument[2..].split("-").skip(1).join("_")))
                 .join("_");
-            let options = quote! {
-                #(#options),*
-            };
             let test_name = format_ident!(
                 "{}",
                 stringcase::snake_case(
@@ -123,18 +124,28 @@ pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
             );
 
             let stream: TokenStream = quote! {
-                paste::item! {
-                    #[test]
-                    fn #test_name() {
-                        check_statistic_equality(
-                            "cumulative",
-                            "mzn_constraints",
-                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#first_name)),"--cumulative-explanation-type", #explanation_type, #options],
-                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#second_name)),"--cumulative-explanation-type", #explanation_type, #options],
-                            &format!("equality_{}_{}_{}", #first_name, #explanation_type, #option_string),
-                            &format!("equality_{}_{}_{}", #second_name, #explanation_type, #option_string),
-                        );
-                    }
+                #[test]
+                fn #test_name() {
+                    check_statistic_equality(
+                        "cumulative",
+                        "mzn_constraints",
+                        vec![
+                            "--cumulative-propagation-method".to_string(),
+                            stringcase::kebab_case(stringify!(#first_name)),
+                            "--cumulative-explanation-type".to_string(),
+                            #explanation_type.to_string(),
+                            #(#options.to_string()),*
+                        ],
+                        vec![
+                            "--cumulative-propagation-method".to_string(),
+                            stringcase::kebab_case(stringify!(#second_name)),
+                            "--cumulative-explanation-type".to_string(),
+                            #explanation_type.to_string(),
+                            #(#options.to_string()),*
+                        ],
+                        &format!("equality_{}_{}_{}", #first_name, #explanation_type, #option_string),
+                        &format!("equality_{}_{}_{}", #second_name, #explanation_type, #option_string),
+                    );
                 }
             }
             .into();

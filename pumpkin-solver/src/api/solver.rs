@@ -128,10 +128,6 @@ impl Solver {
         log_statistic_postfix();
     }
 
-    pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
-        &mut self.satisfaction_solver
-    }
-
     pub fn get_solution_reference(&self) -> SolutionReference {
         self.satisfaction_solver.get_solution_reference()
     }

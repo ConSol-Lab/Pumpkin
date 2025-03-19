@@ -32,7 +32,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables
 //! let x = solver.new_bounded_integer(5, 10);
 //! let y = solver.new_bounded_integer(-3, 15);
 //! let z = solver.new_bounded_integer(7, 25);
@@ -187,7 +187,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables with domains within the range [0, 2]
 //! let x = solver.new_bounded_integer(0, 2);
 //! let y = solver.new_bounded_integer(0, 2);
 //! let z = solver.new_bounded_integer(0, 2);
@@ -252,7 +252,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables with domains within the range [0, 2]
 //! let x = solver.new_bounded_integer(0, 2);
 //! let y = solver.new_bounded_integer(0, 2);
 //! let z = solver.new_bounded_integer(0, 2);

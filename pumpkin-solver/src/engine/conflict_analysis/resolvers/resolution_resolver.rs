@@ -70,16 +70,12 @@ impl ConflictResolver for ResolutionResolver {
         self.clean_up();
 
         // Initialise the data structures with the conflict nogood.
-        for predicate in context
-            .get_conflict_nogood(context.is_completing_proof)
-            .iter()
-        {
+        for predicate in context.get_conflict_nogood().iter() {
             self.add_predicate_to_conflict_nogood(
                 *predicate,
                 context.assignments,
                 context.brancher,
                 self.mode,
-                context.is_completing_proof,
             );
         }
         // Record conflict nogood size statistics.
@@ -157,10 +153,6 @@ impl ConflictResolver for ResolutionResolver {
                         );
 
                         if self.reason_buffer.is_empty() {
-                            // In the case when the proof is being completed, it could be the case
-                            // that the reason for a root-level propagation is empty; this
-                            // predicate will be filtered out by the semantic minimisation
-                            pumpkin_assert_simple!(context.is_completing_proof);
                             predicate
                         } else {
                             pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
@@ -255,7 +247,6 @@ impl ConflictResolver for ResolutionResolver {
                     context.assignments,
                     context.brancher,
                     self.mode,
-                    context.is_completing_proof,
                 );
             }
         }
@@ -289,7 +280,6 @@ impl ResolutionResolver {
         assignments: &Assignments,
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
-        is_logging_complete_proof: bool,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -301,7 +291,7 @@ impl ResolutionResolver {
                 )
             });
         // Ignore root level predicates.
-        if !is_logging_complete_proof && dec_level == 0 {
+        if dec_level == 0 {
             // do nothing
         }
         // 1UIP
