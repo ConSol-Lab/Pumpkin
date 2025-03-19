@@ -139,22 +139,22 @@ pub(crate) fn solve(
     match result {
         OptimisationResult::Optimal(optimal_solution) => {
             if !options.all_solutions {
-                solver.log_statistics();
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
             }
             println!("==========");
+            solver.log_statistics();
         }
         OptimisationResult::Satisfiable(_) => {
             // Solutions are printed in the callback.
             solver.log_statistics();
         }
         OptimisationResult::Unsatisfiable => {
-            solver.log_statistics();
             println!("{MSG_UNSATISFIABLE}");
+            solver.log_statistics();
         }
         OptimisationResult::Unknown => {
-            solver.log_statistics();
             println!("{MSG_UNKNOWN}");
+            solver.log_statistics();
         }
     };
 
@@ -183,6 +183,7 @@ fn satisfy(
                 }
                 IteratedSolution::Finished => {
                     println!("==========");
+                    solver.log_statistics();
                     break;
                 }
                 IteratedSolution::Unknown => {
@@ -190,8 +191,8 @@ fn satisfy(
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
-                    solver.log_statistics();
                     println!("{MSG_UNSATISFIABLE}");
+                    solver.log_statistics();
                     break;
                 }
             }
@@ -206,12 +207,12 @@ fn satisfy(
                 solution.as_reference(),
             ),
             SatisfactionResult::Unsatisfiable => {
-                solver.log_statistics();
                 println!("{MSG_UNSATISFIABLE}");
+                solver.log_statistics();
             }
             SatisfactionResult::Unknown => {
-                solver.log_statistics();
                 println!("{MSG_UNKNOWN}");
+                solver.log_statistics();
             }
         }
     }
