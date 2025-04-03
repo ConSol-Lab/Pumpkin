@@ -11,6 +11,8 @@ use drcp_format::LiteralDefinitions;
 use crate::basic_types::HashMap;
 use crate::predicates::Predicate;
 use crate::variable_names::VariableNames;
+use crate::variables::DomainId;
+use crate::variables::Literal;
 
 #[derive(Default, Debug)]
 pub(crate) struct ProofLiterals {
@@ -19,6 +21,12 @@ pub(crate) struct ProofLiterals {
     /// The predicates in the map are only LessThanEqual or Equal. The other variants are negations
     /// of the predicates in the map.
     variables: HashMap<Predicate, NonZeroU32>,
+
+    /// Maps the domain id of a 0-1 integer `x` to the predicate `p` that it reifies:
+    /// `[x == 1] <-> p`.
+    ///
+    /// Used in substituting the reification domain with the predicate when logging reasons.
+    reification_domains: HashMap<DomainId, Predicate>,
 }
 
 impl ProofLiterals {
@@ -35,6 +43,57 @@ impl ProofLiterals {
         }
 
         definitions.write(sink)
+    }
+
+    /// Given a literal, whenever it shows up in a proof step, substitute it with the provided
+    /// predicate.
+    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
+        // Note: This only works because we assume `literal` is a fresh literal and we are given
+        // the positive polarity. That assumption holds as the only place this can be called is
+        // transitively through `new_literal_for_predicate`. As soon as this assumption is
+        // violated, all hell will break loose.
+        let domain = literal.get_true_predicate().get_domain();
+
+        let _ = self.reification_domains.insert(domain, predicate);
+    }
+
+    /// The given predicate is a predicate over a literal. This function gets the associated
+    /// predicate that was reified with [`Self::reify_predicate`] if it exists.
+    fn get_underlying_predicate(&self, predicate: Predicate) -> Option<Predicate> {
+        let domain_id = predicate.get_domain();
+        let rhs = predicate.get_right_hand_side();
+
+        self.reification_domains
+            .get(&domain_id)
+            .map(|&reified_predicate| {
+                assert!(rhs == 0 || rhs == 1);
+
+                match predicate {
+                    // The `predicate` is false
+                    Predicate::UpperBound { upper_bound: 0, .. }
+                    | Predicate::Equal {
+                        equality_constant: 0,
+                        ..
+                    }
+                    | Predicate::NotEqual {
+                        not_equal_constant: 1,
+                        ..
+                    } => !reified_predicate,
+
+                    // The `predicate` is true
+                    Predicate::LowerBound { lower_bound: 1, .. }
+                    | Predicate::Equal {
+                        equality_constant: 1,
+                        ..
+                    }
+                    | Predicate::NotEqual {
+                        not_equal_constant: 0,
+                        ..
+                    } => reified_predicate,
+
+                    p => panic!("{p:?} is not a valid reification predicate"),
+                }
+            })
     }
 }
 
@@ -74,6 +133,9 @@ impl LiteralCodeProvider for ProofLiterals {
     type Literal = Predicate;
 
     fn to_code(&mut self, literal: Self::Literal) -> NonZeroI32 {
+        // Determine whether `literal` is a reification of another predicate.
+        let literal = self.get_underlying_predicate(literal).unwrap_or(literal);
+
         let key = match literal {
             l @ (Predicate::UpperBound { .. } | Predicate::Equal { .. }) => l,
             l @ (Predicate::LowerBound { .. } | Predicate::NotEqual { .. }) => !l,

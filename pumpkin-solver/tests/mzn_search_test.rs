@@ -3,12 +3,17 @@
 mod helpers;
 
 use helpers::run_mzn_test;
+use helpers::TestType;
 
 macro_rules! mzn_search_ordered {
     ($name:ident) => {
         #[test]
         fn $name() {
-            run_mzn_test::<true>(stringify!($name), "mzn_search");
+            let _ = run_mzn_test::<true>(
+                stringify!($name),
+                "mzn_search",
+                TestType::SolutionEnumeration,
+            );
         }
     };
 }
@@ -17,7 +22,11 @@ macro_rules! mzn_search_unordered {
     ($name:ident) => {
         #[test]
         fn $name() {
-            run_mzn_test::<false>(stringify!($name), "mzn_search");
+            let _ = run_mzn_test::<false>(
+                stringify!($name),
+                "mzn_search",
+                TestType::SolutionEnumeration,
+            );
         }
     };
 }

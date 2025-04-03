@@ -12,6 +12,8 @@ use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
+use crate::proof::explain_root_assignment;
+use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -69,19 +71,31 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood> {
         self.clean_up();
 
+        let conflict_nogood = context.get_conflict_nogood();
+
+        let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
+            Some(RootExplanationContext {
+                propagators: context.propagators,
+                proof_log: context.proof_log,
+                unit_nogood_step_ids: context.unit_nogood_step_ids,
+                assignments: context.assignments,
+                reason_store: context.reason_store,
+            })
+        } else {
+            None
+        };
+
         // Initialise the data structures with the conflict nogood.
-        for predicate in context
-            .get_conflict_nogood(context.is_completing_proof)
-            .iter()
-        {
+        for predicate in conflict_nogood.iter() {
             self.add_predicate_to_conflict_nogood(
                 *predicate,
                 context.assignments,
                 context.brancher,
                 self.mode,
-                context.is_completing_proof,
+                root_explanation_context.as_mut(),
             );
         }
+
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
             self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
@@ -157,10 +171,6 @@ impl ConflictResolver for ResolutionResolver {
                         );
 
                         if self.reason_buffer.is_empty() {
-                            // In the case when the proof is being completed, it could be the case
-                            // that the reason for a root-level propagation is empty; this
-                            // predicate will be filtered out by the semantic minimisation
-                            pumpkin_assert_simple!(context.is_completing_proof);
                             predicate
                         } else {
                             pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
@@ -249,13 +259,25 @@ impl ConflictResolver for ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
+            let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
+                Some(RootExplanationContext {
+                    propagators: context.propagators,
+                    proof_log: context.proof_log,
+                    unit_nogood_step_ids: context.unit_nogood_step_ids,
+                    assignments: context.assignments,
+                    reason_store: context.reason_store,
+                })
+            } else {
+                None
+            };
+
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(
                     self.reason_buffer[i],
                     context.assignments,
                     context.brancher,
                     self.mode,
-                    context.is_completing_proof,
+                    root_explanation_context.as_mut(),
                 );
             }
         }
@@ -283,13 +305,17 @@ impl ResolutionResolver {
         self.to_process_heap.clear();
     }
 
+    /// Add the predicate to the current conflict nogood if we know it needs to be added.
+    ///
+    /// If a `root_explanation_context` is provided, then root-level assignments are explained as
+    /// well in the proof log.
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
         assignments: &Assignments,
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
-        is_logging_complete_proof: bool,
+        root_explanation_context: Option<&mut RootExplanationContext>,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -301,8 +327,11 @@ impl ResolutionResolver {
                 )
             });
         // Ignore root level predicates.
-        if !is_logging_complete_proof && dec_level == 0 {
-            // do nothing
+        if dec_level == 0 {
+            // do nothing, only possibly explain the predicate in the proof
+            if let Some(context) = root_explanation_context {
+                explain_root_assignment(context, predicate);
+            }
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
