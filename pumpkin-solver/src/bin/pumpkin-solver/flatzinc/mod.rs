@@ -25,6 +25,7 @@ use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
+use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TerminationCondition;
@@ -33,7 +34,6 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::Solver;
 
 use self::instance::FlatZincInstance;
-use self::instance::FlatzincObjective;
 use self::instance::Output;
 use crate::flatzinc::error::FlatZincError;
 
@@ -57,6 +57,7 @@ pub(crate) struct FlatZincOptions {
 }
 
 fn solution_callback(
+    brancher: &impl Brancher,
     instance_objective_function: Option<DomainId>,
     options_all_solutions: bool,
     outputs: &[Output],
@@ -64,6 +65,7 @@ fn solution_callback(
     solution: SolutionReference,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
+        brancher.log_statistics(StatisticLogger::default());
         if let Some(objective) = instance_objective_function {
             solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
         } else {
@@ -100,28 +102,26 @@ pub(crate) fn solve(
         instance.search.expect("Expected a search to be defined")
     };
 
-    let (direction, objective) = match instance.objective_function {
-        Some(FlatzincObjective::Maximize(domain_id)) => {
-            (OptimisationDirection::Maximise, domain_id)
-        }
-        Some(FlatzincObjective::Minimize(domain_id)) => {
-            (OptimisationDirection::Minimise, domain_id)
-        }
-        None => {
-            satisfy(options, &mut solver, brancher, termination, outputs);
-            return Ok(());
-        }
-    };
+    let (direction, objective): (OptimisationDirection, DomainId) =
+        match instance.objective_function {
+            Some(objective) => objective.into(),
+            None => {
+                satisfy(options, &mut solver, brancher, termination, outputs);
+                return Ok(());
+            }
+        };
 
-    let callback = |solver: &Solver, solution: SolutionReference<'_>| {
-        solution_callback(
-            Some(objective),
-            options.all_solutions,
-            &outputs,
-            solver,
-            solution,
-        );
-    };
+    let callback =
+        |solver: &Solver, solution: SolutionReference<'_>, brancher: &DynamicBrancher| {
+            solution_callback(
+                brancher,
+                Some(objective),
+                options.all_solutions,
+                &outputs,
+                solver,
+                solution,
+            );
+        };
 
     let result = match options.optimisation_strategy {
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
@@ -139,6 +139,8 @@ pub(crate) fn solve(
     match result {
         OptimisationResult::Optimal(optimal_solution) => {
             if !options.all_solutions {
+                brancher.log_statistics(StatisticLogger::default());
+                solver.log_statistics();
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
             }
             println!("==========");
@@ -172,8 +174,9 @@ fn satisfy(
         let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
         loop {
             match solution_iterator.next_solution() {
-                IteratedSolution::Solution(solution, solver) => {
+                IteratedSolution::Solution(solution, solver, brancher) => {
                     solution_callback(
+                        brancher,
                         None,
                         options.all_solutions,
                         &outputs,
@@ -200,6 +203,7 @@ fn satisfy(
     } else {
         match solver.satisfy(&mut brancher, &mut termination) {
             SatisfactionResult::Satisfiable(solution) => solution_callback(
+                &brancher,
                 None,
                 options.all_solutions,
                 &outputs,

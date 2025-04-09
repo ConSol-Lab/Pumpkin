@@ -1,3 +1,4 @@
+use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
@@ -20,12 +21,7 @@ pub struct LinearSatUnsat<Var, Callback> {
     solution_callback: Callback,
 }
 
-impl<Var, Callback> LinearSatUnsat<Var, Callback>
-where
-    // The trait bound here is not common; see
-    // linear_unsat_sat for more info.
-    Callback: Fn(&Solver, SolutionReference),
-{
+impl<Var, Callback> LinearSatUnsat<Var, Callback> {
     /// Create a new instance of [`LinearSatUnsat`].
     pub fn new(
         direction: OptimisationDirection,
@@ -80,14 +76,15 @@ impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
     }
 }
 
-impl<Var, Callback> OptimisationProcedure<Var, Callback> for LinearSatUnsat<Var, Callback>
+impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
-    Callback: Fn(&Solver, SolutionReference),
+    B: Brancher,
+    Callback: SolutionCallback<B>,
 {
     fn optimise(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
@@ -189,7 +186,8 @@ where
         }
     }
 
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference) {
-        (self.solution_callback)(solver, solution)
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
+        self.solution_callback
+            .on_solution_callback(solver, solution, brancher)
     }
 }
