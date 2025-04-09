@@ -15,7 +15,7 @@ use crate::Solver;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]
-pub struct SolutionIterator<'solver, 'brancher, 'termination, B: Brancher, T> {
+pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
     solver: &'solver mut Solver,
     brancher: &'brancher mut B,
     termination: &'termination mut T,
@@ -84,7 +84,7 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
 #[derive(Debug)]
-pub enum IteratedSolution<'a, B: Brancher> {
+pub enum IteratedSolution<'a, B> {
     /// A new solution was identified.
     Solution(Solution, &'a Solver, &'a B),
 
