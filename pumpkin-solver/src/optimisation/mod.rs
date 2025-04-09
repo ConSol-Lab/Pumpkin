@@ -2,6 +2,7 @@
 use std::fmt::Display;
 
 use clap::ValueEnum;
+use solution_callback::SolutionCallback;
 
 use crate::branching::Brancher;
 use crate::results::OptimisationResult;
@@ -13,16 +14,17 @@ use crate::Solver;
 
 pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
+pub mod solution_callback;
 
-pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)> {
+pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
     fn optimise(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult;
 
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference);
+    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B);
 
     /// Processes a solution when it is found, it consists of the following procedure:
     /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
@@ -37,7 +39,7 @@ pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, Solu
         objective_variable: &impl IntegerVariable,
         best_objective_value: &mut i64,
         best_solution: &mut Solution,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         solver: &Solver,
     ) {
         *best_objective_value = (objective_multiplier
@@ -50,15 +52,10 @@ pub trait OptimisationProcedure<Var: IntegerVariable, Callback: Fn(&Solver, Solu
         self.internal_process_solution(best_solution, brancher, solver)
     }
 
-    fn internal_process_solution(
-        &self,
-        solution: &Solution,
-        brancher: &mut impl Brancher,
-        solver: &Solver,
-    ) {
+    fn internal_process_solution(&self, solution: &Solution, brancher: &mut B, solver: &Solver) {
         brancher.on_solution(solution.as_reference());
 
-        self.on_solution_callback(solver, solution.as_reference())
+        self.on_solution_callback(solver, solution.as_reference(), brancher)
     }
 }
 
