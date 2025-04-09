@@ -9,10 +9,12 @@ use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::ConstraintOperationError;
+use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
@@ -261,16 +263,18 @@ impl Model {
 
         let objective = objective.to_affine_view(&variable_map);
 
+        let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+
         let result = match optimiser {
             Optimiser::LinearSatUnsat => solver.optimise(
                 &mut brancher,
                 &mut Indefinite,
-                LinearSatUnsat::new(direction, objective, |_, _| {}),
+                LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => solver.optimise(
                 &mut brancher,
                 &mut Indefinite,
-                LinearUnsatSat::new(direction, objective, |_, _| {}),
+                LinearUnsatSat::new(direction, objective, callback),
             ),
         };
 

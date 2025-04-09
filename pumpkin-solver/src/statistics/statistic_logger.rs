@@ -8,7 +8,7 @@ use crate::engine::propagation::Propagator;
 
 /// Responsible for logging the statistics with the provided prefix; currently used when logging
 /// the statistics of propagators.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct StatisticLogger {
     /// The prefix which will be attached to the statistic name
     name_prefix: String,

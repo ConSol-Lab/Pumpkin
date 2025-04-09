@@ -1,4 +1,6 @@
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
@@ -9,9 +11,12 @@ use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
+use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
@@ -56,7 +61,6 @@ use crate::DefaultBrancher;
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 #[derive(Debug)]
-
 pub struct AutonomousSearch<BackupBrancher> {
     /// Predicates are mapped to ids. This is used internally in the heap.
     predicate_id_info: PredicateIdGenerator,
@@ -83,7 +87,18 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// If the heap does not contain any more unfixed predicates then this backup_brancher will be
     /// used instead.
     backup_brancher: BackupBrancher,
+
+    statistics: AutonomousSearchStatistics,
 }
+
+create_statistics_struct!(AutonomousSearchStatistics {
+    num_backup_called: usize,
+    num_predicates_removed: usize,
+    num_calls: usize,
+    num_predicates_added: usize,
+    average_size_of_heap: CumulativeMovingAverage<usize>,
+    num_assigned_predicates_encountered: usize,
+});
 
 const DEFAULT_VSIDS_INCREMENT: f64 = 1.0;
 const DEFAULT_VSIDS_MAX_THRESHOLD: f64 = 1e100;
@@ -110,6 +125,7 @@ impl DefaultBrancher {
                 RandomSelector::new(assignments.get_domains()),
                 RandomSplitter,
             ),
+            statistics: Default::default(),
         }
     }
 }
@@ -130,6 +146,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher,
+            statistics: Default::default(),
         }
     }
 
@@ -144,6 +161,8 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     /// Bumps the activity of a predicate by [`Vsids::increment`].
     /// Used when a predicate is encountered during a conflict.
     fn bump_activity(&mut self, predicate: Predicate) {
+        self.statistics.num_predicates_added +=
+            (!self.predicate_id_info.has_id_for_predicate(predicate)) as usize;
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
         self.heap.restore_key(id);
@@ -181,6 +200,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                     .get_predicate(*candidate)
                     .expect("We expected present predicates to be registered.");
                 if context.is_predicate_assigned(predicate) {
+                    self.statistics.num_assigned_predicates_encountered += 1;
                     let _ = self.heap.pop_max();
 
                     // We know that this predicate is now dormant
@@ -226,15 +246,25 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
 
 impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        self.statistics.num_calls += 1;
+        self.statistics
+            .average_size_of_heap
+            .add_term(self.heap.num_nonremoved_elements());
         let result = self
             .next_candidate_predicate(context)
             .map(|predicate| self.determine_polarity(predicate));
         if result.is_none() && !context.are_all_variables_assigned() {
             // There are variables for which we do not have a predicate, rely on the backup
+            self.statistics.num_backup_called += 1;
             self.backup_brancher.next_decision(context)
         } else {
             result
         }
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        let statistic_logger = statistic_logger.attach_to_prefix("AutonomousSearch");
+        self.statistics.log(statistic_logger);
     }
 
     fn on_backtrack(&mut self) {

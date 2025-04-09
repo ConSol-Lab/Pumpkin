@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
@@ -13,6 +14,15 @@ use pumpkin_solver::variables::Literal;
 pub(crate) enum FlatzincObjective {
     Maximize(DomainId),
     Minimize(DomainId),
+}
+
+impl From<FlatzincObjective> for (OptimisationDirection, DomainId) {
+    fn from(value: FlatzincObjective) -> Self {
+        match value {
+            FlatzincObjective::Maximize(domain_id) => (OptimisationDirection::Maximise, domain_id),
+            FlatzincObjective::Minimize(domain_id) => (OptimisationDirection::Minimise, domain_id),
+        }
+    }
 }
 
 #[derive(Default)]
