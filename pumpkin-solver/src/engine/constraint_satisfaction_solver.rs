@@ -1108,44 +1108,53 @@ impl ConstraintSatisfactionSolver {
         event_drain.clear();
     }
 
-    pub(crate) fn compute_reason_for_empty_domain(
-        assignments: &mut Assignments,
-        reason_store: &mut ReasonStore,
-        propagators: &mut PropagatorStore,
-    ) -> PropositionalConjunction {
+    pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
         // The empty domain happened after posting the last predicate on the trail.
         // The reason for this empty domain is computed as the reason for the bounds before the last
         // trail predicate was posted, plus the reason for the last trail predicate.
 
         // The last predicate on the trail reveals the domain id that has resulted
         // in an empty domain.
-        let entry = assignments.get_last_entry_on_trail();
-        assert!(
-            entry.reason.is_some(),
-            "Cannot cause an empty domain using a decision."
-        );
+        let entry = self.assignments.get_last_entry_on_trail();
+        let entry_reason = entry
+            .reason
+            .expect("Cannot cause an empty domain using a decision.");
         let conflict_domain = entry.predicate.get_domain();
         assert!(
-            entry.old_lower_bound != assignments.get_lower_bound(conflict_domain)
-                || entry.old_upper_bound != assignments.get_upper_bound(conflict_domain),
+            entry.old_lower_bound != self.assignments.get_lower_bound(conflict_domain)
+                || entry.old_upper_bound != self.assignments.get_upper_bound(conflict_domain),
             "One of the two bounds had to change."
         );
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
-        let mut empty_domain_reason: Vec<Predicate> = vec![
-            predicate!(conflict_domain >= entry.old_lower_bound),
-            predicate!(conflict_domain <= entry.old_upper_bound),
-        ];
-
-        let _ = reason_store.get_or_compute(
-            entry.reason.unwrap(),
-            ExplanationContext::from(&*assignments),
-            propagators,
+        let mut empty_domain_reason: Vec<Predicate> = vec![];
+        let _ = self.reason_store.get_or_compute(
+            entry_reason,
+            ExplanationContext::from(&self.assignments),
+            &mut self.propagators,
             &mut empty_domain_reason,
         );
 
-        empty_domain_reason.into()
+        // We also need to log this last propagation to the proof log as an inference.
+        let propagator = self.reason_store.get_propagator(entry_reason);
+        let constraint_tag = self.propagators.get_tag(propagator);
+
+        let _ = self.internal_parameters.proof_log.log_inference(
+            constraint_tag,
+            empty_domain_reason.iter().copied(),
+            Some(entry.predicate),
+        );
+
+        empty_domain_reason
+            .into_iter()
+            // The empty domain reason at this point only contains the reason for the last
+            // propagated predicate. The following also ensures the opposite is present.
+            .chain([
+                predicate!(conflict_domain >= entry.old_lower_bound),
+                predicate!(conflict_domain <= entry.old_upper_bound),
+            ])
+            .collect()
     }
 
     /// Main propagation loop.
@@ -1451,11 +1460,7 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        let empty_domain_reason = ConstraintSatisfactionSolver::compute_reason_for_empty_domain(
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.propagators,
-        );
+        let empty_domain_reason = self.compute_reason_for_empty_domain();
 
         // TODO: As a temporary solution, we remove the last trail element.
         // This way we guarantee that the assignment is consistent, which is needed
