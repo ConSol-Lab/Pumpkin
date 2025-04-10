@@ -201,6 +201,7 @@ pub(crate) fn run(
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
+            "pumpkin_disjunctive_strict" => compile_disjunctive_strict(context, exprs)?,
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -244,6 +245,21 @@ fn compile_cumulative(
         options.cumulative_options,
     )
     .post(context.solver, None);
+    Ok(post_result.is_ok())
+}
+
+fn compile_disjunctive_strict(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_disjunctive_strict");
+
+    let start_times = context.resolve_integer_variable_array(&exprs[0])?;
+    let durations = context.resolve_array_integer_constants(&exprs[1])?;
+
+    let post_result =
+        constraints::disjunctive(start_times.iter().copied(), durations.iter().copied())
+            .post(context.solver, None);
     Ok(post_result.is_ok())
 }
 

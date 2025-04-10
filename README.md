@@ -22,6 +22,7 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 The solver currently supports integer variables and a number of (global) constraints:
 
 - [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/cumulative).
+- [Disjunctive global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/disjunctive).
 - [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/element.rs).
 - [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
