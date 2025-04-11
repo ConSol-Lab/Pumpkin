@@ -1146,15 +1146,12 @@ impl ConstraintSatisfactionSolver {
             Some(entry.predicate),
         );
 
-        empty_domain_reason
-            .into_iter()
-            // The empty domain reason at this point only contains the reason for the last
-            // propagated predicate. The following also ensures the opposite is present.
-            .chain([
-                predicate!(conflict_domain >= entry.old_lower_bound),
-                predicate!(conflict_domain <= entry.old_upper_bound),
-            ])
-            .collect()
+        empty_domain_reason.extend([
+            predicate!(conflict_domain >= entry.old_lower_bound),
+            predicate!(conflict_domain <= entry.old_upper_bound),
+        ]);
+
+        empty_domain_reason.into()
     }
 
     /// Main propagation loop.
