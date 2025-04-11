@@ -1,6 +1,6 @@
 [package]
 name = "drcp-format"
-version = "0.2.0"
+version = "0.2.1"
 description = "Parse and write DRCP and literal definition files."
 license.workspace = true
 authors.workspace = true
