@@ -8,16 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1](https://github.com/consol-lab/pumpkin/compare/drcp-format-v0.2.0...drcp-format-v0.2.1) (2025-04-11)
 
 
-### Features
-
-* implement a tool to combine a proof with its literal mapping ([#157](https://github.com/consol-lab/pumpkin/issues/157)) ([e4cb2cc](https://github.com/consol-lab/pumpkin/commit/e4cb2ccef1aa821e7dae6e162b53fba4682aeca2))
-
-
 ### Bug Fixes
 
-* addressing clippy warnings ([#143](https://github.com/consol-lab/pumpkin/issues/143)) ([20c76bb](https://github.com/consol-lab/pumpkin/commit/20c76bb551588cff776c8c7154da8bcac4f2497c))
-* **drcp-format:** An empty nogood with hints can now be parsed. ([e4cb2cc](https://github.com/consol-lab/pumpkin/commit/e4cb2ccef1aa821e7dae6e162b53fba4682aeca2))
-* root level assignments are properly explained in the proof when logging inferences ([#158](https://github.com/consol-lab/pumpkin/issues/158)) ([857f84c](https://github.com/consol-lab/pumpkin/commit/857f84cbb39ab896bcbb36238fef29757d7536f3)), closes [#118](https://github.com/consol-lab/pumpkin/issues/118) [#119](https://github.com/consol-lab/pumpkin/issues/119) [#156](https://github.com/consol-lab/pumpkin/issues/156)
+* an empty nogood with hints can now be parsed. ([e4cb2cc](https://github.com/consol-lab/pumpkin/commit/e4cb2ccef1aa821e7dae6e162b53fba4682aeca2))
 
 ## [0.2.0](https://github.com/ConSol-Lab/Pumpkin/compare/drcp-format-v0.1.0...drcp-format-v0.2.0) (2024-11-05)
 
