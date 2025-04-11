@@ -27,6 +27,9 @@ use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
+#[cfg(target_arch = "wasm32")]
+use pumpkin_solver::termination::Indefinite as OsSignalReplacement;
+#[cfg(not(target_arch = "wasm32"))]
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
@@ -83,10 +86,14 @@ pub(crate) fn solve(
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
-    let mut termination = Combinator::new(
-        OsSignal::install(),
-        time_limit.map(TimeBudget::starting_now),
-    );
+    #[cfg(not(target_arch = "wasm32"))]
+    let signal_condition = OsSignal::install();
+
+    #[cfg(target_arch = "wasm32")]
+    let signal_condition = OsSignalReplacement;
+
+    let mut termination =
+        Combinator::new(signal_condition, time_limit.map(TimeBudget::starting_now));
 
     let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();

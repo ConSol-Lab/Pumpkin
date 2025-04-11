@@ -71,7 +71,13 @@ fn add_output_file<P: AsRef<Path>>(
     output_stem: &str,
 ) {
     let output_dir = output_dir.as_ref();
-    if is_msvc {
+    let target = std::env::var("TARGET").unwrap();
+    if target.contains("wasm32") {
+        // Output as a .wasm file when targeting WebAssembly.
+        let wasm_filename = format!("{output_stem}.wasm");
+        let output_file = output_dir.join(wasm_filename);
+        let _ = cmd.arg("-o").arg(output_file);
+    } else if is_msvc {
         let exe_name = format!("{output_stem}.exe");
 
         // The path to the object file.
