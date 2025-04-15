@@ -46,6 +46,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
 
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
+    pub(crate) use_semantic_minimisation: bool,
 
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) stateful_assignments: &'a mut TrailedAssignments,

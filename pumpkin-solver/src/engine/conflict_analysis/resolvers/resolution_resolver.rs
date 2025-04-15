@@ -1,5 +1,6 @@
 use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::HashSet;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::branching::Brancher;
@@ -453,18 +454,25 @@ impl ResolutionResolver {
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
-        let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
-            &self.processed_nogood_predicates,
-            context.assignments,
-            if !context.should_minimise {
-                // If we do not minimise then we do the equality
-                // merging in the first iteration of removing
-                // duplicates
-                Mode::EnableEqualityMerging
-            } else {
-                Mode::DisableEqualityMerging
-            },
-        );
+        let mut clean_nogood: Vec<Predicate> = if context.use_semantic_minimisation {
+            context.semantic_minimiser.minimise(
+                &self.processed_nogood_predicates,
+                context.assignments,
+                if !context.should_minimise {
+                    // If we do not minimise then we do the equality
+                    // merging in the first iteration of removing
+                    // duplicates
+                    Mode::EnableEqualityMerging
+                } else {
+                    Mode::DisableEqualityMerging
+                },
+            )
+        } else {
+            let nogood_predicates: HashSet<Predicate> =
+                self.processed_nogood_predicates.iter().copied().collect();
+
+            nogood_predicates.into_iter().collect()
+        };
 
         if context.should_minimise {
             // Then we perform recursive minimisation to remove the dominated predicates

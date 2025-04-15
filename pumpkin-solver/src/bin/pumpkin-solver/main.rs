@@ -124,6 +124,10 @@ struct Args {
     #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
     no_learning_clause_minimisation: bool,
 
+    /// Turn off semantic minimisation of learned nogoods.
+    #[arg(long = "no-semantic-minimise")]
+    no_semantic_minimisation: bool,
+
     /// Decides the sequence based on which the restarts are performed.
     ///
     /// - The "constant" approach uses a constant number of conflicts before another restart is
@@ -519,6 +523,7 @@ fn run() -> PumpkinResult<()> {
     let solver_options = SolverOptions {
         restart_options,
         learning_clause_minimisation: !args.no_learning_clause_minimisation,
+        learning_semantic_minimisation: !args.no_semantic_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         conflict_resolver: args.conflict_resolver,

@@ -195,8 +195,10 @@ pub enum ConflictResolver {
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
-    /// Whether learned clause minimisation should take place
+    /// Whether learned clause recursive minimisation should take place
     pub learning_clause_minimisation: bool,
+    /// Whether learned clause semantic minimisation should take place
+    pub learning_semantic_minimisation: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
     /// The proof log for the solver.
@@ -212,6 +214,7 @@ impl Default for SatisfactionSolverOptions {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
             learning_clause_minimisation: true,
+            learning_semantic_minimisation: false,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             conflict_resolver: ConflictResolver::default(),
@@ -661,6 +664,9 @@ impl ConstraintSatisfactionSolver {
                     event_drain: &mut self.event_drain,
                     backtrack_event_drain: &mut self.backtrack_event_drain,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
+                    use_semantic_minimisation: self
+                        .internal_parameters
+                        .learning_semantic_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     stateful_assignments: &mut self.stateful_assignments,
@@ -904,6 +910,7 @@ impl ConstraintSatisfactionSolver {
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
+            use_semantic_minimisation: self.internal_parameters.learning_semantic_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             stateful_assignments: &mut self.stateful_assignments,
