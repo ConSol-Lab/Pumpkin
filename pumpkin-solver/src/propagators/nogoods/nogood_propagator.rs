@@ -50,8 +50,12 @@ use crate::pumpkin_assert_simple;
 pub(crate) struct NogoodPropagator {
     /// The list of currently stored nogoods
     nogood_predicates: KeyedVec<NogoodId, Vec<Predicate>>,
-    /// The list of currently stored nogood_flags
+    /// The list of stored information for each nogood
     nogood_info: KeyedVec<NogoodId, NogoodInfo>,
+    /// The list of cached predicates; they are the last predicate in the nogood which was found to
+    /// be falsified and are checked to see if this is the still the case at the beginning of
+    /// propagation
+    cached_predicates: KeyedVec<NogoodId, Predicate>,
     /// Nogoods which are permanently present
     permanent_nogoods: Vec<NogoodId>,
     /// The ids of the nogoods sorted based on whether they have a "low" LBD score or a "high" LBD
@@ -180,6 +184,20 @@ impl Propagator for NogoodPropagator {
                                 .get_lower_bound_watcher_at_index(current_index)
                                 .nogood_id;
 
+                            // Check the cached predicate to see if it is (still) falsified
+                            if context.is_predicate_falsified(self.cached_predicates[nogood_id]) {
+                                // Keep the watchers, the nogood is falsified,
+                                // no propagation can take place.
+                                self.watch_lists[updated_domain_id]
+                                    .set_lower_bound_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
+                                current_index += 1;
+                                end_index += 1;
+                                continue;
+                            }
+
                             let nogood = &mut self.nogood_predicates[nogood_id];
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -201,6 +219,7 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
+                                self.cached_predicates[nogood_id] = nogood[0];
                                 self.watch_lists[updated_domain_id]
                                     .set_lower_bound_watcher_to_other_watcher(
                                         end_index,
@@ -318,6 +337,21 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_upper_bound_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            // Check the cached predicate to see if it is (still) falsified
+                            if context.is_predicate_falsified(self.cached_predicates[nogood_id]) {
+                                // Keep the watchers, the nogood is falsified,
+                                // no propagation can take place.
+                                self.watch_lists[updated_domain_id]
+                                    .set_upper_bound_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
+                                current_index += 1;
+                                end_index += 1;
+                                continue;
+                            }
+
                             let nogood = &mut self.nogood_predicates[nogood_id];
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -339,6 +373,7 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
+                                self.cached_predicates[nogood_id] = nogood[0];
                                 self.watch_lists[updated_domain_id]
                                     .set_upper_bound_watcher_to_other_watcher(
                                         end_index,
@@ -469,6 +504,21 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_inequality_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            // Check the cached predicate to see if it is (still) falsified
+                            if context.is_predicate_falsified(self.cached_predicates[nogood_id]) {
+                                // Keep the watchers, the nogood is falsified,
+                                // no propagation can take place.
+                                self.watch_lists[updated_domain_id]
+                                    .set_inequality_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
+                                current_index += 1;
+                                end_index += 1;
+                                continue;
+                            }
+
                             let nogood = &mut self.nogood_predicates[nogood_id];
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -490,6 +540,7 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
+                                self.cached_predicates[nogood_id] = nogood[0];
                                 self.watch_lists[updated_domain_id]
                                     .set_inequality_watcher_to_other_watcher(
                                         end_index,
@@ -645,6 +696,21 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_equality_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            // Check the cached predicate to see if it is (still) falsified
+                            if context.is_predicate_falsified(self.cached_predicates[nogood_id]) {
+                                // Keep the watchers, the nogood is falsified,
+                                // no propagation can take place.
+                                self.watch_lists[updated_domain_id]
+                                    .set_equality_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
+                                current_index += 1;
+                                end_index += 1;
+                                continue;
+                            }
+
                             let nogood = &mut self.nogood_predicates[nogood_id];
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -666,6 +732,7 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
+                                self.cached_predicates[nogood_id] = nogood[0];
                                 self.watch_lists[updated_domain_id]
                                     .set_equality_watcher_to_other_watcher(
                                         end_index,
@@ -923,6 +990,7 @@ impl NogoodPropagator {
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
         let new_id = if let Some(reused_id) = self.delete_ids.pop() {
+            self.cached_predicates[reused_id] = nogood[0];
             self.nogood_predicates[reused_id] = nogood;
             self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood(lbd);
             reused_id
@@ -930,6 +998,7 @@ impl NogoodPropagator {
             let new_nogood_id = NogoodId {
                 id: self.nogood_predicates.len() as u32,
             };
+            let _ = self.cached_predicates.push(nogood[0]);
             let _ = self.nogood_predicates.push(nogood);
             let _ = self.nogood_info.push(NogoodInfo::new_learned_nogood(lbd));
             new_nogood_id
@@ -1014,13 +1083,18 @@ impl NogoodPropagator {
             // Add the nogood to the database.
             // If there is an available nogood id, use it, otherwise allocate a fresh id.
             let new_id = if let Some(reused_id) = self.delete_ids.pop() {
+                self.cached_predicates[reused_id] = nogood[0];
                 self.nogood_predicates[reused_id] = nogood;
                 self.nogood_info[reused_id] = NogoodInfo::default();
                 reused_id
             } else {
-                let id = self.nogood_predicates.push(nogood);
+                let new_nogood_id = NogoodId {
+                    id: self.nogood_predicates.len() as u32,
+                };
+                let _ = self.cached_predicates.push(nogood[0]);
+                let _ = self.nogood_predicates.push(nogood);
                 let _ = self.nogood_info.push(NogoodInfo::default());
-                id
+                new_nogood_id
             };
 
             self.permanent_nogoods.push(new_id);
