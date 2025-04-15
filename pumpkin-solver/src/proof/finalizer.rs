@@ -62,6 +62,7 @@ pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) {
+    dbg!(context.assignments.evaluate_predicate(predicate));
     assert_eq!(
         context
             .assignments

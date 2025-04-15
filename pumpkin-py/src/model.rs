@@ -152,9 +152,9 @@ impl Model {
         });
     }
 
-    #[pyo3(signature = (proof=None))]
-    fn satisfy(&self, proof: Option<PathBuf>) -> SatisfactionResult {
-        let solver_setup = self.create_solver(proof);
+    #[pyo3(signature = (proof=None, no_minimisation=false))]
+    fn satisfy(&self, proof: Option<PathBuf>, no_minimisation: bool) -> SatisfactionResult {
+        let solver_setup = self.create_solver(proof, no_minimisation);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
             return SatisfactionResult::Unsatisfiable();
@@ -176,12 +176,13 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (assumptions))]
+    #[pyo3(signature = (assumptions, no_minimisation=false))]
     fn satisfy_under_assumptions(
         &self,
         assumptions: Vec<Predicate>,
+        no_minimisation: bool,
     ) -> SatisfactionUnderAssumptionsResult {
-        let solver_setup = self.create_solver(None);
+        let solver_setup = self.create_solver(None, no_minimisation);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
             return SatisfactionUnderAssumptionsResult::Unsatisfiable();
@@ -240,15 +241,16 @@ impl Model {
         result
     }
 
-    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None))]
+    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None, no_minimisation=false))]
     fn optimise(
         &self,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
         proof: Option<PathBuf>,
+        no_minimisation: bool,
     ) -> OptimisationResult {
-        let solver_setup = self.create_solver(proof);
+        let solver_setup = self.create_solver(proof, no_minimisation);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
             return OptimisationResult::Unsatisfiable();
@@ -351,6 +353,7 @@ impl Model {
     fn create_solver(
         &self,
         proof: Option<PathBuf>,
+        no_minimisation: bool,
     ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
         let proof_log = proof
             .map(|path| ProofLog::cp(&path, Format::Text, true, true))
@@ -360,6 +363,9 @@ impl Model {
 
         let options = SolverOptions {
             proof_log,
+            // learning_semantic_minimisation: !no_minimisation,
+            learning_semantic_minimisation: false,
+            learning_clause_minimisation: false,
             ..Default::default()
         };
 

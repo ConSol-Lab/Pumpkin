@@ -11,9 +11,18 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+dependencies = [
+    "cpmpy",
+    "maturin>=1.8.3",
+    "pytest>=8.3.5",
+    "setuptools>=75.3.2",
+]
 [project.optional-dependencies]
 tests = [
     "pytest",
 ]
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+[tool.uv.sources]
+cpmpy = { path = "../../cpmpy" }
