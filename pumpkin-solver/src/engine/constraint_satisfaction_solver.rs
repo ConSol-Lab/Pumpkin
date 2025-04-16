@@ -985,7 +985,11 @@ impl ConstraintSatisfactionSolver {
             &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
-            &mut self.semantic_minimiser,
+            if self.internal_parameters.learning_semantic_minimisation {
+                Some(&mut self.semantic_minimiser)
+            } else {
+                None
+            },
             Self::get_nogood_propagator_id(),
         );
 
@@ -1178,7 +1182,11 @@ impl ConstraintSatisfactionSolver {
                     &mut self.stateful_assignments,
                     &mut self.assignments,
                     &mut self.reason_store,
-                    &mut self.semantic_minimiser,
+                    if self.internal_parameters.learning_semantic_minimisation {
+                        Some(&mut self.semantic_minimiser)
+                    } else {
+                        None
+                    },
                     propagator_id,
                 );
                 propagator.propagate(context)
@@ -1424,7 +1432,11 @@ impl ConstraintSatisfactionSolver {
             &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
-            &mut self.semantic_minimiser,
+            if self.internal_parameters.learning_semantic_minimisation {
+                Some(&mut self.semantic_minimiser)
+            } else {
+                None
+            },
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();

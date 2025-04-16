@@ -581,8 +581,6 @@ impl ResolutionResolver {
                 .on_appearance_in_conflict_predicate(*predicate);
         }
 
-        dbg!(&clean_nogood);
-
         LearnedNogood {
             backjump_level,
             predicates: clean_nogood,

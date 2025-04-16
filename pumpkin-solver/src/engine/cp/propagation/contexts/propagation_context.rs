@@ -60,7 +60,7 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
-    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
+    pub(crate) semantic_minimiser: Option<&'a mut SemanticMinimiser>,
     reification_literal: Option<Literal>,
 }
 
@@ -69,7 +69,7 @@ impl<'a> PropagationContextMut<'a> {
         stateful_assignments: &'a mut TrailedAssignments,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
-        semantic_minimiser: &'a mut SemanticMinimiser,
+        semantic_minimiser: Option<&'a mut SemanticMinimiser>,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {

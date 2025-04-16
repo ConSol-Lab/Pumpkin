@@ -1263,11 +1263,9 @@ impl NogoodPropagator {
 
         // Semantic minimisation will take care of removing duplicate predicates, conflicting
         // nogoods, and may result in few predicates since it removes redundancies.
-        *nogood = context.semantic_minimiser.minimise(
-            nogood,
-            context.assignments,
-            Mode::EnableEqualityMerging,
-        );
+        if let Some(minimiser) = context.semantic_minimiser.as_mut() {
+            *nogood = minimiser.minimise(nogood, context.assignments, Mode::EnableEqualityMerging);
+        }
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
