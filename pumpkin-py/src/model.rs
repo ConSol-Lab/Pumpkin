@@ -363,9 +363,8 @@ impl Model {
 
         let options = SolverOptions {
             proof_log,
-            // learning_semantic_minimisation: !no_minimisation,
-            learning_semantic_minimisation: false,
-            learning_clause_minimisation: false,
+            learning_semantic_minimisation: !no_minimisation,
+            learning_clause_minimisation: !no_minimisation,
             ..Default::default()
         };
 
