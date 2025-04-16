@@ -468,8 +468,64 @@ impl ResolutionResolver {
                 },
             )
         } else {
-            let nogood_predicates: HashSet<Predicate> =
+            let mut nogood_predicates: HashSet<Predicate> =
                 self.processed_nogood_predicates.iter().copied().collect();
+
+            let bounds: Vec<_> = nogood_predicates
+                .iter()
+                .filter(|p| {
+                    matches!(
+                        p,
+                        Predicate::LowerBound { .. } | Predicate::UpperBound { .. }
+                    )
+                })
+                .copied()
+                .collect();
+
+            for bound in bounds {
+                match bound {
+                    Predicate::LowerBound {
+                        domain_id,
+                        lower_bound,
+                    } => {
+                        if nogood_predicates.contains(&Predicate::UpperBound {
+                            domain_id,
+                            upper_bound: lower_bound,
+                        }) {
+                            nogood_predicates.remove(&bound);
+                            nogood_predicates.remove(&Predicate::UpperBound {
+                                domain_id: domain_id,
+                                upper_bound: lower_bound,
+                            });
+                            nogood_predicates.insert(Predicate::Equal {
+                                domain_id,
+                                equality_constant: lower_bound,
+                            });
+                        }
+                    }
+                    Predicate::UpperBound {
+                        domain_id,
+                        upper_bound,
+                    } => {
+                        if nogood_predicates.contains(&Predicate::LowerBound {
+                            domain_id,
+                            lower_bound: upper_bound,
+                        }) {
+                            nogood_predicates.remove(&bound);
+                            nogood_predicates.remove(&Predicate::LowerBound {
+                                domain_id,
+                                lower_bound: upper_bound,
+                            });
+                            nogood_predicates.insert(Predicate::Equal {
+                                domain_id,
+                                equality_constant: upper_bound,
+                            });
+                        }
+                    }
+
+                    _ => {}
+                }
+            }
 
             nogood_predicates.into_iter().collect()
         };
@@ -524,6 +580,8 @@ impl ResolutionResolver {
                 .brancher
                 .on_appearance_in_conflict_predicate(*predicate);
         }
+
+        dbg!(&clean_nogood);
 
         LearnedNogood {
             backjump_level,
