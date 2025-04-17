@@ -5,6 +5,8 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
+use crate::proof::explain_root_assignment;
+use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -137,6 +139,19 @@ impl RecursiveMinimiser {
                 .unwrap()
                 == 0
             {
+                // The minimisation can introduce new inferences in the proof. If those inferences
+                // contain root-level antecedents, which we identified here, we need to make sure
+                // the proof is aware that that root-level assignment is used.
+                explain_root_assignment(
+                    &mut RootExplanationContext {
+                        propagators: context.propagators,
+                        proof_log: context.proof_log,
+                        unit_nogood_step_ids: context.unit_nogood_step_ids,
+                        assignments: context.assignments,
+                        reason_store: context.reason_store,
+                    },
+                    antecedent_predicate,
+                );
                 continue;
             }
 
