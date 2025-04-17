@@ -139,6 +139,9 @@ impl RecursiveMinimiser {
                 .unwrap()
                 == 0
             {
+                // The minimisation can introduce new inferences in the proof. If those inferences
+                // contain root-level antecedents, which we identified here, we need to make sure
+                // the proof is aware that that root-level assignment is used.
                 explain_root_assignment(
                     &mut RootExplanationContext {
                         propagators: context.propagators,
