@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.0...pumpkin-solver-v0.2.1) (2025-04-17)
+
+
+### Bug Fixes
+
+* explain root assignments in recursive minimisation ([#173](https://github.com/ConSol-Lab/Pumpkin/issues/173)) ([c0eab65](https://github.com/ConSol-Lab/Pumpkin/commit/c0eab6504b412df48a76f0d317afce9e48762caa))
+
 ## [0.2.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.4...pumpkin-solver-v0.2.0) (2025-04-11)
 
 
