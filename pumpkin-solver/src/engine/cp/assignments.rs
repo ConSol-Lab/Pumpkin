@@ -801,6 +801,10 @@ struct BoundUpdateInfo {
 struct HoleUpdateInfo {
     removed_value: i32,
 
+    #[allow(
+        dead_code,
+        reason = "Unsure whether the current implementation will pass review. However, if it does, this can be removed."
+    )]
     decision_level: usize,
 
     triggered_lower_bound_update: bool,
