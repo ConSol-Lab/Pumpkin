@@ -216,7 +216,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
 
     if denominator_min < new_min_denominator {
         context.post(
-            predicate![denominator <= new_min_denominator],
+            predicate![denominator >= new_min_denominator],
             conjunction!(
                 [numerator >= numerator_min] & [rhs <= rhs_max] & [rhs >= 0] & [denominator >= 1]
             ),
