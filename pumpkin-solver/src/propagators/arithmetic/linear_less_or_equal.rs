@@ -18,7 +18,7 @@ use crate::engine::TrailedInt;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
 
-/// Propagator for the constraint `reif => \sum x_i <= c`.
+/// Propagator for the constraint `\sum x_i <= c`.
 #[derive(Clone, Debug)]
 pub(crate) struct LinearLessOrEqualPropagator<Var> {
     x: Box<[Var]>,

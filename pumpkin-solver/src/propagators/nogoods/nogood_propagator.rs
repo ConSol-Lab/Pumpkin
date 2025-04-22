@@ -249,7 +249,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -385,7 +385,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -579,7 +579,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -716,7 +716,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
