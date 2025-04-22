@@ -73,9 +73,8 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                     .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
                 "All of the predicates in the reason should hold"
             );
-            context.set_lower_bound(
-                &propagating_task.start_variable,
-                time_point + 1,
+            context.post(
+                predicate![propagating_task.start_variable >= time_point + 1],
                 explanation,
             )?;
         }
@@ -181,9 +180,11 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                     .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
                 "All of the predicates in the reason should hold"
             );
-            context.set_upper_bound(
-                &propagating_task.start_variable,
-                time_point - propagating_task.processing_time,
+            context.post(
+                predicate![
+                    propagating_task.start_variable
+                        <= time_point - propagating_task.processing_time
+                ],
                 explanation,
             )?;
         }

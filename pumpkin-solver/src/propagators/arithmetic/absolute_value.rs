@@ -7,6 +7,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
@@ -55,7 +56,7 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
     ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
-        context.set_lower_bound(&self.absolute, 0, conjunction!())?;
+        context.post(predicate![self.absolute >= 0], conjunction!())?;
 
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
@@ -69,49 +70,42 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
 
         let signed_absolute_ub = i32::max(signed_lb.abs(), signed_ub.abs());
 
-        context.set_upper_bound(
-            &self.absolute,
-            signed_absolute_ub,
+        context.post(
+            predicate![self.absolute <= signed_absolute_ub],
             conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
         )?;
 
         if signed_lb > 0 {
-            context.set_lower_bound(
-                &self.absolute,
-                signed_lb,
+            context.post(
+                predicate![self.absolute >= signed_lb],
                 conjunction!([self.signed >= signed_lb]),
             )?;
         } else if signed_ub < 0 {
-            context.set_lower_bound(
-                &self.absolute,
-                signed_ub.abs(),
+            context.post(
+                predicate![self.absolute >= signed_ub.abs()],
                 conjunction!([self.signed <= signed_ub]),
             )?;
         }
 
         let absolute_ub = context.upper_bound(&self.absolute);
         let absolute_lb = context.lower_bound(&self.absolute);
-        context.set_lower_bound(
-            &self.signed,
-            -absolute_ub,
+        context.post(
+            predicate![self.signed >= -absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
         )?;
-        context.set_upper_bound(
-            &self.signed,
-            absolute_ub,
+        context.post(
+            predicate![self.signed <= absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
         )?;
 
         if signed_ub <= 0 {
-            context.set_upper_bound(
-                &self.signed,
-                -absolute_lb,
+            context.post(
+                predicate![self.signed <= -absolute_lb],
                 conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
             )?;
         } else if signed_lb >= 0 {
-            context.set_lower_bound(
-                &self.signed,
-                absolute_lb,
+            context.post(
+                predicate![self.signed >= absolute_lb],
                 conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
             )?;
         }

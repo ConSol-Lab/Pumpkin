@@ -48,7 +48,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result = context.set_lower_bound(&domain, 2, conjunction!());
+            let result = context.post(predicate![domain >= 2], conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);
@@ -73,7 +73,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result = context.set_upper_bound(&domain, 15, conjunction!());
+            let result = context.post(predicate![domain <= 15], conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);
@@ -98,7 +98,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result = context.remove(&domain, 15, conjunction!());
+            let result = context.post(predicate![domain != 15], conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);

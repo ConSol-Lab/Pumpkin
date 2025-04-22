@@ -70,7 +70,10 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         for var in self.array.iter() {
             // Rule 1.
             // UB(a_i) <= UB(rhs)
-            context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
+            context.post(
+                predicate![var <= rhs_ub],
+                conjunction!([self.rhs <= rhs_ub]),
+            )?;
 
             let var_lb = context.lower_bound(var);
             let var_ub = context.upper_bound(var);
@@ -86,7 +89,10 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         }
         // Rule 2.
         // LB(rhs) >= max{LB(a_i)}.
-        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::from(lb_reason))?;
+        context.post(
+            predicate![self.rhs >= max_lb],
+            PropositionalConjunction::from(lb_reason),
+        )?;
 
         // Rule 3.
         // UB(rhs) <= max{UB(a_i)}.
@@ -98,7 +104,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 .iter()
                 .map(|var| predicate![var <= max_ub])
                 .collect();
-            context.set_upper_bound(&self.rhs, max_ub, ub_reason)?;
+            context.post(predicate![self.rhs <= max_ub], ub_reason)?;
         }
 
         // Rule 4.
@@ -126,7 +132,10 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             let var_lb = context.lower_bound(propagating_variable);
             if var_lb < rhs_lb {
                 propagation_reason.add(predicate![self.rhs >= rhs_lb]);
-                context.set_lower_bound(propagating_variable, rhs_lb, propagation_reason)?;
+                context.post(
+                    predicate![propagating_variable >= rhs_lb],
+                    propagation_reason,
+                )?;
             }
         }
 

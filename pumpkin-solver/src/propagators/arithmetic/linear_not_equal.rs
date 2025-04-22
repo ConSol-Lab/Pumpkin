@@ -183,9 +183,8 @@ where
                 // from the unfixed variable
                 self.unfixed_variable_has_been_updated = true;
 
-                context.remove(
-                    &self.terms[unfixed_x_i],
-                    value_to_remove,
+                context.post(
+                    predicate![self.terms[unfixed_x_i] != value_to_remove],
                     self.terms
                         .iter()
                         .enumerate()
@@ -244,11 +243,13 @@ where
                 .filter(|&(i, _)| i != unfixed_x_i)
                 .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
                 .collect::<PropositionalConjunction>();
-            context.remove(
-                &self.terms[unfixed_x_i],
-                value_to_remove
-                    .try_into()
-                    .expect("Expected to be able to fit i64 into i32"),
+            context.post(
+                predicate![
+                    self.terms[unfixed_x_i]
+                        != value_to_remove
+                            .try_into()
+                            .expect("Expected to be able to fit i64 into i32")
+                ],
                 reason,
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {

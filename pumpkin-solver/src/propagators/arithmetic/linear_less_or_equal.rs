@@ -170,7 +170,7 @@ where
                     })
                     .collect();
 
-                context.set_upper_bound(x_i, bound, reason)?;
+                context.post(predicate![x_i <= bound], reason)?;
             }
         }
 
@@ -226,7 +226,7 @@ where
                     })
                     .collect();
 
-                context.set_upper_bound(x_i, bound, reason)?;
+                context.post(predicate![x_i <= bound], reason)?;
             }
         }
 

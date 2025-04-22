@@ -19,6 +19,7 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
+use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfile;
@@ -102,9 +103,10 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.as_readonly()
                 ));
-                context.set_lower_bound(
-                    &propagating_task.start_variable,
-                    profiles[profiles.len() - 1].end + 1,
+                context.post(
+                    predicate![
+                        propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
+                    ],
                     full_explanation,
                 )
             }
@@ -164,9 +166,11 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.as_readonly()
                 ));
-                context.set_upper_bound(
-                    &propagating_task.start_variable,
-                    profiles[0].start - propagating_task.processing_time,
+                context.post(
+                    predicate![
+                        propagating_task.start_variable
+                            <= profiles[0].start - propagating_task.processing_time
+                    ],
                     full_explanation,
                 )
             }
@@ -213,7 +217,10 @@ impl CumulativePropagationHandler {
 
                 let mut reason = (*explanation).clone();
                 reason.add(lower_bound_predicate_propagating_task);
-                context.set_lower_bound(&propagating_task.start_variable, profile.end + 1, reason)
+                context.post(
+                    predicate![propagating_task.start_variable >= profile.end + 1],
+                    reason,
+                )
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -259,9 +266,11 @@ impl CumulativePropagationHandler {
 
                 let mut reason = (*explanation).clone();
                 reason.add(upper_bound_predicate_propagating_task);
-                context.set_upper_bound(
-                    &propagating_task.start_variable,
-                    profile.start - propagating_task.processing_time,
+                context.post(
+                    predicate![
+                        propagating_task.start_variable
+                            <= profile.start - propagating_task.processing_time
+                    ],
                     reason,
                 )
             }
@@ -323,9 +332,8 @@ impl CumulativePropagationHandler {
                     // explanation type to create the explanations.
                     let explanation = self.get_stored_profile_explanation_or_init(context, profile);
                     pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                    context.remove(
-                        &propagating_task.start_variable,
-                        time_point,
+                    context.post(
+                        predicate![propagating_task.start_variable != time_point],
                         (*explanation).clone(),
                     )?;
                 }
@@ -355,7 +363,10 @@ impl CumulativePropagationHandler {
                         profile,
                     );
                     pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                    context.remove(&propagating_task.start_variable, time_point, explanation)?;
+                    context.post(
+                        predicate![propagating_task.start_variable != time_point],
+                        explanation,
+                    )?;
                 }
             }
         }

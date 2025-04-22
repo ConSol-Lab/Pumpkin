@@ -7,6 +7,7 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
+use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_assert_simple;
 
@@ -162,9 +163,8 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     // The new minimum value of the rhs is the minimum value that the division can take on
     let new_min_rhs = numerator_min / denominator_max;
     if rhs_min < new_min_rhs {
-        context.set_lower_bound(
-            rhs,
-            new_min_rhs,
+        context.post(
+            predicate![rhs >= new_min_rhs],
             conjunction!(
                 [numerator >= numerator_min]
                     & [denominator <= denominator_max]
@@ -179,9 +179,8 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     // Note that we use rhs_min rather than new_min_rhs, this appears to be a heuristic
     let new_min_numerator = denominator_min * rhs_min;
     if numerator_min < new_min_numerator {
-        context.set_lower_bound(
-            numerator,
-            new_min_numerator,
+        context.post(
+            predicate![numerator >= new_min_numerator],
             conjunction!([denominator >= denominator_min] & [rhs >= rhs_min]),
         )?;
     }
@@ -193,9 +192,8 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     if rhs_min > 0 {
         let new_max_denominator = numerator_max / rhs_min;
         if denominator_max > new_max_denominator {
-            context.set_upper_bound(
-                denominator,
-                new_max_denominator,
+            context.post(
+                predicate![denominator <= new_max_denominator],
                 conjunction!(
                     [numerator <= numerator_max]
                         & [numerator >= 0]
@@ -217,9 +215,8 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     };
 
     if denominator_min < new_min_denominator {
-        context.set_lower_bound(
-            denominator,
-            new_min_denominator,
+        context.post(
+            predicate![denominator <= new_min_denominator],
             conjunction!(
                 [numerator >= numerator_min] & [rhs <= rhs_max] & [rhs >= 0] & [denominator >= 1]
             ),
@@ -250,9 +247,8 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     // that numerator_max is positive and denominator_min is also positive)
     let new_max_rhs = numerator_max / denominator_min;
     if rhs_max > new_max_rhs {
-        context.set_upper_bound(
-            rhs,
-            new_max_rhs,
+        context.post(
+            predicate![rhs <= new_max_rhs],
             conjunction!([numerator <= numerator_max] & [denominator >= denominator_min]),
         )?;
     }
@@ -264,9 +260,8 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     // Note that we use rhs_max here rather than the new upper-bound, this appears to be a heuristic
     let new_max_numerator = (rhs_max + 1) * denominator_max - 1;
     if numerator_max > new_max_numerator {
-        context.set_upper_bound(
-            numerator,
-            new_max_numerator,
+        context.post(
+            predicate![numerator <= new_max_numerator],
             conjunction!([denominator <= denominator_max] & [denominator >= 1] & [rhs <= rhs_max]),
         )?;
     }
@@ -294,24 +289,32 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     // First we propagate the signs
     // If the numerator >= 0 (and we know that denominator > 0) then the rhs must be >= 0
     if numerator_min >= 0 && rhs_min < 0 {
-        context.set_lower_bound(rhs, 0, conjunction!([numerator >= 0] & [denominator >= 1]))?;
+        context.post(
+            predicate![rhs >= 0],
+            conjunction!([numerator >= 0] & [denominator >= 1]),
+        )?;
     }
 
     // If rhs > 0 (and we know that denominator > 0) then the numerator must be > 0
     if numerator_min <= 0 && rhs_min > 0 {
-        context.set_lower_bound(numerator, 1, conjunction!([rhs >= 1] & [denominator >= 1]))?;
+        context.post(
+            predicate![numerator >= 1],
+            conjunction!([rhs >= 1] & [denominator >= 1]),
+        )?;
     }
 
     // If numerator <= 0 (and we know that denominator > 0) then the rhs must be <= 0
     if numerator_max <= 0 && rhs_max > 0 {
-        context.set_upper_bound(rhs, 0, conjunction!([numerator <= 0] & [denominator >= 1]))?;
+        context.post(
+            predicate![rhs <= 0],
+            conjunction!([numerator <= 0] & [denominator >= 1]),
+        )?;
     }
 
     // If the rhs < 0 (and we know that denominator > 0) then the numerator must be < 0
     if numerator_max >= 0 && rhs_max < 0 {
-        context.set_upper_bound(
-            numerator,
-            -1,
+        context.post(
+            predicate![numerator <= -1],
             conjunction!([rhs <= -1] & [denominator >= 1]),
         )?;
     }

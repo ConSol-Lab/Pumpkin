@@ -266,7 +266,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |mut ctx: PropagationContextMut| {
-                        ctx.set_lower_bound(&var, 3, conjunction!())?;
+                        ctx.post(predicate![var >= 3], conjunction!())?;
                         Ok(())
                     },
                     |_: PropagationContextWithTrailedValues| None,

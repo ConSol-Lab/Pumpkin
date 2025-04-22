@@ -7,6 +7,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 use crate::pumpkin_assert_simple;
 
 /// A propagator for maintaining the constraint `a * b = c`. The propagator
@@ -89,22 +90,23 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         //
         // We need the lower-bounds in the explanation as well because the reasoning does not
         // hold in the case of a negative lower-bound
-        context.set_upper_bound(
-            c,
-            new_max_c,
+        context.post(
+            predicate![c <= new_max_c],
             conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
         )?;
 
         // c is larger than the minimum value that a * b can take
-        context.set_lower_bound(c, new_min_c, conjunction!([a >= a_min] & [b >= b_min]))?;
+        context.post(
+            predicate![c >= new_min_c],
+            conjunction!([a >= a_min] & [b >= b_min]),
+        )?;
     }
 
     if b_min >= 0 && b_max >= 1 && c_min >= 1 {
         // a >= ceil(c.min / b.max)
         let bound = div_ceil_pos(c_min, b_max);
-        context.set_lower_bound(
-            a,
-            bound,
+        context.post(
+            predicate![a >= bound],
             conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
         )?;
     }
@@ -112,9 +114,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     if b_min >= 1 && c_min >= 0 && c_max >= 1 {
         // a <= floor(c.max / b.min)
         let bound = c_max / b_min;
-        context.set_upper_bound(
-            a,
-            bound,
+        context.post(
+            predicate![a <= bound],
             conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
         )?;
     }
@@ -122,9 +123,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     if a_min >= 1 && c_min >= 0 && c_max >= 1 {
         // b <= floor(c.max / a.min)
         let bound = c_max / a_min;
-        context.set_upper_bound(
-            b,
-            bound,
+        context.post(
+            predicate![b <= bound],
             conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
         )?;
     }
@@ -133,9 +133,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     if a_min >= 0 && a_max >= 1 && c_min >= 1 {
         let bound = div_ceil_pos(c_min, a_max);
 
-        context.set_lower_bound(
-            b,
-            bound,
+        context.post(
+            predicate![b >= bound],
             conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
         )?;
     }
@@ -196,67 +195,67 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     // Propagating based on positive bounds
     // a is positive and b is positive -> c is positive
     if a_min >= 0 && b_min >= 0 {
-        context.set_lower_bound(c, 0, conjunction!([a >= 0] & [b >= 0]))?;
+        context.post(predicate![c >= 0], conjunction!([a >= 0] & [b >= 0]))?;
     }
 
     // a is positive and c is positive -> b is positive
     if a_min >= 1 && c_min >= 1 {
-        context.set_lower_bound(b, 1, conjunction!([a >= 1] & [c >= 1]))?;
+        context.post(predicate![b >= 1], conjunction!([a >= 1] & [c >= 1]))?;
     }
 
     // b is positive and c is positive -> a is positive
     if b_min >= 1 && c_min >= 1 {
-        context.set_lower_bound(a, 1, conjunction!([b >= 1] & [c >= 1]))?;
+        context.post(predicate![a >= 1], conjunction!([b >= 1] & [c >= 1]))?;
     }
 
     // Propagating based on negative bounds
     // a is negative and b is negative -> c is positive
     if a_max <= 0 && b_max <= 0 {
-        context.set_lower_bound(c, 0, conjunction!([a <= 0] & [b <= 0]))?;
+        context.post(predicate![c >= 0], conjunction!([a <= 0] & [b <= 0]))?;
     }
 
     // a is negative and c is negative -> b is positive
     if a_max <= -1 && c_max <= -1 {
-        context.set_lower_bound(b, 1, conjunction!([a <= -1] & [c <= -1]))?;
+        context.post(predicate![b >= 1], conjunction!([a <= -1] & [c <= -1]))?;
     }
 
     // b is negative and c is negative -> a is positive
     if b_max <= -1 && c_max <= -1 {
-        context.set_lower_bound(a, 1, conjunction!([b <= -1] & [c <= -1]))?;
+        context.post(predicate![a >= 1], conjunction!([b <= -1] & [c <= -1]))?;
     }
 
     // Propagating based on mixed bounds (i.e. one positive and one negative)
     // Propagating c based on a and b
     // a is negative and b is positive -> c is negative
     if a_max <= 0 && b_min >= 0 {
-        context.set_upper_bound(c, 0, conjunction!([a <= 0] & [b >= 0]))?;
+        context.post(predicate![c <= 0], conjunction!([a <= 0] & [b >= 0]))?;
     }
 
     // a is positive and b is negative -> c is negative
     if a_min >= 0 && b_max <= 0 {
-        context.set_upper_bound(c, 0, conjunction!([a >= 0] & [b <= 0]))?;
+        context.post(predicate![c <= 0], conjunction!([a >= 0] & [b <= 0]))?;
     }
 
     // Propagating b based on a and c
     // a is negative and c is positive -> b is negative
     if a_max <= -1 && c_min >= 1 {
-        context.set_upper_bound(b, -1, conjunction!([a <= -1] & [c >= 1]))?;
+        context.post(predicate![b <= -1], conjunction!([a <= -1] & [c >= 1]))?;
     }
 
     // a is positive and c is negative -> b is negative
     if a_min >= 1 && c_max <= -1 {
-        context.set_upper_bound(b, -1, conjunction!([a >= 1] & [c <= -1]))?;
+        context.post(predicate![b <= -1], conjunction!([a >= 1] & [c <= -1]))?;
     }
 
     // Propagating a based on b and c
     // b is negative and c is positive -> a is negative
     if b_max <= -1 && c_min >= 1 {
-        context.set_upper_bound(a, -1, conjunction!([b <= -1] & [c >= 1]))?;
+        context.post(predicate![a <= -1], conjunction!([b <= -1] & [c >= 1]))?;
     }
 
     // b is positive and c is negative -> a is negative
     if b_min >= 1 && c_max <= -1 {
-        context.set_upper_bound(a, -1, conjunction!([b >= 1] & [c <= -1]))?;
+        context.post(predicate![a <= -1], conjunction!([b >= 1] & [c <= -1]))?;
     }
 
     Ok(())

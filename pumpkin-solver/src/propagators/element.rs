@@ -124,8 +124,11 @@ where
         &self,
         context: &mut PropagationContextMut<'_>,
     ) -> PropagationStatusCP {
-        context.set_lower_bound(&self.index, 0, conjunction!())?;
-        context.set_upper_bound(&self.index, self.array.len() as i32 - 1, conjunction!())?;
+        context.post(predicate![self.index >= 0], conjunction!())?;
+        context.post(
+            predicate![self.index <= self.array.len() as i32 - 1],
+            conjunction!(),
+        )?;
         Ok(())
     }
 
@@ -147,9 +150,8 @@ where
                 )
             });
 
-        context.set_lower_bound(
-            &self.rhs,
-            rhs_lb,
+        context.post(
+            predicate![self.rhs >= rhs_lb],
             Reason::DynamicLazy(
                 RightHandSideReason::new()
                     .with_bound(Bound::Lower)
@@ -157,9 +159,8 @@ where
                     .into_bits(),
             ),
         )?;
-        context.set_upper_bound(
-            &self.rhs,
-            rhs_ub,
+        context.post(
+            predicate![self.rhs <= rhs_ub],
             Reason::DynamicLazy(
                 RightHandSideReason::new()
                     .with_bound(Bound::Upper)
@@ -198,7 +199,7 @@ where
         }
 
         for (idx, reason) in to_remove.drain(..) {
-            context.remove(&self.index, idx, reason)?;
+            context.post(predicate![self.index != idx], reason)?;
         }
 
         Ok(())
@@ -215,14 +216,12 @@ where
         let rhs_ub = context.upper_bound(&self.rhs);
         let lhs = &self.array[index as usize];
 
-        context.set_lower_bound(
-            lhs,
-            rhs_lb,
+        context.post(
+            predicate![lhs >= rhs_lb],
             conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
         )?;
-        context.set_upper_bound(
-            lhs,
-            rhs_ub,
+        context.post(
+            predicate![lhs <= rhs_ub],
             conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
         )?;
         Ok(())
