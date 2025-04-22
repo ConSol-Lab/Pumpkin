@@ -21,7 +21,9 @@ use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::predicate;
+use crate::proof::explain_root_assignment;
 use crate::proof::ProofLog;
+use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
@@ -90,7 +92,7 @@ impl ConflictAnalysisContext<'_> {
     /// Returns a nogood which led to the conflict, excluding predicates from the root decision
     /// level.
     pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
-        match self.solver_state.get_conflict_info() {
+        let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
                 propagator_id,
@@ -100,33 +102,46 @@ impl ConflictAnalysisContext<'_> {
                     conflict_nogood.iter().copied(),
                     None,
                 );
+
                 conflict_nogood
-                    .iter()
-                    .filter(|p| {
-                        // filter out root predicates
-                        self.assignments
-                            .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0)
-                    })
-                    .copied()
-                    .collect()
             }
             StoredConflictInfo::EmptyDomain { conflict_nogood } => {
                 conflict_nogood
-                    .iter()
-                    .filter(|p| {
-                        // filter out root predicates
-                        self.assignments
-                            .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0)
-                    })
-                    .copied()
-                    .collect()
             }
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
+        };
+
+        for &predicate in conflict_nogood.iter() {
+            if self
+                .assignments
+                .get_decision_level_for_predicate(&predicate)
+                .unwrap()
+                == 0
+            {
+                explain_root_assignment(
+                    &mut RootExplanationContext {
+                        propagators: self.propagators,
+                        proof_log: self.proof_log,
+                        unit_nogood_step_ids: self.unit_nogood_step_ids,
+                        assignments: self.assignments,
+                        reason_store: self.reason_store,
+                    },
+                    predicate,
+                );
+            }
         }
+
+        conflict_nogood
+            .into_iter()
+            .filter(|p| {
+                self.assignments
+                    .get_decision_level_for_predicate(p)
+                    .unwrap()
+                    > 0
+            })
+            .collect()
     }
 
     /// Compute the reason for `predicate` being true. The reason will be stored in
