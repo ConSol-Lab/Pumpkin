@@ -27,8 +27,8 @@ use crate::statistics::statistic_logger::StatisticLogger;
 // does not allow downcasting from the trait definition to its concrete type.
 impl_downcast!(Propagator);
 
-/// All propagators implement the [`Propagator`] trait, with the exception of the
-/// clausal propagator. Structs implementing the trait defines the main propagator logic with
+/// All propagators implement the [`Propagator`] trait.
+/// Structs implementing the trait defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
 ///
 /// The only required functions are [`Propagator::name`],
