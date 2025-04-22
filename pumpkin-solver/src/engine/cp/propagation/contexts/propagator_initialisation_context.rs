@@ -1,6 +1,6 @@
 use super::PropagationContext;
+use super::PropagationContextWithTrailedAssignments;
 use super::ReadDomains;
-use super::StatefulPropagationContext;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -21,7 +21,7 @@ use crate::engine::Watchers;
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
-    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_assignments: &'a mut TrailedAssignments,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
@@ -31,13 +31,13 @@ pub(crate) struct PropagatorInitialisationContext<'a> {
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
-        stateful_assignments: &'a mut TrailedAssignments,
+        trailed_assignments: &'a mut TrailedAssignments,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorInitialisationContext<'a> {
         PropagatorInitialisationContext {
             watch_list,
-            stateful_assignments,
+            trailed_assignments,
             propagator_id,
             next_local_id: LocalId::from(0),
 
@@ -45,9 +45,9 @@ impl PropagatorInitialisationContext<'_> {
         }
     }
 
-    pub(crate) fn as_stateful_readonly(&mut self) -> StatefulPropagationContext {
-        StatefulPropagationContext {
-            stateful_assignments: self.stateful_assignments,
+    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedAssignments {
+        PropagationContextWithTrailedAssignments {
+            trailed_assignments: self.trailed_assignments,
             assignments: self.assignments,
         }
     }
@@ -129,7 +129,7 @@ impl PropagatorInitialisationContext<'_> {
 mod private {
     use super::*;
     use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasStatefulAssignments;
+    use crate::engine::propagation::contexts::HasTrailedAssignments;
 
     impl HasAssignments for PropagatorInitialisationContext<'_> {
         fn assignments(&self) -> &Assignments {
@@ -137,13 +137,13 @@ mod private {
         }
     }
 
-    impl HasStatefulAssignments for PropagatorInitialisationContext<'_> {
-        fn stateful_assignments(&self) -> &TrailedAssignments {
-            self.stateful_assignments
+    impl HasTrailedAssignments for PropagatorInitialisationContext<'_> {
+        fn trailed_assignments(&self) -> &TrailedAssignments {
+            self.trailed_assignments
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
-            self.stateful_assignments
+        fn trailed_assignments_mut(&mut self) -> &mut TrailedAssignments {
+            self.trailed_assignments
         }
     }
 }
