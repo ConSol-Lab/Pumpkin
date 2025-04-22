@@ -260,7 +260,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post_predicate(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -396,7 +396,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post_predicate(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -590,7 +590,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post_predicate(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -727,7 +727,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post_predicate(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -949,7 +949,7 @@ impl NogoodPropagator {
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(new_id.id as u64);
         context
-            .post_predicate(!self.nogoods[new_id].predicates[0], reason)
+            .post(!self.nogoods[new_id].predicates[0], reason)
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then divide the new nogood based on the LBD level
@@ -1003,7 +1003,7 @@ impl NogoodPropagator {
             input_nogood.retain(|&p| p != nogood[0]);
 
             // Post the negated predicate at the root to respect the nogood.
-            context.post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood))?;
+            context.post(!nogood[0], PropositionalConjunction::from(input_nogood))?;
         }
         // Standard case, nogood is of size at least two.
         //
@@ -1360,7 +1360,7 @@ impl NogoodPropagator {
                 .copied()
                 .collect();
 
-            context.post_predicate(propagated_predicate, reason)?;
+            context.post(propagated_predicate, reason)?;
         }
         Ok(())
     }
