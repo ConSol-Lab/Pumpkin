@@ -105,9 +105,7 @@ impl ConflictAnalysisContext<'_> {
 
                 conflict_nogood
             }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => {
-                conflict_nogood
-            }
+            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood,
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
