@@ -76,6 +76,7 @@
 //! International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
 //! 118–132.
 
+pub(crate) mod constructor;
 pub(crate) mod contexts;
 pub(crate) mod local_id;
 pub(crate) mod propagator;
