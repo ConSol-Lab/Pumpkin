@@ -25,6 +25,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::ConstraintTag;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
 #[cfg(doc)]
@@ -419,6 +420,11 @@ impl Solver {
 
 /// Functions for adding new constraints to the solver.
 impl Solver {
+    /// Creates a new [`ConstraintTag`] that can be used to add constraints to the solver.
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.satisfaction_solver.new_constraint_tag()
+    }
+
     /// Add a constraint to the solver. This returns a [`ConstraintPoster`] which enables control
     /// on whether to add the constraint as-is, or whether to (half) reify it.
     ///

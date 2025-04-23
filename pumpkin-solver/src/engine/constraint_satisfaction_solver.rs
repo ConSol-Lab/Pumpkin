@@ -23,6 +23,7 @@ use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::Lbd;
+use super::ConstraintTag;
 use super::ResolutionResolver;
 use super::TrailedValues;
 use super::VariableNames;
@@ -38,6 +39,7 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
@@ -113,6 +115,8 @@ pub struct ConstraintSatisfactionSolver {
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
     propagators: PropagatorStore,
+    /// The constraint ids generated for this solver instance.
+    constraint_tags: KeyGenerator<ConstraintTag>,
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
@@ -424,6 +428,7 @@ impl ConstraintSatisfactionSolver {
             },
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
+            constraint_tags: KeyGenerator::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -564,6 +569,11 @@ impl ConstraintSatisfactionSolver {
         }
 
         domain_id
+    }
+
+    /// Create a new [`ConstraintTag`].
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.constraint_tags.next_key()
     }
 
     /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
