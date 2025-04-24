@@ -24,7 +24,6 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -78,7 +77,7 @@ pub(crate) struct NogoodPropagator {
 impl PropagatorConstructor for NogoodPropagator {
     type PropagatorImpl = Self;
 
-    fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
         self
     }
 }
@@ -880,15 +879,6 @@ impl Propagator for NogoodPropagator {
         }
         // update LBD, so we need code plus assignments as input.
         &self.nogoods[id].predicates.as_slice()[1..]
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        _context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        // There should be no nogoods yet
-        pumpkin_assert_simple!(self.nogoods.len() == 0);
-        Ok(())
     }
 }
 

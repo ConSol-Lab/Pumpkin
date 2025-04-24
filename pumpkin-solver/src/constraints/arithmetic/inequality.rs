@@ -2,7 +2,7 @@ use std::num::NonZero;
 
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
+use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -51,7 +51,11 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
+        LinearLessOrEqualPropagatorArgs {
+            x: self.terms,
+            c: self.rhs,
+        }
+        .post(solver, tag)
     }
 
     fn implied_by(
@@ -60,11 +64,11 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         reification_literal: crate::variables::Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagator::new(self.terms, self.rhs).implied_by(
-            solver,
-            reification_literal,
-            tag,
-        )
+        LinearLessOrEqualPropagatorArgs {
+            x: self.terms,
+            c: self.rhs,
+        }
+        .implied_by(solver, reification_literal, tag)
     }
 }
 

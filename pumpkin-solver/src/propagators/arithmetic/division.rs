@@ -1,14 +1,14 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::predicate;
-use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_assert_simple;
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
@@ -38,6 +38,31 @@ impl<VA, VB, VC> DivisionPropagator<VA, VB, VC> {
     }
 }
 
+impl<VA, VB, VC> PropagatorConstructor for DivisionPropagator<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    type PropagatorImpl = Self;
+
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        pumpkin_assert_simple!(
+            !context.contains(&self.denominator, 0),
+            "Denominator cannot contain 0"
+        );
+        context.register(self.numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
+        context.register(
+            self.denominator.clone(),
+            DomainEvents::BOUNDS,
+            ID_DENOMINATOR,
+        );
+        context.register(self.rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
+
+        self
+    }
+}
+
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
 where
     VA: IntegerVariable,
@@ -50,25 +75,6 @@ where
 
     fn name(&self) -> &str {
         "Division"
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        pumpkin_assert_simple!(
-            !context.contains(&self.denominator, 0),
-            "Denominator cannot contain 0"
-        );
-        let _ = context.register(self.numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
-        let _ = context.register(
-            self.denominator.clone(),
-            DomainEvents::BOUNDS,
-            ID_DENOMINATOR,
-        );
-        let _ = context.register(self.rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
-
-        Ok(())
     }
 
     fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {

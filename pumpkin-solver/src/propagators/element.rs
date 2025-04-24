@@ -3,17 +3,17 @@ use bitfield_struct::bitfield;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::predicates::PropositionalConjunction;
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
@@ -36,6 +36,30 @@ impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
             rhs,
             rhs_reason_buffer: vec![],
         }
+    }
+}
+
+impl<VX, VI, VE> PropagatorConstructor for ElementPropagator<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+{
+    type PropagatorImpl = Self;
+
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        for (i, x_i) in self.array.iter().enumerate() {
+            context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        }
+
+        context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+
+        self
     }
 }
 
@@ -74,22 +98,6 @@ where
             self.propagate_equality(&mut context, idx)?;
         }
 
-        Ok(())
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.array.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(
-                x_i.clone(),
-                DomainEvents::ANY_INT,
-                LocalId::from(i as u32 + ID_X_OFFSET),
-            );
-        });
-        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
-        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
         Ok(())
     }
 

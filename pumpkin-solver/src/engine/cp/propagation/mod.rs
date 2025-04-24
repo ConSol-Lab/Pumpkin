@@ -89,7 +89,6 @@ pub(crate) use contexts::explanation_context::ExplanationContext;
 pub(crate) use contexts::propagation_context::PropagationContext;
 pub(crate) use contexts::propagation_context::PropagationContextMut;
 pub(crate) use contexts::propagation_context::ReadDomains;
-pub(crate) use contexts::propagator_initialisation_context::PropagatorInitialisationContext;
 pub(crate) use local_id::LocalId;
 pub(crate) use propagator::EnqueueDecision;
 pub(crate) use propagator::Propagator;

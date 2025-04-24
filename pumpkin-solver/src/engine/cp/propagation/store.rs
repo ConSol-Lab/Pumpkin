@@ -20,17 +20,6 @@ pub(crate) struct PropagatorStore {
 }
 
 impl PropagatorStore {
-    pub(crate) fn alloc(
-        &mut self,
-        propagator: Box<dyn Propagator>,
-        tag: Option<NonZero<u32>>,
-    ) -> PropagatorId {
-        let id = self.propagators.push(propagator);
-        let _ = self.tags.push(tag);
-
-        id
-    }
-
     pub(crate) fn get_tag(&self, propagator_id: PropagatorId) -> Option<NonZero<u32>> {
         self.tags[propagator_id]
     }

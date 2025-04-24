@@ -3,10 +3,10 @@ use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -24,30 +24,32 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> MaximumPropagator<Elemen
     }
 }
 
-impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> PropagatorConstructor
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.array
-            .iter()
-            .cloned()
-            .enumerate()
-            .for_each(|(idx, var)| {
-                let _ =
-                    context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
-            });
-        let _ = context.register(
+    type PropagatorImpl = Self;
+
+    fn create(
+        self,
+        context: &mut crate::engine::propagation::constructor::PropagatorConstructorContext,
+    ) -> Self::PropagatorImpl {
+        for (idx, var) in self.array.iter().enumerate() {
+            context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
+        }
+
+        context.register(
             self.rhs.clone(),
             DomainEvents::BOUNDS,
             LocalId::from(self.array.len() as u32),
         );
 
-        Ok(())
+        self
     }
+}
 
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
+    for MaximumPropagator<ElementVar, Rhs>
+{
     fn priority(&self) -> u32 {
         0
     }

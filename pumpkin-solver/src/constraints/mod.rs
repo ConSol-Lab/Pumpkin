@@ -41,7 +41,7 @@ pub use cumulative::*;
 pub use element::*;
 
 use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::propagators::ReifiedPropagator;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -88,7 +88,7 @@ where
     fn post(
         self,
         solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
+        _: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         solver.add_propagator(self)
     }
@@ -97,9 +97,12 @@ where
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
+        _: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: self,
+            reification_literal,
+        })
     }
 }
 

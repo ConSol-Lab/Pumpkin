@@ -4,13 +4,14 @@ use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
@@ -54,7 +55,6 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -85,6 +85,20 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
             parameters,
             updatable_structures,
         }
+    }
+}
+
+impl<Var: IntegerVariable + 'static> PropagatorConstructor
+    for TimeTableOverIntervalPropagator<Var>
+{
+    type PropagatorImpl = Self;
+
+    fn create(mut self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        self.updatable_structures
+            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+        register_tasks(&self.parameters.tasks, context, false);
+
+        self
     }
 }
 
@@ -150,17 +164,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn name(&self) -> &str {
         "CumulativeTimeTableOverInterval"
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
-
-        Ok(())
     }
 
     fn debug_propagate_from_scratch(

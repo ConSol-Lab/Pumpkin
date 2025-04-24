@@ -10,13 +10,14 @@ use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
@@ -78,6 +79,18 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
             parameters,
             updatable_structures,
         }
+    }
+}
+
+impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
+    type PropagatorImpl = Self;
+
+    fn create(mut self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        self.updatable_structures
+            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+        register_tasks(&self.parameters.tasks, context, false);
+
+        self
     }
 }
 
@@ -145,17 +158,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPoint"
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
-
-        Ok(())
     }
 
     fn debug_propagate_from_scratch(

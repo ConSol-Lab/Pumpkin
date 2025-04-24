@@ -7,9 +7,9 @@ use enumset::enum_set;
 
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::propagators::ArgTask;
@@ -50,11 +50,11 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 
 pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks: &[Rc<Task<Var>>],
-    context: &mut PropagatorInitialisationContext<'_>,
+    context: &mut PropagatorConstructorContext<'_>,
     register_backtrack: bool,
 ) {
     tasks.iter().for_each(|task| {
-        let _ = context.register(
+        context.register(
             task.start_variable.clone(),
             DomainEvents::create_with_int_events(enum_set!(
                 IntDomainEvent::LowerBound | IntDomainEvent::UpperBound | IntDomainEvent::Assign
@@ -62,7 +62,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
             task.id,
         );
         if register_backtrack {
-            let _ = context.register_for_backtrack_events(
+            context.register_for_backtrack_events(
                 task.start_variable.clone(),
                 DomainEvents::create_with_int_events(enum_set!(
                     IntDomainEvent::LowerBound

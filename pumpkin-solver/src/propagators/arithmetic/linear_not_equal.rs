@@ -7,19 +7,64 @@ use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicate;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+
+/// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
+#[derive(Clone, Debug)]
+pub(crate) struct LinearNotEqualPropagatorArgs<Var> {
+    /// The terms of the sum
+    pub(crate) terms: Rc<[Var]>,
+    /// The right-hand side of the sum
+    pub(crate) rhs: i32,
+}
+
+impl<Var> PropagatorConstructor for LinearNotEqualPropagatorArgs<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    type PropagatorImpl = LinearNotEqualPropagator<Var>;
+
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let LinearNotEqualPropagatorArgs { terms, rhs } = self;
+
+        for (i, x_i) in terms.iter().enumerate() {
+            context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            context.register_for_backtrack_events(
+                x_i.clone(),
+                DomainEvents::create_with_int_events(enum_set!(
+                    IntDomainEvent::Assign | IntDomainEvent::Removal
+                )),
+                LocalId::from(i as u32),
+            );
+        }
+
+        let mut propagator = LinearNotEqualPropagator {
+            terms,
+            rhs,
+            number_of_fixed_terms: 0,
+            fixed_lhs: 0,
+            unfixed_variable_has_been_updated: false,
+            should_recalculate_lhs: false,
+        };
+
+        propagator.recalculate_fixed_variables(context.as_readonly());
+
+        propagator
+    }
+}
 
 /// Propagator for the constraint `\sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
@@ -41,22 +86,6 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
     /// Indicates whether the value of [`LinearNotEqualPropagator::fixed_lhs`] is invalid and
     /// should be recalculated
     should_recalculate_lhs: bool,
-}
-
-impl<Var> LinearNotEqualPropagator<Var>
-where
-    Var: IntegerVariable + 'static,
-{
-    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNotEqualPropagator {
-            terms: terms.into(),
-            rhs,
-            number_of_fixed_terms: 0,
-            fixed_lhs: 0,
-            unfixed_variable_has_been_updated: false,
-            should_recalculate_lhs: false,
-        }
-    }
 }
 
 impl<Var> Propagator for LinearNotEqualPropagator<Var>
@@ -131,26 +160,6 @@ where
             // We set the flag whether the unfixed variable has been updated
             self.unfixed_variable_has_been_updated = false;
         }
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.terms.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
-            let _ = context.register_for_backtrack_events(
-                x_i.clone(),
-                DomainEvents::create_with_int_events(enum_set!(
-                    IntDomainEvent::Assign | IntDomainEvent::Removal
-                )),
-                LocalId::from(i as u32),
-            );
-        });
-
-        self.recalculate_fixed_variables(context.as_readonly());
-        self.check_for_conflict(context.as_readonly())?;
-        Ok(())
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
@@ -353,10 +362,10 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let propagator = solver
-            .new_propagator(LinearNotEqualPropagator::new(
-                [x.scaled(1), y.scaled(-1)].into(),
-                0,
-            ))
+            .new_propagator(LinearNotEqualPropagatorArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
             .expect("non-empty domain");
 
         solver.propagate(propagator).expect("non-empty domain");
@@ -373,10 +382,10 @@ mod tests {
         let y = solver.new_variable(2, 2);
 
         let err = solver
-            .new_propagator(LinearNotEqualPropagator::new(
-                [x.scaled(1), y.scaled(-1)].into(),
-                0,
-            ))
+            .new_propagator(LinearNotEqualPropagatorArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
             .expect_err("empty domain");
 
         let expected: Inconsistency = conjunction!([x == 2] & [y == 2]).into();
@@ -390,7 +399,10 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let propagator = solver
-            .new_propagator(LinearNotEqualPropagator::new([x, y].into(), 0))
+            .new_propagator(LinearNotEqualPropagatorArgs {
+                terms: [x, y].into(),
+                rhs: 0,
+            })
             .expect("non-empty domain");
 
         solver.propagate(propagator).expect("non-empty domain");
@@ -407,10 +419,10 @@ mod tests {
         let y = solver.new_variable(0, 3);
 
         let propagator = solver
-            .new_propagator(LinearNotEqualPropagator::new(
-                [x.scaled(1), y.scaled(-1)].into(),
-                0,
-            ))
+            .new_propagator(LinearNotEqualPropagatorArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
             .expect("non-empty domain");
 
         solver.remove(x, 0).expect("non-empty domain");

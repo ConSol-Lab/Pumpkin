@@ -5,7 +5,6 @@ use super::contexts::PropagationContextWithTrailedValues;
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
-use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;

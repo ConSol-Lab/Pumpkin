@@ -7,15 +7,14 @@ use super::removal;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
-use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
@@ -89,6 +88,33 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRON
     /// scratch or not; note that this variable is only used if
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
+}
+
+impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
+    for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
+{
+    type PropagatorImpl = Self;
+
+    fn create(
+        mut self,
+        context: &mut crate::engine::propagation::constructor::PropagatorConstructorContext,
+    ) -> Self::PropagatorImpl {
+        // We only register for notifications of backtrack events if incremental backtracking is
+        // enabled
+        register_tasks(
+            &self.parameters.tasks,
+            context,
+            self.parameters.options.incremental_backtracking,
+        );
+
+        // First we store the bounds in the parameters
+        self.updatable_structures
+            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+
+        self.is_time_table_outdated = true;
+
+        self
+    }
 }
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
@@ -454,28 +480,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn name(&self) -> &str {
         "CumulativeTimeTableOverIntervalIncremental"
-    }
-
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        // We only register for notifications of backtrack events if incremental backtracking is
-        // enabled
-        register_tasks(
-            &self.parameters.tasks,
-            context,
-            self.parameters.options.incremental_backtracking,
-        );
-
-        // First we store the bounds in the parameters
-        self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-
-        // Then we do normal propagation
-        self.time_table =
-            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
-        Ok(())
     }
 
     fn debug_propagate_from_scratch(

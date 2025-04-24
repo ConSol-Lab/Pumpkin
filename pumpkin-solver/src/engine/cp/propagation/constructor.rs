@@ -1,12 +1,14 @@
-use crate::{
-    engine::{Assignments, DomainEvents, TrailedAssignments, WatchListCP, Watchers},
-    variables::IntegerVariable,
-};
-
-use super::{
-    contexts::StatefulPropagationContext, LocalId, PropagationContext, Propagator, PropagatorId,
-    PropagatorVarId,
-};
+use super::LocalId;
+use super::PropagationContext;
+use super::Propagator;
+use super::PropagatorId;
+use super::PropagatorVarId;
+use crate::engine::Assignments;
+use crate::engine::DomainEvents;
+use crate::engine::TrailedAssignments;
+use crate::engine::WatchListCP;
+use crate::engine::Watchers;
+use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -50,13 +52,6 @@ impl PropagatorConstructorContext<'_> {
             next_local_id: LocalId::from(0),
 
             assignments,
-        }
-    }
-
-    pub(crate) fn as_stateful_readonly(&mut self) -> StatefulPropagationContext {
-        StatefulPropagationContext {
-            stateful_assignments: self.trailed_values,
-            assignments: self.assignments,
         }
     }
 
@@ -110,7 +105,7 @@ impl PropagatorConstructorContext<'_> {
         var: Var,
         domain_events: DomainEvents,
         local_id: LocalId,
-    ) -> Var {
+    ) {
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -120,8 +115,6 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
-
-        var
     }
 
     pub(crate) fn get_next_local_id(&self) -> LocalId {

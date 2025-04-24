@@ -2,10 +2,11 @@ use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
@@ -35,6 +36,24 @@ where
     }
 }
 
+impl<VA: 'static, VB: 'static, VC: 'static> PropagatorConstructor
+    for IntegerMultiplicationPropagator<VA, VB, VC>
+where
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
+{
+    type PropagatorImpl = Self;
+
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
+        context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
+        context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
+
+        self
+    }
+}
+
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator
     for IntegerMultiplicationPropagator<VA, VB, VC>
 where
@@ -42,17 +61,6 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
-        let _ = context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
-        let _ = context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
-        let _ = context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
-
-        Ok(())
-    }
-
     fn priority(&self) -> u32 {
         0
     }

@@ -355,17 +355,14 @@ mod tests {
         type PropagatorImpl = Self;
 
         fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
-            self.variables_to_register
-                .iter()
-                .enumerate()
-                .for_each(|(index, variable)| {
-                    let _ = context.register(
-                        *variable,
-                        DomainEvents::ANY_INT,
-                        LocalId::from(index as u32),
-                    );
-                });
-            (self.init)(context);
+            for (index, variable) in self.variables_to_register.iter().enumerate() {
+                context.register(
+                    *variable,
+                    DomainEvents::ANY_INT,
+                    LocalId::from(index as u32),
+                );
+            }
+
             self
         }
     }

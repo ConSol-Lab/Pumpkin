@@ -1699,7 +1699,7 @@ mod tests {
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::predicate;
     use crate::predicates::Predicate;
-    use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
+    use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
     use crate::termination::Indefinite;
     use crate::variables::TransformableVariable;
     use crate::DefaultBrancher;
@@ -1895,10 +1895,10 @@ mod tests {
         let y = solver.create_new_integer_variable(0, 10, None);
         let z = solver.create_new_integer_variable(0, 10, None);
 
-        let result = solver.add_propagator(
-            LinearNotEqualPropagator::new([x.scaled(1), y.scaled(-1)].into(), 0),
-            None,
-        );
+        let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+        });
         assert!(result.is_ok());
         run_test(
             solver,
@@ -1951,8 +1951,11 @@ mod tests {
         let x = solver.create_new_integer_variable(1, 1, None);
         let y = solver.create_new_integer_variable(2, 2, None);
 
-        let propagator = LinearNotEqualPropagator::new(Box::new([x, y]), 3);
-        let result = solver.add_propagator(propagator, None);
+        let propagator = LinearNotEqualPropagatorArgs {
+            terms: vec![x, y].into(),
+            rhs: 3,
+        };
+        let result = solver.add_propagator(propagator);
         assert!(result.is_err());
     }
 }

@@ -2,10 +2,11 @@ use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -25,23 +26,30 @@ impl<VA, VB> AbsoluteValuePropagator<VA, VB> {
     }
 }
 
-impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
-    for AbsoluteValuePropagator<VA, VB>
+impl<VA, VB> PropagatorConstructor for AbsoluteValuePropagator<VA, VB>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
-        let _ = context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
-        let _ = context.register(
+    type PropagatorImpl = Self;
+
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
+        context.register(
             self.absolute.clone(),
             DomainEvents::BOUNDS,
             LocalId::from(1),
         );
 
-        Ok(())
+        self
     }
+}
 
+impl<VA, VB> Propagator for AbsoluteValuePropagator<VA, VB>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+{
     fn priority(&self) -> u32 {
         0
     }

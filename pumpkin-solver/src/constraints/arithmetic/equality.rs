@@ -3,7 +3,7 @@ use std::num::NonZero;
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
+use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -129,7 +129,13 @@ where
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
+        let NotEqualConstraint { terms, rhs } = self;
+
+        LinearNotEqualPropagatorArgs {
+            terms: terms.into(),
+            rhs,
+        }
+        .post(solver, tag)
     }
 
     fn implied_by(
@@ -138,11 +144,13 @@ where
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(
-            solver,
-            reification_literal,
-            tag,
-        )
+        let NotEqualConstraint { terms, rhs } = self;
+
+        LinearNotEqualPropagatorArgs {
+            terms: terms.into(),
+            rhs,
+        }
+        .implied_by(solver, reification_literal, tag)
     }
 }
 
