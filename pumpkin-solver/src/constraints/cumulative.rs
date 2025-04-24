@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::num::NonZero;
 
 use super::Constraint;
 use crate::options::CumulativePropagationMethod;
@@ -204,18 +203,14 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,
                 self.resource_capacity,
                 self.options.propagator_options,
             )
-            .post(solver, tag),
+            .post(solver),
 
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
@@ -223,7 +218,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .post(solver, tag)
+                .post(solver)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
                 TimeTablePerPointIncrementalPropagator::<Var, true>::new(
@@ -231,7 +226,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .post(solver, tag)
+                .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 TimeTableOverIntervalPropagator::new(
@@ -239,7 +234,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .post(solver, tag)
+                .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
@@ -247,7 +242,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .post(solver, tag)
+                .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
@@ -255,7 +250,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .post(solver, tag)
+                .post(solver)
             }
         }
     }
@@ -264,7 +259,6 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
@@ -272,14 +266,14 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 self.resource_capacity,
                 self.options.propagator_options,
             )
-            .implied_by(solver, reification_literal, tag),
+            .implied_by(solver, reification_literal),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .implied_by(solver, reification_literal, tag)
+                .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
                 TimeTablePerPointIncrementalPropagator::<Var, true>::new(
@@ -287,7 +281,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .implied_by(solver, reification_literal, tag)
+                .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 TimeTableOverIntervalPropagator::new(
@@ -295,7 +289,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .implied_by(solver, reification_literal, tag)
+                .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
@@ -303,7 +297,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .implied_by(solver, reification_literal, tag)
+                .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
@@ -311,7 +305,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.resource_capacity,
                     self.options.propagator_options,
                 )
-                .implied_by(solver, reification_literal, tag)
+                .implied_by(solver, reification_literal)
             }
         }
     }

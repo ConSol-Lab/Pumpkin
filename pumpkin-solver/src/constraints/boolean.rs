@@ -1,5 +1,3 @@
-use std::num::NonZero;
-
 use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
@@ -43,25 +41,20 @@ struct BooleanLessThanOrEqual {
 }
 
 impl Constraint for BooleanLessThanOrEqual {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs).post(solver, tag)
+        less_than_or_equals(domains, self.rhs).post(solver)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal, tag)
+        less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal)
     }
 }
 
@@ -82,25 +75,20 @@ struct BooleanEqual {
 }
 
 impl Constraint for BooleanEqual {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0).post(solver, tag)
+        equals(domains, 0).post(solver)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0).implied_by(solver, reification_literal, tag)
+        equals(domains, 0).implied_by(solver, reification_literal)
     }
 }
 

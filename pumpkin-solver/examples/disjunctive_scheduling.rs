@@ -66,7 +66,7 @@ fn main() {
             // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
             let _ = constraints::less_than_or_equals(variables, -(processing_times[x] as i32))
-                .reify(&mut solver, literal, None);
+                .reify(&mut solver, literal);
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([

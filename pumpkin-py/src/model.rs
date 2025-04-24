@@ -330,18 +330,13 @@ impl Model {
             let ModelConstraint {
                 constraint,
                 premise,
-                tag,
+                tag: _,
             } = constraint.clone();
 
             if let Some(premise) = premise {
-                constraint.implied_by(
-                    solver,
-                    premise.to_literal(variable_map),
-                    tag,
-                    variable_map,
-                )?;
+                constraint.implied_by(solver, premise.to_literal(variable_map), variable_map)?;
             } else {
-                constraint.post(solver, tag, variable_map)?;
+                constraint.post(solver, variable_map)?;
             }
         }
 
@@ -380,6 +375,10 @@ impl Model {
 struct ModelConstraint {
     constraint: Constraint,
     premise: Option<BoolExpression>,
+    #[allow(
+        unused,
+        reason = "will be used after new propagator API is implemented"
+    )]
     tag: Option<NonZero<u32>>,
 }
 

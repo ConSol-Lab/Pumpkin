@@ -1,6 +1,5 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::constraints;
@@ -33,7 +32,6 @@ fn proof_with_reified_literals() {
 
     let _ = solver
         .add_constraint(constraints::not_equals([variable], 5))
-        .with_tag(NonZero::new(2).unwrap())
         .post()
         .expect_err("unsat");
 
@@ -59,13 +57,11 @@ fn proof_with_equality_unit_nogood_step() {
     let x2 = solver.new_named_bounded_integer(1, 1, "x2");
     solver
         .add_constraint(constraints::binary_not_equals(x1, x2))
-        .with_tag(NonZero::new(1).unwrap())
         .post()
         .expect("no conflict");
 
     let _ = solver
         .add_constraint(constraints::less_than_or_equals([x1], 1))
-        .with_tag(NonZero::new(2).unwrap())
         .post()
         .expect_err("conflict");
 

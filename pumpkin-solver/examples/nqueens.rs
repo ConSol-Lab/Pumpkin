@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -59,7 +58,6 @@ fn main() {
 
     let _ = solver
         .add_constraint(constraints::all_different(variables.clone()))
-        .with_tag(NonZero::new(1).unwrap())
         .post();
 
     let diag1 = variables
@@ -77,11 +75,9 @@ fn main() {
 
     let _ = solver
         .add_constraint(constraints::all_different(diag1))
-        .with_tag(NonZero::new(2).unwrap())
         .post();
     let _ = solver
         .add_constraint(constraints::all_different(diag2))
-        .with_tag(NonZero::new(3).unwrap())
         .post();
 
     let mut brancher = solver.default_brancher();

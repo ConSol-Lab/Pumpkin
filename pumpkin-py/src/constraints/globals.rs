@@ -27,24 +27,22 @@ macro_rules! python_constraint {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                tag: Option<std::num::NonZero<u32>>,
                 variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+
-                ).post(solver, tag)
+                ).post(solver)
             }
 
             pub fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::variables::Literal,
-                tag: Option<std::num::NonZero<u32>>,
                 variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+
-                ).implied_by(solver, reification_literal, tag)
+                ).implied_by(solver, reification_literal)
             }
         }
     };
