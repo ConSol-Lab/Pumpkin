@@ -18,7 +18,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
-use crate::engine::TrailedAssignments;
+use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::ProofLog;
@@ -48,7 +48,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) should_minimise: bool,
 
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
-    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_values: &'a mut TrailedValues,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -83,7 +83,7 @@ impl ConflictAnalysisContext<'_> {
             self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
-            self.stateful_assignments,
+            self.trailed_values,
         )
     }
 
