@@ -4,12 +4,12 @@ use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct TrailedAssignments {
+pub(crate) struct TrailedValues {
     trail: Trail<TrailedChange>,
     values: KeyedVec<TrailedInteger, i64>,
 }
 
-impl TrailedAssignments {
+impl TrailedValues {
     pub(crate) fn grow(&mut self, initial_value: i64) -> TrailedInteger {
         self.values.push(initial_value)
     }
@@ -66,11 +66,11 @@ impl TrailedAssignments {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::TrailedAssignments;
+    use crate::engine::TrailedValues;
 
     #[test]
     fn test_write_resets() {
-        let mut assignments = TrailedAssignments::default();
+        let mut assignments = TrailedValues::default();
         let trailed_integer = assignments.grow(0);
 
         assert_eq!(assignments.read(trailed_integer), 0);

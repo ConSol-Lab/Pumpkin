@@ -9,7 +9,7 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
-use crate::engine::TrailedAssignments;
+use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
 
@@ -21,7 +21,7 @@ use crate::engine::Watchers;
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
-    pub(crate) trailed_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_assignments: &'a mut TrailedValues,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
@@ -31,7 +31,7 @@ pub(crate) struct PropagatorInitialisationContext<'a> {
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
-        trailed_assignments: &'a mut TrailedAssignments,
+        trailed_assignments: &'a mut TrailedValues,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorInitialisationContext<'a> {
@@ -138,11 +138,11 @@ mod private {
     }
 
     impl HasTrailedAssignments for PropagatorInitialisationContext<'_> {
-        fn trailed_assignments(&self) -> &TrailedAssignments {
+        fn trailed_assignments(&self) -> &TrailedValues {
             self.trailed_assignments
         }
 
-        fn trailed_assignments_mut(&mut self) -> &mut TrailedAssignments {
+        fn trailed_assignments_mut(&mut self) -> &mut TrailedValues {
             self.trailed_assignments
         }
     }

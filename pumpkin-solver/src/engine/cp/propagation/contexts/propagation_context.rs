@@ -8,18 +8,18 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
-use crate::engine::TrailedAssignments;
 use crate::engine::TrailedInteger;
+use crate::engine::TrailedValues;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct PropagationContextWithTrailedAssignments<'a> {
-    pub(crate) trailed_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_assignments: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContextWithTrailedAssignments<'a> {
     pub(crate) fn new(
-        trailed_assignments: &'a mut TrailedAssignments,
+        trailed_assignments: &'a mut TrailedValues,
         assignments: &'a Assignments,
     ) -> Self {
         Self {
@@ -56,7 +56,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub(crate) struct PropagationContextMut<'a> {
-    pub(crate) trailed_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_assignments: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -66,7 +66,7 @@ pub(crate) struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
-        trailed_assignments: &'a mut TrailedAssignments,
+        trailed_assignments: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
@@ -138,29 +138,29 @@ pub trait HasAssignments {
 }
 
 pub(crate) trait HasTrailedAssignments {
-    fn trailed_assignments(&self) -> &TrailedAssignments;
-    fn trailed_assignments_mut(&mut self) -> &mut TrailedAssignments;
+    fn trailed_assignments(&self) -> &TrailedValues;
+    fn trailed_assignments_mut(&mut self) -> &mut TrailedValues;
 }
 
 mod private {
     use super::*;
 
     impl HasTrailedAssignments for PropagationContextWithTrailedAssignments<'_> {
-        fn trailed_assignments(&self) -> &TrailedAssignments {
+        fn trailed_assignments(&self) -> &TrailedValues {
             self.trailed_assignments
         }
 
-        fn trailed_assignments_mut(&mut self) -> &mut TrailedAssignments {
+        fn trailed_assignments_mut(&mut self) -> &mut TrailedValues {
             self.trailed_assignments
         }
     }
 
     impl HasTrailedAssignments for PropagationContextMut<'_> {
-        fn trailed_assignments(&self) -> &TrailedAssignments {
+        fn trailed_assignments(&self) -> &TrailedValues {
             self.trailed_assignments
         }
 
-        fn trailed_assignments_mut(&mut self) -> &mut TrailedAssignments {
+        fn trailed_assignments_mut(&mut self) -> &mut TrailedValues {
             self.trailed_assignments
         }
     }
