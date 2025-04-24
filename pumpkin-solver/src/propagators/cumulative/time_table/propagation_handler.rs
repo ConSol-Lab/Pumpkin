@@ -447,7 +447,7 @@ pub(crate) mod test_propagation_handler {
         propagation_handler: CumulativePropagationHandler,
         reason_store: ReasonStore,
         assignments: Assignments,
-        trailed_assignments: TrailedValues,
+        trailed_values: TrailedValues,
     }
 
     impl TestPropagationHandler {
@@ -456,12 +456,12 @@ pub(crate) mod test_propagation_handler {
 
             let reason_store = ReasonStore::default();
             let assignments = Assignments::default();
-            let trailed_assignments = TrailedValues::default();
+            let trailed_values = TrailedValues::default();
             Self {
                 propagation_handler,
                 reason_store,
                 assignments,
-                trailed_assignments,
+                trailed_values,
             }
         }
 
@@ -522,7 +522,7 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.trailed_assignments,
+                        &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
@@ -583,7 +583,7 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.trailed_assignments,
+                        &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
@@ -631,7 +631,7 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.trailed_assignments,
+                        &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
@@ -692,7 +692,7 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.trailed_assignments,
+                        &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),

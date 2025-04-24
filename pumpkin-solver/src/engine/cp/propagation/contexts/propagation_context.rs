@@ -13,17 +13,14 @@ use crate::engine::TrailedValues;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct PropagationContextWithTrailedAssignments<'a> {
-    pub(crate) trailed_assignments: &'a mut TrailedValues,
+    pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContextWithTrailedAssignments<'a> {
-    pub(crate) fn new(
-        trailed_assignments: &'a mut TrailedValues,
-        assignments: &'a Assignments,
-    ) -> Self {
+    pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
         Self {
-            trailed_assignments,
+            trailed_values,
             assignments,
         }
     }
@@ -56,7 +53,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub(crate) struct PropagationContextMut<'a> {
-    pub(crate) trailed_assignments: &'a mut TrailedValues,
+    pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -66,14 +63,14 @@ pub(crate) struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
-        trailed_assignments: &'a mut TrailedValues,
+        trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
-            trailed_assignments,
+            trailed_values,
             assignments,
             reason_store,
             propagator_id,
@@ -114,7 +111,7 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedAssignments {
         PropagationContextWithTrailedAssignments {
-            trailed_assignments: self.trailed_assignments,
+            trailed_values: self.trailed_values,
             assignments: self.assignments,
         }
     }
@@ -138,30 +135,30 @@ pub trait HasAssignments {
 }
 
 pub(crate) trait HasTrailedAssignments {
-    fn trailed_assignments(&self) -> &TrailedValues;
-    fn trailed_assignments_mut(&mut self) -> &mut TrailedValues;
+    fn trailed_values(&self) -> &TrailedValues;
+    fn trailed_values_mut(&mut self) -> &mut TrailedValues;
 }
 
 mod private {
     use super::*;
 
     impl HasTrailedAssignments for PropagationContextWithTrailedAssignments<'_> {
-        fn trailed_assignments(&self) -> &TrailedValues {
-            self.trailed_assignments
+        fn trailed_values(&self) -> &TrailedValues {
+            self.trailed_values
         }
 
-        fn trailed_assignments_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_assignments
+        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+            self.trailed_values
         }
     }
 
     impl HasTrailedAssignments for PropagationContextMut<'_> {
-        fn trailed_assignments(&self) -> &TrailedValues {
-            self.trailed_assignments
+        fn trailed_values(&self) -> &TrailedValues {
+            self.trailed_values
         }
 
-        fn trailed_assignments_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_assignments
+        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+            self.trailed_values
         }
     }
 
@@ -186,21 +183,20 @@ mod private {
 
 pub(crate) trait ManipulateTrailedAssignments: HasTrailedAssignments {
     fn new_trailed_integer(&mut self, initial_value: i64) -> TrailedInteger {
-        self.trailed_assignments_mut().grow(initial_value)
+        self.trailed_values_mut().grow(initial_value)
     }
 
     fn value(&self, trailed_integer: TrailedInteger) -> i64 {
-        self.trailed_assignments().read(trailed_integer)
+        self.trailed_values().read(trailed_integer)
     }
 
     fn add_assign(&mut self, trailed_integer: TrailedInteger, addition: i64) {
-        self.trailed_assignments_mut()
+        self.trailed_values_mut()
             .add_assign(trailed_integer, addition);
     }
 
     fn assign(&mut self, trailed_integer: TrailedInteger, value: i64) {
-        self.trailed_assignments_mut()
-            .assign(trailed_integer, value);
+        self.trailed_values_mut().assign(trailed_integer, value);
     }
 }
 

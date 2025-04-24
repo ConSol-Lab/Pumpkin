@@ -48,7 +48,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) should_minimise: bool,
 
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
-    pub(crate) trailed_assignments: &'a mut TrailedValues,
+    pub(crate) trailed_values: &'a mut TrailedValues,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -83,7 +83,7 @@ impl ConflictAnalysisContext<'_> {
             self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
-            self.trailed_assignments,
+            self.trailed_values,
         )
     }
 

@@ -58,7 +58,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         if local_id < self.reification_literal_id {
             let decision = self.propagator.notify(
                 PropagationContextWithTrailedAssignments::new(
-                    context.trailed_assignments,
+                    context.trailed_values,
                     context.assignments,
                 ),
                 local_id,
