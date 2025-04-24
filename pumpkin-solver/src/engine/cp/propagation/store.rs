@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::num::NonZero;
 use std::ops::Index;
 use std::ops::IndexMut;
 
@@ -10,20 +9,12 @@ use crate::containers::Slot;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
-///
-/// The propagator store associates tags with propagators, whenever a tag is provided for a
-/// propagator.
 #[derive(Default)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
-    tags: KeyedVec<PropagatorId, Option<NonZero<u32>>>,
 }
 
 impl PropagatorStore {
-    pub(crate) fn get_tag(&self, propagator_id: PropagatorId) -> Option<NonZero<u32>> {
-        self.tags[propagator_id]
-    }
-
     pub(crate) fn iter_propagators(&self) -> impl Iterator<Item = &dyn Propagator> + '_ {
         self.propagators.iter().map(|b| b.as_ref())
     }

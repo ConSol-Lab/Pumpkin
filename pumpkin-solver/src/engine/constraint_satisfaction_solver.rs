@@ -2,7 +2,6 @@
 //! using a Lazy Clause Generation approach.
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::num::NonZero;
 use std::time::Instant;
 
 use clap::ValueEnum;
@@ -369,11 +368,10 @@ impl ConstraintSatisfactionSolver {
     fn complete_proof(&mut self) {
         let conflict = match self.state.get_conflict_info() {
             StoredConflictInfo::Propagator {
-                conflict_nogood,
-                propagator_id,
+                conflict_nogood, ..
             } => {
                 let _ = self.internal_parameters.proof_log.log_inference(
-                    self.propagators.get_tag(propagator_id),
+                    None,
                     conflict_nogood.iter().copied(),
                     None,
                 );
@@ -1148,11 +1146,8 @@ impl ConstraintSatisfactionSolver {
         );
 
         // We also need to log this last propagation to the proof log as an inference.
-        let propagator = self.reason_store.get_propagator(entry_reason);
-        let constraint_tag = self.propagators.get_tag(propagator);
-
         let _ = self.internal_parameters.proof_log.log_inference(
-            constraint_tag,
+            None,
             empty_domain_reason.iter().copied(),
             Some(entry.predicate),
         );
@@ -1173,7 +1168,6 @@ impl ConstraintSatisfactionSolver {
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            let tag = self.propagators.get_tag(propagator_id);
             let num_trail_entries_before = self.assignments.num_trail_entries();
 
             let propagation_status = {
@@ -1189,7 +1183,7 @@ impl ConstraintSatisfactionSolver {
             };
 
             if self.assignments.get_decision_level() == 0 {
-                self.log_root_propagation_to_proof(num_trail_entries_before, tag);
+                self.log_root_propagation_to_proof(num_trail_entries_before);
             }
 
             match propagation_status {
@@ -1257,11 +1251,7 @@ impl ConstraintSatisfactionSolver {
     /// The inference `R -> l` is logged to the proof as follows:
     /// 1. Infernce `R /\ ~l -> false`
     /// 2. Nogood (clause) `l`
-    fn log_root_propagation_to_proof(
-        &mut self,
-        start_trail_index: usize,
-        tag: Option<NonZero<u32>>,
-    ) {
+    fn log_root_propagation_to_proof(&mut self, start_trail_index: usize) {
         pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
 
         if !self.internal_parameters.proof_log.is_logging_inferences() {
@@ -1287,10 +1277,10 @@ impl ConstraintSatisfactionSolver {
 
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
-            let _ = self
-                .internal_parameters
-                .proof_log
-                .log_inference(tag, inference_premises, None);
+            let _ =
+                self.internal_parameters
+                    .proof_log
+                    .log_inference(None, inference_premises, None);
 
             // Since inference steps are only related to the nogood they directly precede,
             // facts derived at the root are also logged as nogoods so they can be used in the
@@ -1434,18 +1424,18 @@ impl ConstraintSatisfactionSolver {
 
         if addition_result.is_err() || self.state.is_conflicting() {
             self.prepare_for_conflict_resolution();
-            self.log_root_propagation_to_proof(num_trail_entries, None);
+            self.log_root_propagation_to_proof(num_trail_entries);
             self.complete_proof();
             return Err(ConstraintOperationError::InfeasibleNogood);
         }
 
-        self.log_root_propagation_to_proof(num_trail_entries, None);
+        self.log_root_propagation_to_proof(num_trail_entries);
 
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();
 
-        self.log_root_propagation_to_proof(num_trail_entries, None);
+        self.log_root_propagation_to_proof(num_trail_entries);
 
         if self.state.is_infeasible() {
             self.prepare_for_conflict_resolution();
