@@ -1366,7 +1366,7 @@ impl ConstraintSatisfactionSolver {
 
         let mut constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list_cp,
-            &mut self.stateful_assignments,
+            &mut self.trailed_values,
             propagator_slot.key(),
             &mut self.assignments,
         );

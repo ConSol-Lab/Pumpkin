@@ -5,7 +5,7 @@ use super::PropagatorId;
 use super::PropagatorVarId;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
-use crate::engine::TrailedAssignments;
+use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
 use crate::variables::IntegerVariable;
@@ -31,7 +31,7 @@ pub(crate) trait PropagatorConstructor {
 #[derive(Debug)]
 pub(crate) struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
-    trailed_values: &'a mut TrailedAssignments,
+    trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
@@ -41,7 +41,7 @@ pub(crate) struct PropagatorConstructorContext<'a> {
 impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
-        trailed_values: &'a mut TrailedAssignments,
+        trailed_values: &'a mut TrailedValues,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorConstructorContext<'a> {
@@ -125,7 +125,7 @@ impl PropagatorConstructorContext<'_> {
 mod private {
     use super::*;
     use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasStatefulAssignments;
+    use crate::engine::propagation::contexts::HasTrailedValues;
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {
@@ -133,12 +133,12 @@ mod private {
         }
     }
 
-    impl HasStatefulAssignments for PropagatorConstructorContext<'_> {
-        fn stateful_assignments(&self) -> &TrailedAssignments {
+    impl HasTrailedValues for PropagatorConstructorContext<'_> {
+        fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
+        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
             self.trailed_values
         }
     }

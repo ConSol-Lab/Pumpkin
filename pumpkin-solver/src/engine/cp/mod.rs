@@ -29,6 +29,7 @@ mod tests {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
     use crate::engine::TrailedValues;
+    use crate::predicate;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {

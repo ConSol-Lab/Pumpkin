@@ -43,10 +43,10 @@ where
                 LocalId::from(i as u32),
             );
             lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
-            current_bounds.push(context.new_stateful_integer(context.lower_bound(x_i) as i64));
+            current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
         }
 
-        let lower_bound_left_hand_side = context.new_stateful_integer(lower_bound_left_hand_side);
+        let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
         LinearLessOrEqualPropagator {
             x,
