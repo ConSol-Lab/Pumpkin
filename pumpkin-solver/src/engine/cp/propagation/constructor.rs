@@ -18,7 +18,7 @@ pub(crate) trait PropagatorConstructor {
     type PropagatorImpl: Propagator;
 
     /// Create the propagator instance from `Self`.
-    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
+    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl;
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.

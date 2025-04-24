@@ -3,6 +3,8 @@
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 
+use super::propagation::constructor::PropagatorConstructor;
+use super::propagation::constructor::PropagatorConstructorContext;
 use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
@@ -65,19 +67,27 @@ impl TestSolver {
         Literal::new(domain_id)
     }
 
-    pub(crate) fn new_propagator(
+    pub(crate) fn new_propagator<Constructor>(
         &mut self,
-        propagator: impl Propagator + 'static,
-    ) -> Result<PropagatorId, Inconsistency> {
-        let propagator: Box<dyn Propagator> = Box::new(propagator);
-        let id = self.propagator_store.alloc(propagator, None);
+        constructor: Constructor,
+    ) -> Result<PropagatorId, Inconsistency>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
+        let propagator_slot = self.propagator_store.new_propagator();
 
-        self.propagator_store[id].initialise_at_root(&mut PropagatorInitialisationContext::new(
+        let mut constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list,
             &mut self.trailed_values,
-            id,
+            propagator_slot.key(),
             &mut self.assignments,
-        ))?;
+        );
+
+        let propagator = Box::new(constructor.create(&mut constructor_context));
+
+        let id = propagator_slot.populate(propagator);
+
         let context = PropagationContextMut::new(
             &mut self.trailed_values,
             &mut self.assignments,
