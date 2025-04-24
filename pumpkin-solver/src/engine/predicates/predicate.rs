@@ -277,19 +277,19 @@ impl std::fmt::Display for Predicate {
                 Predicate::LowerBound {
                     domain_id,
                     lower_bound,
-                } => write!(f, "[{} >= {}]", domain_id, lower_bound),
+                } => write!(f, "[{domain_id} >= {lower_bound}]"),
                 Predicate::UpperBound {
                     domain_id,
                     upper_bound,
-                } => write!(f, "[{} <= {}]", domain_id, upper_bound),
+                } => write!(f, "[{domain_id} <= {upper_bound}]"),
                 Predicate::NotEqual {
                     domain_id,
                     not_equal_constant,
-                } => write!(f, "[{} != {}]", domain_id, not_equal_constant),
+                } => write!(f, "[{domain_id} != {not_equal_constant}]"),
                 Predicate::Equal {
                     domain_id,
                     equality_constant,
-                } => write!(f, "[{} == {}]", domain_id, equality_constant),
+                } => write!(f, "[{domain_id} == {equality_constant}]"),
             }
         }
     }
@@ -297,7 +297,7 @@ impl std::fmt::Display for Predicate {
 
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

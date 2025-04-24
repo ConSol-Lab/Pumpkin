@@ -770,7 +770,7 @@ impl Assignments {
                     None
                 }
             })
-            .unwrap_or_else(|| panic!("could not find a reason for predicate {}", predicate))
+            .unwrap_or_else(|| panic!("could not find a reason for predicate {predicate}"))
     }
 }
 
