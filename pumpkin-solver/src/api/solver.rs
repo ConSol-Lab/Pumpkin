@@ -1,5 +1,3 @@
-use std::num::NonZero;
-
 use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
@@ -19,7 +17,7 @@ use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -461,17 +459,6 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
-    /// Adds a propagator with a tag, which is used to identify inferences made by this propagator
-    /// in the proof log.
-    pub(crate) fn add_tagged_propagator(
-        &mut self,
-        propagator: impl Propagator + 'static,
-        tag: NonZero<u32>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(propagator, Some(tag))
-    }
-
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`].
     ///
@@ -482,11 +469,15 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator(
+    pub(crate) fn add_propagator<Constructor>(
         &mut self,
-        propagator: impl Propagator + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(propagator, None)
+        constructor: Constructor,
+    ) -> Result<(), ConstraintOperationError>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
+        self.satisfaction_solver.add_propagator(constructor)
     }
 }
 

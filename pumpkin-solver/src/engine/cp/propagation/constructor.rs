@@ -15,10 +15,10 @@ use super::{
 /// of the solver.
 pub(crate) trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
-    type Prop: Propagator;
+    type PropagatorImpl: Propagator;
 
     /// Create the propagator instance from `Self`.
-    fn create(self, context: PropagatorConstructorContext) -> Self::Prop;
+    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.

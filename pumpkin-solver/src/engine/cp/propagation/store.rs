@@ -6,6 +6,7 @@ use std::ops::IndexMut;
 use super::Propagator;
 use super::PropagatorId;
 use crate::containers::KeyedVec;
+use crate::containers::Slot;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
@@ -42,6 +43,10 @@ impl PropagatorStore {
         &mut self,
     ) -> impl Iterator<Item = &mut Box<dyn Propagator>> + '_ {
         self.propagators.iter_mut()
+    }
+
+    pub(crate) fn new_propagator(&mut self) -> Slot<'_, PropagatorId, Box<dyn Propagator>> {
+        self.propagators.new_slot()
     }
 }
 

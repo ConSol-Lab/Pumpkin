@@ -40,7 +40,7 @@ pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
 
-use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::propagators::ReifiedPropagator;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -83,18 +83,14 @@ pub trait Constraint {
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    ConcretePropagator: Propagator + 'static,
+    ConcretePropagator: PropagatorConstructor + 'static,
 {
     fn post(
         self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        if let Some(tag) = tag {
-            solver.add_tagged_propagator(self, tag)
-        } else {
-            solver.add_propagator(self)
-        }
+        solver.add_propagator(self)
     }
 
     fn implied_by(
@@ -103,11 +99,7 @@ where
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        if let Some(tag) = tag {
-            solver.add_tagged_propagator(ReifiedPropagator::new(self, reification_literal), tag)
-        } else {
-            solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
-        }
+        solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
     }
 }
 

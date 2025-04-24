@@ -15,6 +15,8 @@ use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
+use super::nogoods::Lbd;
+use super::propagation::constructor::PropagatorConstructor;
 use super::propagation::contexts::PropagationContextWithTrailedValues;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
@@ -44,6 +46,7 @@ use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
@@ -51,7 +54,6 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
@@ -441,10 +443,9 @@ impl ConstraintSatisfactionSolver {
             .variable_names
             .add_integer(dummy_id, "Dummy".to_owned());
 
-        let _ = csp_solver.add_propagator(
-            NogoodPropagator::with_options(csp_solver.internal_parameters.learning_options),
-            None,
-        );
+        let _ = csp_solver.add_propagator(NogoodPropagator::with_options(
+            csp_solver.internal_parameters.learning_options,
+        ));
 
         assert!(dummy_id.id == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
@@ -1349,57 +1350,50 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator(
+    pub(crate) fn add_propagator<Constructor>(
         &mut self,
-        propagator_to_add: impl Propagator + 'static,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+        constructor: Constructor,
+    ) -> Result<(), ConstraintOperationError>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
+        let propagator_slot = self.propagators.new_propagator();
+
+        let constructor_context = PropagatorConstructorContext::new(
+            &mut self.watch_list_cp,
+            &mut self.stateful_assignments,
+            propagator_slot.key(),
+            &mut self.assignments,
+        );
+
+        let propagator = Box::new(constructor.create(constructor_context));
+
         pumpkin_assert_simple!(
-            propagator_to_add.priority() <= 3,
+            propagator.priority() <= 3,
             "The propagator priority exceeds 3.
              Currently we only support values up to 3,
              but this can easily be changed if there is a good reason."
         );
-
-        let new_propagator_id = self.propagators.alloc(Box::new(propagator_to_add), tag);
+        let new_propagator_id = propagator_slot.populate(propagator);
 
         let new_propagator = &mut self.propagators[new_propagator_id];
 
-        let mut initialisation_context = PropagatorInitialisationContext::new(
-            &mut self.watch_list_cp,
-            &mut self.trailed_values,
-            new_propagator_id,
-            &mut self.assignments,
-        );
+        self.propagator_queue
+            .enqueue_propagator(new_propagator_id, new_propagator.priority());
 
-        let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
+        self.propagate();
 
-        if let Err(conflict_explanation) = initialisation_status {
-            self.state.declare_conflict(StoredConflictInfo::Propagator {
-                conflict_nogood: conflict_explanation,
-                propagator_id: new_propagator_id,
-            });
+        if self.state.no_conflict() {
+            Ok(())
+        } else {
             self.complete_proof();
             let _ = self.conclude_proof_unsat();
-            self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
-        } else {
-            self.propagator_queue
-                .enqueue_propagator(new_propagator_id, new_propagator.priority());
-
-            self.propagate();
-
-            if self.state.no_conflict() {
-                Ok(())
-            } else {
-                self.complete_proof();
-                let _ = self.conclude_proof_unsat();
-                Err(ConstraintOperationError::InfeasiblePropagator)
-            }
         }
     }
 

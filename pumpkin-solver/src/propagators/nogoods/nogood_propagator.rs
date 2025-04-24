@@ -14,6 +14,8 @@ use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
@@ -71,6 +73,14 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+}
+
+impl PropagatorConstructor for NogoodPropagator {
+    type PropagatorImpl = Self;
+
+    fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        self
+    }
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
