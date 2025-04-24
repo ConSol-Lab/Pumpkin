@@ -74,8 +74,7 @@ pub fn log_statistic(name: impl Display, value: impl Display) {
             let prefix = statistic_options.statistic_prefix;
             let _ = writeln!(
                 statistic_options.statistics_writer,
-                "{} {name}={value}",
-                prefix
+                "{prefix} {name}={value}"
             );
         }
     }

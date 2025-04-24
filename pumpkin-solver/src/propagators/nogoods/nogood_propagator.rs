@@ -1414,7 +1414,7 @@ impl NogoodPropagator {
                 && is_watching(nogood.1.predicates[1], nogood_id))
             {
                 eprintln!("Nogood id: {}", nogood_id.id);
-                eprintln!("Nogood: {:?}", nogood);
+                eprintln!("Nogood: {nogood:?}");
                 eprintln!(
                     "watching 0: {}",
                     is_watching(nogood.1.predicates[0], nogood_id)

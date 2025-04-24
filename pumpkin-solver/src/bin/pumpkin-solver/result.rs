@@ -24,6 +24,6 @@ pub(crate) enum PumpkinError {
 
 impl PumpkinError {
     pub(crate) fn invalid_instance(path: impl Display) -> Self {
-        Self::InvalidInstanceFile(format!("{}", path))
+        Self::InvalidInstanceFile(format!("{path}"))
     }
 }
