@@ -12,12 +12,12 @@ use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::pumpkin_assert_simple;
 
-pub(crate) struct PropagationContextWithTrailedAssignments<'a> {
+pub(crate) struct PropagationContextWithTrailedValues<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
 }
 
-impl<'a> PropagationContextWithTrailedAssignments<'a> {
+impl<'a> PropagationContextWithTrailedValues<'a> {
     pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
         Self {
             trailed_values,
@@ -109,8 +109,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedAssignments {
-        PropagationContextWithTrailedAssignments {
+    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues {
+        PropagationContextWithTrailedValues {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
         }
@@ -134,7 +134,7 @@ pub trait HasAssignments {
     fn assignments(&self) -> &Assignments;
 }
 
-pub(crate) trait HasTrailedAssignments {
+pub(crate) trait HasTrailedValues {
     fn trailed_values(&self) -> &TrailedValues;
     fn trailed_values_mut(&mut self) -> &mut TrailedValues;
 }
@@ -142,7 +142,7 @@ pub(crate) trait HasTrailedAssignments {
 mod private {
     use super::*;
 
-    impl HasTrailedAssignments for PropagationContextWithTrailedAssignments<'_> {
+    impl HasTrailedValues for PropagationContextWithTrailedValues<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -152,7 +152,7 @@ mod private {
         }
     }
 
-    impl HasTrailedAssignments for PropagationContextMut<'_> {
+    impl HasTrailedValues for PropagationContextMut<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -174,14 +174,14 @@ mod private {
         }
     }
 
-    impl HasAssignments for PropagationContextWithTrailedAssignments<'_> {
+    impl HasAssignments for PropagationContextWithTrailedValues<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }
     }
 }
 
-pub(crate) trait ManipulateTrailedAssignments: HasTrailedAssignments {
+pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
     fn new_trailed_integer(&mut self, initial_value: i64) -> TrailedInteger {
         self.trailed_values_mut().grow(initial_value)
     }
@@ -200,7 +200,7 @@ pub(crate) trait ManipulateTrailedAssignments: HasTrailedAssignments {
     }
 }
 
-impl<T: HasTrailedAssignments> ManipulateTrailedAssignments for T {}
+impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
 pub(crate) trait ReadDomains: HasAssignments {
     fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {

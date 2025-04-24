@@ -1,7 +1,7 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
-use super::contexts::PropagationContextWithTrailedAssignments;
+use super::contexts::PropagationContextWithTrailedValues;
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
@@ -91,7 +91,7 @@ pub(crate) trait Propagator: Downcast {
     /// [`PropagatorInitialisationContext::register()`].
     fn notify(
         &mut self,
-        _context: PropagationContextWithTrailedAssignments,
+        _context: PropagationContextWithTrailedValues,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -158,7 +158,7 @@ pub(crate) trait Propagator: Downcast {
     /// inconsistency as well.
     fn detect_inconsistency(
         &self,
-        _context: PropagationContextWithTrailedAssignments,
+        _context: PropagationContextWithTrailedValues,
     ) -> Option<PropositionalConjunction> {
         None
     }

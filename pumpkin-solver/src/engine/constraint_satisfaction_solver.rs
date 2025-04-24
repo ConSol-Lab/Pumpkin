@@ -16,7 +16,7 @@ use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
-use super::propagation::contexts::PropagationContextWithTrailedAssignments;
+use super::propagation::contexts::PropagationContextWithTrailedValues;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
@@ -290,7 +290,7 @@ impl ConstraintSatisfactionSolver {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        let context = PropagationContextWithTrailedAssignments::new(trailed_values, assignments);
+        let context = PropagationContextWithTrailedValues::new(trailed_values, assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 

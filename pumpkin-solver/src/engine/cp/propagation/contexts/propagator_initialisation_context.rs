@@ -1,5 +1,5 @@
 use super::PropagationContext;
-use super::PropagationContextWithTrailedAssignments;
+use super::PropagationContextWithTrailedValues;
 use super::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
@@ -45,8 +45,8 @@ impl PropagatorInitialisationContext<'_> {
         }
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedAssignments {
-        PropagationContextWithTrailedAssignments {
+    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues {
+        PropagationContextWithTrailedValues {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
         }
@@ -129,7 +129,7 @@ impl PropagatorInitialisationContext<'_> {
 mod private {
     use super::*;
     use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasTrailedAssignments;
+    use crate::engine::propagation::contexts::HasTrailedValues;
 
     impl HasAssignments for PropagatorInitialisationContext<'_> {
         fn assignments(&self) -> &Assignments {
@@ -137,7 +137,7 @@ mod private {
         }
     }
 
-    impl HasTrailedAssignments for PropagatorInitialisationContext<'_> {
+    impl HasTrailedValues for PropagatorInitialisationContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }

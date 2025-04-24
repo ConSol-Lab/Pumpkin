@@ -16,7 +16,7 @@ use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::HasAssignments;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedAssignments;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -776,7 +776,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        _context: PropagationContextWithTrailedAssignments,
+        _context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

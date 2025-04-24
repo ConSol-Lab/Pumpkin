@@ -5,8 +5,8 @@ use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::contexts::ManipulateTrailedAssignments;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedAssignments;
+use crate::engine::propagation::contexts::ManipulateTrailedValues;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -86,7 +86,7 @@ where
 
     fn detect_inconsistency(
         &self,
-        context: PropagationContextWithTrailedAssignments,
+        context: PropagationContextWithTrailedValues,
     ) -> Option<PropositionalConjunction> {
         if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
             Some(self.create_conflict_reason(context.as_readonly()))
@@ -97,7 +97,7 @@ where
 
     fn notify(
         &mut self,
-        mut context: PropagationContextWithTrailedAssignments,
+        mut context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

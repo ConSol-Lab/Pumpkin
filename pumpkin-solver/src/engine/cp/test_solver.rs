@@ -12,7 +12,7 @@ use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedAssignments;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -107,10 +107,8 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let context = PropagationContextWithTrailedAssignments::new(
-            &mut self.trailed_values,
-            &self.assignments,
-        );
+        let context =
+            PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -133,10 +131,8 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let context = PropagationContextWithTrailedAssignments::new(
-            &mut self.trailed_values,
-            &self.assignments,
-        );
+        let context =
+            PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -222,7 +218,7 @@ impl TestSolver {
             // The nogood propagator is treated in a special way, since it is not explicitly
             // subscribed to any domain updates, but implicitly is subscribed to all updates.
             if self.propagator_store[propagator].name() == "NogoodPropagator" {
-                let context = PropagationContextWithTrailedAssignments::new(
+                let context = PropagationContextWithTrailedValues::new(
                     &mut self.trailed_values,
                     &self.assignments,
                 );
@@ -230,7 +226,7 @@ impl TestSolver {
                 let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
                 for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                    let context = PropagationContextWithTrailedAssignments::new(
+                    let context = PropagationContextWithTrailedValues::new(
                         &mut self.trailed_values,
                         &self.assignments,
                     );

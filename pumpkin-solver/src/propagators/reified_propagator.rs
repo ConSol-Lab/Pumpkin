@@ -1,7 +1,7 @@
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedAssignments;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -51,13 +51,13 @@ impl<WrappedPropagator: Propagator> ReifiedPropagator<WrappedPropagator> {
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedAssignments,
+        context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         if local_id < self.reification_literal_id {
             let decision = self.propagator.notify(
-                PropagationContextWithTrailedAssignments::new(
+                PropagationContextWithTrailedValues::new(
                     context.trailed_values,
                     context.assignments,
                 ),
@@ -181,10 +181,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         Ok(())
     }
 
-    fn find_inconsistency(
-        &mut self,
-        context: PropagationContextWithTrailedAssignments<'_>,
-    ) -> bool {
+    fn find_inconsistency(&mut self, context: PropagationContextWithTrailedValues<'_>) -> bool {
         if self.inconsistency.is_none() {
             self.inconsistency = self.propagator.detect_inconsistency(context);
         }
@@ -194,7 +191,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
 
     fn filter_enqueue_decision(
         &mut self,
-        context: PropagationContextWithTrailedAssignments<'_>,
+        context: PropagationContextWithTrailedValues<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
         if decision == EnqueueDecision::Skip {
@@ -245,7 +242,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |_: PropagationContextMut| Err(t1.clone().into()),
-                    move |_: PropagationContextWithTrailedAssignments| Some(t2.clone()),
+                    move |_: PropagationContextWithTrailedValues| Some(t2.clone()),
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -272,7 +269,7 @@ mod tests {
                         ctx.set_lower_bound(&var, 3, conjunction!())?;
                         Ok(())
                     },
-                    |_: PropagationContextWithTrailedAssignments| None,
+                    |_: PropagationContextWithTrailedValues| None,
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -305,7 +302,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |_: PropagationContextMut| Err(conjunction!([var >= 1]).into()),
-                    |_: PropagationContextWithTrailedAssignments| None,
+                    |_: PropagationContextWithTrailedValues| None,
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -338,7 +335,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
-                    |_: PropagationContextWithTrailedAssignments| None,
+                    |_: PropagationContextWithTrailedValues| None,
                     move |_: &mut PropagatorInitialisationContext| Err(conjunction!([var >= 0])),
                 ),
                 reification_literal,
@@ -359,7 +356,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
-                    move |context: PropagationContextWithTrailedAssignments| {
+                    move |context: PropagationContextWithTrailedValues| {
                         if context.is_fixed(&var) {
                             Some(conjunction!([var == 5]))
                         } else {
@@ -388,8 +385,8 @@ mod tests {
         for GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
-        ConsistencyCheck: Fn(PropagationContextWithTrailedAssignments) -> Option<PropositionalConjunction>
-            + 'static,
+        ConsistencyCheck:
+            Fn(PropagationContextWithTrailedValues) -> Option<PropositionalConjunction> + 'static,
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>
             + 'static,
     {
@@ -406,7 +403,7 @@ mod tests {
 
         fn detect_inconsistency(
             &self,
-            context: PropagationContextWithTrailedAssignments,
+            context: PropagationContextWithTrailedValues,
         ) -> Option<PropositionalConjunction> {
             (self.consistency_check)(context)
         }
@@ -433,7 +430,7 @@ mod tests {
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
         ConsistencyCheck:
-            Fn(PropagationContextWithTrailedAssignments) -> Option<PropositionalConjunction>,
+            Fn(PropagationContextWithTrailedValues) -> Option<PropositionalConjunction>,
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>,
     {
         pub(crate) fn new(
