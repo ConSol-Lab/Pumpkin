@@ -1,3 +1,4 @@
+use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
@@ -10,6 +11,7 @@ use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct PropagationContextWithTrailedValues<'a> {
@@ -286,22 +288,14 @@ impl PropagationContextMut<'_> {
         let reason = self.build_reason(reason.into());
         let reason_ref = self.reason_store.push(self.propagator_id, reason);
 
+        // TODO: Remove this constant and replace with a parameter. We have this to help
+        // refactoring.
+        let inference_code = InferenceCode::create_from_index(0);
+
         // TODO: When the following does not result in a change, i.e. this is a no-op, we probably
         // want to clean up the reason. Although perhaps that happens so infrequently that that is
         // not worth the effort.
-        self.assignments.post_predicate(predicate, Some(reason_ref))
-    }
-
-    /// Assign the given [`Literal`] to the given truth-value.
-    pub(crate) fn assign_literal<R: Into<Reason> + Clone>(
-        &mut self,
-        boolean: &Literal,
-        truth_value: bool,
-        reason: R,
-    ) -> Result<(), EmptyDomain> {
-        match truth_value {
-            true => self.post(boolean.get_true_predicate(), reason),
-            false => self.post(boolean.get_false_predicate(), reason),
-        }
+        self.assignments
+            .post_predicate(predicate, Some((reason_ref, inference_code)))
     }
 }

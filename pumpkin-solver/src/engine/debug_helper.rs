@@ -166,7 +166,8 @@ impl DebugHelper {
             let _ = reason_store.get_or_compute(
                 trail_entry
                     .reason
-                    .expect("Expected checked propagation to have a reason"),
+                    .expect("Expected checked propagation to have a reason")
+                    .0,
                 ExplanationContext::from(assignments),
                 propagators,
                 &mut reason,
@@ -267,11 +268,12 @@ impl DebugHelper {
                             // subset of the premises
                             if let Inconsistency::Conflict(ref found_inconsistency) = conflict {
                                 found_inconsistency
+                                    .conjunction
                                     .iter()
                                     .all(|predicate| reason.contains(predicate))
-                                    || reason
-                                        .iter()
-                                        .all(|predicate| found_inconsistency.contains(*predicate))
+                                    || reason.iter().all(|predicate| {
+                                        found_inconsistency.conjunction.contains(*predicate)
+                                    })
                             } else {
                                 false
                             }

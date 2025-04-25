@@ -82,7 +82,7 @@ impl ReasonStore {
 
 /// A reference to a reason
 #[derive(Default, Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct ReasonRef(pub(crate) u32);
+pub(crate) struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
 #[derive(Debug)]

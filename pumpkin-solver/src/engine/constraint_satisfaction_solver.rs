@@ -63,6 +63,7 @@ use crate::engine::RestartStrategy;
 use crate::predicate;
 use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
+use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
@@ -367,16 +368,14 @@ impl ConstraintSatisfactionSolver {
 
     fn complete_proof(&mut self) {
         let conflict = match self.state.get_conflict_info() {
-            StoredConflictInfo::Propagator {
-                conflict_nogood, ..
-            } => {
+            StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.internal_parameters.proof_log.log_inference(
-                    None,
-                    conflict_nogood.iter().copied(),
+                    conflict.inference_code,
+                    conflict.conjunction.iter().copied(),
                     None,
                 );
 
-                conflict_nogood.clone()
+                conflict.conjunction.clone()
             }
             StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
             StoredConflictInfo::RootLevelConflict(_) => {
@@ -1125,7 +1124,7 @@ impl ConstraintSatisfactionSolver {
         // The last predicate on the trail reveals the domain id that has resulted
         // in an empty domain.
         let entry = self.assignments.get_last_entry_on_trail();
-        let entry_reason = entry
+        let (entry_reason, entry_inference_code) = entry
             .reason
             .expect("Cannot cause an empty domain using a decision.");
         let conflict_domain = entry.predicate.get_domain();
@@ -1147,7 +1146,7 @@ impl ConstraintSatisfactionSolver {
 
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.internal_parameters.proof_log.log_inference(
-            None,
+            entry_inference_code,
             empty_domain_reason.iter().copied(),
             Some(entry.predicate),
         );
@@ -1198,19 +1197,16 @@ impl ConstraintSatisfactionSolver {
                         break;
                     }
                     // A propagator-specific reason for the current conflict.
-                    Inconsistency::Conflict(conflict_nogood) => {
+                    Inconsistency::Conflict(conflict) => {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                             &self.trailed_values,
                             &self.assignments,
-                            &conflict_nogood,
+                            &conflict.conjunction,
                             &self.propagators[propagator_id],
                             propagator_id,
                         ));
 
-                        let stored_conflict_info = StoredConflictInfo::Propagator {
-                            conflict_nogood,
-                            propagator_id,
-                        };
+                        let stored_conflict_info = StoredConflictInfo::Propagator(conflict);
                         self.state.declare_conflict(stored_conflict_info);
                         break;
                     }
@@ -1260,7 +1256,7 @@ impl ConstraintSatisfactionSolver {
 
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
-            let reason_ref = entry
+            let (reason_ref, inference_code) = entry
                 .reason
                 .expect("Added by a propagator and must therefore have a reason");
 
@@ -1277,10 +1273,11 @@ impl ConstraintSatisfactionSolver {
 
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
-            let _ =
-                self.internal_parameters
-                    .proof_log
-                    .log_inference(None, inference_premises, None);
+            let _ = self.internal_parameters.proof_log.log_inference(
+                inference_code,
+                inference_premises,
+                None,
+            );
 
             // Since inference steps are only related to the nogood they directly precede,
             // facts derived at the root are also logged as nogoods so they can be used in the

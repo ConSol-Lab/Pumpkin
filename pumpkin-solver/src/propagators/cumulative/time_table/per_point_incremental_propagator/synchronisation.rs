@@ -27,7 +27,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
         if let Err(Inconsistency::Conflict(explanation)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
-            *explanation == explanation_scratch
+            explanation.conjunction == explanation_scratch
         } else {
             false
         }

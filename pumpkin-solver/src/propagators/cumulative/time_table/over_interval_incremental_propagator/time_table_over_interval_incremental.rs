@@ -673,7 +673,7 @@ mod tests {
 
         assert!(matches!(result, Err(Inconsistency::Conflict(_))));
         assert!(match result {
-            Err(Inconsistency::Conflict(conflict_nogood)) => {
+            Err(Inconsistency::Conflict(conflict)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -681,11 +681,12 @@ mod tests {
                     predicate!(s2 <= 1),
                 ];
                 expected.iter().all(|y| {
-                    conflict_nogood
+                    conflict
+                        .conjunction
                         .iter()
                         .collect::<Vec<&Predicate>>()
                         .contains(&y)
-                }) && conflict_nogood.iter().all(|y| expected.contains(y))
+                }) && conflict.conjunction.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });

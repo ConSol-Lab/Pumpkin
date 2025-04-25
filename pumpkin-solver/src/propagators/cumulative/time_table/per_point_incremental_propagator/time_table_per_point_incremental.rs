@@ -649,10 +649,12 @@ mod tests {
                     predicate!(s2 <= 1),
                     predicate!(s2 >= 1),
                 ];
-                expected
-                    .iter()
-                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                    && x.iter().all(|y| expected.contains(y))
+                expected.iter().all(|y| {
+                    x.conjunction
+                        .iter()
+                        .collect::<Vec<&Predicate>>()
+                        .contains(&y)
+                }) && x.conjunction.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });
@@ -1216,15 +1218,15 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
         assert!({
-            let same = if let Err(Inconsistency::Conflict (explanation
+            let same = if let Err(Inconsistency::Conflict (conflict
             )) =
                 &result
             {
                 if let Err(Inconsistency::Conflict (explanation_scratch)) =
                     &result_scratch
                 {
-                    explanation.iter().collect::<Vec<_>>()
-                        == explanation_scratch.iter().collect::<Vec<_>>()
+                    conflict.conjunction.iter().collect::<Vec<_>>()
+                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
                     false
                 }
@@ -1317,8 +1319,8 @@ mod tests {
         assert!({
             let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
                 if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.iter().collect::<Vec<_>>()
-                        == explanation_scratch.iter().collect::<Vec<_>>()
+                    explanation.conjunction.iter().collect::<Vec<_>>()
+                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
                     false
                 }
@@ -1409,8 +1411,8 @@ mod tests {
         assert!({
             let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
                 if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.iter().collect::<Vec<_>>()
-                        != explanation_scratch.iter().collect::<Vec<_>>()
+                    explanation.conjunction.iter().collect::<Vec<_>>()
+                        != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
                     false
                 }
@@ -1698,8 +1700,12 @@ mod tests {
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
-            let explanation_vec = explanation.iter().cloned().collect::<Vec<_>>();
-            let explanation_scratch_vec = explanation_scratch.iter().cloned().collect::<Vec<_>>();
+            let explanation_vec = explanation.conjunction.iter().cloned().collect::<Vec<_>>();
+            let explanation_scratch_vec = explanation_scratch
+                .conjunction
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>();
 
             println!("{explanation_vec:?}");
             println!("{explanation_scratch_vec:?}");
@@ -1805,8 +1811,8 @@ mod tests {
         ) = (result, result_scratch)
         {
             assert_eq!(
-                explanation.iter().collect::<Vec<_>>(),
-                explanation_scratch.iter().collect::<Vec<_>>()
+                explanation.conjunction.iter().collect::<Vec<_>>(),
+                explanation_scratch.conjunction.iter().collect::<Vec<_>>()
             );
         } else {
             panic!("Incorrect result")

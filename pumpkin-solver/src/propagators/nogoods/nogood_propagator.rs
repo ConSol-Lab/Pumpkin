@@ -116,7 +116,7 @@ impl NogoodPropagator {
                 .get_trail_position(&!self.nogoods[id].predicates[0])
                 .unwrap();
             let trail_entry = context.assignments().get_trail_entry(trail_position);
-            if let Some(reason_ref) = trail_entry.reason {
+            if let Some((reason_ref, _)) = trail_entry.reason {
                 let propagator_id = reason_store.get_propagator(reason_ref);
                 let code = reason_store.get_lazy_code(reason_ref);
 
@@ -1326,9 +1326,12 @@ impl NogoodPropagator {
 
         // If all predicates in the nogood are satisfied, there is a conflict.
         if num_satisfied_predicates == nogood_len {
-            return Err(Inconsistency::Conflict(
-                nogood.predicates.iter().copied().collect(),
-            ));
+            return Err(nogood
+                .predicates
+                .iter()
+                .copied()
+                .collect::<PropositionalConjunction>()
+                .into());
         }
         // If all but one predicate are satisfied, then we can propagate.
         //

@@ -520,10 +520,12 @@ mod tests {
                             predicate!(s2 >= 1),
                             predicate!(s2 <= 1),
                         ];
-                        expected
-                            .iter()
-                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                            && x.iter().all(|y| expected.contains(y))
+                        expected.iter().all(|y| {
+                            x.conjunction
+                                .iter()
+                                .collect::<Vec<&Predicate>>()
+                                .contains(&y)
+                        }) && x.conjunction.iter().all(|y| expected.contains(y))
                     }
                 }
             }

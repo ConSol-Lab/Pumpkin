@@ -1,6 +1,7 @@
 use crate::basic_types::PropositionalConjunction;
+use crate::containers::StorageKey;
 use crate::engine::EmptyDomain;
-use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
@@ -10,7 +11,7 @@ pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Inconsistency {
     EmptyDomain,
-    Conflict(PropositionalConjunction),
+    Conflict(PropagatorConflict),
 }
 
 impl From<EmptyDomain> for Inconsistency {
@@ -19,18 +20,26 @@ impl From<EmptyDomain> for Inconsistency {
     }
 }
 
+// TODO: Remove this after finalizing refactoring.
 impl From<PropositionalConjunction> for Inconsistency {
-    fn from(conflict_nogood: PropositionalConjunction) -> Self {
-        Inconsistency::Conflict(conflict_nogood)
+    fn from(conjunction: PropositionalConjunction) -> Self {
+        Inconsistency::Conflict(PropagatorConflict {
+            conjunction,
+            inference_code: InferenceCode::create_from_index(0),
+        })
     }
 }
 
-impl<Slice> From<Slice> for Inconsistency
-where
-    Slice: AsRef<[Predicate]>,
-{
-    fn from(value: Slice) -> Self {
-        let conflict_nogood: PropositionalConjunction = value.as_ref().to_vec().into();
-        Inconsistency::Conflict(conflict_nogood)
+impl From<PropagatorConflict> for Inconsistency {
+    fn from(conflict: PropagatorConflict) -> Self {
+        Inconsistency::Conflict(conflict)
     }
+}
+
+/// A conflict stated by a propagator. It's inference code identifies how how the conflict was
+/// determined.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PropagatorConflict {
+    pub(crate) conjunction: PropositionalConjunction,
+    pub(crate) inference_code: InferenceCode,
 }

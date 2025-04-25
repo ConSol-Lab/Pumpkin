@@ -156,8 +156,10 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
 impl<Prop: Propagator> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
-        if let Err(Inconsistency::Conflict(ref mut conflict_nogood)) = status {
-            conflict_nogood.add(self.reification_literal.get_true_predicate());
+        if let Err(Inconsistency::Conflict(ref mut conflict)) = status {
+            conflict
+                .conjunction
+                .add(self.reification_literal.get_true_predicate());
         }
         status
     }
@@ -171,7 +173,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
                 .propagator
                 .detect_inconsistency(context.as_trailed_readonly())
             {
-                context.assign_literal(&self.reification_literal, false, conjunction)?;
+                context.post(self.reification_literal.get_false_predicate(), conjunction)?;
             }
         }
 
@@ -299,7 +301,7 @@ mod tests {
         match inconsistency {
             Inconsistency::Conflict(conflict_nogood) => {
                 assert_eq!(
-                    conflict_nogood,
+                    conflict_nogood.conjunction,
                     PropositionalConjunction::from(vec![
                         reification_literal.get_true_predicate(),
                         predicate![var >= 1]

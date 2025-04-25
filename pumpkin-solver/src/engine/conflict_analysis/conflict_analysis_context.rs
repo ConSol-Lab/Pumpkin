@@ -6,6 +6,7 @@ use super::minimisers::SemanticMinimiser;
 use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
+use crate::containers::StorageKey;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
@@ -22,6 +23,7 @@ use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::explain_root_assignment;
+use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_simple;
@@ -67,8 +69,12 @@ impl ConflictAnalysisContext<'_> {
 
     /// Posts the predicate with reason an empty reason.
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
+        // This should only happen when we are not learning clauses. In that case, the proof log is
+        // also nonsensical. So we can supply a garbage inference code.
+        let garbadge_inference_code = InferenceCode::create_from_index(0);
+
         self.assignments
-            .post_predicate(predicate, Some(ReasonRef(0)))
+            .post_predicate(predicate, Some((ReasonRef(0), garbadge_inference_code)))
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 
@@ -92,14 +98,36 @@ impl ConflictAnalysisContext<'_> {
     /// Returns a nogood which led to the conflict, excluding predicates from the root decision
     /// level.
     pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
-        let conflict_nogood = match self.solver_state.get_conflict_info() {
-            StoredConflictInfo::Propagator {
-                conflict_nogood, ..
-            } => {
-                let _ = self
-                    .proof_log
-                    .log_inference(None, conflict_nogood.iter().copied(), None);
+        match self.solver_state.get_conflict_info() {
+            StoredConflictInfo::Propagator(conflict) => {
+                let _ = self.proof_log.log_inference(
+                    conflict.inference_code,
+                    conflict.conjunction.iter().copied(),
+                    None,
+                );
+                conflict
+                    .conjunction
+                    .iter()
+                    .filter(|p| {
+                        // filter out root predicates
+                        self.assignments
+                            .get_decision_level_for_predicate(p)
+                            .is_some_and(|dl| dl > 0)
+                    })
+                    .copied()
+                    .collect()
+            }
+            StoredConflictInfo::EmptyDomain { conflict_nogood } => {
                 conflict_nogood
+                    .iter()
+                    .filter(|p| {
+                        // filter out root predicates
+                        self.assignments
+                            .get_decision_level_for_predicate(p)
+                            .is_some_and(|dl| dl > 0)
+                    })
+                    .copied()
+                    .collect()
             }
             StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood,
             StoredConflictInfo::RootLevelConflict(_) => {
@@ -184,7 +212,7 @@ impl ConflictAnalysisContext<'_> {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let reason_ref = trail_entry
+            let (reason_ref, inference_code) = trail_entry
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
@@ -225,7 +253,7 @@ impl ConflictAnalysisContext<'_> {
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
-                    None,
+                    inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                 );

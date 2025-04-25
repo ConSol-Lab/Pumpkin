@@ -6,6 +6,7 @@
 //! has completed.
 mod dimacs;
 mod finalizer;
+mod inference_code;
 mod proof_literals;
 
 use std::fs::File;
@@ -17,6 +18,7 @@ use std::path::PathBuf;
 use drcp_format::writer::ProofWriter;
 pub use drcp_format::Format;
 pub(crate) use finalizer::*;
+pub use inference_code::*;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
@@ -74,7 +76,7 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        constraint_tag: Option<NonZero<u32>>,
+        _inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
     ) -> std::io::Result<NonZeroU64> {
@@ -89,7 +91,7 @@ impl ProofLog {
         };
 
         // TODO: Log the inference label.
-        let id = writer.log_inference(constraint_tag, None, premises, propagated)?;
+        let id = writer.log_inference(None, None, premises, propagated)?;
 
         if let Some(hints) = propagation_order_hint {
             hints.push(id);
@@ -206,6 +208,11 @@ impl ProofLog {
         };
 
         writer.literals_mut().reify_predicate(literal, predicate);
+    }
+
+    #[allow(unused, reason = "will be used after refactoring is complete")]
+    fn get_constraint_tag(&self, _inference_code: InferenceCode) -> NonZero<u32> {
+        todo!()
     }
 }
 
