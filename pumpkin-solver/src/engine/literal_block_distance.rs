@@ -2,8 +2,8 @@ use crate::containers::SparseSet;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 
-/// Used to compute the LBD of nogoods. The type carries state that prevents the re-allocation of
-/// helper data structures.
+/// Used to compute the LBD of nogoods.
+/// The type carries state that prevents the re-allocation of helper data structures.
 #[derive(Clone, Debug)]
 pub(crate) struct Lbd {
     lbd_helper: SparseSet<u32>,
