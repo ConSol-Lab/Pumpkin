@@ -9,8 +9,8 @@ use drcp_format::IntAtomicConstraint;
 use drcp_format::LiteralDefinitions;
 
 use crate::basic_types::HashMap;
+use crate::engine::VariableNames;
 use crate::predicates::Predicate;
-use crate::variable_names::VariableNames;
 use crate::variables::DomainId;
 use crate::variables::Literal;
 

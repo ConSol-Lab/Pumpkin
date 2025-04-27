@@ -7,6 +7,7 @@ pub(crate) mod predicates;
 mod restart_strategy;
 mod solver_statistics;
 pub(crate) mod termination;
+pub(crate) mod variable_names;
 pub(crate) mod variables;
 
 pub(crate) use conflict_analysis::ResolutionResolver;
@@ -20,3 +21,4 @@ pub(crate) use domain_events::DomainEvents;
 pub use restart_strategy::RestartOptions;
 pub(crate) use restart_strategy::RestartStrategy;
 pub(crate) use solver_statistics::SolverStatistics;
+pub(crate) use variable_names::VariableNames;

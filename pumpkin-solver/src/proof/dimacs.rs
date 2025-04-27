@@ -2,8 +2,8 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::num::NonZeroU64;
 
+use crate::engine::VariableNames;
 use crate::predicates::Predicate;
-use crate::variable_names::VariableNames;
 
 #[derive(Debug)]
 pub(crate) struct DimacsProof<W: Write> {
