@@ -25,6 +25,7 @@ use super::variables::Literal;
 use super::Lbd;
 use super::ResolutionResolver;
 use super::TrailedValues;
+use super::VariableNames;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
@@ -72,7 +73,6 @@ use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
 use crate::statistics::Statistic;
-use crate::variable_names::VariableNames;
 #[cfg(doc)]
 use crate::Solver;
 
