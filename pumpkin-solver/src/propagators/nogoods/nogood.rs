@@ -1,10 +1,10 @@
-use crate::predicates::PropositionalConjunction;
+use crate::predicates::{Predicate, PropositionalConjunction};
 
 /// A struct which represents a nogood (i.e. a list of [`Predicate`]s which cannot all be true at
 /// the same time).
 ///
 /// It additionally contains certain fields related to how the clause was created/activity.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Nogood {
     /// The predicates which are part of the nogood.
     pub(crate) predicates: PropositionalConjunction,
@@ -21,22 +21,38 @@ pub(crate) struct Nogood {
     pub(crate) block_bumps: bool,
     /// The activity score of the nogood.
     pub(crate) activity: f32,
+    pub(crate) cached_predicate: Predicate,
+    pub(crate) num_propagations: usize,
 }
 
 impl Nogood {
     pub(crate) fn new_learned_nogood(predicates: PropositionalConjunction, lbd: u32) -> Self {
+        let cached_predicate = predicates.predicates_in_conjunction[0];
         Nogood {
             predicates,
             is_learned: true,
             lbd,
-            ..Default::default()
+            is_protected: false,
+            is_deleted: false,
+            block_bumps: false,
+            activity: 0.0,
+            cached_predicate,
+            num_propagations: 0,
         }
     }
 
     pub(crate) fn new_permanent_nogood(predicates: PropositionalConjunction) -> Self {
+        let cached_predicate = predicates.predicates_in_conjunction[0];
         Nogood {
             predicates,
-            ..Default::default()
+            is_learned: false,
+            lbd: 0,
+            is_protected: false,
+            is_deleted: false,
+            block_bumps: false,
+            activity: 0.0,
+            cached_predicate,
+            num_propagations: 0,
         }
     }
 }

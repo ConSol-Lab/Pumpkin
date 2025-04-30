@@ -9,7 +9,7 @@ use crate::engine::predicates::predicate::Predicate;
 /// <= 10]`).
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Vec<Predicate>,
+    pub(crate) predicates_in_conjunction: Vec<Predicate>,
 }
 
 impl PropositionalConjunction {
