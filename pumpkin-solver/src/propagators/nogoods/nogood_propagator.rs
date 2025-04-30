@@ -29,6 +29,7 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
@@ -150,13 +151,14 @@ impl Propagator for NogoodPropagator {
         0
     }
 
-    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+    fn log_statistics(&self, statistic_logger: StatisticLogger, assignments: &Assignments) {
         let mut current_num_nogoods = 0;
         let mut num_propagated_once = 0;
         let mut propagated_once_average_lbd = CumulativeMovingAverage::default();
         let mut average_lbd_of_propagated_nogoods = CumulativeMovingAverage::default();
         let mut num_clauses_which_propagate_rarely_and_are_low_lbd = 0;
         let mut average_number_of_propagations_nogood = CumulativeMovingAverage::default();
+        let mut num_nogoods_falsified_at_root = 0;
 
         self.nogoods
             .iter()
@@ -171,6 +173,14 @@ impl Propagator for NogoodPropagator {
                 }
 
                 average_number_of_propagations_nogood.add_term(nogood.num_propagations);
+
+                if nogood.predicates.iter().any(|predicate| {
+                    assignments
+                        .get_decision_level_for_predicate(&!*predicate)
+                        .is_some_and(|level| level == 0)
+                }) {
+                    num_nogoods_falsified_at_root += 1;
+                }
             });
 
         self.learned_nogood_ids
@@ -184,6 +194,8 @@ impl Propagator for NogoodPropagator {
             });
 
         current_num_nogoods.log(statistic_logger.attach_to_prefix("current_num_nogoods"));
+        num_nogoods_falsified_at_root
+            .log(statistic_logger.attach_to_prefix("num_nogoods_falsified_at_root"));
         self.learned_nogood_ids
             .low_lbd
             .len()

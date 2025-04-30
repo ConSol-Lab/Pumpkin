@@ -493,11 +493,10 @@ impl ConstraintSatisfactionSolver {
         if should_log_statistics() {
             self.solver_statistics.log(StatisticLogger::default());
             for (index, propagator) in self.propagators.iter_propagators().enumerate() {
-                propagator.log_statistics(StatisticLogger::new([
-                    propagator.name(),
-                    "number",
-                    index.to_string().as_str(),
-                ]));
+                propagator.log_statistics(
+                    StatisticLogger::new([propagator.name(), "number", index.to_string().as_str()]),
+                    &self.assignments,
+                );
             }
         }
     }
