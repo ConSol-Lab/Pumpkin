@@ -1,4 +1,6 @@
-use crate::predicates::PropositionalConjunction;
+use smallvec::SmallVec;
+
+use crate::predicates::{Predicate, PropositionalConjunction};
 
 /// A struct which represents a nogood (i.e. a list of [`Predicate`]s which cannot all be true at
 /// the same time).
@@ -7,7 +9,7 @@ use crate::predicates::PropositionalConjunction;
 #[derive(Default, Clone, Debug)]
 pub(crate) struct Nogood {
     /// The predicates which are part of the nogood.
-    pub(crate) predicates: PropositionalConjunction,
+    pub(crate) predicates: SmallVec<[Predicate; 6]>,
     /// Indicates whether the nogood is a learned nogood or not.
     pub(crate) is_learned: bool,
     /// The LBD score of the nogood; this is an indication of how "good" the nogood is.
@@ -26,7 +28,7 @@ pub(crate) struct Nogood {
 impl Nogood {
     pub(crate) fn new_learned_nogood(predicates: PropositionalConjunction, lbd: u32) -> Self {
         Nogood {
-            predicates,
+            predicates: SmallVec::from_vec(predicates.predicates_in_conjunction),
             is_learned: true,
             lbd,
             ..Default::default()
@@ -35,7 +37,7 @@ impl Nogood {
 
     pub(crate) fn new_permanent_nogood(predicates: PropositionalConjunction) -> Self {
         Nogood {
-            predicates,
+            predicates: SmallVec::from(predicates.predicates_in_conjunction),
             ..Default::default()
         }
     }

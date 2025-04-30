@@ -553,6 +553,7 @@ dependencies = [
  "rand",
  "regex",
  "signal-hook",
+ "smallvec",
  "stringcase",
  "thiserror",
  "wait-timeout",
@@ -713,6 +714,12 @@ checksum = "a9e9e0b4211b72e7b8b6e85c807d36c212bdb33ea8587f7569562a84df5465b1"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "smallvec"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8917285742e9f3e1683f0a9c4e6b57960b7314d0b08d30d1ecd426713ee2eee9"
 
 [[package]]
 name = "stringcase"
