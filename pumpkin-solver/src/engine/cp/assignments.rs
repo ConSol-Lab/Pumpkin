@@ -157,6 +157,8 @@ impl Assignments {
             } else {
                 self.remove_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
+
+                self.domains[domain_id].initial_holes.push(value);
             }
         }
         self.domains[domain_id].initial_bounds_below_trail = self.trail.len() - 1;
@@ -291,12 +293,7 @@ impl Assignments {
     }
 
     pub(crate) fn get_initial_holes(&self, domain_id: DomainId) -> Vec<i32> {
-        self.domains[domain_id]
-            .hole_updates
-            .iter()
-            .take_while(|h| h.decision_level == 0)
-            .map(|h| h.removed_value)
-            .collect()
+        self.domains[domain_id].initial_holes.clone()
     }
 
     pub(crate) fn get_assigned_value<Var: IntegerVariable + 'static>(
@@ -804,8 +801,6 @@ struct BoundUpdateInfo {
 struct HoleUpdateInfo {
     removed_value: i32,
 
-    decision_level: usize,
-
     triggered_lower_bound_update: bool,
     triggered_upper_bound_update: bool,
 }
@@ -829,6 +824,8 @@ struct IntegerDomain {
     holes: HashMap<i32, PairDecisionLevelTrailPosition>,
     // Records the trail entry at which all of the root bounds are true
     initial_bounds_below_trail: usize,
+    /// The holes that exist in the input problem.
+    initial_holes: Vec<i32>,
 }
 
 impl IntegerDomain {
@@ -854,6 +851,7 @@ impl IntegerDomain {
 
         IntegerDomain {
             id,
+            initial_holes: vec![],
             lower_bound_updates,
             upper_bound_updates,
             hole_updates: vec![],
@@ -997,7 +995,6 @@ impl IntegerDomain {
 
         self.hole_updates.push(HoleUpdateInfo {
             removed_value,
-            decision_level,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
