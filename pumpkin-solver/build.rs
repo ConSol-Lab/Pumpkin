@@ -99,6 +99,6 @@ fn add_output_file<P: AsRef<Path>>(
 }
 
 fn fail(s: &str) -> ! {
-    eprintln!("\n\nerror occurred: {}\n\n", s);
+    eprintln!("\n\nerror occurred: {s}\n\n");
     std::process::exit(1);
 }

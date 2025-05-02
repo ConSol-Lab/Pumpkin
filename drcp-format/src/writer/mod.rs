@@ -265,7 +265,7 @@ where
         }
 
         if let Some(propagated) = self.propagated {
-            write!(sink, " 0 {}", propagated)?;
+            write!(sink, " 0 {propagated}")?;
         }
 
         if let Some(constraint_id) = self.hint_constraint_id {

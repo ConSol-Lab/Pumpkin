@@ -5,8 +5,8 @@ use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::contexts::ManipulateStatefulIntegers;
-use crate::engine::propagation::contexts::StatefulPropagationContext;
+use crate::engine::propagation::contexts::ManipulateTrailedValues;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -14,20 +14,20 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::TrailedInt;
+use crate::engine::TrailedInteger;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
 
-/// Propagator for the constraint `reif => \sum x_i <= c`.
+/// Propagator for the constraint `\sum x_i <= c`.
 #[derive(Clone, Debug)]
 pub(crate) struct LinearLessOrEqualPropagator<Var> {
     x: Box<[Var]>,
     c: i32,
 
     /// The lower bound of the sum of the left-hand side. This is incremental state.
-    lower_bound_left_hand_side: TrailedInt,
+    lower_bound_left_hand_side: TrailedInteger,
     /// The value at index `i` is the bound for `x[i]`.
-    current_bounds: Box<[TrailedInt]>,
+    current_bounds: Box<[TrailedInteger]>,
 }
 
 impl<Var> LinearLessOrEqualPropagator<Var>
@@ -36,7 +36,7 @@ where
 {
     pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
         let current_bounds = (0..x.len())
-            .map(|_| TrailedInt::default())
+            .map(|_| TrailedInteger::default())
             .collect_vec()
             .into();
 
@@ -44,7 +44,7 @@ where
         LinearLessOrEqualPropagator::<Var> {
             x,
             c,
-            lower_bound_left_hand_side: TrailedInt::default(),
+            lower_bound_left_hand_side: TrailedInteger::default(),
             current_bounds,
         }
     }
@@ -73,11 +73,11 @@ where
                 LocalId::from(i as u32),
             );
             lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
-            self.current_bounds[i] = context.new_stateful_integer(context.lower_bound(x_i) as i64);
+            self.current_bounds[i] = context.new_trailed_integer(context.lower_bound(x_i) as i64);
         });
-        self.lower_bound_left_hand_side = context.new_stateful_integer(lower_bound_left_hand_side);
+        self.lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
 
-        if let Some(conjunction) = self.detect_inconsistency(context.as_stateful_readonly()) {
+        if let Some(conjunction) = self.detect_inconsistency(context.as_trailed_readonly()) {
             Err(conjunction)
         } else {
             Ok(())
@@ -86,7 +86,7 @@ where
 
     fn detect_inconsistency(
         &self,
-        context: StatefulPropagationContext,
+        context: PropagationContextWithTrailedValues,
     ) -> Option<PropositionalConjunction> {
         if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
             Some(self.create_conflict_reason(context.as_readonly()))
@@ -97,7 +97,7 @@ where
 
     fn notify(
         &mut self,
-        mut context: StatefulPropagationContext,
+        mut context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -127,7 +127,7 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conjunction) = self.detect_inconsistency(context.as_stateful_readonly()) {
+        if let Some(conjunction) = self.detect_inconsistency(context.as_trailed_readonly()) {
             return Err(conjunction.into());
         }
 

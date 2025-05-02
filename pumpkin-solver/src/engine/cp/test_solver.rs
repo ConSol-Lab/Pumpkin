@@ -7,12 +7,12 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
-use super::TrailedAssignments;
+use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::contexts::StatefulPropagationContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -34,7 +34,7 @@ pub(crate) struct TestSolver {
     pub propagator_store: PropagatorStore,
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
-    pub stateful_assignments: TrailedAssignments,
+    pub trailed_values: TrailedValues,
     watch_list: WatchListCP,
 }
 
@@ -46,7 +46,7 @@ impl Default for TestSolver {
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
-            stateful_assignments: Default::default(),
+            trailed_values: Default::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -74,12 +74,12 @@ impl TestSolver {
 
         self.propagator_store[id].initialise_at_root(&mut PropagatorInitialisationContext::new(
             &mut self.watch_list,
-            &mut self.stateful_assignments,
+            &mut self.trailed_values,
             id,
             &mut self.assignments,
         ))?;
         let context = PropagationContextMut::new(
-            &mut self.stateful_assignments,
+            &mut self.trailed_values,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
@@ -108,7 +108,7 @@ impl TestSolver {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let context =
-            StatefulPropagationContext::new(&mut self.stateful_assignments, &self.assignments);
+            PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -132,7 +132,7 @@ impl TestSolver {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let context =
-            StatefulPropagationContext::new(&mut self.stateful_assignments, &self.assignments);
+            PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -176,7 +176,7 @@ impl TestSolver {
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
         let context = PropagationContextMut::new(
-            &mut self.stateful_assignments,
+            &mut self.trailed_values,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
@@ -195,7 +195,7 @@ impl TestSolver {
             {
                 // Specify the life-times to be able to retrieve the trail entries
                 let context = PropagationContextMut::new(
-                    &mut self.stateful_assignments,
+                    &mut self.trailed_values,
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
@@ -218,16 +218,16 @@ impl TestSolver {
             // The nogood propagator is treated in a special way, since it is not explicitly
             // subscribed to any domain updates, but implicitly is subscribed to all updates.
             if self.propagator_store[propagator].name() == "NogoodPropagator" {
-                let context = StatefulPropagationContext::new(
-                    &mut self.stateful_assignments,
+                let context = PropagationContextWithTrailedValues::new(
+                    &mut self.trailed_values,
                     &self.assignments,
                 );
                 let local_id = LocalId::from(domain.id);
                 let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
                 for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                    let context = StatefulPropagationContext::new(
-                        &mut self.stateful_assignments,
+                    let context = PropagationContextWithTrailedValues::new(
+                        &mut self.trailed_values,
                         &self.assignments,
                     );
                     let _ = self.propagator_store[propagator].notify(

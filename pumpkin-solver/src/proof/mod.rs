@@ -20,8 +20,8 @@ pub(crate) use finalizer::*;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
+use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
-use crate::variable_names::VariableNames;
 use crate::variables::Literal;
 #[cfg(doc)]
 use crate::Solver;

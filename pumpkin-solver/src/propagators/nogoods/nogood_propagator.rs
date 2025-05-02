@@ -12,11 +12,10 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::Mode;
-use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::HasAssignments;
-use crate::engine::propagation::contexts::StatefulPropagationContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -31,6 +30,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
+use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::predicate;
 use crate::propagators::nogoods::Nogood;
@@ -249,7 +249,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -385,7 +385,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -579,7 +579,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -716,7 +716,7 @@ impl Propagator for NogoodPropagator {
                             end_index += 1;
                             current_index += 1;
 
-                            // At this point, nonwatched predicates and nogood[1] are falsified.
+                            // At this point, nonwatched predicates and nogood[1] are true.
                             pumpkin_assert_advanced!(nogood
                                 .iter()
                                 .skip(1)
@@ -776,7 +776,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        _context: StatefulPropagationContext,
+        _context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -1414,7 +1414,7 @@ impl NogoodPropagator {
                 && is_watching(nogood.1.predicates[1], nogood_id))
             {
                 eprintln!("Nogood id: {}", nogood_id.id);
-                eprintln!("Nogood: {:?}", nogood);
+                eprintln!("Nogood: {nogood:?}");
                 eprintln!(
                     "watching 0: {}",
                     is_watching(nogood.1.predicates[0], nogood_id)
@@ -1479,7 +1479,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
-                &mut solver.stateful_assignments,
+                &mut solver.trailed_values,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
@@ -1520,7 +1520,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
-                &mut solver.stateful_assignments,
+                &mut solver.trailed_values,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
