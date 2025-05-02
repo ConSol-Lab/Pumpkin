@@ -44,6 +44,41 @@ jobs:
         run: pytest
         working-directory: pumpkin-py
 
+  wasm:
+    name: Build pumpkin-solver (wasm32-unknown-emscripten)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # cache Cargo registry & your target/ dir
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # install Rust & add the Emscripten target
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add wasm32-unknown-emscripten
+
+      # install Emscripten SDK & clang
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y emscripten clang
+
+      # build only pumpkin-solver for wasm; skip PyO3’s Python checks
+      - name: Build pumpkin-solver wasm
+        env:
+          PYO3_NO_PYTHON: 1
+        run: |
+          cargo build \
+            --release \
+            --target wasm32-unknown-emscripten \
+            -p pumpkin-solver
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest

@@ -77,6 +77,11 @@ fn add_output_file<P: AsRef<Path>>(
         let wasm_filename = format!("{output_stem}.wasm");
         let output_file = output_dir.join(wasm_filename);
         let _ = cmd.arg("-o").arg(output_file);
+
+        // Enable exceptions for Emscripten target
+        if target.contains("emscripten") {
+            let _ = cmd.arg("-fexceptions");
+        }
     } else if is_msvc {
         let exe_name = format!("{output_stem}.exe");
 
