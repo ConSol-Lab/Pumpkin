@@ -69,10 +69,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y emscripten clang
 
-      # build only pumpkin-solver for wasm; skip PyO3’s Python checks
+      # build only pumpkin-solver for wasm
       - name: Build pumpkin-solver wasm
-        env:
-          PYO3_NO_PYTHON: 1
         run: |
           cargo build \
             --release \
