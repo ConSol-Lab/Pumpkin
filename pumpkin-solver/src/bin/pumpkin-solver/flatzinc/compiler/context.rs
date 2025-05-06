@@ -56,6 +56,9 @@ pub(crate) struct CompilationContext<'a> {
 
     /// All set parameters.
     pub(crate) set_constants: HashMap<Rc<str>, Set>,
+
+    /// Decision diagram constraints.
+    pub(crate) dd_constraints: Vec<mdd_compile::constraints::Constraint<DomainId>>,
 }
 
 /// A set parameter.
@@ -93,6 +96,8 @@ impl CompilationContext<'_> {
             integer_variable_arrays: Default::default(),
 
             set_constants: Default::default(),
+
+            dd_constraints: Default::default(),
         }
     }
 

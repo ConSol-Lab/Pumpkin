@@ -29,6 +29,7 @@ mod clause;
 mod constraint_poster;
 mod cumulative;
 mod element;
+mod mdd;
 
 use std::num::NonZero;
 
@@ -39,6 +40,7 @@ pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
+pub use mdd::*;
 
 use crate::engine::propagation::Propagator;
 use crate::propagators::ReifiedPropagator;

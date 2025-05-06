@@ -20,6 +20,7 @@ use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::CumulativeOptions;
+use pumpkin_solver::options::DecisionDiagramOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
@@ -79,7 +80,8 @@ pub(crate) fn solve(
     mut solver: Solver,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
-    options: FlatZincOptions,
+    fz_options: FlatZincOptions,
+    dd_options: Option<DecisionDiagramOptions>,
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
@@ -88,10 +90,10 @@ pub(crate) fn solve(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let instance = parse_and_compile(&mut solver, instance, fz_options, dd_options)?;
     let outputs = instance.outputs.clone();
 
-    let mut brancher = if options.free_search {
+    let mut brancher = if fz_options.free_search {
         // The free search flag is active, we just use the default brancher
         DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
             &solver,
@@ -106,7 +108,7 @@ pub(crate) fn solve(
         match instance.objective_function {
             Some(objective) => objective.into(),
             None => {
-                satisfy(options, &mut solver, brancher, termination, outputs);
+                satisfy(fz_options, &mut solver, brancher, termination, outputs);
                 return Ok(());
             }
         };
@@ -116,14 +118,14 @@ pub(crate) fn solve(
             solution_callback(
                 brancher,
                 Some(objective),
-                options.all_solutions,
+                fz_options.all_solutions,
                 &outputs,
                 solver,
                 solution,
             );
         };
 
-    let result = match options.optimisation_strategy {
+    let result = match fz_options.optimisation_strategy {
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
             &mut brancher,
             &mut termination,
@@ -138,7 +140,7 @@ pub(crate) fn solve(
 
     match result {
         OptimisationResult::Optimal(optimal_solution) => {
-            if !options.all_solutions {
+            if !fz_options.all_solutions {
                 brancher.log_statistics(StatisticLogger::default());
                 solver.log_statistics();
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
@@ -226,9 +228,10 @@ fn parse_and_compile(
     solver: &mut Solver,
     instance: impl Read,
     options: FlatZincOptions,
+    dd_options: Option<DecisionDiagramOptions>,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver, options)
+    compiler::compile(ast, solver, options, dd_options)
 }
 
 /// Prints the current solution.
@@ -444,9 +447,13 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+        let instance = parse_and_compile(
+            &mut solver,
+            instance.as_bytes(),
+            FlatZincOptions::default(),
+            None,
+        )
+        .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -466,9 +473,13 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+        let instance = parse_and_compile(
+            &mut solver,
+            instance.as_bytes(),
+            FlatZincOptions::default(),
+            None,
+        )
+        .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -484,9 +495,13 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+        let instance = parse_and_compile(
+            &mut solver,
+            instance.as_bytes(),
+            FlatZincOptions::default(),
+            None,
+        )
+        .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -506,9 +521,13 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance =
-            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
-                .expect("compilation should succeed");
+        let instance = parse_and_compile(
+            &mut solver,
+            instance.as_bytes(),
+            FlatZincOptions::default(),
+            None,
+        )
+        .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());

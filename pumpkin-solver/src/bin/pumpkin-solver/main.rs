@@ -350,6 +350,19 @@ struct Args {
     /// Determine what type of optimisation strategy is used by the solver
     #[arg(long = "optimisation-strategy", default_value_t)]
     optimisation_strategy: OptimisationStrategy,
+
+    /// Enable decision diagram propagation
+    #[arg(long = "dd-enable")]
+    decision_diagrams_enable: bool,
+
+    /// Maximum width of decision diagram relaxations
+    // TODO Tune this to your taste
+    #[arg(long = "dd-max-width", default_value_t = 128)]
+    decision_diagrams_max_width: usize,
+
+    /// Determines which constraints are grouped together in the DD construction
+    #[arg(long = "dd-intersect", value_enum, default_value_t)]
+    decision_diagrams_intersection: DecisionDiagramIntersection,
 }
 
 fn configure_logging(
@@ -554,6 +567,14 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_incremental_backtracking,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
+            },
+            if args.decision_diagrams_enable {
+                Some(DecisionDiagramOptions::new(
+                    args.decision_diagrams_max_width,
+                    args.decision_diagrams_intersection,
+                ))
+            } else {
+                None
             },
         )?,
     }

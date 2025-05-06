@@ -81,9 +81,27 @@
         ],
         [
             "--proof-path",
-            "The path to the proof file.",
+            "\tThe path to the proof file.",
             "string",
             "",
+        ],
+        [
+            "--dd-enable",
+            "\tEnable decision diagram propagation",
+            "bool",
+            "false",
+        ],
+        [
+            "--dd-max-width",
+            "\tMaximum width of decision diagram relaxations",
+            "int:2:18446744073709551615",
+            "128",
+        ],
+        [
+            "--dd-intersect",
+            "\tDetermines which constraints are grouped together in the DD construction\n\n\tPossible values: ['none', 'all']",
+            "string",
+            "false",
         ]
     ],
 

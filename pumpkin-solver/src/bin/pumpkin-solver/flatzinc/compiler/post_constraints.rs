@@ -21,6 +21,7 @@ pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
     options: FlatZincOptions,
+    produce_dd_constraints: bool,
 ) -> Result<(), FlatZincError> {
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
@@ -43,13 +44,20 @@ pub(crate) fn run(
             "array_int_element" => compile_array_var_int_element(context, exprs)?,
             "array_var_int_element" => compile_array_var_int_element(context, exprs)?,
 
-            "int_lin_ne" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ne",
-                constraints::not_equals,
-            )?,
+            "int_lin_ne" => {
+                let (sat, dd_constraint) = compile_int_lin_predicate(
+                    context,
+                    exprs,
+                    annos,
+                    "int_lin_ne",
+                    constraints::not_equals,
+                    produce_dd_constraints
+                )?;
+                if let Some(dd_constraint) = dd_constraint {
+                    context.dd_constraints.push(dd_constraint);
+                }
+                sat
+            },
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
@@ -57,13 +65,20 @@ pub(crate) fn run(
                 "int_lin_ne_reif",
                 constraints::not_equals,
             )?,
-            "int_lin_le" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le",
-                constraints::less_than_or_equals,
-            )?,
+            "int_lin_le" => {
+                let (sat, dd_constraint) = compile_int_lin_predicate(
+                    context,
+                    exprs,
+                    annos,
+                    "int_lin_le",
+                    constraints::not_equals,
+                    produce_dd_constraints
+                )?;
+                if let Some(dd_constraint) = dd_constraint {
+                    context.dd_constraints.push(dd_constraint);
+                }
+                sat
+            },
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
@@ -72,8 +87,19 @@ pub(crate) fn run(
                 constraints::less_than_or_equals,
             )?,
             "int_lin_eq" => {
-                compile_int_lin_predicate(context, exprs, annos, "int_lin_eq", constraints::equals)?
-            }
+                let (sat, dd_constraint) = compile_int_lin_predicate(
+                    context,
+                    exprs,
+                    annos,
+                    "int_lin_eq",
+                    constraints::not_equals,
+                    produce_dd_constraints
+                )?;
+                if let Some(dd_constraint) = dd_constraint {
+                    context.dd_constraints.push(dd_constraint);
+                }
+                sat
+            },
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
@@ -164,7 +190,13 @@ pub(crate) fn run(
                 constraints::absolute,
             )?,
 
-            "pumpkin_all_different" => compile_all_different(context, exprs, annos)?,
+            "pumpkin_all_different" => {
+                let (sat, dd_constraint) = compile_all_different(context, exprs, annos, produce_dd_constraints)?;
+                if let Some(dd_constraint) = dd_constraint {
+                    context.dd_constraints.push(dd_constraint);
+                }
+                sat
+            }
 
             "array_bool_and" => compile_array_bool_and(context, exprs)?,
             "array_bool_element" => {
@@ -610,17 +642,36 @@ fn compile_int_lin_predicate<C: Constraint>(
     _: &[flatzinc::Annotation],
     predicate_name: &str,
     create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32) -> C,
-) -> Result<bool, FlatZincError> {
+    prepare_dd: bool,
+) -> Result<(bool, Option<mdd_compile::constraints::Constraint<DomainId>>), FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
     let weights = context.resolve_array_integer_constants(&exprs[0])?;
     let vars = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
+    let dd_cons = match (prepare_dd, predicate_name) {
+        (true, "int_lin_le") => Some(mdd_compile::constraints::Constraint::less_than_or_equals(
+            vars.iter()
+                .zip(weights.iter())
+                .map(|(&var, &w)| (var, w))
+                .collect::<_>(),
+            rhs,
+        )),
+        (true, "int_lin_eq") => Some(mdd_compile::constraints::Constraint::equals(
+            vars.iter()
+                .zip(weights.iter())
+                .map(|(&var, &w)| (var, w))
+                .collect::<_>(),
+            rhs,
+        )),
+        _ => None,
+    };
+
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs);
-    Ok(constraint.post(context.solver, None).is_ok())
+    Ok((constraint.post(context.solver, None).is_ok(), dd_cons))
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
@@ -683,11 +734,24 @@ fn compile_all_different(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
-) -> Result<bool, FlatZincError> {
+    prepare_dd: bool,
+) -> Result<(bool, Option<mdd_compile::constraints::Constraint<DomainId>>), FlatZincError> {
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    Ok(constraints::all_different(variables)
-        .post(context.solver, None)
-        .is_ok())
+
+    let dd_constraint = if prepare_dd {
+        Some(mdd_compile::constraints::Constraint::all_different(
+            variables.clone(),
+        ))
+    } else {
+        None
+    };
+
+    Ok((
+        constraints::all_different(variables)
+            .post(context.solver, None)
+            .is_ok(),
+        dd_constraint,
+    ))
 }

@@ -1,6 +1,6 @@
 [workspace]
-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-py", "./pumpkin-macros", "./drcp-debugger"]
-default-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-py", "./pumpkin-macros"]
+members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-py", "./pumpkin-macros", "./drcp-debugger", "./mdd-compile"]
+default-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-py", "./pumpkin-macros", "./mdd-compile"]
 resolver = "2"
 
 [workspace.package]

@@ -1,0 +1,13 @@
+[package]
+name = "mdd-compile"
+version = "0.1.0"
+edition = "2021"
+# Repeating the choice by the MiniCPP team
+license = "LGPL-3.0"
+
+[dependencies]
+libc = "0.2.0"
+link-cplusplus = "1.0"
+
+[build-dependencies]
+cmake = "0.1"

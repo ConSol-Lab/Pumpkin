@@ -70,6 +70,8 @@ pub mod options {
     pub use crate::propagators::CumulativeExplanationType;
     pub use crate::propagators::CumulativeOptions;
     pub use crate::propagators::CumulativePropagationMethod;
+    pub use crate::propagators::DecisionDiagramIntersection;
+    pub use crate::propagators::DecisionDiagramOptions;
     #[cfg(doc)]
     use crate::Solver;
 }
