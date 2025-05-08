@@ -10,6 +10,7 @@ use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::TrailedValues;
 use crate::basic_types::Inconsistency;
+use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
@@ -26,6 +27,8 @@ use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -37,6 +40,8 @@ pub(crate) struct TestSolver {
     pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
     watch_list: WatchListCP,
+    constraint_tags: KeyGenerator<ConstraintTag>,
+    inference_codes: KeyGenerator<InferenceCode>,
 }
 
 impl Default for TestSolver {
@@ -48,6 +53,8 @@ impl Default for TestSolver {
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
             trailed_values: Default::default(),
+            constraint_tags: Default::default(),
+            inference_codes: Default::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -287,5 +294,13 @@ impl TestSolver {
             (lb, ub), (actual_lb, actual_ub),
             "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
         );
+    }
+
+    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.constraint_tags.next_key()
+    }
+
+    pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
+        self.inference_codes.next_key()
     }
 }

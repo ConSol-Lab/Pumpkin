@@ -169,11 +169,14 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         Prop: Propagator,
     {
         if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conjunction) = self
+            if let Some(conflict) = self
                 .propagator
                 .detect_inconsistency(context.as_trailed_readonly())
             {
-                context.post(self.reification_literal.get_false_predicate(), conjunction)?;
+                context.post(
+                    self.reification_literal.get_false_predicate(),
+                    conflict.conjunction,
+                )?;
             }
         }
 
@@ -212,6 +215,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
 mod tests {
     use super::*;
     use crate::basic_types::Inconsistency;
+    use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
@@ -230,11 +234,24 @@ mod tests {
         let t1 = triggered_conflict.clone();
         let t2 = triggered_conflict.clone();
 
+        let inference_code = solver.new_inference_code();
+
         let _ = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
-                    move |_: PropagationContextMut| Err(t1.clone().into()),
-                    move |_: PropagationContextWithTrailedValues| Some(t2.clone()),
+                    move |_: PropagationContextMut| {
+                        Err(PropagatorConflict {
+                            conjunction: t1.clone(),
+                            inference_code,
+                        }
+                        .into())
+                    },
+                    move |_: PropagationContextWithTrailedValues| {
+                        Some(PropagatorConflict {
+                            conjunction: t2.clone(),
+                            inference_code,
+                        })
+                    },
                 ),
                 reification_literal,
             })
@@ -287,11 +304,18 @@ mod tests {
         let _ = solver.set_literal(reification_literal, true);
 
         let var = solver.new_variable(1, 1);
+        let inference_code = solver.new_inference_code();
 
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
-                    move |_: PropagationContextMut| Err(conjunction!([var >= 1]).into()),
+                    move |_: PropagationContextMut| {
+                        Err(PropagatorConflict {
+                            conjunction: conjunction!([var >= 1]),
+                            inference_code,
+                        }
+                        .into())
+                    },
                     |_: PropagationContextWithTrailedValues| None,
                 ),
                 reification_literal,
@@ -320,13 +344,18 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
+        let inference_code = solver.new_inference_code();
+
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
                     move |context: PropagationContextWithTrailedValues| {
                         if context.is_fixed(&var) {
-                            Some(conjunction!([var == 5]))
+                            Some(PropagatorConflict {
+                                conjunction: conjunction!([var == 5]),
+                                inference_code,
+                            })
                         } else {
                             None
                         }
@@ -352,7 +381,7 @@ mod tests {
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
         ConsistencyCheck:
-            Fn(PropagationContextWithTrailedValues) -> Option<PropositionalConjunction> + 'static,
+            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static,
     {
         type PropagatorImpl = Self;
 
@@ -373,7 +402,7 @@ mod tests {
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
         ConsistencyCheck:
-            Fn(PropagationContextWithTrailedValues) -> Option<PropositionalConjunction> + 'static,
+            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static,
     {
         fn name(&self) -> &str {
             "Generic Propagator"
@@ -389,7 +418,7 @@ mod tests {
         fn detect_inconsistency(
             &self,
             context: PropagationContextWithTrailedValues,
-        ) -> Option<PropositionalConjunction> {
+        ) -> Option<PropagatorConflict> {
             (self.consistency_check)(context)
         }
     }
@@ -397,8 +426,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck> GenericPropagator<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck:
-            Fn(PropagationContextWithTrailedValues) -> Option<PropositionalConjunction>,
+        ConsistencyCheck: Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict>,
     {
         pub(crate) fn new(propagation: Propagation, consistency_check: ConsistencyCheck) -> Self {
             GenericPropagator {

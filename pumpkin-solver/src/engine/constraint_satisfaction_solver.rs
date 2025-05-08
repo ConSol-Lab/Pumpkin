@@ -41,6 +41,8 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyGenerator;
+use crate::containers::KeyedVec;
+use crate::declare_inference_label;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
@@ -65,6 +67,7 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
+use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::propagators::nogoods::LearningOptions;
@@ -117,8 +120,12 @@ pub struct ConstraintSatisfactionSolver {
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
     propagators: PropagatorStore,
+
     /// The constraint ids generated for this solver instance.
     constraint_tags: KeyGenerator<ConstraintTag>,
+    /// The inference code for consistency of literals and atomic constraints.
+    literal_consistency_inference_code: InferenceCode,
+
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
@@ -403,7 +410,12 @@ impl ConstraintSatisfactionSolver {
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
+    pub fn new(mut solver_options: SatisfactionSolverOptions) -> Self {
+        let mut constraint_tags = KeyGenerator::default();
+        let literal_consistency_inference_code = solver_options
+            .proof_log
+            .create_inference_code(constraint_tags.next_key(), NogoodLabel);
+
         let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
             last_notified_cp_trail_index: 0,
             state: CSPSolverState::default(),
@@ -427,7 +439,8 @@ impl ConstraintSatisfactionSolver {
             },
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
-            constraint_tags: KeyGenerator::default(),
+            constraint_tags,
+            literal_consistency_inference_code,
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -522,10 +535,16 @@ impl ConstraintSatisfactionSolver {
             .reify_predicate(literal, predicate);
 
         // If literal --> predicate
-        let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
+        let _ = self.add_clause_internal(
+            vec![!literal.get_true_predicate(), predicate],
+            ClauseType::LiteralConsistency,
+        );
 
         // If !literal --> !predicate
-        let _ = self.add_clause(vec![!literal.get_false_predicate(), !predicate]);
+        let _ = self.add_clause_internal(
+            vec![!literal.get_false_predicate(), !predicate],
+            ClauseType::LiteralConsistency,
+        );
 
         literal
     }
@@ -950,6 +969,8 @@ impl ConstraintSatisfactionSolver {
         }
 
         if let Some(learned_nogood) = learned_nogood {
+            let constraint_tag = self.new_constraint_tag();
+
             let learned_clause = learned_nogood
                 .predicates
                 .iter()
@@ -975,13 +996,18 @@ impl ConstraintSatisfactionSolver {
                 .average_learned_clause_length
                 .add_term(learned_nogood.predicates.len() as u64);
 
-            self.add_learned_nogood(learned_nogood);
+            self.add_learned_nogood(learned_nogood, constraint_tag);
         }
 
         self.state.declare_solving();
     }
 
-    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
+    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood, constraint_tag: ConstraintTag) {
+        let inference_code = self
+            .internal_parameters
+            .proof_log
+            .create_inference_code(constraint_tag, NogoodLabel);
+
         let mut context = PropagationContextMut::new(
             &mut self.trailed_values,
             &mut self.assignments,
@@ -992,6 +1018,7 @@ impl ConstraintSatisfactionSolver {
 
         ConstraintSatisfactionSolver::add_asserting_nogood_to_nogood_propagator(
             &mut self.propagators[Self::get_nogood_propagator_id()],
+            inference_code,
             learned_nogood.predicates,
             &mut context,
             &mut self.solver_statistics,
@@ -1000,13 +1027,14 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn add_asserting_nogood_to_nogood_propagator(
         nogood_propagator: &mut dyn Propagator,
+        inference_code: InferenceCode,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
         statistics: &mut SolverStatistics,
     ) {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
             Some(nogood_propagator) => {
-                nogood_propagator.add_asserting_nogood(nogood, context, statistics)
+                nogood_propagator.add_asserting_nogood(nogood, inference_code, context, statistics)
             }
             None => panic!("Provided propagator should be the nogood propagator"),
         }
@@ -1401,7 +1429,11 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
+    fn add_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        clause_type: ClauseType,
+    ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
         let num_trail_entries = self.assignments.num_trail_entries();
 
@@ -1414,9 +1446,18 @@ impl ConstraintSatisfactionSolver {
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
 
+        let inference_code = match clause_type {
+            ClauseType::LiteralConsistency => self.literal_consistency_inference_code,
+            ClauseType::Constraint(constraint_tag) => self
+                .internal_parameters
+                .proof_log
+                .create_inference_code(constraint_tag, NogoodLabel),
+        };
+
         let addition_result = ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
             &mut self.propagators[nogood_propagator_id],
             nogood,
+            inference_code,
             &mut propagation_context,
         );
 
@@ -1466,10 +1507,13 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood_to_nogood_propagator(
         nogood_propagator: &mut dyn Propagator,
         nogood: Vec<Predicate>,
+        inference_code: InferenceCode,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
-            Some(nogood_propagator) => nogood_propagator.add_nogood(nogood, context),
+            Some(nogood_propagator) => {
+                nogood_propagator.add_nogood(nogood, inference_code, context)
+            }
             None => {
                 panic!("Provided propagator should be the nogood propagator",)
             }
@@ -1484,6 +1528,15 @@ impl ConstraintSatisfactionSolver {
     pub fn add_clause(
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
+        constraint_tag: ConstraintTag,
+    ) -> Result<(), ConstraintOperationError> {
+        self.add_clause_internal(predicates, ClauseType::Constraint(constraint_tag))
+    }
+
+    fn add_clause_internal(
+        &mut self,
+        predicates: impl IntoIterator<Item = Predicate>,
+        clause_type: ClauseType,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             self.get_decision_level() == 0,
@@ -1533,7 +1586,7 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        if let Err(constraint_operation_error) = self.add_nogood(predicates) {
+        if let Err(constraint_operation_error) = self.add_nogood(predicates, clause_type) {
             let _ = self.conclude_proof_unsat();
 
             self.state
@@ -1548,6 +1601,14 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
     }
+}
+
+/// The two types of clauses we distinguish between.
+enum ClauseType {
+    /// A clause that maintains consistency between a literal and an atomic constraint.
+    LiteralConsistency,
+    /// An actual constraint.
+    Constraint(ConstraintTag),
 }
 
 #[derive(Default, Debug)]
@@ -1680,6 +1741,8 @@ impl CSPSolverState {
     }
 }
 
+declare_inference_label!(NogoodLabel);
+
 #[cfg(test)]
 mod tests {
     use super::ConstraintSatisfactionSolver;
@@ -1732,20 +1795,22 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
+        let constraint_tag = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2]);
-        let _ = solver.add_clause([lit1, !lit2]);
-        let _ = solver.add_clause([!lit1, lit2]);
+        let _ = solver.add_clause([lit1, lit2], constraint_tag);
+        let _ = solver.add_clause([lit1, !lit2], constraint_tag);
+        let _ = solver.add_clause([!lit1, lit2], constraint_tag);
         (solver, vec![lit1, lit2])
     }
 
     #[test]
     fn core_extraction_unit_core() {
         let mut solver = ConstraintSatisfactionSolver::default();
+        let constraint_tag = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let _ = solver.add_clause(vec![lit1]);
+        let _ = solver.add_clause(vec![lit1], constraint_tag);
 
         run_test(
             solver,
@@ -1780,7 +1845,8 @@ mod tests {
     #[test]
     fn simple_core_extraction_1_infeasible() {
         let (mut solver, lits) = create_instance1();
-        let _ = solver.add_clause([!lits[0], !lits[1]]);
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver.add_clause([!lits[0], !lits[1]], constraint_tag);
         run_test(
             solver,
             vec![!lits[1], !lits[0]],
@@ -1801,12 +1867,13 @@ mod tests {
     }
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
+        let constraint_tag = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3]);
-        let _ = solver.add_clause([lit1, !lit2, lit3]);
+        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
+        let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -1844,12 +1911,13 @@ mod tests {
     }
     fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
+        let constraint_tag = solver.new_constraint_tag();
 
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3]);
+        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -1883,9 +1951,12 @@ mod tests {
         let y = solver.create_new_integer_variable(0, 10, None);
         let z = solver.create_new_integer_variable(0, 10, None);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
             terms: [x.scaled(1), y.scaled(-1)].into(),
             rhs: 0,
+            constraint_tag,
         });
         assert!(result.is_ok());
         run_test(
@@ -1939,9 +2010,12 @@ mod tests {
         let x = solver.create_new_integer_variable(1, 1, None);
         let y = solver.create_new_integer_variable(2, 2, None);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = LinearNotEqualPropagatorArgs {
             terms: vec![x, y].into(),
             rhs: 3,
+            constraint_tag,
         };
         let result = solver.add_propagator(propagator);
         assert!(result.is_err());

@@ -455,8 +455,9 @@ impl Solver {
     pub fn add_clause(
         &mut self,
         clause: impl IntoIterator<Item = Predicate>,
+        constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause(clause)
+        self.satisfaction_solver.add_clause(clause, constraint_tag)
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined

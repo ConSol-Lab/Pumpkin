@@ -14,6 +14,7 @@ use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use super::CumulativeExplanationType;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -21,6 +22,7 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -411,13 +413,14 @@ impl CumulativePropagationHandler {
 /// `explanation_type`.
 pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
     context: Context,
+    inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
-) -> PropositionalConjunction
+) -> PropagatorConflict
 where
     Var: IntegerVariable + 'static,
 {
-    match explanation_type {
+    let conjunction = match explanation_type {
         CumulativeExplanationType::Naive => {
             create_naive_conflict_explanation(conflict_profile, context)
         }
@@ -427,6 +430,11 @@ where
         CumulativeExplanationType::Pointwise => {
             create_pointwise_conflict_explanation(conflict_profile)
         }
+    };
+
+    PropagatorConflict {
+        conjunction,
+        inference_code,
     }
 }
 

@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::propagation::PropagationContext;
+use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::CumulativeParameters;
@@ -24,10 +26,10 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 ) -> bool {
     let error_from_scratch = create_time_table_per_point_from_scratch(context, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
-        if let Err(Inconsistency::Conflict(explanation)) = &synchronised_conflict_explanation {
+        if let Err(Inconsistency::Conflict(conflict)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
-            explanation.conjunction == explanation_scratch
+            conflict.conjunction == explanation_scratch
         } else {
             false
         }
@@ -108,6 +110,7 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
 /// profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
     context: PropagationContext,
+    inference_code: InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -128,6 +131,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     Err(create_conflict_explanation(
         context,
+        inference_code,
         &ResourceProfile {
             start: new_profile_start,
             end: new_profile_end,

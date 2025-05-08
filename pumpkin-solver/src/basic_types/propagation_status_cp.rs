@@ -20,16 +20,6 @@ impl From<EmptyDomain> for Inconsistency {
     }
 }
 
-// TODO: Remove this after finalizing refactoring.
-impl From<PropositionalConjunction> for Inconsistency {
-    fn from(conjunction: PropositionalConjunction) -> Self {
-        Inconsistency::Conflict(PropagatorConflict {
-            conjunction,
-            inference_code: InferenceCode::create_from_index(0),
-        })
-    }
-}
-
 impl From<PropagatorConflict> for Inconsistency {
     fn from(conflict: PropagatorConflict) -> Self {
         Inconsistency::Conflict(conflict)

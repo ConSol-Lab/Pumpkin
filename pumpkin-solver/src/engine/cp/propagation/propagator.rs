@@ -8,6 +8,7 @@ use super::PropagationContextMut;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -143,7 +144,7 @@ pub(crate) trait Propagator: Downcast {
     fn detect_inconsistency(
         &self,
         _context: PropagationContextWithTrailedValues,
-    ) -> Option<PropositionalConjunction> {
+    ) -> Option<PropagatorConflict> {
         None
     }
 

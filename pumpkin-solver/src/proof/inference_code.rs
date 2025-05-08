@@ -64,13 +64,6 @@ impl StorageKey for InferenceCode {
 /// Conveniently creates [`InferenceLabel`] for use in a propagator.
 #[macro_export]
 macro_rules! declare_inference_label {
-    (pub $name:ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub struct $name;
-
-        declare_inference_label!(@impl_trait $name);
-    };
-
     ($name:ident) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         struct $name;

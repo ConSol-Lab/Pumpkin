@@ -67,9 +67,9 @@ pub mod options {
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::nogoods::LearnedNogoodSortingStrategy;
     pub use crate::propagators::nogoods::LearningOptions;
-    pub use crate::propagators::CumulativeExplanationType;
-    pub use crate::propagators::CumulativeOptions;
-    pub use crate::propagators::CumulativePropagationMethod;
+    // pub use crate::propagators::CumulativeExplanationType;
+    // pub use crate::propagators::CumulativeOptions;
+    // pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]
     use crate::Solver;
 }

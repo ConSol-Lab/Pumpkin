@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
+use super::TimeTable;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -21,6 +22,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -53,6 +56,10 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var>,
+
+    // TODO: Update with proapgator constructor.
+    constraint_tag: ConstraintTag,
+    inference_code: Option<InferenceCode>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -69,6 +76,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
     ) -> TimeTablePerPointPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -78,6 +86,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
             is_time_table_empty: true,
             parameters,
             updatable_structures,
+            constraint_tag,
+            inference_code: None,
         }
     }
 }
@@ -85,10 +95,12 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
     type PropagatorImpl = Self;
 
-    fn create(mut self, context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
+        register_tasks(&self.parameters.tasks, context.reborrow(), false);
+
+        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
 
         self
     }

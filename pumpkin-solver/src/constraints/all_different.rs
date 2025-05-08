@@ -1,10 +1,12 @@
 use super::binary_not_equals;
 use super::Constraint;
+use crate::proof::ConstraintTag;
 use crate::variables::IntegerVariable;
 
 /// Creates the [`Constraint`] that enforces that all the given `variables` are distinct.
 pub fn all_different<Var: IntegerVariable + 'static>(
     variables: impl Into<Box<[Var]>>,
+    constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     let variables: Box<[Var]> = variables.into();
     let mut constraints = Vec::new();
@@ -14,6 +16,7 @@ pub fn all_different<Var: IntegerVariable + 'static>(
             constraints.push(binary_not_equals(
                 variables[i].clone(),
                 variables[j].clone(),
+                constraint_tag,
             ));
         }
     }

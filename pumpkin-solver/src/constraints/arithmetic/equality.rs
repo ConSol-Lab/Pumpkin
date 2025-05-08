@@ -1,6 +1,7 @@
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
+use crate::proof::ConstraintTag;
 use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -13,10 +14,12 @@ use crate::Solver;
 pub fn equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     EqualConstraint {
         terms: terms.into(),
         rhs,
+        constraint_tag,
     }
 }
 
@@ -26,8 +29,9 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
 pub fn binary_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
+    constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+    equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
 }
 
 /// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
@@ -36,8 +40,9 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
 pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    equals(terms, rhs).negation()
+    equals(terms, rhs, constraint_tag).negation()
 }
 
 /// Creates the [`NegatableConstraint`] `lhs != rhs`.
@@ -46,13 +51,15 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
 pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
+    constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+    not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
 }
 
 struct EqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 }
 
 impl<Var> Constraint for EqualConstraint<Var>
@@ -60,14 +67,14 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs).post(solver)?;
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
 
         let negated = self
             .terms
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).post(solver)?;
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
 
         Ok(())
     }
@@ -77,7 +84,7 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs)
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
             .implied_by(solver, reification_literal)?;
 
         let negated = self
@@ -85,7 +92,8 @@ where
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal)?;
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal)?;
 
         Ok(())
     }
@@ -101,6 +109,7 @@ where
         NotEqualConstraint {
             terms: self.terms.clone(),
             rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
         }
     }
 }
@@ -108,6 +117,7 @@ where
 struct NotEqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 }
 
 impl<Var> Constraint for NotEqualConstraint<Var>
@@ -115,11 +125,16 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        let NotEqualConstraint { terms, rhs } = self;
+        let NotEqualConstraint {
+            terms,
+            rhs,
+            constraint_tag,
+        } = self;
 
         LinearNotEqualPropagatorArgs {
             terms: terms.into(),
             rhs,
+            constraint_tag,
         }
         .post(solver)
     }
@@ -129,11 +144,16 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        let NotEqualConstraint { terms, rhs } = self;
+        let NotEqualConstraint {
+            terms,
+            rhs,
+            constraint_tag,
+        } = self;
 
         LinearNotEqualPropagatorArgs {
             terms: terms.into(),
             rhs,
+            constraint_tag,
         }
         .implied_by(solver, reification_literal)
     }
@@ -149,6 +169,7 @@ where
         EqualConstraint {
             terms: self.terms.clone(),
             rhs: self.rhs,
+            constraint_tag: self.constraint_tag,
         }
     }
 }

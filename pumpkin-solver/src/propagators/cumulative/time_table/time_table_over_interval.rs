@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
+use super::TimeTable;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -16,6 +18,8 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -62,6 +66,10 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var>,
+
+    // TODO: Update with propagator constructor.
+    constraint_tag: ConstraintTag,
+    inference_code: Option<InferenceCode>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
@@ -75,6 +83,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -84,6 +93,8 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
             is_time_table_empty: true,
             parameters,
             updatable_structures,
+            constraint_tag,
+            inference_code: None,
         }
     }
 }
@@ -98,6 +109,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
             .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
+        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+
         self
     }
 }
@@ -105,7 +118,11 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
-            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
+            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)
+                .map_err(|conjunction| PropagatorConflict {
+                conjunction,
+                inference_code: self.inference_code.unwrap(),
+            })?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
@@ -272,8 +289,9 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
     events: Vec<Event<Var>>,
     context: Context,
+    inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     pumpkin_assert_extreme!(
         events.is_empty()
             || (0..events.len() - 1)
@@ -341,6 +359,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                     // conflict using the current profile
                     return Err(create_conflict_explanation(
                         context,
+                        inference_code,
                         &new_profile,
                         parameters.options.explanation_type,
                     ));

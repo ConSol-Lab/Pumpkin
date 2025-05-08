@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -15,6 +16,8 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_per_point;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
@@ -25,6 +28,7 @@ use crate::propagators::cumulative::time_table::time_table_util::backtrack_updat
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
+use crate::propagators::cumulative::time_table::TimeTable;
 use crate::propagators::debug_propagate_from_scratch_time_table_point;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
@@ -85,6 +89,11 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE:
     /// scratch or not; note that this variable is only used if
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
+
+    // TODO: This should be refactored to use a separate propagator constructor, but that is a lot
+    // of work in this module and I don't know enough about it to not break it.
+    constraint_tag: ConstraintTag,
+    inference_code: Option<InferenceCode>,
 }
 
 impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> PropagatorConstructor
@@ -100,6 +109,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // Then we do normal propagation
         self.is_time_table_outdated = true;
 
+        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+
         self
     }
 }
@@ -111,6 +122,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
     ) -> TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -121,6 +133,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             updatable_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
+            constraint_tag,
+            inference_code: None,
         }
     }
 
@@ -156,6 +170,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 // The newly introduced mandatory part(s) caused an overflow of the resource
                 conflict = Some(Err(create_conflict_explanation(
                     context,
+                    self.inference_code.unwrap(),
                     current_profile,
                     self.parameters.options.explanation_type,
                 )
@@ -221,7 +236,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table =
-                create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
+                create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)
+                    .map_err(|conjunction| PropagatorConflict {
+                    conjunction,
+                    inference_code: self.inference_code.unwrap(),
+                })?;
 
             // Then we note that the time-table is not outdated anymore
             self.is_time_table_outdated = false;
@@ -287,6 +306,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
+                            self.inference_code.unwrap(),
                             conflicting_profile,
                             &self.parameters,
                         );
@@ -330,6 +350,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
                     return Err(create_conflict_explanation(
                         context.as_readonly(),
+                        self.inference_code.unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
                     )

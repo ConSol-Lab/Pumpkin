@@ -3,7 +3,9 @@ use std::rc::Rc;
 use enumset::enum_set;
 
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -18,9 +20,13 @@ use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+
+declare_inference_label!(LinearNotEquals);
 
 /// The [`PropagatorConstructor`] for the [`LinearNotEqualPropagator`].
 #[derive(Clone, Debug)]
@@ -29,6 +35,8 @@ pub(crate) struct LinearNotEqualPropagatorArgs<Var> {
     pub(crate) terms: Rc<[Var]>,
     /// The right-hand side of the sum
     pub(crate) rhs: i32,
+    /// The constraint tag of the constraint this propagator is propagating for.
+    pub(crate) constraint_tag: ConstraintTag,
 }
 
 impl<Var> PropagatorConstructor for LinearNotEqualPropagatorArgs<Var>
@@ -38,7 +46,11 @@ where
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        let LinearNotEqualPropagatorArgs { terms, rhs } = self;
+        let LinearNotEqualPropagatorArgs {
+            terms,
+            rhs,
+            constraint_tag,
+        } = self;
 
         for (i, x_i) in terms.iter().enumerate() {
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
@@ -58,6 +70,7 @@ where
             fixed_lhs: 0,
             unfixed_variable_has_been_updated: false,
             should_recalculate_lhs: false,
+            inference_code: context.create_inference_code(constraint_tag, LinearNotEquals),
         };
 
         propagator.recalculate_fixed_variables(context.as_readonly());
@@ -74,6 +87,9 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
     terms: Rc<[Var]>,
     /// The right-hand side of the sum
     rhs: i32,
+
+    /// The inference code for this propagator.
+    inference_code: InferenceCode,
 
     /// The number of fixed terms; note that this constraint can only propagate when there is a
     /// single unfixed variable and can only detect conflicts if all variables are assigned
@@ -262,13 +278,17 @@ where
                 reason,
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
-            let failure_reason: PropositionalConjunction = self
+            let conjunction = self
                 .terms
                 .iter()
                 .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
                 .collect();
 
-            return Err(failure_reason.into());
+            return Err(PropagatorConflict {
+                conjunction,
+                inference_code: self.inference_code,
+            }
+            .into());
         }
 
         Ok(())
@@ -300,19 +320,19 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict(
-        &self,
-        context: PropagationContext,
-    ) -> Result<(), PropositionalConjunction> {
+    fn check_for_conflict(&self, context: PropagationContext) -> Result<(), PropagatorConflict> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
-            let failure_reason: PropositionalConjunction = self
+            let conjunction = self
                 .terms
                 .iter()
                 .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
                 .collect();
 
-            return Err(failure_reason);
+            return Err(PropagatorConflict {
+                conjunction,
+                inference_code: self.inference_code,
+            });
         }
         Ok(())
     }
@@ -361,10 +381,13 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(1, 5);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
             .new_propagator(LinearNotEqualPropagatorArgs {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
+                constraint_tag,
             })
             .expect("non-empty domain");
 
@@ -381,15 +404,22 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(2, 2);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let err = solver
             .new_propagator(LinearNotEqualPropagatorArgs {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
+                constraint_tag,
             })
             .expect_err("empty domain");
 
-        let expected: Inconsistency = conjunction!([x == 2] & [y == 2]).into();
-        assert_eq!(expected, err);
+        let expected = conjunction!([x == 2] & [y == 2]);
+
+        match err {
+            Inconsistency::EmptyDomain => panic!("expected an explicit conflict"),
+            Inconsistency::Conflict(conflict) => assert_eq!(expected, conflict.conjunction),
+        }
     }
 
     #[test]
@@ -398,10 +428,13 @@ mod tests {
         let x = solver.new_variable(2, 2).scaled(1);
         let y = solver.new_variable(1, 5).scaled(-1);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
             .new_propagator(LinearNotEqualPropagatorArgs {
                 terms: [x, y].into(),
                 rhs: 0,
+                constraint_tag,
             })
             .expect("non-empty domain");
 
@@ -418,10 +451,13 @@ mod tests {
         let x = solver.new_variable(0, 3);
         let y = solver.new_variable(0, 3);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
             .new_propagator(LinearNotEqualPropagatorArgs {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
+                constraint_tag,
             })
             .expect("non-empty domain");
 

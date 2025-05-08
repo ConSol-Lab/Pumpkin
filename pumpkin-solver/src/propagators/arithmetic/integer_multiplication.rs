@@ -1,5 +1,7 @@
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -9,7 +11,49 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
+
+declare_inference_label!(IntegerMultiplication);
+
+/// The [`PropagatorConstructor`] for [`IntegerMultiplicationPropagator`].
+#[derive(Clone, Debug)]
+pub(crate) struct IntegerMultiplicationArgs<VA, VB, VC> {
+    pub(crate) a: VA,
+    pub(crate) b: VB,
+    pub(crate) c: VC,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationArgs<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        } = self;
+
+        context.register(a.clone(), DomainEvents::ANY_INT, ID_A);
+        context.register(b.clone(), DomainEvents::ANY_INT, ID_B);
+        context.register(c.clone(), DomainEvents::ANY_INT, ID_C);
+
+        IntegerMultiplicationPropagator {
+            a,
+            b,
+            c,
+            inference_code: context.create_inference_code(constraint_tag, IntegerMultiplication),
+        }
+    }
+}
 
 /// A propagator for maintaining the constraint `a * b = c`. The propagator
 /// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
@@ -19,40 +63,12 @@ pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
     b: VB,
     c: VC,
+    inference_code: InferenceCode,
 }
 
 const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
 const ID_C: LocalId = LocalId::from(2);
-
-impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-    VC: IntegerVariable + 'static,
-{
-    pub(crate) fn new(a: VA, b: VB, c: VC) -> Self {
-        IntegerMultiplicationPropagator { a, b, c }
-    }
-}
-
-impl<VA: 'static, VB: 'static, VC: 'static> PropagatorConstructor
-    for IntegerMultiplicationPropagator<VA, VB, VC>
-where
-    VA: IntegerVariable,
-    VB: IntegerVariable,
-    VC: IntegerVariable,
-{
-    type PropagatorImpl = Self;
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
-        context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
-        context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
-
-        self
-    }
-}
 
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator
     for IntegerMultiplicationPropagator<VA, VB, VC>
@@ -70,7 +86,7 @@ where
     }
 
     fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c)
+        perform_propagation(context, &self.a, &self.b, &self.c, self.inference_code)
     }
 }
 
@@ -79,6 +95,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     a: &VA,
     b: &VB,
     c: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // First we propagate the signs
     propagate_signs(&mut context, a, b, c)?;
@@ -154,11 +171,14 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     {
         // All variables are assigned but the resulting value is not correct, so we report a
         // conflict
-        return Err(conjunction!(
-            [a == context.lower_bound(a)]
-                & [b == context.lower_bound(b)]
-                & [c == context.lower_bound(c)]
-        )
+        return Err(PropagatorConflict {
+            conjunction: conjunction!(
+                [a == context.lower_bound(a)]
+                    & [b == context.lower_bound(b)]
+                    & [c == context.lower_bound(c)]
+            ),
+            inference_code,
+        }
         .into());
     }
 
@@ -292,8 +312,15 @@ mod tests {
         let b = solver.new_variable(0, 4);
         let c = solver.new_variable(-10, 20);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");
@@ -322,8 +349,15 @@ mod tests {
         let b = solver.new_variable(0, 12);
         let c = solver.new_variable(2, 12);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");
@@ -349,8 +383,15 @@ mod tests {
         let b = solver.new_variable(3, 6);
         let c = solver.new_variable(2, 12);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");
