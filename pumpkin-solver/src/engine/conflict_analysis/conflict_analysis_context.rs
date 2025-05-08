@@ -71,10 +71,10 @@ impl ConflictAnalysisContext<'_> {
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
         // This should only happen when we are not learning clauses. In that case, the proof log is
         // also nonsensical. So we can supply a garbage inference code.
-        let garbadge_inference_code = InferenceCode::create_from_index(0);
+        let garbage_inference_code = InferenceCode::create_from_index(0);
 
         self.assignments
-            .post_predicate(predicate, Some((ReasonRef(0), garbadge_inference_code)))
+            .post_predicate(predicate, Some((ReasonRef(0), garbage_inference_code)))
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 

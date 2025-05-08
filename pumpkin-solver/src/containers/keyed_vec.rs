@@ -58,6 +58,39 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     /// Create a new slot for a value, and populate it using [`Slot::populate()`].
     ///
     /// This allows initializing the value with the ID it will have in this vector.
+    ///
+    /// # Example
+    /// ```
+    /// struct Key(usize);
+    ///
+    /// impl StorageKey for Key {
+    ///     // ...
+    /// #   fn create_from_index(index: usize) -> Self {
+    /// #       Key(index)
+    /// #   }
+    /// #
+    /// #   fn index(&self) -> usize {
+    /// #       self.0
+    /// #   }
+    /// }
+    ///
+    /// struct Value;
+    ///
+    /// /// Create a value based on the specified key.
+    /// fn create_value(key: Key) -> Value {
+    ///     // ...
+    /// #   todo!()
+    /// }
+    ///
+    /// let mut keyed_vec: KeyedVec<Key, Value> = KeyedVec::default();
+    ///
+    /// // Reserve a slot.
+    /// let slot = keyed_vec.new_slot();
+    /// // Create the value.
+    /// let value = create_value(slot.key());
+    /// // Populate the slot.
+    /// slot.populate(value);
+    /// ```
     pub fn new_slot(&mut self) -> Slot<'_, Key, Value> {
         Slot { vec: self }
     }

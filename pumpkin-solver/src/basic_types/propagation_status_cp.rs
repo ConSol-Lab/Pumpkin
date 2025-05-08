@@ -26,10 +26,12 @@ impl From<PropagatorConflict> for Inconsistency {
     }
 }
 
-/// A conflict stated by a propagator. It's inference code identifies how how the conflict was
-/// determined.
+/// A conflict stated by a propagator. A propagator that identifies a conflict that is _not_ an
+/// empt domain, describes that conflict with this type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PropagatorConflict {
+    /// The conjunction that describes the infeasible partial assignment.
     pub(crate) conjunction: PropositionalConjunction,
+    /// The inference code that identified the conflict.
     pub(crate) inference_code: InferenceCode,
 }
