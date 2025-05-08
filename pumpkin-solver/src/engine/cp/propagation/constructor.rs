@@ -11,6 +11,10 @@ use crate::engine::DomainEvents;
 use crate::engine::TrailedValues;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+use crate::proof::InferenceLabel;
+use crate::proof::ProofLog;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
@@ -36,7 +40,14 @@ pub(crate) struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
     trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
+
+    /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
+    /// either a reference or an owned value, to support
+    /// [`PropagatorConstructorContext::reborrow`].
     next_local_id: RefOrOwned<'a, LocalId>,
+
+    /// The proof log for which [`InferenceCode`]s can be created.
+    proof_log: &'a mut ProofLog,
 
     pub assignments: &'a mut Assignments,
 }
@@ -45,6 +56,7 @@ impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
         trailed_values: &'a mut TrailedValues,
+        proof_log: &'a mut ProofLog,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorConstructorContext<'a> {
@@ -53,6 +65,7 @@ impl PropagatorConstructorContext<'_> {
             trailed_values,
             propagator_id,
             next_local_id: RefOrOwned::Owned(LocalId::from(0)),
+            proof_log,
 
             assignments,
         }
@@ -120,15 +133,35 @@ impl PropagatorConstructorContext<'_> {
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
     }
 
+    /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
+    /// in the solver and the proof.
+    #[allow(
+        unused,
+        reason = "will be used after propagators are converted to the new API"
+    )]
+    pub(crate) fn create_inference_code(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+    ) -> InferenceCode {
+        self.proof_log
+            .create_inference_code(constraint_tag, inference_label)
+    }
+
+    /// Get a new [`LocalId`] which is guaranteed to be unused.
     pub(crate) fn get_next_local_id(&self) -> LocalId {
         *self.next_local_id.deref()
     }
 
+    /// Reborrow the current context to a new value with a shorter lifetime. Should be used when
+    /// passing `Self` to another function that takes ownership, but the value is still needed
+    /// afterwards.
     pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             watch_list: self.watch_list,
             trailed_values: self.trailed_values,
             propagator_id: self.propagator_id,
+            proof_log: self.proof_log,
             next_local_id: match &mut self.next_local_id {
                 RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
                 RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
@@ -203,12 +236,14 @@ mod tests {
     fn reborrowing_remembers_next_local_id() {
         let mut watch_list = WatchListCP::default();
         let mut trailed_values = TrailedValues::default();
+        let mut proof_log = ProofLog::default();
         let propagator_id = PropagatorId(0);
         let mut assignments = Assignments::default();
 
         let mut c1 = PropagatorConstructorContext::new(
             &mut watch_list,
             &mut trailed_values,
+            &mut proof_log,
             propagator_id,
             &mut assignments,
         );

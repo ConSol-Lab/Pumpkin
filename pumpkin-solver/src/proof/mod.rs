@@ -10,10 +10,10 @@ mod inference_code;
 mod proof_literals;
 
 use std::fs::File;
-use std::num::NonZero;
 use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use drcp_format::writer::ProofWriter;
 pub use drcp_format::Format;
@@ -61,6 +61,7 @@ impl ProofLog {
                 log_inferences,
                 definitions_path,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
+                inference_codes: KeyedVec::default(),
             }),
         })
     }
@@ -76,7 +77,7 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        _inference_code: InferenceCode,
+        inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
     ) -> std::io::Result<NonZeroU64> {
@@ -84,14 +85,15 @@ impl ProofLog {
             writer,
             log_inferences: true,
             propagation_order_hint,
+            inference_codes,
             ..
         }) = self.internal_proof.as_mut()
         else {
             return Ok(DUMMY_STEP_ID);
         };
 
-        // TODO: Log the inference label.
-        let id = writer.log_inference(None, None, premises, propagated)?;
+        let (tag, label) = inference_codes[inference_code].clone();
+        let id = writer.log_inference(Some(tag.into()), Some(&label), premises, propagated)?;
 
         if let Some(hints) = propagation_order_hint {
             hints.push(id);
@@ -210,9 +212,21 @@ impl ProofLog {
         writer.literals_mut().reify_predicate(literal, predicate);
     }
 
-    #[allow(unused, reason = "will be used after refactoring is complete")]
-    fn get_constraint_tag(&self, _inference_code: InferenceCode) -> NonZero<u32> {
-        todo!()
+    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
+    /// The inference codes are required to log inferences with [`Self::log_inference`].
+    pub(crate) fn create_inference_code(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        inference_label: impl InferenceLabel,
+    ) -> InferenceCode {
+        match &mut self.internal_proof {
+            Some(ProofImpl::CpProof {
+                inference_codes, ..
+            }) => inference_codes.push((constraint_tag, inference_label.to_str())),
+
+            // If we are not logging a CP proof, then we do not care about this value.
+            _ => InferenceCode::create_from_index(0),
+        }
     }
 }
 
@@ -220,6 +234,7 @@ impl ProofLog {
 enum ProofImpl {
     CpProof {
         writer: ProofWriter<File, ProofLiterals>,
+        inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         log_inferences: bool,
         definitions_path: PathBuf,
         // If propagation hints are enabled, this is a buffer used to record propagations in the

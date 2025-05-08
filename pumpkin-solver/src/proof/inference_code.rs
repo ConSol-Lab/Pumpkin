@@ -1,4 +1,6 @@
 use std::num::NonZero;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::containers::StorageKey;
 #[cfg(doc)]
@@ -56,5 +58,80 @@ impl StorageKey for InferenceCode {
 
     fn create_from_index(index: usize) -> Self {
         Self(NonZero::new(index as u32 + 1).expect("the '+ 1' ensures the value is non-zero"))
+    }
+}
+
+/// Conveniently creates [`InferenceLabel`] for use in a propagator.
+#[macro_export]
+macro_rules! declare_inference_label {
+    (pub $name:ident) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub struct $name;
+
+        declare_inference_label!(@impl_trait $name);
+    };
+
+    ($name:ident) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct $name;
+
+        declare_inference_label!(@impl_trait $name);
+    };
+
+    (@impl_trait $name:ident) => {
+        impl $crate::proof::InferenceLabel for $name {
+            fn to_str(&self) -> std::sync::Arc<str> {
+                static LABEL: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
+
+                let label = LABEL.get_or_init(|| {
+                    let ident_str = stringify!($name);
+                    let label = <&str as convert_case::Casing<&str>>::to_case(
+                        &ident_str,
+                        convert_case::Case::Snake,
+                    );
+
+                    std::sync::Arc::from(label)
+                });
+
+                std::sync::Arc::clone(label)
+            }
+        }
+    };
+}
+
+/// A label of the inference mechanism that identifies a particular inference. It is combined with a
+/// [`ConstraintTag`] to create an [`InferenceCode`].
+///
+/// For most propagators, it is obvious which inference algorithm is used. In that case, an
+/// inference label is not relevant. For that case, we have an [`UnnamedInference`] that can be
+/// provided.
+///
+/// However, for some, there may be different inference algorithms that are incomparable in terms of
+/// propagation strength. To discriminate between these algorithms, the inference label is used.
+///
+/// Conceptually, the inference label is a string. To aid with auto-complete, we introduce
+/// this as a strongly-typed concept. For most cases, creating an inference label is done with the
+/// [`declare_inference_label`] macro.
+pub trait InferenceLabel {
+    /// Returns the string-representation of the inference label.
+    ///
+    /// Typically different instances of the same propagator will use the same inference label.
+    /// Users are encouraged to share the string allocation, which is why the return value is
+    /// `Arc<str>`.
+    fn to_str(&self) -> Arc<str>;
+}
+
+/// An [`InferenceLabel`] for inferences where it is clear what reasoning mechanism derived the
+/// inference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnnamedInference;
+
+impl InferenceLabel for UnnamedInference {
+    fn to_str(&self) -> Arc<str> {
+        static LABEL: OnceLock<Arc<str>> = OnceLock::new();
+
+        let label = LABEL.get_or_init(|| Arc::from(""));
+
+        Arc::clone(label)
     }
 }
