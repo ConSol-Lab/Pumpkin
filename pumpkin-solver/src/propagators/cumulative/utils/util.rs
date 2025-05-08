@@ -50,7 +50,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 
 pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks: &[Rc<Task<Var>>],
-    context: &mut PropagatorConstructorContext<'_>,
+    mut context: PropagatorConstructorContext<'_>,
     register_backtrack: bool,
 ) {
     tasks.iter().for_each(|task| {

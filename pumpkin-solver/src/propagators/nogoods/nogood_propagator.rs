@@ -77,7 +77,7 @@ pub(crate) struct NogoodPropagator {
 impl PropagatorConstructor for NogoodPropagator {
     type PropagatorImpl = Self;
 
-    fn create(self, _: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self
     }
 }

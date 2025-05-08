@@ -37,7 +37,7 @@ where
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearNotEqualPropagatorArgs { terms, rhs } = self;
 
         for (i, x_i) in terms.iter().enumerate() {

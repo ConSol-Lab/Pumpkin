@@ -1,3 +1,6 @@
+use std::ops::Deref;
+use std::ops::DerefMut;
+
 use super::LocalId;
 use super::PropagationContext;
 use super::Propagator;
@@ -20,7 +23,7 @@ pub(crate) trait PropagatorConstructor {
     type PropagatorImpl: Propagator;
 
     /// Create the propagator instance from `Self`.
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl;
+    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.
@@ -33,7 +36,7 @@ pub(crate) struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
     trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
-    next_local_id: LocalId,
+    next_local_id: RefOrOwned<'a, LocalId>,
 
     pub assignments: &'a mut Assignments,
 }
@@ -49,7 +52,7 @@ impl PropagatorConstructorContext<'_> {
             watch_list,
             trailed_values,
             propagator_id,
-            next_local_id: LocalId::from(0),
+            next_local_id: RefOrOwned::Owned(LocalId::from(0)),
 
             assignments,
         }
@@ -81,7 +84,7 @@ impl PropagatorConstructorContext<'_> {
             variable: local_id,
         };
 
-        self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
+        self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all(&mut watchers, domain_events.get_int_events());
@@ -111,14 +114,60 @@ impl PropagatorConstructorContext<'_> {
             variable: local_id,
         };
 
-        self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
+        self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
     }
 
     pub(crate) fn get_next_local_id(&self) -> LocalId {
-        self.next_local_id
+        *self.next_local_id.deref()
+    }
+
+    pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
+        PropagatorConstructorContext {
+            watch_list: self.watch_list,
+            trailed_values: self.trailed_values,
+            propagator_id: self.propagator_id,
+            next_local_id: match &mut self.next_local_id {
+                RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
+                RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
+            },
+            assignments: self.assignments,
+        }
+    }
+
+    /// Set the next local id to be at least one more than the largest encountered local id.
+    fn update_next_local_id(&mut self, local_id: LocalId) {
+        let next_local_id = (*self.next_local_id.deref()).max(LocalId::from(local_id.unpack() + 1));
+
+        *self.next_local_id.deref_mut() = next_local_id;
+    }
+}
+
+#[derive(Debug)]
+enum RefOrOwned<'a, T> {
+    Ref(&'a mut T),
+    Owned(T),
+}
+
+impl<T> Deref for RefOrOwned<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            RefOrOwned::Ref(reference) => reference,
+            RefOrOwned::Owned(value) => value,
+        }
+    }
+}
+
+impl<T> DerefMut for RefOrOwned<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            RefOrOwned::Ref(reference) => reference,
+            RefOrOwned::Owned(value) => value,
+        }
     }
 }
 
@@ -141,5 +190,32 @@ mod private {
         fn trailed_values_mut(&mut self) -> &mut TrailedValues {
             self.trailed_values
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::variables::DomainId;
+
+    #[test]
+    fn reborrowing_remembers_next_local_id() {
+        let mut watch_list = WatchListCP::default();
+        let mut trailed_values = TrailedValues::default();
+        let propagator_id = PropagatorId(0);
+        let mut assignments = Assignments::default();
+
+        let mut c1 = PropagatorConstructorContext::new(
+            &mut watch_list,
+            &mut trailed_values,
+            propagator_id,
+            &mut assignments,
+        );
+
+        let mut c2 = c1.reborrow();
+        c2.register(DomainId::new(0), DomainEvents::ANY_INT, LocalId::from(1));
+
+        assert_eq!(LocalId::from(2), c1.get_next_local_id());
     }
 }

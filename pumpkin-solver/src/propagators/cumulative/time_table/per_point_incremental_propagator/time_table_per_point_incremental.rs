@@ -92,8 +92,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 {
     type PropagatorImpl = Self;
 
-    fn create(mut self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
-        register_tasks(&self.parameters.tasks, context, true);
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
 

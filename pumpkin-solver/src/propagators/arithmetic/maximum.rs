@@ -4,6 +4,7 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -29,10 +30,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
 {
     type PropagatorImpl = Self;
 
-    fn create(
-        self,
-        context: &mut crate::engine::propagation::constructor::PropagatorConstructorContext,
-    ) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         for (idx, var) in self.array.iter().enumerate() {
             context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
         }

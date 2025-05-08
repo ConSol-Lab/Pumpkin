@@ -93,10 +93,10 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 {
     type PropagatorImpl = Self;
 
-    fn create(mut self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
+        register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
         self
     }

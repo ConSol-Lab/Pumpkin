@@ -28,13 +28,13 @@ where
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let ReifiedPropagatorArgs {
             propagator,
             reification_literal,
         } = self;
 
-        let propagator = propagator.create(context);
+        let propagator = propagator.create(context.reborrow());
         let reification_literal_id = context.get_next_local_id();
 
         context.register(
@@ -356,7 +356,7 @@ mod tests {
     {
         type PropagatorImpl = Self;
 
-        fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+        fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
             for (index, variable) in self.variables_to_register.iter().enumerate() {
                 context.register(
                     *variable,

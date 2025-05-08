@@ -85,7 +85,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
     type PropagatorImpl = Self;
 
-    fn create(mut self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(mut self, context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
         register_tasks(&self.parameters.tasks, context, false);

@@ -47,7 +47,7 @@ where
 {
     type PropagatorImpl = Self;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         for (i, x_i) in self.array.iter().enumerate() {
             context.register(
                 x_i.clone(),

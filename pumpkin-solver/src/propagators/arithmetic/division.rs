@@ -46,7 +46,7 @@ where
 {
     type PropagatorImpl = Self;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         pumpkin_assert_simple!(
             !context.contains(&self.denominator, 0),
             "Denominator cannot contain 0"

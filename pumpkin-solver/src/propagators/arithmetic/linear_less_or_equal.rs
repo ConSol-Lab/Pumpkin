@@ -30,7 +30,7 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs { x, c } = self;
 
         let mut lower_bound_left_hand_side = 0_i64;

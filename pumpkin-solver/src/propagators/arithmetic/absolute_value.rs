@@ -33,7 +33,7 @@ where
 {
     type PropagatorImpl = Self;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
         context.register(
             self.absolute.clone(),

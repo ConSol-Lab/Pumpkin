@@ -75,14 +75,14 @@ impl TestSolver {
     {
         let propagator_slot = self.propagator_store.new_propagator();
 
-        let mut constructor_context = PropagatorConstructorContext::new(
+        let constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list,
             &mut self.trailed_values,
             propagator_slot.key(),
             &mut self.assignments,
         );
 
-        let propagator = Box::new(constructor.create(&mut constructor_context));
+        let propagator = Box::new(constructor.create(constructor_context));
 
         let id = propagator_slot.populate(propagator);
 

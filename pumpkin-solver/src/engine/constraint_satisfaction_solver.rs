@@ -1351,14 +1351,14 @@ impl ConstraintSatisfactionSolver {
 
         let propagator_slot = self.propagators.new_propagator();
 
-        let mut constructor_context = PropagatorConstructorContext::new(
+        let constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list_cp,
             &mut self.trailed_values,
             propagator_slot.key(),
             &mut self.assignments,
         );
 
-        let propagator = Box::new(constructor.create(&mut constructor_context));
+        let propagator = Box::new(constructor.create(constructor_context));
 
         pumpkin_assert_simple!(
             propagator.priority() <= 3,

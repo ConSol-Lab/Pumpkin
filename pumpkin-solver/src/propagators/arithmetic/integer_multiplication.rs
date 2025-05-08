@@ -45,7 +45,7 @@ where
 {
     type PropagatorImpl = Self;
 
-    fn create(self, context: &mut PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
         context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
         context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
