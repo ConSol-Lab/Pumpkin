@@ -187,9 +187,13 @@ impl Solver {
         self.satisfaction_solver.create_new_literal(None)
     }
 
-    pub fn new_literal_for_predicate(&mut self, predicate: Predicate) -> Literal {
+    pub fn new_literal_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        constraint_tag: ConstraintTag,
+    ) -> Literal {
         self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None)
+            .create_new_literal_for_predicate(predicate, None, constraint_tag)
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive

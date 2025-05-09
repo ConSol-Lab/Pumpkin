@@ -527,6 +527,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         predicate: Predicate,
         name: Option<String>,
+        constraint_tag: ConstraintTag,
     ) -> Literal {
         let literal = self.create_new_literal(name);
 
@@ -535,15 +536,15 @@ impl ConstraintSatisfactionSolver {
             .reify_predicate(literal, predicate);
 
         // If literal --> predicate
-        let _ = self.add_clause_internal(
+        let _ = self.add_clause(
             vec![!literal.get_true_predicate(), predicate],
-            ClauseType::LiteralConsistency,
+            constraint_tag,
         );
 
         // If !literal --> !predicate
-        let _ = self.add_clause_internal(
+        let _ = self.add_clause(
             vec![!literal.get_false_predicate(), !predicate],
-            ClauseType::LiteralConsistency,
+            constraint_tag,
         );
 
         literal
@@ -1432,7 +1433,7 @@ impl ConstraintSatisfactionSolver {
     fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
-        clause_type: ClauseType,
+        inference_code: InferenceCode,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
         let num_trail_entries = self.assignments.num_trail_entries();
@@ -1445,14 +1446,6 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
-
-        let inference_code = match clause_type {
-            ClauseType::LiteralConsistency => self.literal_consistency_inference_code,
-            ClauseType::Constraint(constraint_tag) => self
-                .internal_parameters
-                .proof_log
-                .create_inference_code(constraint_tag, NogoodLabel),
-        };
 
         let addition_result = ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
             &mut self.propagators[nogood_propagator_id],
@@ -1530,14 +1523,6 @@ impl ConstraintSatisfactionSolver {
         predicates: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
-        self.add_clause_internal(predicates, ClauseType::Constraint(constraint_tag))
-    }
-
-    fn add_clause_internal(
-        &mut self,
-        predicates: impl IntoIterator<Item = Predicate>,
-        clause_type: ClauseType,
-    ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             self.get_decision_level() == 0,
             "Clauses can only be added in the root"
@@ -1586,7 +1571,11 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, clause_type) {
+        let inference_code = self
+            .internal_parameters
+            .proof_log
+            .create_inference_code(constraint_tag, NogoodLabel);
+        if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 
             self.state
@@ -1601,14 +1590,6 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
     }
-}
-
-/// The two types of clauses we distinguish between.
-enum ClauseType {
-    /// A clause that maintains consistency between a literal and an atomic constraint.
-    LiteralConsistency,
-    /// An actual constraint.
-    Constraint(ConstraintTag),
 }
 
 #[derive(Default, Debug)]
