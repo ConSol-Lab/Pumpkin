@@ -1,12 +1,14 @@
 use std::num::NonZero;
 use std::path::PathBuf;
 
+use pumpkin_solver::containers::KeyGenerator;
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::SolutionReference;
@@ -19,6 +21,7 @@ use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
 use crate::constraints::Constraint;
+use crate::constraints::Tag;
 use crate::optimisation::Direction;
 use crate::optimisation::OptimisationResult;
 use crate::optimisation::Optimiser;
@@ -38,6 +41,7 @@ pub struct Model {
     integer_variables: KeyedVec<IntVariable, ModelIntVar>,
     boolean_variables: KeyedVec<BoolVariable, ModelBoolVar>,
     constraints: Vec<ModelConstraint>,
+    constraint_tags: KeyGenerator<ConstraintTag>,
 }
 
 #[pymethods]
@@ -79,31 +83,35 @@ impl Model {
     /// Get an integer variable for the given boolean.
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
+    fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
         let bool_variable = boolean.get_variable();
 
-        let int_variable = match self.boolean_variables[bool_variable] {
+        let (int_variable, t) = match self.boolean_variables[bool_variable] {
             // If there is already an integer associated with the boolean variable, don't create a
             // new one.
             ModelBoolVar {
-                integer_equivalent: Some(variable),
+                integer_equivalent: Some(existing_equivalent),
                 ..
-            } => variable,
+            } => existing_equivalent,
 
             // Create a new integer variable which is equivalent to this boolean variable.
             ModelBoolVar {
                 ref name,
                 integer_equivalent: None,
                 ..
-            } => self.integer_variables.push(ModelIntVar {
-                lower_bound: 0,
-                upper_bound: 1,
-                name: name.clone(),
-            }),
+            } => {
+                let int_variable = self.integer_variables.push(ModelIntVar {
+                    lower_bound: 0,
+                    upper_bound: 1,
+                    name: name.clone(),
+                });
+
+                (int_variable, tag)
+            }
         };
 
         // Link the integer variable to the boolean variable.
-        self.boolean_variables[bool_variable].integer_equivalent = Some(int_variable);
+        self.boolean_variables[bool_variable].integer_equivalent = Some((int_variable, t));
 
         // Convert the integer variable to an appropriate integer expression based on the polarity
         // of the boolean expression.
@@ -116,15 +124,24 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (predicate, name=None))]
-    fn predicate_as_boolean(&mut self, predicate: Predicate, name: Option<&str>) -> BoolExpression {
+    #[pyo3(signature = (predicate, tag, name=None))]
+    fn predicate_as_boolean(
+        &mut self,
+        predicate: Predicate,
+        tag: Tag,
+        name: Option<&str>,
+    ) -> BoolExpression {
         self.boolean_variables
             .push(ModelBoolVar {
                 name: name.map(|n| n.to_owned()),
                 integer_equivalent: None,
-                predicate: Some(predicate),
+                predicate: Some((predicate, tag)),
             })
             .into()
+    }
+
+    fn new_constraint_tag(&mut self) -> Tag {
+        self.constraint_tags.next_key().into()
     }
 
     /// Add the given constraint to the model.
@@ -404,9 +421,9 @@ struct ModelBoolVar {
     name: Option<String>,
     /// If present, this is the 0-1 integer variable which is 1 if this boolean is `true`, and
     /// 0 if this boolean is `false`.
-    integer_equivalent: Option<IntVariable>,
+    integer_equivalent: Option<(IntVariable, Tag)>,
     /// If present, this boolean is true iff the predicate holds.
-    predicate: Option<Predicate>,
+    predicate: Option<(Predicate, Tag)>,
 }
 
 impl ModelBoolVar {
@@ -418,8 +435,8 @@ impl ModelBoolVar {
     ) -> Result<Literal, ConstraintOperationError> {
         let literal = match self {
             ModelBoolVar {
-                integer_equivalent: Some(int_var),
-                predicate: Some(predicate),
+                integer_equivalent: Some((int_var, int_var_tag)),
+                predicate: Some((predicate, predicate_tag)),
                 ..
             } => {
                 // In case the boolean corresponds to both a predicate and a 0-1 integer, we have to
@@ -430,26 +447,29 @@ impl ModelBoolVar {
 
                 let predicate_literal = predicate.to_solver_predicate(variable_map);
 
-                solver.add_clause([!predicate_literal, int_eq_1])?;
-                solver.add_clause([predicate_literal, !int_eq_1])?;
+                solver.add_clause([!predicate_literal, int_eq_1], (*predicate_tag).into())?;
+                solver.add_clause([predicate_literal, !int_eq_1], (*predicate_tag).into())?;
 
-                solver.new_literal_for_predicate(int_eq_1)
+                solver.new_literal_for_predicate(int_eq_1, (*int_var_tag).into())
             }
 
             ModelBoolVar {
-                integer_equivalent: Some(int_var),
+                integer_equivalent: Some((int_var, tag)),
                 predicate: None,
                 ..
             } => {
                 let affine_view = variable_map.get_integer(*int_var);
-                solver.new_literal_for_predicate(predicate![affine_view == 1])
+                solver.new_literal_for_predicate(predicate![affine_view == 1], (*tag).into())
             }
 
             ModelBoolVar {
-                predicate: Some(predicate),
+                predicate: Some((predicate, tag)),
                 integer_equivalent: None,
                 ..
-            } => solver.new_literal_for_predicate(predicate.to_solver_predicate(variable_map)),
+            } => solver.new_literal_for_predicate(
+                predicate.to_solver_predicate(variable_map),
+                (*tag).into(),
+            ),
 
             ModelBoolVar {
                 name: Some(name), ..

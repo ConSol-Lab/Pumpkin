@@ -41,7 +41,6 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::declare_inference_label;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
@@ -123,8 +122,6 @@ pub struct ConstraintSatisfactionSolver {
 
     /// The constraint ids generated for this solver instance.
     constraint_tags: KeyGenerator<ConstraintTag>,
-    /// The inference code for consistency of literals and atomic constraints.
-    literal_consistency_inference_code: InferenceCode,
 
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
@@ -410,11 +407,8 @@ impl ConstraintSatisfactionSolver {
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(mut solver_options: SatisfactionSolverOptions) -> Self {
-        let mut constraint_tags = KeyGenerator::default();
-        let literal_consistency_inference_code = solver_options
-            .proof_log
-            .create_inference_code(constraint_tags.next_key(), NogoodLabel);
+    pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
+        let constraint_tags = KeyGenerator::default();
 
         let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
             last_notified_cp_trail_index: 0,
@@ -440,7 +434,6 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
             constraint_tags,
-            literal_consistency_inference_code,
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1

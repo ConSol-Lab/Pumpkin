@@ -28,6 +28,7 @@ pub(crate) fn wcnf_problem(
         solver,
         objective,
         variables,
+        ..
     } = parse_wcnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
 
     let brancher = solver.default_brancher();

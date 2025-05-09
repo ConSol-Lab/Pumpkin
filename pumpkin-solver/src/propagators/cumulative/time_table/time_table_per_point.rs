@@ -22,7 +22,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
-use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;

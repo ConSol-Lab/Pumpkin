@@ -16,7 +16,6 @@ use crate::engine::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicates::Predicate;
-use crate::predicates::PropositionalConjunction;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]

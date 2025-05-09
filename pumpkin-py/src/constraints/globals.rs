@@ -3,6 +3,7 @@ use pumpkin_solver::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 
+use super::Tag;
 use crate::variables::*;
 
 macro_rules! python_constraint {
@@ -52,12 +53,14 @@ python_constraint! {
     Absolute: absolute {
         signed: IntExpression,
         absolute: IntExpression,
+        tag: Tag,
     }
 }
 
 python_constraint! {
     AllDifferent: all_different {
         variables: Vec<IntExpression>,
+        tag: Tag,
     }
 }
 
@@ -65,6 +68,7 @@ python_constraint! {
     BinaryEquals: binary_equals {
         lhs: IntExpression,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -72,6 +76,7 @@ python_constraint! {
     BinaryLessThan: binary_less_than {
         lhs: IntExpression,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -79,6 +84,7 @@ python_constraint! {
     BinaryLessThanEqual: binary_less_than_or_equals {
         lhs: IntExpression,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -86,6 +92,7 @@ python_constraint! {
     BinaryNotEquals: binary_not_equals {
         lhs: IntExpression,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -95,6 +102,7 @@ python_constraint! {
         durations: Vec<i32>,
         resource_requirements: Vec<i32>,
         resource_capacity: i32,
+        tag: Tag,
     }
 }
 
@@ -103,6 +111,7 @@ python_constraint! {
         numerator: IntExpression,
         denominator: IntExpression,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -111,6 +120,7 @@ python_constraint! {
         index: IntExpression,
         array: Vec<IntExpression>,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -118,6 +128,7 @@ python_constraint! {
     Equals: equals {
         terms: Vec<IntExpression>,
         rhs: i32,
+        tag: Tag,
     }
 }
 
@@ -125,6 +136,7 @@ python_constraint! {
     LessThanOrEquals: less_than_or_equals {
         terms: Vec<IntExpression>,
         rhs: i32,
+        tag: Tag,
     }
 }
 
@@ -132,6 +144,7 @@ python_constraint! {
     Maximum: maximum {
         choices: Vec<IntExpression>,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -139,6 +152,7 @@ python_constraint! {
     Minimum: minimum {
         choices: Vec<IntExpression>,
         rhs: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -146,6 +160,7 @@ python_constraint! {
     NotEquals: not_equals {
         terms: Vec<IntExpression>,
         rhs: i32,
+        tag: Tag,
     }
 }
 
@@ -154,6 +169,7 @@ python_constraint! {
         a: IntExpression,
         b: IntExpression,
         c: IntExpression,
+        tag: Tag,
     }
 }
 
@@ -162,17 +178,20 @@ python_constraint! {
         a: IntExpression,
         b: IntExpression,
         c: IntExpression,
+        tag: Tag,
     }
 }
 
 python_constraint! {
     Conjunction: conjunction {
         literals: Vec<BoolExpression>,
+        tag: Tag,
     }
 }
 
 python_constraint! {
     Clause: clause {
         literals: Vec<BoolExpression>,
+        tag: Tag,
     }
 }

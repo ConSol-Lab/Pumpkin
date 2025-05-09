@@ -27,7 +27,7 @@ mod arithmetic;
 mod boolean;
 mod clause;
 mod constraint_poster;
-// mod cumulative;
+mod cumulative;
 mod element;
 
 pub use all_different::*;
@@ -35,7 +35,7 @@ pub use arithmetic::*;
 pub use boolean::*;
 pub use clause::*;
 pub use constraint_poster::*;
-// pub use cumulative::*;
+pub use cumulative::*;
 pub use element::*;
 
 use crate::engine::propagation::constructor::PropagatorConstructor;

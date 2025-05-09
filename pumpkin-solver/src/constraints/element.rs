@@ -1,7 +1,6 @@
 use super::Constraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::element::ElementArgs;
-use crate::propagators::element::ElementPropagator;
 use crate::variables::IntegerVariable;
 
 /// Creates the [element](https://sofdem.github.io/gccat/gccat/Celement.html) [`Constraint`] which states that `array[index] = rhs`.

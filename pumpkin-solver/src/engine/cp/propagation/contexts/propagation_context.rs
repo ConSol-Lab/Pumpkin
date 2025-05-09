@@ -1,4 +1,3 @@
-use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;

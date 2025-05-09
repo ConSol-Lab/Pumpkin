@@ -4,7 +4,6 @@ use super::debug::are_mergeable;
 use super::debug::merge_profiles;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropagatorConflict;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::proof::InferenceCode;

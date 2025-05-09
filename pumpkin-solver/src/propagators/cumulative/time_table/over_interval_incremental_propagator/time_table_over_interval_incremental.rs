@@ -5,7 +5,6 @@ use std::rc::Rc;
 use super::insertion;
 use super::removal;
 use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropagatorConflict;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;

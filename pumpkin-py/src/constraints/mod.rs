@@ -1,8 +1,12 @@
 pub mod arguments;
 pub mod globals;
 
+use arguments::PythonConstraintArg;
 use globals::*;
+use pumpkin_solver::proof::ConstraintTag;
 use pyo3::prelude::*;
+
+use crate::variables::VariableMap;
 
 macro_rules! declare_constraints {
     ($name:ident { $($constraint:ident),+ $(,)? }) => {
@@ -61,5 +65,29 @@ declare_constraints! {
         Times,
         Clause,
         Conjunction,
+    }
+}
+
+#[derive(Clone, Copy)]
+#[pyclass]
+pub struct Tag(ConstraintTag);
+
+impl From<ConstraintTag> for Tag {
+    fn from(value: ConstraintTag) -> Self {
+        Tag(value)
+    }
+}
+
+impl From<Tag> for ConstraintTag {
+    fn from(value: Tag) -> Self {
+        value.0
+    }
+}
+
+impl PythonConstraintArg for Tag {
+    type Output = ConstraintTag;
+
+    fn to_solver_constraint_argument(self, _: &VariableMap) -> Self::Output {
+        self.0
     }
 }

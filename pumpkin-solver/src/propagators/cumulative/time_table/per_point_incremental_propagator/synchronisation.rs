@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropagatorConflict;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;

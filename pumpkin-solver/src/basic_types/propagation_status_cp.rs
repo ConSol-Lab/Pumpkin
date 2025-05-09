@@ -1,7 +1,7 @@
-use crate::basic_types::PropositionalConjunction;
-use crate::containers::StorageKey;
 use crate::engine::EmptyDomain;
 use crate::proof::InferenceCode;
+
+use super::PropositionalConjunction;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error

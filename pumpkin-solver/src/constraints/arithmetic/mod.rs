@@ -7,13 +7,9 @@ pub use inequality::*;
 use super::Constraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::absolute_value::AbsoluteValueArgs;
-use crate::propagators::absolute_value::AbsoluteValuePropagator;
 use crate::propagators::division::DivisionArgs;
-use crate::propagators::division::DivisionPropagator;
 use crate::propagators::integer_multiplication::IntegerMultiplicationArgs;
-use crate::propagators::integer_multiplication::IntegerMultiplicationPropagator;
 use crate::propagators::maximum::MaximumArgs;
-use crate::propagators::maximum::MaximumPropagator;
 use crate::variables::IntegerVariable;
 
 /// Creates the [`Constraint`] `a + b = c`.

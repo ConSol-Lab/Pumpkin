@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use super::Constraint;
 use crate::options::CumulativePropagationMethod;
+use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
@@ -123,6 +124,7 @@ pub fn cumulative<StartTimes, Durations, ResourceRequirements>(
     durations: Durations,
     resource_requirements: ResourceRequirements,
     resource_capacity: i32,
+    constraint_tag: ConstraintTag,
 ) -> impl Constraint
 where
     StartTimes: IntoIterator,
@@ -139,6 +141,7 @@ where
         resource_requirements,
         resource_capacity,
         CumulativeOptions::default(),
+        constraint_tag,
     )
 }
 
@@ -152,6 +155,7 @@ pub fn cumulative_with_options<StartTimes, Durations, ResourceRequirements>(
     resource_requirements: ResourceRequirements,
     resource_capacity: i32,
     options: CumulativeOptions,
+    constraint_tag: ConstraintTag,
 ) -> impl Constraint
 where
     StartTimes: IntoIterator,
@@ -183,6 +187,7 @@ where
             .collect::<Vec<_>>(),
         resource_capacity,
         options,
+        constraint_tag,
     )
 }
 
@@ -190,14 +195,22 @@ struct CumulativeConstraint<Var> {
     tasks: Vec<ArgTask<Var>>,
     resource_capacity: i32,
     options: CumulativeOptions,
+    constraint_tag: ConstraintTag,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
-    fn new(tasks: &[ArgTask<Var>], resource_capacity: i32, options: CumulativeOptions) -> Self {
+    fn new(
+        tasks: &[ArgTask<Var>],
+        resource_capacity: i32,
+        options: CumulativeOptions,
+        constraint_tag: ConstraintTag,
+    ) -> Self {
         Self {
             tasks: tasks.into(),
             resource_capacity,
+
             options,
+            constraint_tag,
         }
     }
 }
@@ -209,6 +222,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 &self.tasks,
                 self.resource_capacity,
                 self.options.propagator_options,
+                self.constraint_tag,
             )
             .post(solver),
 
@@ -217,6 +231,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .post(solver)
             }
@@ -225,6 +240,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .post(solver)
             }
@@ -233,6 +249,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .post(solver)
             }
@@ -241,6 +258,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .post(solver)
             }
@@ -249,6 +267,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .post(solver)
             }
@@ -265,6 +284,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 &self.tasks,
                 self.resource_capacity,
                 self.options.propagator_options,
+                self.constraint_tag,
             )
             .implied_by(solver, reification_literal),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
@@ -272,6 +292,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .implied_by(solver, reification_literal)
             }
@@ -280,6 +301,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .implied_by(solver, reification_literal)
             }
@@ -288,6 +310,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .implied_by(solver, reification_literal)
             }
@@ -296,6 +319,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .implied_by(solver, reification_literal)
             }
@@ -304,6 +328,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.constraint_tag,
                 )
                 .implied_by(solver, reification_literal)
             }

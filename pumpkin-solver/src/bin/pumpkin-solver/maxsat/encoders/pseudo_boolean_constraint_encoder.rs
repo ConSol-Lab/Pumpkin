@@ -279,6 +279,8 @@ impl PseudoBooleanConstraintEncoder {
         k: u64,
         solver: &mut Solver,
     ) -> Result<Vec<WeightedLiteral>, EncodingError> {
+        let constraint_tag = solver.new_constraint_tag();
+
         // preprocess the input before the initial encoding considering the following:
         //  1. Terms that are assigned at the root level are removed True literals decrease the
         //     right-hand side Falsified literals can be removed without modifying the right-hand
@@ -318,7 +320,8 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    let result = solver.add_clause([(!term.literal).get_true_predicate()]);
+                    let result =
+                        solver.add_clause([(!term.literal).get_true_predicate()], constraint_tag);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }
