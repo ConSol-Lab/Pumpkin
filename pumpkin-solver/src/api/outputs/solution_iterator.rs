@@ -1,5 +1,7 @@
 //! Contains the structures corresponding to solution iterations.
 
+use std::fmt::Debug;
+
 use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
@@ -13,7 +15,7 @@ use crate::Solver;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]
-pub struct SolutionIterator<'solver, 'brancher, 'termination, B: Brancher, T> {
+pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
     solver: &'solver mut Solver,
     brancher: &'brancher mut B,
     termination: &'termination mut T,
@@ -40,20 +42,18 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution {
+    pub fn next_solution(&mut self) -> IteratedSolution<B> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
-            self.solver
-                .get_satisfaction_solver_mut()
-                .restore_state_at_root(self.brancher);
             if self.solver.add_clause(blocking_clause).is_err() {
                 return IteratedSolution::Finished;
             }
         }
+
         match self.solver.satisfy(self.brancher, self.termination) {
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(solution, self.solver)
+                IteratedSolution::Solution(solution, self.solver, self.brancher)
             }
             Unsatisfiable => {
                 if self.has_solution {
@@ -79,11 +79,14 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
         .collect::<Vec<_>>()
 }
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
-#[allow(clippy::large_enum_variant, reason = "Will not be stored in bulk")]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "these will not be stored in bulk, so this is not an issue"
+)]
 #[derive(Debug)]
-pub enum IteratedSolution<'a> {
+pub enum IteratedSolution<'a, B> {
     /// A new solution was identified.
-    Solution(Solution, &'a Solver),
+    Solution(Solution, &'a Solver, &'a B),
 
     /// No more solutions exist.
     Finished,

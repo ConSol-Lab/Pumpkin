@@ -74,6 +74,13 @@ impl<W: Write, Literals> ProofWriter<W, Literals> {
     }
 }
 
+impl<W: Write, Literals> ProofWriter<W, Literals> {
+    /// Get the encountered literals instance to be mutated.
+    pub fn literals_mut(&mut self) -> &mut Literals {
+        &mut self.encountered_literals
+    }
+}
+
 impl<W, Literals> ProofWriter<W, Literals>
 where
     W: Write,
@@ -258,7 +265,7 @@ where
         }
 
         if let Some(propagated) = self.propagated {
-            write!(sink, " 0 {}", propagated)?;
+            write!(sink, " 0 {propagated}")?;
         }
 
         if let Some(constraint_id) = self.hint_constraint_id {

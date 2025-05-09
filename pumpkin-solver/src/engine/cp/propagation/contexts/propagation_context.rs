@@ -9,22 +9,19 @@ use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
-use crate::engine::TrailedAssignments;
-use crate::engine::TrailedInt;
+use crate::engine::TrailedInteger;
+use crate::engine::TrailedValues;
 use crate::pumpkin_assert_simple;
 
-pub(crate) struct StatefulPropagationContext<'a> {
-    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+pub(crate) struct PropagationContextWithTrailedValues<'a> {
+    pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
 }
 
-impl<'a> StatefulPropagationContext<'a> {
-    pub(crate) fn new(
-        stateful_assignments: &'a mut TrailedAssignments,
-        assignments: &'a Assignments,
-    ) -> Self {
+impl<'a> PropagationContextWithTrailedValues<'a> {
+    pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
         Self {
-            stateful_assignments,
+            trailed_values,
             assignments,
         }
     }
@@ -57,7 +54,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub(crate) struct PropagationContextMut<'a> {
-    pub(crate) stateful_assignments: &'a mut TrailedAssignments,
+    pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -68,7 +65,7 @@ pub(crate) struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub(crate) fn new(
-        stateful_assignments: &'a mut TrailedAssignments,
+        trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
@@ -76,7 +73,7 @@ impl<'a> PropagationContextMut<'a> {
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
-            stateful_assignments,
+            trailed_values,
             assignments,
             reason_store,
             propagator_id,
@@ -116,9 +113,9 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn as_stateful_readonly(&mut self) -> StatefulPropagationContext {
-        StatefulPropagationContext {
-            stateful_assignments: self.stateful_assignments,
+    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues {
+        PropagationContextWithTrailedValues {
+            trailed_values: self.trailed_values,
             assignments: self.assignments,
         }
     }
@@ -141,31 +138,31 @@ pub trait HasAssignments {
     fn assignments(&self) -> &Assignments;
 }
 
-pub(crate) trait HasStatefulAssignments {
-    fn stateful_assignments(&self) -> &TrailedAssignments;
-    fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments;
+pub(crate) trait HasTrailedValues {
+    fn trailed_values(&self) -> &TrailedValues;
+    fn trailed_values_mut(&mut self) -> &mut TrailedValues;
 }
 
 mod private {
     use super::*;
 
-    impl HasStatefulAssignments for StatefulPropagationContext<'_> {
-        fn stateful_assignments(&self) -> &TrailedAssignments {
-            self.stateful_assignments
+    impl HasTrailedValues for PropagationContextWithTrailedValues<'_> {
+        fn trailed_values(&self) -> &TrailedValues {
+            self.trailed_values
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
-            self.stateful_assignments
+        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+            self.trailed_values
         }
     }
 
-    impl HasStatefulAssignments for PropagationContextMut<'_> {
-        fn stateful_assignments(&self) -> &TrailedAssignments {
-            self.stateful_assignments
+    impl HasTrailedValues for PropagationContextMut<'_> {
+        fn trailed_values(&self) -> &TrailedValues {
+            self.trailed_values
         }
 
-        fn stateful_assignments_mut(&mut self) -> &mut TrailedAssignments {
-            self.stateful_assignments
+        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+            self.trailed_values
         }
     }
 
@@ -181,34 +178,33 @@ mod private {
         }
     }
 
-    impl HasAssignments for StatefulPropagationContext<'_> {
+    impl HasAssignments for PropagationContextWithTrailedValues<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }
     }
 }
 
-pub(crate) trait ManipulateStatefulIntegers: HasStatefulAssignments {
-    fn new_stateful_integer(&mut self, initial_value: i64) -> TrailedInt {
-        self.stateful_assignments_mut().grow(initial_value)
+pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
+    fn new_trailed_integer(&mut self, initial_value: i64) -> TrailedInteger {
+        self.trailed_values_mut().grow(initial_value)
     }
 
-    fn value(&self, stateful_integer: TrailedInt) -> i64 {
-        self.stateful_assignments().read(stateful_integer)
+    fn value(&self, trailed_integer: TrailedInteger) -> i64 {
+        self.trailed_values().read(trailed_integer)
     }
 
-    fn add_assign(&mut self, stateful_integer: TrailedInt, addition: i64) {
-        self.stateful_assignments_mut()
-            .add_assign(stateful_integer, addition);
+    fn add_assign(&mut self, trailed_integer: TrailedInteger, addition: i64) {
+        self.trailed_values_mut()
+            .add_assign(trailed_integer, addition);
     }
 
-    fn assign(&mut self, stateful_integer: TrailedInt, value: i64) {
-        self.stateful_assignments_mut()
-            .assign(stateful_integer, value);
+    fn assign(&mut self, trailed_integer: TrailedInteger, value: i64) {
+        self.trailed_values_mut().assign(trailed_integer, value);
     }
 }
 
-impl<T: HasStatefulAssignments> ManipulateStatefulIntegers for T {}
+impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
 pub(crate) trait ReadDomains: HasAssignments {
     fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {

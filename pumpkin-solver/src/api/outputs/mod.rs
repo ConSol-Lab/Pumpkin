@@ -12,7 +12,10 @@ use crate::Solver;
 
 /// The result of a call to [`Solver::satisfy`].
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant, reason = "Will not be stored in bulk")]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "these will not be stored in bulk, so this is not an issue"
+)]
 pub enum SatisfactionResult {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),
@@ -25,7 +28,10 @@ pub enum SatisfactionResult {
 
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant, reason = "Will not be stored in bulk")]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "these will not be stored in bulk, so this is not an issue"
+)]
 pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),

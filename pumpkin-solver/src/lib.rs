@@ -32,7 +32,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables
 //! let x = solver.new_bounded_integer(5, 10);
 //! let y = solver.new_bounded_integer(-3, 15);
 //! let z = solver.new_bounded_integer(7, 25);
@@ -135,6 +135,8 @@
 //! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
 //! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
+//! # use pumpkin_solver::results::SolutionReference;
+//! # use pumpkin_solver::DefaultBrancher;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -145,10 +147,11 @@
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
+//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
-//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, |_, _| {}),
+//!     LinearSatUnsat::new(OptimisationDirection::Minimise, objective, callback),
 //! );
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
@@ -187,7 +190,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables with domains within the range [0, 2]
 //! let x = solver.new_bounded_integer(0, 2);
 //! let y = solver.new_bounded_integer(0, 2);
 //! let z = solver.new_bounded_integer(0, 2);
@@ -210,7 +213,7 @@
 //!
 //! loop {
 //!     match solution_iterator.next_solution() {
-//!         IteratedSolution::Solution(solution, _) => {
+//!         IteratedSolution::Solution(solution, _, _) => {
 //!             number_of_solutions += 1;
 //!             // We have found another solution, the same invariant should hold
 //!             let value_x = solution.get_integer_value(x);
@@ -252,7 +255,7 @@
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
-//! // We create 3 variables with domains within the range [0, 10]
+//! // We create 3 variables with domains within the range [0, 2]
 //! let x = solver.new_bounded_integer(0, 2);
 //! let y = solver.new_bounded_integer(0, 2);
 //! let z = solver.new_bounded_integer(0, 2);
@@ -294,7 +297,6 @@ pub(crate) mod engine;
 pub(crate) mod math;
 pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
-pub(crate) mod variable_names;
 
 #[cfg(doc)]
 use crate::branching::Brancher;

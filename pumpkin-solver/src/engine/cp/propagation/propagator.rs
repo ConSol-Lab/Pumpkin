@@ -1,7 +1,7 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
-use super::contexts::StatefulPropagationContext;
+use super::contexts::PropagationContextWithTrailedValues;
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
@@ -28,8 +28,7 @@ use crate::statistics::statistic_logger::StatisticLogger;
 // does not allow downcasting from the trait definition to its concrete type.
 impl_downcast!(Propagator);
 
-/// All propagators implement the [`Propagator`] trait, with the exception of the
-/// clausal propagator. Structs implementing the trait defines the main propagator logic with
+/// All propagators implement the [`Propagator`] trait, which defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
 ///
 /// The only required functions are [`Propagator::name`],
@@ -92,7 +91,7 @@ pub(crate) trait Propagator: Downcast {
     /// [`PropagatorInitialisationContext::register()`].
     fn notify(
         &mut self,
-        _context: StatefulPropagationContext,
+        _context: PropagationContextWithTrailedValues,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -164,7 +163,7 @@ pub(crate) trait Propagator: Downcast {
     /// inconsistency as well.
     fn detect_inconsistency(
         &self,
-        _context: StatefulPropagationContext,
+        _context: PropagationContextWithTrailedValues,
     ) -> Option<PropositionalConjunction> {
         None
     }

@@ -6,7 +6,7 @@ use super::insertion;
 use super::removal;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::contexts::StatefulPropagationContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -364,7 +364,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn notify(
         &mut self,
-        context: StatefulPropagationContext,
+        context: PropagationContextWithTrailedValues,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

@@ -2,8 +2,8 @@ use log::info;
 
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
-use crate::engine::TrailedAssignments;
-use crate::engine::TrailedInt;
+use crate::engine::TrailedInteger;
+use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -22,17 +22,17 @@ pub(crate) struct FaithfullnessWatcher {
     domain_id: DomainId,
     s: Vec<i64>,
     g: Vec<i64>,
-    min_unassigned: TrailedInt,
-    max_unassigned: TrailedInt,
+    min_unassigned: TrailedInteger,
+    max_unassigned: TrailedInteger,
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
 }
 
 impl FaithfullnessWatcher {
-    pub(super) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
-        let min_unassigned = stateful_assignments.grow(0);
-        let max_unassigned = stateful_assignments.grow(1);
+    pub(super) fn new(trailed_values: &mut TrailedValues) -> Self {
+        let min_unassigned = trailed_values.grow(0);
+        let max_unassigned = trailed_values.grow(1);
         Self {
             domain_id: DomainId { id: 0 },
             min_unassigned,
@@ -70,9 +70,9 @@ pub(crate) trait DomainWatcherInformation {
     fn get_greater(&self) -> &Vec<i64>;
     fn get_greater_mut(&mut self) -> &mut Vec<i64>;
 
-    fn get_min_unassigned(&self) -> TrailedInt;
+    fn get_min_unassigned(&self) -> TrailedInteger;
 
-    fn get_max_unassigned(&self) -> TrailedInt;
+    fn get_max_unassigned(&self) -> TrailedInteger;
 
     fn is_empty(&self) -> bool;
 
@@ -137,11 +137,11 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
         &mut self.get_watcher_mut().g
     }
 
-    fn get_min_unassigned(&self) -> TrailedInt {
+    fn get_min_unassigned(&self) -> TrailedInteger {
         self.get_watcher().min_unassigned
     }
 
-    fn get_max_unassigned(&self) -> TrailedInt {
+    fn get_max_unassigned(&self) -> TrailedInteger {
         self.get_watcher().max_unassigned
     }
 
@@ -206,7 +206,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         &mut self,
         value: i32,
         predicate_id: PredicateId,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
         pumpkin_assert_simple!(self.get_values().len() >= 2);
@@ -259,16 +259,12 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         // the bounds since these are what are representd by the indices. This is especially
         // important when considering holes in the domain
         if assignments.is_implied_by_bounds(self.get_predicate_for_value(value)) {
-            if value
-                > self.get_values()[stateful_assignments.read(self.get_min_unassigned()) as usize]
-            {
-                stateful_assignments.assign(self.get_min_unassigned(), new_index);
+            if value > self.get_values()[trailed_values.read(self.get_min_unassigned()) as usize] {
+                trailed_values.assign(self.get_min_unassigned(), new_index);
             }
 
-            if value
-                < self.get_values()[stateful_assignments.read(self.get_max_unassigned()) as usize]
-            {
-                stateful_assignments.assign(self.get_max_unassigned(), new_index);
+            if value < self.get_values()[trailed_values.read(self.get_max_unassigned()) as usize] {
+                trailed_values.assign(self.get_max_unassigned(), new_index);
             }
         }
 
@@ -289,7 +285,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         predicate_id: Option<PredicateId>,

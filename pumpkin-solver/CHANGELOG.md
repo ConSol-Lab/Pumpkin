@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.4...pumpkin-solver-v0.2.0) (2025-04-11)
+
+
+### Features
+
+* Add logging for branchers ([#135](https://github.com/ConSol-Lab/Pumpkin/issues/135)) ([d8814f1](https://github.com/ConSol-Lab/Pumpkin/commit/d8814f12fe7e8bd38ccdfc02bdb049ee84d7fe16))
+* Add method for retrieving relevant brancher events ([#138](https://github.com/ConSol-Lab/Pumpkin/issues/138)) ([8253580](https://github.com/ConSol-Lab/Pumpkin/commit/8253580ef0a5e222abb8d81fa88a5e1d2e66bf89))
+* Adding lower-bounding search to the solver ([#132](https://github.com/ConSol-Lab/Pumpkin/issues/132)) ([57bde78](https://github.com/ConSol-Lab/Pumpkin/commit/57bde7879c20e02d2d59eeae627178eecd02460e))
+* Adding random variable selector + sparse_set fixes ([#139](https://github.com/ConSol-Lab/Pumpkin/issues/139)) ([1c4b85f](https://github.com/ConSol-Lab/Pumpkin/commit/1c4b85fe9fb802c9409df52741c0dff8c6b68d4a))
+* Debug clone does not synchronise at level 0 + random splitter edge cases ([#146](https://github.com/ConSol-Lab/Pumpkin/issues/146)) ([bba1abb](https://github.com/ConSol-Lab/Pumpkin/commit/bba1abbd1a24f4dd6fc9d09f387383aa2fd36eb1))
+* Enable proof logging in appropriate test cases ([#154](https://github.com/ConSol-Lab/Pumpkin/issues/154)) ([914f1bc](https://github.com/ConSol-Lab/Pumpkin/commit/914f1bc37cead8a6d8945b715af4551e4c11437b))
+* Expose the optimisation API in the python wrapper ([#148](https://github.com/ConSol-Lab/Pumpkin/issues/148)) ([ab9a463](https://github.com/ConSol-Lab/Pumpkin/commit/ab9a4632d08343ef685bf0223f400cdfe666a829))
+* Flatzinc parse boolean & negative int arrays as well ([#142](https://github.com/ConSol-Lab/Pumpkin/issues/142)) ([68aef75](https://github.com/ConSol-Lab/Pumpkin/commit/68aef7575a2316d24d3652618fe630f135cb028b))
+* Improve element propagator ([#140](https://github.com/ConSol-Lab/Pumpkin/issues/140)) ([b9bcfd3](https://github.com/ConSol-Lab/Pumpkin/commit/b9bcfd318c44725df0b90661ac7da1e1ca8fe07c))
+* Lazy explanation context ([#123](https://github.com/ConSol-Lab/Pumpkin/issues/123)) ([0781357](https://github.com/ConSol-Lab/Pumpkin/commit/0781357aae2fc4753df67d469056e397ecc46dd6))
+* No additional variables during constraint construction ([#131](https://github.com/ConSol-Lab/Pumpkin/issues/131)) ([19dd45b](https://github.com/ConSol-Lab/Pumpkin/commit/19dd45b97ab7cffb08f61500ff80c8e270145eab))
+* Nemove explicit literals ([#115](https://github.com/ConSol-Lab/Pumpkin/issues/115)) ([ab74e20](https://github.com/ConSol-Lab/Pumpkin/commit/ab74e20d511856dea3469aea067902db1d6a1d1f))
+* Stateful integer ([#125](https://github.com/ConSol-Lab/Pumpkin/issues/125)) ([eb01ed3](https://github.com/ConSol-Lab/Pumpkin/commit/eb01ed34fd0a62a3b34060a7f9f7418390c7e26c))
+
+
+### Bug Fixes
+
+* Addressing clippy warnings ([#143](https://github.com/ConSol-Lab/Pumpkin/issues/143)) ([20c76bb](https://github.com/ConSol-Lab/Pumpkin/commit/20c76bb551588cff776c8c7154da8bcac4f2497c))
+* Allow reification of lazy reasons ([#152](https://github.com/ConSol-Lab/Pumpkin/issues/152)) ([c7418ec](https://github.com/ConSol-Lab/Pumpkin/commit/c7418ec1669050d78bea3f79dd7770f004f22593))
+* Also log the inference that led to an empty domain ([#165](https://github.com/ConSol-Lab/Pumpkin/issues/165)) ([7799119](https://github.com/ConSol-Lab/Pumpkin/commit/7799119a4ab65635636dac69bec50373b2e76494))
+* Alternating brancher did not call the methods correctly ([#128](https://github.com/ConSol-Lab/Pumpkin/issues/128)) ([6019d86](https://github.com/ConSol-Lab/Pumpkin/commit/6019d8606478625d40e225c8dab2bf19a8160b15))
+* Disjunctive scheduling example had incorrect negation constraint ([#114](https://github.com/ConSol-Lab/Pumpkin/issues/114)) ([fd007a0](https://github.com/ConSol-Lab/Pumpkin/commit/fd007a0af37d1674e42741eed97eb22e2a8ef3aa))
+* Don't debug propagate deleted nogoods ([#147](https://github.com/ConSol-Lab/Pumpkin/issues/147)) ([e3a6527](https://github.com/ConSol-Lab/Pumpkin/commit/e3a65279389f731dcd856325353b6d5d0167648b))
+* Explain root-level assignments in the proof log during conflict analysis ([#163](https://github.com/ConSol-Lab/Pumpkin/issues/163)) ([c877b06](https://github.com/ConSol-Lab/Pumpkin/commit/c877b0663fc9140ba55fd75e4dd7bc018d16bfa5))
+* Fixing erronous conflict check when using incrementality ([#137](https://github.com/ConSol-Lab/Pumpkin/issues/137)) ([07c253f](https://github.com/ConSol-Lab/Pumpkin/commit/07c253f568bce25cba9bc15e44656a7df1a95753))
+* Give reason to root-level propagation in nogood propagator ([#124](https://github.com/ConSol-Lab/Pumpkin/issues/124)) ([14868d5](https://github.com/ConSol-Lab/Pumpkin/commit/14868d5f69e159a528e881a78efdbb4e33449bca))
+* Identify more places where root-level facts need to be logged to the proof ([#153](https://github.com/ConSol-Lab/Pumpkin/issues/153)) ([3ac5019](https://github.com/ConSol-Lab/Pumpkin/commit/3ac50196d50314b268cf1ef2b178a64aa71a1b5f))
+* Issue with integer multiplication + correct path in msc file ([#117](https://github.com/ConSol-Lab/Pumpkin/issues/117)) ([ce25710](https://github.com/ConSol-Lab/Pumpkin/commit/ce25710071e58af84b6cdd0925b4099ab0d924a9))
+* Post process new domain ([#129](https://github.com/ConSol-Lab/Pumpkin/issues/129)) ([26a3b46](https://github.com/ConSol-Lab/Pumpkin/commit/26a3b46d45164b62ec5b58941065f956c9801c4f))
+* Print statistics at the end of solving process + make pumpkin-solver default bin ([#162](https://github.com/ConSol-Lab/Pumpkin/issues/162)) ([7d30ac8](https://github.com/ConSol-Lab/Pumpkin/commit/7d30ac83e55c07143f7afec20ce82ac00e014d71))
+* Remove paste dependency ([#159](https://github.com/ConSol-Lab/Pumpkin/issues/159)) ([ea53fed](https://github.com/ConSol-Lab/Pumpkin/commit/ea53fed1ee19fe8b902a407fea1fd2500ae4ae13))
+* Root level assignments are properly explained in the proof when logging inferences ([#158](https://github.com/ConSol-Lab/Pumpkin/issues/158)) ([857f84c](https://github.com/ConSol-Lab/Pumpkin/commit/857f84cbb39ab896bcbb36238fef29757d7536f3)), closes [#118](https://github.com/ConSol-Lab/Pumpkin/issues/118) [#119](https://github.com/ConSol-Lab/Pumpkin/issues/119) [#156](https://github.com/ConSol-Lab/Pumpkin/issues/156)
+
 ## [0.1.4](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.3...pumpkin-solver-v0.1.4) (2024-11-07)
 
 

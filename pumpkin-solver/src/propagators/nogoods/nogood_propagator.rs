@@ -8,14 +8,13 @@ use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
-use crate::engine::nogoods::Lbd;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
@@ -29,8 +28,9 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
+use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
-use crate::engine::TrailedAssignments;
+use crate::engine::TrailedValues;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -55,11 +55,10 @@ pub(crate) struct NogoodPropagator {
     learned_nogood_ids: LearnedNogoodIds,
     /// Ids which have been deleted and can now be re-used
     delete_ids: Vec<NogoodId>,
-    /// Indicates whether the nogood propagator is in an infeasible state
-    is_in_infeasible_state: bool,
     /// Watch lists for the nogood propagator.
     // TODO: could improve the data structure for watching.
     watch_lists: KeyedVec<PredicateId, NogoodWatchList>,
+    /// Keep track of the events which the propagator has been notified of.
     updated_predicate_ids: Vec<PredicateId>,
     /// A helper for calculating the LBD for the nogoods.
     lbd_helper: Lbd,
@@ -153,12 +152,17 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        info!("Nogood Propagator Propagating ",);
         pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
-        self.clean_up_learned_nogoods_if_needed(&mut context);
+        self.clean_up_learned_nogoods_if_needed(
+            PropagationContext {
+                assignments: context.assignments,
+            },
+            context.reason_store,
+            context.domain_faithfulness,
+        );
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(
@@ -238,7 +242,7 @@ impl Propagator for NogoodPropagator {
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
                             context.domain_faithfulness,
-                            context.stateful_assignments,
+                            context.trailed_values,
                             &mut self.watch_lists,
                             nogood_predicates[1],
                             nogood_id,
@@ -322,7 +326,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated, reason = "Should be changed when the API is changed")]
+                #[allow(deprecated, reason = "should be refactored later")]
                 context.assignments(),
             );
 
@@ -419,7 +423,7 @@ impl NogoodPropagator {
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_assignments,
+            context.trailed_values,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
@@ -427,7 +431,7 @@ impl NogoodPropagator {
         );
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_assignments,
+            context.trailed_values,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
@@ -455,14 +459,8 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
-        match self.add_permanent_nogood(nogood, context) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                self.is_in_infeasible_state = true;
-                Err(e)
-            }
-        }
+    ) -> PropagationStatusCP {
+        self.add_permanent_nogood(nogood, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
@@ -470,17 +468,11 @@ impl NogoodPropagator {
         &mut self,
         mut nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
+    ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
             context.get_decision_level() == 0,
             "Only allowed to add nogoods permanently at the root for now."
         );
-
-        // If we are already in an infeasible state then we simply return that we are in an
-        // infeasible state.
-        if self.is_in_infeasible_state {
-            return Err(ConstraintOperationError::InfeasibleState);
-        }
 
         // If the nogood is empty then it is automatically satisfied (though it is unusual!)
         if nogood.is_empty() {
@@ -498,29 +490,14 @@ impl NogoodPropagator {
 
         // Unit nogoods are added as root assignments rather than as nogoods.
         if nogood.len() == 1 {
-            if context.is_predicate_satisfied(nogood[0]) {
-                // If the predicate is already satisfied then we report a conflict
-                self.is_in_infeasible_state = true;
-                Err(ConstraintOperationError::InfeasibleNogood)
-            } else if context.is_predicate_falsified(nogood[0]) {
-                // If the predicate is already falsified then we don't do anything and simply
-                // return success
-                Ok(())
-            } else {
-                // Get the reason for the propagation.
-                input_nogood.retain(|&p| p != nogood[0]);
+            // Get the reason for the propagation. Note that preprocessing removes literals from
+            // `nogood` that are still present in `input_nogood`, so this does not necessarily
+            // result in an empty reason.
+            input_nogood.retain(|&p| p != nogood[0]);
 
-                // Post the negated predicate at the root to respect the nogood.
-                let result = context
-                    .post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood));
-                match result {
-                    Ok(_) => Ok(()),
-                    Err(_) => {
-                        self.is_in_infeasible_state = true;
-                        Err(ConstraintOperationError::InfeasibleNogood)
-                    }
-                }
-            }
+            // Post the negated predicate at the root to respect the nogood.
+            context.post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood))?;
+            Ok(())
         }
         // Standard case, nogood is of size at least two.
         //
@@ -540,7 +517,7 @@ impl NogoodPropagator {
 
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_assignments,
+                context.trailed_values,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
@@ -548,7 +525,7 @@ impl NogoodPropagator {
             );
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_assignments,
+                context.trailed_values,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
@@ -565,7 +542,7 @@ impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
         domain_faithfulness: &mut DomainFaithfulness,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
@@ -580,7 +557,7 @@ impl NogoodPropagator {
         }
 
         let predicate_id =
-            domain_faithfulness.watch_predicate(predicate, stateful_assignments, assignments);
+            domain_faithfulness.watch_predicate(predicate, trailed_values, assignments);
         while watch_lists.len() <= predicate_id.index() {
             let _ = watch_lists.push(NogoodWatchList::default());
         }
@@ -602,14 +579,19 @@ impl NogoodPropagator {
 /// Nogood management
 impl NogoodPropagator {
     /// Removes nogoods if there are too many nogoods with a "high" LBD
-    fn clean_up_learned_nogoods_if_needed(&mut self, context: &mut PropagationContextMut) {
+    fn clean_up_learned_nogoods_if_needed(
+        &mut self,
+        context: PropagationContext,
+        reason_store: &mut ReasonStore,
+        domain_faithfulness: &mut DomainFaithfulness,
+    ) {
         // Only remove learned nogoods if there are too many.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_num_high_lbd_nogoods {
             // The procedure is divided into two parts (for simplicity of implementation).
             //  1. Promote nogoods that are in the high lbd group but got updated to a low lbd.
             //  2. Remove roughly half of the nogoods that have high lbd.
             self.promote_high_lbd_nogoods();
-            self.remove_high_lbd_nogoods(context);
+            self.remove_high_lbd_nogoods(context, reason_store, domain_faithfulness);
         }
     }
 
@@ -633,7 +615,12 @@ impl NogoodPropagator {
     ///
     /// The idea is that these are likely poor quality nogoods and the overhead of propagating them
     /// is not worth it.
-    fn remove_high_lbd_nogoods(&mut self, context: &mut PropagationContextMut) {
+    fn remove_high_lbd_nogoods(
+        &mut self,
+        context: PropagationContext,
+        reason_store: &mut ReasonStore,
+        domain_faithfulness: &mut DomainFaithfulness,
+    ) {
         // First we sort the high LBD nogoods based on non-increasing "quality"
         self.sort_high_lbd_nogoods_by_quality_better_first();
 
@@ -657,23 +644,21 @@ impl NogoodPropagator {
                 continue;
             }
 
-            if self.is_nogood_propagating(context.as_readonly(), context.reason_store, id) {
+            if self.is_nogood_propagating(context, reason_store, id) {
                 continue;
             }
 
             // Remove the nogood from the watch list.
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                context
-                    .domain_faithfulness
+                domain_faithfulness
                     .get_id_for_predicate(self.nogoods[id].predicates[0])
                     .unwrap(),
                 id,
             );
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                context
-                    .domain_faithfulness
+                domain_faithfulness
                     .get_id_for_predicate(self.nogoods[id].predicates[1])
                     .unwrap(),
                 id,
@@ -837,19 +822,6 @@ impl NogoodPropagator {
                 .unwrap()
                 .not();
 
-            // println!(
-            //    "Debug Propagating {propagated_predicate} for nogood {nogood_id:?} - {:?}",
-            //    nogood
-            //        .predicates
-            //        .iter()
-            //        .map(|predicate| (
-            //            predicate,
-            //            context.lower_bound(&predicate.get_domain()),
-            //            context.upper_bound(&predicate.get_domain())
-            //        ))
-            //        .collect::<Vec<_>>()
-            //);
-
             assert!(nogood
                 .predicates
                 .iter()
@@ -900,7 +872,7 @@ impl NogoodPropagator {
                 && is_watching(nogood.1.predicates[1], nogood_id))
             {
                 eprintln!("Nogood id: {}", nogood_id.id);
-                eprintln!("Nogood: {:?}", nogood);
+                eprintln!("Nogood: {nogood:?}");
                 eprintln!(
                     "watching 0: {}",
                     is_watching(nogood.1.predicates[0], nogood_id)
@@ -959,7 +931,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
-                &mut solver.stateful_assignments,
+                &mut solver.trailed_values,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
@@ -1002,7 +974,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
-                &mut solver.stateful_assignments,
+                &mut solver.trailed_values,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,

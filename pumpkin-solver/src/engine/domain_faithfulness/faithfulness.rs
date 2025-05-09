@@ -6,7 +6,7 @@ use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
-use crate::engine::TrailedAssignments;
+use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
@@ -51,7 +51,7 @@ impl DomainFaithfulness {
     pub(crate) fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
         if self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
@@ -68,7 +68,7 @@ impl DomainFaithfulness {
         // Otherwise we update the structures
         self.domain_id_to_faithfullness[predicate.get_domain()].has_been_updated(
             predicate,
-            stateful_assignments,
+            trailed_values,
             &mut self.falsified_predicates,
             &mut self.satisfied_predicates,
             self.predicate_to_id
@@ -80,7 +80,7 @@ impl DomainFaithfulness {
     pub(crate) fn watch_predicate(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) -> PredicateId {
         // If it is already watched then at the moment we do nothing
@@ -95,7 +95,7 @@ impl DomainFaithfulness {
             while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
                 let _ = self
                     .domain_id_to_faithfullness
-                    .push(Faithfullness::new(stateful_assignments));
+                    .push(Faithfullness::new(trailed_values));
             }
 
             self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
@@ -108,7 +108,7 @@ impl DomainFaithfulness {
             self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
                 predicate,
                 id,
-                stateful_assignments,
+                trailed_values,
                 assignments,
             );
         } else {

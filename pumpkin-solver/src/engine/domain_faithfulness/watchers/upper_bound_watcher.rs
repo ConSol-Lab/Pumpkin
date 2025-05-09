@@ -2,7 +2,7 @@ use super::DomainWatcher;
 use super::FaithfullnessWatcher;
 use super::HasWatcher;
 use super::PredicateId;
-use super::TrailedAssignments;
+use super::TrailedValues;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -12,9 +12,9 @@ pub(crate) struct UpperBoundWatcher {
 }
 
 impl UpperBoundWatcher {
-    pub(crate) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
+    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
         Self {
-            watcher: FaithfullnessWatcher::new(stateful_assignments),
+            watcher: FaithfullnessWatcher::new(trailed_values),
         }
     }
 }
@@ -37,7 +37,7 @@ impl DomainWatcher for UpperBoundWatcher {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         _predicate_id: Option<PredicateId>,
@@ -48,10 +48,10 @@ impl DomainWatcher for UpperBoundWatcher {
                 lower_bound,
             } => {
                 let mut larger =
-                    self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
+                    self.watcher.g[trailed_values.read(self.watcher.min_unassigned) as usize];
                 while larger != i64::MAX && lower_bound > self.watcher.values[larger as usize] {
                     self.predicate_has_been_falsified(larger as usize, falsified_predicates);
-                    stateful_assignments.assign(self.watcher.min_unassigned, larger);
+                    trailed_values.assign(self.watcher.min_unassigned, larger);
                     larger = self.watcher.g[larger as usize];
                 }
             }
@@ -60,10 +60,10 @@ impl DomainWatcher for UpperBoundWatcher {
                 upper_bound,
             } => {
                 let mut smaller =
-                    self.watcher.s[stateful_assignments.read(self.watcher.max_unassigned) as usize];
+                    self.watcher.s[trailed_values.read(self.watcher.max_unassigned) as usize];
                 while smaller != i64::MAX && upper_bound <= self.watcher.values[smaller as usize] {
                     self.predicate_has_been_satisfied(smaller as usize, satisfied_predicates);
-                    stateful_assignments.assign(self.watcher.max_unassigned, smaller);
+                    trailed_values.assign(self.watcher.max_unassigned, smaller);
                     smaller = self.watcher.s[smaller as usize];
                 }
             }

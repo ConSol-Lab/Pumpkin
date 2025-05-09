@@ -2,7 +2,7 @@ use super::DomainWatcher;
 use super::FaithfullnessWatcher;
 use super::HasWatcher;
 use super::PredicateId;
-use super::TrailedAssignments;
+use super::TrailedValues;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -12,9 +12,9 @@ pub(crate) struct EqualityWatcher {
 }
 
 impl EqualityWatcher {
-    pub(crate) fn new(stateful_assignments: &mut TrailedAssignments) -> Self {
+    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
         Self {
-            watcher: FaithfullnessWatcher::new(stateful_assignments),
+            watcher: FaithfullnessWatcher::new(trailed_values),
         }
     }
 }
@@ -37,7 +37,7 @@ impl DomainWatcher for EqualityWatcher {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_assignments: &mut TrailedAssignments,
+        trailed_values: &mut TrailedValues,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         _predicate_id: Option<PredicateId>,
@@ -48,10 +48,10 @@ impl DomainWatcher for EqualityWatcher {
                 lower_bound,
             } => {
                 let mut greater =
-                    self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
+                    self.watcher.g[trailed_values.read(self.watcher.min_unassigned) as usize];
                 while greater != i64::MAX && lower_bound > self.watcher.values[greater as usize] {
                     self.predicate_has_been_falsified(greater as usize, falsified_predicates);
-                    stateful_assignments.assign(self.watcher.min_unassigned, greater);
+                    trailed_values.assign(self.watcher.min_unassigned, greater);
                     greater = self.watcher.g[greater as usize];
                 }
             }
@@ -60,10 +60,10 @@ impl DomainWatcher for EqualityWatcher {
                 upper_bound,
             } => {
                 let mut smaller =
-                    self.watcher.s[stateful_assignments.read(self.watcher.max_unassigned) as usize];
+                    self.watcher.s[trailed_values.read(self.watcher.max_unassigned) as usize];
                 while smaller != i64::MAX && upper_bound < self.watcher.values[smaller as usize] {
                     self.predicate_has_been_falsified(smaller as usize, falsified_predicates);
-                    stateful_assignments.assign(self.watcher.max_unassigned, smaller);
+                    trailed_values.assign(self.watcher.max_unassigned, smaller);
                     smaller = self.watcher.s[smaller as usize];
                 }
             }
@@ -72,35 +72,34 @@ impl DomainWatcher for EqualityWatcher {
                 equality_constant,
             } => {
                 let mut greater =
-                    self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
+                    self.watcher.g[trailed_values.read(self.watcher.min_unassigned) as usize];
                 while greater != i64::MAX
                     && equality_constant > self.watcher.values[greater as usize]
                 {
                     self.predicate_has_been_falsified(greater as usize, falsified_predicates);
-                    stateful_assignments.assign(self.watcher.min_unassigned, greater);
+                    trailed_values.assign(self.watcher.min_unassigned, greater);
                     greater = self.watcher.g[greater as usize];
                 }
 
                 let mut smaller =
-                    self.watcher.s[stateful_assignments.read(self.watcher.max_unassigned) as usize];
+                    self.watcher.s[trailed_values.read(self.watcher.max_unassigned) as usize];
                 while smaller != i64::MAX
                     && equality_constant < self.watcher.values[smaller as usize]
                 {
                     self.predicate_has_been_falsified(smaller as usize, falsified_predicates);
-                    stateful_assignments.assign(self.watcher.max_unassigned, smaller);
+                    trailed_values.assign(self.watcher.max_unassigned, smaller);
                     smaller = self.watcher.s[smaller as usize];
                 }
 
                 let greater =
-                    self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
+                    self.watcher.g[trailed_values.read(self.watcher.min_unassigned) as usize];
                 if greater
-                    == self.watcher.s
-                        [stateful_assignments.read(self.watcher.max_unassigned) as usize]
+                    == self.watcher.s[trailed_values.read(self.watcher.max_unassigned) as usize]
                     && self.watcher.values[greater as usize] == equality_constant
                 {
                     self.predicate_has_been_satisfied(greater as usize, satisfied_predicates);
-                    stateful_assignments.assign(self.watcher.min_unassigned, greater);
-                    stateful_assignments.assign(self.watcher.max_unassigned, greater);
+                    trailed_values.assign(self.watcher.min_unassigned, greater);
+                    trailed_values.assign(self.watcher.max_unassigned, greater);
                 }
             }
             Predicate::NotEqual {
@@ -109,14 +108,14 @@ impl DomainWatcher for EqualityWatcher {
             } => {
                 if not_equal_constant
                     <= self.watcher.values
-                        [stateful_assignments.read(self.watcher.min_unassigned) as usize]
+                        [trailed_values.read(self.watcher.min_unassigned) as usize]
                 {
                     return;
                 }
 
                 if not_equal_constant
                     >= self.watcher.values
-                        [stateful_assignments.read(self.watcher.max_unassigned) as usize]
+                        [trailed_values.read(self.watcher.max_unassigned) as usize]
                 {
                     return;
                 }
@@ -124,7 +123,7 @@ impl DomainWatcher for EqualityWatcher {
                 // We go through all of the values and simply check whether it is being watched
                 // TODO: There should be a more efficient way to do this
                 let mut current_index =
-                    self.watcher.g[stateful_assignments.read(self.watcher.min_unassigned) as usize];
+                    self.watcher.g[trailed_values.read(self.watcher.min_unassigned) as usize];
                 while current_index != i64::MAX {
                     if not_equal_constant < self.watcher.values[current_index as usize] {
                         break;

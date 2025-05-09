@@ -27,36 +27,32 @@ pub(crate) struct Nogood {
     pub(crate) cached_predicate: Predicate,
 }
 
-impl Default for Nogood {
-    fn default() -> Self {
-        Self {
-            predicates: Default::default(),
-            is_learned: Default::default(),
-            lbd: Default::default(),
-            is_protected: Default::default(),
-            is_deleted: Default::default(),
-            block_bumps: Default::default(),
-            activity: Default::default(),
-            // We select a predicate which is always satified as the default
-            cached_predicate: Predicate::trivially_true(),
-        }
-    }
-}
-
 impl Nogood {
     pub(crate) fn new_learned_nogood(predicates: PropositionalConjunction, lbd: u32) -> Self {
+        let cached_predicate = predicates[0];
         Nogood {
             predicates,
             is_learned: true,
             lbd,
-            ..Default::default()
+            is_protected: false,
+            is_deleted: false,
+            block_bumps: false,
+            activity: 0.0,
+            cached_predicate,
         }
     }
 
     pub(crate) fn new_permanent_nogood(predicates: PropositionalConjunction) -> Self {
+        let cached_predicate = predicates[0];
         Nogood {
             predicates,
-            ..Default::default()
+            is_learned: false,
+            lbd: 0,
+            is_protected: false,
+            is_deleted: false,
+            block_bumps: false,
+            activity: 0.0,
+            cached_predicate,
         }
     }
 }

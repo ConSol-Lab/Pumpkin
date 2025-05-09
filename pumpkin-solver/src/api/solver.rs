@@ -29,6 +29,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
 #[cfg(doc)]
 use crate::optimisation::linear_unsat_sat::LinearUnsatSat;
+use crate::optimisation::solution_callback::SolutionCallback;
 use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
@@ -126,10 +127,6 @@ impl Solver {
     pub fn log_statistics(&self) {
         self.satisfaction_solver.log_statistics();
         log_statistic_postfix();
-    }
-
-    pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
-        &mut self.satisfaction_solver
     }
 
     pub fn get_solution_reference(&self) -> SolutionReference {
@@ -406,12 +403,16 @@ impl Solver {
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise<Var: IntegerVariable, Callback: Fn(&Solver, SolutionReference)>(
+    pub fn optimise<B, Callback>(
         &mut self,
-        brancher: &mut impl Brancher,
+        brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        mut optimisation_procedure: impl OptimisationProcedure<Var, Callback>,
-    ) -> OptimisationResult {
+        mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
+    ) -> OptimisationResult
+    where
+        B: Brancher,
+        Callback: SolutionCallback<B>,
+    {
         optimisation_procedure.optimise(brancher, termination, self)
     }
 }

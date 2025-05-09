@@ -6,7 +6,7 @@ use crate::engine::conflict_analysis::LearnedNogood;
 pub(crate) trait ConflictResolver: Debug {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood>;
 
-    #[allow(clippy::result_unit_err, reason = "Should be refactored")]
+    #[allow(clippy::result_unit_err, reason = "unknown, this should be refactored")]
     fn process(
         &mut self,
         context: &mut ConflictAnalysisContext,
