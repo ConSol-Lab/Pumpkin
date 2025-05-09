@@ -1,6 +1,7 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -10,6 +11,51 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+
+#[derive(Clone, Debug)]
+pub(crate) struct MaximumArgs<ElementVar, Rhs> {
+    pub(crate) array: Box<[ElementVar]>,
+    pub(crate) rhs: Rhs,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+declare_inference_label!(Maximum);
+
+impl<ElementVar, Rhs> PropagatorConstructor for MaximumArgs<ElementVar, Rhs>
+where
+    ElementVar: IntegerVariable + 'static,
+    Rhs: IntegerVariable + 'static,
+{
+    type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let MaximumArgs {
+            array,
+            rhs,
+            constraint_tag,
+        } = self;
+
+        for (idx, var) in array.iter().enumerate() {
+            context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
+        }
+
+        context.register(
+            rhs.clone(),
+            DomainEvents::BOUNDS,
+            LocalId::from(array.len() as u32),
+        );
+
+        let inference_code = context.create_inference_code(constraint_tag, Maximum);
+
+        MaximumPropagator {
+            array,
+            rhs,
+            inference_code,
+        }
+    }
+}
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumConstructor`].
@@ -17,32 +63,7 @@ use crate::predicate;
 pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[ElementVar]>,
     rhs: Rhs,
-}
-
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> MaximumPropagator<ElementVar, Rhs> {
-    pub(crate) fn new(array: Box<[ElementVar]>, rhs: Rhs) -> Self {
-        MaximumPropagator { array, rhs }
-    }
-}
-
-impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> PropagatorConstructor
-    for MaximumPropagator<ElementVar, Rhs>
-{
-    type PropagatorImpl = Self;
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        for (idx, var) in self.array.iter().enumerate() {
-            context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
-        }
-
-        context.register(
-            self.rhs.clone(),
-            DomainEvents::BOUNDS,
-            LocalId::from(self.array.len() as u32),
-        );
-
-        self
-    }
+    inference_code: InferenceCode,
 }
 
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
@@ -73,6 +94,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             context.post(
                 predicate![var <= rhs_ub],
                 conjunction!([self.rhs <= rhs_ub]),
+                self.inference_code,
             )?;
 
             let var_lb = context.lower_bound(var);
@@ -92,6 +114,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         context.post(
             predicate![self.rhs >= max_lb],
             PropositionalConjunction::from(lb_reason),
+            self.inference_code,
         )?;
 
         // Rule 3.
@@ -104,7 +127,11 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 .iter()
                 .map(|var| predicate![var <= max_ub])
                 .collect();
-            context.post(predicate![self.rhs <= max_ub], ub_reason)?;
+            context.post(
+                predicate![self.rhs <= max_ub],
+                ub_reason,
+                self.inference_code,
+            )?;
         }
 
         // Rule 4.
@@ -135,6 +162,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 context.post(
                     predicate![propagating_variable >= rhs_lb],
                     propagation_reason,
+                    self.inference_code,
                 )?;
             }
         }

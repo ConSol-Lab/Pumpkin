@@ -284,13 +284,10 @@ impl PropagationContextMut<'_> {
         &mut self,
         predicate: Predicate,
         reason: impl Into<Reason>,
+        inference_code: InferenceCode,
     ) -> Result<(), EmptyDomain> {
         let reason = self.build_reason(reason.into());
         let reason_ref = self.reason_store.push(self.propagator_id, reason);
-
-        // TODO: Remove this constant and replace with a parameter. We have this to help
-        // refactoring.
-        let inference_code = InferenceCode::create_from_index(0);
 
         // TODO: When the following does not result in a change, i.e. this is a no-op, we probably
         // want to clean up the reason. Although perhaps that happens so infrequently that that is

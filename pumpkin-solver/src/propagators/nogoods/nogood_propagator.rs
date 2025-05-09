@@ -189,6 +189,7 @@ impl Propagator for NogoodPropagator {
                                 .get_lower_bound_watcher_at_index(current_index)
                                 .nogood_id;
 
+                            let inference_code = self.nogoods[nogood_id].1;
                             let nogood = &mut self.nogoods[nogood_id].0.predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -271,7 +272,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason, inference_code);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -327,6 +328,8 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_upper_bound_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            let inference_code = self.nogoods[nogood_id].1;
                             let nogood = &mut self.nogoods[nogood_id].0.predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -407,7 +410,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason, inference_code);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -478,6 +481,8 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_inequality_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            let inference_code = self.nogoods[nogood_id].1;
                             let nogood = &mut self.nogoods[nogood_id].0.predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -601,7 +606,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason, inference_code);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -654,6 +659,8 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[updated_domain_id]
                                 .get_equality_watcher_at_index(current_index)
                                 .nogood_id;
+
+                            let inference_code = self.nogoods[nogood_id].1;
                             let nogood = &mut self.nogoods[nogood_id].0.predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -738,7 +745,7 @@ impl Propagator for NogoodPropagator {
                             // nogood[0] is assigned true -> conflict.
                             let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                            let result = context.post(!nogood[0], reason);
+                            let result = context.post(!nogood[0], reason, inference_code);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
                                 // Stop any further propagation and report the conflict.
@@ -955,8 +962,14 @@ impl NogoodPropagator {
         // Then we propagate the asserting predicate and as reason we give the index to the
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(new_id.id as u64);
+        let inference_code = self.nogoods[new_id].1;
+
         context
-            .post(!self.nogoods[new_id].0.predicates[0], reason)
+            .post(
+                !self.nogoods[new_id].0.predicates[0],
+                reason,
+                inference_code,
+            )
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then divide the new nogood based on the LBD level
@@ -1012,7 +1025,11 @@ impl NogoodPropagator {
             input_nogood.retain(|&p| p != nogood[0]);
 
             // Post the negated predicate at the root to respect the nogood.
-            context.post(!nogood[0], PropositionalConjunction::from(input_nogood))?;
+            context.post(
+                !nogood[0],
+                PropositionalConjunction::from(input_nogood),
+                inference_code,
+            )?;
         }
         // Standard case, nogood is of size at least two.
         //
@@ -1376,7 +1393,7 @@ impl NogoodPropagator {
                 .copied()
                 .collect();
 
-            context.post(propagated_predicate, reason)?;
+            context.post(propagated_predicate, reason, *inference_code)?;
         }
         Ok(())
     }

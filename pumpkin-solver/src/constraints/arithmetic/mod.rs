@@ -6,10 +6,13 @@ pub use inequality::*;
 
 use super::Constraint;
 use crate::proof::ConstraintTag;
+use crate::propagators::absolute_value::AbsoluteValueArgs;
 use crate::propagators::absolute_value::AbsoluteValuePropagator;
+use crate::propagators::division::DivisionArgs;
 use crate::propagators::division::DivisionPropagator;
 use crate::propagators::integer_multiplication::IntegerMultiplicationArgs;
 use crate::propagators::integer_multiplication::IntegerMultiplicationPropagator;
+use crate::propagators::maximum::MaximumArgs;
 use crate::propagators::maximum::MaximumPropagator;
 use crate::variables::IntegerVariable;
 
@@ -50,7 +53,12 @@ pub fn division(
     rhs: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    DivisionPropagator::new(numerator, denominator, rhs)
+    DivisionArgs {
+        numerator,
+        denominator,
+        rhs,
+        constraint_tag,
+    }
 }
 
 /// Creates the [`Constraint`] `|signed| = absolute`.
@@ -59,7 +67,11 @@ pub fn absolute(
     absolute: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    AbsoluteValuePropagator::new(signed, absolute)
+    AbsoluteValueArgs {
+        signed,
+        absolute,
+        constraint_tag,
+    }
 }
 
 /// Creates the [`Constraint`] `max(array) = m`.
@@ -68,7 +80,11 @@ pub fn maximum<Var: IntegerVariable + 'static>(
     rhs: impl IntegerVariable + 'static,
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
-    MaximumPropagator::new(array.into_iter().collect(), rhs)
+    MaximumArgs {
+        array: array.into_iter().collect(),
+        rhs,
+        constraint_tag,
+    }
 }
 
 /// Creates the [`Constraint`] `min(array) = m`.

@@ -2,6 +2,7 @@ use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -14,6 +15,63 @@ use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+
+#[derive(Clone, Debug)]
+pub(crate) struct ElementArgs<VX, VI, VE> {
+    pub(crate) array: Box<[VX]>,
+    pub(crate) index: VI,
+    pub(crate) rhs: VE,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+declare_inference_label!(Element);
+
+impl<VX, VI, VE> PropagatorConstructor for ElementArgs<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+{
+    type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let ElementArgs {
+            array,
+            index,
+            rhs,
+            constraint_tag,
+        } = self;
+
+        for (i, x_i) in array.iter().enumerate() {
+            context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        }
+
+        context.register(index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        context.register(rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+
+        let inference_code = context.create_inference_code(constraint_tag, Element);
+
+        ElementPropagator {
+            array,
+            index,
+            rhs,
+            inference_code,
+            rhs_reason_buffer: vec![],
+        }
+    }
+}
+
+const ID_INDEX: LocalId = LocalId::from(0);
+const ID_RHS: LocalId = LocalId::from(1);
+
+// local ids of array vars are shifted by ID_X_OFFSET
+const ID_X_OFFSET: u32 = 2;
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
@@ -24,50 +82,10 @@ pub(crate) struct ElementPropagator<VX, VI, VE> {
     array: Box<[VX]>,
     index: VI,
     rhs: VE,
+    inference_code: InferenceCode,
 
     rhs_reason_buffer: Vec<Predicate>,
 }
-
-impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
-    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
-        Self {
-            array,
-            index,
-            rhs,
-            rhs_reason_buffer: vec![],
-        }
-    }
-}
-
-impl<VX, VI, VE> PropagatorConstructor for ElementPropagator<VX, VI, VE>
-where
-    VX: IntegerVariable + 'static,
-    VI: IntegerVariable + 'static,
-    VE: IntegerVariable + 'static,
-{
-    type PropagatorImpl = Self;
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        for (i, x_i) in self.array.iter().enumerate() {
-            context.register(
-                x_i.clone(),
-                DomainEvents::ANY_INT,
-                LocalId::from(i as u32 + ID_X_OFFSET),
-            );
-        }
-
-        context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
-        context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
-
-        self
-    }
-}
-
-const ID_INDEX: LocalId = LocalId::from(0);
-const ID_RHS: LocalId = LocalId::from(1);
-
-// local ids of array vars are shifted by ID_X_OFFSET
-const ID_X_OFFSET: u32 = 2;
 
 impl<VX, VI, VE> Propagator for ElementPropagator<VX, VI, VE>
 where
@@ -132,10 +150,15 @@ where
         &self,
         context: &mut PropagationContextMut<'_>,
     ) -> PropagationStatusCP {
-        context.post(predicate![self.index >= 0], conjunction!())?;
+        context.post(
+            predicate![self.index >= 0],
+            conjunction!(),
+            self.inference_code,
+        )?;
         context.post(
             predicate![self.index <= self.array.len() as i32 - 1],
             conjunction!(),
+            self.inference_code,
         )?;
         Ok(())
     }
@@ -166,6 +189,7 @@ where
                     .with_value(rhs_lb)
                     .into_bits(),
             ),
+            self.inference_code,
         )?;
         context.post(
             predicate![self.rhs <= rhs_ub],
@@ -175,6 +199,7 @@ where
                     .with_value(rhs_ub)
                     .into_bits(),
             ),
+            self.inference_code,
         )?;
 
         Ok(())
@@ -207,7 +232,7 @@ where
         }
 
         for (idx, reason) in to_remove.drain(..) {
-            context.post(predicate![self.index != idx], reason)?;
+            context.post(predicate![self.index != idx], reason, self.inference_code)?;
         }
 
         Ok(())
@@ -227,10 +252,12 @@ where
         context.post(
             predicate![lhs >= rhs_lb],
             conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
+            self.inference_code,
         )?;
         context.post(
             predicate![lhs <= rhs_ub],
             conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
+            self.inference_code,
         )?;
         Ok(())
     }

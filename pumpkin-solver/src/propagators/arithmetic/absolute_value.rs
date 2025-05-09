@@ -1,5 +1,6 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -9,6 +10,44 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+
+declare_inference_label!(AbsoluteValue);
+
+#[derive(Clone, Debug)]
+pub(crate) struct AbsoluteValueArgs<VA, VB> {
+    pub(crate) signed: VA,
+    pub(crate) absolute: VB,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+impl<VA, VB> PropagatorConstructor for AbsoluteValueArgs<VA, VB>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+{
+    type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        } = self;
+
+        context.register(signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
+        context.register(absolute.clone(), DomainEvents::BOUNDS, LocalId::from(1));
+
+        let inference_code = context.create_inference_code(constraint_tag, AbsoluteValue);
+
+        AbsoluteValuePropagator {
+            signed,
+            absolute,
+            inference_code,
+        }
+    }
+}
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
@@ -18,31 +57,7 @@ use crate::predicate;
 pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     signed: VA,
     absolute: VB,
-}
-
-impl<VA, VB> AbsoluteValuePropagator<VA, VB> {
-    pub(crate) fn new(signed: VA, absolute: VB) -> Self {
-        AbsoluteValuePropagator { signed, absolute }
-    }
-}
-
-impl<VA, VB> PropagatorConstructor for AbsoluteValuePropagator<VA, VB>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-{
-    type PropagatorImpl = Self;
-
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
-        context.register(
-            self.absolute.clone(),
-            DomainEvents::BOUNDS,
-            LocalId::from(1),
-        );
-
-        self
-    }
+    inference_code: InferenceCode,
 }
 
 impl<VA, VB> Propagator for AbsoluteValuePropagator<VA, VB>
@@ -64,7 +79,11 @@ where
     ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
-        context.post(predicate![self.absolute >= 0], conjunction!())?;
+        context.post(
+            predicate![self.absolute >= 0],
+            conjunction!(),
+            self.inference_code,
+        )?;
 
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
@@ -81,17 +100,20 @@ where
         context.post(
             predicate![self.absolute <= signed_absolute_ub],
             conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
+            self.inference_code,
         )?;
 
         if signed_lb > 0 {
             context.post(
                 predicate![self.absolute >= signed_lb],
                 conjunction!([self.signed >= signed_lb]),
+                self.inference_code,
             )?;
         } else if signed_ub < 0 {
             context.post(
                 predicate![self.absolute >= signed_ub.abs()],
                 conjunction!([self.signed <= signed_ub]),
+                self.inference_code,
             )?;
         }
 
@@ -100,21 +122,25 @@ where
         context.post(
             predicate![self.signed >= -absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
+            self.inference_code,
         )?;
         context.post(
             predicate![self.signed <= absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
+            self.inference_code,
         )?;
 
         if signed_ub <= 0 {
             context.post(
                 predicate![self.signed <= -absolute_lb],
                 conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
+                self.inference_code,
             )?;
         } else if signed_lb >= 0 {
             context.post(
                 predicate![self.signed >= absolute_lb],
                 conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
+                self.inference_code,
             )?;
         }
 

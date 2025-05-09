@@ -216,6 +216,7 @@ where
                         .filter(|&(i, _)| i != unfixed_x_i)
                         .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
                         .collect::<PropositionalConjunction>(),
+                    self.inference_code,
                 )?;
             }
         } else if self.number_of_fixed_terms == self.terms.len() {
@@ -276,6 +277,7 @@ where
                             .expect("Expected to be able to fit i64 into i32")
                 ],
                 reason,
+                self.inference_code,
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
             let conjunction = self

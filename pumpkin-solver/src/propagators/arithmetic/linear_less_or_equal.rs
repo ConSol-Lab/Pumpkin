@@ -189,7 +189,7 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason)?;
+                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
             }
         }
 
@@ -245,7 +245,7 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason)?;
+                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
             }
         }
 

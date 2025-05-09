@@ -176,6 +176,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
                 context.post(
                     self.reification_literal.get_false_predicate(),
                     conflict.conjunction,
+                    conflict.inference_code,
                 )?;
             }
         }
