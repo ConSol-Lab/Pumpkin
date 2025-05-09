@@ -8,6 +8,7 @@ use crate::options::CumulativeExplanationType;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
 use crate::propagators::ResourceProfile;
@@ -20,6 +21,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     context: &mut PropagationContextMut,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
+    inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
@@ -76,6 +78,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
             context.post(
                 predicate![propagating_task.start_variable >= time_point + 1],
                 explanation,
+                inference_code,
             )?;
         }
 
@@ -127,6 +130,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
     context: &mut PropagationContextMut,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
+    inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
@@ -186,6 +190,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                         <= time_point - propagating_task.processing_time
                 ],
                 explanation,
+                inference_code,
             )?;
         }
 

@@ -235,12 +235,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
-            self.time_table =
-                create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)
-                    .map_err(|conjunction| PropagatorConflict {
-                    conjunction,
-                    inference_code: self.inference_code.unwrap(),
-                })?;
+            self.time_table = create_time_table_per_point_from_scratch(
+                context.as_readonly(),
+                self.inference_code.unwrap(),
+                &self.parameters,
+            )?;
 
             // Then we note that the time-table is not outdated anymore
             self.is_time_table_outdated = false;
@@ -315,6 +314,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         check_synchronisation_conflict_explanation_per_point(
                             &synchronised_conflict_explanation,
                             context.as_readonly(),
+                            self.inference_code.unwrap(),
                             &self.parameters,
                         ),
                         "The conflict explanation was not the same as the conflict explanation from scratch!"
@@ -340,6 +340,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     pumpkin_assert_extreme!(
                         create_time_table_per_point_from_scratch(
                             context.as_readonly(),
+                            self.inference_code.unwrap(),
                             &self.parameters
                         )
                         .is_err(),
@@ -396,6 +397,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
             context.as_readonly(),
+            self.inference_code.unwrap(),
             &self.time_table,
             &self.parameters
         ));
@@ -406,6 +408,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
+            self.inference_code.unwrap(),
             self.time_table.values(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -511,6 +514,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // Use the same debug propagator from `TimeTablePerPoint`
         debug_propagate_from_scratch_time_table_point(
             &mut context,
+            self.inference_code.unwrap(),
             &self.parameters,
             &self.updatable_structures,
         )
@@ -521,6 +525,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 mod debug {
 
     use crate::engine::propagation::PropagationContext;
+    use crate::proof::InferenceCode;
     use crate::propagators::create_time_table_per_point_from_scratch;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
@@ -540,11 +545,13 @@ mod debug {
         const SYNCHRONISE: bool,
     >(
         context: PropagationContext,
+        inference_code: InferenceCode,
         time_table: &PerPointTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
     ) -> bool {
-        let time_table_scratch = create_time_table_per_point_from_scratch(context, parameters)
-            .expect("Expected no error");
+        let time_table_scratch =
+            create_time_table_per_point_from_scratch(context, inference_code, parameters)
+                .expect("Expected no error");
 
         if time_table.is_empty() {
             return time_table_scratch.is_empty();

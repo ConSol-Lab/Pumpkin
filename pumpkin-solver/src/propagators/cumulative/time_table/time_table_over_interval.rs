@@ -117,17 +117,17 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table =
-            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)
-                .map_err(|conjunction| PropagatorConflict {
-                conjunction,
-                inference_code: self.inference_code.unwrap(),
-            })?;
+        let time_table = create_time_table_over_interval_from_scratch(
+            context.as_readonly(),
+            &self.parameters,
+            self.inference_code.unwrap(),
+        )?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
+            self.inference_code.unwrap(),
             time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -191,6 +191,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             &self.parameters,
             &self.updatable_structures,
+            self.inference_code.unwrap(),
         )
     }
 }
@@ -211,12 +212,13 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 >(
     context: Context,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+    inference_code: InferenceCode,
+) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
     let events = create_events(context, parameters);
 
     // Then we create a time-table using these events
-    create_time_table_from_events(events, context, parameters)
+    create_time_table_from_events(events, context, inference_code, parameters)
 }
 
 /// Creates a list of all the events (for the starts and ends of mandatory parts) of all the
@@ -441,14 +443,19 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table =
-        create_time_table_over_interval_from_scratch(context.as_readonly(), parameters)?;
+    let time_table = create_time_table_over_interval_from_scratch(
+        context.as_readonly(),
+        parameters,
+        inference_code,
+    )?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
+        inference_code,
         time_table.iter(),
         parameters,
         &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),

@@ -39,6 +39,7 @@ pub(crate) struct CumulativePropagationHandler {
     /// explanation and re-use it. Note that this will only be used for
     /// [`CumulativeExplanationType::Naive`] and [`CumulativeExplanationType::BigStep`].
     stored_profile_explanation: OnceCell<Rc<PropositionalConjunction>>,
+    inference_code: InferenceCode,
 }
 
 fn check_explanation(explanation: &PropositionalConjunction, context: PropagationContext) -> bool {
@@ -52,10 +53,14 @@ fn check_explanation(explanation: &PropositionalConjunction, context: Propagatio
 }
 
 impl CumulativePropagationHandler {
-    pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
+    pub(crate) fn new(
+        explanation_type: CumulativeExplanationType,
+        inference_code: InferenceCode,
+    ) -> Self {
         Self {
             explanation_type,
             stored_profile_explanation: OnceCell::new(),
+            inference_code,
         }
     }
 
@@ -110,6 +115,7 @@ impl CumulativePropagationHandler {
                         propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
                     ],
                     full_explanation,
+                    self.inference_code,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -117,6 +123,7 @@ impl CumulativePropagationHandler {
                     context,
                     profiles,
                     propagating_task,
+                    self.inference_code,
                 )
             }
         }
@@ -174,6 +181,7 @@ impl CumulativePropagationHandler {
                             <= profiles[0].start - propagating_task.processing_time
                     ],
                     full_explanation,
+                    self.inference_code,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -181,6 +189,7 @@ impl CumulativePropagationHandler {
                     context,
                     profiles,
                     propagating_task,
+                    self.inference_code,
                 )
             }
         }
@@ -222,6 +231,7 @@ impl CumulativePropagationHandler {
                 context.post(
                     predicate![propagating_task.start_variable >= profile.end + 1],
                     reason,
+                    self.inference_code,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -229,6 +239,7 @@ impl CumulativePropagationHandler {
                     context,
                     &[profile],
                     propagating_task,
+                    self.inference_code,
                 )
             }
         }
@@ -274,6 +285,7 @@ impl CumulativePropagationHandler {
                             <= profile.start - propagating_task.processing_time
                     ],
                     reason,
+                    self.inference_code,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -281,6 +293,7 @@ impl CumulativePropagationHandler {
                     context,
                     &[profile],
                     propagating_task,
+                    self.inference_code,
                 )
             }
         }
@@ -337,6 +350,7 @@ impl CumulativePropagationHandler {
                     context.post(
                         predicate![propagating_task.start_variable != time_point],
                         (*explanation).clone(),
+                        self.inference_code,
                     )?;
                 }
                 CumulativeExplanationType::Pointwise => {
@@ -368,6 +382,7 @@ impl CumulativePropagationHandler {
                     context.post(
                         predicate![propagating_task.start_variable != time_point],
                         explanation,
+                        self.inference_code,
                     )?;
                 }
             }

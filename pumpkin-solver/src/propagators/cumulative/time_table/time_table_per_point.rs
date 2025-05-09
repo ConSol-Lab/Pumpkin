@@ -9,6 +9,7 @@ use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::TimeTable;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -108,13 +109,17 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table =
-            create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
+        let time_table = create_time_table_per_point_from_scratch(
+            context.as_readonly(),
+            self.inference_code.unwrap(),
+            &self.parameters,
+        )?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
+            self.inference_code.unwrap(),
             time_table.values(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -178,6 +183,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     ) -> PropagationStatusCP {
         debug_propagate_from_scratch_time_table_point(
             &mut context,
+            self.inference_code.unwrap(),
             &self.parameters,
             &self.updatable_structures,
         )
@@ -197,8 +203,9 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     Context: ReadDomains + Copy,
 >(
     context: Context,
+    inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
-) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
+) -> Result<PerPointTimeTableType<Var>, PropagatorConflict> {
     let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
     // First we go over all tasks and determine their mandatory parts
     for task in parameters.tasks.iter() {
@@ -222,6 +229,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                     // overflow
                     return Err(create_conflict_explanation(
                         context,
+                        inference_code,
                         current_profile,
                         parameters.options.explanation_type,
                     ));
@@ -240,15 +248,21 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
+    inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(context.as_readonly(), parameters)?;
+    let time_table = create_time_table_per_point_from_scratch(
+        context.as_readonly(),
+        inference_code,
+        parameters,
+    )?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
+        inference_code,
         time_table.values(),
         parameters,
         &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),

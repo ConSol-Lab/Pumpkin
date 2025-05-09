@@ -22,14 +22,16 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: PropagationContext,
+    inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let error_from_scratch = create_time_table_per_point_from_scratch(context, parameters);
+    let error_from_scratch =
+        create_time_table_per_point_from_scratch(context, inference_code, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
         if let Err(Inconsistency::Conflict(conflict)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
-            conflict.conjunction == explanation_scratch
+            conflict.conjunction == explanation_scratch.conjunction
         } else {
             false
         }
