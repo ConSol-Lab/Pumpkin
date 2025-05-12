@@ -430,6 +430,9 @@ impl Solver {
     /// Add a constraint to the solver. This returns a [`ConstraintPoster`] which enables control
     /// on whether to add the constraint as-is, or whether to (half) reify it.
     ///
+    /// All constraints require a [`ConstraintTag`] to be supplied. See its documentation for more
+    /// information.
+    ///
     /// If none of the methods on [`ConstraintPoster`] are used, the constraint _is not_ actually
     /// added to the solver. In this case, a warning is emitted.
     ///
@@ -442,7 +445,11 @@ impl Solver {
     /// let a = solver.new_bounded_integer(0, 3);
     /// let b = solver.new_bounded_integer(0, 3);
     ///
-    /// solver.add_constraint(constraints::equals([a, b], 0)).post();
+    /// let constraint_tag = solver.new_constraint_tag();
+    ///
+    /// solver
+    ///     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+    ///     .post();
     /// ```
     pub fn add_constraint<Constraint>(
         &mut self,

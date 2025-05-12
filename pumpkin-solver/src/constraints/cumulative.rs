@@ -52,6 +52,8 @@ use crate::Solver;
 /// let start_1 = solver.new_bounded_integer(0, 4);
 /// let start_2 = solver.new_bounded_integer(0, 5);
 ///
+/// let constraint_tag = solver.new_constraint_tag();
+///
 /// let start_times = [start_0, start_1, start_2];
 /// let durations = [5, 2, 5];
 /// let resource_requirements = [1, 1, 2];
@@ -63,6 +65,7 @@ use crate::Solver;
 ///         durations.clone(),
 ///         resource_requirements.clone(),
 ///         resource_capacity,
+///         constraint_tag,
 ///     ))
 ///     .post();
 ///

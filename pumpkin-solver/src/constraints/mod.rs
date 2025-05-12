@@ -13,7 +13,12 @@
 //! let a = solver.new_bounded_integer(0, 3);
 //! let b = solver.new_bounded_integer(0, 3);
 //!
-//! solver.add_constraint(constraints::equals([a, b], 0)).post();
+//! // All constraints require a constraint tag.
+//! let constraint_tag = solver.new_constraint_tag();
+//!
+//! solver
+//!     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+//!     .post();
 //! ```
 //!
 //! # Note

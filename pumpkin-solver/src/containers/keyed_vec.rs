@@ -61,6 +61,8 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     ///
     /// # Example
     /// ```
+    /// # use pumpkin_solver::containers::StorageKey;
+    /// # use pumpkin_solver::containers::KeyedVec;
     /// struct Key(usize);
     ///
     /// impl StorageKey for Key {
@@ -79,7 +81,7 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     /// /// Create a value based on the specified key.
     /// fn create_value(key: Key) -> Value {
     ///     // ...
-    /// #   todo!()
+    /// #   Value
     /// }
     ///
     /// let mut keyed_vec: KeyedVec<Key, Value> = KeyedVec::default();

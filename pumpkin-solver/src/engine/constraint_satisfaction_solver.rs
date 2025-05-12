@@ -612,14 +612,18 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_solver::termination::Indefinite;
     /// # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
     /// let mut solver = Solver::default();
+    ///
+    /// // We use a dummy constraint tag for this example.
+    /// let constraint_tag = solver.new_constraint_tag();
+    ///
     /// let x = vec![
     ///     solver.new_literal().get_true_predicate(),
     ///     solver.new_literal().get_true_predicate(),
     ///     solver.new_literal().get_true_predicate(),
     /// ];
     ///
-    /// solver.add_clause([x[0], x[1], x[2]]);
-    /// solver.add_clause([x[0], !x[1], x[2]]);
+    /// solver.add_clause([x[0], x[1], x[2]], constraint_tag);
+    /// solver.add_clause([x[0], !x[1], x[2]], constraint_tag);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut termination = Indefinite;
