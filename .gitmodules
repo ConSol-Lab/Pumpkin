@@ -1,3 +1,9 @@
 [submodule "mdd-compile/minicpp"]
 	path = mdd-compile/minicpp
 	url = git@github.com:k-sidorov/minicpp.git
+[submodule "minicpp"]
+	path = minicpp
+	url = git@github.com:k-sidorov/minicpp.git
+[submodule "benchmark_suite"]
+	path = benchmark_suite
+	url = git@github.com:MiniZinc/minizinc-benchmarks.git

@@ -5,10 +5,10 @@ use std::hash::Hash;
 use crate::constraints::Constraint;
 use crate::ffi;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MddNode {
-    layer: usize,
-    index: usize,
+    pub layer: usize,
+    pub index: usize,
 }
 
 impl MddNode {
@@ -17,12 +17,11 @@ impl MddNode {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // TODO Remove when start inspecting the graph
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct MddEdge {
-    from: MddNode,
-    to: MddNode,
-    value: i32,
+    pub from: MddNode,
+    pub to: MddNode,
+    pub value: i32,
 }
 
 #[derive(Debug)]
