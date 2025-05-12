@@ -235,6 +235,7 @@ mod tests {
     #[test]
     fn reborrowing_remembers_next_local_id() {
         let mut watch_list = WatchListCP::default();
+        watch_list.grow();
         let mut trailed_values = TrailedValues::default();
         let mut proof_log = ProofLog::default();
         let propagator_id = PropagatorId(0);
