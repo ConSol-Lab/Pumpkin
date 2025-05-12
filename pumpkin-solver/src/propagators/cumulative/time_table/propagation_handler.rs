@@ -460,6 +460,7 @@ pub(crate) mod test_propagation_handler {
     use super::create_conflict_explanation;
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
+    use crate::containers::StorageKey;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
@@ -473,6 +474,7 @@ pub(crate) mod test_propagation_handler {
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::proof::InferenceCode;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::variables::DomainId;
@@ -486,7 +488,10 @@ pub(crate) mod test_propagation_handler {
 
     impl TestPropagationHandler {
         pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
-            let propagation_handler = CumulativePropagationHandler::new(explanation_type);
+            let propagation_handler = CumulativePropagationHandler::new(
+                explanation_type,
+                InferenceCode::create_from_index(0),
+            );
 
             let reason_store = ReasonStore::default();
             let assignments = Assignments::default();
@@ -518,11 +523,12 @@ pub(crate) mod test_propagation_handler {
 
             let reason = create_conflict_explanation(
                 PropagationContext::new(&self.assignments),
+                self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
             );
 
-            (reason, y)
+            (reason.conjunction, y)
         }
 
         pub(crate) fn set_up_example_lower_bound(

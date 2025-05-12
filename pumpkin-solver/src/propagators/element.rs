@@ -308,13 +308,15 @@ mod tests {
 
         let index = solver.new_variable(0, 3);
         let rhs = solver.new_variable(6, 9);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(index, 0, 2);
@@ -341,13 +343,15 @@ mod tests {
 
         let index = solver.new_variable(0, 3);
         let rhs = solver.new_variable(0, 20);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(rhs, 2, 15);
@@ -371,16 +375,18 @@ mod tests {
         let x_1 = solver.new_variable(0, 15);
         let x_2 = solver.new_variable(7, 9);
         let x_3 = solver.new_variable(14, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let index = solver.new_variable(1, 1);
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(x_1, 6, 9);
@@ -404,6 +410,7 @@ mod tests {
         let x_1 = solver.new_variable(0, 15);
         let x_2 = solver.new_variable(7, 9);
         let x_3 = solver.new_variable(14, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let index = solver.new_variable(0, 3);
         solver.remove(index, 1).expect("Value can be removed");
@@ -411,11 +418,12 @@ mod tests {
         let rhs = solver.new_variable(-10, 30);
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(rhs, 3, 15);

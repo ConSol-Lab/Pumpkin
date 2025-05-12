@@ -216,9 +216,11 @@ mod tests {
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
+    use crate::containers::StorageKey;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::proof::InferenceCode;
     use crate::variables::DomainId;
 
     #[test]
@@ -273,7 +275,11 @@ mod tests {
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
                     move |mut ctx: PropagationContextMut| {
-                        ctx.post(predicate![var >= 3], conjunction!())?;
+                        ctx.post(
+                            predicate![var >= 3],
+                            conjunction!(),
+                            InferenceCode::create_from_index(0),
+                        )?;
                         Ok(())
                     },
                     |_: PropagationContextWithTrailedValues| None,

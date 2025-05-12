@@ -479,6 +479,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -498,6 +499,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -511,6 +513,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let result = solver.new_propagator(TimeTableOverIntervalPropagator::new(
             &[
@@ -532,6 +535,7 @@ mod tests {
                 explanation_type: CumulativeExplanationType::Naive,
                 ..Default::default()
             },
+            constraint_tag,
         ));
 
         assert!(match result {
@@ -563,6 +567,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(0, 6);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -582,6 +587,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -599,6 +605,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -638,6 +645,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -648,6 +656,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -667,6 +676,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -692,6 +702,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -714,6 +725,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -734,6 +746,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -773,6 +786,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -808,6 +822,8 @@ mod tests {
         let b2 = solver.new_variable(5, 5);
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
+
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -852,6 +868,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -880,6 +897,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -902,6 +920,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -919,6 +938,7 @@ mod tests {
         let s1 = solver.new_variable(3, 3);
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -946,6 +966,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -964,6 +985,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(4, 4);
         let s2 = solver.new_variable(0, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -987,6 +1009,7 @@ mod tests {
                     allow_holes_in_domain: true,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);

@@ -39,6 +39,7 @@ fn main() {
     let horizon = processing_times.iter().sum::<usize>();
 
     let mut solver = Solver::default();
+    let constraint_tag = solver.new_constraint_tag();
 
     let start_variables = (0..n_tasks)
         .map(|i| solver.new_bounded_integer(0, (horizon - processing_times[i]) as i32))
@@ -65,14 +66,21 @@ fn main() {
             // equivelent to literal <=> (s_x - s_y <= -p_x)
             // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = constraints::less_than_or_equals(variables, -(processing_times[x] as i32))
-                .reify(&mut solver, literal);
+            let _ = constraints::less_than_or_equals(
+                variables,
+                -(processing_times[x] as i32),
+                constraint_tag,
+            )
+            .reify(&mut solver, literal);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_clause([
-                literal.get_true_predicate(),
-                precedence_literals[y][x].get_true_predicate(),
-            ]);
+            let _ = solver.add_clause(
+                [
+                    literal.get_true_predicate(),
+                    precedence_literals[y][x].get_true_predicate(),
+                ],
+                constraint_tag,
+            );
         }
     }
 

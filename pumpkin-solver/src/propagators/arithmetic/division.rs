@@ -387,9 +387,14 @@ mod tests {
         let numerator = solver.new_variable(1, 1);
         let denominator = solver.new_variable(2, 2);
         let rhs = solver.new_variable(2, 2);
+        let constraint_tag = solver.new_constraint_tag();
 
-        let propagator =
-            solver.new_propagator(DivisionPropagator::new(numerator, denominator, rhs));
+        let propagator = solver.new_propagator(DivisionArgs {
+            numerator,
+            denominator,
+            rhs,
+            constraint_tag,
+        });
 
         assert!(propagator.is_err());
     }

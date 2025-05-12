@@ -420,24 +420,36 @@ mod tests {
     #[test]
     fn test_smallest_cardinality_constraint() {
         let mut solver = Solver::default();
+        let constraint_tag = solver.new_constraint_tag();
         let xs = create_variables(&mut solver, 2);
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
-        assert!(solver.add_clause([xs[0].get_true_predicate()]).is_ok());
-        assert!(solver.add_clause([xs[1].get_true_predicate()]).is_err());
+        assert!(solver
+            .add_clause([xs[0].get_true_predicate()], constraint_tag)
+            .is_ok());
+        assert!(solver
+            .add_clause([xs[1].get_true_predicate()], constraint_tag)
+            .is_err());
     }
 
     #[test]
     fn test_small_cardinality_constraint() {
         let mut solver = Solver::default();
+        let constraint_tag = solver.new_constraint_tag();
         let xs = create_variables(&mut solver, 3);
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
-        assert!(solver.add_clause([xs[0].get_true_predicate()]).is_ok());
-        assert!(solver.add_clause([xs[1].get_true_predicate()]).is_ok());
-        assert!(solver.add_clause([xs[2].get_true_predicate()]).is_err());
+        assert!(solver
+            .add_clause([xs[0].get_true_predicate()], constraint_tag)
+            .is_ok());
+        assert!(solver
+            .add_clause([xs[1].get_true_predicate()], constraint_tag)
+            .is_ok());
+        assert!(solver
+            .add_clause([xs[2].get_true_predicate()], constraint_tag)
+            .is_err());
     }
 
     fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {

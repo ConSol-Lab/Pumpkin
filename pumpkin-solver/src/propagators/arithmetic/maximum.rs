@@ -90,7 +90,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
             // Rule 1.
-            // UB(a_i) <= UB(rhs)
+            // UB(a_i) <= UB(rhs, constraint_tag }
             context.post(
                 predicate![var <= rhs_ub],
                 conjunction!([self.rhs <= rhs_ub]),
@@ -110,7 +110,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             }
         }
         // Rule 2.
-        // LB(rhs) >= max{LB(a_i)}.
+        // LB(rhs, constraint_tag } >= max{LB(a_i)}.
         context.post(
             predicate![self.rhs >= max_lb],
             PropositionalConjunction::from(lb_reason),
@@ -118,9 +118,9 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         )?;
 
         // Rule 3.
-        // UB(rhs) <= max{UB(a_i)}.
+        // UB(rhs, constraint_tag } <= max{UB(a_i)}.
         // Note that this implicitly also covers the rule:
-        // 'if LB(rhs) > UB(a_i) for all i, then conflict'.
+        // 'if LB(rhs, constraint_tag } > UB(a_i) for all i, then conflict'.
         if rhs_ub > max_ub {
             let ub_reason: PropositionalConjunction = self
                 .array
@@ -135,7 +135,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         }
 
         // Rule 4.
-        // If there is only one variable with UB(a_i) >= LB(rhs),
+        // If there is only one variable with UB(a_i) >= LB(rhs, constraint_tag },
         // then the bounds for rhs and that variable should be intersected.
         let rhs_lb = context.lower_bound(&self.rhs);
         let mut propagating_variable: Option<&ElementVar> = None;
@@ -152,9 +152,10 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 propagation_reason.add(predicate![var <= rhs_lb - 1]);
             }
         }
-        // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is
-        // Some. In that case, intersect the bounds of that variable and the rhs. Given previous
-        // rules, only the lower bound of the propagated variable needs to be propagated.
+        // If there is exactly one variable UB(a_i) >= LB(rhs, constraint_tag }, then the
+        // propagating variable is Some. In that case, intersect the bounds of that variable
+        // and the rhs. Given previous rules, only the lower bound of the propagated
+        // variable needs to be propagated.
         if let Some(propagating_variable) = propagating_variable {
             let var_lb = context.lower_bound(propagating_variable);
             if var_lb < rhs_lb {
@@ -185,9 +186,14 @@ mod tests {
         let c = solver.new_variable(1, 5);
 
         let rhs = solver.new_variable(1, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
+            .new_propagator(MaximumArgs {
+                array: [a, b, c].into(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 1, 5);
@@ -205,9 +211,14 @@ mod tests {
         let c = solver.new_variable(5, 10);
 
         let rhs = solver.new_variable(1, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
+            .new_propagator(MaximumArgs {
+                array: [a, b, c].into(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 5, 10);
@@ -225,9 +236,14 @@ mod tests {
             .collect::<Box<_>>();
 
         let rhs = solver.new_variable(1, 3);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
+            .new_propagator(MaximumArgs {
+                array: array.clone(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         for var in array.iter() {
@@ -246,9 +262,14 @@ mod tests {
             .collect::<Box<_>>();
 
         let rhs = solver.new_variable(45, 60);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
+            .new_propagator(MaximumArgs {
+                array: array.clone(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(*array.last().unwrap(), 45, 51);

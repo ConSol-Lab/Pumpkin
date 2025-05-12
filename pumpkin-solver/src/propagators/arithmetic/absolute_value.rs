@@ -159,9 +159,14 @@ mod tests {
 
         let signed = solver.new_variable(-3, 4);
         let absolute = solver.new_variable(-2, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -173,9 +178,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, 5);
         let absolute = solver.new_variable(0, 3);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -187,9 +197,14 @@ mod tests {
 
         let signed = solver.new_variable(3, 6);
         let absolute = solver.new_variable(0, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -201,9 +216,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, -3);
         let absolute = solver.new_variable(1, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -215,9 +235,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, 0);
         let absolute = solver.new_variable(1, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -229,9 +254,14 @@ mod tests {
 
         let signed = solver.new_variable(1, 5);
         let absolute = solver.new_variable(3, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);
