@@ -57,21 +57,19 @@ where
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
 /// propagator.
 ///
-/// By default, the propagator 'p' only propagates whenever `r` is set to true.
-/// However, if the propagator 'p' implements [`Propagator::detect_inconsistency`], the result of
-/// that method may be used to propagate `r` to false. If that method is not implemented, `r` will
-/// never be propagated to false.
+/// When a propagator is reified, it will only propagate whenever `r` is set to true. However, if
+/// the propagator implements [`Propagator::detect_inconsistency`], the result of that method may
+/// be used to propagate `r` to false. If that method is not implemented, `r` will never be
+/// propagated to false.
 #[derive(Clone, Debug)]
 pub(crate) struct ReifiedPropagator<WrappedPropagator> {
+    propagator: WrappedPropagator,
     reification_literal: Literal,
+    /// The formatted name of the propagator.
+    name: String,
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
     reification_literal_id: LocalId,
-    propagator: WrappedPropagator,
-    /// An inconsistency that is identified by `propagator`.
-    inconsistency: Option<PropositionalConjunction>,
-    /// The formatted name of the propagator.
-    name: String,
 }
 
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {

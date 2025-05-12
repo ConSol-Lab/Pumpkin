@@ -98,36 +98,15 @@ impl ConflictAnalysisContext<'_> {
     /// Returns a nogood which led to the conflict, excluding predicates from the root decision
     /// level.
     pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
-        match self.solver_state.get_conflict_info() {
+        let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
                 );
-                conflict
-                    .conjunction
-                    .iter()
-                    .filter(|p| {
-                        // filter out root predicates
-                        self.assignments
-                            .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0)
-                    })
-                    .copied()
-                    .collect()
-            }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => {
-                conflict_nogood
-                    .iter()
-                    .filter(|p| {
-                        // filter out root predicates
-                        self.assignments
-                            .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0)
-                    })
-                    .copied()
-                    .collect()
+
+                conflict.conjunction
             }
             StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood,
             StoredConflictInfo::RootLevelConflict(_) => {

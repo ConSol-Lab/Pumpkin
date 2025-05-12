@@ -22,6 +22,8 @@ pub use inference_code::*;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
+use crate::containers::KeyedVec;
+use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
 use crate::variables::Literal;
