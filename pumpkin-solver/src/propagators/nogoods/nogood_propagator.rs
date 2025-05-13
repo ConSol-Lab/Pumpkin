@@ -6,6 +6,7 @@ use log::warn;
 use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
+use super::NogoodInfo;
 use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::Inconsistency;
@@ -31,7 +32,6 @@ use crate::engine::DomainFaithfulness;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
-use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -46,8 +46,14 @@ use crate::pumpkin_assert_simple;
 /// track of watch lists.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct NogoodPropagator {
-    /// The list of currently stored nogoods
-    nogoods: KeyedVec<NogoodId, Nogood>,
+    /// The predicates corresponding to each Nogood.
+    nogood_predicates: KeyedVec<NogoodId, Vec<Predicate>>,
+    /// The information corresponding to each nogood; including activity, and lbd.
+    nogood_info: KeyedVec<NogoodId, NogoodInfo>,
+    /// For each nogood, this structure stores the predicate which was last found to be falsified;
+    /// we store this predicate to allow for simple checking of whether a nogood might be
+    /// satisfied
+    cached_predicates: KeyedVec<NogoodId, Predicate>,
     /// Nogoods which are permanently present
     permanent_nogoods: Vec<NogoodId>,
     /// The ids of the nogoods sorted based on whether they have a "low" LBD score or a "high" LBD
@@ -97,10 +103,10 @@ impl NogoodPropagator {
         reason_store: &ReasonStore,
         id: NogoodId,
     ) -> bool {
-        if context.is_predicate_falsified(self.nogoods[id].predicates[0]) {
+        if context.is_predicate_falsified(self.nogood_predicates[id][0]) {
             let trail_position = context
                 .assignments()
-                .get_trail_position(&!self.nogoods[id].predicates[0])
+                .get_trail_position(&!self.nogood_predicates[id][0])
                 .unwrap();
             let trail_entry = context.assignments().get_trail_entry(trail_position);
             if let Some(reason_ref) = trail_entry.reason {
@@ -202,11 +208,11 @@ impl Propagator for NogoodPropagator {
 
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
-                if context.is_predicate_falsified(self.nogoods[nogood_id].cached_predicate) {
+                if context.is_predicate_falsified(self.cached_predicates[nogood_id]) {
                     index += 1;
                     continue;
                 }
-                let nogood_predicates = &mut self.nogoods[nogood_id].predicates;
+                let nogood_predicates = &mut self.nogood_predicates[nogood_id];
 
                 // Place the watched predicate at position 1 for simplicity.
                 if Self::is_watched_predicate(nogood_predicates[0], &predicate_id, &mut context) {
@@ -219,7 +225,7 @@ impl Propagator for NogoodPropagator {
                 // no propagation can take place. Recall that the other watched
                 // predicate is at position 0 due to previous code.
                 if context.is_predicate_falsified(nogood_predicates[0]) {
-                    self.nogoods[nogood_id].cached_predicate = nogood_predicates[0];
+                    self.cached_predicates[nogood_id] = nogood_predicates[0];
                     index += 1;
                     continue;
                 }
@@ -297,7 +303,7 @@ impl Propagator for NogoodPropagator {
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
-        for nogood_id in self.nogoods.keys() {
+        for nogood_id in self.nogood_predicates.keys() {
             self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
         }
         Ok(())
@@ -315,46 +321,46 @@ impl Propagator for NogoodPropagator {
         // Update the LBD and activity of the nogood, if appropriate.
         //
         // Note that low lbd nogoods are kept permanently, so these are not updated.
-        if !self.nogoods[id].block_bumps
-            && self.nogoods[id].is_learned
-            && self.nogoods[id].lbd > self.parameters.lbd_threshold
+        if !self.nogood_info[id].block_bumps
+            && self.nogood_info[id].is_learned
+            && self.nogood_info[id].lbd > self.parameters.lbd_threshold
         {
-            self.nogoods[id].block_bumps = true;
+            self.nogood_info[id].block_bumps = true;
             self.bumped_nogoods.push(id);
             // LBD update.
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
-                &self.nogoods[id].predicates.as_slice()[1..],
+                &self.nogood_predicates[id].as_slice()[1..],
                 #[allow(deprecated, reason = "should be refactored later")]
                 context.assignments(),
             );
 
             // The nogood keeps track of the best lbd encountered.
-            if current_lbd < self.nogoods[id].lbd {
-                self.nogoods[id].lbd = current_lbd;
+            if current_lbd < self.nogood_info[id].lbd {
+                self.nogood_info[id].lbd = current_lbd;
                 if current_lbd <= 30 {
-                    self.nogoods[id].is_protected = true;
+                    self.nogood_info[id].is_protected = true;
                 }
             }
 
             // Nogood activity update.
             // Rescale the nogood activities,
             // in case bumping the activity now would lead to a large activity value.
-            if self.nogoods[id].activity + self.parameters.activity_bump_increment
+            if self.nogood_info[id].activity + self.parameters.activity_bump_increment
                 > self.parameters.max_activity
             {
                 self.learned_nogood_ids.high_lbd.iter().for_each(|i| {
-                    self.nogoods[*i].activity /= self.parameters.max_activity;
+                    self.nogood_info[*i].activity /= self.parameters.max_activity;
                 });
                 self.parameters.activity_bump_increment /= self.parameters.max_activity;
             }
 
             // At this point, it is safe to increase the activity value
-            self.nogoods[id].activity += self.parameters.activity_bump_increment;
+            self.nogood_info[id].activity += self.parameters.activity_bump_increment;
         }
         // update LBD, so we need code plus assignments as input.
-        &self.nogoods[id].predicates.as_slice()[1..]
+        &self.nogood_predicates[id].as_slice()[1..]
     }
 
     fn initialise_at_root(
@@ -362,7 +368,7 @@ impl Propagator for NogoodPropagator {
         _context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         // There should be no nogoods yet
-        pumpkin_assert_simple!(self.nogoods.len() == 0);
+        pumpkin_assert_simple!(self.nogood_predicates.len() == 0);
         Ok(())
     }
 }
@@ -408,16 +414,17 @@ impl NogoodPropagator {
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
         let new_id = if let Some(reused_id) = self.delete_ids.pop() {
-            self.nogoods[reused_id] = Nogood::new_learned_nogood(nogood.into(), lbd);
+            self.cached_predicates[reused_id] = nogood[0];
+            self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood_info(lbd);
+            self.nogood_predicates[reused_id] = nogood;
             reused_id
         } else {
-            let new_nogood_id = NogoodId {
-                id: self.nogoods.len() as u32,
-            };
+            let new_id = self.cached_predicates.push(nogood[0]);
             let _ = self
-                .nogoods
-                .push(Nogood::new_learned_nogood(nogood.into(), lbd));
-            new_nogood_id
+                .nogood_info
+                .push(NogoodInfo::new_learned_nogood_info(lbd));
+            let _ = self.nogood_predicates.push(nogood);
+            new_id
         };
 
         // Now we add two watchers to the first two predicates in the nogood
@@ -425,7 +432,7 @@ impl NogoodPropagator {
             context.domain_faithfulness,
             context.trailed_values,
             &mut self.watch_lists,
-            self.nogoods[new_id].predicates[0],
+            self.nogood_predicates[new_id][0],
             new_id,
             context.assignments,
         );
@@ -433,7 +440,7 @@ impl NogoodPropagator {
             context.domain_faithfulness,
             context.trailed_values,
             &mut self.watch_lists,
-            self.nogoods[new_id].predicates[1],
+            self.nogood_predicates[new_id][1],
             new_id,
             context.assignments,
         );
@@ -442,7 +449,7 @@ impl NogoodPropagator {
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(new_id.id as u64);
         context
-            .post_predicate(!self.nogoods[new_id].predicates[0], reason)
+            .post_predicate(!self.nogood_predicates[new_id][0], reason)
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then divide the new nogood based on the LBD level
@@ -506,11 +513,17 @@ impl NogoodPropagator {
             // Add the nogood to the database.
             // If there is an available nogood id, use it, otherwise allocate a fresh id.
             let new_id = if let Some(reused_id) = self.delete_ids.pop() {
-                self.nogoods[reused_id] = Nogood::new_permanent_nogood(nogood.into());
+                self.cached_predicates[reused_id] = nogood[0];
+                self.nogood_info[reused_id] = NogoodInfo::new_permanent_nogood_info();
+                self.nogood_predicates[reused_id] = nogood;
                 reused_id
             } else {
-                self.nogoods
-                    .push(Nogood::new_permanent_nogood(nogood.into()))
+                let new_id = self.cached_predicates.push(nogood[0]);
+                let _ = self
+                    .nogood_info
+                    .push(NogoodInfo::new_permanent_nogood_info());
+                let _ = self.nogood_predicates.push(nogood);
+                new_id
             };
 
             self.permanent_nogoods.push(new_id);
@@ -519,7 +532,7 @@ impl NogoodPropagator {
                 context.domain_faithfulness,
                 context.trailed_values,
                 &mut self.watch_lists,
-                self.nogoods[new_id].predicates[0],
+                self.nogood_predicates[new_id][0],
                 new_id,
                 context.assignments,
             );
@@ -527,7 +540,7 @@ impl NogoodPropagator {
                 context.domain_faithfulness,
                 context.trailed_values,
                 &mut self.watch_lists,
-                self.nogoods[new_id].predicates[1],
+                self.nogood_predicates[new_id][1],
                 new_id,
                 context.assignments,
             );
@@ -600,7 +613,7 @@ impl NogoodPropagator {
     fn promote_high_lbd_nogoods(&mut self) {
         self.learned_nogood_ids.high_lbd.retain(|id| {
             // If the LBD is still high, the nogood stays in the high LBD category.
-            if self.nogoods[*id].lbd > self.parameters.lbd_threshold {
+            if self.nogood_info[*id].lbd > self.parameters.lbd_threshold {
                 true
             }
             // Otherwise the nogood is promoted to the low LBD group.
@@ -639,8 +652,8 @@ impl NogoodPropagator {
             }
 
             // Protected clauses are skipped for one clean up iteration.
-            if self.nogoods[id].is_protected {
-                self.nogoods[id].is_protected = false;
+            if self.nogood_info[id].is_protected {
+                self.nogood_info[id].is_protected = false;
                 continue;
             }
 
@@ -652,14 +665,14 @@ impl NogoodPropagator {
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
                 domain_faithfulness
-                    .get_id_for_predicate(self.nogoods[id].predicates[0])
+                    .get_id_for_predicate(self.nogood_predicates[id][0])
                     .unwrap(),
                 id,
             );
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
                 domain_faithfulness
-                    .get_id_for_predicate(self.nogoods[id].predicates[1])
+                    .get_id_for_predicate(self.nogood_predicates[id][1])
                     .unwrap(),
                 id,
             );
@@ -669,7 +682,7 @@ impl NogoodPropagator {
             // Note that the deleted nogood is still kept in the database but it will not be used
             // for propagation. A new nogood may take the place of a deleted nogood, this makes it
             // simpler, since other nogood ids remain unchanged.
-            self.nogoods[id].is_deleted = true;
+            self.nogood_info[id].is_deleted = true;
             self.delete_ids.push(id);
 
             num_clauses_to_remove -= 1;
@@ -679,7 +692,7 @@ impl NogoodPropagator {
         // remove it from the database.
         self.learned_nogood_ids
             .high_lbd
-            .retain(|&id| !self.nogoods[id].is_deleted);
+            .retain(|&id| !self.nogood_info[id].is_deleted);
     }
 
     /// Orders the `high_lbd` nogoods in such a way that the 'better' nogoods are in front.
@@ -690,8 +703,8 @@ impl NogoodPropagator {
         self.learned_nogood_ids
             .high_lbd
             .sort_unstable_by(|&id1, &id2| {
-                let nogood1 = &self.nogoods[id1];
-                let nogood2 = &self.nogoods[id2];
+                let nogood1 = &self.nogood_info[id1];
+                let nogood2 = &self.nogood_info[id2];
 
                 match self.parameters.nogood_sorting_strategy {
                     LearnedNogoodSortingStrategy::Activity => {
@@ -718,7 +731,7 @@ impl NogoodPropagator {
     pub(crate) fn decay_nogood_activities(&mut self) {
         self.parameters.activity_bump_increment /= self.parameters.activity_decay_factor;
         for &id in &self.bumped_nogoods {
-            self.nogoods[id].block_bumps = false;
+            self.nogood_info[id].block_bumps = false;
         }
         self.bumped_nogoods.clear();
     }
@@ -775,9 +788,9 @@ impl NogoodPropagator {
         context: &mut PropagationContextMut,
     ) -> Result<(), Inconsistency> {
         // This is an inefficient implementation for testing purposes
-        let nogood = &self.nogoods[nogood_id];
+        let nogood = &self.nogood_predicates[nogood_id];
 
-        if nogood.is_deleted {
+        if self.nogood_info[nogood_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to
             // `propagate` would not find any propagations using it due to the watchers being
             // deleted
@@ -786,7 +799,6 @@ impl NogoodPropagator {
 
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood
-            .predicates
             .iter()
             .any(|predicate| context.evaluate_predicate(*predicate).is_some_and(|x| !x));
 
@@ -796,18 +808,15 @@ impl NogoodPropagator {
         }
 
         let num_satisfied_predicates = nogood
-            .predicates
             .iter()
             .filter(|predicate| context.evaluate_predicate(**predicate).is_some_and(|x| x))
             .count();
 
-        let nogood_len = nogood.predicates.len();
+        let nogood_len = nogood.len();
 
         // If all predicates in the nogood are satisfied, there is a conflict.
         if num_satisfied_predicates == nogood_len {
-            return Err(Inconsistency::Conflict(
-                nogood.predicates.iter().copied().collect(),
-            ));
+            return Err(Inconsistency::Conflict(nogood.iter().copied().collect()));
         }
         // If all but one predicate are satisfied, then we can propagate.
         //
@@ -816,16 +825,12 @@ impl NogoodPropagator {
         else if num_satisfied_predicates == nogood_len - 1 {
             // Note that we negate the remaining unassigned predicate!
             let propagated_predicate = nogood
-                .predicates
                 .iter()
                 .find(|predicate| context.evaluate_predicate(**predicate).is_none())
                 .unwrap()
                 .not();
 
-            assert!(nogood
-                .predicates
-                .iter()
-                .any(|p| *p == propagated_predicate.not()));
+            assert!(nogood.iter().any(|p| *p == propagated_predicate.not()));
 
             // Cannot use lazy explanations when propagating from scratch
             // since the propagated predicate may not be at position zero.
@@ -833,7 +838,6 @@ impl NogoodPropagator {
             //
             // So an eager reason is constructed
             let reason: PropositionalConjunction = nogood
-                .predicates
                 .iter()
                 .filter(|p| **p != !propagated_predicate)
                 .copied()
@@ -854,39 +858,27 @@ impl NogoodPropagator {
             self.watch_lists[predicate_id].watchers.contains(&nogood_id)
         };
 
-        for nogood in self.nogoods.iter().enumerate() {
+        for nogood in self.nogood_predicates.iter().enumerate() {
             let nogood_id = NogoodId {
                 id: nogood.0 as u32,
             };
 
-            if nogood.1.is_deleted {
+            if self.nogood_info[nogood_id].is_deleted {
                 // If the clause is deleted then it will have no watchers
                 assert!(
-                    !is_watching(nogood.1.predicates[0], nogood_id)
-                        && !is_watching(nogood.1.predicates[1], nogood_id)
+                    !is_watching(nogood.1[0], nogood_id) && !is_watching(nogood.1[1], nogood_id)
                 );
                 continue;
             }
 
-            if !(is_watching(nogood.1.predicates[0], nogood_id)
-                && is_watching(nogood.1.predicates[1], nogood_id))
-            {
+            if !(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id)) {
                 eprintln!("Nogood id: {}", nogood_id.id);
                 eprintln!("Nogood: {nogood:?}");
-                eprintln!(
-                    "watching 0: {}",
-                    is_watching(nogood.1.predicates[0], nogood_id)
-                );
-                eprintln!(
-                    "watching 1: {}",
-                    is_watching(nogood.1.predicates[1], nogood_id)
-                );
+                eprintln!("watching 0: {}", is_watching(nogood.1[0], nogood_id));
+                eprintln!("watching 1: {}", is_watching(nogood.1[1], nogood_id));
             }
 
-            assert!(
-                is_watching(nogood.1.predicates[0], nogood_id)
-                    && is_watching(nogood.1.predicates[1], nogood_id)
-            );
+            assert!(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id));
         }
         true
     }
