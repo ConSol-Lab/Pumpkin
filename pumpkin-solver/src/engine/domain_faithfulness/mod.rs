@@ -1,5 +1,5 @@
 mod faithfulness;
-mod faithfulness_list;
-mod watchers;
+mod faithfulness_for_domain;
+mod trackers;
 
 pub(crate) use faithfulness::*;

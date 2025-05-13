@@ -315,7 +315,7 @@ impl ConstraintSatisfactionSolver {
         });
 
         for (event, domain) in self.event_drain.drain(..) {
-            // Special case: the nogood propagator is notified about each event.
+            // First we notify the domain faithfulness that a domain has been updated
             match event {
                 IntDomainEvent::Assign => {
                     info!("Reached eq");
@@ -354,6 +354,7 @@ impl ConstraintSatisfactionSolver {
                         })
                 }
             }
+            // Special case: the nogood propagator is notified about each event.
             Self::notify_nogood_propagator(
                 event,
                 domain,
@@ -378,16 +379,23 @@ impl ConstraintSatisfactionSolver {
             }
         }
 
+        // Then we notify the propagators that a predicate has been satisfied
         self.notify_predicate_id_satisfied();
         self.notify_predicate_id_falsified();
 
         self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
     }
 
+    /// Notifies propagators that certain [`Predicate`]s have been falsified.
+    ///
+    /// Currently, no propagators are informed of this information.
     fn notify_predicate_id_falsified(&mut self) {
         // At the moment this does nothing
     }
 
+    /// Notifies propagators that certain [`Predicate`]s have been satisfied.
+    ///
+    /// Currently, only the [`NogoodPropagator`] is notified.
     fn notify_predicate_id_satisfied(&mut self) {
         for predicate_id in self
             .domain_faithfulness
@@ -724,7 +732,6 @@ impl ConstraintSatisfactionSolver {
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
-                    domain_faithfulness: &mut self.domain_faithfulness,
                     trailed_values: &mut self.trailed_values,
                 };
 
@@ -796,7 +803,6 @@ impl ConstraintSatisfactionSolver {
                 &mut self.backtrack_event_drain,
                 0,
                 brancher,
-                &mut self.domain_faithfulness,
                 &mut self.trailed_values,
             );
             self.state.declare_ready();
@@ -973,7 +979,6 @@ impl ConstraintSatisfactionSolver {
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
-            domain_faithfulness: &mut self.domain_faithfulness,
             trailed_values: &mut self.trailed_values,
         };
 
@@ -1112,7 +1117,6 @@ impl ConstraintSatisfactionSolver {
             &mut self.backtrack_event_drain,
             0,
             brancher,
-            &mut self.domain_faithfulness,
             &mut self.trailed_values,
         );
 
@@ -1134,11 +1138,9 @@ impl ConstraintSatisfactionSolver {
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
-        domain_faithfulness: &mut DomainFaithfulness,
         trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
-        domain_faithfulness.backtrack_has_occurred();
 
         brancher.on_backtrack();
 

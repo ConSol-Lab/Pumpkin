@@ -16,7 +16,6 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::DomainFaithfulness;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
@@ -52,7 +51,6 @@ pub(crate) struct ConflictAnalysisContext<'a> {
 
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) trailed_values: &'a mut TrailedValues,
-    pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -87,7 +85,6 @@ impl ConflictAnalysisContext<'_> {
             self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
-            self.domain_faithfulness,
             self.trailed_values,
         )
     }

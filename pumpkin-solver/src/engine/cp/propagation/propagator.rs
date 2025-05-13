@@ -119,8 +119,14 @@ pub(crate) trait Propagator: Downcast {
     ) {
     }
 
+    /// Called when a [`PredicateId`] has been satisfied.
+    ///
+    /// By default, the propagator does nothing when this method is called.
     fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
 
+    /// Called when a [`PredicateId`] has been falsified.
+    ///
+    /// By default, the propagator does nothing when this method is called.
     #[allow(dead_code, reason = "Will be part of the public API")]
     fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
 
