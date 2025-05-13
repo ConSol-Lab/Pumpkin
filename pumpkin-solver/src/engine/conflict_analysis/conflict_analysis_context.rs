@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-
 use drcp_format::steps::StepId;
 
 use super::minimisers::SemanticMinimiser;
