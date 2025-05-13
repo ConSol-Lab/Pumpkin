@@ -395,7 +395,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     ///
     /// This should update the appropriate structures of the [`DomainTracker`] and add the
     /// satisfied (falsified) [`Predicate`]s to `satisfied_predicates` (`falsified_predicates`).
-    fn has_been_updated(
+    fn on_update(
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,

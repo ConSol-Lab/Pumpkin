@@ -67,9 +67,9 @@ impl DomainFaithfulness {
     /// Method which is called when an update to a [`DomainId`] has taken place (provided in the
     /// form of a [Predicate]).
     ///
-    /// This method will pass it along to the correct [`Faithfulness::has_been_updated`]
+    /// This method will pass it along to the correct [`Faithfulness::on_update`]
     /// corresponding to the [`DomainId`] for which the update took place.
-    pub(crate) fn has_been_updated(
+    pub(crate) fn on_update(
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
@@ -87,7 +87,7 @@ impl DomainFaithfulness {
         );
 
         // Otherwise we update the structures
-        self.domain_id_to_faithfullness[predicate.get_domain()].has_been_updated(
+        self.domain_id_to_faithfullness[predicate.get_domain()].on_update(
             predicate,
             trailed_values,
             &mut self.falsified_predicates,

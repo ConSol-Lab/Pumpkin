@@ -77,7 +77,7 @@ impl DomainFaithfulnessForDomain {
     ///
     /// This method will pass it along to the correct tracker; if no [`Predicate`] are being
     /// watched by the corresponding tracker then no updates will take place.
-    pub(crate) fn has_been_updated(
+    pub(crate) fn on_update(
         &mut self,
         predicate: Predicate,
         stateful_trail: &mut TrailedValues,
@@ -86,7 +86,7 @@ impl DomainFaithfulnessForDomain {
         predicate_id: Option<PredicateId>,
     ) {
         if !self.lower_bound.is_empty() {
-            self.lower_bound.has_been_updated(
+            self.lower_bound.on_update(
                 predicate,
                 stateful_trail,
                 falsified_predicates,
@@ -96,7 +96,7 @@ impl DomainFaithfulnessForDomain {
         }
 
         if !self.upper_bound.is_empty() {
-            self.upper_bound.has_been_updated(
+            self.upper_bound.on_update(
                 predicate,
                 stateful_trail,
                 falsified_predicates,
@@ -106,7 +106,7 @@ impl DomainFaithfulnessForDomain {
         }
 
         if !self.disequality.is_empty() {
-            self.disequality.has_been_updated(
+            self.disequality.on_update(
                 predicate,
                 stateful_trail,
                 falsified_predicates,
@@ -116,7 +116,7 @@ impl DomainFaithfulnessForDomain {
         }
 
         if !self.equality.is_empty() {
-            self.equality.has_been_updated(
+            self.equality.on_update(
                 predicate,
                 stateful_trail,
                 falsified_predicates,

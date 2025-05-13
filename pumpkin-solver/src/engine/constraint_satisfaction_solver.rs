@@ -319,7 +319,7 @@ impl ConstraintSatisfactionSolver {
             match event {
                 IntDomainEvent::Assign => {
                     info!("Reached eq");
-                    self.domain_faithfulness.has_been_updated(
+                    self.domain_faithfulness.on_update(
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
                         &mut self.trailed_values,
                         &self.assignments,
@@ -327,7 +327,7 @@ impl ConstraintSatisfactionSolver {
                 }
                 IntDomainEvent::LowerBound => {
                     info!("Reached lb");
-                    self.domain_faithfulness.has_been_updated(
+                    self.domain_faithfulness.on_update(
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
                         &mut self.trailed_values,
                         &self.assignments,
@@ -335,7 +335,7 @@ impl ConstraintSatisfactionSolver {
                 }
                 IntDomainEvent::UpperBound => {
                     info!("Reached ub");
-                    self.domain_faithfulness.has_been_updated(
+                    self.domain_faithfulness.on_update(
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
                         &mut self.trailed_values,
                         &self.assignments,
@@ -346,7 +346,7 @@ impl ConstraintSatisfactionSolver {
                     self.assignments
                         .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
                         .for_each(|value| {
-                            self.domain_faithfulness.has_been_updated(
+                            self.domain_faithfulness.on_update(
                                 predicate!(domain != value),
                                 &mut self.trailed_values,
                                 &self.assignments,

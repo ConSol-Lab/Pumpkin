@@ -112,7 +112,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        self.domain_faithfulness.has_been_updated(
+        self.domain_faithfulness.on_update(
             predicate!(var >= value),
             &mut self.trailed_values,
             &self.assignments,
@@ -152,7 +152,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        self.domain_faithfulness.has_been_updated(
+        self.domain_faithfulness.on_update(
             predicate!(var <= value),
             &mut self.trailed_values,
             &self.assignments,

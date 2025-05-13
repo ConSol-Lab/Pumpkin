@@ -35,7 +35,7 @@ impl DomainTracker for EqualityTracker {
         predicate!(self.watcher.domain_id == value)
     }
 
-    fn has_been_updated(
+    fn on_update(
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
