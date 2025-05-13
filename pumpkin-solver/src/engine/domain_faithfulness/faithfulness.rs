@@ -100,7 +100,7 @@ impl DomainFaithfulness {
 
     /// This method will extend the scope of [`DomainFaithfulness`] by adding the provided
     /// [`Predicate`] to its scope.
-    pub(crate) fn watch_predicate(
+    pub(crate) fn track_predicate(
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,

@@ -557,7 +557,7 @@ impl NogoodPropagator {
         }
 
         let predicate_id =
-            domain_faithfulness.watch_predicate(predicate, trailed_values, assignments);
+            domain_faithfulness.track_predicate(predicate, trailed_values, assignments);
         while watch_lists.len() <= predicate_id.index() {
             let _ = watch_lists.push(NogoodWatchList::default());
         }
@@ -900,7 +900,6 @@ mod tests {
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
-    use crate::engine::DomainFaithfulness;
     use crate::predicate;
 
     fn downcast_to_nogood_propagator(
@@ -926,7 +925,6 @@ mod tests {
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
-        let mut domain_faithfulness = DomainFaithfulness::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -935,7 +933,7 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
-                &mut domain_faithfulness,
+                &mut solver.domain_faithfulness,
                 propagator,
             );
 
@@ -969,7 +967,6 @@ mod tests {
         let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
-        let mut domain_faithfulness = DomainFaithfulness::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -978,7 +975,7 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
-                &mut domain_faithfulness,
+                &mut solver.domain_faithfulness,
                 propagator,
             );
 

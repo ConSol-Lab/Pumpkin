@@ -26,6 +26,7 @@ use crate::engine::DomainEvents;
 use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
+use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -36,7 +37,7 @@ pub(crate) struct TestSolver {
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
-    domain_faithfulness: DomainFaithfulness,
+    pub domain_faithfulness: DomainFaithfulness,
     watch_list: WatchListCP,
 }
 
@@ -111,9 +112,14 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        self.domain_faithfulness.has_been_updated(
+            predicate!(var >= value),
+            &mut self.trailed_values,
+            &self.assignments,
+        );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
-        self.propagator_store[propagator].notify(
+        let decision = self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
             OpaqueDomainEvent::from(
@@ -123,7 +129,18 @@ impl TestSolver {
                     .next()
                     .unwrap(),
             ),
-        )
+        );
+        self.domain_faithfulness
+            .drain_satisfied_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
+            });
+        self.domain_faithfulness
+            .drain_falsified_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
+            });
+        decision
     }
 
     pub(crate) fn decrease_upper_bound_and_notify(
@@ -135,9 +152,14 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        self.domain_faithfulness.has_been_updated(
+            predicate!(var <= value),
+            &mut self.trailed_values,
+            &self.assignments,
+        );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
-        self.propagator_store[propagator].notify(
+        let decision = self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
             OpaqueDomainEvent::from(
@@ -147,7 +169,18 @@ impl TestSolver {
                     .next()
                     .unwrap(),
             ),
-        )
+        );
+        self.domain_faithfulness
+            .drain_satisfied_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
+            });
+        self.domain_faithfulness
+            .drain_falsified_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
+            });
+        decision
     }
     pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
