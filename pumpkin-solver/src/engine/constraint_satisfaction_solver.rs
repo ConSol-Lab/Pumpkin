@@ -19,7 +19,6 @@ use super::conflict_analysis::SemanticMinimiser;
 use super::notification_engine::domain_event_notification::DomainEvent;
 use super::notification_engine::PredicateNotifier;
 use super::notification_engine::WatchListDomainEvents;
-use super::propagation::contexts::PropagationContextWithTrailedValues;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
@@ -44,11 +43,10 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
+use crate::engine::notification_engine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -255,159 +253,6 @@ impl ConstraintSatisfactionSolver {
             }
         }
         true
-    }
-
-    fn notify_nogood_propagator(
-        event: DomainEvent,
-        domain: DomainId,
-        propagators: &mut PropagatorStore,
-        propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
-        trailed_values: &mut TrailedValues,
-    ) {
-        pumpkin_assert_moderate!(
-            propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
-        );
-        let nogood_propagator_id = Self::get_nogood_propagator_id();
-        // The nogood propagator is implicitly subscribed to every domain event for every variable.
-        // For this reason, its local id matches the domain id.
-        // This is special only for the nogood propagator.
-        let local_id = LocalId::from(domain.id);
-        Self::notify_propagator(
-            nogood_propagator_id,
-            local_id,
-            event,
-            propagators,
-            propagator_queue,
-            assignments,
-            trailed_values,
-        );
-    }
-
-    fn notify_propagator(
-        propagator_id: PropagatorId,
-        local_id: LocalId,
-        event: DomainEvent,
-        propagators: &mut PropagatorStore,
-        propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
-        trailed_values: &mut TrailedValues,
-    ) {
-        let context = PropagationContextWithTrailedValues::new(trailed_values, assignments);
-
-        let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
-
-        if enqueue_decision == EnqueueDecision::Enqueue {
-            propagator_queue
-                .enqueue_propagator(propagator_id, propagators[propagator_id].priority());
-        }
-    }
-
-    /// Process the stored domain events that happens as a result of decision/propagation predicates
-    /// to the trail. Propagators are notified and enqueued if needed about the domain events.
-    fn notify_propagators_about_domain_events(&mut self) {
-        assert!(self.event_drain.is_empty());
-
-        // Eagerly adding since the drain operation lazily removes elements from internal data
-        // structures.
-        self.assignments.drain_domain_events().for_each(|e| {
-            self.event_drain.push(e);
-        });
-
-        for (event, domain) in self.event_drain.drain(..) {
-            // First we notify the domain faithfulness that a domain has been updated
-            match event {
-                DomainEvent::Assign => {
-                    info!("Reached eq");
-                    self.predicate_notifier.on_update(
-                        predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
-                        &mut self.trailed_values,
-                        &self.assignments,
-                    );
-                }
-                DomainEvent::LowerBound => {
-                    info!("Reached lb");
-                    self.predicate_notifier.on_update(
-                        predicate!(domain >= self.assignments.get_lower_bound(domain)),
-                        &mut self.trailed_values,
-                        &self.assignments,
-                    );
-                }
-                DomainEvent::UpperBound => {
-                    info!("Reached ub");
-                    self.predicate_notifier.on_update(
-                        predicate!(domain <= self.assignments.get_upper_bound(domain)),
-                        &mut self.trailed_values,
-                        &self.assignments,
-                    );
-                }
-                DomainEvent::Removal => {
-                    info!("Reached ineq");
-                    self.assignments
-                        .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
-                        .for_each(|value| {
-                            self.predicate_notifier.on_update(
-                                predicate!(domain != value),
-                                &mut self.trailed_values,
-                                &self.assignments,
-                            );
-                        })
-                }
-            }
-            // Special case: the nogood propagator is notified about each event.
-            Self::notify_nogood_propagator(
-                event,
-                domain,
-                &mut self.propagators,
-                &mut self.propagator_queue,
-                &mut self.assignments,
-                &mut self.trailed_values,
-            );
-            // Now notify other propagators subscribed to this event.
-            for propagator_var in self
-                .watch_list_domain_events
-                .get_affected_propagators(event, domain)
-            {
-                let propagator_id = propagator_var.propagator;
-                let local_id = propagator_var.variable;
-                Self::notify_propagator(
-                    propagator_id,
-                    local_id,
-                    event,
-                    &mut self.propagators,
-                    &mut self.propagator_queue,
-                    &mut self.assignments,
-                    &mut self.trailed_values,
-                );
-            }
-        }
-
-        // Then we notify the propagators that a predicate has been satisfied
-        self.notify_predicate_id_satisfied();
-        self.notify_predicate_id_falsified();
-
-        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
-    }
-
-    /// Notifies propagators that certain [`Predicate`]s have been falsified.
-    ///
-    /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self) {
-        // At the moment this does nothing
-    }
-
-    /// Notifies propagators that certain [`Predicate`]s have been satisfied.
-    ///
-    /// Currently, only the [`NogoodPropagator`] is notified.
-    fn notify_predicate_id_satisfied(&mut self) {
-        for predicate_id in self
-            .predicate_notifier
-            .drain_satisfied_predicates()
-            .collect::<Vec<_>>()
-        {
-            let nogood_propagator = &mut self.propagators[Self::get_nogood_propagator_id()];
-            nogood_propagator.notify_predicate_id_satisfied(predicate_id);
-        }
     }
 
     /// This is a temporary accessor to help refactoring.
@@ -1236,7 +1081,15 @@ impl ConstraintSatisfactionSolver {
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
-        self.notify_propagators_about_domain_events();
+        notification_engine::notify_propagators_about_domain_events(
+            &mut self.predicate_notifier,
+            &mut self.assignments,
+            &mut self.trailed_values,
+            &mut self.propagators,
+            &mut self.propagator_queue,
+            &self.watch_list_domain_events,
+            &mut self.last_notified_cp_trail_index,
+        );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
             let tag = self.propagators.get_tag(propagator_id);
@@ -1261,7 +1114,15 @@ impl ConstraintSatisfactionSolver {
             match propagation_status {
                 Ok(_) => {
                     // Notify other propagators of the propagations and continue.
-                    self.notify_propagators_about_domain_events();
+                    notification_engine::notify_propagators_about_domain_events(
+                        &mut self.predicate_notifier,
+                        &mut self.assignments,
+                        &mut self.trailed_values,
+                        &mut self.propagators,
+                        &mut self.propagator_queue,
+                        &self.watch_list_domain_events,
+                        &mut self.last_notified_cp_trail_index,
+                    );
                 }
                 Err(inconsistency) => match inconsistency {
                     // A propagator did a change that resulted in an empty domain.

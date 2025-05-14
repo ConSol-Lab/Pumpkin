@@ -5,8 +5,10 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
@@ -64,12 +66,53 @@ impl PredicateNotifier {
         Some(self.predicate_to_id.get_id(predicate))
     }
 
+    pub(crate) fn on_update(
+        &mut self,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+        event: DomainEvent,
+        domain: DomainId,
+    ) {
+        match event {
+            DomainEvent::Assign => {
+                self.on_update_predicate(
+                    predicate!(domain == assignments.get_assigned_value(&domain).unwrap()),
+                    trailed_values,
+                    assignments,
+                );
+            }
+            DomainEvent::LowerBound => {
+                self.on_update_predicate(
+                    predicate!(domain >= assignments.get_lower_bound(domain)),
+                    trailed_values,
+                    assignments,
+                );
+            }
+            DomainEvent::UpperBound => {
+                self.on_update_predicate(
+                    predicate!(domain <= assignments.get_upper_bound(domain)),
+                    trailed_values,
+                    assignments,
+                );
+            }
+            DomainEvent::Removal => assignments
+                .get_holes_on_decision_level(domain, assignments.get_decision_level())
+                .for_each(|value| {
+                    self.on_update_predicate(
+                        predicate!(domain != value),
+                        trailed_values,
+                        assignments,
+                    );
+                }),
+        }
+    }
+
     /// Method which is called when an update to a [`DomainId`] has taken place (provided in the
     /// form of a [Predicate]).
     ///
     /// This method will pass it along to the correct [`Faithfulness::on_update`]
     /// corresponding to the [`DomainId`] for which the update took place.
-    pub(crate) fn on_update(
+    pub(crate) fn on_update_predicate(
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,

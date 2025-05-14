@@ -11,6 +11,7 @@ use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::notification_engine::PredicateNotifier;
 use crate::engine::notification_engine::WatchListDomainEvents;
 use crate::engine::predicates::predicate::Predicate;
@@ -26,7 +27,6 @@ use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
-use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -113,9 +113,10 @@ impl TestSolver {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         self.predicate_notifier.on_update(
-            predicate!(var >= value),
             &mut self.trailed_values,
             &self.assignments,
+            DomainEvent::LowerBound,
+            var,
         );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
@@ -153,9 +154,10 @@ impl TestSolver {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         self.predicate_notifier.on_update(
-            predicate!(var <= value),
             &mut self.trailed_values,
             &self.assignments,
+            DomainEvent::UpperBound,
+            var,
         );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
