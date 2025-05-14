@@ -1,5 +1,3 @@
-use log::info;
-
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::TrailedInteger;
@@ -22,7 +20,7 @@ pub(crate) use upper_bound_tracker::UpperBoundTracker;
 /// This structure is useful since there is a lot of overlap in the methods for the different
 /// trackers.
 #[derive(Debug, Clone)]
-pub(crate) struct FaithfulnessTracker {
+pub(crate) struct PredicateTracker {
     /// The [`DomainId`] which the tracker is tracking the polarity for.
     domain_id: DomainId,
     /// `smaller[i]` is the index of the element with the largest value such that it is smaller
@@ -34,23 +32,23 @@ pub(crate) struct FaithfulnessTracker {
     /// A [`TrailedInteger`] which points to the largest lowest value which is assigned.
     ///
     /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x >= 6]` holds,
-    /// then [`FaithfulnessTracker::min_assigned`] will point to index 1.
+    /// then [`PredicateTracker::min_assigned`] will point to index 1.
     min_assigned: TrailedInteger,
     /// A [`TrailedInteger`] which points to the smallest largest value which is assigned.
     ///
     /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x <= 8]` holds,
-    /// then [`FaithfulnessTracker::min_assigned`] will point to index 3.
+    /// then [`PredicateTracker::min_assigned`] will point to index 3.
     max_unassigned: TrailedInteger,
-    /// The values which are currently being tracked by this [`FaithfulnessTracker`].
+    /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
     /// Note that there is no specific order in which these values are stored.
     values: Vec<i32>,
     /// The [`PredicateId`] corresponding to the predicate for each value in
-    /// [`FaithfulnessTracker::values`].
+    /// [`PredicateTracker::values`].
     ids: Vec<PredicateId>,
 }
 
-impl FaithfulnessTracker {
+impl PredicateTracker {
     pub(super) fn new(trailed_values: &mut TrailedValues) -> Self {
         let min_unassigned = trailed_values.grow(0);
         let max_unassigned = trailed_values.grow(1);
@@ -66,18 +64,18 @@ impl FaithfulnessTracker {
     }
 }
 
-/// A trait for any structure which has a [`FaithfulnessTracker`].
+/// A trait for any structure which has a [`PredicateTracker`].
 ///
 /// For an example of such a structure, see [`LowerBoundTracker`].
 pub(crate) trait HasTracker {
-    /// Returns a reference to the [`FaithfulnessTracker`].
-    fn get_tracker(&self) -> &FaithfulnessTracker;
-    /// Returns a mutable reference to the [`FaithfulnessTracker`].
-    fn get_tracker_mut(&mut self) -> &mut FaithfulnessTracker;
+    /// Returns a reference to the [`PredicateTracker`].
+    fn get_tracker(&self) -> &PredicateTracker;
+    /// Returns a mutable reference to the [`PredicateTracker`].
+    fn get_tracker_mut(&mut self) -> &mut PredicateTracker;
 }
 
 /// A trait which specifies how to provide and retrieve information from a structure containing a
-/// [`FaithfulnessTracker`].
+/// [`PredicateTracker`].
 pub(crate) trait DomainTrackerInformation {
     /// Initialise the tracker.
     fn initialise(
@@ -234,7 +232,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        info!("Satisfied: {predicate_id:?}");
         satisfied_predicates.push(predicate_id)
     }
 
@@ -249,10 +246,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        info!(
-            "Satisfied: {:?}",
-            self.get_predicate_for_value(self.get_values()[index])
-        );
         satisfied_predicates.push(predicate_id)
     }
 
@@ -270,10 +263,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         // if predicate_id.id == u32::MAX {
         //    return;
         //}
-        // info!(
-        //    "Falsified: {:?}",
-        //    self.get_predicate_for_value(self.get_values()[index])
-        //);
         // falsified_predicates.push(self.get_ids()[index])
     }
 

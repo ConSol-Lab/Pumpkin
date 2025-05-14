@@ -39,7 +39,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
     pub(crate) last_notified_cp_trail_index: &'a mut usize,
-    pub(crate) watch_list_cp: &'a mut WatchListDomainEvents,
+    pub(crate) watch_list_domain_events: &'a mut WatchListDomainEvents,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
     pub(crate) event_drain: &'a mut Vec<(DomainEvent, DomainId)>,
 
@@ -79,7 +79,7 @@ impl ConflictAnalysisContext<'_> {
             self.last_notified_cp_trail_index,
             self.reason_store,
             self.propagator_queue,
-            self.watch_list_cp,
+            self.watch_list_domain_events,
             self.propagators,
             self.event_drain,
             self.backtrack_event_drain,

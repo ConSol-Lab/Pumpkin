@@ -35,7 +35,7 @@ impl PredicateTrackerForDomain {
 }
 
 impl PredicateTrackerForDomain {
-    /// This method will extend the scope of [`DomainFaithfulnessForDomain`] by adding the provided
+    /// This method will extend the scope of [`PredicateTrackerForDomain`] by adding the provided
     /// [`Predicate`] to the scope of the correct tracker.
     pub(crate) fn watch_predicate(
         &mut self,

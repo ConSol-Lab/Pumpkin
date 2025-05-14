@@ -1,7 +1,7 @@
 use super::DomainTracker;
-use super::FaithfulnessTracker;
 use super::HasTracker;
 use super::PredicateId;
+use super::PredicateTracker;
 use super::TrailedValues;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -9,23 +9,23 @@ use crate::predicates::Predicate;
 /// A tracker for equality [`Predicate`]s
 #[derive(Debug, Clone)]
 pub(crate) struct EqualityTracker {
-    watcher: FaithfulnessTracker,
+    watcher: PredicateTracker,
 }
 
 impl EqualityTracker {
     pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
         Self {
-            watcher: FaithfulnessTracker::new(trailed_values),
+            watcher: PredicateTracker::new(trailed_values),
         }
     }
 }
 
 impl HasTracker for EqualityTracker {
-    fn get_tracker(&self) -> &FaithfulnessTracker {
+    fn get_tracker(&self) -> &PredicateTracker {
         &self.watcher
     }
 
-    fn get_tracker_mut(&mut self) -> &mut FaithfulnessTracker {
+    fn get_tracker_mut(&mut self) -> &mut PredicateTracker {
         &mut self.watcher
     }
 }

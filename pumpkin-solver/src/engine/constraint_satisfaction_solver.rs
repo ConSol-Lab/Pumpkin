@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use drcp_format::steps::StepId;
-use log::info;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -227,14 +226,14 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn process_backtrack_events(
-        watch_list_cp: &mut WatchListDomainEvents,
+        watch_list_domain_events: &mut WatchListDomainEvents,
         backtrack_event_drain: &mut Vec<(DomainEvent, DomainId)>,
         assignments: &mut Assignments,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
-        if watch_list_cp.is_watching_any_backtrack_events() {
+        if watch_list_domain_events.is_watching_any_backtrack_events() {
             backtrack_event_drain.extend(assignments.drain_backtrack_domain_events());
 
             if backtrack_event_drain.is_empty() {
@@ -243,7 +242,7 @@ impl ConstraintSatisfactionSolver {
 
             for (event, domain) in backtrack_event_drain.drain(..) {
                 for propagator_var in
-                    watch_list_cp.get_backtrack_affected_propagators(event, domain)
+                    watch_list_domain_events.get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut propagators[propagator_var.propagator];
                     let context = PropagationContext::new(assignments);
@@ -573,7 +572,7 @@ impl ConstraintSatisfactionSolver {
                     semantic_minimiser: &mut self.semantic_minimiser,
                     propagators: &mut self.propagators,
                     last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-                    watch_list_cp: &mut self.watch_list_domain_events,
+                    watch_list_domain_events: &mut self.watch_list_domain_events,
                     propagator_queue: &mut self.propagator_queue,
                     event_drain: &mut self.event_drain,
                     backtrack_event_drain: &mut self.backtrack_event_drain,
@@ -790,10 +789,6 @@ impl ConstraintSatisfactionSolver {
         self.assignments.increase_decision_level();
         self.trailed_values.increase_decision_level();
         self.reason_store.increase_decision_level();
-        info!(
-            "New decision level: {}",
-            self.assignments.get_decision_level()
-        )
     }
 
     /// Changes the state based on the conflict analysis. It performs the following:
@@ -820,7 +815,7 @@ impl ConstraintSatisfactionSolver {
             semantic_minimiser: &mut self.semantic_minimiser,
             propagators: &mut self.propagators,
             last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-            watch_list_cp: &mut self.watch_list_domain_events,
+            watch_list_domain_events: &mut self.watch_list_domain_events,
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
@@ -980,7 +975,7 @@ impl ConstraintSatisfactionSolver {
         last_notified_cp_trail_index: &mut usize,
         reason_store: &mut ReasonStore,
         propagator_queue: &mut PropagatorQueue,
-        watch_list_cp: &mut WatchListDomainEvents,
+        watch_list_domain_events: &mut WatchListDomainEvents,
         propagators: &mut PropagatorStore,
         event_drain: &mut Vec<(DomainEvent, DomainId)>,
         backtrack_event_drain: &mut Vec<(DomainEvent, DomainId)>,
@@ -996,7 +991,7 @@ impl ConstraintSatisfactionSolver {
             .synchronise(
                 backtrack_level,
                 *last_notified_cp_trail_index,
-                watch_list_cp.is_watching_any_backtrack_events(),
+                watch_list_domain_events.is_watching_any_backtrack_events(),
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
@@ -1021,7 +1016,7 @@ impl ConstraintSatisfactionSolver {
         brancher.synchronise(assignments);
 
         let _ = ConstraintSatisfactionSolver::process_backtrack_events(
-            watch_list_cp,
+            watch_list_domain_events,
             backtrack_event_drain,
             assignments,
             propagators,

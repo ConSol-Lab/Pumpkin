@@ -1,5 +1,3 @@
-use log::info;
-
 use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
@@ -12,19 +10,19 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
-/// An orchestrating struct which serves as the main contact point for propagators with
-/// [`DomainFaithfulness`].
+/// An orchestrating struct which serves as the main contact point for the solver with
+/// [`PredicateNotifier`].
 ///
 /// Contains method for creating [`PredicateId`]s for [`Predicate`]s, retrieving the list of
 /// updated [`Predicate`]s, and allowing propagators to indicate that the polarity of a
 /// [`Predicate`] should be tracked (i.e. adding a [`Predicate`] to the scope of
-/// [`DomainFaithfulness`]).
+/// [`PredicateNotifier`]).
 #[derive(Default, Debug)]
 pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
     pub(crate) predicate_to_id: PredicateIdGenerator,
-    /// Contains the [`Faithfulness`] for each [`DomainId`]
-    domain_id_to_faithfullness: KeyedVec<DomainId, PredicateTrackerForDomain>,
+    /// Contains the [`PredicateTrackerForDomain`] for each [`DomainId`]
+    domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTrackerForDomain>,
     /// A list of the predicates which have been found to be falsified since the last round of
     /// notifications
     falsified_predicates: Vec<PredicateId>,
@@ -66,6 +64,10 @@ impl PredicateNotifier {
         Some(self.predicate_to_id.get_id(predicate))
     }
 
+    /// Method which is called when an update to a [`DomainId`] has taken place
+    ///
+    /// This method will pass it along to the correct [`PredicateNotifier::on_update`]
+    /// corresponding to the [`DomainId`] for which the update took place.
     pub(crate) fn on_update(
         &mut self,
         trailed_values: &mut TrailedValues,
@@ -78,31 +80,24 @@ impl PredicateNotifier {
                 self.on_update_predicate(
                     predicate!(domain == assignments.get_assigned_value(&domain).unwrap()),
                     trailed_values,
-                    assignments,
                 );
             }
             DomainEvent::LowerBound => {
                 self.on_update_predicate(
                     predicate!(domain >= assignments.get_lower_bound(domain)),
                     trailed_values,
-                    assignments,
                 );
             }
             DomainEvent::UpperBound => {
                 self.on_update_predicate(
                     predicate!(domain <= assignments.get_upper_bound(domain)),
                     trailed_values,
-                    assignments,
                 );
             }
             DomainEvent::Removal => assignments
                 .get_holes_on_decision_level(domain, assignments.get_decision_level())
                 .for_each(|value| {
-                    self.on_update_predicate(
-                        predicate!(domain != value),
-                        trailed_values,
-                        assignments,
-                    );
+                    self.on_update_predicate(predicate!(domain != value), trailed_values);
                 }),
         }
     }
@@ -110,27 +105,16 @@ impl PredicateNotifier {
     /// Method which is called when an update to a [`DomainId`] has taken place (provided in the
     /// form of a [Predicate]).
     ///
-    /// This method will pass it along to the correct [`Faithfulness::on_update`]
+    /// This method will pass it along to the correct [`PredicateNotifier::on_update`]
     /// corresponding to the [`DomainId`] for which the update took place.
-    pub(crate) fn on_update_predicate(
-        &mut self,
-        predicate: Predicate,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
-        if self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
+    fn on_update_predicate(&mut self, predicate: Predicate, trailed_values: &mut TrailedValues) {
+        if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
             // If no predicate has been registered for this domain id then we do nothing
             return;
         }
 
-        info!(
-            "Faithfulness updated: {predicate} - {}, {}",
-            assignments.get_lower_bound(predicate.get_domain()),
-            assignments.get_upper_bound(predicate.get_domain())
-        );
-
         // Otherwise we update the structures
-        self.domain_id_to_faithfullness[predicate.get_domain()].on_update(
+        self.domain_id_to_predicate_tracker[predicate.get_domain()].on_update(
             predicate,
             trailed_values,
             &mut self.falsified_predicates,
@@ -141,7 +125,7 @@ impl PredicateNotifier {
         );
     }
 
-    /// This method will extend the scope of [`DomainFaithfulness`] by adding the provided
+    /// This method will extend the scope of [`PredicateNotifier`] by adding the provided
     /// [`Predicate`] to its scope.
     pub(crate) fn track_predicate(
         &mut self,
@@ -156,29 +140,25 @@ impl PredicateNotifier {
         let id = self.predicate_to_id.get_id(predicate);
 
         if !has_id_for_predicate {
-            info!("Adding watcher for {predicate} with id {id:?}",);
-
-            while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
+            while self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
                 let _ = self
-                    .domain_id_to_faithfullness
+                    .domain_id_to_predicate_tracker
                     .push(PredicateTrackerForDomain::new(trailed_values));
             }
 
-            self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
+            self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
                 predicate.get_domain(),
                 assignments.get_initial_lower_bound(predicate.get_domain()),
                 assignments.get_initial_upper_bound(predicate.get_domain()),
             );
 
             // Then we update the structures
-            self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
+            self.domain_id_to_predicate_tracker[predicate.get_domain()].watch_predicate(
                 predicate,
                 id,
                 trailed_values,
                 assignments,
             );
-        } else {
-            info!("Adding existing watcher for {predicate} with id {id:?}")
         }
 
         id

@@ -1,6 +1,5 @@
 use std::ops::Not;
 
-use log::info;
 use log::warn;
 
 use super::LearnedNogoodSortingStrategy;
@@ -404,8 +403,6 @@ impl NogoodPropagator {
             .average_lbd
             .add_term(lbd as u64);
 
-        info!("Adding learned nogood: {:?}", nogood,);
-
         // Add the nogood to the database.
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
@@ -592,7 +589,7 @@ impl NogoodPropagator {
         &mut self,
         context: PropagationContext,
         reason_store: &mut ReasonStore,
-        domain_faithfulness: &mut PredicateNotifier,
+        predicate_notifier: &mut PredicateNotifier,
     ) {
         // Only remove learned nogoods if there are too many.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_num_high_lbd_nogoods {
@@ -600,7 +597,7 @@ impl NogoodPropagator {
             //  1. Promote nogoods that are in the high lbd group but got updated to a low lbd.
             //  2. Remove roughly half of the nogoods that have high lbd.
             self.promote_high_lbd_nogoods();
-            self.remove_high_lbd_nogoods(context, reason_store, domain_faithfulness);
+            self.remove_high_lbd_nogoods(context, reason_store, predicate_notifier);
         }
     }
 
@@ -628,7 +625,7 @@ impl NogoodPropagator {
         &mut self,
         context: PropagationContext,
         reason_store: &mut ReasonStore,
-        domain_faithfulness: &mut PredicateNotifier,
+        predicate_notifier: &mut PredicateNotifier,
     ) {
         // First we sort the high LBD nogoods based on non-increasing "quality"
         self.sort_high_lbd_nogoods_by_quality_better_first();
@@ -660,14 +657,14 @@ impl NogoodPropagator {
             // Remove the nogood from the watch list.
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                domain_faithfulness
+                predicate_notifier
                     .get_id_for_predicate(self.nogood_predicates[id][0])
                     .unwrap(),
                 id,
             );
             Self::remove_nogood_from_watch_list(
                 &mut self.watch_lists,
-                domain_faithfulness
+                predicate_notifier
                     .get_id_for_predicate(self.nogood_predicates[id][1])
                     .unwrap(),
                 id,
@@ -845,12 +842,10 @@ impl NogoodPropagator {
     }
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
-    fn debug_is_properly_watched(&self, domain_faithfulness: &mut PredicateNotifier) -> bool {
+    fn debug_is_properly_watched(&self, predicate_notifier: &mut PredicateNotifier) -> bool {
         let mut is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
-            pumpkin_assert_moderate!(domain_faithfulness
-                .get_id_for_predicate(predicate)
-                .is_some());
-            let predicate_id = domain_faithfulness.get_id_for_predicate(predicate).unwrap();
+            pumpkin_assert_moderate!(predicate_notifier.get_id_for_predicate(predicate).is_some());
+            let predicate_id = predicate_notifier.get_id_for_predicate(predicate).unwrap();
             self.watch_lists[predicate_id].watchers.contains(&nogood_id)
         };
 

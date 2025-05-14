@@ -519,7 +519,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = PredicateNotifier::default();
+            let mut predicate_notifier = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -529,7 +529,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut domain_faithfulness,
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -583,7 +583,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = PredicateNotifier::default();
+            let mut predicate_notifier = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -593,7 +593,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut domain_faithfulness,
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &[&profile_y, &profile_z],
@@ -634,7 +634,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = PredicateNotifier::default();
+            let mut predicate_notifier = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -644,7 +644,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut domain_faithfulness,
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -698,7 +698,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = PredicateNotifier::default();
+            let mut predicate_notifier = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -708,7 +708,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut domain_faithfulness,
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &[&profile_z, &profile_y],
