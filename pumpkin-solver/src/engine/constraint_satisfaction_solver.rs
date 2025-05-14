@@ -42,7 +42,6 @@ use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -1270,7 +1269,7 @@ impl ConstraintSatisfactionSolver {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::new(&self.assignments, CurrentNogood::empty(), trail_idx),
+                ExplanationContext::without_working_nogood(&self.assignments, trail_idx),
                 &mut self.propagators,
                 &mut reason,
             );
