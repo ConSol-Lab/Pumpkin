@@ -16,6 +16,9 @@ use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
+use super::notification_engine::domain_event_notification::DomainEvent;
+use super::notification_engine::PredicateNotifier;
+use super::notification_engine::WatchListDomainEvents;
 use super::propagation::contexts::PropagationContextWithTrailedValues;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
@@ -23,7 +26,6 @@ use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
-use super::DomainFaithfulness;
 use super::Lbd;
 use super::ResolutionResolver;
 use super::TrailedValues;
@@ -42,7 +44,6 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
-use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
@@ -56,7 +57,6 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::DebugHelper;
-use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
@@ -126,7 +126,7 @@ pub struct ConstraintSatisfactionSolver {
     pub(crate) assignments: Assignments,
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
-    watch_list_cp: WatchListCP,
+    watch_list_domain_events: WatchListDomainEvents,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -135,10 +135,10 @@ pub struct ConstraintSatisfactionSolver {
     /// Contains events that need to be processed to notify propagators of event occurrences.
     /// Used as a helper storage vector to avoid reallocation, and to take away ownership from the
     /// events in assignments.
-    event_drain: Vec<(IntDomainEvent, DomainId)>,
+    event_drain: Vec<(DomainEvent, DomainId)>,
     /// Contains events that need to be processed to notify propagators of backtrack
-    /// [`IntDomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
-    backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
+    /// [`DomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
+    backtrack_event_drain: Vec<(DomainEvent, DomainId)>,
     last_notified_cp_trail_index: usize,
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
@@ -153,7 +153,7 @@ pub struct ConstraintSatisfactionSolver {
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
 
-    pub(crate) domain_faithfulness: DomainFaithfulness,
+    pub(crate) predicate_notifier: PredicateNotifier,
     pub(crate) trailed_values: TrailedValues,
 }
 
@@ -229,8 +229,8 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn process_backtrack_events(
-        watch_list_cp: &mut WatchListCP,
-        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
+        watch_list_cp: &mut WatchListDomainEvents,
+        backtrack_event_drain: &mut Vec<(DomainEvent, DomainId)>,
         assignments: &mut Assignments,
         propagators: &mut PropagatorStore,
     ) -> bool {
@@ -258,7 +258,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn notify_nogood_propagator(
-        event: IntDomainEvent,
+        event: DomainEvent,
         domain: DomainId,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
@@ -287,7 +287,7 @@ impl ConstraintSatisfactionSolver {
     fn notify_propagator(
         propagator_id: PropagatorId,
         local_id: LocalId,
-        event: IntDomainEvent,
+        event: DomainEvent,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
@@ -317,36 +317,36 @@ impl ConstraintSatisfactionSolver {
         for (event, domain) in self.event_drain.drain(..) {
             // First we notify the domain faithfulness that a domain has been updated
             match event {
-                IntDomainEvent::Assign => {
+                DomainEvent::Assign => {
                     info!("Reached eq");
-                    self.domain_faithfulness.on_update(
+                    self.predicate_notifier.on_update(
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
                         &mut self.trailed_values,
                         &self.assignments,
                     );
                 }
-                IntDomainEvent::LowerBound => {
+                DomainEvent::LowerBound => {
                     info!("Reached lb");
-                    self.domain_faithfulness.on_update(
+                    self.predicate_notifier.on_update(
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
                         &mut self.trailed_values,
                         &self.assignments,
                     );
                 }
-                IntDomainEvent::UpperBound => {
+                DomainEvent::UpperBound => {
                     info!("Reached ub");
-                    self.domain_faithfulness.on_update(
+                    self.predicate_notifier.on_update(
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
                         &mut self.trailed_values,
                         &self.assignments,
                     );
                 }
-                IntDomainEvent::Removal => {
+                DomainEvent::Removal => {
                     info!("Reached ineq");
                     self.assignments
                         .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
                         .for_each(|value| {
-                            self.domain_faithfulness.on_update(
+                            self.predicate_notifier.on_update(
                                 predicate!(domain != value),
                                 &mut self.trailed_values,
                                 &self.assignments,
@@ -364,7 +364,10 @@ impl ConstraintSatisfactionSolver {
                 &mut self.trailed_values,
             );
             // Now notify other propagators subscribed to this event.
-            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
+            for propagator_var in self
+                .watch_list_domain_events
+                .get_affected_propagators(event, domain)
+            {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
                 Self::notify_propagator(
@@ -398,7 +401,7 @@ impl ConstraintSatisfactionSolver {
     /// Currently, only the [`NogoodPropagator`] is notified.
     fn notify_predicate_id_satisfied(&mut self) {
         for predicate_id in self
-            .domain_faithfulness
+            .predicate_notifier
             .drain_satisfied_predicates()
             .collect::<Vec<_>>()
         {
@@ -474,7 +477,7 @@ impl ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
             assignments: Assignments::default(),
-            watch_list_cp: WatchListCP::default(),
+            watch_list_domain_events: WatchListDomainEvents::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             event_drain: vec![],
@@ -491,14 +494,14 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
             },
             internal_parameters: solver_options,
-            domain_faithfulness: DomainFaithfulness::default(),
+            predicate_notifier: PredicateNotifier::default(),
             trailed_values: TrailedValues::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
         // trivially true. We need to adjust other data structures to take this into account.
-        csp_solver.watch_list_cp.grow();
+        csp_solver.watch_list_domain_events.grow();
         let dummy_id = Predicate::trivially_true().get_domain();
 
         csp_solver
@@ -609,7 +612,7 @@ impl ConstraintSatisfactionSolver {
         );
 
         let domain_id = self.assignments.grow(lower_bound, upper_bound);
-        self.watch_list_cp.grow();
+        self.watch_list_domain_events.grow();
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
@@ -626,7 +629,7 @@ impl ConstraintSatisfactionSolver {
     ) -> DomainId {
         let domain_id = self.assignments.create_new_integer_variable_sparse(values);
 
-        self.watch_list_cp.grow();
+        self.watch_list_domain_events.grow();
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
@@ -725,7 +728,7 @@ impl ConstraintSatisfactionSolver {
                     semantic_minimiser: &mut self.semantic_minimiser,
                     propagators: &mut self.propagators,
                     last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-                    watch_list_cp: &mut self.watch_list_cp,
+                    watch_list_cp: &mut self.watch_list_domain_events,
                     propagator_queue: &mut self.propagator_queue,
                     event_drain: &mut self.event_drain,
                     backtrack_event_drain: &mut self.backtrack_event_drain,
@@ -797,7 +800,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.last_notified_cp_trail_index,
                 &mut self.reason_store,
                 &mut self.propagator_queue,
-                &mut self.watch_list_cp,
+                &mut self.watch_list_domain_events,
                 &mut self.propagators,
                 &mut self.event_drain,
                 &mut self.backtrack_event_drain,
@@ -972,7 +975,7 @@ impl ConstraintSatisfactionSolver {
             semantic_minimiser: &mut self.semantic_minimiser,
             propagators: &mut self.propagators,
             last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-            watch_list_cp: &mut self.watch_list_cp,
+            watch_list_cp: &mut self.watch_list_domain_events,
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
@@ -1052,7 +1055,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.domain_faithfulness,
+            &mut self.predicate_notifier,
             Self::get_nogood_propagator_id(),
         );
 
@@ -1111,7 +1114,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.last_notified_cp_trail_index,
             &mut self.reason_store,
             &mut self.propagator_queue,
-            &mut self.watch_list_cp,
+            &mut self.watch_list_domain_events,
             &mut self.propagators,
             &mut self.event_drain,
             &mut self.backtrack_event_drain,
@@ -1132,10 +1135,10 @@ impl ConstraintSatisfactionSolver {
         last_notified_cp_trail_index: &mut usize,
         reason_store: &mut ReasonStore,
         propagator_queue: &mut PropagatorQueue,
-        watch_list_cp: &mut WatchListCP,
+        watch_list_cp: &mut WatchListDomainEvents,
         propagators: &mut PropagatorStore,
-        event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
-        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
+        event_drain: &mut Vec<(DomainEvent, DomainId)>,
+        backtrack_event_drain: &mut Vec<(DomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
         trailed_values: &mut TrailedValues,
@@ -1246,7 +1249,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
-                    &mut self.domain_faithfulness,
+                    &mut self.predicate_notifier,
                     propagator_id,
                 );
                 propagator.propagate(context)
@@ -1434,7 +1437,7 @@ impl ConstraintSatisfactionSolver {
         let new_propagator = &mut self.propagators[new_propagator_id];
 
         let mut initialisation_context = PropagatorInitialisationContext::new(
-            &mut self.watch_list_cp,
+            &mut self.watch_list_domain_events,
             &mut self.trailed_values,
             new_propagator_id,
             &mut self.assignments,
@@ -1492,7 +1495,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.domain_faithfulness,
+            &mut self.predicate_notifier,
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();

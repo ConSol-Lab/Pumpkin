@@ -5,8 +5,8 @@ use enumset::enum_set;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::domain_events::DomainEvents;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -15,7 +15,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
+use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -108,7 +108,7 @@ where
     ) {
         if matches!(
             self.terms[local_id.unpack() as usize].unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             pumpkin_assert_simple!(
                 self.number_of_fixed_terms >= 1,
@@ -125,7 +125,7 @@ where
             // A removal has been undone
             pumpkin_assert_moderate!(matches!(
                 self.terms[local_id.unpack() as usize].unpack_event(event),
-                IntDomainEvent::Removal
+                DomainEvent::Removal
             ));
 
             // We set the flag whether the unfixed variable has been updated
@@ -142,7 +142,7 @@ where
             let _ = context.register_for_backtrack_events(
                 x_i.clone(),
                 DomainEvents::create_with_int_events(enum_set!(
-                    IntDomainEvent::Assign | IntDomainEvent::Removal
+                    DomainEvent::Assign | DomainEvent::Removal
                 )),
                 LocalId::from(i as u32),
             );

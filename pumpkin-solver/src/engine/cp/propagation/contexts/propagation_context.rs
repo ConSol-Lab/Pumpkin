@@ -1,4 +1,5 @@
 use crate::engine::conflict_analysis::SemanticMinimiser;
+use crate::engine::notification_engine::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
@@ -7,7 +8,6 @@ use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
-use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
@@ -59,7 +59,7 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
-    pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
+    pub(crate) predicate_notifier: &'a mut PredicateNotifier,
     reification_literal: Option<Literal>,
 }
 
@@ -69,7 +69,7 @@ impl<'a> PropagationContextMut<'a> {
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
-        domain_faithfulness: &'a mut DomainFaithfulness,
+        predicate_notifier: &'a mut PredicateNotifier,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
@@ -77,7 +77,7 @@ impl<'a> PropagationContextMut<'a> {
             assignments,
             reason_store,
             propagator_id,
-            domain_faithfulness,
+            predicate_notifier,
             semantic_minimiser,
             reification_literal: None,
         }

@@ -1,7 +1,7 @@
 use enumset::EnumSet;
 
+use super::DomainEvent;
 use crate::containers::KeyedVec;
-use crate::engine::cp::IntDomainEvent;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::DomainEvents;
@@ -11,15 +11,15 @@ use crate::pumpkin_assert_advanced;
 
 /// While a propagator runs (see [`propagators`]), the propagations it performs
 /// are captured as events in the event sink. When the propagator finishes, the event sink is
-/// drained to notify all the propagators that subscribe to those [`IntDomainEvent`].
+/// drained to notify all the propagators that subscribe to those [`DomainEvent`].
 ///
 /// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct EventSink {
-    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
-    events: Vec<(IntDomainEvent, DomainId)>,
+    present: KeyedVec<DomainId, EnumSet<DomainEvent>>,
+    events: Vec<(DomainEvent, DomainId)>,
 }
 
 impl EventSink {
@@ -35,7 +35,7 @@ impl EventSink {
         let _ = self.present.push(EnumSet::new());
     }
 
-    pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
+    pub(crate) fn event_occurred(&mut self, event: DomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
         if elem.insert(event) {
@@ -57,8 +57,8 @@ impl EventSink {
 }
 
 pub(crate) struct Drain<'a> {
-    present: &'a mut KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
-    drain: std::vec::Drain<'a, (IntDomainEvent, DomainId)>,
+    present: &'a mut KeyedVec<DomainId, EnumSet<DomainEvent>>,
+    drain: std::vec::Drain<'a, (DomainEvent, DomainId)>,
 }
 
 impl Drop for Drain<'_> {
@@ -70,7 +70,7 @@ impl Drop for Drain<'_> {
 }
 
 impl Iterator for Drain<'_> {
-    type Item = (IntDomainEvent, DomainId);
+    type Item = (DomainEvent, DomainId);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.drain.next().inspect(|&(event, domain)| {
@@ -96,7 +96,6 @@ impl ExactSizeIterator for Drain<'_> {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::IntDomainEvent;
 
     #[test]
     fn the_default_sink_is_empty() {
@@ -112,14 +111,14 @@ mod tests {
         sink.grow();
         sink.grow();
 
-        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(IntDomainEvent::UpperBound, DomainId::new(1));
+        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(DomainEvent::UpperBound, DomainId::new(1));
 
         let events = sink.drain().collect::<Vec<_>>();
 
         assert_eq!(events.len(), 2);
-        assert!(events.contains(&(IntDomainEvent::LowerBound, DomainId::new(0))));
-        assert!(events.contains(&(IntDomainEvent::UpperBound, DomainId::new(1))));
+        assert!(events.contains(&(DomainEvent::LowerBound, DomainId::new(0))));
+        assert!(events.contains(&(DomainEvent::UpperBound, DomainId::new(1))));
     }
 
     #[test]
@@ -128,8 +127,8 @@ mod tests {
         sink.grow();
         sink.grow();
 
-        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(IntDomainEvent::UpperBound, DomainId::new(1));
+        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(DomainEvent::UpperBound, DomainId::new(1));
 
         let _ = sink.drain().collect::<Vec<_>>();
 
@@ -142,8 +141,8 @@ mod tests {
         let mut sink = EventSink::default();
         sink.grow();
 
-        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
 
         let events = sink.drain().collect::<Vec<_>>();
 

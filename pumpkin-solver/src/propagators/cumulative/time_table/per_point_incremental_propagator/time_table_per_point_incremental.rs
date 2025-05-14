@@ -4,7 +4,8 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -13,7 +14,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_per_point;
@@ -408,7 +408,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             self.updatable_structures.fix_task(&updated_task);
         }
@@ -434,7 +434,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             // The start variable of the task has been unassigned, we should restore it to unfixed
             self.updatable_structures.unfix_task(updated_task)

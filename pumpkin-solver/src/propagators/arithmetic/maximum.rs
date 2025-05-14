@@ -2,12 +2,12 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::DomainEvents;
 use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through

@@ -6,12 +6,12 @@ use std::rc::Rc;
 use enumset::enum_set;
 
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::domain_events::DomainEvents;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
+use crate::engine::DomainEvents;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 
@@ -57,7 +57,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
         let _ = context.register(
             task.start_variable.clone(),
             DomainEvents::create_with_int_events(enum_set!(
-                IntDomainEvent::LowerBound | IntDomainEvent::UpperBound | IntDomainEvent::Assign
+                DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign
             )),
             task.id,
         );
@@ -65,9 +65,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
             let _ = context.register_for_backtrack_events(
                 task.start_variable.clone(),
                 DomainEvents::create_with_int_events(enum_set!(
-                    IntDomainEvent::LowerBound
-                        | IntDomainEvent::UpperBound
-                        | IntDomainEvent::Assign
+                    DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign
                 )),
                 task.id,
             );

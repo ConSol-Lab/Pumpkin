@@ -1,6 +1,6 @@
 use log::info;
 
-use super::faithfulness_for_domain::DomainFaithfulnessForDomain;
+use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -18,11 +18,11 @@ use crate::variables::DomainId;
 /// [`Predicate`] should be tracked (i.e. adding a [`Predicate`] to the scope of
 /// [`DomainFaithfulness`]).
 #[derive(Default, Debug)]
-pub(crate) struct DomainFaithfulness {
+pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
     pub(crate) predicate_to_id: PredicateIdGenerator,
     /// Contains the [`Faithfulness`] for each [`DomainId`]
-    domain_id_to_faithfullness: KeyedVec<DomainId, DomainFaithfulnessForDomain>,
+    domain_id_to_faithfullness: KeyedVec<DomainId, PredicateTrackerForDomain>,
     /// A list of the predicates which have been found to be falsified since the last round of
     /// notifications
     falsified_predicates: Vec<PredicateId>,
@@ -31,7 +31,7 @@ pub(crate) struct DomainFaithfulness {
     pub(crate) satisfied_predicates: Vec<PredicateId>,
 }
 
-impl DomainFaithfulness {
+impl PredicateNotifier {
     /// Returns the falsified predicates; note that this structure will be cleared once it is
     /// dropped.
     #[allow(dead_code, reason = "Will be part of the public API")]
@@ -118,7 +118,7 @@ impl DomainFaithfulness {
             while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
                 let _ = self
                     .domain_id_to_faithfullness
-                    .push(DomainFaithfulnessForDomain::new(trailed_values));
+                    .push(PredicateTrackerForDomain::new(trailed_values));
             }
 
             self.domain_id_to_faithfullness[predicate.get_domain()].initialise(

@@ -8,10 +8,12 @@ use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
 
 #[derive(Default, Debug)]
-pub(crate) struct WatchListCP {
-    watchers: KeyedVec<DomainId, WatcherCP>, /* contains propagator ids of propagators that
-                                              * watch domain changes of the i-th integer
-                                              * variable */
+pub(crate) struct WatchListDomainEvents {
+    watchers: KeyedVec<DomainId, WatcherDomainEvents>, /* contains propagator ids of propagators
+                                                        * that
+                                                        * watch domain changes of the i-th
+                                                        * integer
+                                                        * variable */
     is_watching_anything: bool,
     is_watching_any_backtrack_events: bool,
 }
@@ -20,12 +22,12 @@ pub(crate) struct WatchListCP {
 #[derive(Debug)]
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
-    watch_list: &'a mut WatchListCP,
+    watch_list: &'a mut WatchListDomainEvents,
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
 #[derive(Debug, EnumSetType, Hash)]
-pub enum IntDomainEvent {
+pub enum DomainEvent {
     /// Event where an (integer) variable domain collapses to a single value.
     Assign,
     /// Event where an (integer) variable domain tightens the lower bound.
@@ -38,21 +40,21 @@ pub enum IntDomainEvent {
     Removal,
 }
 
-impl Display for IntDomainEvent {
+impl Display for DomainEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IntDomainEvent::Assign => write!(f, "[Event:Assign]"),
-            IntDomainEvent::LowerBound => write!(f, "[Event:LB]"),
-            IntDomainEvent::UpperBound => write!(f, "[Event:UB]"),
-            IntDomainEvent::Removal => write!(f, "[Event:Remove]"),
+            DomainEvent::Assign => write!(f, "[Event:Assign]"),
+            DomainEvent::LowerBound => write!(f, "[Event:LB]"),
+            DomainEvent::UpperBound => write!(f, "[Event:UB]"),
+            DomainEvent::Removal => write!(f, "[Event:Remove]"),
         }
     }
 }
 
 // public functions
-impl WatchListCP {
+impl WatchListDomainEvents {
     pub(crate) fn grow(&mut self) {
-        let _ = self.watchers.push(WatcherCP::default());
+        let _ = self.watchers.push(WatcherDomainEvents::default());
     }
 
     pub(crate) fn is_watching_any_backtrack_events(&self) -> bool {
@@ -61,53 +63,56 @@ impl WatchListCP {
 
     pub(crate) fn get_affected_propagators(
         &self,
-        event: IntDomainEvent,
+        event: DomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {
         let watcher = &self.watchers[domain];
 
         match event {
-            IntDomainEvent::Assign => &watcher.forward_watcher.assign_watchers,
-            IntDomainEvent::LowerBound => &watcher.forward_watcher.lower_bound_watchers,
-            IntDomainEvent::UpperBound => &watcher.forward_watcher.upper_bound_watchers,
-            IntDomainEvent::Removal => &watcher.forward_watcher.removal_watchers,
+            DomainEvent::Assign => &watcher.forward_watcher.assign_watchers,
+            DomainEvent::LowerBound => &watcher.forward_watcher.lower_bound_watchers,
+            DomainEvent::UpperBound => &watcher.forward_watcher.upper_bound_watchers,
+            DomainEvent::Removal => &watcher.forward_watcher.removal_watchers,
         }
     }
 
     pub(crate) fn get_backtrack_affected_propagators(
         &self,
-        event: IntDomainEvent,
+        event: DomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {
         let watcher = &self.watchers[domain];
 
         match event {
-            IntDomainEvent::Assign => &watcher.backtrack_watcher.assign_watchers,
-            IntDomainEvent::LowerBound => &watcher.backtrack_watcher.lower_bound_watchers,
-            IntDomainEvent::UpperBound => &watcher.backtrack_watcher.upper_bound_watchers,
-            IntDomainEvent::Removal => &watcher.backtrack_watcher.removal_watchers,
+            DomainEvent::Assign => &watcher.backtrack_watcher.assign_watchers,
+            DomainEvent::LowerBound => &watcher.backtrack_watcher.lower_bound_watchers,
+            DomainEvent::UpperBound => &watcher.backtrack_watcher.upper_bound_watchers,
+            DomainEvent::Removal => &watcher.backtrack_watcher.removal_watchers,
         }
     }
 }
 
 impl<'a> Watchers<'a> {
-    pub(crate) fn new(propagator_var: PropagatorVarId, watch_list: &'a mut WatchListCP) -> Self {
+    pub(crate) fn new(
+        propagator_var: PropagatorVarId,
+        watch_list: &'a mut WatchListDomainEvents,
+    ) -> Self {
         Watchers {
             propagator_var,
             watch_list,
         }
     }
 
-    pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
+    pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {
         self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {
             let event_watcher = match event {
-                IntDomainEvent::LowerBound => &mut watcher.forward_watcher.lower_bound_watchers,
-                IntDomainEvent::UpperBound => &mut watcher.forward_watcher.upper_bound_watchers,
-                IntDomainEvent::Assign => &mut watcher.forward_watcher.assign_watchers,
-                IntDomainEvent::Removal => &mut watcher.forward_watcher.removal_watchers,
+                DomainEvent::LowerBound => &mut watcher.forward_watcher.lower_bound_watchers,
+                DomainEvent::UpperBound => &mut watcher.forward_watcher.upper_bound_watchers,
+                DomainEvent::Assign => &mut watcher.forward_watcher.assign_watchers,
+                DomainEvent::Removal => &mut watcher.forward_watcher.removal_watchers,
             };
 
             if !event_watcher.contains(&self.propagator_var) {
@@ -116,20 +121,16 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub(crate) fn watch_all_backtrack(
-        &mut self,
-        domain: DomainId,
-        events: EnumSet<IntDomainEvent>,
-    ) {
+    pub(crate) fn watch_all_backtrack(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {
         self.watch_list.is_watching_any_backtrack_events = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {
             let backtrack_event_watchers = match event {
-                IntDomainEvent::Assign => &mut watcher.backtrack_watcher.assign_watchers,
-                IntDomainEvent::LowerBound => &mut watcher.backtrack_watcher.lower_bound_watchers,
-                IntDomainEvent::UpperBound => &mut watcher.backtrack_watcher.upper_bound_watchers,
-                IntDomainEvent::Removal => &mut watcher.backtrack_watcher.removal_watchers,
+                DomainEvent::Assign => &mut watcher.backtrack_watcher.assign_watchers,
+                DomainEvent::LowerBound => &mut watcher.backtrack_watcher.lower_bound_watchers,
+                DomainEvent::UpperBound => &mut watcher.backtrack_watcher.upper_bound_watchers,
+                DomainEvent::Removal => &mut watcher.backtrack_watcher.removal_watchers,
             };
 
             if !backtrack_event_watchers.contains(&self.propagator_var) {
@@ -140,7 +141,7 @@ impl<'a> Watchers<'a> {
 }
 
 #[derive(Default, Debug)]
-struct WatcherCP {
+struct WatcherDomainEvents {
     // FIXME measure performance of these vectors, they are treated as sets
     forward_watcher: Watcher,
     backtrack_watcher: Watcher,

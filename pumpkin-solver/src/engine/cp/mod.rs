@@ -1,21 +1,14 @@
 mod assignments;
-pub(crate) mod domain_events;
-mod event_sink;
-pub(crate) mod opaque_domain_event;
 pub(crate) mod propagation;
 mod propagator_queue;
 pub(crate) mod reason;
 pub(crate) mod test_solver;
 mod trailed;
-mod watch_list_cp;
 
 pub(crate) use assignments::Assignments;
 pub(crate) use assignments::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use trailed::*;
-pub(crate) use watch_list_cp::IntDomainEvent;
-pub(crate) use watch_list_cp::WatchListCP;
-pub(crate) use watch_list_cp::Watchers;
 
 #[cfg(test)]
 mod tests {
@@ -24,10 +17,10 @@ mod tests {
     use crate::conjunction;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
+    use crate::engine::notification_engine::PredicateNotifier;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::DomainFaithfulness;
     use crate::engine::TrailedValues;
 
     #[test]
@@ -40,13 +33,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut predicate_notifier = PredicateNotifier::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut domain_faithfulness,
+                &mut predicate_notifier,
                 PropagatorId(0),
             );
 
@@ -67,13 +60,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut predicate_notifier = PredicateNotifier::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut domain_faithfulness,
+                &mut predicate_notifier,
                 PropagatorId(0),
             );
 
@@ -94,13 +87,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut predicate_notifier = PredicateNotifier::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut domain_faithfulness,
+                &mut predicate_notifier,
                 PropagatorId(0),
             );
 

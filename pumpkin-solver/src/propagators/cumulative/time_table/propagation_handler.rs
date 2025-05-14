@@ -427,6 +427,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use crate::engine::conflict_analysis::SemanticMinimiser;
+    use crate::engine::notification_engine::PredicateNotifier;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
@@ -435,7 +436,6 @@ pub(crate) mod test_propagation_handler {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
     use crate::engine::Assignments;
-    use crate::engine::DomainFaithfulness;
     use crate::engine::TrailedValues;
     use crate::predicate;
     use crate::predicates::Predicate;
@@ -519,7 +519,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -583,7 +583,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -634,7 +634,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler
@@ -698,7 +698,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
 
             let result = self
                 .propagation_handler

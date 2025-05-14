@@ -2,14 +2,14 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::containers::StorageKey;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
+use crate::engine::notification_engine::Watchers;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
-use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
@@ -95,15 +95,15 @@ impl IntegerVariable for DomainId {
         assignment.tighten_upper_bound(*self, value, reason)
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         watchers.watch_all(*self, events);
     }
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         watchers.watch_all_backtrack(*self, events);
     }
 
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         event.unwrap()
     }
 }

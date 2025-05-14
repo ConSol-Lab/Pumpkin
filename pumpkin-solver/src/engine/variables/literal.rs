@@ -5,15 +5,15 @@ use enumset::EnumSet;
 use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
+use crate::engine::notification_engine::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
-use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
@@ -146,15 +146,15 @@ impl IntegerVariable for Literal {
             .set_upper_bound(assignment, value, reason)
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         self.integer_variable.watch_all(watchers, events)
     }
 
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         self.integer_variable.unpack_event(event)
     }
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         self.integer_variable.watch_all_backtrack(watchers, events)
     }
 }

@@ -2,7 +2,6 @@ use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
@@ -11,6 +10,7 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;

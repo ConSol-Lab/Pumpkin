@@ -10,7 +10,9 @@ use super::propagation::PropagatorInitialisationContext;
 use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::PredicateNotifier;
+use crate::engine::notification_engine::WatchListDomainEvents;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::LocalId;
@@ -23,9 +25,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
-use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
-use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 
@@ -37,8 +37,8 @@ pub(crate) struct TestSolver {
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
-    pub domain_faithfulness: DomainFaithfulness,
-    watch_list: WatchListCP,
+    pub predicate_notifier: PredicateNotifier,
+    watch_list: WatchListDomainEvents,
 }
 
 impl Default for TestSolver {
@@ -48,7 +48,7 @@ impl Default for TestSolver {
             reason_store: Default::default(),
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
-            domain_faithfulness: DomainFaithfulness::default(),
+            predicate_notifier: PredicateNotifier::default(),
             watch_list: Default::default(),
             trailed_values: Default::default(),
         };
@@ -87,7 +87,7 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.domain_faithfulness,
+            &mut self.predicate_notifier,
             PropagatorId(0),
         );
         self.propagator_store[id].propagate(context)?;
@@ -112,7 +112,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        self.domain_faithfulness.on_update(
+        self.predicate_notifier.on_update(
             predicate!(var >= value),
             &mut self.trailed_values,
             &self.assignments,
@@ -130,12 +130,12 @@ impl TestSolver {
                     .unwrap(),
             ),
         );
-        self.domain_faithfulness
+        self.predicate_notifier
             .drain_satisfied_predicates()
             .for_each(|predicate_id| {
                 self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
             });
-        self.domain_faithfulness
+        self.predicate_notifier
             .drain_falsified_predicates()
             .for_each(|predicate_id| {
                 self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
@@ -152,7 +152,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        self.domain_faithfulness.on_update(
+        self.predicate_notifier.on_update(
             predicate!(var <= value),
             &mut self.trailed_values,
             &self.assignments,
@@ -170,12 +170,12 @@ impl TestSolver {
                     .unwrap(),
             ),
         );
-        self.domain_faithfulness
+        self.predicate_notifier
             .drain_satisfied_predicates()
             .for_each(|predicate_id| {
                 self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
             });
-        self.domain_faithfulness
+        self.predicate_notifier
             .drain_falsified_predicates()
             .for_each(|predicate_id| {
                 self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
@@ -217,7 +217,7 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.domain_faithfulness,
+            &mut self.predicate_notifier,
             PropagatorId(0),
         );
         self.propagator_store[propagator].propagate(context)
@@ -237,7 +237,7 @@ impl TestSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
-                    &mut self.domain_faithfulness,
+                    &mut self.predicate_notifier,
                     PropagatorId(0),
                 );
                 self.propagator_store[propagator].propagate(context)?;

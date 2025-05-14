@@ -3,7 +3,8 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -13,7 +14,6 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
@@ -136,7 +136,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             self.updatable_structures.fix_task(&updated_task)
         }

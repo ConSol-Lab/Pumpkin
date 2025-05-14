@@ -1,7 +1,8 @@
 use super::PropagationContext;
 use super::PropagationContextWithTrailedValues;
 use super::ReadDomains;
-use crate::engine::domain_events::DomainEvents;
+use crate::engine::notification_engine::WatchListDomainEvents;
+use crate::engine::notification_engine::Watchers;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
@@ -9,9 +10,8 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
+use crate::engine::DomainEvents;
 use crate::engine::TrailedValues;
-use crate::engine::WatchListCP;
-use crate::engine::Watchers;
 
 /// [`PropagatorInitialisationContext`] is used when [`Propagator`]s are initialised after creation.
 ///
@@ -20,7 +20,7 @@ use crate::engine::Watchers;
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub(crate) struct PropagatorInitialisationContext<'a> {
-    watch_list: &'a mut WatchListCP,
+    watch_list: &'a mut WatchListDomainEvents,
     pub(crate) trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
@@ -30,7 +30,7 @@ pub(crate) struct PropagatorInitialisationContext<'a> {
 
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
-        watch_list: &'a mut WatchListCP,
+        watch_list: &'a mut WatchListDomainEvents,
         trailed_values: &'a mut TrailedValues,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,

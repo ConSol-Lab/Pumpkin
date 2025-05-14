@@ -7,12 +7,12 @@ use log::debug;
 use log::warn;
 
 use super::conflict_analysis::SemanticMinimiser;
+use super::notification_engine::PredicateNotifier;
 use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
-use super::DomainFaithfulness;
 use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
@@ -76,7 +76,7 @@ impl DebugHelper {
 
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
@@ -233,7 +233,7 @@ impl DebugHelper {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
-                let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut domain_faithfulness = PredicateNotifier::default();
                 let context = PropagationContextMut::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
@@ -346,7 +346,7 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let mut domain_faithfulness = DomainFaithfulness::default();
+                    let mut domain_faithfulness = PredicateNotifier::default();
                     let context = PropagationContextMut::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
@@ -411,7 +411,7 @@ impl DebugHelper {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
-            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut domain_faithfulness = PredicateNotifier::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
@@ -474,7 +474,7 @@ impl DebugHelper {
             if outcome.is_ok() {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
-                let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut domain_faithfulness = PredicateNotifier::default();
                 let context = PropagationContextMut::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,

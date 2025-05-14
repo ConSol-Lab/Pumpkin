@@ -1,9 +1,9 @@
-use super::trackers::DisequalityTracker;
-use super::trackers::DomainTracker;
-use super::trackers::DomainTrackerInformation;
-use super::trackers::EqualityTracker;
-use super::trackers::LowerBoundTracker;
-use super::trackers::UpperBoundTracker;
+use super::predicate_trackers::DisequalityTracker;
+use super::predicate_trackers::DomainTracker;
+use super::predicate_trackers::DomainTrackerInformation;
+use super::predicate_trackers::EqualityTracker;
+use super::predicate_trackers::LowerBoundTracker;
+use super::predicate_trackers::UpperBoundTracker;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
@@ -12,7 +12,7 @@ use crate::variables::DomainId;
 
 /// A structure for managing the trackers of the polarity for a specific [`DomainId`].
 #[derive(Debug, Clone)]
-pub(crate) struct DomainFaithfulnessForDomain {
+pub(crate) struct PredicateTrackerForDomain {
     /// A tracker for the lower-bound [`Predicate`]s which are tracked.
     lower_bound: LowerBoundTracker,
     /// A tracker for the upper-bound [`Predicate`]s which are tracked.
@@ -23,7 +23,7 @@ pub(crate) struct DomainFaithfulnessForDomain {
     equality: EqualityTracker,
 }
 
-impl DomainFaithfulnessForDomain {
+impl PredicateTrackerForDomain {
     pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
         Self {
             lower_bound: LowerBoundTracker::new(trailed_values),
@@ -34,7 +34,7 @@ impl DomainFaithfulnessForDomain {
     }
 }
 
-impl DomainFaithfulnessForDomain {
+impl PredicateTrackerForDomain {
     /// This method will extend the scope of [`DomainFaithfulnessForDomain`] by adding the provided
     /// [`Predicate`] to the scope of the correct tracker.
     pub(crate) fn watch_predicate(

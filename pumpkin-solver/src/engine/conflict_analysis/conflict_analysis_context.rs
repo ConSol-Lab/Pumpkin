@@ -7,6 +7,8 @@ use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
+use crate::engine::notification_engine::domain_event_notification::DomainEvent;
+use crate::engine::notification_engine::WatchListDomainEvents;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
@@ -16,10 +18,8 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
-use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::explain_root_assignment;
 use crate::proof::ProofLog;
@@ -39,11 +39,11 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
     pub(crate) last_notified_cp_trail_index: &'a mut usize,
-    pub(crate) watch_list_cp: &'a mut WatchListCP,
+    pub(crate) watch_list_cp: &'a mut WatchListDomainEvents,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
-    pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) event_drain: &'a mut Vec<(DomainEvent, DomainId)>,
 
-    pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) backtrack_event_drain: &'a mut Vec<(DomainEvent, DomainId)>,
     pub(crate) counters: &'a mut SolverStatistics,
 
     pub(crate) proof_log: &'a mut ProofLog,

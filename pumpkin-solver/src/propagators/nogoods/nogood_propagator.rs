@@ -16,6 +16,7 @@ use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
+use crate::engine::notification_engine::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
@@ -28,7 +29,6 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::DomainFaithfulness;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
@@ -131,14 +131,10 @@ impl NogoodPropagator {
         context: &mut PropagationContextMut,
     ) -> bool {
         context
-            .domain_faithfulness
+            .predicate_notifier
             .predicate_to_id
             .has_id_for_predicate(predicate)
-            && context
-                .domain_faithfulness
-                .predicate_to_id
-                .get_id(predicate)
-                == *predicate_id
+            && context.predicate_notifier.predicate_to_id.get_id(predicate) == *predicate_id
     }
 }
 
@@ -158,7 +154,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
-        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.predicate_notifier));
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
@@ -167,7 +163,7 @@ impl Propagator for NogoodPropagator {
                 assignments: context.assignments,
             },
             context.reason_store,
-            context.domain_faithfulness,
+            context.predicate_notifier,
         );
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
@@ -182,22 +178,22 @@ impl Propagator for NogoodPropagator {
             pumpkin_assert_moderate!(
                 context.is_predicate_satisfied(
                     context
-                        .domain_faithfulness
+                        .predicate_notifier
                         .get_predicate_for_id(predicate_id)
                 ),
                 "The predicate {} should be satisfied but was not - bounds: {}, {}",
                 context
-                    .domain_faithfulness
+                    .predicate_notifier
                     .get_predicate_for_id(predicate_id),
                 context.lower_bound(
                     &context
-                        .domain_faithfulness
+                        .predicate_notifier
                         .get_predicate_for_id(predicate_id)
                         .get_domain()
                 ),
                 context.upper_bound(
                     &context
-                        .domain_faithfulness
+                        .predicate_notifier
                         .get_predicate_for_id(predicate_id)
                         .get_domain()
                 )
@@ -247,7 +243,7 @@ impl Propagator for NogoodPropagator {
                         nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
-                            context.domain_faithfulness,
+                            context.predicate_notifier,
                             context.trailed_values,
                             &mut self.watch_lists,
                             nogood_predicates[1],
@@ -286,7 +282,7 @@ impl Propagator for NogoodPropagator {
             }
         }
 
-        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.predicate_notifier));
 
         Ok(())
     }
@@ -429,7 +425,7 @@ impl NogoodPropagator {
 
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
-            context.domain_faithfulness,
+            context.predicate_notifier,
             context.trailed_values,
             &mut self.watch_lists,
             self.nogood_predicates[new_id][0],
@@ -437,7 +433,7 @@ impl NogoodPropagator {
             context.assignments,
         );
         NogoodPropagator::add_watcher(
-            context.domain_faithfulness,
+            context.predicate_notifier,
             context.trailed_values,
             &mut self.watch_lists,
             self.nogood_predicates[new_id][1],
@@ -529,7 +525,7 @@ impl NogoodPropagator {
             self.permanent_nogoods.push(new_id);
 
             NogoodPropagator::add_watcher(
-                context.domain_faithfulness,
+                context.predicate_notifier,
                 context.trailed_values,
                 &mut self.watch_lists,
                 self.nogood_predicates[new_id][0],
@@ -537,7 +533,7 @@ impl NogoodPropagator {
                 context.assignments,
             );
             NogoodPropagator::add_watcher(
-                context.domain_faithfulness,
+                context.predicate_notifier,
                 context.trailed_values,
                 &mut self.watch_lists,
                 self.nogood_predicates[new_id][1],
@@ -554,7 +550,7 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
-        domain_faithfulness: &mut DomainFaithfulness,
+        predicate_notifier: &mut PredicateNotifier,
         trailed_values: &mut TrailedValues,
         watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
@@ -570,7 +566,7 @@ impl NogoodPropagator {
         }
 
         let predicate_id =
-            domain_faithfulness.track_predicate(predicate, trailed_values, assignments);
+            predicate_notifier.track_predicate(predicate, trailed_values, assignments);
         while watch_lists.len() <= predicate_id.index() {
             let _ = watch_lists.push(NogoodWatchList::default());
         }
@@ -596,7 +592,7 @@ impl NogoodPropagator {
         &mut self,
         context: PropagationContext,
         reason_store: &mut ReasonStore,
-        domain_faithfulness: &mut DomainFaithfulness,
+        domain_faithfulness: &mut PredicateNotifier,
     ) {
         // Only remove learned nogoods if there are too many.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_num_high_lbd_nogoods {
@@ -632,7 +628,7 @@ impl NogoodPropagator {
         &mut self,
         context: PropagationContext,
         reason_store: &mut ReasonStore,
-        domain_faithfulness: &mut DomainFaithfulness,
+        domain_faithfulness: &mut PredicateNotifier,
     ) {
         // First we sort the high LBD nogoods based on non-increasing "quality"
         self.sort_high_lbd_nogoods_by_quality_better_first();
@@ -849,7 +845,7 @@ impl NogoodPropagator {
     }
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
-    fn debug_is_properly_watched(&self, domain_faithfulness: &mut DomainFaithfulness) -> bool {
+    fn debug_is_properly_watched(&self, domain_faithfulness: &mut PredicateNotifier) -> bool {
         let mut is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
             pumpkin_assert_moderate!(domain_faithfulness
                 .get_id_for_predicate(predicate)
@@ -925,7 +921,7 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
-                &mut solver.domain_faithfulness,
+                &mut solver.predicate_notifier,
                 propagator,
             );
 
@@ -967,7 +963,7 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
-                &mut solver.domain_faithfulness,
+                &mut solver.predicate_notifier,
                 propagator,
             );
 
