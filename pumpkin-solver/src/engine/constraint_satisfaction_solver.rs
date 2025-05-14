@@ -1131,7 +1131,10 @@ impl ConstraintSatisfactionSolver {
         let mut empty_domain_reason: Vec<Predicate> = vec![];
         let _ = self.reason_store.get_or_compute(
             entry_reason,
-            ExplanationContext::from(&self.assignments),
+            ExplanationContext::without_working_nogood(
+                &self.assignments,
+                self.assignments.num_trail_entries() - 1,
+            ),
             &mut self.propagators,
             &mut empty_domain_reason,
         );
@@ -1267,7 +1270,7 @@ impl ConstraintSatisfactionSolver {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
+                ExplanationContext::new(&self.assignments, CurrentNogood::empty(), trail_idx),
                 &mut self.propagators,
                 &mut reason,
             );

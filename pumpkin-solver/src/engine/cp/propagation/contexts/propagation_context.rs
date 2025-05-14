@@ -260,6 +260,15 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.contains(self.assignments(), value)
     }
 
+    fn contains_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        var.contains_at_trail_position(self.assignments(), value, trail_position)
+    }
+
     fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
         var.iterate_domain(self.assignments())
     }

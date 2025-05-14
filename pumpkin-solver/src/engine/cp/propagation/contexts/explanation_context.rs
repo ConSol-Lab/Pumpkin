@@ -13,22 +13,41 @@ use crate::predicates::Predicate;
 pub(crate) struct ExplanationContext<'a> {
     assignments: &'a Assignments,
     current_nogood: CurrentNogood<'a>,
+    trail_position: usize,
 }
 
+#[cfg(test)]
 impl<'a> From<&'a Assignments> for ExplanationContext<'a> {
     fn from(value: &'a Assignments) -> Self {
         ExplanationContext {
             assignments: value,
             current_nogood: CurrentNogood::empty(),
+            trail_position: 0,
         }
     }
 }
 
 impl<'a> ExplanationContext<'a> {
-    pub(crate) fn new(assignments: &'a Assignments, current_nogood: CurrentNogood<'a>) -> Self {
+    pub(crate) fn new(
+        assignments: &'a Assignments,
+        current_nogood: CurrentNogood<'a>,
+        trail_position: usize,
+    ) -> Self {
         ExplanationContext {
             assignments,
             current_nogood,
+            trail_position,
+        }
+    }
+
+    pub(crate) fn without_working_nogood(
+        assignments: &'a Assignments,
+        trail_position: usize,
+    ) -> Self {
+        ExplanationContext {
+            assignments,
+            current_nogood: CurrentNogood::empty(),
+            trail_position,
         }
     }
 
@@ -40,6 +59,14 @@ impl<'a> ExplanationContext<'a> {
     #[allow(unused, reason = "it will be part of the public API at some point")]
     pub(crate) fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.current_nogood.iter()
+    }
+
+    /// Returns the trail position before which the propagation took place.
+    ///
+    /// For example, if the context is created for explaining a predicate `[x >= v]` at trail
+    /// position i, then this method will return `i - 1`
+    pub(crate) fn get_trail_position(&self) -> usize {
+        self.trail_position - 1
     }
 }
 

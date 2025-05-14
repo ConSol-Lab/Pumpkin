@@ -167,10 +167,21 @@ impl DebugHelper {
                 trail_entry
                     .reason
                     .expect("Expected checked propagation to have a reason"),
-                ExplanationContext::from(assignments),
+                ExplanationContext::without_working_nogood(assignments, trail_index),
                 propagators,
                 &mut reason,
             );
+
+            reason.iter().for_each(|antecedent| {
+                assert!(
+                    assignments.get_trail_position(antecedent) < Some(trail_index),
+                    "Expected {antecedent} ({:?}) < {:?} ({trail_index}) for propagator {:?}\n{reason:?} -> {}",
+                    assignments.get_trail_position(antecedent),
+                    trail_entry.predicate,
+                    propagators[reason_store.get_propagator(trail_entry.reason.unwrap())].name(),
+                    trail_entry.predicate
+                );
+            });
 
             result &= Self::debug_propagator_reason(
                 trail_entry.predicate,
