@@ -20,7 +20,7 @@ pub(crate) struct GeneralisedTotaliserEncoder {
     index_last_added_weighted_literal: usize,
     layers: Vec<Layer>,
     num_clauses_added: usize,
-    /// Useless, since this is only used when solving DIMACS problems, but required to add
+    /// Useless, since the encoder is only used when solving DIMACS problems, but required to add
     /// constraints.
     constraint_tag: ConstraintTag,
 }

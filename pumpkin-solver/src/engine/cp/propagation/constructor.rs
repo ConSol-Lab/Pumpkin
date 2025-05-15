@@ -177,7 +177,7 @@ impl PropagatorConstructorContext<'_> {
 /// Either owns a value or has a mutable reference to a value.
 ///
 /// Used to store data in a reborrowed context that needs to be 'shared' with the original context
-/// that was reborrowed from. For example, when dropping a reborred context, we want
+/// that was reborrowed from. For example, when dropping a reborrowed context, we want
 /// [`PropagatorConstructorContext::get_next_local_id`] in the original context to 'know' about the
 /// registered local ids in the reborrowed context.
 #[derive(Debug)]

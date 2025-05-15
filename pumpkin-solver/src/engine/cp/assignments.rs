@@ -784,7 +784,7 @@ pub(crate) struct ConstraintProgrammingTrailEntry {
     /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
     /// the update was due  to synchronisation from the propositional trail.
-    pub(crate) reason: Option<(ReasonRef, InferenceCode)>,
+    pub(crate) reason: Option<AssignmentReason>,
 }
 
 #[derive(Clone, Copy, Debug)]

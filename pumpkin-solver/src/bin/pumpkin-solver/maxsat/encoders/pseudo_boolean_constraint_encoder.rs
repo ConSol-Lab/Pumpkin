@@ -279,6 +279,7 @@ impl PseudoBooleanConstraintEncoder {
         k: u64,
         solver: &mut Solver,
     ) -> Result<Vec<WeightedLiteral>, EncodingError> {
+        // Useless, since the encoder is only used when solving DIMACS problems.
         let constraint_tag = solver.new_constraint_tag();
 
         // preprocess the input before the initial encoding considering the following:

@@ -63,7 +63,7 @@ impl StorageKey for InferenceCode {
 ///
 /// # Example
 /// ```
-/// declare_inference_label!(SomeInference);
+/// pumpkin_solver::declare_inference_label!(SomeInference);
 ///
 /// // Now we can use `SomeInference` when creating an inference code as it implements
 /// // `InferenceLabel`.
