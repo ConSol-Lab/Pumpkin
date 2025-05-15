@@ -170,8 +170,8 @@ pub(crate) trait Propagator: Downcast {
     ///
     /// *Note:* The context which is provided contains the _current_ state (i.e. the state when the
     /// explanation is generated); the bounds at the time of the propagation can be retrieved using
-    /// methods such as [`ExplanationContext::get_lower_bound_at_trail_position`] and
-    /// [`ExplanationContext::get_trail_position`].
+    /// methods such as [`ExplanationContext::get_lower_bound_at_trail_position`] in combination
+    /// with [`ExplanationContext::get_trail_position`].
     fn lazy_explanation(&mut self, _code: u64, _context: ExplanationContext) -> &[Predicate] {
         panic!(
             "{}",
