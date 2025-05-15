@@ -86,6 +86,9 @@ fn main() {
     );
 
     let mut solver = Solver::default();
+
+    // Creates a dummy constraint tag; since this example does not support proof logging the
+    // constraint tag does not matter.
     let constraint_tag = solver.new_constraint_tag();
 
     // Create 0-1 integer variables that make up the matrix.

@@ -163,7 +163,7 @@ pub trait StorageKey {
     fn create_from_index(index: usize) -> Self;
 }
 
-/// A reserved slot for a value.
+/// A reserved slot for a new value in a [`KeyedVec`].
 #[derive(Debug)]
 pub struct Slot<'a, Key, Value> {
     vec: &'a mut KeyedVec<Key, Value>,

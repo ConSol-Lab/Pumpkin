@@ -423,6 +423,8 @@ impl Solver {
 /// Functions for adding new constraints to the solver.
 impl Solver {
     /// Creates a new [`ConstraintTag`] that can be used to add constraints to the solver.
+    ///
+    /// See the [`ConstraintTag`] documentation for information on how the tags are used.
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.satisfaction_solver.new_constraint_tag()
     }
@@ -474,9 +476,8 @@ impl Solver {
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`].
     ///
-    /// The caller should ensure the solver is in the root state before calling this, either
-    /// because no call to [`Self::solve()`] has been made, or because
-    /// [`Self::restore_state_at_root()`] was called.
+    /// A propagator is provided through an implementation of [`PropagatorConstructor`]. The
+    /// propagator that will be added is [`PropagatorConstructor::PropagatorImpl`].
     ///
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and

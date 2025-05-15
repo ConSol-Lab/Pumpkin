@@ -118,7 +118,7 @@ pub struct ConstraintSatisfactionSolver {
     /// happen. The list is only traversed during synchronisation for now.
     propagators: PropagatorStore,
 
-    /// The constraint ids generated for this solver instance.
+    /// The [`ConstraintTag`]s generated for this solver instance.
     constraint_tags: KeyGenerator<ConstraintTag>,
 
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
@@ -1351,16 +1351,7 @@ impl ConstraintSatisfactionSolver {
 
 // methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
-    /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return `false`. If not, this returns `true`.
-    ///
-    /// The caller should ensure the solver is in the root state before calling this, either
-    /// because no call to [`Self::solve()`] has been made, or because
-    /// [`Self::restore_state_at_root()`] was called.
-    ///
-    /// If the solver is already in a conflicting state, i.e. a previous call to this method
-    /// already returned `false`, calling this again will not alter the solver in any way, and
-    /// `false` will be returned again.
+    /// See [`crate::Solver::add_propagator`] for documentation.
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,

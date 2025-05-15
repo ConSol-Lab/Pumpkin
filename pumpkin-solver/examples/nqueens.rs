@@ -52,6 +52,7 @@ fn main() {
         ..Default::default()
     });
 
+    // Create the constraint tags for the three all_different constraints.
     let c1_tag = solver.new_constraint_tag();
     let c2_tag = solver.new_constraint_tag();
     let c3_tag = solver.new_constraint_tag();

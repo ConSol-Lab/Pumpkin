@@ -135,10 +135,6 @@ impl PropagatorConstructorContext<'_> {
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
     /// in the solver and the proof.
-    #[allow(
-        unused,
-        reason = "will be used after propagators are converted to the new API"
-    )]
     pub(crate) fn create_inference_code(
         &mut self,
         constraint_tag: ConstraintTag,
@@ -178,6 +174,12 @@ impl PropagatorConstructorContext<'_> {
     }
 }
 
+/// Either owns a value or has a mutable reference to a value.
+///
+/// Used to store data in a reborrowed context that needs to be 'shared' with the original context
+/// that was reborrowed from. For example, when dropping a reborred context, we want
+/// [`PropagatorConstructorContext::get_next_local_id`] in the original context to 'know' about the
+/// registered local ids in the reborrowed context.
 #[derive(Debug)]
 enum RefOrOwned<'a, T> {
     Ref(&'a mut T),

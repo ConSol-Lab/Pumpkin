@@ -23,6 +23,8 @@ pub(crate) struct CardinalityNetworkEncoder {
     literals: Vec<Literal>,
     output: Vec<Literal>,
     num_clauses_added: usize,
+    /// Useless, since this is only used when solving DIMACS problems, but required to add
+    /// constraints.
     constraint_tag: ConstraintTag,
 }
 

@@ -404,13 +404,15 @@ impl Assignments {
     }
 }
 
+type AssignmentReason = (ReasonRef, InferenceCode);
+
 // methods to change the domains
 impl Assignments {
     pub(crate) fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
-        reason: Option<(ReasonRef, InferenceCode)>,
+        reason: Option<AssignmentReason>,
     ) -> Result<(), EmptyDomain> {
         // No need to do any changes if the new lower bound is weaker.
         if new_lower_bound <= self.get_lower_bound(domain_id) {
@@ -454,7 +456,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
-        reason: Option<(ReasonRef, InferenceCode)>,
+        reason: Option<AssignmentReason>,
     ) -> Result<(), EmptyDomain> {
         // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
@@ -498,7 +500,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
-        reason: Option<(ReasonRef, InferenceCode)>,
+        reason: Option<AssignmentReason>,
     ) -> Result<(), EmptyDomain> {
         // only tighten the lower bound if needed
         if self.get_lower_bound(domain_id) < assigned_value {
@@ -517,7 +519,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
-        reason: Option<(ReasonRef, InferenceCode)>,
+        reason: Option<AssignmentReason>,
     ) -> Result<(), EmptyDomain> {
         // No need to do any changes if the value is not present anyway.
         if !self.domains[domain_id].contains(removed_value_from_domain) {
@@ -572,7 +574,7 @@ impl Assignments {
     pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
-        reason: Option<(ReasonRef, InferenceCode)>,
+        reason: Option<AssignmentReason>,
     ) -> Result<(), EmptyDomain> {
         match predicate {
             Predicate::LowerBound {

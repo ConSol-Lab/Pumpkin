@@ -39,6 +39,9 @@ fn main() {
     let horizon = processing_times.iter().sum::<usize>();
 
     let mut solver = Solver::default();
+
+    // Creates a dummy constraint tag; since this example does not support proof logging the
+    // constraint tag does not matter.
     let constraint_tag = solver.new_constraint_tag();
 
     let start_variables = (0..n_tasks)

@@ -1,6 +1,5 @@
 use std::num::NonZero;
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use crate::containers::StorageKey;
 #[cfg(doc)]
@@ -10,10 +9,9 @@ use crate::Solver;
 /// the proof. Under the hood, a tag is just a [`NonZero<u32>`]. The underlying integer can be
 /// obtained through the [`Into`] implementation.
 ///
-/// Constraint tags cannot be created by users of Pumpkin. Instead, they are created through
-/// [`Solver::new_constraint_tag()`]. This is a concious decision, as derived constraints will also
-/// need to be tagged, which means the solver has to be responsible for maintaining their
-/// uniqueness.
+/// Constraint tags only be created through [`Solver::new_constraint_tag()`]. This is a conscious
+/// decision, as learned constraints will also need to be tagged, which means the solver has to be
+/// responsible for maintaining their uniqueness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ConstraintTag(NonZero<u32>);
 
@@ -62,6 +60,14 @@ impl StorageKey for InferenceCode {
 }
 
 /// Conveniently creates [`InferenceLabel`] for use in a propagator.
+///
+/// # Example
+/// ```
+/// declare_inference_label!(SomeInference);
+///
+/// // Now we can use `SomeInference` when creating an inference code as it implements
+/// // `InferenceLabel`.
+/// ```
 #[macro_export]
 macro_rules! declare_inference_label {
     ($name:ident) => {
@@ -95,12 +101,9 @@ macro_rules! declare_inference_label {
 /// A label of the inference mechanism that identifies a particular inference. It is combined with a
 /// [`ConstraintTag`] to create an [`InferenceCode`].
 ///
-/// For most propagators, it is obvious which inference algorithm is used. In that case, an
-/// inference label is not relevant. For that case, we have an [`UnnamedInference`] that can be
-/// provided.
-///
-/// However, for some, there may be different inference algorithms that are incomparable in terms of
-/// propagation strength. To discriminate between these algorithms, the inference label is used.
+/// There may be different inference algorithms for the same contraint that are incomparable in
+/// terms of propagation strength. To discriminate between these algorithms, the inference label is
+/// used.
 ///
 /// Conceptually, the inference label is a string. To aid with auto-complete, we introduce
 /// this as a strongly-typed concept. For most cases, creating an inference label is done with the
@@ -112,19 +115,4 @@ pub trait InferenceLabel {
     /// Users are encouraged to share the string allocation, which is why the return value is
     /// `Arc<str>`.
     fn to_str(&self) -> Arc<str>;
-}
-
-/// An [`InferenceLabel`] for inferences where it is clear what reasoning mechanism derived the
-/// inference.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct UnnamedInference;
-
-impl InferenceLabel for UnnamedInference {
-    fn to_str(&self) -> Arc<str> {
-        static LABEL: OnceLock<Arc<str>> = OnceLock::new();
-
-        let label = LABEL.get_or_init(|| Arc::from(""));
-
-        Arc::clone(label)
-    }
 }
