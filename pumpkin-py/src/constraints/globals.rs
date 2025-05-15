@@ -101,6 +101,13 @@ python_constraint! {
 }
 
 python_constraint! {
+    Disjunctive: disjunctive {
+        start_times: Vec<IntExpression>,
+        durations: Vec<i32>,
+    }
+}
+
+python_constraint! {
     Division: division {
         numerator: IntExpression,
         denominator: IntExpression,

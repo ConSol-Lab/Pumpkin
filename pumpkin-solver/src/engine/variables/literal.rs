@@ -157,6 +157,10 @@ impl IntegerVariable for Literal {
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
         self.integer_variable.watch_all_backtrack(watchers, events)
     }
+
+    fn domain_id(&self) -> DomainId {
+        self.integer_variable.domain_id()
+    }
 }
 
 impl PredicateConstructor for Literal {

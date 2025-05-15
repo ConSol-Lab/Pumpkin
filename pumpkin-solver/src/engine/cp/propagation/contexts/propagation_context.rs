@@ -232,6 +232,18 @@ pub(crate) trait ReadDomains: HasAssignments {
         self.lower_bound(var) == self.upper_bound(var)
     }
 
+    #[allow(unused, reason = "Might be used in the future")]
+    fn lower_bound_after_root_propagation<Var: IntegerVariable>(&self, var: &Var) -> i32 {
+        self.assignments()
+            .lower_bound_after_propagation(var.domain_id())
+    }
+
+    #[allow(unused, reason = "Might be used in the future")]
+    fn upper_bound_after_root_propagation<Var: IntegerVariable>(&self, var: &Var) -> i32 {
+        self.assignments()
+            .upper_bound_after_propagation(var.domain_id())
+    }
+
     fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
         var.lower_bound(self.assignments())
     }

@@ -26,6 +26,7 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
+            "pumpkin_disjunctive_strict" => compile_disjunctive(context, exprs)?,
             "array_int_maximum" => compile_array_int_maximum(context, exprs)?,
             "array_int_minimum" => compile_array_int_minimum(context, exprs)?,
             "int_max" => {
@@ -244,6 +245,21 @@ fn compile_cumulative(
         options.cumulative_options,
     )
     .post(context.solver, None);
+    Ok(post_result.is_ok())
+}
+
+fn compile_disjunctive(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_disjunctive_strict");
+
+    let start_times = context.resolve_integer_variable_array(&exprs[0])?;
+    let durations = context.resolve_array_integer_constants(&exprs[1])?;
+
+    let post_result =
+        constraints::disjunctive(start_times.iter().copied(), durations.iter().copied())
+            .post(context.solver, None);
     Ok(post_result.is_ok())
 }
 

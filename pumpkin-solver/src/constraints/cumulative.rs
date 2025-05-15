@@ -216,7 +216,6 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 self.options.propagator_options,
             )
             .post(solver, tag),
-
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
                     &self.tasks,
@@ -256,6 +255,14 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                 )
                 .post(solver, tag)
+            }
+            CumulativePropagationMethod::EnergeticReasoning => {
+                todo!("Call your Energetic Reasoning propagator here!")
+                // EnergeticReasoning::new(
+                //    &self.tasks,
+                //    self.resource_capacity,
+                // )
+                //.post(solver, tag)
             }
         }
     }
@@ -312,6 +319,9 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                 )
                 .implied_by(solver, reification_literal, tag)
+            }
+            CumulativePropagationMethod::EnergeticReasoning => {
+                todo!("Don't think this should be necessary but could call it here as well")
             }
         }
     }

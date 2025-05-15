@@ -1,5 +1,6 @@
 use enumset::EnumSet;
 
+use super::DomainId;
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
@@ -16,6 +17,8 @@ pub trait IntegerVariable:
     Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView>
 {
     type AffineView: IntegerVariable;
+
+    fn domain_id(&self) -> DomainId;
 
     /// Get the lower bound of the variable.
     fn lower_bound(&self, assignment: &Assignments) -> i32;

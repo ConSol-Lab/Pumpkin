@@ -256,6 +256,28 @@ impl Assignments {
             }
         }
     }
+
+    #[allow(unused, reason = "Might be used in the future")]
+    pub(crate) fn lower_bound_after_propagation(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id]
+            .lower_bound_updates
+            .iter()
+            .take_while(|update| update.decision_level == 0)
+            .last()
+            .expect("Expected at least a single item at decision level 0")
+            .bound
+    }
+
+    #[allow(unused, reason = "Might be used in the future")]
+    pub(crate) fn upper_bound_after_propagation(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id]
+            .upper_bound_updates
+            .iter()
+            .take_while(|update| update.decision_level == 0)
+            .last()
+            .expect("Expected at least a single item at decision level 0")
+            .bound
+    }
 }
 
 // methods for getting info about the domains

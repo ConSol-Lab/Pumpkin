@@ -55,9 +55,10 @@ pub enum CumulativePropagationMethod {
     TimeTablePerPointIncremental,
     TimeTablePerPointIncrementalSynchronised,
     TimeTableOverInterval,
-    #[default]
     TimeTableOverIntervalIncremental,
     TimeTableOverIntervalIncrementalSynchronised,
+    #[default]
+    EnergeticReasoning,
 }
 
 impl Display for CumulativePropagationMethod {
@@ -79,6 +80,7 @@ impl Display for CumulativePropagationMethod {
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 write!(f, "time-table-over-interval-incremental-synchronised")
             }
+            CumulativePropagationMethod::EnergeticReasoning => write!(f, "energetic-reasoning"),
         }
     }
 }

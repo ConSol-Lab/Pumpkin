@@ -106,6 +106,10 @@ impl IntegerVariable for DomainId {
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         event.unwrap()
     }
+
+    fn domain_id(&self) -> DomainId {
+        *self
+    }
 }
 
 impl TransformableVariable<AffineView<DomainId>> for DomainId {

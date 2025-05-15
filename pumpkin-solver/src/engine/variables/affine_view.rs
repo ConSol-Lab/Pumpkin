@@ -214,6 +214,10 @@ where
             self.inner.unpack_event(event)
         }
     }
+
+    fn domain_id(&self) -> DomainId {
+        self.inner.domain_id()
+    }
 }
 
 impl<View> TransformableVariable<AffineView<View>> for AffineView<View>

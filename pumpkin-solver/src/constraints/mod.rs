@@ -28,6 +28,7 @@ mod boolean;
 mod clause;
 mod constraint_poster;
 mod cumulative;
+mod disjunctive;
 mod element;
 
 use std::num::NonZero;
@@ -38,6 +39,7 @@ pub use boolean::*;
 pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
+pub use disjunctive::*;
 pub use element::*;
 
 use crate::engine::propagation::Propagator;
@@ -163,5 +165,24 @@ pub trait NegatableConstraint: Constraint {
 
         self.implied_by(solver, reification_literal, tag)?;
         negation.implied_by(solver, !reification_literal, tag)
+    }
+}
+
+impl Constraint for () {
+    fn post(
+        self,
+        _solver: &mut Solver,
+        _tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        unreachable!()
+    }
+
+    fn implied_by(
+        self,
+        _solver: &mut Solver,
+        _reification_literal: Literal,
+        _tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        unreachable!()
     }
 }
