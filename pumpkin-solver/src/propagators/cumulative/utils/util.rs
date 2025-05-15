@@ -6,7 +6,7 @@ use std::rc::Rc;
 use enumset::enum_set;
 
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::notification_engine::domain_event_notification::DomainEvent;
+use crate::engine::notifications::domain_event_notification::DomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagatorInitialisationContext;

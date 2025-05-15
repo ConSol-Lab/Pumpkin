@@ -3,7 +3,7 @@ use itertools::Itertools;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::notification_engine::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::contexts::ManipulateTrailedValues;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;

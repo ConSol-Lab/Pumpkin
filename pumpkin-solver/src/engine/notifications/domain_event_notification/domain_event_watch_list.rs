@@ -9,11 +9,9 @@ use crate::engine::variables::DomainId;
 
 #[derive(Default, Debug)]
 pub(crate) struct WatchListDomainEvents {
-    watchers: KeyedVec<DomainId, WatcherDomainEvents>, /* contains propagator ids of propagators
-                                                        * that
-                                                        * watch domain changes of the i-th
-                                                        * integer
-                                                        * variable */
+    /// Contains propagator ids of propagators that watch domain changes of the i-th integer
+    /// variable
+    watchers: KeyedVec<DomainId, WatcherDomainEvents>,
     is_watching_anything: bool,
     is_watching_any_backtrack_events: bool,
 }

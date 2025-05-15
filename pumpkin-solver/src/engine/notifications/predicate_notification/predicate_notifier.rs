@@ -3,7 +3,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::notification_engine::domain_event_notification::DomainEvent;
+use crate::engine::notifications::domain_event_notification::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicate;
@@ -34,7 +34,6 @@ pub(crate) struct PredicateNotifier {
 impl PredicateNotifier {
     /// Returns the falsified predicates; note that this structure will be cleared once it is
     /// dropped.
-    #[allow(dead_code, reason = "Will be part of the public API")]
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }

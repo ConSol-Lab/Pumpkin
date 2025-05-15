@@ -17,7 +17,7 @@ mod tests {
     use crate::conjunction;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
-    use crate::engine::notification_engine::PredicateNotifier;
+    use crate::engine::notifications::PredicateNotifier;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;

@@ -1,8 +1,8 @@
 use super::PropagationContext;
 use super::PropagationContextWithTrailedValues;
 use super::ReadDomains;
-use crate::engine::notification_engine::WatchListDomainEvents;
-use crate::engine::notification_engine::Watchers;
+use crate::engine::notifications::WatchListDomainEvents;
+use crate::engine::notifications::Watchers;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;

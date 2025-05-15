@@ -1,5 +1,5 @@
 use crate::engine::conflict_analysis::SemanticMinimiser;
-use crate::engine::notification_engine::PredicateNotifier;
+use crate::engine::notifications::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;

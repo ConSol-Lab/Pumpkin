@@ -7,7 +7,7 @@ use log::debug;
 use log::warn;
 
 use super::conflict_analysis::SemanticMinimiser;
-use super::notification_engine::PredicateNotifier;
+use super::notifications::PredicateNotifier;
 use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;

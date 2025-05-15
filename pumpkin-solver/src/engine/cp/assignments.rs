@@ -2,8 +2,8 @@ use crate::basic_types::HashMap;
 use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::engine::cp::reason::ReasonRef;
-use crate::engine::notification_engine::domain_event_notification::DomainEvent;
-use crate::engine::notification_engine::EventSink;
+use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::notifications::EventSink;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
@@ -1423,8 +1423,8 @@ impl Iterator for IntegerDomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::notification_engine::domain_event_notification::DomainEvent;
-    use crate::engine::notification_engine::EventSink;
+    use crate::engine::notifications::domain_event_notification::DomainEvent;
+    use crate::engine::notifications::EventSink;
 
     #[test]
     fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {

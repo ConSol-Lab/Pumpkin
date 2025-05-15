@@ -44,31 +44,20 @@ impl PredicateTrackerForDomain {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => self
-                .lower_bound
-                .track(lower_bound, id, trailed_values, assignments),
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => self
-                .upper_bound
-                .track(upper_bound, id, trailed_values, assignments),
-            Predicate::NotEqual {
-                domain_id: _,
-                not_equal_constant,
-            } => self
-                .disequality
-                .track(not_equal_constant, id, trailed_values, assignments),
-            Predicate::Equal {
-                domain_id: _,
-                equality_constant,
-            } => self
-                .equality
-                .track(equality_constant, id, trailed_values, assignments),
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            self.lower_bound
+                .track(value, id, trailed_values, assignments)
+        } else if predicate.is_upper_bound_predicate() {
+            self.upper_bound
+                .track(value, id, trailed_values, assignments)
+        } else if predicate.is_not_equal_predicate() {
+            self.disequality
+                .track(value, id, trailed_values, assignments)
+        } else if predicate.is_equality_predicate() {
+            self.equality.track(value, id, trailed_values, assignments)
+        } else {
+            panic!()
         }
     }
 

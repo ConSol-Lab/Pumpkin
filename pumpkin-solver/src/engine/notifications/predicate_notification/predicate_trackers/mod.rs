@@ -250,20 +250,16 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been falsified.
-    ///
-    /// NOTE: Currently, no propagator is interested whether a predicate has been falsified, this
-    /// will be changed in the future.
     fn predicate_has_been_falsified(
         &self,
-        _index: usize,
-        _falsified_predicates: &mut Vec<PredicateId>,
+        index: usize,
+        falsified_predicates: &mut Vec<PredicateId>,
     ) {
-        // TODO: At the moment, no propagator is interested
-        // let predicate_id = self.get_ids()[index];
-        // if predicate_id.id == u32::MAX {
-        //    return;
-        //}
-        // falsified_predicates.push(self.get_ids()[index])
+        let predicate_id = self.get_ids()[index];
+        if predicate_id.id == u32::MAX {
+            return;
+        }
+        falsified_predicates.push(self.get_ids()[index])
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].

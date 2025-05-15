@@ -6,7 +6,6 @@ use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodInfo;
-use super::NogoodWatchList;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
@@ -15,7 +14,7 @@ use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
-use crate::engine::notification_engine::PredicateNotifier;
+use crate::engine::notifications::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
@@ -62,7 +61,7 @@ pub(crate) struct NogoodPropagator {
     delete_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
     // TODO: could improve the data structure for watching.
-    watch_lists: KeyedVec<PredicateId, NogoodWatchList>,
+    watch_lists: KeyedVec<PredicateId, Vec<NogoodId>>,
     /// Keep track of the events which the propagator has been notified of.
     updated_predicate_ids: Vec<PredicateId>,
     /// A helper for calculating the LBD for the nogoods.
@@ -168,7 +167,7 @@ impl Propagator for NogoodPropagator {
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(
                 context.assignments().num_domains() as usize + 1,
-                NogoodWatchList::default(),
+                Vec::default(),
             );
         }
 
@@ -198,8 +197,8 @@ impl Propagator for NogoodPropagator {
                 )
             );
             let mut index = 0;
-            while index < self.watch_lists[predicate_id].watchers.len() {
-                let nogood_id = self.watch_lists[predicate_id].watchers[index];
+            while index < self.watch_lists[predicate_id].len() {
+                let nogood_id = self.watch_lists[predicate_id][index];
 
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
@@ -257,7 +256,7 @@ impl Propagator for NogoodPropagator {
 
                 if found_new_watch {
                     // We remove the current watcher
-                    let _ = self.watch_lists[predicate_id].watchers.swap_remove(index);
+                    let _ = self.watch_lists[predicate_id].swap_remove(index);
                     continue;
                 }
 
@@ -549,36 +548,31 @@ impl NogoodPropagator {
     fn add_watcher(
         predicate_notifier: &mut PredicateNotifier,
         trailed_values: &mut TrailedValues,
-        watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<NogoodId>>,
         predicate: Predicate,
         nogood_id: NogoodId,
         assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
         if predicate.get_domain().id as usize >= watch_lists.len() {
-            watch_lists.resize(
-                (predicate.get_domain().id + 1) as usize,
-                NogoodWatchList::default(),
-            );
+            watch_lists.resize((predicate.get_domain().id + 1) as usize, Vec::default());
         }
 
         let predicate_id =
             predicate_notifier.track_predicate(predicate, trailed_values, assignments);
         while watch_lists.len() <= predicate_id.index() {
-            let _ = watch_lists.push(NogoodWatchList::default());
+            let _ = watch_lists.push(Vec::default());
         }
-        watch_lists[predicate_id].add_watcher(nogood_id);
+        watch_lists[predicate_id].push(nogood_id);
     }
 
     /// Removes the noogd from the watch list
     fn remove_nogood_from_watch_list(
-        watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<NogoodId>>,
         predicate_id: PredicateId,
         id: NogoodId,
     ) {
-        watch_lists[predicate_id]
-            .watchers
-            .retain(|nogood_id| *nogood_id != id);
+        watch_lists[predicate_id].retain(|nogood_id| *nogood_id != id);
     }
 }
 
@@ -846,7 +840,7 @@ impl NogoodPropagator {
         let mut is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
             pumpkin_assert_moderate!(predicate_notifier.get_id_for_predicate(predicate).is_some());
             let predicate_id = predicate_notifier.get_id_for_predicate(predicate).unwrap();
-            self.watch_lists[predicate_id].watchers.contains(&nogood_id)
+            self.watch_lists[predicate_id].contains(&nogood_id)
         };
 
         for nogood in self.nogood_predicates.iter().enumerate() {

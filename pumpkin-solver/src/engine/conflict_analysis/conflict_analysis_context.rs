@@ -7,8 +7,7 @@ use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::notification_engine::domain_event_notification::DomainEvent;
-use crate::engine::notification_engine::WatchListDomainEvents;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
@@ -25,7 +24,6 @@ use crate::proof::explain_root_assignment;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_simple;
-use crate::variables::DomainId;
 
 /// Used during conflict analysis to provide the necessary information.
 ///
@@ -38,12 +36,10 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
-    pub(crate) last_notified_cp_trail_index: &'a mut usize,
-    pub(crate) watch_list_domain_events: &'a mut WatchListDomainEvents,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
-    pub(crate) event_drain: &'a mut Vec<(DomainEvent, DomainId)>,
 
-    pub(crate) backtrack_event_drain: &'a mut Vec<(DomainEvent, DomainId)>,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
+
     pub(crate) counters: &'a mut SolverStatistics,
 
     pub(crate) proof_log: &'a mut ProofLog,
@@ -75,14 +71,11 @@ impl ConflictAnalysisContext<'_> {
     /// Backtracks the solver to the provided backtrack level.
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         ConstraintSatisfactionSolver::backtrack(
+            self.notification_engine,
             self.assignments,
-            self.last_notified_cp_trail_index,
             self.reason_store,
             self.propagator_queue,
-            self.watch_list_domain_events,
             self.propagators,
-            self.event_drain,
-            self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
             self.trailed_values,

@@ -427,7 +427,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use crate::engine::conflict_analysis::SemanticMinimiser;
-    use crate::engine::notification_engine::PredicateNotifier;
+    use crate::engine::notifications::PredicateNotifier;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
