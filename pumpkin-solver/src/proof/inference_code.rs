@@ -62,8 +62,8 @@ impl StorageKey for InferenceCode {
 /// Conveniently creates [`InferenceLabel`] for use in a propagator.
 ///
 /// # Example
-/// ```
-/// pumpkin_solver::declare_inference_label!(SomeInference);
+/// ```ignore
+/// declare_inference_label!(SomeInference);
 ///
 /// // Now we can use `SomeInference` when creating an inference code as it implements
 /// // `InferenceLabel`.
