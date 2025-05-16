@@ -66,33 +66,20 @@ impl SemanticMinimiser {
         // Apply the predicates to the domains in a straight-forward way.
         // Later we will take into account the effect of holes on the domain.
         for predicate in nogood {
-            self.present_ids.insert(predicate.get_domain());
+            let domain_id = predicate.get_domain();
+            self.present_ids.insert(domain_id);
+            let value = predicate.get_right_hand_side();
 
-            match *predicate {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => {
-                    self.domains[domain_id].tighten_lower_bound(lower_bound);
-                }
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => {
-                    self.domains[domain_id].tighten_upper_bound(upper_bound);
-                }
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => {
-                    self.domains[domain_id].add_hole(not_equal_constant);
-                }
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => {
-                    self.domains[domain_id].assign(equality_constant);
-                }
+            if predicate.is_lower_bound_predicate() {
+                self.domains[domain_id].tighten_lower_bound(value);
+            } else if predicate.is_upper_bound_predicate() {
+                self.domains[domain_id].tighten_upper_bound(value);
+            } else if predicate.is_not_equal_predicate() {
+                self.domains[domain_id].add_hole(value);
+            } else if predicate.is_equality_predicate() {
+                self.domains[domain_id].assign(value);
+            } else {
+                panic!()
             }
         }
         for domain_id in self.present_ids.iter() {

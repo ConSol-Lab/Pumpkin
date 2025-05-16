@@ -9,6 +9,7 @@ use drcp_format::IntAtomicConstraint;
 use drcp_format::LiteralDefinitions;
 
 use crate::basic_types::HashMap;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -68,25 +69,25 @@ impl ProofLiterals {
             .map(|&reified_predicate| {
                 assert!(rhs == 0 || rhs == 1);
 
-                match predicate {
+                match predicate.get_type() {
                     // The `predicate` is false
-                    Predicate::UpperBound { upper_bound: 0, .. }
-                    | Predicate::Equal {
+                    PredicateType::UpperBound { upper_bound: 0, .. }
+                    | PredicateType::Equal {
                         equality_constant: 0,
                         ..
                     }
-                    | Predicate::NotEqual {
+                    | PredicateType::NotEqual {
                         not_equal_constant: 1,
                         ..
                     } => !reified_predicate,
 
                     // The `predicate` is true
-                    Predicate::LowerBound { lower_bound: 1, .. }
-                    | Predicate::Equal {
+                    PredicateType::LowerBound { lower_bound: 1, .. }
+                    | PredicateType::Equal {
                         equality_constant: 1,
                         ..
                     }
-                    | Predicate::NotEqual {
+                    | PredicateType::NotEqual {
                         not_equal_constant: 0,
                         ..
                     } => reified_predicate,
@@ -101,8 +102,8 @@ fn predicate_to_atomic(
     predicate: Predicate,
     variable_names: &VariableNames,
 ) -> AtomicConstraint<&str> {
-    match predicate {
-        Predicate::UpperBound {
+    match predicate.get_type() {
+        PredicateType::UpperBound {
             domain_id,
             upper_bound,
         } => AtomicConstraint::Int(IntAtomicConstraint {
@@ -112,7 +113,7 @@ fn predicate_to_atomic(
             comparison: Comparison::LessThanEqual,
             value: upper_bound.into(),
         }),
-        Predicate::Equal {
+        PredicateType::Equal {
             domain_id,
             equality_constant,
         } => AtomicConstraint::Int(IntAtomicConstraint {
@@ -123,7 +124,7 @@ fn predicate_to_atomic(
             value: equality_constant.into(),
         }),
 
-        Predicate::NotEqual { .. } | Predicate::LowerBound { .. } => {
+        PredicateType::NotEqual { .. } | PredicateType::LowerBound { .. } => {
             panic!("Only Equal and UpperBound predicates should be in the literal definition")
         }
     }
@@ -136,9 +137,10 @@ impl LiteralCodeProvider for ProofLiterals {
         // Determine whether `literal` is a reification of another predicate.
         let literal = self.get_underlying_predicate(literal).unwrap_or(literal);
 
-        let key = match literal {
-            l @ (Predicate::UpperBound { .. } | Predicate::Equal { .. }) => l,
-            l @ (Predicate::LowerBound { .. } | Predicate::NotEqual { .. }) => !l,
+        let key = if literal.is_upper_bound_predicate() || literal.is_equality_predicate() {
+            literal
+        } else {
+            !literal
         };
 
         let next_code = NonZeroU32::new(self.variables.len() as u32 + 1).unwrap();

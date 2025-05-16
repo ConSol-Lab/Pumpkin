@@ -238,30 +238,21 @@ impl Assignments {
     }
 
     pub(crate) fn is_initial_bound(&self, predicate: Predicate) -> bool {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => lower_bound <= self.domains[domain_id].initial_lower_bound(),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => upper_bound >= self.domains[domain_id].initial_upper_bound(),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant: _,
-            } => {
-                self.get_trail_position(&predicate).unwrap_or_else(|| {
-                    panic!("Expected to be able to get trail entry of {predicate}")
-                }) <= self.domains[domain_id].initial_bounds_below_trail
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                equality_constant == self.domains[domain_id].initial_lower_bound()
-                    && equality_constant == self.domains[domain_id].initial_upper_bound()
-            }
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            value <= self.domains[domain_id].initial_lower_bound()
+        } else if predicate.is_upper_bound_predicate() {
+            value >= self.domains[domain_id].initial_upper_bound()
+        } else if predicate.is_not_equal_predicate() {
+            self.get_trail_position(&predicate)
+                .unwrap_or_else(|| panic!("Expected to be able to get trail entry of {predicate}"))
+                <= self.domains[domain_id].initial_bounds_below_trail
+        } else if predicate.is_equality_predicate() {
+            value == self.domains[domain_id].initial_lower_bound()
+                && value == self.domains[domain_id].initial_upper_bound()
+        } else {
+            panic!()
         }
     }
 }
@@ -424,10 +415,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::LowerBound {
-            domain_id,
-            lower_bound: new_lower_bound,
-        };
+        let predicate = predicate!(domain_id >= new_lower_bound);
 
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
@@ -468,10 +456,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::UpperBound {
-            domain_id,
-            upper_bound: new_upper_bound,
-        };
+        let predicate = predicate!(domain_id <= new_upper_bound);
 
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
@@ -531,10 +516,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::NotEqual {
-            domain_id,
-            not_equal_constant: removed_value_from_domain,
-        };
+        let predicate = predicate!(domain_id != removed_value_from_domain);
 
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
@@ -581,23 +563,18 @@ impl Assignments {
         predicate: Predicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.tighten_lower_bound(domain_id, lower_bound, reason),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.tighten_upper_bound(domain_id, upper_bound, reason),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => self.remove_value_from_domain(domain_id, not_equal_constant, reason),
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => self.make_assignment(domain_id, equality_constant, reason),
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            self.tighten_lower_bound(domain_id, value, reason)
+        } else if predicate.is_upper_bound_predicate() {
+            self.tighten_upper_bound(domain_id, value, reason)
+        } else if predicate.is_not_equal_predicate() {
+            self.remove_value_from_domain(domain_id, value, reason)
+        } else if predicate.is_equality_predicate() {
+            self.make_assignment(domain_id, value, reason)
+        } else {
+            panic!()
         }
     }
 
@@ -605,59 +582,46 @@ impl Assignments {
     /// [`Assignments`]. In case the predicate is not assigned yet (neither true nor false),
     /// returns None.
     pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => {
-                if self.get_lower_bound(domain_id) >= lower_bound {
-                    Some(true)
-                } else if self.get_upper_bound(domain_id) < lower_bound {
-                    Some(false)
-                } else {
-                    None
-                }
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            if self.get_lower_bound(domain_id) >= value {
+                Some(true)
+            } else if self.get_upper_bound(domain_id) < value {
+                Some(false)
+            } else {
+                None
             }
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => {
-                if self.get_upper_bound(domain_id) <= upper_bound {
-                    Some(true)
-                } else if self.get_lower_bound(domain_id) > upper_bound {
-                    Some(false)
-                } else {
-                    None
-                }
+        } else if predicate.is_upper_bound_predicate() {
+            if self.get_upper_bound(domain_id) <= value {
+                Some(true)
+            } else if self.get_lower_bound(domain_id) > value {
+                Some(false)
+            } else {
+                None
             }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                if !self.is_value_in_domain(domain_id, not_equal_constant) {
-                    Some(true)
-                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
-                    // Previous branch concluded the value is not in the domain, so if the variable
-                    // is assigned, then it is assigned to the not equals value.
-                    pumpkin_assert_simple!(assigned_value == not_equal_constant);
-                    Some(false)
-                } else {
-                    None
-                }
+        } else if predicate.is_not_equal_predicate() {
+            if !self.is_value_in_domain(domain_id, value) {
+                Some(true)
+            } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                // Previous branch concluded the value is not in the domain, so if the variable
+                // is assigned, then it is assigned to the not equals value.
+                pumpkin_assert_simple!(assigned_value == value);
+                Some(false)
+            } else {
+                None
             }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                if !self.is_value_in_domain(domain_id, equality_constant) {
-                    Some(false)
-                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
-                    pumpkin_assert_moderate!(assigned_value == equality_constant);
-                    Some(true)
-                } else {
-                    None
-                }
+        } else if predicate.is_equality_predicate() {
+            if !self.is_value_in_domain(domain_id, value) {
+                Some(false)
+            } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                pumpkin_assert_moderate!(assigned_value == value);
+                Some(true)
+            } else {
+                None
             }
+        } else {
+            panic!()
         }
     }
 
@@ -673,29 +637,18 @@ impl Assignments {
     }
 
     pub(crate) fn is_implied_by_bounds(&self, predicate: Predicate) -> bool {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.get_lower_bound(domain_id) >= lower_bound,
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.get_upper_bound(domain_id) <= upper_bound,
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                self.get_lower_bound(domain_id) > not_equal_constant
-                    || self.get_upper_bound(domain_id) < not_equal_constant
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                self.get_lower_bound(domain_id) == equality_constant
-                    && equality_constant == self.get_upper_bound(domain_id)
-            }
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            self.get_lower_bound(domain_id) >= value
+        } else if predicate.is_upper_bound_predicate() {
+            self.get_upper_bound(domain_id) <= value
+        } else if predicate.is_not_equal_predicate() {
+            self.get_lower_bound(domain_id) > value || self.get_upper_bound(domain_id) < value
+        } else if predicate.is_equality_predicate() {
+            self.get_lower_bound(domain_id) == value && value == self.get_upper_bound(domain_id)
+        } else {
+            panic!()
         }
     }
 
@@ -735,7 +688,7 @@ impl Assignments {
             let add_on_lower_bound = lower_bound_before.abs_diff(entry.old_lower_bound) as u64;
             self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
 
-            if let Predicate::NotEqual { .. } = entry.predicate {
+            if entry.predicate.is_not_equal_predicate() {
                 if add_on_lower_bound + add_on_upper_bound == 0 {
                     self.pruned_values -= 1;
                 }
@@ -761,7 +714,7 @@ impl Assignments {
                 if upper_bound_before != self.domains[domain_id].upper_bound() {
                     self.backtrack_events.event_occurred(DomainEvent::UpperBound, domain_id)
                 }
-                if matches!(entry.predicate, Predicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
+                if entry.predicate.is_not_equal_predicate() {
                     self.backtrack_events.event_occurred(DomainEvent::Removal, domain_id)
                 }
             }
@@ -1181,62 +1134,47 @@ impl IntegerDomain {
     }
 
     fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
-        match entry.predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound: _,
-            } => {
-                pumpkin_assert_moderate!(domain_id == self.id);
+        let predicate = entry.predicate;
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            pumpkin_assert_moderate!(domain_id == self.id);
 
+            let _ = self.lower_bound_updates.pop();
+            pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
+        } else if predicate.is_upper_bound_predicate() {
+            pumpkin_assert_moderate!(domain_id == self.id);
+
+            let _ = self.upper_bound_updates.pop();
+            pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
+        } else if predicate.is_not_equal_predicate() {
+            pumpkin_assert_moderate!(domain_id == self.id);
+
+            let hole_update = self
+                .hole_updates
+                .pop()
+                .expect("Must have record of domain removal.");
+            pumpkin_assert_moderate!(hole_update.removed_value == value);
+
+            let _ = self.holes.remove(&value).expect("Must be present.");
+
+            if hole_update.triggered_lower_bound_update {
                 let _ = self.lower_bound_updates.pop();
                 pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
             }
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound: _,
-            } => {
-                pumpkin_assert_moderate!(domain_id == self.id);
 
+            if hole_update.triggered_upper_bound_update {
                 let _ = self.upper_bound_updates.pop();
                 pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
             }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                pumpkin_assert_moderate!(domain_id == self.id);
-
-                let hole_update = self
-                    .hole_updates
-                    .pop()
-                    .expect("Must have record of domain removal.");
-                pumpkin_assert_moderate!(hole_update.removed_value == not_equal_constant);
-
-                let _ = self
-                    .holes
-                    .remove(&not_equal_constant)
-                    .expect("Must be present.");
-
-                if hole_update.triggered_lower_bound_update {
-                    let _ = self.lower_bound_updates.pop();
-                    pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
-                }
-
-                if hole_update.triggered_upper_bound_update {
-                    let _ = self.upper_bound_updates.pop();
-                    pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
-                }
-            }
-            Predicate::Equal {
-                domain_id: _,
-                equality_constant: _,
-            } => {
-                // I think we never push equality predicates to the trail
-                // in the current version. Equality gets substituted
-                // by a lower and upper bound predicate.
-                unreachable!()
-            }
-        };
+        } else if predicate.is_equality_predicate() {
+            // I think we never push equality predicates to the trail
+            // in the current version. Equality gets substituted
+            // by a lower and upper bound predicate.
+            unreachable!()
+        } else {
+            panic!()
+        }
 
         // these asserts will be removed, for now it is a sanity check
         // later we may remove the old bound from the trail entry since it is not needed
@@ -1247,105 +1185,78 @@ impl IntegerDomain {
     }
 
     fn get_update_info(&self, predicate: &Predicate) -> Option<PairDecisionLevelTrailPosition> {
-        // Perhaps the recursion could be done in a cleaner way,
-        // e.g., separate functions dependibng on the type of predicate.
-        // For the initial version, the current version is okay.
-        match predicate {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => {
-                // Recall that by the nature of the updates,
-                // the updates are stored in increasing order of the lower bound.
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            // Recall that by the nature of the updates,
+            // the updates are stored in increasing order of the lower bound.
 
-                // for now a simple inefficient linear scan
-                // in the future this should be done with binary search
+            // for now a simple inefficient linear scan
+            // in the future this should be done with binary search
 
-                // find the update with smallest lower bound
-                // that is greater than or equal to the input lower bound
-                self.lower_bound_updates
-                    .iter()
-                    .find(|u| u.bound >= *lower_bound)
-                    .map(|u| PairDecisionLevelTrailPosition {
-                        decision_level: u.decision_level,
-                        trail_position: u.trail_position,
-                    })
-            }
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => {
-                // Recall that by the nature of the updates,
-                // the updates are stored in decreasing order of the upper bound.
+            // find the update with smallest lower bound
+            // that is greater than or equal to the input lower bound
+            self.lower_bound_updates
+                .iter()
+                .find(|u| u.bound >= value)
+                .map(|u| PairDecisionLevelTrailPosition {
+                    decision_level: u.decision_level,
+                    trail_position: u.trail_position,
+                })
+        } else if predicate.is_upper_bound_predicate() {
+            // Recall that by the nature of the updates,
+            // the updates are stored in decreasing order of the upper bound.
 
-                // for now a simple inefficient linear scan
-                // in the future this should be done with binary search
+            // for now a simple inefficient linear scan
+            // in the future this should be done with binary search
 
-                // find the update with greatest upper bound
-                // that is smaller than or equal to the input upper bound
-                self.upper_bound_updates
-                    .iter()
-                    .find(|u| u.bound <= *upper_bound)
-                    .map(|u| PairDecisionLevelTrailPosition {
-                        decision_level: u.decision_level,
-                        trail_position: u.trail_position,
-                    })
-            }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                // Check the explictly stored holes.
-                // If the value has been removed explicitly,
-                // then the stored time is the first time the value was removed.
-                if let Some(hole_info) = self.holes.get(not_equal_constant) {
-                    Some(*hole_info)
+            // find the update with greatest upper bound
+            // that is smaller than or equal to the input upper bound
+            self.upper_bound_updates
+                .iter()
+                .find(|u| u.bound <= value)
+                .map(|u| PairDecisionLevelTrailPosition {
+                    decision_level: u.decision_level,
+                    trail_position: u.trail_position,
+                })
+        } else if predicate.is_not_equal_predicate() {
+            // Check the explictly stored holes.
+            // If the value has been removed explicitly,
+            // then the stored time is the first time the value was removed.
+            if let Some(hole_info) = self.holes.get(&value) {
+                Some(*hole_info)
+            } else {
+                // Otherwise, check the case when the lower/upper bound surpassed the value.
+                // If this never happened, then report that the predicate is not true.
+
+                // Note that it cannot be that both the lower bound and upper bound surpassed
+                // the not equals constant, i.e., at most one of the two may happen.
+                // So we can stop as soon as we find one of the two.
+
+                // Check the lower bound first.
+                if let Some(trail_position) =
+                    self.get_update_info(&predicate!(domain_id >= value + 1))
+                {
+                    // The lower bound removed the value from the domain,
+                    // report the trail position of the lower bound.
+                    Some(trail_position)
                 } else {
-                    // Otherwise, check the case when the lower/upper bound surpassed the value.
-                    // If this never happened, then report that the predicate is not true.
-
-                    // Note that it cannot be that both the lower bound and upper bound surpassed
-                    // the not equals constant, i.e., at most one of the two may happen.
-                    // So we can stop as soon as we find one of the two.
-
-                    // Check the lower bound first.
-                    if let Some(trail_position) = self.get_update_info(&Predicate::LowerBound {
-                        domain_id: *domain_id,
-                        lower_bound: not_equal_constant + 1,
-                    }) {
-                        // The lower bound removed the value from the domain,
-                        // report the trail position of the lower bound.
-                        Some(trail_position)
-                    } else {
-                        // The lower bound did not surpass the value,
-                        // now check the upper bound.
-                        self.get_update_info(&Predicate::UpperBound {
-                            domain_id: *domain_id,
-                            upper_bound: not_equal_constant - 1,
-                        })
-                    }
+                    // The lower bound did not surpass the value,
+                    // now check the upper bound.
+                    self.get_update_info(&predicate!(domain_id <= value - 1))
                 }
             }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                // For equality to hold, both the lower and upper bound predicates must hold.
-                // Check lower bound first.
-                if let Some(lb_trail_position) = self.get_update_info(&Predicate::LowerBound {
-                    domain_id: *domain_id,
-                    lower_bound: *equality_constant,
-                }) {
-                    // The lower bound found,
-                    // now the check depends on the upper bound.
+        } else if predicate.is_equality_predicate() {
+            // For equality to hold, both the lower and upper bound predicates must hold.
+            // Check lower bound first.
+            if let Some(lb_trail_position) = self.get_update_info(&predicate!(domain_id >= value)) {
+                // The lower bound found,
+                // now the check depends on the upper bound.
 
-                    // If both the lower and upper bounds are present,
-                    // report the trail position of the bound that was set last.
-                    // Otherwise, return that the predicate is not on the trail.
-                    self.get_update_info(&Predicate::UpperBound {
-                        domain_id: *domain_id,
-                        upper_bound: *equality_constant,
-                    })
+                // If both the lower and upper bounds are present,
+                // report the trail position of the bound that was set last.
+                // Otherwise, return that the predicate is not on the trail.
+                self.get_update_info(&predicate!(domain_id <= value))
                     .map(|ub_trail_position| {
                         if lb_trail_position.trail_position > ub_trail_position.trail_position {
                             lb_trail_position
@@ -1353,13 +1264,14 @@ impl IntegerDomain {
                             ub_trail_position
                         }
                     })
-                }
-                // If the lower bound is never reached,
-                // then surely the equality predicate cannot be true.
-                else {
-                    None
-                }
             }
+            // If the lower bound is never reached,
+            // then surely the equality predicate cannot be true.
+            else {
+                None
+            }
+        } else {
+            panic!()
         }
     }
 
@@ -1759,10 +1671,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&Predicate::LowerBound {
-                    domain_id,
-                    lower_bound: 12,
-                })
+                .get_update_info(&predicate!(domain_id >= 12))
                 .unwrap()
                 .trail_position,
             50
@@ -1775,10 +1684,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&Predicate::LowerBound {
-                    domain_id,
-                    lower_bound: 50,
-                })
+                .get_update_info(&predicate!(domain_id >= 50))
                 .unwrap()
                 .trail_position,
             70
@@ -1790,10 +1696,7 @@ mod tests {
         let (domain_id, domain, _) = get_domain1();
 
         assert!(domain
-            .get_update_info(&Predicate::LowerBound {
-                domain_id,
-                lower_bound: 101,
-            })
+            .get_update_info(&predicate!(domain_id >= 101))
             .is_none());
     }
 
@@ -1803,10 +1706,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&Predicate::LowerBound {
-                    domain_id,
-                    lower_bound: -10,
-                })
+                .get_update_info(&predicate!(domain_id >= -10))
                 .unwrap()
                 .trail_position,
             0

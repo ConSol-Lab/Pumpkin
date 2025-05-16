@@ -308,36 +308,27 @@ impl PropagationContextMut<'_> {
         predicate: Predicate,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.set_lower_bound(&domain_id, lower_bound, reason),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.set_upper_bound(&domain_id, upper_bound, reason),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => self.remove(&domain_id, not_equal_constant, reason),
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                if self
-                    .assignments
-                    .is_value_in_domain(domain_id, equality_constant)
-                    && !self.assignments.is_domain_assigned(&domain_id)
-                {
-                    let reason = self.build_reason(reason.into());
-                    let reason = self.reason_store.push(self.propagator_id, reason);
-                    self.assignments
-                        .make_assignment(domain_id, equality_constant, Some(reason))?;
-                }
-
-                Ok(())
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+        if predicate.is_lower_bound_predicate() {
+            self.set_lower_bound(&domain_id, value, reason)
+        } else if predicate.is_upper_bound_predicate() {
+            self.set_upper_bound(&domain_id, value, reason)
+        } else if predicate.is_not_equal_predicate() {
+            self.remove(&domain_id, value, reason)
+        } else if predicate.is_equality_predicate() {
+            if self.assignments.is_value_in_domain(domain_id, value)
+                && !self.assignments.is_domain_assigned(&domain_id)
+            {
+                let reason = self.build_reason(reason.into());
+                let reason = self.reason_store.push(self.propagator_id, reason);
+                self.assignments
+                    .make_assignment(domain_id, value, Some(reason))?;
             }
+
+            Ok(())
+        } else {
+            panic!()
         }
     }
 

@@ -1,5 +1,6 @@
 use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
+use crate::pumpkin_assert_moderate;
 
 /// A trait which defines methods for creating a [`Predicate`].
 pub trait PredicateConstructor {
@@ -22,32 +23,24 @@ pub trait PredicateConstructor {
 impl PredicateConstructor for DomainId {
     type Value = i32;
 
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id, bound)
+    }
+
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::LowerBound {
-            domain_id: *self,
-            lower_bound: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | 1 << 30, bound)
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::UpperBound {
-            domain_id: *self,
-            upper_bound: bound,
-        }
-    }
-
-    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::Equal {
-            domain_id: *self,
-            equality_constant: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | 1 << 31, bound)
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::NotEqual {
-            domain_id: *self,
-            not_equal_constant: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | 3 << 30, bound)
     }
 }
 
