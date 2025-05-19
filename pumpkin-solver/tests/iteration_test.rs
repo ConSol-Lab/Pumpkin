@@ -11,6 +11,8 @@ fn iterator_finds_all_solutions() {
     // We create the solver with default options
     let mut solver = Solver::default();
 
+    let constraint_tag = solver.new_constraint_tag();
+
     // We create 3 variables with domains within the range [0, 2]
     let x = solver.new_bounded_integer(0, 2);
     let y = solver.new_bounded_integer(0, 2);
@@ -18,7 +20,7 @@ fn iterator_finds_all_solutions() {
 
     // We create the all-different constraint
     let _ = solver
-        .add_constraint(constraints::all_different(vec![x, y, z]))
+        .add_constraint(constraints::all_different(vec![x, y, z], constraint_tag))
         .post();
 
     // We create a termination condition which allows the solver to run indefinitely

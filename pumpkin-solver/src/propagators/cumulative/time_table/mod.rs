@@ -82,7 +82,10 @@ pub(crate) use per_point_incremental_propagator::*;
 pub(crate) use time_table_over_interval::*;
 pub(crate) use time_table_per_point::*;
 
+use crate::declare_inference_label;
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;
 #[cfg(doc)]
 use crate::propagators::Task;
+
+declare_inference_label!(TimeTable);

@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::iter::once;
-use std::ops::Not;
 
 use log::debug;
 use log::warn;
@@ -130,14 +129,6 @@ impl DebugHelper {
             propagator,
             propagator_id,
         );
-
-        DebugHelper::debug_reported_propagations_negate_failure_and_check(
-            trailed_values,
-            assignments,
-            failure_reason,
-            propagator,
-            propagator_id,
-        );
         true
     }
 
@@ -166,7 +157,8 @@ impl DebugHelper {
             let _ = reason_store.get_or_compute(
                 trail_entry
                     .reason
-                    .expect("Expected checked propagation to have a reason"),
+                    .expect("Expected checked propagation to have a reason")
+                    .0,
                 ExplanationContext::from(assignments),
                 propagators,
                 &mut reason,
@@ -267,11 +259,12 @@ impl DebugHelper {
                             // subset of the premises
                             if let Inconsistency::Conflict(ref found_inconsistency) = conflict {
                                 found_inconsistency
+                                    .conjunction
                                     .iter()
                                     .all(|predicate| reason.contains(predicate))
-                                    || reason
-                                        .iter()
-                                        .all(|predicate| found_inconsistency.contains(*predicate))
+                                    || reason.iter().all(|predicate| {
+                                        found_inconsistency.conjunction.contains(*predicate)
+                                    })
                             } else {
                                 false
                             }
@@ -425,68 +418,6 @@ impl DebugHelper {
                 "Bug detected for '{}' propagator with id '{propagator_id}' after a failure reason
                  was given by the propagator.",
                 propagator.name()
-            );
-        }
-    }
-
-    fn debug_reported_propagations_negate_failure_and_check(
-        trailed_values: &TrailedValues,
-        assignments: &Assignments,
-        failure_reason: &PropositionalConjunction,
-        propagator: &dyn Propagator,
-        propagator_id: PropagatorId,
-    ) {
-        // The nogood propagator is special, so the code below does not necessarily hold.
-        // This is because the propagator gets updated during solving.
-        // For example, x != y with x,y\in{0,1}, and we ask to enumerate all solutions,
-        // after adding nogoods to forbid the two solutions, the negation of failure
-        // will still be a failure!
-        if propagator.name() == "NogoodPropagator" {
-            return;
-        }
-
-        // let the failure be: (p1 && p2 && p3) -> failure
-        //  then (!p1 || !p2 || !p3) should not lead to immediate failure
-
-        // empty reasons are by definition satisifed after negation
-        if failure_reason.is_empty() {
-            return;
-        }
-
-        let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
-        let mut found_nonconflicting_state_at_root = false;
-        for predicate in &reason_predicates {
-            let mut assignments_clone = assignments.debug_create_empty_clone();
-            let mut trailed_values_clone = trailed_values.debug_create_empty_clone();
-
-            let negated_predicate = predicate.not();
-            let outcome = assignments_clone.post_predicate(negated_predicate, None);
-
-            if outcome.is_ok() {
-                let mut reason_store = Default::default();
-                let mut semantic_minimiser = SemanticMinimiser::default();
-                let context = PropagationContextMut::new(
-                    &mut trailed_values_clone,
-                    &mut assignments_clone,
-                    &mut reason_store,
-                    &mut semantic_minimiser,
-                    propagator_id,
-                );
-                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
-
-                if debug_propagation_status_cp.is_ok() {
-                    found_nonconflicting_state_at_root = true;
-                    break;
-                }
-            }
-        }
-
-        if !found_nonconflicting_state_at_root {
-            panic!(
-                "Negating the reason for failure was still leading to failure
-                 for propagator '{}' with id '{propagator_id}'.\n
-                 The reported failure: {failure_reason}\n",
-                propagator.name(),
             );
         }
     }

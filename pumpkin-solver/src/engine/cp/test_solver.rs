@@ -3,19 +3,20 @@
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 
+use super::propagation::constructor::PropagatorConstructor;
+use super::propagation::constructor::PropagatorConstructorContext;
 use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
-use super::propagation::PropagatorInitialisationContext;
 use super::TrailedValues;
 use crate::basic_types::Inconsistency;
+use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
@@ -26,6 +27,9 @@ use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+use crate::proof::ProofLog;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -36,6 +40,8 @@ pub(crate) struct TestSolver {
     pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
     watch_list: WatchListCP,
+    constraint_tags: KeyGenerator<ConstraintTag>,
+    inference_codes: KeyGenerator<InferenceCode>,
 }
 
 impl Default for TestSolver {
@@ -47,6 +53,8 @@ impl Default for TestSolver {
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
             trailed_values: Default::default(),
+            constraint_tags: Default::default(),
+            inference_codes: Default::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -65,19 +73,30 @@ impl TestSolver {
         Literal::new(domain_id)
     }
 
-    pub(crate) fn new_propagator(
+    pub(crate) fn new_propagator<Constructor>(
         &mut self,
-        propagator: impl Propagator + 'static,
-    ) -> Result<PropagatorId, Inconsistency> {
-        let propagator: Box<dyn Propagator> = Box::new(propagator);
-        let id = self.propagator_store.alloc(propagator, None);
+        constructor: Constructor,
+    ) -> Result<PropagatorId, Inconsistency>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
+        let propagator_slot = self.propagator_store.new_propagator();
 
-        self.propagator_store[id].initialise_at_root(&mut PropagatorInitialisationContext::new(
+        let mut proof_log = ProofLog::default();
+
+        let constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list,
             &mut self.trailed_values,
-            id,
+            &mut proof_log,
+            propagator_slot.key(),
             &mut self.assignments,
-        ))?;
+        );
+
+        let propagator = Box::new(constructor.create(constructor_context));
+
+        let id = propagator_slot.populate(propagator);
+
         let context = PropagationContextMut::new(
             &mut self.trailed_values,
             &mut self.assignments,
@@ -275,5 +294,13 @@ impl TestSolver {
             (lb, ub), (actual_lb, actual_ub),
             "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
         );
+    }
+
+    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.constraint_tags.next_key()
+    }
+
+    pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
+        self.inference_codes.next_key()
     }
 }

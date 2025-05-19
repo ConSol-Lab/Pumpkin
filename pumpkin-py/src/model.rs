@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::containers::KeyedVec;
@@ -86,9 +85,9 @@ impl Model {
             // If there is already an integer associated with the boolean variable, don't create a
             // new one.
             ModelBoolVar {
-                integer_equivalent: Some(variable),
+                integer_equivalent: Some(existing_equivalent),
                 ..
-            } => variable,
+            } => existing_equivalent,
 
             // Create a new integer variable which is equivalent to this boolean variable.
             ModelBoolVar {
@@ -116,7 +115,7 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (predicate, name=None))]
+    #[pyo3(signature = (predicate,  name=None))]
     fn predicate_as_boolean(&mut self, predicate: Predicate, name: Option<&str>) -> BoolExpression {
         self.boolean_variables
             .push(ModelBoolVar {
@@ -128,27 +127,20 @@ impl Model {
     }
 
     /// Add the given constraint to the model.
-    #[pyo3(signature = (constraint, tag=None))]
-    fn add_constraint(&mut self, constraint: Constraint, tag: Option<NonZero<u32>>) {
+    #[pyo3(signature = (constraint))]
+    fn add_constraint(&mut self, constraint: Constraint) {
         self.constraints.push(ModelConstraint {
             constraint,
             premise: None,
-            tag,
         });
     }
 
     /// Add `premise -> constraint` to the model.
-    #[pyo3(signature = (constraint, premise, tag=None))]
-    fn add_implication(
-        &mut self,
-        constraint: Constraint,
-        premise: BoolExpression,
-        tag: Option<NonZero<u32>>,
-    ) {
+    #[pyo3(signature = (constraint, premise))]
+    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) {
         self.constraints.push(ModelConstraint {
             constraint,
             premise: Some(premise),
-            tag,
         });
     }
 
@@ -330,18 +322,12 @@ impl Model {
             let ModelConstraint {
                 constraint,
                 premise,
-                tag,
             } = constraint.clone();
 
             if let Some(premise) = premise {
-                constraint.implied_by(
-                    solver,
-                    premise.to_literal(variable_map),
-                    tag,
-                    variable_map,
-                )?;
+                constraint.implied_by(solver, premise.to_literal(variable_map), variable_map)?;
             } else {
-                constraint.post(solver, tag, variable_map)?;
+                constraint.post(solver, variable_map)?;
             }
         }
 
@@ -380,7 +366,6 @@ impl Model {
 struct ModelConstraint {
     constraint: Constraint,
     premise: Option<BoolExpression>,
-    tag: Option<NonZero<u32>>,
 }
 
 struct ModelIntVar {
@@ -417,6 +402,8 @@ impl ModelBoolVar {
         solver: &mut Solver,
         variable_map: &VariableMap,
     ) -> Result<Literal, ConstraintOperationError> {
+        let cs = solver.new_constraint_tag();
+
         let literal = match self {
             ModelBoolVar {
                 integer_equivalent: Some(int_var),
@@ -431,10 +418,10 @@ impl ModelBoolVar {
 
                 let predicate_literal = predicate.to_solver_predicate(variable_map);
 
-                solver.add_clause([!predicate_literal, int_eq_1])?;
-                solver.add_clause([predicate_literal, !int_eq_1])?;
+                solver.add_clause([!predicate_literal, int_eq_1], cs)?;
+                solver.add_clause([predicate_literal, !int_eq_1], cs)?;
 
-                solver.new_literal_for_predicate(int_eq_1)
+                solver.new_literal_for_predicate(int_eq_1, cs)
             }
 
             ModelBoolVar {
@@ -443,14 +430,14 @@ impl ModelBoolVar {
                 ..
             } => {
                 let affine_view = variable_map.get_integer(*int_var);
-                solver.new_literal_for_predicate(predicate![affine_view == 1])
+                solver.new_literal_for_predicate(predicate![affine_view == 1], cs)
             }
 
             ModelBoolVar {
                 predicate: Some(predicate),
                 integer_equivalent: None,
                 ..
-            } => solver.new_literal_for_predicate(predicate.to_solver_predicate(variable_map)),
+            } => solver.new_literal_for_predicate(predicate.to_solver_predicate(variable_map), cs),
 
             ModelBoolVar {
                 name: Some(name), ..

@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -53,13 +52,17 @@ fn main() {
         ..Default::default()
     });
 
+    // Create the constraint tags for the three all_different constraints.
+    let c1_tag = solver.new_constraint_tag();
+    let c2_tag = solver.new_constraint_tag();
+    let c3_tag = solver.new_constraint_tag();
+
     let variables = (0..n)
         .map(|i| solver.new_named_bounded_integer(0, n as i32 - 1, format!("q{i}")))
         .collect::<Vec<_>>();
 
     let _ = solver
-        .add_constraint(constraints::all_different(variables.clone()))
-        .with_tag(NonZero::new(1).unwrap())
+        .add_constraint(constraints::all_different(variables.clone(), c1_tag))
         .post();
 
     let diag1 = variables
@@ -76,12 +79,10 @@ fn main() {
         .collect::<Vec<_>>();
 
     let _ = solver
-        .add_constraint(constraints::all_different(diag1))
-        .with_tag(NonZero::new(2).unwrap())
+        .add_constraint(constraints::all_different(diag1, c2_tag))
         .post();
     let _ = solver
-        .add_constraint(constraints::all_different(diag2))
-        .with_tag(NonZero::new(3).unwrap())
+        .add_constraint(constraints::all_different(diag2, c3_tag))
         .post();
 
     let mut brancher = solver.default_brancher();

@@ -1,14 +1,69 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::declare_inference_label;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
-use crate::predicates::PropositionalConjunction;
+use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
+
+/// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
+#[derive(Clone, Debug)]
+pub(crate) struct DivisionArgs<VA, VB, VC> {
+    pub(crate) numerator: VA,
+    pub(crate) denominator: VB,
+    pub(crate) rhs: VC,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+const ID_NUMERATOR: LocalId = LocalId::from(0);
+const ID_DENOMINATOR: LocalId = LocalId::from(1);
+const ID_RHS: LocalId = LocalId::from(2);
+
+declare_inference_label!(Division);
+
+impl<VA, VB, VC> PropagatorConstructor for DivisionArgs<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    type PropagatorImpl = DivisionPropagator<VA, VB, VC>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let DivisionArgs {
+            numerator,
+            denominator,
+            rhs,
+            constraint_tag,
+        } = self;
+
+        pumpkin_assert_simple!(
+            !context.contains(&denominator, 0),
+            "Denominator cannot contain 0"
+        );
+
+        context.register(numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
+        context.register(denominator.clone(), DomainEvents::BOUNDS, ID_DENOMINATOR);
+        context.register(rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
+
+        let inference_code = context.create_inference_code(constraint_tag, Division);
+
+        DivisionPropagator {
+            numerator,
+            denominator,
+            rhs,
+            inference_code,
+        }
+    }
+}
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
 /// propagator performs truncating division (i.e. rounding towards 0).
@@ -21,20 +76,7 @@ pub(crate) struct DivisionPropagator<VA, VB, VC> {
     numerator: VA,
     denominator: VB,
     rhs: VC,
-}
-
-const ID_NUMERATOR: LocalId = LocalId::from(0);
-const ID_DENOMINATOR: LocalId = LocalId::from(1);
-const ID_RHS: LocalId = LocalId::from(2);
-
-impl<VA, VB, VC> DivisionPropagator<VA, VB, VC> {
-    pub(crate) fn new(numerator: VA, denominator: VB, rhs: VC) -> Self {
-        DivisionPropagator {
-            numerator,
-            denominator,
-            rhs,
-        }
-    }
+    inference_code: InferenceCode,
 }
 
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
@@ -51,27 +93,14 @@ where
         "Division"
     }
 
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        pumpkin_assert_simple!(
-            !context.contains(&self.denominator, 0),
-            "Denominator cannot contain 0"
-        );
-        let _ = context.register(self.numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
-        let _ = context.register(
-            self.denominator.clone(),
-            DomainEvents::BOUNDS,
-            ID_DENOMINATOR,
-        );
-        let _ = context.register(self.rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
-
-        Ok(())
-    }
-
     fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
+        perform_propagation(
+            context,
+            &self.numerator,
+            &self.denominator,
+            &self.rhs,
+            self.inference_code,
+        )
     }
 }
 
@@ -80,6 +109,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     if context.lower_bound(denominator) < 0 && context.upper_bound(denominator) > 0 {
         // For now we don't do anything in this case, note that this will not lead to incorrect
@@ -105,32 +135,44 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 
     // We propagate the domains to their appropriate signs (e.g. if the numerator is negative and
     // the denominator is positive then the rhs should also be negative)
-    propagate_signs(&mut context, numerator, denominator, rhs)?;
+    propagate_signs(&mut context, numerator, denominator, rhs, inference_code)?;
 
     // If the upper-bound of the numerator is positive and the upper-bound of the rhs is positive
     // then we can simply update the upper-bounds
     if context.upper_bound(numerator) >= 0 && context.upper_bound(rhs) >= 0 {
-        propagate_upper_bounds(&mut context, numerator, denominator, rhs)?;
+        propagate_upper_bounds(&mut context, numerator, denominator, rhs, inference_code)?;
     }
 
     // If the lower-bound of the numerator is negative and the lower-bound of the rhs is negative
     // then we negate these variables and update the upper-bounds
     if context.upper_bound(negated_numerator) >= 0 && context.upper_bound(negated_rhs) >= 0 {
-        propagate_upper_bounds(&mut context, negated_numerator, denominator, negated_rhs)?;
+        propagate_upper_bounds(
+            &mut context,
+            negated_numerator,
+            denominator,
+            negated_rhs,
+            inference_code,
+        )?;
     }
 
     // If the domain of the numerator is positive and the domain of the rhs is positive (and we know
     // that our denominator is positive) then we can propagate based on the assumption that all the
     // domains are positive
     if context.lower_bound(numerator) >= 0 && context.lower_bound(rhs) >= 0 {
-        propagate_positive_domains(&mut context, numerator, denominator, rhs)?;
+        propagate_positive_domains(&mut context, numerator, denominator, rhs, inference_code)?;
     }
 
     // If the domain of the numerator is negative and the domain of the rhs is negative (and we know
     // that our denominator is positive) then we propagate based on the views over the numerator and
     // rhs
     if context.lower_bound(negated_numerator) >= 0 && context.lower_bound(negated_rhs) >= 0 {
-        propagate_positive_domains(&mut context, negated_numerator, denominator, negated_rhs)?;
+        propagate_positive_domains(
+            &mut context,
+            negated_numerator,
+            denominator,
+            negated_rhs,
+            inference_code,
+        )?;
     }
 
     Ok(())
@@ -151,6 +193,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
@@ -162,14 +205,14 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     // The new minimum value of the rhs is the minimum value that the division can take on
     let new_min_rhs = numerator_min / denominator_max;
     if rhs_min < new_min_rhs {
-        context.set_lower_bound(
-            rhs,
-            new_min_rhs,
+        context.post(
+            predicate![rhs >= new_min_rhs],
             conjunction!(
                 [numerator >= numerator_min]
                     & [denominator <= denominator_max]
                     & [denominator >= 1]
             ),
+            inference_code,
         )?;
     }
 
@@ -179,10 +222,10 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     // Note that we use rhs_min rather than new_min_rhs, this appears to be a heuristic
     let new_min_numerator = denominator_min * rhs_min;
     if numerator_min < new_min_numerator {
-        context.set_lower_bound(
-            numerator,
-            new_min_numerator,
+        context.post(
+            predicate![numerator >= new_min_numerator],
             conjunction!([denominator >= denominator_min] & [rhs >= rhs_min]),
+            inference_code,
         )?;
     }
 
@@ -193,15 +236,15 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     if rhs_min > 0 {
         let new_max_denominator = numerator_max / rhs_min;
         if denominator_max > new_max_denominator {
-            context.set_upper_bound(
-                denominator,
-                new_max_denominator,
+            context.post(
+                predicate![denominator <= new_max_denominator],
                 conjunction!(
                     [numerator <= numerator_max]
                         & [numerator >= 0]
                         & [rhs >= rhs_min]
                         & [denominator >= 1]
                 ),
+                inference_code,
             )?;
         }
     }
@@ -217,12 +260,12 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     };
 
     if denominator_min < new_min_denominator {
-        context.set_lower_bound(
-            denominator,
-            new_min_denominator,
+        context.post(
+            predicate![denominator >= new_min_denominator],
             conjunction!(
                 [numerator >= numerator_min] & [rhs <= rhs_max] & [rhs >= 0] & [denominator >= 1]
             ),
+            inference_code,
         )?;
     }
 
@@ -240,6 +283,7 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_max = context.upper_bound(rhs);
     let numerator_max = context.upper_bound(numerator);
@@ -250,10 +294,10 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     // that numerator_max is positive and denominator_min is also positive)
     let new_max_rhs = numerator_max / denominator_min;
     if rhs_max > new_max_rhs {
-        context.set_upper_bound(
-            rhs,
-            new_max_rhs,
+        context.post(
+            predicate![rhs <= new_max_rhs],
             conjunction!([numerator <= numerator_max] & [denominator >= denominator_min]),
+            inference_code,
         )?;
     }
 
@@ -264,10 +308,10 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     // Note that we use rhs_max here rather than the new upper-bound, this appears to be a heuristic
     let new_max_numerator = (rhs_max + 1) * denominator_max - 1;
     if numerator_max > new_max_numerator {
-        context.set_upper_bound(
-            numerator,
-            new_max_numerator,
+        context.post(
+            predicate![numerator <= new_max_numerator],
             conjunction!([denominator <= denominator_max] & [denominator >= 1] & [rhs <= rhs_max]),
+            inference_code,
         )?;
     }
 
@@ -285,6 +329,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
@@ -294,25 +339,37 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     // First we propagate the signs
     // If the numerator >= 0 (and we know that denominator > 0) then the rhs must be >= 0
     if numerator_min >= 0 && rhs_min < 0 {
-        context.set_lower_bound(rhs, 0, conjunction!([numerator >= 0] & [denominator >= 1]))?;
+        context.post(
+            predicate![rhs >= 0],
+            conjunction!([numerator >= 0] & [denominator >= 1]),
+            inference_code,
+        )?;
     }
 
     // If rhs > 0 (and we know that denominator > 0) then the numerator must be > 0
     if numerator_min <= 0 && rhs_min > 0 {
-        context.set_lower_bound(numerator, 1, conjunction!([rhs >= 1] & [denominator >= 1]))?;
+        context.post(
+            predicate![numerator >= 1],
+            conjunction!([rhs >= 1] & [denominator >= 1]),
+            inference_code,
+        )?;
     }
 
     // If numerator <= 0 (and we know that denominator > 0) then the rhs must be <= 0
     if numerator_max <= 0 && rhs_max > 0 {
-        context.set_upper_bound(rhs, 0, conjunction!([numerator <= 0] & [denominator >= 1]))?;
+        context.post(
+            predicate![rhs <= 0],
+            conjunction!([numerator <= 0] & [denominator >= 1]),
+            inference_code,
+        )?;
     }
 
     // If the rhs < 0 (and we know that denominator > 0) then the numerator must be < 0
     if numerator_max >= 0 && rhs_max < 0 {
-        context.set_upper_bound(
-            numerator,
-            -1,
+        context.post(
+            predicate![numerator <= -1],
             conjunction!([rhs <= -1] & [denominator >= 1]),
+            inference_code,
         )?;
     }
 
@@ -330,9 +387,14 @@ mod tests {
         let numerator = solver.new_variable(1, 1);
         let denominator = solver.new_variable(2, 2);
         let rhs = solver.new_variable(2, 2);
+        let constraint_tag = solver.new_constraint_tag();
 
-        let propagator =
-            solver.new_propagator(DivisionPropagator::new(numerator, denominator, rhs));
+        let propagator = solver.new_propagator(DivisionArgs {
+            numerator,
+            denominator,
+            rhs,
+            constraint_tag,
+        });
 
         assert!(propagator.is_err());
     }

@@ -24,17 +24,13 @@
 //!
 //! # Practical
 //!
-//! Each concrete propagator is associated with one trait: [`Propagator`]. This trait contains the
-//! functions which are required to be implemented by the propagator such as
-//! [`Propagator::propagate`], [`Propagator::initialise_at_root`], and [`Propagator::notify`].
+//! Each concrete propagator is associated with one trait: [`Propagator`]. The main function to
+//! implement for this trait is [`Proagator::propagate`], which performs the domain reduction.
 //!
-//! A [`Propagator`] can be notified of different domain changes to a variable by registering
-//! variables using [`PropagatorInitialisationContext::register`] (and
-//! [`PropagatorInitialisationContext::register_literal`]) which are provided when
-//! [`Propagator::initialise_at_root`] is called. When domain changes happen for a variable outside
-//! the propagator, the propagator will receive information that its variable with a specific
-//! [`LocalId`] has changed (see [`Propagator::notify`]). The idea behind using the structs apart
-//! from [`Propagator`] is to support views \[2\] (e.g. see [`AffineView`]) on variables.
+//! A propagator is created by a [`PropagatorConstructor`]. The constructor is responsible for
+//! registering to domain events, and setting up the state of the propagator. The constructor is
+//! provided a [`PropagatorConstructorContext`], which has all the available functions allowing the
+//! propagator to hook into the solver state.
 //!
 //! We do not require propagators to be idempotent (see the previous section for a
 //! definition) and it can be assumed that if a propagator is not at fix-point after propagating
@@ -52,6 +48,8 @@
 //!    inconsistencies and is also responsible for registering the variables and corresponding
 //!    [`DomainEvents`] with the solver, so that the solver can notify the propagator once an event
 //!    happens that relates to one of the variables of the propagator.
+//! 2. Create an implementation of the [`PropagatorConstructor`] trait, to register for domain
+//!    events and set up the propagator state.
 //! 3. Following the procedure above gives an initial version of the propagator that is likely not
 //!    efficient, but has an important role for testing. Now is a good time to write tests which use
 //!    the [`TestSolver`]. **We strongly discourage skipping this step**.
@@ -76,6 +74,7 @@
 //! International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
 //! 118–132.
 
+pub(crate) mod constructor;
 pub(crate) mod contexts;
 pub(crate) mod local_id;
 pub(crate) mod propagator;
@@ -88,7 +87,6 @@ pub(crate) use contexts::explanation_context::ExplanationContext;
 pub(crate) use contexts::propagation_context::PropagationContext;
 pub(crate) use contexts::propagation_context::PropagationContextMut;
 pub(crate) use contexts::propagation_context::ReadDomains;
-pub(crate) use contexts::propagator_initialisation_context::PropagatorInitialisationContext;
 pub(crate) use local_id::LocalId;
 pub(crate) use propagator::EnqueueDecision;
 pub(crate) use propagator::Propagator;

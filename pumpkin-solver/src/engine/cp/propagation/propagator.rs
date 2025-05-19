@@ -5,10 +5,10 @@ use super::contexts::PropagationContextWithTrailedValues;
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
-use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -16,7 +16,6 @@ use crate::engine::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicates::Predicate;
-use crate::predicates::PropositionalConjunction;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
@@ -135,20 +134,6 @@ pub(crate) trait Propagator: Downcast {
         3
     }
 
-    /// Initialises the propagator without performing propagation. This method is called only once
-    /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
-    /// [`ConstraintSatisfactionSolver::add_propagator`].
-    ///
-    /// The method can be used to detect root-level inconsistencies and to register variables used
-    /// for notifications (see [`Propagator::notify`]) by calling
-    /// [`PropagatorInitialisationContext::register`].
-    ///
-    /// The solver will call this before any call to [`Propagator::propagate`] is made.
-    fn initialise_at_root(
-        &mut self,
-        _: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction>;
-
     /// A check whether this propagator can detect an inconsistency.
     ///
     /// By implementing this function, if the propagator is reified, it can propagate the
@@ -158,7 +143,7 @@ pub(crate) trait Propagator: Downcast {
     fn detect_inconsistency(
         &self,
         _context: PropagationContextWithTrailedValues,
-    ) -> Option<PropositionalConjunction> {
+    ) -> Option<PropagatorConflict> {
         None
     }
 

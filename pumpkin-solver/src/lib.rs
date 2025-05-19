@@ -52,9 +52,10 @@
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
 //! // We create the constraint:
-//! // - x + y + z = 17
+//! // x + y + z = 17
+//! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::equals(vec![x, y, z], 17))
+//!     .add_constraint(constraints::equals(vec![x, y, z], 17, c1))
 //!     .post();
 //! ```
 //!
@@ -85,7 +86,8 @@
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17)).post();
+//! # let c1 = solver.new_constraint_tag();
+//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we find a solution to the problem
@@ -118,8 +120,9 @@
 //! let objective = solver.new_bounded_integer(-10, 30);
 //!
 //! // We add a constraint which specifies the value of the objective
+//! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::maximum(vec![x, y, z], objective))
+//!     .add_constraint(constraints::maximum(vec![x, y, z], objective, c1))
 //!     .post();
 //! ```
 //!
@@ -142,8 +145,9 @@
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let objective = solver.new_bounded_integer(-10, 30);
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17)).post();
-//! # solver.add_constraint(constraints::maximum(vec![x, y, z], objective)).post();
+//! # let c1 = solver.new_constraint_tag();
+//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
+//! # solver.add_constraint(constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
@@ -196,7 +200,8 @@
 //! let z = solver.new_bounded_integer(0, 2);
 //!
 //! // We create the all-different constraint
-//! solver.add_constraint(constraints::all_different(vec![x, y, z])).post();
+//! let c1 = solver.new_constraint_tag();
+//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -261,7 +266,8 @@
 //! let z = solver.new_bounded_integer(0, 2);
 //!
 //! // We create the all-different constraint
-//! solver.add_constraint(constraints::all_different(vec![x, y, z])).post();
+//! let c1 = solver.new_constraint_tag();
+//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;

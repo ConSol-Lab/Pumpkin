@@ -10,6 +10,7 @@ use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
 
 pub(crate) struct PropagationContextWithTrailedValues<'a> {
@@ -268,100 +269,29 @@ pub(crate) trait ReadDomains: HasAssignments {
 impl<T: HasAssignments> ReadDomains for T {}
 
 impl PropagationContextMut<'_> {
-    pub(crate) fn remove<Var: IntegerVariable, R: Into<Reason>>(
-        &mut self,
-        var: &Var,
-        value: i32,
-        reason: R,
-    ) -> Result<(), EmptyDomain> {
-        if var.contains(self.assignments, value) {
-            let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator_id, reason);
-            return var.remove(self.assignments, value, Some(reason_ref));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn set_upper_bound<Var: IntegerVariable, R: Into<Reason>>(
-        &mut self,
-        var: &Var,
-        bound: i32,
-        reason: R,
-    ) -> Result<(), EmptyDomain> {
-        if bound < var.upper_bound(self.assignments) {
-            let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator_id, reason);
-            return var.set_upper_bound(self.assignments, bound, Some(reason_ref));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn set_lower_bound<Var: IntegerVariable, R: Into<Reason>>(
-        &mut self,
-        var: &Var,
-        bound: i32,
-        reason: R,
-    ) -> Result<(), EmptyDomain> {
-        if bound > var.lower_bound(self.assignments) {
-            let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator_id, reason);
-            return var.set_lower_bound(self.assignments, bound, Some(reason_ref));
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    pub(crate) fn post_predicate<R: Into<Reason>>(
+    /// Assign the truth-value of the given [`Predicate`] to `true` in the current partial
+    /// assignment.
+    ///
+    /// If the truth-value is already `true`, then this is a no-op. Alternatively, if the
+    /// truth-value is `false`, then a conflict is triggered and the [`EmptyDomain`] error is
+    /// returned. At that point, no-more propagation should happen.
+    pub(crate) fn post(
         &mut self,
         predicate: Predicate,
-        reason: R,
+        reason: impl Into<Reason>,
+        inference_code: InferenceCode,
     ) -> Result<(), EmptyDomain> {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.set_lower_bound(&domain_id, lower_bound, reason),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.set_upper_bound(&domain_id, upper_bound, reason),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => self.remove(&domain_id, not_equal_constant, reason),
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                if self
-                    .assignments
-                    .is_value_in_domain(domain_id, equality_constant)
-                    && !self.assignments.is_domain_assigned(&domain_id)
-                {
-                    let reason = self.build_reason(reason.into());
-                    let reason = self.reason_store.push(self.propagator_id, reason);
-                    self.assignments
-                        .make_assignment(domain_id, equality_constant, Some(reason))?;
-                }
+        let reason = self.build_reason(reason.into());
+        let reason_ref = self.reason_store.push(self.propagator_id, reason);
 
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn assign_literal<R: Into<Reason> + Clone>(
-        &mut self,
-        boolean: &Literal,
-        truth_value: bool,
-        reason: R,
-    ) -> Result<(), EmptyDomain> {
-        match truth_value {
-            true => self.set_lower_bound(boolean, 1, reason),
-            false => self.set_upper_bound(boolean, 0, reason),
-        }
+        // TODO: When the following does not result in a change, i.e. this is a no-op, we probably
+        // want to clean up the reason. Although perhaps that happens so infrequently that that is
+        // not worth the effort.
+        self.assignments
+            .post_predicate(predicate, Some((reason_ref, inference_code)))
     }
 }

@@ -87,20 +87,32 @@ fn main() {
 
     let mut solver = Solver::default();
 
+    // Creates a dummy constraint tag; since this example does not support proof logging the
+    // constraint tag does not matter.
+    let constraint_tag = solver.new_constraint_tag();
+
     // Create 0-1 integer variables that make up the matrix.
     let matrix = create_matrix(&mut solver, &bibd);
 
     // Enforce the row sum.
     for row in matrix.iter() {
         let _ = solver
-            .add_constraint(constraints::equals(row.clone(), bibd.row_sum as i32))
+            .add_constraint(constraints::equals(
+                row.clone(),
+                bibd.row_sum as i32,
+                constraint_tag,
+            ))
             .post();
     }
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
         let _ = solver
-            .add_constraint(constraints::equals(row, bibd.column_sum as i32))
+            .add_constraint(constraints::equals(
+                row,
+                bibd.column_sum as i32,
+                constraint_tag,
+            ))
             .post();
     }
 
@@ -118,6 +130,7 @@ fn main() {
                         matrix[r1][col],
                         matrix[r2][col],
                         pairwise_product[r1][r2][col],
+                        constraint_tag,
                     ))
                     .post();
             }
@@ -126,6 +139,7 @@ fn main() {
                 .add_constraint(constraints::less_than_or_equals(
                     pairwise_product[r1][r2].clone(),
                     bibd.max_dot_product as i32,
+                    constraint_tag,
                 ))
                 .post();
         }

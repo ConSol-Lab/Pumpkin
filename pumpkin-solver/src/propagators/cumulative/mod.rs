@@ -55,12 +55,14 @@
 //! let resource_requirements = [1, 1, 2];
 //! let resource_capacity = 2;
 //!
+//! let c1 = solver.new_constraint_tag();
 //! solver
 //!     .add_constraint(constraints::cumulative(
 //!         start_times.clone(),
 //!         durations.clone(),
 //!         resource_requirements.clone(),
 //!         resource_capacity,
+//!         c1,
 //!     ))
 //!     .post();
 //!

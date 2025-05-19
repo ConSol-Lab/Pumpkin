@@ -1,14 +1,61 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+
+#[derive(Clone, Debug)]
+pub(crate) struct MaximumArgs<ElementVar, Rhs> {
+    pub(crate) array: Box<[ElementVar]>,
+    pub(crate) rhs: Rhs,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+declare_inference_label!(Maximum);
+
+impl<ElementVar, Rhs> PropagatorConstructor for MaximumArgs<ElementVar, Rhs>
+where
+    ElementVar: IntegerVariable + 'static,
+    Rhs: IntegerVariable + 'static,
+{
+    type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let MaximumArgs {
+            array,
+            rhs,
+            constraint_tag,
+        } = self;
+
+        for (idx, var) in array.iter().enumerate() {
+            context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
+        }
+
+        context.register(
+            rhs.clone(),
+            DomainEvents::BOUNDS,
+            LocalId::from(array.len() as u32),
+        );
+
+        let inference_code = context.create_inference_code(constraint_tag, Maximum);
+
+        MaximumPropagator {
+            array,
+            rhs,
+            inference_code,
+        }
+    }
+}
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumConstructor`].
@@ -16,38 +63,12 @@ use crate::predicate;
 pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[ElementVar]>,
     rhs: Rhs,
-}
-
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> MaximumPropagator<ElementVar, Rhs> {
-    pub(crate) fn new(array: Box<[ElementVar]>, rhs: Rhs) -> Self {
-        MaximumPropagator { array, rhs }
-    }
+    inference_code: InferenceCode,
 }
 
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.array
-            .iter()
-            .cloned()
-            .enumerate()
-            .for_each(|(idx, var)| {
-                let _ =
-                    context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
-            });
-        let _ = context.register(
-            self.rhs.clone(),
-            DomainEvents::BOUNDS,
-            LocalId::from(self.array.len() as u32),
-        );
-
-        Ok(())
-    }
-
     fn priority(&self) -> u32 {
         0
     }
@@ -69,8 +90,12 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
             // Rule 1.
-            // UB(a_i) <= UB(rhs)
-            context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
+            // UB(a_i) <= UB(rhs, constraint_tag }
+            context.post(
+                predicate![var <= rhs_ub],
+                conjunction!([self.rhs <= rhs_ub]),
+                self.inference_code,
+            )?;
 
             let var_lb = context.lower_bound(var);
             let var_ub = context.upper_bound(var);
@@ -85,24 +110,32 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             }
         }
         // Rule 2.
-        // LB(rhs) >= max{LB(a_i)}.
-        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::from(lb_reason))?;
+        // LB(rhs, constraint_tag } >= max{LB(a_i)}.
+        context.post(
+            predicate![self.rhs >= max_lb],
+            PropositionalConjunction::from(lb_reason),
+            self.inference_code,
+        )?;
 
         // Rule 3.
-        // UB(rhs) <= max{UB(a_i)}.
+        // UB(rhs, constraint_tag } <= max{UB(a_i)}.
         // Note that this implicitly also covers the rule:
-        // 'if LB(rhs) > UB(a_i) for all i, then conflict'.
+        // 'if LB(rhs, constraint_tag } > UB(a_i) for all i, then conflict'.
         if rhs_ub > max_ub {
             let ub_reason: PropositionalConjunction = self
                 .array
                 .iter()
                 .map(|var| predicate![var <= max_ub])
                 .collect();
-            context.set_upper_bound(&self.rhs, max_ub, ub_reason)?;
+            context.post(
+                predicate![self.rhs <= max_ub],
+                ub_reason,
+                self.inference_code,
+            )?;
         }
 
         // Rule 4.
-        // If there is only one variable with UB(a_i) >= LB(rhs),
+        // If there is only one variable with UB(a_i) >= LB(rhs, constraint_tag },
         // then the bounds for rhs and that variable should be intersected.
         let rhs_lb = context.lower_bound(&self.rhs);
         let mut propagating_variable: Option<&ElementVar> = None;
@@ -119,14 +152,19 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 propagation_reason.add(predicate![var <= rhs_lb - 1]);
             }
         }
-        // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is
-        // Some. In that case, intersect the bounds of that variable and the rhs. Given previous
-        // rules, only the lower bound of the propagated variable needs to be propagated.
+        // If there is exactly one variable UB(a_i) >= LB(rhs, constraint_tag }, then the
+        // propagating variable is Some. In that case, intersect the bounds of that variable
+        // and the rhs. Given previous rules, only the lower bound of the propagated
+        // variable needs to be propagated.
         if let Some(propagating_variable) = propagating_variable {
             let var_lb = context.lower_bound(propagating_variable);
             if var_lb < rhs_lb {
                 propagation_reason.add(predicate![self.rhs >= rhs_lb]);
-                context.set_lower_bound(propagating_variable, rhs_lb, propagation_reason)?;
+                context.post(
+                    predicate![propagating_variable >= rhs_lb],
+                    propagation_reason,
+                    self.inference_code,
+                )?;
             }
         }
 
@@ -148,9 +186,14 @@ mod tests {
         let c = solver.new_variable(1, 5);
 
         let rhs = solver.new_variable(1, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
+            .new_propagator(MaximumArgs {
+                array: [a, b, c].into(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 1, 5);
@@ -168,9 +211,14 @@ mod tests {
         let c = solver.new_variable(5, 10);
 
         let rhs = solver.new_variable(1, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
+            .new_propagator(MaximumArgs {
+                array: [a, b, c].into(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 5, 10);
@@ -188,9 +236,14 @@ mod tests {
             .collect::<Box<_>>();
 
         let rhs = solver.new_variable(1, 3);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
+            .new_propagator(MaximumArgs {
+                array: array.clone(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         for var in array.iter() {
@@ -209,9 +262,14 @@ mod tests {
             .collect::<Box<_>>();
 
         let rhs = solver.new_variable(45, 60);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
+            .new_propagator(MaximumArgs {
+                array: array.clone(),
+                rhs,
+                constraint_tag,
+            })
             .expect("no empty domain");
 
         solver.assert_bounds(*array.last().unwrap(), 45, 51);

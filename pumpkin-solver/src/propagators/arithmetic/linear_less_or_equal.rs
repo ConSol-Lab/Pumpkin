@@ -1,10 +1,12 @@
-use itertools::Itertools;
-
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::ManipulateTrailedValues;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
@@ -12,11 +14,60 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::TrailedInteger;
 use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
+
+declare_inference_label!(LinearBounds);
+
+/// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
+#[derive(Clone, Debug)]
+pub(crate) struct LinearLessOrEqualPropagatorArgs<Var> {
+    pub(crate) x: Box<[Var]>,
+    pub(crate) c: i32,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+impl<Var> PropagatorConstructor for LinearLessOrEqualPropagatorArgs<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let LinearLessOrEqualPropagatorArgs {
+            x,
+            c,
+            constraint_tag,
+        } = self;
+
+        let mut lower_bound_left_hand_side = 0_i64;
+        let mut current_bounds = vec![];
+
+        for (i, x_i) in x.iter().enumerate() {
+            context.register(
+                x_i.clone(),
+                DomainEvents::LOWER_BOUND,
+                LocalId::from(i as u32),
+            );
+            lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
+            current_bounds.push(context.new_trailed_integer(context.lower_bound(x_i) as i64));
+        }
+
+        let lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
+
+        LinearLessOrEqualPropagator {
+            x,
+            c,
+            lower_bound_left_hand_side,
+            current_bounds: current_bounds.into(),
+            inference_code: context.create_inference_code(constraint_tag, LinearBounds),
+        }
+    }
+}
 
 /// Propagator for the constraint `\sum x_i <= c`.
 #[derive(Clone, Debug)]
@@ -28,32 +79,23 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     lower_bound_left_hand_side: TrailedInteger,
     /// The value at index `i` is the bound for `x[i]`.
     current_bounds: Box<[TrailedInteger]>,
+
+    inference_code: InferenceCode,
 }
 
 impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
-        let current_bounds = (0..x.len())
-            .map(|_| TrailedInteger::default())
-            .collect_vec()
-            .into();
-
-        // incremental state will be properly initialized in `Propagator::initialise_at_root`.
-        LinearLessOrEqualPropagator::<Var> {
-            x,
-            c,
-            lower_bound_left_hand_side: TrailedInteger::default(),
-            current_bounds,
+    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
+        PropagatorConflict {
+            conjunction: self
+                .x
+                .iter()
+                .map(|var| predicate![var >= context.lower_bound(var)])
+                .collect(),
+            inference_code: self.inference_code,
         }
-    }
-
-    fn create_conflict_reason(&self, context: PropagationContext) -> PropositionalConjunction {
-        self.x
-            .iter()
-            .map(|var| predicate![var >= context.lower_bound(var)])
-            .collect()
     }
 }
 
@@ -61,35 +103,12 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        let mut lower_bound_left_hand_side = 0_i64;
-        self.x.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(
-                x_i.clone(),
-                DomainEvents::LOWER_BOUND,
-                LocalId::from(i as u32),
-            );
-            lower_bound_left_hand_side += context.lower_bound(x_i) as i64;
-            self.current_bounds[i] = context.new_trailed_integer(context.lower_bound(x_i) as i64);
-        });
-        self.lower_bound_left_hand_side = context.new_trailed_integer(lower_bound_left_hand_side);
-
-        if let Some(conjunction) = self.detect_inconsistency(context.as_trailed_readonly()) {
-            Err(conjunction)
-        } else {
-            Ok(())
-        }
-    }
-
     fn detect_inconsistency(
         &self,
         context: PropagationContextWithTrailedValues,
-    ) -> Option<PropositionalConjunction> {
+    ) -> Option<PropagatorConflict> {
         if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
-            Some(self.create_conflict_reason(context.as_readonly()))
+            Some(self.create_conflict(context.as_readonly()))
         } else {
             None
         }
@@ -127,8 +146,8 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conjunction) = self.detect_inconsistency(context.as_trailed_readonly()) {
-            return Err(conjunction.into());
+        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+            return Err(conflict.into());
         }
 
         let lower_bound_left_hand_side =
@@ -142,7 +161,7 @@ where
                     // This means that the lower-bounds of the current variables will always be
                     // higher than the right-hand side (with a maximum value of i32). We thus
                     // return a conflict
-                    return Err(self.create_conflict_reason(context.as_readonly()).into());
+                    return Err(self.create_conflict(context.as_readonly()).into());
                 }
                 Err(_) => {
                     // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
@@ -170,7 +189,7 @@ where
                     })
                     .collect();
 
-                context.set_upper_bound(x_i, bound, reason)?;
+                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
             }
         }
 
@@ -198,7 +217,7 @@ where
                 // This means that the lower-bounds of the current variables will always be
                 // higher than the right-hand side (with a maximum value of i32). We thus
                 // return a conflict
-                return Err(self.create_conflict_reason(context.as_readonly()).into());
+                return Err(self.create_conflict(context.as_readonly()).into());
             }
             Err(_) => {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
@@ -226,7 +245,7 @@ where
                     })
                     .collect();
 
-                context.set_upper_bound(x_i, bound, reason)?;
+                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
             }
         }
 
@@ -246,8 +265,14 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualPropagatorArgs {
+                x: [x, y].into(),
+                c: 7,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("non-empty domain");
@@ -261,9 +286,14 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualPropagatorArgs {
+                x: [x, y].into(),
+                c: 7,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("non-empty domain");
@@ -279,9 +309,14 @@ mod tests {
 
         let x = solver.new_variable(i32::MAX, i32::MAX);
         let y = solver.new_variable(1, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), i32::MAX))
+            .new_propagator(LinearLessOrEqualPropagatorArgs {
+                x: [x, y].into(),
+                c: i32::MAX,
+                constraint_tag,
+            })
             .expect_err("Expected overflow to be detected");
     }
 
@@ -291,9 +326,14 @@ mod tests {
 
         let x = solver.new_variable(i32::MIN, i32::MIN);
         let y = solver.new_variable(-1, -1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), i32::MIN))
+            .new_propagator(LinearLessOrEqualPropagatorArgs {
+                x: [x, y].into(),
+                c: i32::MIN,
+                constraint_tag,
+            })
             .expect("Expected no error to be detected");
     }
 }
