@@ -3,6 +3,8 @@
 use std::rc::Rc;
 
 use pumpkin_solver::constraints;
+use pumpkin_solver::constraints::Comparator;
+use pumpkin_solver::constraints::Condition;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::predicate;
@@ -184,6 +186,7 @@ pub(crate) fn run(
             )?,
 
             "pumpkin_all_different" => compile_all_different(context, exprs, annos, constraint_tag)?,
+            "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
             "array_bool_element" => {
@@ -755,6 +758,45 @@ fn compile_all_different(
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
     Ok(constraints::all_different(variables, constraint_tag)
+        .post(context.solver)
+        .is_ok())
+}
+
+fn compile_table(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_table_int");
+
+    let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+
+    let flat_table_arg = context.resolve_array_integer_constants(&exprs[1])?;
+    let table = flat_table_arg
+        .iter()
+        .copied()
+        .fold(vec![], |mut acc, next_value| {
+            if acc
+                .last()
+                .map(|row: &Vec<Condition>| row.len() == variables.len())
+                .unwrap_or(true)
+            {
+                acc.push(vec![]);
+            }
+
+            let last_row = acc.last_mut().unwrap();
+            if last_row.len() < variables.len() {
+                last_row.push(Condition {
+                    comparator: Comparator::Equal,
+                    value: next_value,
+                });
+            }
+
+            acc
+        });
+
+    Ok(constraints::table(variables, table, constraint_tag)
         .post(context.solver)
         .is_ok())
 }

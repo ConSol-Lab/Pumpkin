@@ -1,0 +1,137 @@
+use std::collections::BTreeMap;
+
+use super::Constraint;
+use super::NegatableConstraint;
+use crate::predicate;
+use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
+use crate::proof::ConstraintTag;
+use crate::variables::IntegerVariable;
+use crate::variables::Literal;
+use crate::ConstraintOperationError;
+use crate::Solver;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Condition {
+    pub comparator: Comparator,
+    pub value: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Comparator {
+    NotEqual,
+    Equal,
+}
+
+impl Condition {
+    /// Create a predicate for a variable from this condition.
+    fn to_predicate<Var>(self, variable: &Var) -> Predicate
+    where
+        Var: PredicateConstructor<Value = i32>,
+    {
+        match self.comparator {
+            Comparator::NotEqual => predicate![variable != self.value],
+            Comparator::Equal => predicate![variable == self.value],
+        }
+    }
+}
+
+/// Create a table constraint over the variables `xs`.
+pub fn table<Var: IntegerVariable + 'static>(
+    xs: impl IntoIterator<Item = Var>,
+    table: Vec<Vec<Condition>>,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    Table {
+        xs: xs.into_iter().collect(),
+        table,
+        constraint_tag,
+    }
+}
+
+struct Table<Var> {
+    xs: Vec<Var>,
+    table: Vec<Vec<Condition>>,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var: IntegerVariable> Table<Var> {
+    fn encode(
+        self,
+        solver: &mut Solver,
+        reification_literal: Option<Literal>,
+    ) -> Result<(), ConstraintOperationError> {
+        // 1. Create a variable `y_i` that selects the row from the table which is chosen.
+        let ys: Vec<_> = (0..self.table.len())
+            .map(|_| solver.new_literal())
+            .collect();
+
+        // 2. Setup the implications between values and `ys`.
+        for (col, x_col) in self.xs.iter().enumerate() {
+            // A map from domain values to the `ys` variables that support this value.
+            let mut values = BTreeMap::new();
+
+            // For every value in this column, aggregate the `ys` that support it.
+            for (row, &y_row) in ys.iter().enumerate() {
+                let value = self.table[row][col];
+
+                let supports = values.entry(value).or_insert(vec![]);
+                supports.push(y_row);
+            }
+
+            // For every value in this column, add the clause
+            //   `condition <-> (\/ supports)`
+            for (condition, supports) in values {
+                let condition = condition.to_predicate(x_col);
+
+                // For every `support in supports`: `support -> condition`
+                for support in supports.iter() {
+                    let mut clause = vec![support.get_false_predicate(), condition];
+
+                    // Account for possible reification.
+                    clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+
+                    solver.add_clause(clause, self.constraint_tag)?;
+                }
+
+                // `condition -> (\/ supports)`
+                let mut clause = vec![!condition];
+                clause.extend(supports.iter().map(|l| l.get_true_predicate()));
+                // Account for possible reification.
+                clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+            }
+        }
+
+        // 4. Enforce at least one `y` to be true.
+        let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
+        if let Some(literal) = reification_literal {
+            poster.implied_by(literal)?;
+        } else {
+            poster.post()?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<Var: IntegerVariable> Constraint for Table<Var> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        self.encode(solver, None)
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.encode(solver, Some(reification_literal))
+    }
+}
+
+impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
+    type NegatedConstraint = Table<Var>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        todo!()
+    }
+}
