@@ -45,17 +45,14 @@ pub(crate) fn run(
             "array_var_int_element" => compile_array_var_int_element(context, exprs)?,
 
             "int_lin_ne" => {
-                let (sat, dd_constraint) = compile_int_lin_predicate(
+                let (sat, _) = compile_int_lin_predicate(
                     context,
                     exprs,
                     annos,
                     "int_lin_ne",
                     constraints::not_equals,
-                    produce_dd_constraints
+                    false
                 )?;
-                if let Some(dd_constraint) = dd_constraint {
-                    context.dd_constraints.push(dd_constraint);
-                }
                 sat
             },
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
@@ -71,7 +68,7 @@ pub(crate) fn run(
                     exprs,
                     annos,
                     "int_lin_le",
-                    constraints::not_equals,
+                    constraints::less_than_or_equals,
                     produce_dd_constraints
                 )?;
                 if let Some(dd_constraint) = dd_constraint {
@@ -92,7 +89,7 @@ pub(crate) fn run(
                     exprs,
                     annos,
                     "int_lin_eq",
-                    constraints::not_equals,
+                    constraints::equals,
                     produce_dd_constraints
                 )?;
                 if let Some(dd_constraint) = dd_constraint {
