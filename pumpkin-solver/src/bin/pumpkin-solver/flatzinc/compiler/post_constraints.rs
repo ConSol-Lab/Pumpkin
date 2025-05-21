@@ -3,8 +3,6 @@
 use std::rc::Rc;
 
 use pumpkin_solver::constraints;
-use pumpkin_solver::constraints::Comparator;
-use pumpkin_solver::constraints::Condition;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::predicate;
@@ -187,6 +185,7 @@ pub(crate) fn run(
 
             "pumpkin_all_different" => compile_all_different(context, exprs, annos, constraint_tag)?,
             "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
+            "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
             "array_bool_element" => {
@@ -772,31 +771,58 @@ fn compile_table(
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
 
-    let flat_table_arg = context.resolve_array_integer_constants(&exprs[1])?;
-    let table = flat_table_arg
+    let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
+    let table = create_table(flat_table, variables.len());
+
+    Ok(constraints::table(variables, table, constraint_tag)
+        .post(context.solver)
+        .is_ok())
+}
+
+fn compile_table_reif(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "pumpkin_table_int_reif");
+
+    let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+
+    let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
+    let table = create_table(flat_table, variables.len());
+
+    let reified = context.resolve_bool_variable(&exprs[2])?;
+
+    Ok(constraints::table(variables, table, constraint_tag)
+        .reify(context.solver, reified)
+        .is_ok())
+}
+
+fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
+    let table = flat_table
         .iter()
         .copied()
         .fold(vec![], |mut acc, next_value| {
             if acc
                 .last()
-                .map(|row: &Vec<Condition>| row.len() == variables.len())
+                .map(|row: &Vec<i32>| row.len() == num_variables)
                 .unwrap_or(true)
             {
                 acc.push(vec![]);
             }
 
             let last_row = acc.last_mut().unwrap();
-            if last_row.len() < variables.len() {
-                last_row.push(Condition {
-                    comparator: Comparator::Equal,
-                    value: next_value,
-                });
+            if last_row.len() < num_variables {
+                last_row.push(next_value);
             }
 
             acc
         });
 
-    Ok(constraints::table(variables, table, constraint_tag)
-        .post(context.solver)
-        .is_ok())
+    if !flat_table.is_empty() {
+        assert_eq!(num_variables, table.last().unwrap().len());
+    }
+
+    table
 }

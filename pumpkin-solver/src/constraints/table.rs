@@ -3,43 +3,16 @@ use std::collections::BTreeMap;
 use super::Constraint;
 use super::NegatableConstraint;
 use crate::predicate;
-use crate::predicates::Predicate;
-use crate::predicates::PredicateConstructor;
 use crate::proof::ConstraintTag;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Condition {
-    pub comparator: Comparator,
-    pub value: i32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Comparator {
-    NotEqual,
-    Equal,
-}
-
-impl Condition {
-    /// Create a predicate for a variable from this condition.
-    fn to_predicate<Var>(self, variable: &Var) -> Predicate
-    where
-        Var: PredicateConstructor<Value = i32>,
-    {
-        match self.comparator {
-            Comparator::NotEqual => predicate![variable != self.value],
-            Comparator::Equal => predicate![variable == self.value],
-        }
-    }
-}
-
 /// Create a table constraint over the variables `xs`.
 pub fn table<Var: IntegerVariable + 'static>(
     xs: impl IntoIterator<Item = Var>,
-    table: Vec<Vec<Condition>>,
+    table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     Table {
@@ -51,7 +24,7 @@ pub fn table<Var: IntegerVariable + 'static>(
 
 struct Table<Var> {
     xs: Vec<Var>,
-    table: Vec<Vec<Condition>>,
+    table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
 }
 
@@ -81,8 +54,8 @@ impl<Var: IntegerVariable> Table<Var> {
 
             // For every value in this column, add the clause
             //   `condition <-> (\/ supports)`
-            for (condition, supports) in values {
-                let condition = condition.to_predicate(x_col);
+            for (value, supports) in values {
+                let condition = predicate![x_col == value];
 
                 // For every `support in supports`: `support -> condition`
                 for support in supports.iter() {
@@ -129,9 +102,76 @@ impl<Var: IntegerVariable> Constraint for Table<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
+    type NegatedConstraint = NegatedTable<Var>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        let xs = self.xs.clone();
+        let table = self.table.clone();
+        let constraint_tag = self.constraint_tag;
+
+        NegatedTable {
+            xs,
+            table,
+            constraint_tag,
+        }
+    }
+}
+
+struct NegatedTable<Var> {
+    xs: Vec<Var>,
+    table: Vec<Vec<i32>>,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var: IntegerVariable> Constraint for NegatedTable<Var> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        for row in self.table {
+            let clause: Vec<_> = self
+                .xs
+                .iter()
+                .zip(row)
+                .map(|(x, value)| predicate![x != value])
+                .collect();
+
+            solver.add_clause(clause, self.constraint_tag)?;
+        }
+
+        Ok(())
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        for row in self.table {
+            let clause: Vec<_> = self
+                .xs
+                .iter()
+                .zip(row)
+                .map(|(x, value)| predicate![x != value])
+                .chain(std::iter::once(reification_literal.get_false_predicate()))
+                .collect();
+
+            solver.add_clause(clause, self.constraint_tag)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<Var: IntegerVariable + 'static> NegatableConstraint for NegatedTable<Var> {
     type NegatedConstraint = Table<Var>;
 
     fn negation(&self) -> Self::NegatedConstraint {
-        todo!()
+        let xs = self.xs.clone();
+        let table = self.table.clone();
+        let constraint_tag = self.constraint_tag;
+
+        Table {
+            xs,
+            table,
+            constraint_tag,
+        }
     }
 }

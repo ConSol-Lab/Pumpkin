@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub(crate) enum FlatZincError {
-    #[error("failed to read instance file")]
+    #[error("failed to read instance file: {0}")]
     Io(#[from] std::io::Error),
 
     #[error("{0}")]
