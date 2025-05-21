@@ -6,16 +6,18 @@ use super::insertion;
 use super::removal;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
-use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
@@ -28,6 +30,7 @@ use crate::propagators::cumulative::time_table::time_table_util::has_overlap_wit
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
+use crate::propagators::cumulative::time_table::TimeTable;
 use crate::propagators::debug_propagate_from_scratch_time_table_interval;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
@@ -89,6 +92,36 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRON
     /// scratch or not; note that this variable is only used if
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
+
+    // TODO: This should be refactored to use a propagator constructor.
+    constraint_tag: ConstraintTag,
+    inference_code: Option<InferenceCode>,
+}
+
+impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
+    for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
+{
+    type PropagatorImpl = Self;
+
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        // We only register for notifications of backtrack events if incremental backtracking is
+        // enabled
+        register_tasks(
+            &self.parameters.tasks,
+            context.reborrow(),
+            self.parameters.options.incremental_backtracking,
+        );
+
+        // First we store the bounds in the parameters
+        self.updatable_structures
+            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+
+        self.is_time_table_outdated = true;
+
+        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+
+        self
+    }
 }
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
@@ -98,6 +131,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -109,6 +143,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             updatable_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
+            constraint_tag,
+            inference_code: None,
         }
     }
 
@@ -140,6 +176,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         if conflict.is_none() {
                             conflict = Some(Err(create_conflict_explanation(
                                 context,
+                                self.inference_code.unwrap(),
                                 &conflict_tasks,
                                 self.parameters.options.explanation_type,
                             )
@@ -201,6 +238,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             self.time_table = create_time_table_over_interval_from_scratch(
                 context.as_readonly(),
                 &self.parameters,
+                self.inference_code.unwrap(),
             )?;
 
             // Then we note that the time-table is not outdated anymore
@@ -261,6 +299,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
+                            self.inference_code.unwrap(),
                             &mut conflicting_profile,
                             &self.parameters,
                         );
@@ -269,6 +308,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                             &synchronised_conflict_explanation,
                             context.as_readonly(),
                             &self.parameters,
+                            self.inference_code.unwrap(),
                         ),
                         "The conflict explanation was not the same as the conflict explanation from scratch!"
                     );
@@ -289,7 +329,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     pumpkin_assert_extreme!(
                         create_time_table_over_interval_from_scratch(
                             context.as_readonly(),
-                            &self.parameters
+                            &self.parameters,
+                            self.inference_code.unwrap(),
                         )
                         .is_err(),
                         "Time-table from scratch could not find conflict"
@@ -299,6 +340,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
                     return Err(create_conflict_explanation(
                         context.as_readonly(),
+                        self.inference_code.unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
                     )
@@ -344,6 +386,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(
                 context.as_readonly(),
+                self.inference_code.unwrap(),
                 &self.time_table,
                 &self.parameters,
             ),
@@ -356,6 +399,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
+            self.inference_code.unwrap(),
             self.time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -456,28 +500,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         "CumulativeTimeTableOverIntervalIncremental"
     }
 
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        // We only register for notifications of backtrack events if incremental backtracking is
-        // enabled
-        register_tasks(
-            &self.parameters.tasks,
-            context,
-            self.parameters.options.incremental_backtracking,
-        );
-
-        // First we store the bounds in the parameters
-        self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-
-        // Then we do normal propagation
-        self.time_table =
-            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
-        Ok(())
-    }
-
     fn debug_propagate_from_scratch(
         &self,
         mut context: PropagationContextMut,
@@ -487,6 +509,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             &mut context,
             &self.parameters,
             &self.updatable_structures,
+            self.inference_code.unwrap(),
         )
     }
 }
@@ -607,6 +630,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -627,6 +651,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -641,6 +666,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let result = solver.new_propagator(TimeTableOverIntervalIncrementalPropagator::<
             DomainId,
@@ -665,11 +691,12 @@ mod tests {
                 explanation_type: CumulativeExplanationType::Naive,
                 ..Default::default()
             },
+            constraint_tag,
         ));
 
         assert!(matches!(result, Err(Inconsistency::Conflict(_))));
         assert!(match result {
-            Err(Inconsistency::Conflict(conflict_nogood)) => {
+            Err(Inconsistency::Conflict(conflict)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -677,11 +704,12 @@ mod tests {
                     predicate!(s2 <= 1),
                 ];
                 expected.iter().all(|y| {
-                    conflict_nogood
+                    conflict
+                        .conjunction
                         .iter()
                         .collect::<Vec<&Predicate>>()
                         .contains(&y)
-                }) && conflict_nogood.iter().all(|y| expected.contains(y))
+                }) && conflict.conjunction.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });
@@ -692,6 +720,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(0, 6);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -712,6 +741,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -730,6 +760,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -770,6 +801,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -781,6 +813,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(
@@ -801,6 +834,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -827,6 +861,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -850,6 +885,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -871,6 +907,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(
@@ -911,6 +948,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -947,6 +985,7 @@ mod tests {
         let b2 = solver.new_variable(5, 5);
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(
@@ -992,6 +1031,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -1021,6 +1061,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -1044,6 +1085,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -1062,6 +1104,7 @@ mod tests {
         let s1 = solver.new_variable(3, 3);
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -1090,6 +1133,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");
@@ -1109,6 +1153,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(4, 4);
         let s2 = solver.new_variable(0, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(
@@ -1133,6 +1178,7 @@ mod tests {
                         allow_holes_in_domain: true,
                         ..Default::default()
                     },
+                    constraint_tag,
                 ),
             )
             .expect("No conflict");

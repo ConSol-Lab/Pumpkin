@@ -1,4 +1,5 @@
 use log::debug;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::pumpkin_assert_moderate;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::variables::Literal;
@@ -19,6 +20,9 @@ pub(crate) struct GeneralisedTotaliserEncoder {
     index_last_added_weighted_literal: usize,
     layers: Vec<Layer>,
     num_clauses_added: usize,
+    /// Useless, since the encoder is only used when solving DIMACS problems, but required to add
+    /// constraints.
+    constraint_tag: ConstraintTag,
 }
 
 impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
@@ -35,6 +39,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
             index_last_added_weighted_literal: usize::MAX,
             layers: vec![],
             num_clauses_added: 0,
+            constraint_tag: solver.new_constraint_tag(),
         };
         encoder.encode_at_most_k_standard_case(weighted_literals, k, solver);
 
@@ -65,7 +70,10 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.index_last_added_weighted_literal = i;
 
                 if solver
-                    .add_clause([(!weighted_literals[i].literal).get_true_predicate()])
+                    .add_clause(
+                        [(!weighted_literals[i].literal).get_true_predicate()],
+                        self.constraint_tag,
+                    )
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -195,11 +203,14 @@ impl GeneralisedTotaliserEncoder {
                 //  node1[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
                     solver
-                        .add_clause(vec![
-                            (!weighted_literal.literal).get_true_predicate(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                .get_true_predicate(),
-                        ])
+                        .add_clause(
+                            vec![
+                                (!weighted_literal.literal).get_true_predicate(),
+                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                    .get_true_predicate(),
+                            ],
+                            self.constraint_tag,
+                        )
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
                 }
@@ -207,11 +218,14 @@ impl GeneralisedTotaliserEncoder {
                 //  node2[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
                     solver
-                        .add_clause(vec![
-                            (!weighted_literal.literal).get_true_predicate(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                .get_true_predicate(),
-                        ])
+                        .add_clause(
+                            vec![
+                                (!weighted_literal.literal).get_true_predicate(),
+                                (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                    .get_true_predicate(),
+                            ],
+                            self.constraint_tag,
+                        )
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
                 }
@@ -223,12 +237,15 @@ impl GeneralisedTotaliserEncoder {
                         let combined_weight = wl1.weight + wl2.weight;
                         if combined_weight <= k {
                             solver
-                                .add_clause(vec![
-                                    (!wl1.literal).get_true_predicate(),
-                                    (!wl2.literal).get_true_predicate(),
-                                    (*value_to_literal_map.get(&combined_weight).unwrap())
-                                        .get_true_predicate(),
-                                ])
+                                .add_clause(
+                                    vec![
+                                        (!wl1.literal).get_true_predicate(),
+                                        (!wl2.literal).get_true_predicate(),
+                                        (*value_to_literal_map.get(&combined_weight).unwrap())
+                                            .get_true_predicate(),
+                                    ],
+                                    self.constraint_tag,
+                                )
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         // explicitly forbid the assignment of both literals
@@ -238,10 +255,13 @@ impl GeneralisedTotaliserEncoder {
                         // makes sense      I think it is necessary
                         } else {
                             solver
-                                .add_clause(vec![
-                                    (!wl1.literal).get_true_predicate(),
-                                    (!wl2.literal).get_true_predicate(),
-                                ])
+                                .add_clause(
+                                    vec![
+                                        (!wl1.literal).get_true_predicate(),
+                                        (!wl2.literal).get_true_predicate(),
+                                    ],
+                                    self.constraint_tag,
+                                )
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         }

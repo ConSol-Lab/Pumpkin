@@ -82,7 +82,7 @@ impl ReasonStore {
 
 /// A reference to a reason
 #[derive(Default, Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub struct ReasonRef(pub(crate) u32);
+pub(crate) struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
 #[derive(Debug)]
@@ -232,13 +232,6 @@ mod tests {
                 todo!()
             }
 
-            fn initialise_at_root(
-                &mut self,
-                _: &mut crate::engine::propagation::PropagatorInitialisationContext,
-            ) -> Result<(), PropositionalConjunction> {
-                todo!()
-            }
-
             fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
                 assert_eq!(0, code);
 
@@ -247,8 +240,9 @@ mod tests {
         }
 
         let mut propagator_store = PropagatorStore::default();
-        let propagator_id =
-            propagator_store.alloc(Box::new(TestPropagator(vec![predicate![x >= 2]])), None);
+        let propagator_id = propagator_store
+            .new_propagator()
+            .populate(Box::new(TestPropagator(vec![predicate![x >= 2]])));
         let reason_ref = reason_store.push(propagator_id, StoredReason::ReifiedLazy(reif, 0));
 
         assert_eq!(ReasonRef(0), reason_ref);

@@ -1,6 +1,5 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::constraints;
@@ -23,17 +22,18 @@ fn proof_with_reified_literals() {
         .expect("created proof"),
         ..Default::default()
     });
+
+    let constraint_tag = solver.new_constraint_tag();
     let variable = solver.new_named_bounded_integer(1, 10, "var");
-    let literal = solver.new_literal_for_predicate(predicate![variable == 5]);
+    let literal = solver.new_literal_for_predicate(predicate![variable == 5], constraint_tag);
 
     solver
-        .add_constraint(constraints::clause(vec![literal]))
+        .add_constraint(constraints::clause(vec![literal], constraint_tag))
         .post()
         .expect("no error");
 
     let _ = solver
-        .add_constraint(constraints::not_equals([variable], 5))
-        .with_tag(NonZero::new(2).unwrap())
+        .add_constraint(constraints::not_equals([variable], 5, constraint_tag))
         .post()
         .expect_err("unsat");
 
@@ -55,17 +55,17 @@ fn proof_with_equality_unit_nogood_step() {
         ..Default::default()
     });
 
+    let constraint_tag = solver.new_constraint_tag();
+
     let x1 = solver.new_named_bounded_integer(1, 2, "x1");
     let x2 = solver.new_named_bounded_integer(1, 1, "x2");
     solver
-        .add_constraint(constraints::binary_not_equals(x1, x2))
-        .with_tag(NonZero::new(1).unwrap())
+        .add_constraint(constraints::binary_not_equals(x1, x2, constraint_tag))
         .post()
         .expect("no conflict");
 
     let _ = solver
-        .add_constraint(constraints::less_than_or_equals([x1], 1))
-        .with_tag(NonZero::new(2).unwrap())
+        .add_constraint(constraints::less_than_or_equals([x1], 1, constraint_tag))
         .post()
         .expect_err("conflict");
 

@@ -1,7 +1,7 @@
+use super::propagation_status_cp::PropagatorConflict;
 use super::PropositionalConjunction;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::ConstraintOperationError;
@@ -12,10 +12,7 @@ use crate::ConstraintOperationError;
 /// 2) A propagator post a domain change that results in a variable having an empty domain.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum StoredConflictInfo {
-    Propagator {
-        conflict_nogood: PropositionalConjunction,
-        propagator_id: PropagatorId,
-    },
+    Propagator(PropagatorConflict),
     EmptyDomain {
         conflict_nogood: PropositionalConjunction,
     },

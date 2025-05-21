@@ -20,6 +20,7 @@ use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use pumpkin_solver::options::SolverOptions;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
@@ -434,6 +435,7 @@ pub(crate) struct SolverDimacsSink {
     pub(crate) solver: Solver,
     pub(crate) objective: Function,
     pub(crate) variables: Vec<Literal>,
+    constraint_tag: ConstraintTag,
 }
 
 /// The arguments to construct a [`Solver`]. Forwarded to
@@ -475,10 +477,13 @@ impl DimacsSink for SolverDimacsSink {
             .map(|code| solver.new_named_literal(format!("{}", code + 1)))
             .collect::<Vec<_>>();
 
+        let constraint_tag = solver.new_constraint_tag();
+
         SolverDimacsSink {
             solver,
             objective: Function::default(),
             variables,
+            constraint_tag,
         }
     }
 
@@ -487,7 +492,7 @@ impl DimacsSink for SolverDimacsSink {
             .mapped_clause(clause)
             .into_iter()
             .map(|literal| literal.get_true_predicate());
-        let _ = self.solver.add_clause(mapped);
+        let _ = self.solver.add_clause(mapped, self.constraint_tag);
     }
 
     fn add_soft_clause(&mut self, weight: NonZeroU32, clause: &[NonZeroI32]) {
@@ -513,6 +518,7 @@ impl DimacsSink for SolverDimacsSink {
                 clause
                     .into_iter()
                     .map(|literal| literal.get_true_predicate()),
+                self.constraint_tag,
             );
 
             self.objective

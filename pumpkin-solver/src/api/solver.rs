@@ -1,5 +1,3 @@
-use std::num::NonZero;
-
 use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
@@ -19,7 +17,7 @@ use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -34,6 +32,7 @@ use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
+use crate::proof::ConstraintTag;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::log_statistic;
@@ -188,9 +187,13 @@ impl Solver {
         self.satisfaction_solver.create_new_literal(None)
     }
 
-    pub fn new_literal_for_predicate(&mut self, predicate: Predicate) -> Literal {
+    pub fn new_literal_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        constraint_tag: ConstraintTag,
+    ) -> Literal {
         self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None)
+            .create_new_literal_for_predicate(predicate, None, constraint_tag)
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
@@ -419,8 +422,18 @@ impl Solver {
 
 /// Functions for adding new constraints to the solver.
 impl Solver {
+    /// Creates a new [`ConstraintTag`] that can be used to add constraints to the solver.
+    ///
+    /// See the [`ConstraintTag`] documentation for information on how the tags are used.
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.satisfaction_solver.new_constraint_tag()
+    }
+
     /// Add a constraint to the solver. This returns a [`ConstraintPoster`] which enables control
     /// on whether to add the constraint as-is, or whether to (half) reify it.
+    ///
+    /// All constraints require a [`ConstraintTag`] to be supplied. See its documentation for more
+    /// information.
     ///
     /// If none of the methods on [`ConstraintPoster`] are used, the constraint _is not_ actually
     /// added to the solver. In this case, a warning is emitted.
@@ -434,7 +447,11 @@ impl Solver {
     /// let a = solver.new_bounded_integer(0, 3);
     /// let b = solver.new_bounded_integer(0, 3);
     ///
-    /// solver.add_constraint(constraints::equals([a, b], 0)).post();
+    /// let constraint_tag = solver.new_constraint_tag();
+    ///
+    /// solver
+    ///     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+    ///     .post();
     /// ```
     pub fn add_constraint<Constraint>(
         &mut self,
@@ -451,36 +468,29 @@ impl Solver {
     pub fn add_clause(
         &mut self,
         clause: impl IntoIterator<Item = Predicate>,
+        constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause(clause)
-    }
-
-    /// Adds a propagator with a tag, which is used to identify inferences made by this propagator
-    /// in the proof log.
-    pub(crate) fn add_tagged_propagator(
-        &mut self,
-        propagator: impl Propagator + 'static,
-        tag: NonZero<u32>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(propagator, Some(tag))
+        self.satisfaction_solver.add_clause(clause, constraint_tag)
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`].
     ///
-    /// The caller should ensure the solver is in the root state before calling this, either
-    /// because no call to [`Self::solve()`] has been made, or because
-    /// [`Self::restore_state_at_root()`] was called.
+    /// A propagator is provided through an implementation of [`PropagatorConstructor`]. The
+    /// propagator that will be added is [`PropagatorConstructor::PropagatorImpl`].
     ///
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator(
+    pub(crate) fn add_propagator<Constructor>(
         &mut self,
-        propagator: impl Propagator + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(propagator, None)
+        constructor: Constructor,
+    ) -> Result<(), ConstraintOperationError>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
+        self.satisfaction_solver.add_propagator(constructor)
     }
 }
 

@@ -6,11 +6,9 @@ use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
-use crate::engine::reason::ReasonRef;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
 use crate::math::num_ext::NumExt;
@@ -135,50 +133,6 @@ where
         self.inner
             .iterate_domain(assignment)
             .map(|value| self.map(value))
-    }
-
-    fn remove(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        if (value - self.offset) % self.scale == 0 {
-            let inverted = self.invert(value, Rounding::Up);
-            self.inner.remove(assignment, inverted, reason)
-        } else {
-            Ok(())
-        }
-    }
-
-    fn set_lower_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        if self.scale >= 0 {
-            let inverted = self.invert(value, Rounding::Up);
-            self.inner.set_lower_bound(assignment, inverted, reason)
-        } else {
-            let inverted = self.invert(value, Rounding::Down);
-            self.inner.set_upper_bound(assignment, inverted, reason)
-        }
-    }
-
-    fn set_upper_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        if self.scale >= 0 {
-            let inverted = self.invert(value, Rounding::Down);
-            self.inner.set_upper_bound(assignment, inverted, reason)
-        } else {
-            let inverted = self.invert(value, Rounding::Up);
-            self.inner.set_lower_bound(assignment, inverted, reason)
-        }
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<IntDomainEvent>) {

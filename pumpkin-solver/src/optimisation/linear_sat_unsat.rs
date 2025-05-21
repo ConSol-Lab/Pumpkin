@@ -46,9 +46,16 @@ impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
         best_objective_value: i64,
         solver: &mut Solver,
     ) -> Result<(), ConstraintOperationError> {
-        solver.satisfaction_solver.add_clause([predicate!(
-            objective_variable <= (best_objective_value - 1) as i32
-        )])
+        // This screws up the proof, but for now I just want things to compile and run
+        // before proceeding with correctness of the proof.
+        let constraint_tag = solver.new_constraint_tag();
+
+        solver.satisfaction_solver.add_clause(
+            [predicate!(
+                objective_variable <= (best_objective_value - 1) as i32
+            )],
+            constraint_tag,
+        )
     }
 
     fn debug_bound_change(

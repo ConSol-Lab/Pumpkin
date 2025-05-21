@@ -13,6 +13,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
@@ -200,6 +201,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// cannot be increased or decreased, respectively).
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
+    inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -223,9 +225,21 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     );
 
     if parameters.options.generate_sequence {
-        propagate_sequence_of_profiles(context, time_table, updatable_structures, parameters)?;
+        propagate_sequence_of_profiles(
+            context,
+            inference_code,
+            time_table,
+            updatable_structures,
+            parameters,
+        )?;
     } else {
-        propagate_single_profiles(context, time_table, updatable_structures, parameters)?;
+        propagate_single_profiles(
+            context,
+            inference_code,
+            time_table,
+            updatable_structures,
+            parameters,
+        )?;
     }
 
     Ok(())
@@ -242,13 +256,14 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// [`CumulativeExplanationType::Pointwise`].
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
+    inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
-        CumulativePropagationHandler::new(parameters.options.explanation_type);
+        CumulativePropagationHandler::new(parameters.options.explanation_type, inference_code);
 
     // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
@@ -325,13 +340,14 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 /// beneficial.
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
+    inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
-        CumulativePropagationHandler::new(parameters.options.explanation_type);
+        CumulativePropagationHandler::new(parameters.options.explanation_type, inference_code);
 
     // We collect the time-table since we will need to index into it
     let time_table = time_table.collect::<Vec<_>>();
