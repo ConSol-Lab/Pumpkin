@@ -1,0 +1,5 @@
+i 1 2 3 -4 0 -1 c:3 l:nogood_label
+i 2 -5 -4 0 1 c:3 l:nogood_label
+i 3 6 -4 0 2 c:3 l:nogood_label
+i 4 -4 -7 0 3 c:3 l:nogood_label
+n 5 -8 -3 4 0 4 3 2 1

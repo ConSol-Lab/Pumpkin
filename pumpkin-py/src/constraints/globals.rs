@@ -182,3 +182,17 @@ python_constraint! {
         literals: Vec<BoolExpression>,
     }
 }
+
+python_constraint! {
+    Table: table {
+        variables: Vec<IntExpression>,
+        table: Vec<Vec<i32>>,
+    }
+}
+
+python_constraint! {
+    NegativeTable: negative_table {
+        variables: Vec<IntExpression>,
+        table: Vec<Vec<i32>>,
+    }
+}

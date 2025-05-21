@@ -61,5 +61,7 @@ declare_constraints! {
         Times,
         Clause,
         Conjunction,
+        Table,
+        NegativeTable,
     }
 }

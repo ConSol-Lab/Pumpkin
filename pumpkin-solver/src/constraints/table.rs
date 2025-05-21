@@ -22,6 +22,21 @@ pub fn table<Var: IntegerVariable + 'static>(
     }
 }
 
+/// Create a negative table constraint over the variables `xs`.
+///
+/// A negative table is essentially a set of conflicts over the given variables.
+pub fn negative_table<Var: IntegerVariable + 'static>(
+    xs: impl IntoIterator<Item = Var>,
+    table: Vec<Vec<i32>>,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    NegativeTable {
+        xs: xs.into_iter().collect(),
+        table,
+        constraint_tag,
+    }
+}
+
 struct Table<Var> {
     xs: Vec<Var>,
     table: Vec<Vec<i32>>,
@@ -102,14 +117,14 @@ impl<Var: IntegerVariable> Constraint for Table<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
-    type NegatedConstraint = NegatedTable<Var>;
+    type NegatedConstraint = NegativeTable<Var>;
 
     fn negation(&self) -> Self::NegatedConstraint {
         let xs = self.xs.clone();
         let table = self.table.clone();
         let constraint_tag = self.constraint_tag;
 
-        NegatedTable {
+        NegativeTable {
             xs,
             table,
             constraint_tag,
@@ -117,13 +132,13 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
     }
 }
 
-struct NegatedTable<Var> {
+struct NegativeTable<Var> {
     xs: Vec<Var>,
     table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
 }
 
-impl<Var: IntegerVariable> Constraint for NegatedTable<Var> {
+impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         for row in self.table {
             let clause: Vec<_> = self
@@ -160,7 +175,7 @@ impl<Var: IntegerVariable> Constraint for NegatedTable<Var> {
     }
 }
 
-impl<Var: IntegerVariable + 'static> NegatableConstraint for NegatedTable<Var> {
+impl<Var: IntegerVariable + 'static> NegatableConstraint for NegativeTable<Var> {
     type NegatedConstraint = Table<Var>;
 
     fn negation(&self) -> Self::NegatedConstraint {
