@@ -197,7 +197,8 @@ impl ConflictAnalysisContext<'_> {
 
             let propagator_id = reason_store.get_propagator(reason_ref);
 
-            let explanation_context = ExplanationContext::new(assignments, current_nogood);
+            let explanation_context =
+                ExplanationContext::new(assignments, current_nogood, trail_position);
 
             let reason_exists = reason_store.get_or_compute(
                 reason_ref,

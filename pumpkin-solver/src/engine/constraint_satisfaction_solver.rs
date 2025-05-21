@@ -45,7 +45,6 @@ use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -1163,7 +1162,10 @@ impl ConstraintSatisfactionSolver {
         let mut empty_domain_reason: Vec<Predicate> = vec![];
         let _ = self.reason_store.get_or_compute(
             entry_reason,
-            ExplanationContext::from(&self.assignments),
+            ExplanationContext::without_working_nogood(
+                &self.assignments,
+                self.assignments.num_trail_entries() - 1,
+            ),
             &mut self.propagators,
             &mut empty_domain_reason,
         );
@@ -1288,7 +1290,7 @@ impl ConstraintSatisfactionSolver {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
+                ExplanationContext::without_working_nogood(&self.assignments, trail_idx),
                 &mut self.propagators,
                 &mut reason,
             );

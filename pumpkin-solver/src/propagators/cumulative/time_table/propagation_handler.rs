@@ -757,7 +757,10 @@ pub(crate) mod test_propagation_handler {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::from(&self.assignments),
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    self.assignments.get_trail_position(&predicate).unwrap(),
+                ),
                 &mut propagator_store,
                 &mut reason,
             );

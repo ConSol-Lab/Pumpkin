@@ -125,7 +125,11 @@ where
         self.rhs_reason_buffer.clear();
         self.rhs_reason_buffer
             .extend(self.array.iter().enumerate().map(|(idx, variable)| {
-                if context.contains(&self.index, idx as i32) {
+                if context.contains_at_trail_position(
+                    &self.index,
+                    idx as i32,
+                    context.get_trail_position(),
+                ) {
                     match payload.bound() {
                         Bound::Lower => predicate![variable >= payload.value()],
                         Bound::Upper => predicate![variable <= payload.value()],
