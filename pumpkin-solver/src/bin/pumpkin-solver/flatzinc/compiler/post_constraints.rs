@@ -184,6 +184,8 @@ pub(crate) fn run(
             )?,
 
             "pumpkin_all_different" => compile_all_different(context, exprs, annos, constraint_tag)?,
+            "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
+            "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
             "array_bool_element" => {
@@ -757,4 +759,67 @@ fn compile_all_different(
     Ok(constraints::all_different(variables, constraint_tag)
         .post(context.solver)
         .is_ok())
+}
+
+fn compile_table(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_table_int");
+
+    let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+
+    let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
+    let table = create_table(flat_table, variables.len());
+
+    Ok(constraints::table(variables, table, constraint_tag)
+        .post(context.solver)
+        .is_ok())
+}
+
+fn compile_table_reif(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "pumpkin_table_int_reif");
+
+    let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+
+    let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
+    let table = create_table(flat_table, variables.len());
+
+    let reified = context.resolve_bool_variable(&exprs[2])?;
+
+    Ok(constraints::table(variables, table, constraint_tag)
+        .reify(context.solver, reified)
+        .is_ok())
+}
+
+fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
+    let table = flat_table
+        .iter()
+        .copied()
+        .fold(vec![], |mut acc, next_value| {
+            if acc
+                .last()
+                .map(|row: &Vec<i32>| row.len() == num_variables)
+                .unwrap_or(true)
+            {
+                acc.push(vec![]);
+            }
+
+            acc.last_mut().unwrap().push(next_value);
+
+            acc
+        });
+
+    if !flat_table.is_empty() {
+        assert_eq!(num_variables, table.last().unwrap().len());
+    }
+
+    table
 }

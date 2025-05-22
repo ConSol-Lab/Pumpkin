@@ -34,6 +34,7 @@ mod clause;
 mod constraint_poster;
 mod cumulative;
 mod element;
+mod table;
 
 pub use all_different::*;
 pub use arithmetic::*;
@@ -42,6 +43,7 @@ pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
+pub use table::*;
 
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::propagators::ReifiedPropagatorArgs;
