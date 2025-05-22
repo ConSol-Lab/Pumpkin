@@ -241,8 +241,26 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
+    #[allow(unused, reason = "Will be part of the API")]
+    fn lower_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.lower_bound_at_trail_position(self.assignments(), trail_position)
+    }
+
     fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
         var.upper_bound(self.assignments())
+    }
+
+    #[allow(unused, reason = "Will be part of the API")]
+    fn upper_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.upper_bound_at_trail_position(self.assignments(), trail_position)
     }
 
     fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {

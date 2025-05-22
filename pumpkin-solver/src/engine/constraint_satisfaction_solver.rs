@@ -144,6 +144,8 @@ pub struct ConstraintSatisfactionSolver {
     conflict_resolver: Box<dyn Resolver>,
     /// Keep track of trailed values (i.e. values which automatically backtrack)
     pub(crate) trailed_values: TrailedValues,
+    /// Component responsible for providing notifications for changes to the domains of variables
+    /// and/or the polarity [Predicate]s
     notification_engine: NotificationEngine,
 }
 
