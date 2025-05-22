@@ -13,7 +13,12 @@
 //! let a = solver.new_bounded_integer(0, 3);
 //! let b = solver.new_bounded_integer(0, 3);
 //!
-//! solver.add_constraint(constraints::equals([a, b], 0)).post();
+//! // All constraints require a constraint tag.
+//! let constraint_tag = solver.new_constraint_tag();
+//!
+//! solver
+//!     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+//!     .post();
 //! ```
 //!
 //! # Note
@@ -29,8 +34,7 @@ mod clause;
 mod constraint_poster;
 mod cumulative;
 mod element;
-
-use std::num::NonZero;
+mod table;
 
 pub use all_different::*;
 pub use arithmetic::*;
@@ -39,9 +43,10 @@ pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
+pub use table::*;
 
-use crate::engine::propagation::Propagator;
-use crate::propagators::ReifiedPropagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -59,11 +64,7 @@ pub trait Constraint {
     ///
     /// The `tag` allows inferences to be traced to the constraint that implies them. They will
     /// show up in the proof log.
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError>;
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
@@ -77,57 +78,41 @@ pub trait Constraint {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
 }
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    ConcretePropagator: Propagator + 'static,
+    ConcretePropagator: PropagatorConstructor + 'static,
 {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
-        if let Some(tag) = tag {
-            solver.add_tagged_propagator(self, tag)
-        } else {
-            solver.add_propagator(self)
-        }
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(self)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        if let Some(tag) = tag {
-            solver.add_tagged_propagator(ReifiedPropagator::new(self, reification_literal), tag)
-        } else {
-            solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
-        }
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: self,
+            reification_literal,
+        })
     }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.into_iter().try_for_each(|c| c.post(solver, tag))
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        self.into_iter().try_for_each(|c| c.post(solver))
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         self.into_iter()
-            .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
+            .try_for_each(|c| c.implied_by(solver, reification_literal))
     }
 }
 
@@ -154,14 +139,13 @@ pub trait NegatableConstraint: Constraint {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>
     where
         Self: Sized,
     {
         let negation = self.negation();
 
-        self.implied_by(solver, reification_literal, tag)?;
-        negation.implied_by(solver, !reification_literal, tag)
+        self.implied_by(solver, reification_literal)?;
+        negation.implied_by(solver, !reification_literal)
     }
 }

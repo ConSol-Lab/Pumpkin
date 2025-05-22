@@ -83,3 +83,5 @@ cumulative_synchronised!(
 );
 
 mzn_test!(all_different);
+mzn_test!(table);
+mzn_test!(table_reif);

@@ -5,13 +5,10 @@ use crate::engine::notifications::domain_event_notification::opaque_domain_event
 use crate::engine::notifications::domain_event_notification::DomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
-use crate::engine::reason::ReasonRef;
 use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
-/// lower-bound ([`IntegerVariable::lower_bound`]) or adjusting the bounds
-/// ([`IntegerVariable::set_lower_bound`]).
+/// lower-bound ([`IntegerVariable::lower_bound`]).
 pub trait IntegerVariable:
     Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView>
 {
@@ -44,30 +41,6 @@ pub trait IntegerVariable:
 
     /// Iterate over the values of the domain.
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32>;
-
-    /// Remove a value from the domain of this variable.
-    fn remove(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
-
-    /// Tighten the lower bound of the domain of this variable.
-    fn set_lower_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
-
-    /// Tighten the upper bound of the domain of this variable.
-    fn set_upper_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);

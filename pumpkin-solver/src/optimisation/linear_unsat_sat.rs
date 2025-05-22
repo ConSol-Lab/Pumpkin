@@ -131,7 +131,11 @@ where
                     solver.satisfaction_solver.restore_state_at_root(brancher);
                     // We add the (hard) constraint that the negated assumption should hold (i.e.,
                     // the solution should be at least as large as the found solution)
-                    let _ = solver.add_clause([!assumption]);
+
+                    // TODO: For now this breaks the proof, but we want this to compile
+                    // and run first.
+                    let constraint_tag = solver.new_constraint_tag();
+                    let _ = solver.add_clause([!assumption], constraint_tag);
                 }
                 CSPSolverExecutionFlag::Timeout => {
                     // Reset the state whenever we return a result

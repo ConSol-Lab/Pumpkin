@@ -1,13 +1,59 @@
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
+use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
+
+declare_inference_label!(IntegerMultiplication);
+
+/// The [`PropagatorConstructor`] for [`IntegerMultiplicationPropagator`].
+#[derive(Clone, Debug)]
+pub(crate) struct IntegerMultiplicationArgs<VA, VB, VC> {
+    pub(crate) a: VA,
+    pub(crate) b: VB,
+    pub(crate) c: VC,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationArgs<VA, VB, VC>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
+{
+    type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        } = self;
+
+        context.register(a.clone(), DomainEvents::ANY_INT, ID_A);
+        context.register(b.clone(), DomainEvents::ANY_INT, ID_B);
+        context.register(c.clone(), DomainEvents::ANY_INT, ID_C);
+
+        IntegerMultiplicationPropagator {
+            a,
+            b,
+            c,
+            inference_code: context.create_inference_code(constraint_tag, IntegerMultiplication),
+        }
+    }
+}
 
 /// A propagator for maintaining the constraint `a * b = c`. The propagator
 /// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
@@ -17,22 +63,12 @@ pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
     b: VB,
     c: VC,
+    inference_code: InferenceCode,
 }
 
 const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
 const ID_C: LocalId = LocalId::from(2);
-
-impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-    VC: IntegerVariable + 'static,
-{
-    pub(crate) fn new(a: VA, b: VB, c: VC) -> Self {
-        IntegerMultiplicationPropagator { a, b, c }
-    }
-}
 
 impl<VA: 'static, VB: 'static, VC: 'static> Propagator
     for IntegerMultiplicationPropagator<VA, VB, VC>
@@ -41,17 +77,6 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
-        let _ = context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
-        let _ = context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
-        let _ = context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
-
-        Ok(())
-    }
-
     fn priority(&self) -> u32 {
         0
     }
@@ -61,7 +86,7 @@ where
     }
 
     fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c)
+        perform_propagation(context, &self.a, &self.b, &self.c, self.inference_code)
     }
 }
 
@@ -70,9 +95,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     a: &VA,
     b: &VB,
     c: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // First we propagate the signs
-    propagate_signs(&mut context, a, b, c)?;
+    propagate_signs(&mut context, a, b, c, inference_code)?;
 
     let a_min = context.lower_bound(a);
     let a_max = context.upper_bound(a);
@@ -89,43 +115,47 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         //
         // We need the lower-bounds in the explanation as well because the reasoning does not
         // hold in the case of a negative lower-bound
-        context.set_upper_bound(
-            c,
-            new_max_c,
+        context.post(
+            predicate![c <= new_max_c],
             conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
+            inference_code,
         )?;
 
         // c is larger than the minimum value that a * b can take
-        context.set_lower_bound(c, new_min_c, conjunction!([a >= a_min] & [b >= b_min]))?;
+        context.post(
+            predicate![c >= new_min_c],
+            conjunction!([a >= a_min] & [b >= b_min]),
+            inference_code,
+        )?;
     }
 
     if b_min >= 0 && b_max >= 1 && c_min >= 1 {
         // a >= ceil(c.min / b.max)
         let bound = div_ceil_pos(c_min, b_max);
-        context.set_lower_bound(
-            a,
-            bound,
+        context.post(
+            predicate![a >= bound],
             conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
+            inference_code,
         )?;
     }
 
     if b_min >= 1 && c_min >= 0 && c_max >= 1 {
         // a <= floor(c.max / b.min)
         let bound = c_max / b_min;
-        context.set_upper_bound(
-            a,
-            bound,
+        context.post(
+            predicate![a <= bound],
             conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
+            inference_code,
         )?;
     }
 
     if a_min >= 1 && c_min >= 0 && c_max >= 1 {
         // b <= floor(c.max / a.min)
         let bound = c_max / a_min;
-        context.set_upper_bound(
-            b,
-            bound,
+        context.post(
+            predicate![b <= bound],
             conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
+            inference_code,
         )?;
     }
 
@@ -133,10 +163,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     if a_min >= 0 && a_max >= 1 && c_min >= 1 {
         let bound = div_ceil_pos(c_min, a_max);
 
-        context.set_lower_bound(
-            b,
-            bound,
+        context.post(
+            predicate![b >= bound],
             conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
+            inference_code,
         )?;
     }
 
@@ -147,11 +177,14 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     {
         // All variables are assigned but the resulting value is not correct, so we report a
         // conflict
-        return Err(conjunction!(
-            [a == context.lower_bound(a)]
-                & [b == context.lower_bound(b)]
-                & [c == context.lower_bound(c)]
-        )
+        return Err(PropagatorConflict {
+            conjunction: conjunction!(
+                [a == context.lower_bound(a)]
+                    & [b == context.lower_bound(b)]
+                    & [c == context.lower_bound(c)]
+            ),
+            inference_code,
+        }
         .into());
     }
 
@@ -185,6 +218,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     a: &VA,
     b: &VB,
     c: &VC,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     let a_min = context.lower_bound(a);
     let a_max = context.upper_bound(a);
@@ -196,67 +230,115 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     // Propagating based on positive bounds
     // a is positive and b is positive -> c is positive
     if a_min >= 0 && b_min >= 0 {
-        context.set_lower_bound(c, 0, conjunction!([a >= 0] & [b >= 0]))?;
+        context.post(
+            predicate![c >= 0],
+            conjunction!([a >= 0] & [b >= 0]),
+            inference_code,
+        )?;
     }
 
     // a is positive and c is positive -> b is positive
     if a_min >= 1 && c_min >= 1 {
-        context.set_lower_bound(b, 1, conjunction!([a >= 1] & [c >= 1]))?;
+        context.post(
+            predicate![b >= 1],
+            conjunction!([a >= 1] & [c >= 1]),
+            inference_code,
+        )?;
     }
 
     // b is positive and c is positive -> a is positive
     if b_min >= 1 && c_min >= 1 {
-        context.set_lower_bound(a, 1, conjunction!([b >= 1] & [c >= 1]))?;
+        context.post(
+            predicate![a >= 1],
+            conjunction!([b >= 1] & [c >= 1]),
+            inference_code,
+        )?;
     }
 
     // Propagating based on negative bounds
     // a is negative and b is negative -> c is positive
     if a_max <= 0 && b_max <= 0 {
-        context.set_lower_bound(c, 0, conjunction!([a <= 0] & [b <= 0]))?;
+        context.post(
+            predicate![c >= 0],
+            conjunction!([a <= 0] & [b <= 0]),
+            inference_code,
+        )?;
     }
 
     // a is negative and c is negative -> b is positive
     if a_max <= -1 && c_max <= -1 {
-        context.set_lower_bound(b, 1, conjunction!([a <= -1] & [c <= -1]))?;
+        context.post(
+            predicate![b >= 1],
+            conjunction!([a <= -1] & [c <= -1]),
+            inference_code,
+        )?;
     }
 
     // b is negative and c is negative -> a is positive
     if b_max <= -1 && c_max <= -1 {
-        context.set_lower_bound(a, 1, conjunction!([b <= -1] & [c <= -1]))?;
+        context.post(
+            predicate![a >= 1],
+            conjunction!([b <= -1] & [c <= -1]),
+            inference_code,
+        )?;
     }
 
     // Propagating based on mixed bounds (i.e. one positive and one negative)
     // Propagating c based on a and b
     // a is negative and b is positive -> c is negative
     if a_max <= 0 && b_min >= 0 {
-        context.set_upper_bound(c, 0, conjunction!([a <= 0] & [b >= 0]))?;
+        context.post(
+            predicate![c <= 0],
+            conjunction!([a <= 0] & [b >= 0]),
+            inference_code,
+        )?;
     }
 
     // a is positive and b is negative -> c is negative
     if a_min >= 0 && b_max <= 0 {
-        context.set_upper_bound(c, 0, conjunction!([a >= 0] & [b <= 0]))?;
+        context.post(
+            predicate![c <= 0],
+            conjunction!([a >= 0] & [b <= 0]),
+            inference_code,
+        )?;
     }
 
     // Propagating b based on a and c
     // a is negative and c is positive -> b is negative
     if a_max <= -1 && c_min >= 1 {
-        context.set_upper_bound(b, -1, conjunction!([a <= -1] & [c >= 1]))?;
+        context.post(
+            predicate![b <= -1],
+            conjunction!([a <= -1] & [c >= 1]),
+            inference_code,
+        )?;
     }
 
     // a is positive and c is negative -> b is negative
     if a_min >= 1 && c_max <= -1 {
-        context.set_upper_bound(b, -1, conjunction!([a >= 1] & [c <= -1]))?;
+        context.post(
+            predicate![b <= -1],
+            conjunction!([a >= 1] & [c <= -1]),
+            inference_code,
+        )?;
     }
 
     // Propagating a based on b and c
     // b is negative and c is positive -> a is negative
     if b_max <= -1 && c_min >= 1 {
-        context.set_upper_bound(a, -1, conjunction!([b <= -1] & [c >= 1]))?;
+        context.post(
+            predicate![a <= -1],
+            conjunction!([b <= -1] & [c >= 1]),
+            inference_code,
+        )?;
     }
 
     // b is positive and c is negative -> a is negative
     if b_min >= 1 && c_max <= -1 {
-        context.set_upper_bound(a, -1, conjunction!([b >= 1] & [c <= -1]))?;
+        context.post(
+            predicate![a <= -1],
+            conjunction!([b >= 1] & [c <= -1]),
+            inference_code,
+        )?;
     }
 
     Ok(())
@@ -285,8 +367,15 @@ mod tests {
         let b = solver.new_variable(0, 4);
         let c = solver.new_variable(-10, 20);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");
@@ -315,8 +404,15 @@ mod tests {
         let b = solver.new_variable(0, 12);
         let c = solver.new_variable(2, 12);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");
@@ -342,8 +438,15 @@ mod tests {
         let b = solver.new_variable(3, 6);
         let c = solver.new_variable(2, 12);
 
+        let constraint_tag = solver.new_constraint_tag();
+
         let propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.propagate(propagator).expect("no empty domains");

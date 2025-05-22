@@ -1,6 +1,6 @@
-use crate::basic_types::PropositionalConjunction;
+use super::PropositionalConjunction;
 use crate::engine::EmptyDomain;
-use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
@@ -10,7 +10,7 @@ pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Inconsistency {
     EmptyDomain,
-    Conflict(PropositionalConjunction),
+    Conflict(PropagatorConflict),
 }
 
 impl From<EmptyDomain> for Inconsistency {
@@ -19,18 +19,18 @@ impl From<EmptyDomain> for Inconsistency {
     }
 }
 
-impl From<PropositionalConjunction> for Inconsistency {
-    fn from(conflict_nogood: PropositionalConjunction) -> Self {
-        Inconsistency::Conflict(conflict_nogood)
+impl From<PropagatorConflict> for Inconsistency {
+    fn from(conflict: PropagatorConflict) -> Self {
+        Inconsistency::Conflict(conflict)
     }
 }
 
-impl<Slice> From<Slice> for Inconsistency
-where
-    Slice: AsRef<[Predicate]>,
-{
-    fn from(value: Slice) -> Self {
-        let conflict_nogood: PropositionalConjunction = value.as_ref().to_vec().into();
-        Inconsistency::Conflict(conflict_nogood)
-    }
+/// A conflict stated by a propagator. A propagator that identifies a conflict that is _not_ an
+/// empty domain, describes that conflict with this type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PropagatorConflict {
+    /// The conjunction that describes the infeasible partial assignment.
+    pub(crate) conjunction: PropositionalConjunction,
+    /// The inference code that identified the conflict.
+    pub(crate) inference_code: InferenceCode,
 }

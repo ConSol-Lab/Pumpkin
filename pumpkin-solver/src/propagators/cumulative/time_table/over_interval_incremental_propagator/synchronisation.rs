@@ -6,6 +6,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
+use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::CumulativeParameters;
@@ -58,13 +59,15 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: PropagationContext,
     parameters: &CumulativeParameters<Var>,
+    inference_code: InferenceCode,
 ) -> bool {
-    let error_from_scratch = create_time_table_over_interval_from_scratch(context, parameters);
+    let error_from_scratch =
+        create_time_table_over_interval_from_scratch(context, parameters, inference_code);
     if let Err(explanation_scratch) = error_from_scratch {
         if let Err(Inconsistency::Conflict(explanation)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
-            *explanation == explanation_scratch
+            explanation.conjunction == explanation_scratch.conjunction
         } else {
             false
         }
@@ -79,6 +82,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 /// included in the profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
     context: PropagationContext,
+    inference_code: InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -105,6 +109,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     Err(create_conflict_explanation(
         context,
+        inference_code,
         &ResourceProfile {
             start: conflicting_profile.start,
             end: conflicting_profile.end,

@@ -5,11 +5,9 @@ use crate::containers::StorageKey;
 use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::notifications::domain_event_notification::DomainEvent;
 use crate::engine::notifications::Watchers;
-use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
@@ -66,33 +64,6 @@ impl IntegerVariable for DomainId {
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
         assignment.get_domain_iterator(*self)
-    }
-
-    fn remove(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.remove_value_from_domain(*self, value, reason)
-    }
-
-    fn set_lower_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.tighten_lower_bound(*self, value, reason)
-    }
-
-    fn set_upper_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.tighten_upper_bound(*self, value, reason)
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {

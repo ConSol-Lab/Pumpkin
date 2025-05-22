@@ -1,5 +1,6 @@
 pub(crate) mod conflict_analysis;
 pub(crate) mod constraint_satisfaction_solver;
+mod constraint_tag;
 pub(crate) mod cp;
 mod debug_helper;
 mod literal_block_distance;

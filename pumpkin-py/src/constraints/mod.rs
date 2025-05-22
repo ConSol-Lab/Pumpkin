@@ -15,11 +15,10 @@ macro_rules! declare_constraints {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                tag: Option<std::num::NonZero<u32>>,
                 variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.post(solver, tag, variable_map)),+
+                    $($name::$constraint(cns) => cns.post(solver, variable_map)),+
                 }
             }
 
@@ -27,11 +26,10 @@ macro_rules! declare_constraints {
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::variables::Literal,
-                tag: Option<std::num::NonZero<u32>>,
                 variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, tag, variable_map)),+
+                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, variable_map)),+
                 }
             }
         }
@@ -63,5 +61,7 @@ declare_constraints! {
         Times,
         Clause,
         Conjunction,
+        Table,
+        NegativeTable,
     }
 }

@@ -2,38 +2,66 @@ use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::declare_inference_label;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 
-/// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
-///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
-///
-/// Note that this propagator is 0-indexed
 #[derive(Clone, Debug)]
-pub(crate) struct ElementPropagator<VX, VI, VE> {
-    array: Box<[VX]>,
-    index: VI,
-    rhs: VE,
-
-    rhs_reason_buffer: Vec<Predicate>,
+pub(crate) struct ElementArgs<VX, VI, VE> {
+    pub(crate) array: Box<[VX]>,
+    pub(crate) index: VI,
+    pub(crate) rhs: VE,
+    pub(crate) constraint_tag: ConstraintTag,
 }
 
-impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
-    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
-        Self {
+declare_inference_label!(Element);
+
+impl<VX, VI, VE> PropagatorConstructor for ElementArgs<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+{
+    type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let ElementArgs {
             array,
             index,
             rhs,
+            constraint_tag,
+        } = self;
+
+        for (i, x_i) in array.iter().enumerate() {
+            context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        }
+
+        context.register(index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        context.register(rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+
+        let inference_code = context.create_inference_code(constraint_tag, Element);
+
+        ElementPropagator {
+            array,
+            index,
+            rhs,
+            inference_code,
             rhs_reason_buffer: vec![],
         }
     }
@@ -44,6 +72,20 @@ const ID_RHS: LocalId = LocalId::from(1);
 
 // local ids of array vars are shifted by ID_X_OFFSET
 const ID_X_OFFSET: u32 = 2;
+
+/// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
+///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
+///
+/// Note that this propagator is 0-indexed
+#[derive(Clone, Debug)]
+pub(crate) struct ElementPropagator<VX, VI, VE> {
+    array: Box<[VX]>,
+    index: VI,
+    rhs: VE,
+    inference_code: InferenceCode,
+
+    rhs_reason_buffer: Vec<Predicate>,
+}
 
 impl<VX, VI, VE> Propagator for ElementPropagator<VX, VI, VE>
 where
@@ -77,29 +119,17 @@ where
         Ok(())
     }
 
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.array.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(
-                x_i.clone(),
-                DomainEvents::ANY_INT,
-                LocalId::from(i as u32 + ID_X_OFFSET),
-            );
-        });
-        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
-        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
-        Ok(())
-    }
-
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let payload = RightHandSideReason::from_bits(code);
 
         self.rhs_reason_buffer.clear();
         self.rhs_reason_buffer
             .extend(self.array.iter().enumerate().map(|(idx, variable)| {
-                if context.contains(&self.index, idx as i32) {
+                if context.contains_at_trail_position(
+                    &self.index,
+                    idx as i32,
+                    context.get_trail_position(),
+                ) {
                     match payload.bound() {
                         Bound::Lower => predicate![variable >= payload.value()],
                         Bound::Upper => predicate![variable <= payload.value()],
@@ -124,8 +154,16 @@ where
         &self,
         context: &mut PropagationContextMut<'_>,
     ) -> PropagationStatusCP {
-        context.set_lower_bound(&self.index, 0, conjunction!())?;
-        context.set_upper_bound(&self.index, self.array.len() as i32 - 1, conjunction!())?;
+        context.post(
+            predicate![self.index >= 0],
+            conjunction!(),
+            self.inference_code,
+        )?;
+        context.post(
+            predicate![self.index <= self.array.len() as i32 - 1],
+            conjunction!(),
+            self.inference_code,
+        )?;
         Ok(())
     }
 
@@ -147,25 +185,25 @@ where
                 )
             });
 
-        context.set_lower_bound(
-            &self.rhs,
-            rhs_lb,
+        context.post(
+            predicate![self.rhs >= rhs_lb],
             Reason::DynamicLazy(
                 RightHandSideReason::new()
                     .with_bound(Bound::Lower)
                     .with_value(rhs_lb)
                     .into_bits(),
             ),
+            self.inference_code,
         )?;
-        context.set_upper_bound(
-            &self.rhs,
-            rhs_ub,
+        context.post(
+            predicate![self.rhs <= rhs_ub],
             Reason::DynamicLazy(
                 RightHandSideReason::new()
                     .with_bound(Bound::Upper)
                     .with_value(rhs_ub)
                     .into_bits(),
             ),
+            self.inference_code,
         )?;
 
         Ok(())
@@ -198,7 +236,7 @@ where
         }
 
         for (idx, reason) in to_remove.drain(..) {
-            context.remove(&self.index, idx, reason)?;
+            context.post(predicate![self.index != idx], reason, self.inference_code)?;
         }
 
         Ok(())
@@ -215,15 +253,15 @@ where
         let rhs_ub = context.upper_bound(&self.rhs);
         let lhs = &self.array[index as usize];
 
-        context.set_lower_bound(
-            lhs,
-            rhs_lb,
+        context.post(
+            predicate![lhs >= rhs_lb],
             conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
+            self.inference_code,
         )?;
-        context.set_upper_bound(
-            lhs,
-            rhs_ub,
+        context.post(
+            predicate![lhs <= rhs_ub],
             conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
+            self.inference_code,
         )?;
         Ok(())
     }
@@ -274,13 +312,15 @@ mod tests {
 
         let index = solver.new_variable(0, 3);
         let rhs = solver.new_variable(6, 9);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(index, 0, 2);
@@ -307,13 +347,15 @@ mod tests {
 
         let index = solver.new_variable(0, 3);
         let rhs = solver.new_variable(0, 20);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(rhs, 2, 15);
@@ -337,16 +379,18 @@ mod tests {
         let x_1 = solver.new_variable(0, 15);
         let x_2 = solver.new_variable(7, 9);
         let x_3 = solver.new_variable(14, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let index = solver.new_variable(1, 1);
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(x_1, 6, 9);
@@ -370,6 +414,7 @@ mod tests {
         let x_1 = solver.new_variable(0, 15);
         let x_2 = solver.new_variable(7, 9);
         let x_3 = solver.new_variable(14, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let index = solver.new_variable(0, 3);
         solver.remove(index, 1).expect("Value can be removed");
@@ -377,11 +422,12 @@ mod tests {
         let rhs = solver.new_variable(-10, 30);
 
         let _ = solver
-            .new_propagator(ElementPropagator::new(
-                vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementArgs {
+                array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            ))
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(rhs, 3, 15);

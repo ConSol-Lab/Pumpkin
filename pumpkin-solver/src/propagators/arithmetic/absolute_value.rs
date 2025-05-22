@@ -1,12 +1,53 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
+use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
+use crate::predicate;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
+
+declare_inference_label!(AbsoluteValue);
+
+#[derive(Clone, Debug)]
+pub(crate) struct AbsoluteValueArgs<VA, VB> {
+    pub(crate) signed: VA,
+    pub(crate) absolute: VB,
+    pub(crate) constraint_tag: ConstraintTag,
+}
+
+impl<VA, VB> PropagatorConstructor for AbsoluteValueArgs<VA, VB>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+{
+    type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        } = self;
+
+        context.register(signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
+        context.register(absolute.clone(), DomainEvents::BOUNDS, LocalId::from(1));
+
+        let inference_code = context.create_inference_code(constraint_tag, AbsoluteValue);
+
+        AbsoluteValuePropagator {
+            signed,
+            absolute,
+            inference_code,
+        }
+    }
+}
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
@@ -16,31 +57,14 @@ use crate::engine::DomainEvents;
 pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     signed: VA,
     absolute: VB,
+    inference_code: InferenceCode,
 }
 
-impl<VA, VB> AbsoluteValuePropagator<VA, VB> {
-    pub(crate) fn new(signed: VA, absolute: VB) -> Self {
-        AbsoluteValuePropagator { signed, absolute }
-    }
-}
-
-impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
-    for AbsoluteValuePropagator<VA, VB>
+impl<VA, VB> Propagator for AbsoluteValuePropagator<VA, VB>
+where
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
 {
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
-        let _ = context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
-        let _ = context.register(
-            self.absolute.clone(),
-            DomainEvents::BOUNDS,
-            LocalId::from(1),
-        );
-
-        Ok(())
-    }
-
     fn priority(&self) -> u32 {
         0
     }
@@ -55,7 +79,11 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
     ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
-        context.set_lower_bound(&self.absolute, 0, conjunction!())?;
+        context.post(
+            predicate![self.absolute >= 0],
+            conjunction!(),
+            self.inference_code,
+        )?;
 
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
@@ -69,50 +97,50 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
 
         let signed_absolute_ub = i32::max(signed_lb.abs(), signed_ub.abs());
 
-        context.set_upper_bound(
-            &self.absolute,
-            signed_absolute_ub,
+        context.post(
+            predicate![self.absolute <= signed_absolute_ub],
             conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
+            self.inference_code,
         )?;
 
         if signed_lb > 0 {
-            context.set_lower_bound(
-                &self.absolute,
-                signed_lb,
+            context.post(
+                predicate![self.absolute >= signed_lb],
                 conjunction!([self.signed >= signed_lb]),
+                self.inference_code,
             )?;
         } else if signed_ub < 0 {
-            context.set_lower_bound(
-                &self.absolute,
-                signed_ub.abs(),
+            context.post(
+                predicate![self.absolute >= signed_ub.abs()],
                 conjunction!([self.signed <= signed_ub]),
+                self.inference_code,
             )?;
         }
 
         let absolute_ub = context.upper_bound(&self.absolute);
         let absolute_lb = context.lower_bound(&self.absolute);
-        context.set_lower_bound(
-            &self.signed,
-            -absolute_ub,
+        context.post(
+            predicate![self.signed >= -absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
+            self.inference_code,
         )?;
-        context.set_upper_bound(
-            &self.signed,
-            absolute_ub,
+        context.post(
+            predicate![self.signed <= absolute_ub],
             conjunction!([self.absolute <= absolute_ub]),
+            self.inference_code,
         )?;
 
         if signed_ub <= 0 {
-            context.set_upper_bound(
-                &self.signed,
-                -absolute_lb,
+            context.post(
+                predicate![self.signed <= -absolute_lb],
                 conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
+                self.inference_code,
             )?;
         } else if signed_lb >= 0 {
-            context.set_lower_bound(
-                &self.signed,
-                absolute_lb,
+            context.post(
+                predicate![self.signed >= absolute_lb],
                 conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
+                self.inference_code,
             )?;
         }
 
@@ -131,9 +159,14 @@ mod tests {
 
         let signed = solver.new_variable(-3, 4);
         let absolute = solver.new_variable(-2, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -145,9 +178,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, 5);
         let absolute = solver.new_variable(0, 3);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -159,9 +197,14 @@ mod tests {
 
         let signed = solver.new_variable(3, 6);
         let absolute = solver.new_variable(0, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -173,9 +216,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, -3);
         let absolute = solver.new_variable(1, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -187,9 +235,14 @@ mod tests {
 
         let signed = solver.new_variable(-5, 0);
         let absolute = solver.new_variable(1, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -201,9 +254,14 @@ mod tests {
 
         let signed = solver.new_variable(1, 5);
         let absolute = solver.new_variable(3, 5);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
+            .new_propagator(AbsoluteValueArgs {
+                signed,
+                absolute,
+                constraint_tag,
+            })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);

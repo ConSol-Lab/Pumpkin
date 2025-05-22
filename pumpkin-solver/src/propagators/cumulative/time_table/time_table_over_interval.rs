@@ -2,19 +2,23 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
+use super::TimeTable;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
-use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -54,7 +58,6 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -62,6 +65,10 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var>,
+
+    // TODO: Update with propagator constructor.
+    constraint_tag: ConstraintTag,
+    inference_code: Option<InferenceCode>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
@@ -75,6 +82,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -84,19 +92,41 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
             is_time_table_empty: true,
             parameters,
             updatable_structures,
+            constraint_tag,
+            inference_code: None,
         }
+    }
+}
+
+impl<Var: IntegerVariable + 'static> PropagatorConstructor
+    for TimeTableOverIntervalPropagator<Var>
+{
+    type PropagatorImpl = Self;
+
+    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        self.updatable_structures
+            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+        register_tasks(&self.parameters.tasks, context.reborrow(), false);
+
+        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+
+        self
     }
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table =
-            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
+        let time_table = create_time_table_over_interval_from_scratch(
+            context.as_readonly(),
+            &self.parameters,
+            self.inference_code.unwrap(),
+        )?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
+            self.inference_code.unwrap(),
             time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -152,17 +182,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         "CumulativeTimeTableOverInterval"
     }
 
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
-
-        Ok(())
-    }
-
     fn debug_propagate_from_scratch(
         &self,
         mut context: PropagationContextMut,
@@ -171,6 +190,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             &self.parameters,
             &self.updatable_structures,
+            self.inference_code.unwrap(),
         )
     }
 }
@@ -191,12 +211,13 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 >(
     context: Context,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+    inference_code: InferenceCode,
+) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
     let events = create_events(context, parameters);
 
     // Then we create a time-table using these events
-    create_time_table_from_events(events, context, parameters)
+    create_time_table_from_events(events, context, inference_code, parameters)
 }
 
 /// Creates a list of all the events (for the starts and ends of mandatory parts) of all the
@@ -269,8 +290,9 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
     events: Vec<Event<Var>>,
     context: Context,
+    inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     pumpkin_assert_extreme!(
         events.is_empty()
             || (0..events.len() - 1)
@@ -338,6 +360,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                     // conflict using the current profile
                     return Err(create_conflict_explanation(
                         context,
+                        inference_code,
                         &new_profile,
                         parameters.options.explanation_type,
                     ));
@@ -419,14 +442,19 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
+    inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table =
-        create_time_table_over_interval_from_scratch(context.as_readonly(), parameters)?;
+    let time_table = create_time_table_over_interval_from_scratch(
+        context.as_readonly(),
+        parameters,
+        inference_code,
+    )?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
+        inference_code,
         time_table.iter(),
         parameters,
         &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
@@ -451,6 +479,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -470,6 +499,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -483,6 +513,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let result = solver.new_propagator(TimeTableOverIntervalPropagator::new(
             &[
@@ -504,6 +535,7 @@ mod tests {
                 explanation_type: CumulativeExplanationType::Naive,
                 ..Default::default()
             },
+            constraint_tag,
         ));
 
         assert!(match result {
@@ -517,10 +549,12 @@ mod tests {
                             predicate!(s2 >= 1),
                             predicate!(s2 <= 1),
                         ];
-                        expected
-                            .iter()
-                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                            && x.iter().all(|y| expected.contains(y))
+                        expected.iter().all(|y| {
+                            x.conjunction
+                                .iter()
+                                .collect::<Vec<&Predicate>>()
+                                .contains(&y)
+                        }) && x.conjunction.iter().all(|y| expected.contains(y))
                     }
                 }
             }
@@ -533,6 +567,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(0, 6);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -552,6 +587,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -569,6 +605,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -608,6 +645,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -618,6 +656,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -637,6 +676,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -662,6 +702,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -684,6 +725,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -704,6 +746,7 @@ mod tests {
         let c = solver.new_variable(8, 9);
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -743,6 +786,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -778,6 +822,8 @@ mod tests {
         let b2 = solver.new_variable(5, 5);
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
+
+        let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -822,6 +868,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions::default(),
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -850,6 +897,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -872,6 +920,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -889,6 +938,7 @@ mod tests {
         let s1 = solver.new_variable(3, 3);
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -916,6 +966,7 @@ mod tests {
                     explanation_type: CumulativeExplanationType::Naive,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -934,6 +985,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(4, 4);
         let s2 = solver.new_variable(0, 8);
+        let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
             .new_propagator(TimeTableOverIntervalPropagator::new(
@@ -957,6 +1009,7 @@ mod tests {
                     allow_holes_in_domain: true,
                     ..Default::default()
                 },
+                constraint_tag,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);

@@ -1,8 +1,7 @@
-use std::num::NonZero;
-
 use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
+use crate::proof::ConstraintTag;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
@@ -15,11 +14,13 @@ pub fn boolean_less_than_or_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Literal]>>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     BooleanLessThanOrEqual {
         weights: weights.into(),
         bools: bools.into(),
         rhs,
+        constraint_tag,
     }
 }
 
@@ -28,11 +29,13 @@ pub fn boolean_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Literal]>>,
     rhs: DomainId,
+    constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     BooleanEqual {
         weights: weights.into(),
         bools: bools.into(),
         rhs,
+        constraint_tag,
     }
 }
 
@@ -40,28 +43,25 @@ struct BooleanLessThanOrEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
     rhs: i32,
+    constraint_tag: ConstraintTag,
 }
 
 impl Constraint for BooleanLessThanOrEqual {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs).post(solver, tag)
+        less_than_or_equals(domains, self.rhs, self.constraint_tag).post(solver)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal, tag)
+        less_than_or_equals(domains, self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal)
     }
 }
 
@@ -79,28 +79,24 @@ struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
     rhs: DomainId,
+    constraint_tag: ConstraintTag,
 }
 
 impl Constraint for BooleanEqual {
-    fn post(
-        self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0).post(solver, tag)
+        equals(domains, 0, self.constraint_tag).post(solver)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0).implied_by(solver, reification_literal, tag)
+        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
     }
 }
 

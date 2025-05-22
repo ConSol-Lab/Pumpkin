@@ -1,39 +1,20 @@
 use std::fmt::Debug;
-use std::num::NonZero;
 use std::ops::Index;
 use std::ops::IndexMut;
 
 use super::Propagator;
 use super::PropagatorId;
 use crate::containers::KeyedVec;
+use crate::containers::Slot;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
-///
-/// The propagator store associates tags with propagators, whenever a tag is provided for a
-/// propagator.
 #[derive(Default)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
-    tags: KeyedVec<PropagatorId, Option<NonZero<u32>>>,
 }
 
 impl PropagatorStore {
-    pub(crate) fn alloc(
-        &mut self,
-        propagator: Box<dyn Propagator>,
-        tag: Option<NonZero<u32>>,
-    ) -> PropagatorId {
-        let id = self.propagators.push(propagator);
-        let _ = self.tags.push(tag);
-
-        id
-    }
-
-    pub(crate) fn get_tag(&self, propagator_id: PropagatorId) -> Option<NonZero<u32>> {
-        self.tags[propagator_id]
-    }
-
     pub(crate) fn iter_propagators(&self) -> impl Iterator<Item = &dyn Propagator> + '_ {
         self.propagators.iter().map(|b| b.as_ref())
     }
@@ -42,6 +23,10 @@ impl PropagatorStore {
         &mut self,
     ) -> impl Iterator<Item = &mut Box<dyn Propagator>> + '_ {
         self.propagators.iter_mut()
+    }
+
+    pub(crate) fn new_propagator(&mut self) -> Slot<'_, PropagatorId, Box<dyn Propagator>> {
+        self.propagators.new_slot()
     }
 }
 

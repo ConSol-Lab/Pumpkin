@@ -10,18 +10,20 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -30,6 +32,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
+use crate::proof::InferenceCode;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -52,6 +55,8 @@ pub(crate) struct NogoodPropagator {
     /// we store this predicate to allow for simple checking of whether a nogood might be
     /// satisfied
     cached_predicates: KeyedVec<NogoodId, Predicate>,
+    /// The inference codes for the nogoods.
+    inference_codes: KeyedVec<NogoodId, InferenceCode>,
     /// Nogoods which are permanently present
     permanent_nogoods: Vec<NogoodId>,
     /// The ids of the nogoods sorted based on whether they have a "low" LBD score or a "high" LBD
@@ -71,6 +76,14 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+}
+
+impl PropagatorConstructor for NogoodPropagator {
+    type PropagatorImpl = Self;
+
+    fn create(self, _: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        self
+    }
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -107,7 +120,7 @@ impl NogoodPropagator {
                 .get_trail_position(&!self.nogood_predicates[id][0])
                 .unwrap();
             let trail_entry = context.assignments().get_trail_entry(trail_position);
-            if let Some(reason_ref) = trail_entry.reason {
+            if let Some((reason_ref, _)) = trail_entry.reason {
                 let propagator_id = reason_store.get_propagator(reason_ref);
                 let code = reason_store.get_lazy_code(reason_ref);
 
@@ -271,7 +284,11 @@ impl Propagator for NogoodPropagator {
                 // nogood[0] is assigned true -> conflict.
                 let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                let result = context.post_predicate(!nogood_predicates[0], reason);
+                let result = context.post(
+                    !nogood_predicates[0],
+                    reason,
+                    self.inference_codes[nogood_id],
+                );
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
                     return Err(e.into());
@@ -356,15 +373,6 @@ impl Propagator for NogoodPropagator {
         // update LBD, so we need code plus assignments as input.
         &self.nogood_predicates[id].as_slice()[1..]
     }
-
-    fn initialise_at_root(
-        &mut self,
-        _context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        // There should be no nogoods yet
-        pumpkin_assert_simple!(self.nogood_predicates.len() == 0);
-        Ok(())
-    }
 }
 
 /// Functions for adding nogoods
@@ -376,6 +384,7 @@ impl NogoodPropagator {
     pub(crate) fn add_asserting_nogood(
         &mut self,
         nogood: Vec<Predicate>,
+        inference_code: InferenceCode,
         context: &mut PropagationContextMut,
         statistics: &mut SolverStatistics,
     ) {
@@ -386,7 +395,7 @@ impl NogoodPropagator {
                 context.get_decision_level() == 0,
                 "A unit nogood should have backtracked to the root-level"
             );
-            self.add_permanent_nogood(nogood, context)
+            self.add_permanent_nogood(nogood, inference_code, context)
                 .expect("Unit learned nogoods cannot fail.");
             return;
         }
@@ -409,12 +418,14 @@ impl NogoodPropagator {
             self.cached_predicates[reused_id] = nogood[0];
             self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood_info(lbd);
             self.nogood_predicates[reused_id] = nogood;
+            self.inference_codes[reused_id] = inference_code;
             reused_id
         } else {
             let new_id = self.cached_predicates.push(nogood[0]);
             let _ = self
                 .nogood_info
                 .push(NogoodInfo::new_learned_nogood_info(lbd));
+            let _ = self.inference_codes.push(inference_code);
             let _ = self.nogood_predicates.push(nogood);
             new_id
         };
@@ -440,8 +451,10 @@ impl NogoodPropagator {
         // Then we propagate the asserting predicate and as reason we give the index to the
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(new_id.id as u64);
+        let inference_code = self.inference_codes[new_id];
+
         context
-            .post_predicate(!self.nogood_predicates[new_id][0], reason)
+            .post(!self.nogood_predicates[new_id][0], reason, inference_code)
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then divide the new nogood based on the LBD level
@@ -457,15 +470,17 @@ impl NogoodPropagator {
     pub(crate) fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
+        inference_code: InferenceCode,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
-        self.add_permanent_nogood(nogood, context)
+        self.add_permanent_nogood(nogood, inference_code, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
     fn add_permanent_nogood(
         &mut self,
         mut nogood: Vec<Predicate>,
+        inference_code: InferenceCode,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
@@ -495,7 +510,11 @@ impl NogoodPropagator {
             input_nogood.retain(|&p| p != nogood[0]);
 
             // Post the negated predicate at the root to respect the nogood.
-            context.post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood))?;
+            context.post(
+                !nogood[0],
+                PropositionalConjunction::from(input_nogood),
+                inference_code,
+            )?;
             Ok(())
         }
         // Standard case, nogood is of size at least two.
@@ -508,6 +527,7 @@ impl NogoodPropagator {
                 self.cached_predicates[reused_id] = nogood[0];
                 self.nogood_info[reused_id] = NogoodInfo::new_permanent_nogood_info();
                 self.nogood_predicates[reused_id] = nogood;
+                self.inference_codes[reused_id] = inference_code;
                 reused_id
             } else {
                 let new_id = self.cached_predicates.push(nogood[0]);
@@ -515,6 +535,7 @@ impl NogoodPropagator {
                     .nogood_info
                     .push(NogoodInfo::new_permanent_nogood_info());
                 let _ = self.nogood_predicates.push(nogood);
+                let _ = self.inference_codes.push(inference_code);
                 new_id
             };
 
@@ -776,6 +797,7 @@ impl NogoodPropagator {
     ) -> Result<(), Inconsistency> {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
+        let inference_code = self.inference_codes[nogood_id];
 
         if self.nogood_info[nogood_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to
@@ -803,7 +825,11 @@ impl NogoodPropagator {
 
         // If all predicates in the nogood are satisfied, there is a conflict.
         if num_satisfied_predicates == nogood_len {
-            return Err(Inconsistency::Conflict(nogood.iter().copied().collect()));
+            return Err(PropagatorConflict {
+                conjunction: nogood.iter().copied().collect::<PropositionalConjunction>(),
+                inference_code,
+            }
+            .into());
         }
         // If all but one predicate are satisfied, then we can propagate.
         //
@@ -830,7 +856,7 @@ impl NogoodPropagator {
                 .copied()
                 .collect();
 
-            context.post_predicate(propagated_predicate, reason)?;
+            context.post(propagated_predicate, reason, inference_code)?;
         }
         Ok(())
     }
@@ -892,6 +918,7 @@ mod tests {
     #[test]
     fn ternary_nogood_propagate() {
         let mut solver = TestSolver::default();
+        let inference_code = solver.new_inference_code();
         let dummy = solver.new_variable(0, 1);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
@@ -915,7 +942,7 @@ mod tests {
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
-                .add_nogood(nogood.into(), &mut context)
+                .add_nogood(nogood.into(), inference_code, &mut context)
                 .expect("");
         }
 
@@ -937,6 +964,7 @@ mod tests {
     #[test]
     fn unsat() {
         let mut solver = TestSolver::default();
+        let inference_code = solver.new_inference_code();
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
@@ -957,7 +985,7 @@ mod tests {
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
-                .add_nogood(nogood.into(), &mut context)
+                .add_nogood(nogood.into(), inference_code, &mut context)
                 .expect("");
         }
 

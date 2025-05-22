@@ -10,10 +10,8 @@ use crate::engine::notifications::domain_event_notification::DomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
-use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
@@ -115,35 +113,6 @@ impl IntegerVariable for Literal {
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
         self.integer_variable.iterate_domain(assignment)
-    }
-
-    fn remove(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        self.integer_variable.remove(assignment, value, reason)
-    }
-
-    fn set_lower_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        self.integer_variable
-            .set_lower_bound(assignment, value, reason)
-    }
-
-    fn set_upper_bound(
-        &self,
-        assignment: &mut Assignments,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        self.integer_variable
-            .set_upper_bound(assignment, value, reason)
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
