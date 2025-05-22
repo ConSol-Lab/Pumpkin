@@ -1,4 +1,5 @@
 use crate::engine::conflict_analysis::SemanticMinimiser;
+use crate::engine::notifications::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
@@ -59,6 +60,7 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
+    pub(crate) predicate_notifier: &'a mut PredicateNotifier,
     reification_literal: Option<Literal>,
 }
 
@@ -68,6 +70,7 @@ impl<'a> PropagationContextMut<'a> {
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
+        predicate_notifier: &'a mut PredicateNotifier,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
@@ -75,6 +78,7 @@ impl<'a> PropagationContextMut<'a> {
             assignments,
             reason_store,
             propagator_id,
+            predicate_notifier,
             semantic_minimiser,
             reification_literal: None,
         }
@@ -237,6 +241,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
+    #[allow(unused, reason = "Will be part of the API")]
     fn lower_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,
@@ -249,6 +254,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.upper_bound(self.assignments())
     }
 
+    #[allow(unused, reason = "Will be part of the API")]
     fn upper_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,

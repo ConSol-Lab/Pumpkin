@@ -6,6 +6,7 @@ use log::debug;
 use log::warn;
 
 use super::conflict_analysis::SemanticMinimiser;
+use super::notifications::PredicateNotifier;
 use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
@@ -74,11 +75,13 @@ impl DebugHelper {
 
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
+            let mut predicate_notifier = PredicateNotifier::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
+                &mut predicate_notifier,
                 PropagatorId(propagator_id as u32),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -234,11 +237,13 @@ impl DebugHelper {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
+                let mut predicate_notifier = PredicateNotifier::default();
                 let context = PropagationContextMut::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
+                    &mut predicate_notifier,
                     propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -346,11 +351,13 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
+                    let mut predicate_notifier = PredicateNotifier::default();
                     let context = PropagationContextMut::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut semantic_minimiser,
+                        &mut predicate_notifier,
                         propagator_id,
                     );
                     let debug_propagation_status_cp =
@@ -409,11 +416,13 @@ impl DebugHelper {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
+            let mut predicate_notifier = PredicateNotifier::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
+                &mut predicate_notifier,
                 propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);

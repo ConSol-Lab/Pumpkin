@@ -1,18 +1,18 @@
-use crate::engine::IntDomainEvent;
+use super::DomainEvent;
 
 /// A wrapper for a domain event, which forces the propagator implementation to map the event
 /// through the variable view.
 #[derive(Clone, Debug, Copy)]
-pub struct OpaqueDomainEvent(IntDomainEvent);
+pub struct OpaqueDomainEvent(DomainEvent);
 
-impl From<IntDomainEvent> for OpaqueDomainEvent {
-    fn from(event: IntDomainEvent) -> Self {
+impl From<DomainEvent> for OpaqueDomainEvent {
+    fn from(event: DomainEvent) -> Self {
         OpaqueDomainEvent(event)
     }
 }
 
 impl OpaqueDomainEvent {
-    pub(crate) fn unwrap(self) -> IntDomainEvent {
+    pub(crate) fn unwrap(self) -> DomainEvent {
         self.0
     }
 }

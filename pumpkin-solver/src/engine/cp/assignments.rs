@@ -1,9 +1,9 @@
 use crate::basic_types::HashMap;
 use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
-use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
-use crate::engine::cp::IntDomainEvent;
+use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::notifications::EventSink;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
@@ -51,6 +51,14 @@ impl Default for Assignments {
 pub(crate) struct EmptyDomain;
 
 impl Assignments {
+    pub(crate) fn get_holes_on_decision_level(
+        &self,
+        domain_id: DomainId,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id].get_holes_from_decision_level(decision_level)
+    }
+
     pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
@@ -173,13 +181,13 @@ impl Assignments {
 
     pub(crate) fn drain_domain_events(
         &mut self,
-    ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+    ) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
         self.events.drain()
     }
 
     pub(crate) fn drain_backtrack_domain_events(
         &mut self,
-    ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+    ) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
         self.backtrack_events.drain()
     }
 
@@ -667,6 +675,33 @@ impl Assignments {
             .is_some_and(|truth_value| !truth_value)
     }
 
+    pub(crate) fn is_implied_by_bounds(&self, predicate: Predicate) -> bool {
+        match predicate {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => self.get_lower_bound(domain_id) >= lower_bound,
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => self.get_upper_bound(domain_id) <= upper_bound,
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                self.get_lower_bound(domain_id) > not_equal_constant
+                    || self.get_upper_bound(domain_id) < not_equal_constant
+            }
+            Predicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                self.get_lower_bound(domain_id) == equality_constant
+                    && equality_constant == self.get_upper_bound(domain_id)
+            }
+        }
+    }
+
     /// Synchronises the internal structures of [`Assignments`] based on the fact that
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
@@ -714,7 +749,7 @@ impl Assignments {
             if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
                 if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
                     // This `domain_id` was unassigned while backtracking
-                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
+                    self.backtrack_events.event_occurred(DomainEvent::Assign, domain_id);
                 }
 
                 // Variable used to be fixed but is not after backtracking
@@ -724,13 +759,13 @@ impl Assignments {
             if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 if lower_bound_before != self.domains[domain_id].lower_bound() {
-                    self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
+                    self.backtrack_events.event_occurred(DomainEvent::LowerBound, domain_id)
                 }
                 if upper_bound_before != self.domains[domain_id].upper_bound() {
-                    self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
+                    self.backtrack_events.event_occurred(DomainEvent::UpperBound, domain_id)
                 }
                 if matches!(entry.predicate, Predicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
-                    self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
+                    self.backtrack_events.event_occurred(DomainEvent::Removal, domain_id)
                 }
             }
         });
@@ -758,9 +793,6 @@ impl Assignments {
 #[cfg(test)]
 impl Assignments {
     pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
-        self.trail
-            .iter()
-            .for_each(|trail_entry| println!("{trail_entry:?}"));
         self.trail
             .iter()
             .find_map(|entry| {
@@ -803,6 +835,8 @@ struct BoundUpdateInfo {
 #[derive(Clone, Debug)]
 struct HoleUpdateInfo {
     removed_value: i32,
+
+    decision_level: usize,
 
     triggered_lower_bound_update: bool,
     triggered_upper_bound_update: bool,
@@ -994,10 +1028,11 @@ impl IntegerDomain {
             return;
         }
 
-        events.event_occurred(IntDomainEvent::Removal, self.id);
+        events.event_occurred(DomainEvent::Removal, self.id);
 
         self.hole_updates.push(HoleUpdateInfo {
             removed_value,
+            decision_level,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
@@ -1030,7 +1065,7 @@ impl IntegerDomain {
         }
 
         if self.lower_bound() == self.upper_bound() {
-            events.event_occurred(IntDomainEvent::Assign, self.id);
+            events.event_occurred(DomainEvent::Assign, self.id);
         }
     }
 
@@ -1059,7 +1094,7 @@ impl IntegerDomain {
             return;
         }
 
-        events.event_occurred(IntDomainEvent::UpperBound, self.id);
+        events.event_occurred(DomainEvent::UpperBound, self.id);
 
         self.upper_bound_updates.push(BoundUpdateInfo {
             bound: new_upper_bound,
@@ -1069,7 +1104,7 @@ impl IntegerDomain {
         self.update_upper_bound_with_respect_to_holes();
 
         if self.lower_bound() == self.upper_bound() {
-            events.event_occurred(IntDomainEvent::Assign, self.id);
+            events.event_occurred(DomainEvent::Assign, self.id);
         }
     }
 
@@ -1106,7 +1141,7 @@ impl IntegerDomain {
             return;
         }
 
-        events.event_occurred(IntDomainEvent::LowerBound, self.id);
+        events.event_occurred(DomainEvent::LowerBound, self.id);
 
         self.lower_bound_updates.push(BoundUpdateInfo {
             bound: new_lower_bound,
@@ -1116,7 +1151,7 @@ impl IntegerDomain {
         self.update_lower_bound_with_respect_to_holes();
 
         if self.lower_bound() == self.upper_bound() {
-            events.event_occurred(IntDomainEvent::Assign, self.id);
+            events.event_occurred(DomainEvent::Assign, self.id);
         }
     }
 
@@ -1330,6 +1365,16 @@ impl IntegerDomain {
             }
         }
     }
+
+    pub(crate) fn get_holes_from_decision_level(
+        &self,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.hole_updates
+            .iter()
+            .filter(move |entry| entry.decision_level == decision_level)
+            .map(|entry| entry.removed_value)
+    }
 }
 
 #[derive(Debug)]
@@ -1381,6 +1426,8 @@ impl Iterator for IntegerDomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::notifications::domain_event_notification::DomainEvent;
+    use crate::engine::notifications::EventSink;
 
     #[test]
     fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {
@@ -1403,9 +1450,9 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 3);
 
-        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [DomainEvent::Removal]);
     }
 
     #[test]
@@ -1436,10 +1483,10 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 4);
 
-        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
-        assert_contains_events(&events, d1, [IntDomainEvent::Assign]);
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [DomainEvent::Removal]);
+        assert_contains_events(&events, d1, [DomainEvent::Assign]);
     }
 
     #[test]
@@ -1466,8 +1513,8 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 2);
 
-        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [DomainEvent::Removal]);
     }
 
     #[test]
@@ -1494,8 +1541,8 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 2);
 
-        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
-        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [DomainEvent::Removal]);
     }
 
     #[test]
@@ -1510,7 +1557,7 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
     }
 
     #[test]
@@ -1524,7 +1571,7 @@ mod tests {
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
-        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
     }
 
     #[test]
@@ -1544,16 +1591,8 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 4, "expected more than 4 events: {events:?}");
 
-        assert_contains_events(
-            &events,
-            d1,
-            [IntDomainEvent::LowerBound, IntDomainEvent::Assign],
-        );
-        assert_contains_events(
-            &events,
-            d2,
-            [IntDomainEvent::UpperBound, IntDomainEvent::Assign],
-        );
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound, DomainEvent::Assign]);
+        assert_contains_events(&events, d2, [DomainEvent::UpperBound, DomainEvent::Assign]);
     }
 
     #[test]
@@ -1577,23 +1616,15 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 7);
 
-        assert_contains_events(
-            &events,
-            d1,
-            [IntDomainEvent::Assign, IntDomainEvent::UpperBound],
-        );
-        assert_contains_events(
-            &events,
-            d2,
-            [IntDomainEvent::Assign, IntDomainEvent::LowerBound],
-        );
+        assert_contains_events(&events, d1, [DomainEvent::Assign, DomainEvent::UpperBound]);
+        assert_contains_events(&events, d2, [DomainEvent::Assign, DomainEvent::LowerBound]);
         assert_contains_events(
             &events,
             d3,
             [
-                IntDomainEvent::Assign,
-                IntDomainEvent::LowerBound,
-                IntDomainEvent::UpperBound,
+                DomainEvent::Assign,
+                DomainEvent::LowerBound,
+                DomainEvent::UpperBound,
             ],
         );
     }
@@ -1609,7 +1640,7 @@ mod tests {
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
-        assert!(events.contains(&(IntDomainEvent::Removal, d1)));
+        assert!(events.contains(&(DomainEvent::Removal, d1)));
     }
 
     #[test]
@@ -1701,9 +1732,9 @@ mod tests {
     }
 
     fn assert_contains_events(
-        slice: &[(IntDomainEvent, DomainId)],
+        slice: &[(DomainEvent, DomainId)],
         domain: DomainId,
-        required_events: impl IntoIterator<Item = IntDomainEvent>,
+        required_events: impl IntoIterator<Item = DomainEvent>,
     ) {
         for event in required_events {
             assert!(slice.contains(&(event, domain)));

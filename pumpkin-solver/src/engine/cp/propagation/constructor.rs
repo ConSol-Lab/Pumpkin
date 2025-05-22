@@ -6,11 +6,11 @@ use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+use crate::engine::notifications::WatchListDomainEvents;
+use crate::engine::notifications::Watchers;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::TrailedValues;
-use crate::engine::WatchListCP;
-use crate::engine::Watchers;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
@@ -37,7 +37,7 @@ pub(crate) trait PropagatorConstructor {
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub(crate) struct PropagatorConstructorContext<'a> {
-    watch_list: &'a mut WatchListCP,
+    watch_list: &'a mut WatchListDomainEvents,
     trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
 
@@ -54,7 +54,7 @@ pub(crate) struct PropagatorConstructorContext<'a> {
 
 impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
-        watch_list: &'a mut WatchListCP,
+        watch_list: &'a mut WatchListDomainEvents,
         trailed_values: &'a mut TrailedValues,
         proof_log: &'a mut ProofLog,
         propagator_id: PropagatorId,
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn reborrowing_remembers_next_local_id() {
-        let mut watch_list = WatchListCP::default();
+        let mut watch_list = WatchListDomainEvents::default();
         watch_list.grow();
         let mut trailed_values = TrailedValues::default();
         let mut proof_log = ProofLog::default();

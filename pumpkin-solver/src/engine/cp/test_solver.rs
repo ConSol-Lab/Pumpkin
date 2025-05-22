@@ -12,7 +12,10 @@ use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::notifications::PredicateNotifier;
+use crate::engine::notifications::WatchListDomainEvents;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::LocalId;
@@ -25,7 +28,6 @@ use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
-use crate::engine::WatchListCP;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
@@ -39,7 +41,8 @@ pub(crate) struct TestSolver {
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
-    watch_list: WatchListCP,
+    pub predicate_notifier: PredicateNotifier,
+    watch_list: WatchListDomainEvents,
     constraint_tags: KeyGenerator<ConstraintTag>,
     inference_codes: KeyGenerator<InferenceCode>,
 }
@@ -51,6 +54,7 @@ impl Default for TestSolver {
             reason_store: Default::default(),
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
+            predicate_notifier: PredicateNotifier::default(),
             watch_list: Default::default(),
             trailed_values: Default::default(),
             constraint_tags: Default::default(),
@@ -102,6 +106,7 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.predicate_notifier,
             PropagatorId(0),
         );
         self.propagator_store[id].propagate(context)?;
@@ -126,9 +131,15 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        self.predicate_notifier.on_update(
+            &mut self.trailed_values,
+            &self.assignments,
+            DomainEvent::LowerBound,
+            var,
+        );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
-        self.propagator_store[propagator].notify(
+        let decision = self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
             OpaqueDomainEvent::from(
@@ -138,7 +149,18 @@ impl TestSolver {
                     .next()
                     .unwrap(),
             ),
-        )
+        );
+        self.predicate_notifier
+            .drain_satisfied_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
+            });
+        self.predicate_notifier
+            .drain_falsified_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
+            });
+        decision
     }
 
     pub(crate) fn decrease_upper_bound_and_notify(
@@ -150,9 +172,15 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        self.predicate_notifier.on_update(
+            &mut self.trailed_values,
+            &self.assignments,
+            DomainEvent::UpperBound,
+            var,
+        );
         let context =
             PropagationContextWithTrailedValues::new(&mut self.trailed_values, &self.assignments);
-        self.propagator_store[propagator].notify(
+        let decision = self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
             OpaqueDomainEvent::from(
@@ -162,7 +190,18 @@ impl TestSolver {
                     .next()
                     .unwrap(),
             ),
-        )
+        );
+        self.predicate_notifier
+            .drain_satisfied_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_satisfied(predicate_id);
+            });
+        self.predicate_notifier
+            .drain_falsified_predicates()
+            .for_each(|predicate_id| {
+                self.propagator_store[propagator].notify_predicate_id_falsified(predicate_id);
+            });
+        decision
     }
     pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
@@ -199,6 +238,7 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.predicate_notifier,
             PropagatorId(0),
         );
         self.propagator_store[propagator].propagate(context)
@@ -218,6 +258,7 @@ impl TestSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
+                    &mut self.predicate_notifier,
                     PropagatorId(0),
                 );
                 self.propagator_store[propagator].propagate(context)?;

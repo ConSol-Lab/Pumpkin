@@ -462,6 +462,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativePropagationHandler;
     use crate::containers::StorageKey;
     use crate::engine::conflict_analysis::SemanticMinimiser;
+    use crate::engine::notifications::PredicateNotifier;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
@@ -558,6 +559,8 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
+            let mut predicate_notifier = PredicateNotifier::default();
+
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
@@ -566,6 +569,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -619,6 +623,8 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
+            let mut predicate_notifier = PredicateNotifier::default();
+
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
@@ -627,6 +633,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &[&profile_y, &profile_z],
@@ -667,6 +674,8 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
+            let mut predicate_notifier = PredicateNotifier::default();
+
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
@@ -675,6 +684,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -728,6 +738,8 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
+            let mut predicate_notifier = PredicateNotifier::default();
+
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
@@ -736,6 +748,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
+                        &mut predicate_notifier,
                         PropagatorId(0),
                     ),
                     &[&profile_z, &profile_y],
