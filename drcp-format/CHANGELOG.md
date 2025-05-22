@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/drcp-format-v0.2.1...drcp-format-v0.2.2) (2025-05-22)
+
+
+### Bug Fixes
+
+* Use variable inline in format string ([#180](https://github.com/ConSol-Lab/Pumpkin/issues/180)) ([35d5f47](https://github.com/ConSol-Lab/Pumpkin/commit/35d5f47698d11246a21f9d112459bfcdb031a090))
+
 ## [0.2.1](https://github.com/consol-lab/pumpkin/compare/drcp-format-v0.2.0...drcp-format-v0.2.1) (2025-04-11)
 
 
