@@ -812,10 +812,7 @@ fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
                 acc.push(vec![]);
             }
 
-            let last_row = acc.last_mut().unwrap();
-            if last_row.len() < num_variables {
-                last_row.push(next_value);
-            }
+            acc.last_mut().unwrap().push(next_value);
 
             acc
         });

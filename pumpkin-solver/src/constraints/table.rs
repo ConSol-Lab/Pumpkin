@@ -10,6 +10,16 @@ use crate::ConstraintOperationError;
 use crate::Solver;
 
 /// Create a table constraint over the variables `xs`.
+///
+/// A table constraint constrains a tuple of variables to have pre-defined values. For example:
+/// ```ignore
+/// (x1, x2, x3) in {(1, 3, 5), (3, 1, 4)}
+/// ```
+/// This has two solutions: either the first tuple of values is assigned to the variables, or the
+/// second. The set of value tuples is the 'table'.
+///
+/// In the XCSP3 specification, this is the "positive table"
+/// (<https://www.xcsp.org/specifications/constraints/generic/extension/>).
 pub fn table<Var: IntegerVariable + 'static>(
     xs: impl IntoIterator<Item = Var>,
     table: Vec<Vec<i32>>,
@@ -24,7 +34,15 @@ pub fn table<Var: IntegerVariable + 'static>(
 
 /// Create a negative table constraint over the variables `xs`.
 ///
-/// A negative table is essentially a set of conflicts over the given variables.
+/// A negative table is essentially a set of conflicts over the given variables. For example:
+/// ```ignore
+/// (x1, x2, x3) not in {(1, 3, 5), (3, 1, 4)}
+/// ```
+/// This prevents any solution where the variables have both the first and the second tuple as
+/// values.
+///
+/// In the XCSP3 specification, this is the "negative table"
+/// (<https://www.xcsp.org/specifications/constraints/generic/extension/>).
 pub fn negative_table<Var: IntegerVariable + 'static>(
     xs: impl IntoIterator<Item = Var>,
     table: Vec<Vec<i32>>,
@@ -77,6 +95,7 @@ impl<Var: IntegerVariable> Table<Var> {
                     let mut clause = vec![support.get_false_predicate(), condition];
 
                     // Account for possible reification.
+                    // l -> clause
                     clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
                     solver.add_clause(clause, self.constraint_tag)?;

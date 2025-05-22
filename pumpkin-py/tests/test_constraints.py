@@ -85,7 +85,7 @@ def generate_operators():
                     cons = constraints.Maximum(args, rhs)
                 if name == "element":
                     idx = model.new_integer_variable(
-                        -1, 5, name=f"idx"
+                        -1, 5, name="idx"
                     )  # sneaky, idx can be out of bounds
                     cons = constraints.Element(idx, args, rhs)
 
@@ -124,6 +124,8 @@ def generate_table():
     cons = constraints.Table(variables, table)
     yield model, cons, "table", bool, bool
 
+
+def generate_negative_table():
     model = pumpkin_py.Model()
     variables = [model.new_integer_variable(1, 5, name=f"x[{i}]") for i in range(3)]
 
@@ -154,6 +156,7 @@ def generate_globals():
     yield from generate_alldiff()
     yield from generate_cumulative()
     yield from generate_table()
+    yield from generate_negative_table()
 
 
 def label(model, cons, name, scaled, bool):
