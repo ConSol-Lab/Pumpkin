@@ -533,8 +533,19 @@ where
 
     fn propagate(
         &mut self,
-        _context: PropagationContextMut,
+        mut _context: PropagationContextMut,
     ) -> crate::basic_types::PropagationStatusCP {
+        // Propagate any infeasible value, i.e. there are no edges corresponding to that assignement
+        // If the edges are not present in the MDD, it means that the assignment would not be present in any feasible solution
+        for var in self.mdd.layers.iter() {
+            let domain = _context.iterate_domain(var).collect::<HashSet<i32>>();
+            for value in domain {
+                if !self.var_value_to_edges.contains_key(&(var.clone(), value)) {
+                    _context.remove(var, value, PropositionalConjunction::new(vec![]))?;
+                }
+            }
+        }
+
         let mut kfb: HashSet<MddNode> = FnvHashSet::with_hasher(FnvBuildHasher::default());
         let mut kfa: HashSet<MddNode> = FnvHashSet::with_hasher(FnvBuildHasher::default());
         let mut pinf: HashSet<(Var, i32)> = FnvHashSet::with_hasher(FnvBuildHasher::default());
@@ -611,6 +622,9 @@ where
         assert!(new_domain_set.is_subset(&old_domain_set));
         let values_removed = old_domain_set.difference(&new_domain_set);
         values_removed.into_iter().for_each(|x| {
+            if !self.var_value_to_edges.contains_key(&(x_i.clone(), *x)) {
+                return;
+            }
             self.domain_changes.push((x_i.clone(), *x));
         });
         EnqueueDecision::Enqueue
@@ -623,15 +637,17 @@ where
     ) {
         let index = _local_id.unpack() as usize;
         let x_i = self.mdd.layers[index].clone();
-
         let old_domain_set = self.current_domains[index].clone();
         let new_domain_set = _context.iterate_domain(&x_i).collect::<HashSet<i32>>();
         // Assert if the old domain is a subset of the new domain, to backtrack to
         assert!(old_domain_set.is_subset(&new_domain_set));
         let values_returned = new_domain_set.difference(&old_domain_set);
-        values_returned
-            .into_iter()
-            .for_each(|val| self.restore_to(x_i.clone(), *val));
+        values_returned.into_iter().for_each(|val| {
+            if !self.var_value_to_edges.contains_key(&(x_i.clone(), *val)) {
+                return;
+            }
+            self.restore_to(x_i.clone(), *val)
+        });
         self.current_domains[index] = new_domain_set;
         self.domain_changes.clear(); // Reset previously recorded domain changes
     }
@@ -651,7 +667,6 @@ where
             self.current_domains.push(domain_set);
             let _ = self.var_to_index.insert(x_i.clone(), i);
         });
-
         self.mdd.transitions.iter().for_each(|edge| {
             let _ = self
                 .node_to_in_edges
