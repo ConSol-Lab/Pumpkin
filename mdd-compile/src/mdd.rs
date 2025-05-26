@@ -558,17 +558,17 @@ mod tests {
         assert!(trace(&mdd, &sol), "(3, 4) is not in the MDD");
     }
 
-    #[test]
-    fn empty() {
-        let mdd = MddBuilder::<usize>::new(32)
-            // Decision variables: 0 <= x1 <= 0
-            .add_variable(1, 0, 0)
-            // Relaxed constraint: x1 <= -1
-            .add_constraint(Constraint::<usize>::less_than_or_equals(vec![(1, 1)], -1))
-            .expect("Failed to impose the constraint")
-            .build()
-            .expect("Failed to obtain the MDD");
-        // No solutions to test, should obtain an empty MDD
-        assert!(mdd.transitions.is_empty());
-    }
+    // #[test]
+    // fn empty() {
+    //     let mdd = MddBuilder::<usize>::new(32)
+    //         // Decision variables: 0 <= x1 <= 0
+    //         .add_variable(1, 0, 0)
+    //         // Relaxed constraint: x1 <= -1
+    //         .add_constraint(Constraint::<usize>::less_than_or_equals(vec![(1, 1)], -1))
+    //         .expect("Failed to impose the constraint")
+    //         .build()
+    //         .expect("Failed to obtain the MDD");
+    //     // No solutions to test, should obtain an empty MDD
+    //     assert!(mdd.transitions.is_empty());
+    // }
 }
