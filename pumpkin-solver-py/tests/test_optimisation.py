@@ -1,5 +1,5 @@
-from pumpkin_py import Model
-from pumpkin_py.optimisation import Direction, OptimisationResult
+from pumpkin_solver_py import Model
+from pumpkin_solver_py.optimisation import Direction, OptimisationResult
 
 
 def test_linear_sat_unsat_minimisation():
@@ -26,5 +26,3 @@ def test_linear_sat_unsat_maximisation():
 
     solution = result._0
     assert solution.int_value(objective) == 5
-
-

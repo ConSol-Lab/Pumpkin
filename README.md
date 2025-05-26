@@ -71,7 +71,7 @@ Pumpkin consists of 3 different crates:
 - The library contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the API through which the solver can be used via Rust.
 - The CLI contained in [here](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/bin/pumpkin-solver); defines the usage of Pumpkin through a command line.
 - The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
-- The python bindings contained in [pumpkin-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-py); defines the python interface for Pumpkin
+- The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin
 
 The easiest way to get to know the different modules is through the documentation. This documentation can be created automatically using the command:
 ```sh
