@@ -1,7 +1,8 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from pumpkin_py import constraints, SatisfactionResult, Model
+from pumpkin_solver_py import constraints, SatisfactionResult, Model
+
 
 def main(n: int, proof: Path | None):
     assert n > 0, "Please provide a positive non-zero 'n'"
@@ -24,21 +25,20 @@ def main(n: int, proof: Path | None):
             row_separator = "+---" * n + "+"
 
             for row in range(n):
-                print(f"{row_separator}");
-
+                print(f"{row_separator}")
                 queen_col = solution.int_value(variables[row])
 
-                for col in range(n): 
+                for col in range(n):
                     string = "| * " if queen_col == col else "|   "
-                    print(f"{string}", end='')
-                
+                    print(f"{string}", end="")
+
                 print("|")
-            
+
             print(f"{row_separator}")
-        
+
         case SatisfactionResult.Unsatisfiable():
             print(f"{n}-queens is unsatisfiable.")
-        
+
         case SatisfactionResult.Unknown():
             print("Timeout.")
 

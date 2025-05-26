@@ -15,7 +15,7 @@ macro_rules! submodule {
             $python,
             submodule,
             &format!(
-                "import sys; sys.modules['pumpkin_py.{}'] = submodule",
+                "import sys; sys.modules['pumpkin_solver_py.{}'] = submodule",
                 stringify!($module)
             )
         );
@@ -25,7 +25,7 @@ macro_rules! submodule {
 }
 
 #[pymodule]
-fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn pumpkin_solver_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<variables::IntExpression>()?;
     m.add_class::<variables::BoolExpression>()?;
     m.add_class::<variables::Comparator>()?;
