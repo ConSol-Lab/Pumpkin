@@ -522,14 +522,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumpkin-py"
-version = "0.1.0"
-dependencies = [
- "pumpkin-solver",
- "pyo3",
-]
-
-[[package]]
 name = "pumpkin-solver"
 version = "0.2.0"
 dependencies = [
@@ -556,6 +548,14 @@ dependencies = [
  "stringcase",
  "thiserror",
  "wait-timeout",
+]
+
+[[package]]
+name = "pumpkin-solver-py"
+version = "0.1.0"
+dependencies = [
+ "pumpkin-solver",
+ "pyo3",
 ]
 
 [[package]]

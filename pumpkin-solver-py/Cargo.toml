@@ -1,5 +1,5 @@
 [package]
-name = "pumpkin-py"
+name = "pumpkin-solver-py"
 version = "0.1.0"
 description = "The Python interface for the Pumpkin solver library."
 authors.workspace = true
@@ -8,7 +8,7 @@ edition.workspace = true
 repository.workspace = true
 
 [lib]
-name = "pumpkin_py"
+name = "pumpkin_solver_py"
 crate-type = ["cdylib"]
 
 [dependencies]
