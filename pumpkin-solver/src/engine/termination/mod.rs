@@ -3,6 +3,8 @@
 //! made. The most common example would be [`time_budget::TimeBudget`], which gives the solver a
 //! certain time budget to complete its search.
 
+use std::ops::DerefMut;
+
 pub(crate) mod combinator;
 pub(crate) mod indefinite;
 pub(crate) mod os_signal;
@@ -21,5 +23,11 @@ impl<T: TerminationCondition> TerminationCondition for Option<T> {
             Some(t) => t.should_stop(),
             None => false,
         }
+    }
+}
+
+impl TerminationCondition for Box<dyn TerminationCondition> {
+    fn should_stop(&mut self) -> bool {
+        self.deref_mut().should_stop()
     }
 }

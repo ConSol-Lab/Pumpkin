@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
 
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -10,6 +12,8 @@ use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
+use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::ConstraintOperationError;
@@ -144,8 +148,10 @@ impl Model {
         });
     }
 
-    #[pyo3(signature = (proof=None))]
-    fn satisfy(&self, proof: Option<PathBuf>) -> SatisfactionResult {
+    #[pyo3(signature = (timeout=None,proof=None))]
+    fn satisfy(&self, timeout: Option<f32>, proof: Option<PathBuf>) -> SatisfactionResult {
+        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
+
         let solver_setup = self.create_solver(proof);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
@@ -153,8 +159,9 @@ impl Model {
         };
 
         let mut brancher = solver.default_brancher();
+        let mut termination = get_termination(end_time);
 
-        match solver.satisfy(&mut brancher, &mut Indefinite) {
+        match solver.satisfy(&mut brancher, &mut termination) {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(solution) => {
                 SatisfactionResult::Satisfiable(Solution {
                     solver_solution: solution,
@@ -168,11 +175,13 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (assumptions))]
+    #[pyo3(signature = (assumptions,timeout=None))]
     fn satisfy_under_assumptions(
         &self,
         assumptions: Vec<Predicate>,
+        timeout: Option<f32>,
     ) -> SatisfactionUnderAssumptionsResult {
+        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
         let solver_setup = self.create_solver(None);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
@@ -180,6 +189,7 @@ impl Model {
         };
 
         let mut brancher = solver.default_brancher();
+        let mut termination = get_termination(end_time);
 
         let solver_assumptions = assumptions
             .iter()
@@ -192,7 +202,7 @@ impl Model {
         //
         //     Ideally this would not be necessary, but perhaps it is unavoidable with the setup we
         //     currently have. Either way, we take the suggestion by the compiler.
-        let result = match solver.satisfy_under_assumptions(&mut brancher, &mut Indefinite, &solver_assumptions) {
+        let result = match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
             pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(solution) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
                     solver_solution: solution,
@@ -232,14 +242,16 @@ impl Model {
         result
     }
 
-    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None))]
+    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None, timeout=None))]
     fn optimise(
         &self,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
         proof: Option<PathBuf>,
+        timeout: Option<f32>,
     ) -> OptimisationResult {
+        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
         let solver_setup = self.create_solver(proof);
 
         let Ok((mut solver, variable_map)) = solver_setup else {
@@ -247,6 +259,7 @@ impl Model {
         };
 
         let mut brancher = solver.default_brancher();
+        let mut termination = get_termination(end_time);
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,
@@ -260,12 +273,12 @@ impl Model {
         let result = match optimiser {
             Optimiser::LinearSatUnsat => solver.optimise(
                 &mut brancher,
-                &mut Indefinite,
+                &mut termination,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => solver.optimise(
                 &mut brancher,
-                &mut Indefinite,
+                &mut termination,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
         };
@@ -289,6 +302,15 @@ impl Model {
             pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
         }
     }
+}
+
+fn get_termination(end_time: Option<Instant>) -> Box<dyn TerminationCondition> {
+    end_time
+        .map(|end_time| end_time - Instant::now())
+        .map(|duration| {
+            Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
+        })
+        .unwrap_or(Box::new(Indefinite))
 }
 
 impl Model {
