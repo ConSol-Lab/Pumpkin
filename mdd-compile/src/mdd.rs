@@ -201,11 +201,6 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
 
 #[cfg(test)]
 mod tests {
-    // TODO I am yet to figure out a good way to test the conditions of the form
-    // TODO "a non-solution is not a path;" unlike the opposite condition,
-    // TODO they *should*---but not necessarily *will*!---fail.
-    // TODO Ideally, this should be some sort of a soft failure or warning,
-    // TODO but I do not know how to do this neatly within `cargo test`.
     use super::*;
 
     /// Returns `true` if the input solution corresponds to a path in the given MDD
@@ -294,13 +289,6 @@ mod tests {
         // - (1, 0, 3, 2, 0): 1 + 3 * 3 + 4 * 2 = 18
         let sol = HashMap::from_iter(vec![(1, 1), (2, 0), (3, 3), (4, 2), (5, 0)]);
         assert!(trace(&mdd, &sol), "(1, 0, 3, 2, 0) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 0, 0, 0, 0): 0 < 18
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 5)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 0, 0, 0) is in the MDD");
-        // - (0, 0, 3, 4, 0): 3 * 3 + 4 * 4 = 25 > 19
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 3), (4, 4), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 3, 4, 0) is in the MDD");
     }
 
     #[test]
@@ -336,13 +324,6 @@ mod tests {
         // - (1, 0, 3, 2, 0): 1 + 3 * 3 + 4 * 2 = 18
         let sol = HashMap::from_iter(vec![(1, 1), (2, 0), (3, 3), (4, 2), (5, 0)]);
         assert!(trace(&mdd, &sol), "(1, 0, 3, 2, 0) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 0, 0, 0, 5): 5 * 5 = 25 > 19
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 5)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 0, 0, 5) is in the MDD");
-        // - (0, 0, 3, 4, 0): 3 * 3 + 4 * 4 = 25 > 19
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 3), (4, 4), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 3, 4, 0) is in the MDD");
     }
 
     #[test]
@@ -369,13 +350,6 @@ mod tests {
         // - (0, 0, 0, 1, 0): 4 * 1 = 4
         let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 1), (5, 0)]);
         assert!(trace(&mdd, &sol), "(0, 0, 0, 1, 0) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 0, 0, 0, 1): 5 * 1 = 5 > 4
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 1)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 0, 0, 1) is in the MDD");
-        // - (5, 0, 0, 0, 0): 1 * 5 = 5 > 4
-        let sol = HashMap::from_iter(vec![(1, 5), (2, 0), (3, 0), (4, 0), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(5, 0, 0, 0, 0) is in the MDD");
     }
 
     #[test]
@@ -405,13 +379,6 @@ mod tests {
         // - (5, 4, 0, 0, 2): 5 + 2 * 4 + 5 * 2 = 23
         let sol = HashMap::from_iter(vec![(1, 5), (2, 4), (3, 0), (4, 0), (5, 2)]);
         assert!(trace(&mdd, &sol), "(5, 4, 0, 0, 1) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 0, 0, 0, 0): 0 < 18
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(0, 0, 0, 0, 0) is in the MDD");
-        // - (1, 0, 0, 0, 3): 1 * 1 + 3 * 5 = 16 < 18
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 3)]);
-        assert!(!trace(&mdd, &sol), "(1, 0, 0, 0, 3) is in the MDD");
     }
 
     #[test]
@@ -438,13 +405,6 @@ mod tests {
         // - (3, 2, 0, 1, 0): 1 * 3 + 2 * 2 + 4 * 1 = 11
         let sol = HashMap::from_iter(vec![(1, 3), (2, 2), (3, 0), (4, 1), (5, 0)]);
         assert!(trace(&mdd, &sol), "(3, 2, 0, 1, 0) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 5, 0, 0, 0): 2 * 5 = 10 <> 11
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 5), (3, 0), (4, 0), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(0, 5, 0, 0, 0) is in the MDD");
-        // - (1, 0, 0, 0, 3): 1 * 1 + 3 * 5 = 16 <> 10
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 3)]);
-        assert!(!trace(&mdd, &sol), "(1, 0, 0, 0, 3) is in the MDD");
     }
 
     #[test]
@@ -474,13 +434,6 @@ mod tests {
         // - (0, 1, 3, 0, 0): 2 * 1 + 3 * 3 = 11
         let sol = HashMap::from_iter(vec![(1, 0), (2, 1), (3, 3), (4, 0), (5, 0)]);
         assert!(trace(&mdd, &sol), "(0, 4, 1, 0, 0) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (0, 4, 1, 0, 0): 2 * 4 + 3 * 1 = 11, 0 + 4 != 1
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 4), (3, 1), (4, 0), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(0, 4, 1, 0, 0) is in the MDD");
-        // - (1, 0, 0, 0, 0): 1 * 1 <> 1, 1 + 0 = 1
-        let sol = HashMap::from_iter(vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]);
-        assert!(!trace(&mdd, &sol), "(1, 0, 0, 0, 0) is in the MDD");
     }
 
     // TODO The test below falls into an infininte loop; I am out of ideas why that happens,
@@ -528,13 +481,6 @@ mod tests {
         // - (3, 2, 1)
         let sol = HashMap::from_iter(vec![(1, 3), (2, 2), (3, 1)]);
         assert!(trace(&mdd, &sol), "(3, 2, 1) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (1, 3, 1)
-        let sol = HashMap::from_iter(vec![(1, 1), (2, 3), (3, 1)]);
-        assert!(!trace(&mdd, &sol), "(1, 3, 1) is in the MDD");
-        // - (2, 2, 1)
-        let sol = HashMap::from_iter(vec![(1, 2), (2, 2), (3, 1)]);
-        assert!(!trace(&mdd, &sol), "(2, 2, 1) is in the MDD");
     }
 
     #[test]
@@ -564,15 +510,65 @@ mod tests {
         // - (4, 3, 2, 1)
         let sol = HashMap::from_iter(vec![(1, 4), (2, 3), (3, 2), (4, 1)]);
         assert!(trace(&mdd, &sol), "(4, 3, 2, 1) is not in the MDD");
-        // Test that the following infeasible solutions do not correspond to a DD path:
-        // - (2, 4, 2, 1)
-        let sol = HashMap::from_iter(vec![(1, 2), (2, 4), (3, 2), (4, 1)]);
-        assert!(!trace(&mdd, &sol), "(2, 4, 2, 1) is in the MDD");
-        // - (3, 3, 2, 1)
-        let sol = HashMap::from_iter(vec![(1, 3), (2, 3), (3, 2), (4, 1)]);
-        assert!(!trace(&mdd, &sol), "(3, 3, 2, 1) is in the MDD");
-        // - (1, 2, 3, 4)
-        let sol = HashMap::from_iter(vec![(1, 1), (2, 2), (3, 3), (4, 4)]);
-        assert!(!trace(&mdd, &sol), "(1, 2, 3, 4) is in the MDD");
+    }
+
+    #[test]
+    fn linear_difference_constraint_1x2() {
+        let mdd = MddBuilder::<usize>::new(32)
+            // Decision variables: 3 <= x1 <= 3, 3 <= x2 <= 4
+            .add_variable(1, 3, 3)
+            .add_variable(2, 3, 4)
+            // Relaxed constraint: x1 - x2 <= -1
+            .add_constraint(Constraint::<usize>::less_than_or_equals(
+                vec![(1, 1), (2, -1)],
+                -1,
+            ))
+            .expect("Failed to impose the constraint")
+            .build()
+            .expect("Failed to obtain the MDD");
+        // Test that the following feasible solutions correspond to DD paths:
+        // - (3, 3)
+        let sol = HashMap::from_iter(vec![(1, 3), (2, 3)]);
+        assert!(trace(&mdd, &sol), "(3, 3) is not in the MDD");
+        // - (3, 4)
+        let sol = HashMap::from_iter(vec![(1, 3), (2, 4)]);
+        assert!(trace(&mdd, &sol), "(3, 4) is not in the MDD");
+    }
+
+    #[test]
+    fn linear_difference_constraint_2x2() {
+        let mdd = MddBuilder::<usize>::new(32)
+            // Decision variables: 2 <= x1 <= 3, 3 <= x2 <= 4
+            .add_variable(1, 2, 3)
+            .add_variable(2, 3, 4)
+            // Relaxed constraint: x1 - x2 <= -1
+            .add_constraint(Constraint::<usize>::less_than_or_equals(
+                vec![(1, 1), (2, -1)],
+                -1,
+            ))
+            .expect("Failed to impose the constraint")
+            .build()
+            .expect("Failed to obtain the MDD");
+        // Test that the following feasible solutions correspond to DD paths:
+        // - (2, 3)
+        let sol = HashMap::from_iter(vec![(1, 2), (2, 3)]);
+        assert!(trace(&mdd, &sol), "(2, 3) is not in the MDD");
+        // - (3, 4)
+        let sol = HashMap::from_iter(vec![(1, 3), (2, 4)]);
+        assert!(trace(&mdd, &sol), "(3, 4) is not in the MDD");
+    }
+
+    #[test]
+    fn empty() {
+        let mdd = MddBuilder::<usize>::new(32)
+            // Decision variables: 0 <= x1 <= 0
+            .add_variable(1, 0, 0)
+            // Relaxed constraint: x1 <= -1
+            .add_constraint(Constraint::<usize>::less_than_or_equals(vec![(1, 1)], -1))
+            .expect("Failed to impose the constraint")
+            .build()
+            .expect("Failed to obtain the MDD");
+        // No solutions to test, should obtain an empty MDD
+        assert!(mdd.transitions.is_empty());
     }
 }
