@@ -92,7 +92,7 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
         self,
         constraint: Constraint<VariableKey>,
     ) -> Result<Self, MddConstructionError> {
-        match constraint {
+        let res = match constraint.clone() {
             Constraint::LinearInequality {
                 linear_expr,
                 lower_bound,
@@ -103,12 +103,16 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
                 upper_bound.unwrap_or(i32::MAX),
             ),
             Constraint::AllDifferent(vars) => self.add_all_different(vars),
-        }
+        };
+        res.map_err(|e| MddConstructionError)
     }
 
     pub fn build(self) -> Result<MddGraph<VariableKey>, MddConstructionError> {
         let mut graph = MddGraph::<VariableKey>::default();
         let ffi_graph = unsafe { ffi::post_mdd(self.haddock_handle, self.mdd_handle) };
+        if !ffi_graph.success {
+            return Err(MddConstructionError);
+        }
         let ffi_vars =
             unsafe { slice::from_raw_parts(ffi_graph.variables, ffi_graph.n_variables as usize) };
         for ffi_var in ffi_vars {
@@ -156,7 +160,7 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
                 return Err(MddConstructionError);
             }
         }
-        unsafe {
+        let ok = unsafe {
             ffi::impose_linear(
                 self.haddock_handle,
                 self.mdd_handle,
@@ -165,9 +169,13 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
                 vars.len(),
                 lb,
                 ub,
-            );
+            )
+        };
+        if ok {
+            Ok(self)
+        } else {
+            Err(MddConstructionError)
         }
-        Ok(self)
     }
 
     fn add_all_different(self, expr: Vec<VariableKey>) -> Result<Self, MddConstructionError> {
@@ -179,15 +187,19 @@ impl<VariableKey: Eq + Hash + Clone> MddBuilder<VariableKey> {
                 return Err(MddConstructionError);
             }
         }
-        unsafe {
+        let ok = unsafe {
             ffi::impose_alldiff(
                 self.haddock_handle,
                 self.mdd_handle,
                 vars.as_ptr(),
                 vars.len(),
-            );
+            )
+        };
+        if ok {
+            Ok(self)
+        } else {
+            Err(MddConstructionError)
         }
-        Ok(self)
     }
 
     fn find_variable(&self, var_id: &VariableKey) -> Option<*const ffi::HaddockVarHandle> {

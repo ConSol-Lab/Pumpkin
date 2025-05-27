@@ -35,6 +35,7 @@ pub(crate) struct MddEdge {
 #[repr(C)]
 #[derive(Debug)]
 pub(crate) struct MddGraph {
+    pub(crate) success: bool,
     pub(crate) variables: *const *const HaddockVarHandle,
     pub(crate) n_variables: c_int,
     pub(crate) edges: *const MddEdge,
@@ -60,13 +61,13 @@ extern "C" {
         n_vars: size_t,
         lb: c_int,
         ub: c_int,
-    );
+    ) -> bool;
     pub(crate) fn impose_alldiff(
         haddock_handle: *mut HaddockHandle,
         mdd_handle: *mut MddHandle,
         vars: *const *const HaddockVarHandle,
         n_vars: size_t,
-    );
+    ) -> bool;
 
     pub(crate) fn init_mdd(haddock: *mut HaddockHandle, init_mdd: size_t) -> *mut MddHandle;
     pub(crate) fn post_mdd(

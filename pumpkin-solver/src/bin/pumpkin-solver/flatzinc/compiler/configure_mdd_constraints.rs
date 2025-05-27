@@ -20,14 +20,14 @@ pub(crate) fn run(
     };
     let mut sat = true;
     for group in constraint_groups {
-        match process_group(group, context, options) {
+        match process_group(group.clone(), context, options) {
             Ok(mdd_graph) => {
                 sat &= constraints::mdd(mdd_graph)
                     .post(context.solver, None)
                     .is_ok();
             }
             Err(_) => {
-                warn!("Failed to compile an MDD from a constraint group");
+                warn!("Failed to compile an MDD from a constraint group {group:?}");
             }
         }
     }
