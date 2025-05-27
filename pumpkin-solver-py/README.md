@@ -1,4 +1,4 @@
-# Pumpkin-py
+# Pumpkin Python Interface
 
 The python interface for the Pumpkin solver.
 
@@ -9,7 +9,7 @@ the current python environment:
 1. `maturin`, which builds and installs the python module
 2. `pytest`, to run the tests.
 
-To build the `pumpkin_py` module and make it available to the current python
+To build the `pumpkin_solver_py` module and make it available to the current python
 environment, run:
 ```
 maturin develop

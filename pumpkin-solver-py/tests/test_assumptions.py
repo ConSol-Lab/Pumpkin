@@ -1,5 +1,10 @@
-from pumpkin_py import Comparator, Model, Predicate, SatisfactionUnderAssumptionsResult
-from pumpkin_py.constraints import LessThanOrEquals
+from pumpkin_solver_py import (
+    Comparator,
+    Model,
+    Predicate,
+    SatisfactionUnderAssumptionsResult,
+)
+from pumpkin_solver_py.constraints import LessThanOrEquals
 
 
 def test_assumptions_are_respected():
@@ -29,8 +34,9 @@ def test_core_extraction():
     model.add_constraint(LessThanOrEquals([x, y], 5))
 
     result = model.satisfy_under_assumptions([x_ge_3, y_ge_3])
-    assert isinstance(result, SatisfactionUnderAssumptionsResult.UnsatisfiableUnderAssumptions)
+    assert isinstance(
+        result, SatisfactionUnderAssumptionsResult.UnsatisfiableUnderAssumptions
+    )
 
     core = set(result._0)
     assert set([x_ge_3, y_ge_3]) == core
-
