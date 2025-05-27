@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -75,12 +75,17 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_no_middle() {
-        let mut assignments = SelectionContext::create_for_testing(vec![(1, 10)]);
+        let (mut assignments, mut notification_engine) =
+            SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
         let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMiddle;
 
-        let _ = assignments.remove_value_from_domain(domain_ids[0], 5, None);
+        let _ = assignments.post_predicate(
+            predicate!(domain_ids[0] != 5),
+            None,
+            &mut notification_engine,
+        );
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
@@ -90,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_size_two_domain() {
-        let assignments = SelectionContext::create_for_testing(vec![(1, 2)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -103,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_size_three_domain() {
-        let assignments = SelectionContext::create_for_testing(vec![(1, 3)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(1, 3)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -116,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_negative_lower_bound() {
-        let assignments = SelectionContext::create_for_testing(vec![(-5, 5)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(-5, 5)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -129,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_negative_upper_bound() {
-        let assignments = SelectionContext::create_for_testing(vec![(-10, -5)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(-10, -5)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();

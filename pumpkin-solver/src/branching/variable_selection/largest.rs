@@ -87,10 +87,12 @@ where
 mod tests {
     use super::*;
     use crate::basic_types::tests::TestRandom;
+    use crate::predicate;
 
     #[test]
     fn test_correctly_selected() {
-        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
+        let (mut assignments, mut notification_engine) =
+            SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
         let mut test_rng = TestRandom::default();
         let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = Largest::new(&integer_variables);
@@ -103,7 +105,11 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments.tighten_upper_bound(integer_variables[1], 9, None);
+        let _ = assignments.post_predicate(
+            predicate!(integer_variables[1] <= 9),
+            None,
+            &mut notification_engine,
+        );
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
@@ -114,7 +120,7 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();

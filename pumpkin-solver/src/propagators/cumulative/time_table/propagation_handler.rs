@@ -462,7 +462,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativePropagationHandler;
     use crate::containers::StorageKey;
     use crate::engine::conflict_analysis::SemanticMinimiser;
-    use crate::engine::notifications::PredicateNotifier;
+    use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
@@ -482,6 +482,7 @@ pub(crate) mod test_propagation_handler {
 
     pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,
+        notification_engine: NotificationEngine,
         reason_store: ReasonStore,
         assignments: Assignments,
         trailed_values: TrailedValues,
@@ -497,8 +498,10 @@ pub(crate) mod test_propagation_handler {
             let reason_store = ReasonStore::default();
             let assignments = Assignments::default();
             let trailed_values = TrailedValues::default();
+            let notification_engine = NotificationEngine::default();
             Self {
                 propagation_handler,
+                notification_engine,
                 reason_store,
                 assignments,
                 trailed_values,
@@ -507,6 +510,7 @@ pub(crate) mod test_propagation_handler {
 
         pub(crate) fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
             let y = self.assignments.grow(15, 16);
+            self.notification_engine.grow();
 
             let profile_task = Task {
                 start_variable: y,
@@ -537,6 +541,8 @@ pub(crate) mod test_propagation_handler {
         ) -> (PropositionalConjunction, DomainId, DomainId) {
             let x = self.assignments.grow(11, 20);
             let y = self.assignments.grow(15, 16);
+            self.notification_engine.grow();
+            self.notification_engine.grow();
 
             let propagating_task = Task {
                 start_variable: x,
@@ -559,8 +565,6 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut predicate_notifier = PredicateNotifier::default();
-
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
@@ -569,7 +573,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut predicate_notifier,
+                        &mut self.notification_engine,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -589,6 +593,9 @@ pub(crate) mod test_propagation_handler {
             let x = self.assignments.grow(11, 25);
             let y = self.assignments.grow(15, 16);
             let z = self.assignments.grow(15, 19);
+            self.notification_engine.grow();
+            self.notification_engine.grow();
+            self.notification_engine.grow();
 
             let propagating_task = Task {
                 start_variable: x,
@@ -623,8 +630,6 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut predicate_notifier = PredicateNotifier::default();
-
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
@@ -633,7 +638,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut predicate_notifier,
+                        &mut self.notification_engine,
                         PropagatorId(0),
                     ),
                     &[&profile_y, &profile_z],
@@ -652,6 +657,8 @@ pub(crate) mod test_propagation_handler {
         ) -> (PropositionalConjunction, DomainId, DomainId) {
             let x = self.assignments.grow(5, 16);
             let y = self.assignments.grow(15, 16);
+            self.notification_engine.grow();
+            self.notification_engine.grow();
 
             let propagating_task = Task {
                 start_variable: x,
@@ -674,8 +681,6 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut predicate_notifier = PredicateNotifier::default();
-
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
@@ -684,7 +689,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut predicate_notifier,
+                        &mut self.notification_engine,
                         PropagatorId(0),
                     ),
                     &profile,
@@ -704,6 +709,9 @@ pub(crate) mod test_propagation_handler {
             let x = self.assignments.grow(0, 16);
             let y = self.assignments.grow(15, 16);
             let z = self.assignments.grow(7, 9);
+            self.notification_engine.grow();
+            self.notification_engine.grow();
+            self.notification_engine.grow();
 
             let propagating_task = Task {
                 start_variable: x,
@@ -738,8 +746,6 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let mut predicate_notifier = PredicateNotifier::default();
-
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
@@ -748,7 +754,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
-                        &mut predicate_notifier,
+                        &mut self.notification_engine,
                         PropagatorId(0),
                     ),
                     &[&profile_z, &profile_y],

@@ -3,7 +3,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::notifications::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicate;

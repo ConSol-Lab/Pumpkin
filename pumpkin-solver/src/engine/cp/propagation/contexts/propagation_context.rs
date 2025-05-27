@@ -1,5 +1,5 @@
 use crate::engine::conflict_analysis::SemanticMinimiser;
-use crate::engine::notifications::PredicateNotifier;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
@@ -60,7 +60,7 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
-    pub(crate) predicate_notifier: &'a mut PredicateNotifier,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
 }
 
@@ -70,7 +70,7 @@ impl<'a> PropagationContextMut<'a> {
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
-        predicate_notifier: &'a mut PredicateNotifier,
+        notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
@@ -78,7 +78,7 @@ impl<'a> PropagationContextMut<'a> {
             assignments,
             reason_store,
             propagator_id,
-            predicate_notifier,
+            notification_engine,
             semantic_minimiser,
             reification_literal: None,
         }
@@ -306,7 +306,10 @@ impl PropagationContextMut<'_> {
         // TODO: When the following does not result in a change, i.e. this is a no-op, we probably
         // want to clean up the reason. Although perhaps that happens so infrequently that that is
         // not worth the effort.
-        self.assignments
-            .post_predicate(predicate, Some((reason_ref, inference_code)))
+        self.assignments.post_predicate(
+            predicate,
+            Some((reason_ref, inference_code)),
+            self.notification_engine,
+        )
     }
 }

@@ -714,7 +714,7 @@ impl ConstraintSatisfactionSolver {
 
             return self
                 .assignments
-                .post_predicate(assumption_literal, None)
+                .post_predicate(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
                     self.state
                         .declare_infeasible_under_assumptions(assumption_literal);
@@ -749,7 +749,7 @@ impl ConstraintSatisfactionSolver {
 
         self.solver_statistics.engine_statistics.num_decisions += 1;
         self.assignments
-            .post_predicate(decision_predicate, None)
+            .post_predicate(decision_predicate, None, &mut self.notification_engine)
             .expect("Decisions are expected not to fail.");
 
         Ok(())
@@ -869,7 +869,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.notification_engine.predicate_notifier,
+            &mut self.notification_engine,
             Self::get_nogood_propagator_id(),
         );
 
@@ -958,13 +958,7 @@ impl ConstraintSatisfactionSolver {
         brancher.on_backtrack();
 
         assignments
-            .synchronise(
-                backtrack_level,
-                notification_engine.last_notified_cp_trail_index,
-                notification_engine
-                    .watch_list_domain_events
-                    .is_watching_any_backtrack_events(),
-            )
+            .synchronise(backtrack_level, notification_engine)
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
@@ -972,7 +966,7 @@ impl ConstraintSatisfactionSolver {
 
         trailed_values.synchronise(backtrack_level);
 
-        notification_engine.last_notified_cp_trail_index = assignments.num_trail_entries();
+        notification_engine.update_last_notified_index(assignments);
 
         reason_store.synchronise(backtrack_level);
         propagator_queue.clear();
@@ -988,8 +982,7 @@ impl ConstraintSatisfactionSolver {
         brancher.synchronise(assignments);
 
         let _ = notification_engine.process_backtrack_events(assignments, propagators);
-
-        notification_engine.event_drain.clear();
+        notification_engine.clear_event_drain();
     }
 
     pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
@@ -1061,7 +1054,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
-                    &mut self.notification_engine.predicate_notifier,
+                    &mut self.notification_engine,
                     propagator_id,
                 );
                 propagator.propagate(context)
@@ -1234,7 +1227,7 @@ impl ConstraintSatisfactionSolver {
         let propagator_slot = self.propagators.new_propagator();
 
         let constructor_context = PropagatorConstructorContext::new(
-            &mut self.notification_engine.watch_list_domain_events,
+            &mut self.notification_engine,
             &mut self.trailed_values,
             &mut self.internal_parameters.proof_log,
             propagator_slot.key(),
@@ -1276,7 +1269,10 @@ impl ConstraintSatisfactionSolver {
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
-            match self.assignments.post_predicate(predicate, None) {
+            match self
+                .assignments
+                .post_predicate(predicate, None, &mut self.notification_engine)
+            {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
@@ -1296,7 +1292,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
-            &mut self.notification_engine.predicate_notifier,
+            &mut self.notification_engine,
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();

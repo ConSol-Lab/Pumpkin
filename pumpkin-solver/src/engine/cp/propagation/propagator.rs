@@ -12,7 +12,7 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
-use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;

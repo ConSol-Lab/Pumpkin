@@ -344,6 +344,7 @@ mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
+    use crate::engine::notifications::NotificationEngine;
     use crate::engine::Assignments;
     use crate::predicate;
     use crate::results::SolutionReference;
@@ -364,8 +365,10 @@ mod tests {
 
     #[test]
     fn dormant_values() {
+        let mut notification_engine = NotificationEngine::default();
         let mut assignments = Assignments::default();
         let x = assignments.grow(0, 10);
+        notification_engine.grow();
 
         let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
 
@@ -379,15 +382,15 @@ mod tests {
 
         assignments.increase_decision_level();
         // Decision Level 1
-        let _ = assignments.tighten_lower_bound(x, 5, None);
+        let _ = assignments.post_predicate(predicate!(x >= 5), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // Decision Level 2
-        let _ = assignments.tighten_lower_bound(x, 7, None);
+        let _ = assignments.post_predicate(predicate!(x >= 7), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // Decision Level 3
-        let _ = assignments.tighten_lower_bound(x, 10, None);
+        let _ = assignments.post_predicate(predicate!(x >= 10), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // We end at decision level 4
@@ -399,7 +402,7 @@ mod tests {
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(3, usize::MAX, false);
+        let _ = assignments.synchronise(3, &mut notification_engine);
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
@@ -408,7 +411,7 @@ mod tests {
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(0, usize::MAX, false);
+        let _ = assignments.synchronise(0, &mut notification_engine);
         brancher.synchronise(&assignments);
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
@@ -441,17 +444,19 @@ mod tests {
 
     #[test]
     fn uses_stored_solution() {
+        let mut notification_engine = NotificationEngine::default();
         let mut assignments = Assignments::default();
         let x = assignments.grow(0, 10);
+        notification_engine.grow();
 
         assignments.increase_decision_level();
-        let _ = assignments.make_assignment(x, 7, None);
+        let _ = assignments.post_predicate(predicate!(x == 7), None, &mut notification_engine);
 
         let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
 
         brancher.on_solution(SolutionReference::new(&assignments));
 
-        let _ = assignments.synchronise(0, usize::MAX, false);
+        let _ = assignments.synchronise(0, &mut notification_engine);
 
         assert_eq!(
             predicate!(x >= 5),

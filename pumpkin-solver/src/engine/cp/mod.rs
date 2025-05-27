@@ -18,7 +18,7 @@ mod tests {
     use crate::containers::StorageKey;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
-    use crate::engine::notifications::PredicateNotifier;
+    use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
@@ -37,13 +37,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut predicate_notifier = PredicateNotifier::default();
+            let mut notification_engine = NotificationEngine::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut predicate_notifier,
+                &mut notification_engine,
                 PropagatorId(0),
             );
 
@@ -69,13 +69,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut predicate_notifier = PredicateNotifier::default();
+            let mut notification_engine = NotificationEngine::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut predicate_notifier,
+                &mut notification_engine,
                 PropagatorId(0),
             );
 
@@ -101,13 +101,13 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
-            let mut predicate_notifier = PredicateNotifier::default();
+            let mut notification_engine = NotificationEngine::default();
             let mut context = PropagationContextMut::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
-                &mut predicate_notifier,
+                &mut notification_engine,
                 PropagatorId(0),
             );
 

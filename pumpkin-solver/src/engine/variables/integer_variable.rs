@@ -1,8 +1,8 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::engine::notifications::domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::notifications::domain_event_notification::DomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::Assignments;

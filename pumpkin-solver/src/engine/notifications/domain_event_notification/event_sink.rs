@@ -23,16 +23,12 @@ pub(crate) struct EventSink {
 }
 
 impl EventSink {
-    pub(crate) fn new(num_domains: usize) -> Self {
-        let mut event_sink = EventSink::default();
-        for _ in 0..num_domains {
-            event_sink.grow();
-        }
-        event_sink
-    }
-
     pub(crate) fn grow(&mut self) {
         let _ = self.present.push(EnumSet::new());
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.events.is_empty()
     }
 
     pub(crate) fn event_occurred(&mut self, event: DomainEvent, domain: DomainId) {

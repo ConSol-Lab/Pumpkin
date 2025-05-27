@@ -70,7 +70,11 @@ impl ConflictAnalysisContext<'_> {
         let garbage_inference_code = InferenceCode::create_from_index(0);
 
         self.assignments
-            .post_predicate(predicate, Some((ReasonRef(0), garbage_inference_code)))
+            .post_predicate(
+                predicate,
+                Some((ReasonRef(0), garbage_inference_code)),
+                self.notification_engine,
+            )
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 
