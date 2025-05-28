@@ -3,14 +3,14 @@ use std::cmp::Ordering;
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
+use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
-use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
 use crate::math::num_ext::NumExt;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
@@ -135,8 +135,8 @@ where
             .map(|value| self.map(value))
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<IntDomainEvent>) {
-        let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
+    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
+        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
             events = events.symmetrical_difference(bound);
@@ -144,12 +144,8 @@ where
         self.inner.watch_all(watchers, events);
     }
 
-    fn watch_all_backtrack(
-        &self,
-        watchers: &mut Watchers<'_>,
-        mut events: EnumSet<IntDomainEvent>,
-    ) {
-        let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
+        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
             events = events.symmetrical_difference(bound);
@@ -157,11 +153,11 @@ where
         self.inner.watch_all_backtrack(watchers, events);
     }
 
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         if self.scale.is_negative() {
             match self.inner.unpack_event(event) {
-                IntDomainEvent::LowerBound => IntDomainEvent::UpperBound,
-                IntDomainEvent::UpperBound => IntDomainEvent::LowerBound,
+                DomainEvent::LowerBound => DomainEvent::UpperBound,
+                DomainEvent::UpperBound => DomainEvent::LowerBound,
                 event => event,
             }
         } else {

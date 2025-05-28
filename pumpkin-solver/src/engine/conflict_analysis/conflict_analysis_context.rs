@@ -8,6 +8,7 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::StorageKey;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
@@ -17,17 +18,14 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
-use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::pumpkin_assert_simple;
-use crate::variables::DomainId;
 
 /// Used during conflict analysis to provide the necessary information.
 ///
@@ -40,12 +38,10 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
-    pub(crate) last_notified_cp_trail_index: &'a mut usize,
-    pub(crate) watch_list_cp: &'a mut WatchListCP,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
-    pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
 
-    pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
+
     pub(crate) counters: &'a mut SolverStatistics,
 
     pub(crate) proof_log: &'a mut ProofLog,
@@ -74,21 +70,22 @@ impl ConflictAnalysisContext<'_> {
         let garbage_inference_code = InferenceCode::create_from_index(0);
 
         self.assignments
-            .post_predicate(predicate, Some((ReasonRef(0), garbage_inference_code)))
+            .post_predicate(
+                predicate,
+                Some((ReasonRef(0), garbage_inference_code)),
+                self.notification_engine,
+            )
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 
     /// Backtracks the solver to the provided backtrack level.
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         ConstraintSatisfactionSolver::backtrack(
+            self.notification_engine,
             self.assignments,
-            self.last_notified_cp_trail_index,
             self.reason_store,
             self.propagator_queue,
-            self.watch_list_cp,
             self.propagators,
-            self.event_drain,
-            self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
             self.trailed_values,

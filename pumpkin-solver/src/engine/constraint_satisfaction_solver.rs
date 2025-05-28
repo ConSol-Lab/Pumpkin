@@ -14,8 +14,8 @@ use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
+use super::notifications::NotificationEngine;
 use super::propagation::constructor::PropagatorConstructor;
-use super::propagation::contexts::PropagationContextWithTrailedValues;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
@@ -42,12 +42,9 @@ use crate::containers::KeyGenerator;
 use crate::declare_inference_label;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
-use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -55,7 +52,6 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::DebugHelper;
-use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
@@ -129,22 +125,11 @@ pub struct ConstraintSatisfactionSolver {
     semantic_minimiser: SemanticMinimiser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments: Assignments,
-    /// Contains information on which propagator to notify upon
-    /// integer events, e.g., lower or upper bound change of a variable.
-    watch_list_cp: WatchListCP,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis
     pub(crate) reason_store: ReasonStore,
-    /// Contains events that need to be processed to notify propagators of event occurrences.
-    /// Used as a helper storage vector to avoid reallocation, and to take away ownership from the
-    /// events in assignments.
-    event_drain: Vec<(IntDomainEvent, DomainId)>,
-    /// Contains events that need to be processed to notify propagators of backtrack
-    /// [`IntDomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
-    backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
-    last_notified_cp_trail_index: usize,
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
@@ -157,8 +142,11 @@ pub struct ConstraintSatisfactionSolver {
     unit_nogood_step_ids: HashMap<Predicate, StepId>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
-
+    /// Keep track of trailed values (i.e. values which automatically backtrack)
     pub(crate) trailed_values: TrailedValues,
+    /// Component responsible for providing notifications for changes to the domains of variables
+    /// and/or the polarity [Predicate]s
+    notification_engine: NotificationEngine,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -232,120 +220,6 @@ impl ConstraintSatisfactionSolver {
         PropagatorId(0)
     }
 
-    fn process_backtrack_events(
-        watch_list_cp: &mut WatchListCP,
-        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
-        assignments: &mut Assignments,
-        propagators: &mut PropagatorStore,
-    ) -> bool {
-        // If there are no variables being watched then there is no reason to perform these
-        // operations
-        if watch_list_cp.is_watching_any_backtrack_events() {
-            backtrack_event_drain.extend(assignments.drain_backtrack_domain_events());
-
-            if backtrack_event_drain.is_empty() {
-                return false;
-            }
-
-            for (event, domain) in backtrack_event_drain.drain(..) {
-                for propagator_var in
-                    watch_list_cp.get_backtrack_affected_propagators(event, domain)
-                {
-                    let propagator = &mut propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(assignments);
-
-                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
-                }
-            }
-        }
-        true
-    }
-
-    fn notify_nogood_propagator(
-        event: IntDomainEvent,
-        domain: DomainId,
-        propagators: &mut PropagatorStore,
-        propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
-        trailed_values: &mut TrailedValues,
-    ) {
-        pumpkin_assert_moderate!(
-            propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
-        );
-        let nogood_propagator_id = Self::get_nogood_propagator_id();
-        // The nogood propagator is implicitly subscribed to every domain event for every variable.
-        // For this reason, its local id matches the domain id.
-        // This is special only for the nogood propagator.
-        let local_id = LocalId::from(domain.id);
-        Self::notify_propagator(
-            nogood_propagator_id,
-            local_id,
-            event,
-            propagators,
-            propagator_queue,
-            assignments,
-            trailed_values,
-        );
-    }
-
-    fn notify_propagator(
-        propagator_id: PropagatorId,
-        local_id: LocalId,
-        event: IntDomainEvent,
-        propagators: &mut PropagatorStore,
-        propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
-        trailed_values: &mut TrailedValues,
-    ) {
-        let context = PropagationContextWithTrailedValues::new(trailed_values, assignments);
-
-        let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
-
-        if enqueue_decision == EnqueueDecision::Enqueue {
-            propagator_queue
-                .enqueue_propagator(propagator_id, propagators[propagator_id].priority());
-        }
-    }
-
-    /// Process the stored domain events that happens as a result of decision/propagation predicates
-    /// to the trail. Propagators are notified and enqueued if needed about the domain events.
-    fn notify_propagators_about_domain_events(&mut self) {
-        assert!(self.event_drain.is_empty());
-
-        // Eagerly adding since the drain operation lazily removes elements from internal data
-        // structures.
-        self.assignments.drain_domain_events().for_each(|e| {
-            self.event_drain.push(e);
-        });
-
-        for (event, domain) in self.event_drain.drain(..) {
-            // Special case: the nogood propagator is notified about each event.
-            Self::notify_nogood_propagator(
-                event,
-                domain,
-                &mut self.propagators,
-                &mut self.propagator_queue,
-                &mut self.assignments,
-                &mut self.trailed_values,
-            );
-            // Now notify other propagators subscribed to this event.
-            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                let propagator_id = propagator_var.propagator;
-                let local_id = propagator_var.variable;
-                Self::notify_propagator(
-                    propagator_id,
-                    local_id,
-                    event,
-                    &mut self.propagators,
-                    &mut self.propagator_queue,
-                    &mut self.assignments,
-                    &mut self.trailed_values,
-                );
-            }
-        }
-        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
-    }
-
     /// This is a temporary accessor to help refactoring.
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         SolutionReference::new(&self.assignments)
@@ -408,15 +282,11 @@ impl ConstraintSatisfactionSolver {
         let constraint_tags = KeyGenerator::default();
 
         let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
-            last_notified_cp_trail_index: 0,
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
             assignments: Assignments::default(),
-            watch_list_cp: WatchListCP::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
-            event_drain: vec![],
-            backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: PropagatorStore::default(),
             solver_statistics: SolverStatistics::default(),
@@ -430,13 +300,13 @@ impl ConstraintSatisfactionSolver {
             },
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
+            notification_engine: NotificationEngine::default(),
             constraint_tags,
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
         // trivially true. We need to adjust other data structures to take this into account.
-        csp_solver.watch_list_cp.grow();
         let dummy_id = Predicate::trivially_true().get_domain();
 
         csp_solver
@@ -553,7 +423,7 @@ impl ConstraintSatisfactionSolver {
         );
 
         let domain_id = self.assignments.grow(lower_bound, upper_bound);
-        self.watch_list_cp.grow();
+        self.notification_engine.grow();
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
@@ -570,7 +440,7 @@ impl ConstraintSatisfactionSolver {
     ) -> DomainId {
         let domain_id = self.assignments.create_new_integer_variable_sparse(values);
 
-        self.watch_list_cp.grow();
+        self.notification_engine.grow();
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
@@ -677,11 +547,8 @@ impl ConstraintSatisfactionSolver {
                     brancher,
                     semantic_minimiser: &mut self.semantic_minimiser,
                     propagators: &mut self.propagators,
-                    last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-                    watch_list_cp: &mut self.watch_list_cp,
+                    notification_engine: &mut self.notification_engine,
                     propagator_queue: &mut self.propagator_queue,
-                    event_drain: &mut self.event_drain,
-                    backtrack_event_drain: &mut self.backtrack_event_drain,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
@@ -746,14 +613,11 @@ impl ConstraintSatisfactionSolver {
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         if self.assignments.get_decision_level() != 0 {
             ConstraintSatisfactionSolver::backtrack(
+                &mut self.notification_engine,
                 &mut self.assignments,
-                &mut self.last_notified_cp_trail_index,
                 &mut self.reason_store,
                 &mut self.propagator_queue,
-                &mut self.watch_list_cp,
                 &mut self.propagators,
-                &mut self.event_drain,
-                &mut self.backtrack_event_drain,
                 0,
                 brancher,
                 &mut self.trailed_values,
@@ -850,7 +714,7 @@ impl ConstraintSatisfactionSolver {
 
             return self
                 .assignments
-                .post_predicate(assumption_literal, None)
+                .post_predicate(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
                     self.state
                         .declare_infeasible_under_assumptions(assumption_literal);
@@ -885,7 +749,7 @@ impl ConstraintSatisfactionSolver {
 
         self.solver_statistics.engine_statistics.num_decisions += 1;
         self.assignments
-            .post_predicate(decision_predicate, None)
+            .post_predicate(decision_predicate, None, &mut self.notification_engine)
             .expect("Decisions are expected not to fail.");
 
         Ok(())
@@ -919,12 +783,9 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             brancher,
             semantic_minimiser: &mut self.semantic_minimiser,
+            notification_engine: &mut self.notification_engine,
             propagators: &mut self.propagators,
-            last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
-            watch_list_cp: &mut self.watch_list_cp,
             propagator_queue: &mut self.propagator_queue,
-            event_drain: &mut self.event_drain,
-            backtrack_event_drain: &mut self.backtrack_event_drain,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
@@ -1008,6 +869,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.notification_engine,
             Self::get_nogood_propagator_id(),
         );
 
@@ -1064,14 +926,11 @@ impl ConstraintSatisfactionSolver {
         self.solver_statistics.engine_statistics.num_restarts += 1;
 
         ConstraintSatisfactionSolver::backtrack(
+            &mut self.notification_engine,
             &mut self.assignments,
-            &mut self.last_notified_cp_trail_index,
             &mut self.reason_store,
             &mut self.propagator_queue,
-            &mut self.watch_list_cp,
             &mut self.propagators,
-            &mut self.event_drain,
-            &mut self.backtrack_event_drain,
             0,
             brancher,
             &mut self.trailed_values,
@@ -1085,14 +944,11 @@ impl ConstraintSatisfactionSolver {
         reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
     )]
     pub(crate) fn backtrack<BrancherType: Brancher + ?Sized>(
+        notification_engine: &mut NotificationEngine,
         assignments: &mut Assignments,
-        last_notified_cp_trail_index: &mut usize,
         reason_store: &mut ReasonStore,
         propagator_queue: &mut PropagatorQueue,
-        watch_list_cp: &mut WatchListCP,
         propagators: &mut PropagatorStore,
-        event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
-        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
         trailed_values: &mut TrailedValues,
@@ -1102,11 +958,7 @@ impl ConstraintSatisfactionSolver {
         brancher.on_backtrack();
 
         assignments
-            .synchronise(
-                backtrack_level,
-                *last_notified_cp_trail_index,
-                watch_list_cp.is_watching_any_backtrack_events(),
-            )
+            .synchronise(backtrack_level, notification_engine)
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
@@ -1114,7 +966,7 @@ impl ConstraintSatisfactionSolver {
 
         trailed_values.synchronise(backtrack_level);
 
-        *last_notified_cp_trail_index = assignments.num_trail_entries();
+        notification_engine.update_last_notified_index(assignments);
 
         reason_store.synchronise(backtrack_level);
         propagator_queue.clear();
@@ -1129,14 +981,8 @@ impl ConstraintSatisfactionSolver {
 
         brancher.synchronise(assignments);
 
-        let _ = ConstraintSatisfactionSolver::process_backtrack_events(
-            watch_list_cp,
-            backtrack_event_drain,
-            assignments,
-            propagators,
-        );
-
-        event_drain.clear();
+        let _ = notification_engine.process_backtrack_events(assignments, propagators);
+        notification_engine.clear_event_drain();
     }
 
     pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
@@ -1190,7 +1036,13 @@ impl ConstraintSatisfactionSolver {
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
-        self.notify_propagators_about_domain_events();
+        self.notification_engine
+            .notify_propagators_about_domain_events(
+                &mut self.assignments,
+                &mut self.trailed_values,
+                &mut self.propagators,
+                &mut self.propagator_queue,
+            );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
             let num_trail_entries_before = self.assignments.num_trail_entries();
@@ -1202,6 +1054,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
+                    &mut self.notification_engine,
                     propagator_id,
                 );
                 propagator.propagate(context)
@@ -1210,11 +1063,16 @@ impl ConstraintSatisfactionSolver {
             if self.assignments.get_decision_level() == 0 {
                 self.log_root_propagation_to_proof(num_trail_entries_before);
             }
-
             match propagation_status {
                 Ok(_) => {
                     // Notify other propagators of the propagations and continue.
-                    self.notify_propagators_about_domain_events();
+                    self.notification_engine
+                        .notify_propagators_about_domain_events(
+                            &mut self.assignments,
+                            &mut self.trailed_values,
+                            &mut self.propagators,
+                            &mut self.propagator_queue,
+                        );
                 }
                 Err(inconsistency) => match inconsistency {
                     // A propagator did a change that resulted in an empty domain.
@@ -1369,7 +1227,7 @@ impl ConstraintSatisfactionSolver {
         let propagator_slot = self.propagators.new_propagator();
 
         let constructor_context = PropagatorConstructorContext::new(
-            &mut self.watch_list_cp,
+            &mut self.notification_engine,
             &mut self.trailed_values,
             &mut self.internal_parameters.proof_log,
             propagator_slot.key(),
@@ -1411,7 +1269,10 @@ impl ConstraintSatisfactionSolver {
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
-            match self.assignments.post_predicate(predicate, None) {
+            match self
+                .assignments
+                .post_predicate(predicate, None, &mut self.notification_engine)
+            {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
@@ -1431,6 +1292,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.notification_engine,
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();

@@ -7,8 +7,8 @@ use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::domain_events::DomainEvents;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
@@ -18,7 +18,7 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
+use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
@@ -57,7 +57,7 @@ where
             context.register_for_backtrack_events(
                 x_i.clone(),
                 DomainEvents::create_with_int_events(enum_set!(
-                    IntDomainEvent::Assign | IntDomainEvent::Removal
+                    DomainEvent::Assign | DomainEvent::Removal
                 )),
                 LocalId::from(i as u32),
             );
@@ -153,7 +153,7 @@ where
     ) {
         if matches!(
             self.terms[local_id.unpack() as usize].unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             pumpkin_assert_simple!(
                 self.number_of_fixed_terms >= 1,
@@ -170,7 +170,7 @@ where
             // A removal has been undone
             pumpkin_assert_moderate!(matches!(
                 self.terms[local_id.unpack() as usize].unpack_event(event),
-                IntDomainEvent::Removal
+                DomainEvent::Removal
             ));
 
             // We set the flag whether the unfixed variable has been updated

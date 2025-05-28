@@ -6,11 +6,11 @@ use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+use crate::engine::notifications::NotificationEngine;
+use crate::engine::notifications::Watchers;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::TrailedValues;
-use crate::engine::WatchListCP;
-use crate::engine::Watchers;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
@@ -37,7 +37,7 @@ pub(crate) trait PropagatorConstructor {
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub(crate) struct PropagatorConstructorContext<'a> {
-    watch_list: &'a mut WatchListCP,
+    notification_engine: &'a mut NotificationEngine,
     trailed_values: &'a mut TrailedValues,
     propagator_id: PropagatorId,
 
@@ -54,14 +54,14 @@ pub(crate) struct PropagatorConstructorContext<'a> {
 
 impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
-        watch_list: &'a mut WatchListCP,
+        notification_engine: &'a mut NotificationEngine,
         trailed_values: &'a mut TrailedValues,
         proof_log: &'a mut ProofLog,
         propagator_id: PropagatorId,
         assignments: &'a mut Assignments,
     ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
-            watch_list,
+            notification_engine,
             trailed_values,
             propagator_id,
             next_local_id: RefOrOwned::Owned(LocalId::from(0)),
@@ -99,7 +99,7 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.watch_list);
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
         var.watch_all(&mut watchers, domain_events.get_int_events());
     }
 
@@ -129,7 +129,7 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.watch_list);
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
     }
 
@@ -154,7 +154,7 @@ impl PropagatorConstructorContext<'_> {
     /// afterwards.
     pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
-            watch_list: self.watch_list,
+            notification_engine: self.notification_engine,
             trailed_values: self.trailed_values,
             propagator_id: self.propagator_id,
             proof_log: self.proof_log,
@@ -236,15 +236,15 @@ mod tests {
 
     #[test]
     fn reborrowing_remembers_next_local_id() {
-        let mut watch_list = WatchListCP::default();
-        watch_list.grow();
+        let mut notification_engine = NotificationEngine::default();
+        notification_engine.grow();
         let mut trailed_values = TrailedValues::default();
         let mut proof_log = ProofLog::default();
         let propagator_id = PropagatorId(0);
         let mut assignments = Assignments::default();
 
         let mut c1 = PropagatorConstructorContext::new(
-            &mut watch_list,
+            &mut notification_engine,
             &mut trailed_values,
             &mut proof_log,
             propagator_id,

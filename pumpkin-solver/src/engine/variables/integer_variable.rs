@@ -1,11 +1,11 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
+use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::Assignments;
-use crate::engine::IntDomainEvent;
-use crate::engine::Watchers;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
@@ -43,10 +43,10 @@ pub trait IntegerVariable:
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32>;
 
     /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 
     /// Decode a domain event for this variable.
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
 }

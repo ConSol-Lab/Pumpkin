@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
+#[cfg(test)]
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 #[cfg(doc)]
 use crate::engine::propagation::PropagationContext;
@@ -80,13 +82,17 @@ impl<'a> SelectionContext<'a> {
 
     #[cfg(test)]
     /// Create an ['Assignments'] with the variables having the input bounds.
-    pub fn create_for_testing(domains: Vec<(i32, i32)>) -> Assignments {
+    pub(crate) fn create_for_testing(
+        domains: Vec<(i32, i32)>,
+    ) -> (Assignments, NotificationEngine) {
         let mut assignments = Assignments::default();
+        let mut notification_engine = NotificationEngine::default();
 
         for (lower_bound, upper_bound) in domains {
             _ = assignments.grow(lower_bound, upper_bound);
+            notification_engine.grow();
         }
 
-        assignments
+        (assignments, notification_engine)
     }
 }

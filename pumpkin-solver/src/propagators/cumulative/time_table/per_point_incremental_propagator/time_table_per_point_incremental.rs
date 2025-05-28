@@ -4,7 +4,8 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
@@ -14,7 +15,6 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
@@ -448,7 +448,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             self.updatable_structures.fix_task(&updated_task);
         }
@@ -474,7 +474,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             // The start variable of the task has been unassigned, we should restore it to unfixed
             self.updatable_structures.unfix_task(updated_task)

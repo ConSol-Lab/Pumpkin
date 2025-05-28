@@ -55,13 +55,18 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let (mut assignments, mut notification_engine) =
+            SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
         let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainInterval;
 
         for to_remove in [2, 3, 7, 8] {
-            let _ = assignments.remove_value_from_domain(domain_ids[0], to_remove, None);
+            let _ = assignments.post_predicate(
+                predicate!(domain_ids[0] != to_remove),
+                None,
+                &mut notification_engine,
+            );
         }
 
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
@@ -72,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_no_holes_in_domain_bisects_domain() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -86,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
-        let assignments = SelectionContext::create_for_testing(vec![(1, 2)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();

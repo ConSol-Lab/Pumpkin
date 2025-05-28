@@ -69,10 +69,11 @@ mod tests {
     use crate::branching::variable_selection::RandomSelector;
     use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
+    use crate::predicate;
 
     #[test]
     fn test_selects_randomly() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10), (5, 20), (1, 3)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10), (5, 20), (1, 3)]);
         let mut test_rng = TestRandom {
             usizes: vec![1],
             ..Default::default()
@@ -89,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_selects_randomly_not_unfixed() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10), (5, 5), (1, 3)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10), (5, 5), (1, 3)]);
         let mut test_rng = TestRandom {
             usizes: vec![1, 0],
             ..Default::default()
@@ -106,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_select_nothing_if_all_fixed() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 0), (5, 5), (1, 1)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 0), (5, 5), (1, 1)]);
         let mut test_rng = TestRandom {
             usizes: vec![1, 0, 0],
             ..Default::default()
@@ -121,7 +122,8 @@ mod tests {
 
     #[test]
     fn test_select_unfixed_variable_after_fixing() {
-        let mut assignments = SelectionContext::create_for_testing(vec![(0, 0), (5, 7), (1, 1)]);
+        let (mut assignments, mut notification_engine) =
+            SelectionContext::create_for_testing(vec![(0, 0), (5, 7), (1, 1)]);
         let mut test_rng = TestRandom {
             usizes: vec![2, 0, 0, 0, 0],
             ..Default::default()
@@ -138,7 +140,11 @@ mod tests {
         }
 
         assignments.increase_decision_level();
-        let _ = assignments.tighten_lower_bound(integer_variables[1], 7, None);
+        let _ = assignments.post_predicate(
+            predicate!(integer_variables[1] >= 7),
+            None,
+            &mut notification_engine,
+        );
 
         {
             let mut context = SelectionContext::new(&assignments, &mut test_rng);
@@ -147,7 +153,7 @@ mod tests {
             assert!(selected.is_none());
         }
 
-        let _ = assignments.synchronise(0, 0, false);
+        let _ = assignments.synchronise(0, &mut notification_engine);
         strategy.on_unassign_integer(integer_variables[1], 7);
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let selected = strategy.select_variable(&mut context);

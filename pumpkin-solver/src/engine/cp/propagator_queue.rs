@@ -22,6 +22,11 @@ impl PropagatorQueue {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_propagator_present(&self, propagator_id: PropagatorId) -> bool {
+        self.present_propagators.contains(&propagator_id)
+    }
+
     pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 

@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10), (10, 20)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10), (10, 20)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();

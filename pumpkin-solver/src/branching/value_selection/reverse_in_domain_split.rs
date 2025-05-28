@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
-        let assignments = SelectionContext::create_for_testing(vec![(1, 2)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();

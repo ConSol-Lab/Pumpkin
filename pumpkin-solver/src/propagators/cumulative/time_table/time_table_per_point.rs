@@ -11,7 +11,8 @@ use super::TimeTable;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
@@ -21,7 +22,6 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::IntDomainEvent;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
@@ -160,7 +160,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
         if matches!(
             updated_task.start_variable.unpack_event(event),
-            IntDomainEvent::Assign
+            DomainEvent::Assign
         ) {
             self.updatable_structures.fix_task(&updated_task)
         }

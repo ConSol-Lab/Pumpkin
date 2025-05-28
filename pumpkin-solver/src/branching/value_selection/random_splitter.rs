@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let (assignments, _) = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_random = TestRandom {
             integers: vec![2],
             bools: vec![true],

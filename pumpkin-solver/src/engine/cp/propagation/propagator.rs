@@ -7,11 +7,12 @@ use super::PropagationContext;
 use super::PropagationContextMut;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
-use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
@@ -116,6 +117,17 @@ pub(crate) trait Propagator: Downcast {
         _event: OpaqueDomainEvent,
     ) {
     }
+
+    /// Called when a [`PredicateId`] has been satisfied.
+    ///
+    /// By default, the propagator does nothing when this method is called.
+    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
+
+    /// Called when a [`PredicateId`] has been falsified.
+    ///
+    /// By default, the propagator does nothing when this method is called.
+    #[allow(dead_code, reason = "Will be part of the public API")]
+    fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.
