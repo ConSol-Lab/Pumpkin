@@ -7,6 +7,7 @@ use std::ops::DerefMut;
 
 pub(crate) mod combinator;
 pub(crate) mod indefinite;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod os_signal;
 pub(crate) mod time_budget;
 
