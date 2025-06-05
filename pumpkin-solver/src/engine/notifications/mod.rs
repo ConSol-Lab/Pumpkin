@@ -201,13 +201,7 @@ impl NotificationEngine {
                 self.backtrack_events
                     .event_occurred(DomainEvent::UpperBound, predicate.get_domain())
             }
-            if matches!(
-                predicate,
-                Predicate::NotEqual {
-                    domain_id: _,
-                    not_equal_constant: _
-                }
-            ) {
+            if predicate.is_not_equal_predicate() {
                 self.backtrack_events
                     .event_occurred(DomainEvent::Removal, predicate.get_domain())
             }

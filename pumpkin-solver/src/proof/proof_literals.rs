@@ -9,8 +9,10 @@ use drcp_format::IntAtomicConstraint;
 use drcp_format::LiteralDefinitions;
 
 use crate::basic_types::HashMap;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 use crate::variables::Literal;
 
@@ -68,30 +70,34 @@ impl ProofLiterals {
             .map(|&reified_predicate| {
                 assert!(rhs == 0 || rhs == 1);
 
-                match predicate {
-                    // The `predicate` is false
-                    Predicate::UpperBound { upper_bound: 0, .. }
-                    | Predicate::Equal {
-                        equality_constant: 0,
-                        ..
+                let value = predicate.get_right_hand_side();
+                match predicate.get_predicate_type() {
+                    PredicateType::LowerBound => {
+                        pumpkin_assert_simple!(value == 1);
+                        reified_predicate
                     }
-                    | Predicate::NotEqual {
-                        not_equal_constant: 1,
-                        ..
-                    } => !reified_predicate,
-
-                    // The `predicate` is true
-                    Predicate::LowerBound { lower_bound: 1, .. }
-                    | Predicate::Equal {
-                        equality_constant: 1,
-                        ..
+                    PredicateType::UpperBound => {
+                        pumpkin_assert_simple!(value == 0);
+                        !reified_predicate
                     }
-                    | Predicate::NotEqual {
-                        not_equal_constant: 0,
-                        ..
-                    } => reified_predicate,
+                    PredicateType::NotEqual => {
+                        pumpkin_assert_simple!(value == 0 || value == 1);
 
-                    p => panic!("{p:?} is not a valid reification predicate"),
+                        if value == 0 {
+                            reified_predicate
+                        } else {
+                            !reified_predicate
+                        }
+                    }
+                    PredicateType::Equal => {
+                        pumpkin_assert_simple!(value == 0 || value == 1);
+
+                        if value == 0 {
+                            !reified_predicate
+                        } else {
+                            reified_predicate
+                        }
+                    }
                 }
             })
     }
@@ -101,29 +107,26 @@ fn predicate_to_atomic(
     predicate: Predicate,
     variable_names: &VariableNames,
 ) -> AtomicConstraint<&str> {
-    match predicate {
-        Predicate::UpperBound {
-            domain_id,
-            upper_bound,
-        } => AtomicConstraint::Int(IntAtomicConstraint {
+    let domain_id = predicate.get_domain();
+    let value = predicate.get_right_hand_side();
+
+    match predicate.get_predicate_type() {
+        PredicateType::UpperBound => AtomicConstraint::Int(IntAtomicConstraint {
             name: variable_names
                 .get_int_name(domain_id)
                 .expect("integer domain is unnamed"),
             comparison: Comparison::LessThanEqual,
-            value: upper_bound.into(),
+            value: value.into(),
         }),
-        Predicate::Equal {
-            domain_id,
-            equality_constant,
-        } => AtomicConstraint::Int(IntAtomicConstraint {
+        PredicateType::Equal => AtomicConstraint::Int(IntAtomicConstraint {
             name: variable_names
                 .get_int_name(domain_id)
                 .expect("integer domain is unnamed"),
             comparison: Comparison::Equal,
-            value: equality_constant.into(),
+            value: value.into(),
         }),
 
-        Predicate::NotEqual { .. } | Predicate::LowerBound { .. } => {
+        PredicateType::NotEqual | PredicateType::LowerBound => {
             panic!("Only Equal and UpperBound predicates should be in the literal definition")
         }
     }
@@ -136,9 +139,9 @@ impl LiteralCodeProvider for ProofLiterals {
         // Determine whether `literal` is a reification of another predicate.
         let literal = self.get_underlying_predicate(literal).unwrap_or(literal);
 
-        let key = match literal {
-            l @ (Predicate::UpperBound { .. } | Predicate::Equal { .. }) => l,
-            l @ (Predicate::LowerBound { .. } | Predicate::NotEqual { .. }) => !l,
+        let key = match literal.get_predicate_type() {
+            PredicateType::UpperBound | PredicateType::Equal => literal,
+            PredicateType::LowerBound | PredicateType::NotEqual => !literal,
         };
 
         let next_code = NonZeroU32::new(self.variables.len() as u32 + 1).unwrap();

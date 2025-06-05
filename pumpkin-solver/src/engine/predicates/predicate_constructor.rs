@@ -1,5 +1,9 @@
 use super::predicate::Predicate;
+use crate::engine::predicates::predicate::LOWER_BOUND_CODE;
+use crate::engine::predicates::predicate::NOT_EQUALS_CODE;
+use crate::engine::predicates::predicate::UPPER_BOUND_CODE;
 use crate::engine::variables::DomainId;
+use crate::pumpkin_assert_moderate;
 
 /// A trait which defines methods for creating a [`Predicate`].
 pub trait PredicateConstructor {
@@ -22,32 +26,24 @@ pub trait PredicateConstructor {
 impl PredicateConstructor for DomainId {
     type Value = i32;
 
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id, bound)
+    }
+
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::LowerBound {
-            domain_id: *self,
-            lower_bound: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | (LOWER_BOUND_CODE as u32) << 30, bound)
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::UpperBound {
-            domain_id: *self,
-            upper_bound: bound,
-        }
-    }
-
-    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::Equal {
-            domain_id: *self,
-            equality_constant: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | (UPPER_BOUND_CODE as u32) << 30, bound)
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::NotEqual {
-            domain_id: *self,
-            not_equal_constant: bound,
-        }
+        pumpkin_assert_moderate!(self.id >> 30 == 0);
+        Predicate::new(self.id | (NOT_EQUALS_CODE as u32) << 30, bound)
     }
 }
 
@@ -123,100 +119,4 @@ macro_rules! predicate {
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.disequality_predicate($value)
     }};
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn macro_local_identifiers_are_matched() {
-        let x = DomainId { id: 0 };
-
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: x,
-            lower_bound: 2,
-        };
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: x,
-            upper_bound: 3,
-        };
-        let equality_predicate = Predicate::Equal {
-            domain_id: x,
-            equality_constant: 5,
-        };
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: x,
-            not_equal_constant: 5,
-        };
-
-        assert_eq!(lower_bound_predicate, predicate![x >= 2]);
-        assert_eq!(upper_bound_predicate, predicate![x <= 3]);
-        assert_eq!(equality_predicate, predicate![x == 5]);
-        assert_eq!(disequality_predicate, predicate![x != 5]);
-    }
-
-    #[test]
-    fn macro_nested_identifiers_are_matched() {
-        struct Wrapper {
-            x: DomainId,
-        }
-
-        let wrapper = Wrapper {
-            x: DomainId { id: 0 },
-        };
-
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: wrapper.x,
-            lower_bound: 2,
-        };
-        assert_eq!(lower_bound_predicate, predicate![wrapper.x >= 2]);
-
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: wrapper.x,
-            upper_bound: 3,
-        };
-        assert_eq!(upper_bound_predicate, predicate![wrapper.x <= 3]);
-
-        let equality_predicate = Predicate::Equal {
-            domain_id: wrapper.x,
-            equality_constant: 5,
-        };
-        assert_eq!(equality_predicate, predicate![wrapper.x == 5]);
-
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: wrapper.x,
-            not_equal_constant: 5,
-        };
-        assert_eq!(disequality_predicate, predicate![wrapper.x != 5]);
-    }
-
-    #[test]
-    fn macro_index_expressions_are_matched() {
-        let wrapper = [DomainId { id: 0 }];
-
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: wrapper[0],
-            lower_bound: 2,
-        };
-        assert_eq!(lower_bound_predicate, predicate![wrapper[0] >= 2]);
-
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: wrapper[0],
-            upper_bound: 3,
-        };
-        assert_eq!(upper_bound_predicate, predicate![wrapper[0] <= 3]);
-
-        let equality_predicate = Predicate::Equal {
-            domain_id: wrapper[0],
-            equality_constant: 5,
-        };
-        assert_eq!(equality_predicate, predicate![wrapper[0] == 5]);
-
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: wrapper[0],
-            not_equal_constant: 5,
-        };
-        assert_eq!(disequality_predicate, predicate![wrapper[0] != 5]);
-    }
 }

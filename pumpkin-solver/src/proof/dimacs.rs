@@ -2,8 +2,10 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::num::NonZeroU64;
 
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Debug)]
 pub(crate) struct DimacsProof<W: Write> {
@@ -37,28 +39,33 @@ impl<W: Write> DimacsProof<W> {
             let variable_code = variable_names
                 .get_int_name(predicate.get_domain())
                 .expect("all variables are named in a DIMACS problem");
-            let variable_prefix = match predicate {
-                Predicate::LowerBound { lower_bound: 1, .. } => "",
-                Predicate::Equal {
-                    equality_constant: 1,
-                    ..
-                } => "",
-                Predicate::NotEqual {
-                    not_equal_constant: 0,
-                    ..
-                } => "",
+            let value = predicate.get_right_hand_side();
+            let variable_prefix = match predicate.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    pumpkin_assert_simple!(value == 1);
+                    ""
+                }
+                PredicateType::Equal => {
+                    pumpkin_assert_simple!(value == 0 || value == 1);
+                    if value == 0 {
+                        "-"
+                    } else {
+                        ""
+                    }
+                }
+                PredicateType::NotEqual => {
+                    pumpkin_assert_simple!(value == 0 || value == 1);
+                    if value == 0 {
+                        ""
+                    } else {
+                        "-"
+                    }
+                }
 
-                Predicate::UpperBound { upper_bound: 0, .. } => "-",
-                Predicate::Equal {
-                    equality_constant: 0,
-                    ..
-                } => "-",
-                Predicate::NotEqual {
-                    not_equal_constant: 1,
-                    ..
-                } => "-",
-
-                other => panic!("Unexpected predicate {other:?} in learned clause for DIMACS"),
+                PredicateType::UpperBound => {
+                    pumpkin_assert_simple!(value == 0);
+                    "-"
+                }
             };
 
             write!(self.writer, "{variable_prefix}{variable_code} ")?;
