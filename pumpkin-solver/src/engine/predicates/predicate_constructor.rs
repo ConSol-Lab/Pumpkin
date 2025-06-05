@@ -120,3 +120,79 @@ macro_rules! predicate {
         $($var).+$([$index])?.disequality_predicate($value)
     }};
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macro_local_identifiers_are_matched() {
+        let x = DomainId { id: 0 };
+
+        assert_eq!(x, predicate![x >= 2].get_domain());
+        assert_eq!(x, predicate![x <= 3].get_domain());
+        assert_eq!(x, predicate![x == 5].get_domain());
+        assert_eq!(x, predicate![x != 5].get_domain());
+
+        assert_eq!(2, predicate![x >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![x <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![x == 5].get_right_hand_side());
+        assert_eq!(5, predicate![x != 5].get_right_hand_side());
+
+        assert!(predicate!(x >= 2).is_lower_bound_predicate());
+        assert!(!predicate!(x >= 2).is_upper_bound_predicate());
+        assert!(!predicate!(x >= 2).is_equality_predicate());
+        assert!(!predicate!(x >= 2).is_not_equal_predicate());
+
+        assert!(predicate!(x <= 3).is_upper_bound_predicate());
+        assert!(!predicate!(x <= 3).is_lower_bound_predicate());
+        assert!(!predicate!(x <= 3).is_equality_predicate());
+        assert!(!predicate!(x <= 3).is_not_equal_predicate());
+
+        assert!(predicate!(x == 5).is_equality_predicate());
+        assert!(!predicate!(x == 5).is_lower_bound_predicate());
+        assert!(!predicate!(x == 5).is_upper_bound_predicate());
+        assert!(!predicate!(x == 5).is_not_equal_predicate());
+
+        assert!(predicate!(x != 5).is_not_equal_predicate());
+        assert!(!predicate!(x != 5).is_lower_bound_predicate());
+        assert!(!predicate!(x != 5).is_upper_bound_predicate());
+        assert!(!predicate!(x != 5).is_equality_predicate());
+    }
+
+    #[test]
+    fn macro_nested_identifiers_are_matched() {
+        struct Wrapper {
+            x: DomainId,
+        }
+
+        let wrapper = Wrapper {
+            x: DomainId { id: 0 },
+        };
+
+        assert_eq!(wrapper.x, predicate![wrapper.x >= 2].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x <= 3].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x == 5].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x != 5].get_domain());
+
+        assert_eq!(2, predicate![wrapper.x >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![wrapper.x <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper.x == 5].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper.x != 5].get_right_hand_side());
+    }
+
+    #[test]
+    fn macro_index_expressions_are_matched() {
+        let wrapper = [DomainId { id: 0 }];
+
+        assert_eq!(wrapper[0], predicate![wrapper[0] >= 2].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] <= 3].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] == 5].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] != 5].get_domain());
+
+        assert_eq!(2, predicate![wrapper[0] >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![wrapper[0] <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper[0] == 5].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper[0] != 5].get_right_hand_side());
+    }
+}
