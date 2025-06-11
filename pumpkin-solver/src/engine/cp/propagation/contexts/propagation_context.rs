@@ -94,26 +94,6 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    fn build_reason(&self, reason: Reason) -> StoredReason {
-        match reason {
-            Reason::Eager(mut conjunction) => {
-                conjunction.extend(
-                    self.reification_literal
-                        .iter()
-                        .map(|lit| lit.get_true_predicate()),
-                );
-                StoredReason::Eager(conjunction)
-            }
-            Reason::DynamicLazy(code) => {
-                if let Some(reification_literal) = self.reification_literal {
-                    StoredReason::ReifiedLazy(reification_literal, code)
-                } else {
-                    StoredReason::DynamicLazy(code)
-                }
-            }
-        }
-    }
-
     pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues<'_> {
         PropagationContextWithTrailedValues {
             trailed_values: self.trailed_values,
@@ -300,19 +280,50 @@ impl PropagationContextMut<'_> {
         reason: impl Into<Reason>,
         inference_code: InferenceCode,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.build_reason(reason.into());
-        let reason_ref = self.reason_store.push(self.propagator_id, reason);
+        let slot = self.reason_store.new_slot();
 
-        let update_occured = self.assignments.post_predicate(
+        let modification_result = self.assignments.post_predicate(
             predicate,
-            Some((reason_ref, inference_code)),
+            Some((slot.reason_ref(), inference_code)),
             self.notification_engine,
-        )?;
+        );
 
-        if !update_occured {
-            self.reason_store.pop();
+        match modification_result {
+            Ok(false) => Ok(()),
+            Ok(true) => {
+                let _ = slot.populate(
+                    self.propagator_id,
+                    build_reason(reason, self.reification_literal),
+                );
+                Ok(())
+            }
+            Err(e) => {
+                let _ = slot.populate(
+                    self.propagator_id,
+                    build_reason(reason, self.reification_literal),
+                );
+                Err(e)
+            }
         }
+    }
+}
 
-        Ok(())
+fn build_reason(reason: impl Into<Reason>, reification_literal: Option<Literal>) -> StoredReason {
+    match reason.into() {
+        Reason::Eager(mut conjunction) => {
+            conjunction.extend(
+                reification_literal
+                    .iter()
+                    .map(|lit| lit.get_true_predicate()),
+            );
+            StoredReason::Eager(conjunction)
+        }
+        Reason::DynamicLazy(code) => {
+            if let Some(reification_literal) = reification_literal {
+                StoredReason::ReifiedLazy(reification_literal, code)
+            } else {
+                StoredReason::DynamicLazy(code)
+            }
+        }
     }
 }

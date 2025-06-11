@@ -5,6 +5,8 @@ use super::propagation::ExplanationContext;
 use super::propagation::PropagatorId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
+#[cfg(doc)]
+use crate::containers::KeyedVec;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::Literal;
@@ -27,8 +29,9 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
-    pub(crate) fn pop(&mut self) {
-        let _ = self.trail.pop();
+    /// Similar to [`KeyedVec::new_slot`].
+    pub(crate) fn new_slot(&mut self) -> Slot<'_> {
+        Slot { store: self }
     }
 
     /// Evaluate the reason with the given reference, and write the predicates to
@@ -156,6 +159,24 @@ impl StoredReason {
 impl From<PropositionalConjunction> for Reason {
     fn from(value: PropositionalConjunction) -> Self {
         Reason::Eager(value)
+    }
+}
+
+/// A reserved slot for a new reason in the [`ReasonStore`].
+#[derive(Debug)]
+pub(crate) struct Slot<'a> {
+    store: &'a mut ReasonStore,
+}
+
+impl Slot<'_> {
+    /// The reference for this slot.
+    pub(crate) fn reason_ref(&self) -> ReasonRef {
+        ReasonRef(self.store.trail.len() as u32)
+    }
+
+    /// Populate the slot with a [`Reason`].
+    pub(crate) fn populate(self, propagator: PropagatorId, reason: StoredReason) -> ReasonRef {
+        self.store.push(propagator, reason)
     }
 }
 
