@@ -71,7 +71,7 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext {
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext::new(self.assignments)
     }
 

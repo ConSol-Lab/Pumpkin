@@ -42,7 +42,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution<B> {
+    pub fn next_solution(&mut self) -> IteratedSolution<'_, B> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             // We do not care much about this tag, as the proof is nonsensical for
             // solution enumeration anyways.
