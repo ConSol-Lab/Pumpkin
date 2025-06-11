@@ -722,6 +722,8 @@ impl ConstraintSatisfactionSolver {
                 })?;
 
             pumpkin_assert_simple!(update_occurred);
+
+            return Ok(());
         }
 
         // Otherwise proceed with standard branching.
