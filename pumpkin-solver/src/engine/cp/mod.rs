@@ -27,7 +27,6 @@ mod tests {
     use crate::proof::InferenceCode;
 
     #[test]
-    #[ignore]
     fn test_no_update_reason_store_if_no_update_lower_bound() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
@@ -58,7 +57,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_no_update_reason_store_if_no_update_upper_bound() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
@@ -90,7 +88,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_no_update_reason_store_if_no_update_remove() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();

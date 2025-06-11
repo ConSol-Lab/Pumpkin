@@ -303,13 +303,16 @@ impl PropagationContextMut<'_> {
         let reason = self.build_reason(reason.into());
         let reason_ref = self.reason_store.push(self.propagator_id, reason);
 
-        // TODO: When the following does not result in a change, i.e. this is a no-op, we probably
-        // want to clean up the reason. Although perhaps that happens so infrequently that that is
-        // not worth the effort.
-        self.assignments.post_predicate(
+        let update_occured = self.assignments.post_predicate(
             predicate,
             Some((reason_ref, inference_code)),
             self.notification_engine,
-        )
+        )?;
+
+        if !update_occured {
+            self.reason_store.pop();
+        }
+
+        Ok(())
     }
 }

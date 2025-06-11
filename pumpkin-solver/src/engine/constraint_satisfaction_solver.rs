@@ -712,14 +712,16 @@ impl ConstraintSatisfactionSolver {
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
             self.declare_new_decision_level();
 
-            return self
+            let update_occurred = self
                 .assignments
                 .post_predicate(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
                     self.state
                         .declare_infeasible_under_assumptions(assumption_literal);
                     CSPSolverExecutionFlag::Infeasible
-                });
+                })?;
+
+            pumpkin_assert_simple!(update_occurred);
         }
 
         // Otherwise proceed with standard branching.
@@ -748,9 +750,11 @@ impl ConstraintSatisfactionSolver {
         );
 
         self.solver_statistics.engine_statistics.num_decisions += 1;
-        self.assignments
+        let update_occurred = self
+            .assignments
             .post_predicate(decision_predicate, None, &mut self.notification_engine)
             .expect("Decisions are expected not to fail.");
+        pumpkin_assert_simple!(update_occurred);
 
         Ok(())
     }
@@ -1611,7 +1615,7 @@ mod tests {
     ) {
         let mut brancher = DefaultBrancher::default_over_all_variables(&solver.assignments);
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
-        assert!(flag == expected_flag, "The flags do not match.");
+        assert_eq!(flag, expected_flag, "The flags do not match.");
 
         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
             assert!(

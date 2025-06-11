@@ -69,13 +69,19 @@ impl ConflictAnalysisContext<'_> {
         // also nonsensical. So we can supply a garbage inference code.
         let garbage_inference_code = InferenceCode::create_from_index(0);
 
-        self.assignments
+        let update_occurred = self
+            .assignments
             .post_predicate(
                 predicate,
                 Some((ReasonRef(0), garbage_inference_code)),
                 self.notification_engine,
             )
-            .expect("Expected enqueued predicate to not lead to conflict directly")
+            .expect("Expected enqueued predicate to not lead to conflict directly");
+
+        pumpkin_assert_simple!(
+            update_occurred,
+            "The propagated predicate should not already be true."
+        );
     }
 
     /// Backtracks the solver to the provided backtrack level.

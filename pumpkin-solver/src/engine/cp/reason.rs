@@ -27,6 +27,10 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
+    pub(crate) fn pop(&mut self) {
+        let _ = self.trail.pop();
+    }
+
     /// Evaluate the reason with the given reference, and write the predicates to
     /// `destination_buffer`.
     pub(crate) fn get_or_compute(

@@ -459,7 +459,7 @@ impl DebugHelper {
                 NotificationEngine::new(assignments.num_domains() as usize);
             let outcome = assignments.post_predicate(*predicate, None, &mut notification_engine);
             match outcome {
-                Ok(()) => {
+                Ok(_) => {
                     // do nothing, everything is okay
                 }
                 Err(_) => {
