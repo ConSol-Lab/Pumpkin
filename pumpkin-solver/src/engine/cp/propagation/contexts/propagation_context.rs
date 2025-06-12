@@ -114,7 +114,7 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues {
+    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues<'_> {
         PropagationContextWithTrailedValues {
             trailed_values: self.trailed_values,
             assignments: self.assignments,

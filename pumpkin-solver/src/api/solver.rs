@@ -128,7 +128,7 @@ impl Solver {
         log_statistic_postfix();
     }
 
-    pub fn get_solution_reference(&self) -> SolutionReference {
+    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.satisfaction_solver.get_solution_reference()
     }
 }

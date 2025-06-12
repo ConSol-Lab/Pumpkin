@@ -295,7 +295,7 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
+    pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator<'_> {
         self.domains[domain_id].domain_iterator()
     }
 
@@ -960,7 +960,7 @@ impl IntegerDomain {
             .bound
     }
 
-    fn domain_iterator(&self) -> IntegerDomainIterator {
+    fn domain_iterator(&self) -> IntegerDomainIterator<'_> {
         // Ideally we use into_iter but I did not manage to get it to work,
         // because the iterator takes a lifelines
         // (the iterator takes a reference to the domain).
@@ -1350,7 +1350,7 @@ pub(crate) struct IntegerDomainIterator<'a> {
 }
 
 impl IntegerDomainIterator<'_> {
-    fn new(domain: &IntegerDomain) -> IntegerDomainIterator {
+    fn new(domain: &IntegerDomain) -> IntegerDomainIterator<'_> {
         IntegerDomainIterator {
             domain,
             current_value: domain.lower_bound(),
