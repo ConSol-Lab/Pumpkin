@@ -712,7 +712,7 @@ impl ConstraintSatisfactionSolver {
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
             self.declare_new_decision_level();
 
-            let update_occurred = self
+            let _ = self
                 .assignments
                 .post_predicate(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
@@ -720,8 +720,6 @@ impl ConstraintSatisfactionSolver {
                         .declare_infeasible_under_assumptions(assumption_literal);
                     CSPSolverExecutionFlag::Infeasible
                 })?;
-
-            pumpkin_assert_simple!(update_occurred);
 
             return Ok(());
         }
