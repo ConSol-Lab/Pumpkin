@@ -95,14 +95,6 @@ impl NotificationEngine {
         result
     }
 
-    pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
-        &self.predicate_notifier.predicate_id_assignments
-    }
-
-    pub(crate) fn predicate_id_assignments_mut(&mut self) -> &mut PredicateIdAssignments {
-        &mut self.predicate_notifier.predicate_id_assignments
-    }
-
     pub(crate) fn grow(&mut self) {
         self.watch_list_domain_events.grow();
         self.events.grow();
@@ -532,5 +524,25 @@ impl NotificationEngine {
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
         self.predicate_notifier
             .debug_create_from_assignments(assignments);
+    }
+
+    pub(crate) fn is_id_satisfied(&self, predicate_id: PredicateId) -> bool {
+        self.predicate_notifier
+            .predicate_id_assignments
+            .is_satisfied(predicate_id)
+    }
+
+    pub(crate) fn is_id_falsified(&self, predicate_id: PredicateId) -> bool {
+        self.predicate_notifier
+            .predicate_id_assignments
+            .is_falsified(predicate_id)
+    }
+
+    pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
+        &self.predicate_notifier.predicate_id_assignments
+    }
+
+    pub(crate) fn predicate_id_assignments_mut(&mut self) -> &mut PredicateIdAssignments {
+        &mut self.predicate_notifier.predicate_id_assignments
     }
 }

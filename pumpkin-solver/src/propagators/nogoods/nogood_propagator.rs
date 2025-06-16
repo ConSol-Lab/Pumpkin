@@ -117,10 +117,7 @@ impl NogoodPropagator {
         id: NogoodId,
         notification_engine: &mut NotificationEngine,
     ) -> bool {
-        if notification_engine
-            .predicate_id_assignments()
-            .is_satisfied(self.nogood_predicates[id][0])
-        {
+        if notification_engine.is_id_satisfied(self.nogood_predicates[id][0]) {
             let trail_position = assignments
                 .get_trail_position(
                     &!notification_engine.get_predicate(self.nogood_predicates[id][0]),
@@ -193,11 +190,7 @@ impl Propagator for NogoodPropagator {
 
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
-                if context
-                    .notification_engine
-                    .predicate_id_assignments()
-                    .is_falsified(self.cached_predicates[nogood_id])
-                {
+                if context.is_id_falsified(self.cached_predicates[nogood_id]) {
                     index += 1;
                     continue;
                 }
@@ -208,19 +201,12 @@ impl Propagator for NogoodPropagator {
                     nogood_predicates.swap(0, 1);
                 }
 
-                pumpkin_assert_moderate!(context
-                    .notification_engine
-                    .predicate_id_assignments()
-                    .is_satisfied(nogood_predicates[1]));
+                pumpkin_assert_moderate!(context.is_id_satisfied(nogood_predicates[1]));
 
                 // Check the other watched predicate is already falsified, in which case
                 // no propagation can take place. Recall that the other watched
                 // predicate is at position 0 due to previous code.
-                if context
-                    .notification_engine
-                    .predicate_id_assignments()
-                    .is_falsified(nogood_predicates[0])
-                {
+                if context.is_id_falsified(nogood_predicates[0]) {
                     self.cached_predicates[nogood_id] = nogood_predicates[0];
                     index += 1;
                     continue;
@@ -266,10 +252,10 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // At this point, nonwatched predicates and nogood[1] are falsified.
-                pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| context
-                    .notification_engine
-                    .predicate_id_assignments()
-                    .is_satisfied(*p)));
+                pumpkin_assert_advanced!(nogood_predicates
+                    .iter()
+                    .skip(1)
+                    .all(|p| context.notification_engine.is_id_satisfied(*p)));
 
                 // There are two scenarios:
                 // nogood[0] is unassigned -> propagate the predicate to false

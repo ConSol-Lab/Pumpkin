@@ -1,3 +1,4 @@
+use crate::basic_types::PredicateId;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
@@ -117,6 +118,14 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
+    }
+
+    pub(crate) fn is_id_falsified(&self, predicate_id: PredicateId) -> bool {
+        self.notification_engine.is_id_falsified(predicate_id)
+    }
+
+    pub(crate) fn is_id_satisfied(&self, predicate_id: PredicateId) -> bool {
+        self.notification_engine.is_id_satisfied(predicate_id)
     }
 }
 
