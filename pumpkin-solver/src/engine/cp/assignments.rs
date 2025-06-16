@@ -287,7 +287,7 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
+    pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator<'_> {
         self.domains[domain_id].domain_iterator()
     }
 
@@ -529,15 +529,16 @@ impl Assignments {
 
     /// Apply the given [`Predicate`] to the integer domains.
     ///
-    /// In case where the [`Predicate`] is already true, this does nothing. If instead
-    /// applying the [`Predicate`] leads to an [`EmptyDomain`], the error variant is
-    /// returned.
+    /// In case where the [`Predicate`] is already true, this does nothing and will
+    /// return `false`. If the predicate was unassigned and became true, then `true`
+    /// is returned. If instead applying the [`Predicate`] leads to an
+    /// [`EmptyDomain`], the error variant is returned.
     pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
         reason: Option<AssignmentReason>,
         notification_engine: &mut NotificationEngine,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<bool, EmptyDomain> {
         let lower_bound_before = self.domains[predicate.get_domain()].lower_bound();
         let upper_bound_before = self.domains[predicate.get_domain()].upper_bound();
 
@@ -567,7 +568,7 @@ impl Assignments {
             );
         }
 
-        Ok(())
+        Ok(update_took_place)
     }
 
     /// Determines whether the provided [`Predicate`] holds in the current state of the
@@ -912,7 +913,7 @@ impl IntegerDomain {
             .bound
     }
 
-    fn domain_iterator(&self) -> IntegerDomainIterator {
+    fn domain_iterator(&self) -> IntegerDomainIterator<'_> {
         // Ideally we use into_iter but I did not manage to get it to work,
         // because the iterator takes a lifelines
         // (the iterator takes a reference to the domain).
@@ -1276,7 +1277,7 @@ pub(crate) struct IntegerDomainIterator<'a> {
 }
 
 impl IntegerDomainIterator<'_> {
-    fn new(domain: &IntegerDomain) -> IntegerDomainIterator {
+    fn new(domain: &IntegerDomain) -> IntegerDomainIterator<'_> {
         IntegerDomainIterator {
             domain,
             current_value: domain.lower_bound(),
@@ -1329,10 +1330,10 @@ mod tests {
 
         assignment.increase_decision_level();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1357,16 +1358,16 @@ mod tests {
 
         assignment.increase_decision_level();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
@@ -1395,13 +1396,13 @@ mod tests {
 
         assignment.increase_decision_level();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1453,7 +1454,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 >= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1472,7 +1473,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 <= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1493,10 +1494,10 @@ mod tests {
         notification_engine.grow();
         notification_engine.grow();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 >= 5), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d2 <= 1), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1521,13 +1522,13 @@ mod tests {
         notification_engine.grow();
         notification_engine.grow();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 == 1), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d2 == 5), None, &mut notification_engine)
             .expect("non-empty domain");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d3 == 3), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1556,7 +1557,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1630,7 +1631,7 @@ mod tests {
 
         assignment.increase_decision_level();
 
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
@@ -1769,22 +1770,22 @@ mod tests {
 
         // decision level 1
         assignment.increase_decision_level();
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 2), None, &mut notification_engine)
             .expect("");
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(domain_id2 >= 25), None, &mut notification_engine)
             .expect("");
 
         // decision level 2
         assignment.increase_decision_level();
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 5), None, &mut notification_engine)
             .expect("");
 
         // decision level 3
         assignment.increase_decision_level();
-        assignment
+        let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 7), None, &mut notification_engine)
             .expect("");
 

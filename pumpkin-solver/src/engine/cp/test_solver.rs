@@ -183,11 +183,13 @@ impl TestSolver {
     }
 
     pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
-        self.assignments.post_predicate(
+        let _ = self.assignments.post_predicate(
             predicate!(var != value),
             None,
             &mut self.notification_engine,
-        )
+        )?;
+
+        Ok(())
     }
 
     pub(crate) fn set_literal(
@@ -195,18 +197,20 @@ impl TestSolver {
         literal: Literal,
         truth_value: bool,
     ) -> Result<(), EmptyDomain> {
-        match truth_value {
+        let _ = match truth_value {
             true => self.assignments.post_predicate(
                 literal.get_true_predicate(),
                 None,
                 &mut self.notification_engine,
-            ),
+            )?,
             false => self.assignments.post_predicate(
                 (!literal).get_true_predicate(),
                 None,
                 &mut self.notification_engine,
-            ),
-        }
+            )?,
+        };
+
+        Ok(())
     }
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
