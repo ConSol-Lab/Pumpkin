@@ -67,6 +67,7 @@ impl DomainTracker for LowerBoundTracker {
             //
             // First we get the element which is smaller than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
+
             let mut smaller =
                 self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {

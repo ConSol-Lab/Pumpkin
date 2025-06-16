@@ -102,6 +102,10 @@ impl PredicateIdAssignments {
         self.domains[predicate_id].is_unassigned()
     }
 
+    pub(crate) fn get_info(&self, predicate_id: PredicateId) -> PredicateIdInfo {
+        self.domains[predicate_id]
+    }
+
     pub(crate) fn is_untracked(&self, predicate_id: PredicateId) -> bool {
         self.domains[predicate_id].is_untracked()
     }

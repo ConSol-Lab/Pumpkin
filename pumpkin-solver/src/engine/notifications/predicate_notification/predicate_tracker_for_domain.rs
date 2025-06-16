@@ -6,7 +6,6 @@ use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
 use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
-use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -38,25 +37,16 @@ impl PredicateTrackerForDomain {
 impl PredicateTrackerForDomain {
     /// This method will extend the scope of [`PredicateTrackerForDomain`] by adding the provided
     /// [`Predicate`] to the scope of the correct tracker.
-    pub(crate) fn watch_predicate(
-        &mut self,
-        predicate: Predicate,
-        id: PredicateId,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
+    pub(crate) fn watch_predicate(&mut self, predicate: Predicate, id: PredicateId) {
         let value = predicate.get_right_hand_side();
         if predicate.is_lower_bound_predicate() {
-            self.lower_bound
-                .track(value, id, trailed_values, assignments)
+            self.lower_bound.track(value, id)
         } else if predicate.is_upper_bound_predicate() {
-            self.upper_bound
-                .track(value, id, trailed_values, assignments)
+            self.upper_bound.track(value, id)
         } else if predicate.is_not_equal_predicate() {
-            self.disequality
-                .track(value, id, trailed_values, assignments)
+            self.disequality.track(value, id)
         } else if predicate.is_equality_predicate() {
-            self.equality.track(value, id, trailed_values, assignments)
+            self.equality.track(value, id)
         } else {
             panic!()
         }

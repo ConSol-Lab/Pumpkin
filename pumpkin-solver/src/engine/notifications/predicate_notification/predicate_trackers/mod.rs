@@ -1,5 +1,4 @@
 use crate::basic_types::PredicateId;
-use crate::engine::Assignments;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
@@ -112,12 +111,6 @@ pub(crate) trait DomainTrackerInformation {
     /// the smallest value such that it is larger than `values[i]`
     fn get_greater_mut(&mut self) -> &mut Vec<i64>;
 
-    /// A [`TrailedInteger`] which points to the largest lowest value which is assigned.
-    fn get_min_unassigned(&self) -> TrailedInteger;
-
-    /// A [`TrailedInteger`] which points to the smallest largest value which is assigned.
-    fn get_max_unassigned(&self) -> TrailedInteger;
-
     /// Returns true if no [`Predicate`]s are currently being tracked.
     fn is_empty(&self) -> bool;
 }
@@ -196,14 +189,6 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
         &mut self.get_tracker_mut().greater
     }
 
-    fn get_min_unassigned(&self) -> TrailedInteger {
-        self.get_tracker().min_assigned
-    }
-
-    fn get_max_unassigned(&self) -> TrailedInteger {
-        self.get_tracker().max_unassigned
-    }
-
     fn is_empty(&self) -> bool {
         self.get_tracker().values.is_empty()
     }
@@ -212,6 +197,7 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 /// A trait which defines the common behaviours for structures which track [`Predicate`]s for a
 /// specific [`DomainId`].
 pub(crate) trait DomainTracker: DomainTrackerInformation {
+    #[allow(unused, reason = "Could be useful for debugging")]
     /// Returns a predicate corresponding to the provided value.
     ///
     /// For example, for a lower-bound [`DomainTracker`] which tracks a variable `x`, the call
@@ -259,13 +245,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].
-    fn track(
-        &mut self,
-        value: i32,
-        predicate_id: PredicateId,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
+    fn track(&mut self, value: i32, predicate_id: PredicateId) {
         pumpkin_assert_simple!(
             self.get_values().len() >= 2,
             "Initialise should have been called previously"
@@ -328,29 +308,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
                     || value < self.get_values()[self.get_greater()[index] as usize])
             {
                 self.get_greater_mut()[index] = new_index;
-            }
-        }
-
-        // We might also need to update the pointers to the indices of the elements which are
-        // assigned.
-        //
-        // Note that we only look at the bounds when updating these indices; this has implications
-        // when considering holes in the domain.
-        //
-        // We first check whethher the current predicate is implied by the current bounds
-        if assignments.is_implied_by_bounds(self.get_predicate_for_value(value)) {
-            // We now know that the current predicate is assigned
-            //
-            // If `value` is larger than the value currently pointed to by `min_unassigned` then we
-            // need to update it
-            if value > self.get_values()[trailed_values.read(self.get_min_unassigned()) as usize] {
-                trailed_values.assign(self.get_min_unassigned(), new_index);
-            }
-
-            // Similarly, if `value` is smaller than the value currently pointed to by
-            // `max_unassigned` then we need to update it
-            if value < self.get_values()[trailed_values.read(self.get_max_unassigned()) as usize] {
-                trailed_values.assign(self.get_max_unassigned(), new_index);
             }
         }
 

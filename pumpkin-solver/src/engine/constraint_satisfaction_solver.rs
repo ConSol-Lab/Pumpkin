@@ -1115,7 +1115,7 @@ impl ConstraintSatisfactionSolver {
                     &self.assignments,
                     &mut self.reason_store,
                     &mut self.propagators,
-                    &mut self.notification_engine
+                    &self.notification_engine
                 ),
                 "Checking the propagations performed by the propagator led to inconsistencies!"
             );

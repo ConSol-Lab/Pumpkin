@@ -395,16 +395,7 @@ impl NogoodPropagator {
 
         let nogood = nogood
             .iter()
-            .map(|predicate| {
-                let id = context.notification_engine.get_id(*predicate);
-
-                context.notification_engine.track_predicate(
-                    id,
-                    context.trailed_values,
-                    context.assignments,
-                );
-                id
-            })
+            .map(|predicate| context.notification_engine.get_id(*predicate))
             .collect::<Vec<_>>();
 
         // Add the nogood to the database.
@@ -522,17 +513,7 @@ impl NogoodPropagator {
         else {
             let nogood = nogood
                 .iter()
-                .map(|predicate| {
-                    let id = context.notification_engine.get_id(*predicate);
-
-                    context.notification_engine.track_predicate(
-                        id,
-                        context.trailed_values,
-                        context.assignments,
-                    );
-
-                    id
-                })
+                .map(|predicate| context.notification_engine.get_id(*predicate))
                 .collect::<Vec<_>>();
             // Add the nogood to the database.
             // If there is an available nogood id, use it, otherwise allocate a fresh id.

@@ -185,11 +185,6 @@ impl PredicateNotifier {
         );
 
         // Then we update the structures
-        self.domain_id_to_predicate_tracker[predicate.get_domain()].watch_predicate(
-            predicate,
-            id,
-            trailed_values,
-            assignments,
-        );
+        self.domain_id_to_predicate_tracker[predicate.get_domain()].watch_predicate(predicate, id);
     }
 }

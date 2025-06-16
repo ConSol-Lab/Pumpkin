@@ -154,11 +154,15 @@ impl DebugHelper {
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
-        notification_engine: &mut NotificationEngine,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
             return true;
         }
+
+        let mut notification_engine_clone =
+            notification_engine.debug_empty_clone(assignments.num_domains() as usize);
+
         let mut result = true;
         for trail_index in num_trail_entries_before..assignments.num_trail_entries() {
             let trail_entry = assignments.get_trail_entry(trail_index);
@@ -172,7 +176,7 @@ impl DebugHelper {
                 ExplanationContext::without_working_nogood(
                     assignments,
                     trail_index,
-                    notification_engine,
+                    &mut notification_engine_clone,
                 ),
                 propagators,
                 &mut reason,

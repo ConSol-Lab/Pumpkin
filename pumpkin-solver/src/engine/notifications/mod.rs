@@ -297,7 +297,7 @@ impl NotificationEngine {
             .predicate_id_assignments
             .predicate_ids()
             .all(|predicate_id| {
-                if self
+                let result = if self
                     .predicate_notifier
                     .predicate_id_assignments
                     .is_untracked(predicate_id)
@@ -325,7 +325,22 @@ impl NotificationEngine {
                             .predicate_id_assignments
                             .is_unassigned(predicate_id),
                     }
+                };
+
+                if !result {
+                    let predicate = self
+                        .predicate_notifier
+                        .predicate_to_id
+                        .get_predicate(predicate_id);
+                    eprintln!(
+                        "Expected {:?} to be equal to {:?} for {predicate:?} with id {predicate_id:?}",
+                        self.predicate_notifier
+                            .predicate_id_assignments
+                            .get_info(predicate_id),
+                        assignments.evaluate_predicate(predicate),
+                    )
                 }
+                result
             }));
 
         self.last_notified_trail_index = assignments.num_trail_entries();

@@ -668,33 +668,6 @@ impl Assignments {
             .is_some_and(|truth_value| !truth_value)
     }
 
-    pub(crate) fn is_implied_by_bounds(&self, predicate: Predicate) -> bool {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.get_lower_bound(domain_id) >= lower_bound,
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.get_upper_bound(domain_id) <= upper_bound,
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                self.get_lower_bound(domain_id) > not_equal_constant
-                    || self.get_upper_bound(domain_id) < not_equal_constant
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                self.get_lower_bound(domain_id) == equality_constant
-                    && equality_constant == self.get_upper_bound(domain_id)
-            }
-        }
-    }
-
     /// Synchronises the internal structures of [`Assignments`] based on the fact that
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
