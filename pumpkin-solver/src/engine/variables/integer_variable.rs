@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use enumset::EnumSet;
 
 use super::TransformableVariable;
@@ -40,7 +42,7 @@ pub trait IntegerVariable:
     ) -> bool;
 
     /// Iterate over the values of the domain.
-    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32>;
+    fn iterate_domain<'a>(&self, assignment: &'a Assignments) -> impl Iterator<Item = i32> + 'a;
 
     /// Register a watch for this variable on the given domain events.
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);

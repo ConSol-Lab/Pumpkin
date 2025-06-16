@@ -13,6 +13,7 @@ pub(crate) use predicate_notification::PredicateNotifier;
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
 use crate::basic_types::PredicateId;
+use crate::containers::KeyedVec;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::EnqueueDecision;
@@ -35,6 +36,9 @@ pub(crate) struct NotificationEngine {
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_domain_events: WatchListDomainEvents,
+    /// For every predicate id, indicate which propagators are notified when the predicate *becomes
+    /// true*.
+    watch_list_predicates: KeyedVec<PredicateId, Vec<PropagatorVarId>>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
@@ -47,6 +51,7 @@ impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
             watch_list_domain_events: Default::default(),
+            watch_list_predicates: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
             events: Default::default(),
@@ -69,6 +74,7 @@ impl Default for NotificationEngine {
 
         let mut result = Self {
             watch_list_domain_events,
+            watch_list_predicates: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
@@ -464,5 +470,20 @@ impl NotificationEngine {
         self.notify_predicate_id_falsified(propagators);
 
         self.last_notified_trail_index = assignments.num_trail_entries();
+    }
+
+    fn watch_predicate(
+        &mut self,
+        predicate: Predicate,
+        propagator_var: PropagatorVarId,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) {
+        let predicate_id =
+            self.predicate_notifier
+                .track_predicate(predicate, trailed_values, assignments);
+
+        self.watch_list_predicates.accomodate(predicate_id, vec![]);
+        self.watch_list_predicates[predicate_id].push(propagator_var);
     }
 }

@@ -7,6 +7,9 @@ use crate::containers::KeyedVec;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
+use crate::engine::TrailedValues;
+use crate::predicates::Predicate;
 
 #[derive(Default, Debug)]
 pub(crate) struct WatchListDomainEvents {
@@ -22,6 +25,8 @@ pub(crate) struct WatchListDomainEvents {
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
     notification_engine: &'a mut NotificationEngine,
+    trailed_values: &'a mut TrailedValues,
+    assignments: &'a Assignments,
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
@@ -95,11 +100,24 @@ impl<'a> Watchers<'a> {
     pub(crate) fn new(
         propagator_var: PropagatorVarId,
         notification_engine: &'a mut NotificationEngine,
+        trailed_values: &'a mut TrailedValues,
+        assignments: &'a Assignments,
     ) -> Self {
         Watchers {
             propagator_var,
             notification_engine,
+            trailed_values,
+            assignments,
         }
+    }
+
+    pub(crate) fn watch_predicate(&mut self, predicate: Predicate) {
+        self.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_var,
+            self.trailed_values,
+            self.assignments,
+        );
     }
 
     pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {

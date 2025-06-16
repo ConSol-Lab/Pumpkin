@@ -286,6 +286,21 @@ impl Assignments {
         self.is_domain_assigned(var).then(|| var.lower_bound(self))
     }
 
+    pub(crate) fn get_assigned_value_at_trail_position<Var: IntegerVariable + 'static>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> Option<i32> {
+        let lb = var.lower_bound_at_trail_position(&self, trail_position);
+        let ub = var.upper_bound_at_trail_position(&self, trail_position);
+
+        if lb == ub {
+            Some(lb)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.get_trail_position(predicate) {
             self.trail[trail_position].reason.is_none()
@@ -597,18 +612,30 @@ impl Assignments {
         Ok(update_took_place)
     }
 
-    /// Determines whether the provided [`Predicate`] holds in the current state of the
-    /// [`Assignments`]. In case the predicate is not assigned yet (neither true nor false),
-    /// returns None.
+    /// Determines whether the provided [`Predicate`] currently holds.
+    /// In case the predicate is not assigned yet (neither true nor false), returns None.
     pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.evaluate_predicate_at_trail_position(predicate, self.trail.len() - 1)
+    }
+
+    /// Determines whether the provided [`Predicate`] holds at the given trail position.
+    /// In case the predicate is not assigned yet (neither true nor false), returns None.
+    pub(crate) fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
         match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => {
-                if self.get_lower_bound(domain_id) >= lower_bound {
+                if self.get_lower_bound_at_trail_position(domain_id, trail_position) >= lower_bound
+                {
                     Some(true)
-                } else if self.get_upper_bound(domain_id) < lower_bound {
+                } else if self.get_upper_bound_at_trail_position(domain_id, trail_position)
+                    < lower_bound
+                {
                     Some(false)
                 } else {
                     None
@@ -618,9 +645,12 @@ impl Assignments {
                 domain_id,
                 upper_bound,
             } => {
-                if self.get_upper_bound(domain_id) <= upper_bound {
+                if self.get_upper_bound_at_trail_position(domain_id, trail_position) <= upper_bound
+                {
                     Some(true)
-                } else if self.get_lower_bound(domain_id) > upper_bound {
+                } else if self.get_lower_bound_at_trail_position(domain_id, trail_position)
+                    > upper_bound
+                {
                     Some(false)
                 } else {
                     None
@@ -630,9 +660,15 @@ impl Assignments {
                 domain_id,
                 not_equal_constant,
             } => {
-                if !self.is_value_in_domain(domain_id, not_equal_constant) {
+                if !self.is_value_in_domain_at_trail_position(
+                    domain_id,
+                    not_equal_constant,
+                    trail_position,
+                ) {
                     Some(true)
-                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
                     // Previous branch concluded the value is not in the domain, so if the variable
                     // is assigned, then it is assigned to the not equals value.
                     pumpkin_assert_simple!(assigned_value == not_equal_constant);
@@ -645,9 +681,15 @@ impl Assignments {
                 domain_id,
                 equality_constant,
             } => {
-                if !self.is_value_in_domain(domain_id, equality_constant) {
+                if !self.is_value_in_domain_at_trail_position(
+                    domain_id,
+                    equality_constant,
+                    trail_position,
+                ) {
                     Some(false)
-                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                } else if let Some(assigned_value) =
+                    self.get_assigned_value_at_trail_position(&domain_id, trail_position)
+                {
                     pumpkin_assert_moderate!(assigned_value == equality_constant);
                     Some(true)
                 } else {

@@ -82,7 +82,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
         if solver
             .add_clause(
-                [(!self.output[k as usize]).get_true_predicate()],
+                [(!self.output[k as usize]).to_predicate()],
                 self.constraint_tag,
             )
             .is_err()
@@ -137,7 +137,7 @@ impl CardinalityNetworkEncoder {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
             let r = solver.add_clause(
-                [(!self.output[p as usize]).get_true_predicate()],
+                [(!self.output[p as usize]).to_predicate()],
                 self.constraint_tag,
             );
             if r.is_err() {
@@ -164,7 +164,7 @@ impl CardinalityNetworkEncoder {
 
         for &lit in padding_lits.iter() {
             if solver
-                .add_clause([(!lit).get_true_predicate()], self.constraint_tag)
+                .add_clause([(!lit).to_predicate()], self.constraint_tag)
                 .is_err()
             {
                 return Err(EncodingError::RootPropagationConflict);
@@ -196,25 +196,25 @@ impl CardinalityNetworkEncoder {
 
         if a.len() == 1 {
             let c = vec![solver.new_literal(), solver.new_literal()];
-            let a = a[0].get_true_predicate();
-            let b = b[0].get_true_predicate();
+            let a = a[0].to_predicate();
+            let b = b[0].to_predicate();
 
             try_add_clause!(
                 self,
                 solver,
-                vec![!a, !b, c[1].get_true_predicate()],
+                vec![!a, !b, c[1].to_predicate()],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![!a, c[0].get_true_predicate()],
+                vec![!a, c[0].to_predicate()],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![!b, c[0].get_true_predicate()],
+                vec![!b, c[0].to_predicate()],
                 self.constraint_tag
             );
 
@@ -243,9 +243,9 @@ impl CardinalityNetworkEncoder {
                 self,
                 solver,
                 vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1)]).get_true_predicate()
+                    (!d[i + 1]).to_predicate(),
+                    (!e[i]).to_predicate(),
+                    (c[2 * (i + 1)]).to_predicate()
                 ],
                 self.constraint_tag
             );
@@ -253,18 +253,15 @@ impl CardinalityNetworkEncoder {
                 self,
                 solver,
                 vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
+                    (!d[i + 1]).to_predicate(),
+                    (c[2 * (i + 1) - 1]).to_predicate()
                 ],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!e[i]).to_predicate(), (c[2 * (i + 1) - 1]).to_predicate()],
                 self.constraint_tag
             );
         }
@@ -321,9 +318,9 @@ impl CardinalityNetworkEncoder {
                 self,
                 solver,
                 vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1)]).get_true_predicate()
+                    (!d[i + 1]).to_predicate(),
+                    (!e[i]).to_predicate(),
+                    (c[2 * (i + 1)]).to_predicate()
                 ],
                 self.constraint_tag
             );
@@ -331,18 +328,15 @@ impl CardinalityNetworkEncoder {
                 self,
                 solver,
                 vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
+                    (!d[i + 1]).to_predicate(),
+                    (c[2 * (i + 1) - 1]).to_predicate()
                 ],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!e[i]).to_predicate(), (c[2 * (i + 1) - 1]).to_predicate()],
                 self.constraint_tag
             );
         }
@@ -428,10 +422,10 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
         assert!(solver
-            .add_clause([xs[0].get_true_predicate()], constraint_tag)
+            .add_clause([xs[0].to_predicate()], constraint_tag)
             .is_ok());
         assert!(solver
-            .add_clause([xs[1].get_true_predicate()], constraint_tag)
+            .add_clause([xs[1].to_predicate()], constraint_tag)
             .is_err());
     }
 
@@ -444,13 +438,13 @@ mod tests {
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
         assert!(solver
-            .add_clause([xs[0].get_true_predicate()], constraint_tag)
+            .add_clause([xs[0].to_predicate()], constraint_tag)
             .is_ok());
         assert!(solver
-            .add_clause([xs[1].get_true_predicate()], constraint_tag)
+            .add_clause([xs[1].to_predicate()], constraint_tag)
             .is_ok());
         assert!(solver
-            .add_clause([xs[2].get_true_predicate()], constraint_tag)
+            .add_clause([xs[2].to_predicate()], constraint_tag)
             .is_err());
     }
 

@@ -175,8 +175,9 @@ impl Propagator for NogoodPropagator {
         );
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
-            self.watch_lists.resize(
-                context.assignments().num_domains() as usize + 1,
+            // TODO: Is this really necessary
+            self.watch_lists.accomodate(
+                PredicateId::create_from_index(context.assignments().num_domains() as usize + 1),
                 Vec::default(),
             );
         }
@@ -562,7 +563,10 @@ impl NogoodPropagator {
     ) {
         // First we resize the watch list to accomodate the new nogood
         if predicate.get_domain().id as usize >= watch_lists.len() {
-            watch_lists.resize((predicate.get_domain().id + 1) as usize, Vec::default());
+            watch_lists.accomodate(
+                PredicateId::create_from_index(predicate.get_domain().id as usize + 1),
+                Vec::default(),
+            );
         }
 
         let predicate_id =

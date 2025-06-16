@@ -14,34 +14,21 @@ use crate::engine::variables::AffineView;
 use crate::engine::Assignments;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Literal {
-    integer_variable: AffineView<DomainId>,
-}
+pub struct Literal(Predicate);
 
 impl Literal {
-    pub(crate) fn new(domain_id: DomainId) -> Literal {
-        Literal {
-            integer_variable: domain_id.scaled(1),
-        }
+    pub(crate) fn new(predicate: Predicate) -> Literal {
+        Literal(predicate)
     }
 
     #[cfg(test)]
     pub fn test_new(domain_id: DomainId) -> Literal {
-        Literal {
-            integer_variable: domain_id.scaled(1),
-        }
+        todo!()
     }
 
-    pub fn get_integer_variable(&self) -> AffineView<DomainId> {
-        self.integer_variable
-    }
-
-    pub fn get_true_predicate(&self) -> Predicate {
-        self.lower_bound_predicate(1)
-    }
-
-    pub fn get_false_predicate(&self) -> Predicate {
-        self.upper_bound_predicate(0)
+    /// Get the underlying [`Predicate`].
+    pub fn to_predicate(self) -> Predicate {
+        self.0
     }
 }
 
@@ -49,9 +36,13 @@ impl Not for Literal {
     type Output = Literal;
 
     fn not(self) -> Self::Output {
-        Literal {
-            integer_variable: self.integer_variable.scaled(-1).offset(1),
-        }
+        Literal(!self.0)
+    }
+}
+
+impl From<Predicate> for Literal {
+    fn from(value: Predicate) -> Self {
+        Literal(value)
     }
 }
 
@@ -63,7 +54,12 @@ impl IntegerVariable for Literal {
     /// Literal that evaluate to false have a lower bound of 0.
     /// Unassigned literals have a lower bound of 0.
     fn lower_bound(&self, assignment: &Assignments) -> i32 {
-        self.integer_variable.lower_bound(assignment)
+        let value = assignment.evaluate_predicate(self.0);
+
+        match value {
+            Some(true) => 1,
+            Some(false) | None => 0,
+        }
     }
 
     fn lower_bound_at_trail_position(
@@ -71,8 +67,12 @@ impl IntegerVariable for Literal {
         assignment: &Assignments,
         trail_position: usize,
     ) -> i32 {
-        self.integer_variable
-            .lower_bound_at_trail_position(assignment, trail_position)
+        let value = assignment.evaluate_predicate_at_trail_position(self.0, trail_position);
+
+        match value {
+            Some(true) => 1,
+            Some(false) | None => 0,
+        }
     }
 
     /// Returns the upper bound represented as a 0-1 value.
@@ -80,7 +80,12 @@ impl IntegerVariable for Literal {
     /// Literal that evaluate to false have a upper bound of 0.
     /// Unassigned literals have a upper bound of 1.
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
-        self.integer_variable.upper_bound(assignment)
+        let value = assignment.evaluate_predicate(self.0);
+
+        match value {
+            Some(false) => 0,
+            Some(true) | None => 1,
+        }
     }
 
     fn upper_bound_at_trail_position(
@@ -88,8 +93,12 @@ impl IntegerVariable for Literal {
         assignment: &Assignments,
         trail_position: usize,
     ) -> i32 {
-        self.integer_variable
-            .upper_bound_at_trail_position(assignment, trail_position)
+        let value = assignment.evaluate_predicate_at_trail_position(self.0, trail_position);
+
+        match value {
+            Some(false) => 0,
+            Some(true) | None => 1,
+        }
     }
 
     /// Returns whether the input value, when interpreted as a bool,
@@ -98,7 +107,13 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to false only contain value 0.
     /// Unassigned literals contain both values 0 and 1.
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
-        self.integer_variable.contains(assignment, value)
+        let truth_value = assignment.evaluate_predicate(self.0);
+
+        match truth_value {
+            Some(true) => value == 1,
+            Some(false) => value == 0,
+            None => value == 0 || value == 1,
+        }
     }
 
     fn contains_at_trail_position(
@@ -107,24 +122,31 @@ impl IntegerVariable for Literal {
         value: i32,
         trail_position: usize,
     ) -> bool {
-        self.integer_variable
-            .contains_at_trail_position(assignment, value, trail_position)
+        let truth_value = assignment.evaluate_predicate_at_trail_position(self.0, trail_position);
+
+        match truth_value {
+            Some(true) => value == 1,
+            Some(false) => value == 0,
+            None => value == 0 || value == 1,
+        }
     }
 
-    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
-        self.integer_variable.iterate_domain(assignment)
+    fn iterate_domain<'a>(&self, assignment: &'a Assignments) -> impl Iterator<Item = i32> + 'a {
+        let truth_value = assignment.evaluate_predicate(self.0);
+
+        LiteralDomainIterator::new(truth_value)
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        self.integer_variable.watch_all(watchers, events)
+        watchers.watch_predicate(self.0);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
-        self.integer_variable.unpack_event(event)
+        todo!()
     }
 
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        self.integer_variable.watch_all_backtrack(watchers, events)
+        todo!()
     }
 }
 
@@ -132,19 +154,19 @@ impl PredicateConstructor for Literal {
     type Value = i32;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.lower_bound_predicate(bound)
+        todo!()
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.upper_bound_predicate(bound)
+        todo!()
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.equality_predicate(bound)
+        todo!()
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.disequality_predicate(bound)
+        todo!()
     }
 }
 
@@ -155,5 +177,27 @@ impl TransformableVariable<AffineView<Literal>> for Literal {
 
     fn offset(&self, offset: i32) -> AffineView<Literal> {
         AffineView::new(*self, 1, offset)
+    }
+}
+
+struct LiteralDomainIterator {
+    truth_value: Option<bool>,
+    next_value: i32,
+}
+
+impl LiteralDomainIterator {
+    fn new(truth_value: Option<bool>) -> Self {
+        LiteralDomainIterator {
+            truth_value,
+            next_value: 0,
+        }
+    }
+}
+
+impl Iterator for LiteralDomainIterator {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
     }
 }

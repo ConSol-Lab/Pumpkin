@@ -157,7 +157,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         if let Err(Inconsistency::Conflict(ref mut conflict)) = status {
             conflict
                 .conjunction
-                .add(self.reification_literal.get_true_predicate());
+                .add(self.reification_literal.to_predicate());
         }
         status
     }
@@ -172,7 +172,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
                 .detect_inconsistency(context.as_trailed_readonly())
             {
                 context.post(
-                    self.reification_literal.get_false_predicate(),
+                    !self.reification_literal.to_predicate(),
                     conflict.conjunction,
                     conflict.inference_code,
                 )?;
@@ -297,7 +297,7 @@ mod tests {
         let reason = solver.get_reason_int(predicate![var >= 3]);
         assert_eq!(
             reason,
-            PropositionalConjunction::from(reification_literal.get_true_predicate())
+            PropositionalConjunction::from(reification_literal.to_predicate())
         );
     }
 
@@ -332,7 +332,7 @@ mod tests {
                 assert_eq!(
                     conflict_nogood.conjunction,
                     PropositionalConjunction::from(vec![
-                        reification_literal.get_true_predicate(),
+                        reification_literal.to_predicate(),
                         predicate![var >= 1]
                     ])
                 )

@@ -78,7 +78,7 @@ use crate::statistics::log_statistic_postfix;
 /// let named_literal = solver.new_named_literal("z");
 ///
 /// // We can also get the predicate from the literal
-/// let true_predicate = literal.get_true_predicate();
+/// let true_predicate = literal.to_predicate();
 ///
 /// // We can also create an iterator of new literals and get a number of them at once
 /// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();
@@ -97,7 +97,7 @@ pub struct Solver {
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,
@@ -109,7 +109,7 @@ impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,
@@ -194,6 +194,16 @@ impl Solver {
     ) -> Literal {
         self.satisfaction_solver
             .create_new_literal_for_predicate(predicate, None, constraint_tag)
+    }
+
+    pub fn reifiy_predicate_with_literal(
+        &mut self,
+        predicate: Predicate,
+        literal: Literal,
+        constraint_tag: ConstraintTag,
+    ) {
+        self.satisfaction_solver
+            .reify_predicate_with_literal(predicate, literal, constraint_tag);
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
@@ -519,7 +529,7 @@ impl Solver {
     pub fn conclude_proof_optimal(&mut self, bound: Literal) {
         let _ = self
             .satisfaction_solver
-            .conclude_proof_optimal(bound.get_true_predicate());
+            .conclude_proof_optimal(bound.to_predicate());
     }
 }
 

@@ -150,7 +150,7 @@ impl StoredReason {
                         .iter()
                         .copied(),
                 );
-                destination_buffer.extend(std::iter::once(literal.get_true_predicate()));
+                destination_buffer.extend(std::iter::once(literal.to_predicate()));
             }
         }
     }
@@ -241,7 +241,8 @@ mod tests {
         let mut integers = Assignments::default();
 
         let x = integers.grow(1, 5);
-        let reif = Literal::new(integers.grow(0, 1));
+        let reif_domain = integers.grow(0, 1);
+        let reif = Literal::new(predicate![reif_domain == 1]);
 
         struct TestPropagator(Vec<Predicate>);
 
@@ -280,6 +281,6 @@ mod tests {
             &mut reason,
         );
 
-        assert_eq!(vec![predicate![x >= 2], reif.get_true_predicate()], reason);
+        assert_eq!(vec![predicate![x >= 2], reif.to_predicate()], reason);
     }
 }

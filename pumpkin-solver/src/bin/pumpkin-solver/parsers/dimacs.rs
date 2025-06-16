@@ -491,7 +491,7 @@ impl DimacsSink for SolverDimacsSink {
         let mapped = self
             .mapped_clause(clause)
             .into_iter()
-            .map(|literal| literal.get_true_predicate());
+            .map(|literal| literal.to_predicate());
         let _ = self.solver.add_clause(mapped, self.constraint_tag);
     }
 
@@ -515,9 +515,7 @@ impl DimacsSink for SolverDimacsSink {
             let soft_literal = self.solver.new_literal();
             clause.push(soft_literal);
             let _ = self.solver.add_clause(
-                clause
-                    .into_iter()
-                    .map(|literal| literal.get_true_predicate()),
+                clause.into_iter().map(|literal| literal.to_predicate()),
                 self.constraint_tag,
             );
 

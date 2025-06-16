@@ -3,8 +3,7 @@ use log::warn;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
-use crate::engine::variables::DomainId;
-use crate::variables::Literal;
+use crate::variables::IntegerVariable;
 
 /// A [`VariableSelector`] which selects the first variable which is not fixed given the order in
 /// the provided list.
@@ -24,25 +23,15 @@ impl<Var: Copy> InputOrder<Var> {
     }
 }
 
-impl VariableSelector<DomainId> for InputOrder<DomainId> {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
+impl<Var> VariableSelector<Var> for InputOrder<Var>
+where
+    Var: IntegerVariable,
+{
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.variables
             .iter()
-            .find(|variable| !context.is_integer_fixed(**variable))
-            .copied()
-    }
-
-    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
-        vec![]
-    }
-}
-
-impl VariableSelector<Literal> for InputOrder<Literal> {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Literal> {
-        self.variables
-            .iter()
-            .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
-            .copied()
+            .find(|&variable| !context.is_integer_fixed(variable.clone()))
+            .cloned()
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {

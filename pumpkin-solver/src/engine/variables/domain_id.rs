@@ -62,7 +62,7 @@ impl IntegerVariable for DomainId {
         assignment.is_value_in_domain_at_trail_position(*self, value, trail_position)
     }
 
-    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+    fn iterate_domain<'a>(&self, assignment: &'a Assignments) -> impl Iterator<Item = i32> + 'a {
         assignment.get_domain_iterator(*self)
     }
 

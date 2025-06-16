@@ -71,7 +71,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
 
                 if solver
                     .add_clause(
-                        [(!weighted_literals[i].literal).get_true_predicate()],
+                        [(!weighted_literals[i].literal).to_predicate()],
                         self.constraint_tag,
                     )
                     .is_err()
@@ -205,9 +205,9 @@ impl GeneralisedTotaliserEncoder {
                     solver
                         .add_clause(
                             vec![
-                                (!weighted_literal.literal).get_true_predicate(),
+                                (!weighted_literal.literal).to_predicate(),
                                 (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
+                                    .to_predicate(),
                             ],
                             self.constraint_tag,
                         )
@@ -220,9 +220,9 @@ impl GeneralisedTotaliserEncoder {
                     solver
                         .add_clause(
                             vec![
-                                (!weighted_literal.literal).get_true_predicate(),
+                                (!weighted_literal.literal).to_predicate(),
                                 (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
-                                    .get_true_predicate(),
+                                    .to_predicate(),
                             ],
                             self.constraint_tag,
                         )
@@ -239,10 +239,10 @@ impl GeneralisedTotaliserEncoder {
                             solver
                                 .add_clause(
                                     vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
+                                        (!wl1.literal).to_predicate(),
+                                        (!wl2.literal).to_predicate(),
                                         (*value_to_literal_map.get(&combined_weight).unwrap())
-                                            .get_true_predicate(),
+                                            .to_predicate(),
                                     ],
                                     self.constraint_tag,
                                 )
@@ -257,8 +257,8 @@ impl GeneralisedTotaliserEncoder {
                             solver
                                 .add_clause(
                                     vec![
-                                        (!wl1.literal).get_true_predicate(),
-                                        (!wl2.literal).get_true_predicate(),
+                                        (!wl1.literal).to_predicate(),
+                                        (!wl2.literal).to_predicate(),
                                     ],
                                     self.constraint_tag,
                                 )

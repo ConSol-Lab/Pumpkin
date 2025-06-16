@@ -201,11 +201,11 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     fn is_literal_true(&self, literal: &Literal) -> bool {
-        self.is_predicate_satisfied(literal.get_true_predicate())
+        self.is_predicate_satisfied(literal.to_predicate())
     }
 
     fn is_literal_false(&self, literal: &Literal) -> bool {
-        self.is_predicate_satisfied(literal.get_false_predicate())
+        self.is_predicate_satisfied(!literal.to_predicate())
     }
 
     fn is_literal_fixed(&self, literal: &Literal) -> bool {
@@ -311,11 +311,7 @@ impl PropagationContextMut<'_> {
 fn build_reason(reason: impl Into<Reason>, reification_literal: Option<Literal>) -> StoredReason {
     match reason.into() {
         Reason::Eager(mut conjunction) => {
-            conjunction.extend(
-                reification_literal
-                    .iter()
-                    .map(|lit| lit.get_true_predicate()),
-            );
+            conjunction.extend(reification_literal.iter().map(|lit| lit.to_predicate()));
             StoredReason::Eager(conjunction)
         }
         Reason::DynamicLazy(code) => {

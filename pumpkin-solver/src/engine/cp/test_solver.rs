@@ -68,7 +68,7 @@ impl TestSolver {
 
     pub(crate) fn new_literal(&mut self) -> Literal {
         let domain_id = self.new_variable(0, 1);
-        Literal::new(domain_id)
+        Literal::new(predicate![domain_id == 1])
     }
 
     pub(crate) fn new_propagator<Constructor>(
@@ -174,7 +174,7 @@ impl TestSolver {
 
     pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
-            .evaluate_predicate(literal.get_true_predicate())
+            .evaluate_predicate(literal.to_predicate())
             .is_some_and(|truth_value| !truth_value)
     }
 
@@ -199,12 +199,12 @@ impl TestSolver {
     ) -> Result<(), EmptyDomain> {
         let _ = match truth_value {
             true => self.assignments.post_predicate(
-                literal.get_true_predicate(),
+                literal.to_predicate(),
                 None,
                 &mut self.notification_engine,
             )?,
             false => self.assignments.post_predicate(
-                (!literal).get_true_predicate(),
+                (!literal).to_predicate(),
                 None,
                 &mut self.notification_engine,
             )?,
@@ -287,8 +287,8 @@ impl TestSolver {
         truth_value: bool,
     ) -> PropositionalConjunction {
         let predicate = match truth_value {
-            true => literal.get_true_predicate(),
-            false => (!literal).get_true_predicate(),
+            true => literal.to_predicate(),
+            false => (!literal).to_predicate(),
         };
         self.get_reason_int(predicate)
     }

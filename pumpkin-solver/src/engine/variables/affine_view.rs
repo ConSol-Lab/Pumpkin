@@ -129,10 +129,13 @@ where
         }
     }
 
-    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+    fn iterate_domain<'a>(&self, assignment: &'a Assignments) -> impl Iterator<Item = i32> + 'a {
+        let scale = self.scale;
+        let offset = self.offset;
+
         self.inner
             .iterate_domain(assignment)
-            .map(|value| self.map(value))
+            .map(move |value| scale * value + offset)
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {

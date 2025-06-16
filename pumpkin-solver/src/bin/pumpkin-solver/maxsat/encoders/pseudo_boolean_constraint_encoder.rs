@@ -322,7 +322,7 @@ impl PseudoBooleanConstraintEncoder {
                     has_assigned = true;
 
                     let result =
-                        solver.add_clause([(!term.literal).get_true_predicate()], constraint_tag);
+                        solver.add_clause([(!term.literal).to_predicate()], constraint_tag);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }

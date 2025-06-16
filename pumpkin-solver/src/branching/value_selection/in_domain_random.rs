@@ -2,50 +2,30 @@ use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::variables::DomainId;
 use crate::predicate;
-use crate::variables::Literal;
+use crate::variables::IntegerVariable;
 
 /// A [`ValueSelector`] which assigns to a random value in the domain.
 #[derive(Debug, Clone, Copy)]
 pub struct InDomainRandom;
 
-impl ValueSelector<DomainId> for InDomainRandom {
+impl<Var> ValueSelector<Var> for InDomainRandom
+where
+    Var: IntegerVariable,
+{
     fn select_value(
         &mut self,
         context: &mut SelectionContext,
-        decision_variable: DomainId,
+        decision_variable: Var,
     ) -> Predicate {
-        let values_in_domain = (context.lower_bound(decision_variable)
-            ..=context.upper_bound(decision_variable))
-            .filter(|bound| context.contains(decision_variable, *bound))
+        let values_in_domain = (context.lower_bound(decision_variable.clone())
+            ..=context.upper_bound(decision_variable.clone()))
+            .filter(|bound| context.contains(decision_variable.clone(), *bound))
             .collect::<Vec<_>>();
         let random_index = context
             .random()
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable == values_in_domain[random_index])
-    }
-
-    fn is_restart_pointless(&mut self) -> bool {
-        false
-    }
-
-    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
-        vec![]
-    }
-}
-
-impl ValueSelector<Literal> for InDomainRandom {
-    fn select_value(
-        &mut self,
-        context: &mut SelectionContext,
-        decision_variable: Literal,
-    ) -> Predicate {
-        if context.random().generate_bool(0.5) {
-            decision_variable.get_true_predicate()
-        } else {
-            (!decision_variable).get_true_predicate()
-        }
     }
 
     fn is_restart_pointless(&mut self) -> bool {

@@ -92,20 +92,20 @@ impl<Var: IntegerVariable> Table<Var> {
 
                 // For every `support in supports`: `support -> condition`
                 for support in supports.iter() {
-                    let mut clause = vec![support.get_false_predicate(), condition];
+                    let mut clause = vec![!support.to_predicate(), condition];
 
                     // Account for possible reification.
                     // l -> clause
-                    clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+                    clause.extend(reification_literal.iter().map(|l| !l.to_predicate()));
 
                     solver.add_clause(clause, self.constraint_tag)?;
                 }
 
                 // `condition -> (\/ supports)`
                 let mut clause = vec![!condition];
-                clause.extend(supports.iter().map(|l| l.get_true_predicate()));
+                clause.extend(supports.iter().map(|l| l.to_predicate()));
                 // Account for possible reification.
-                clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+                clause.extend(reification_literal.iter().map(|l| !l.to_predicate()));
             }
         }
 
@@ -184,7 +184,7 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .iter()
                 .zip(row)
                 .map(|(x, value)| predicate![x != value])
-                .chain(std::iter::once(reification_literal.get_false_predicate()))
+                .chain(std::iter::once(!reification_literal.to_predicate()))
                 .collect();
 
             solver.add_clause(clause, self.constraint_tag)?;

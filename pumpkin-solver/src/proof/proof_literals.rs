@@ -52,7 +52,7 @@ impl ProofLiterals {
         // the positive polarity. That assumption holds as the only place this can be called is
         // transitively through `new_literal_for_predicate`. As soon as this assumption is
         // violated, all hell will break loose.
-        let domain = literal.get_true_predicate().get_domain();
+        let domain = literal.to_predicate().get_domain();
 
         let _ = self.reification_domains.insert(domain, predicate);
     }

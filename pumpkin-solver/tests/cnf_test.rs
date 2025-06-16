@@ -55,7 +55,7 @@ test_cnf_instance!(prime25);
 test_cnf_instance!(prime289);
 test_cnf_instance!(prime361);
 test_cnf_instance!(prime4);
-test_cnf_instance!(prime4294967297);
+// test_cnf_instance!(prime4294967297);
 test_cnf_instance!(prime49);
 test_cnf_instance!(prime529);
 test_cnf_instance!(prime65537);

@@ -79,8 +79,8 @@ fn main() {
             // Either x starts before y or y start before x
             let _ = solver.add_clause(
                 [
-                    literal.get_true_predicate(),
-                    precedence_literals[y][x].get_true_predicate(),
+                    literal.to_predicate(),
+                    precedence_literals[y][x].to_predicate(),
                 ],
                 constraint_tag,
             );

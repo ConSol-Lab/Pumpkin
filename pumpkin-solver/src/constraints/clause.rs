@@ -32,7 +32,7 @@ impl Constraint for Clause {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
-            clause.iter().map(|literal| literal.get_true_predicate()),
+            clause.iter().map(|literal| literal.to_predicate()),
             constraint_tag,
         )
     }
@@ -48,7 +48,7 @@ impl Constraint for Clause {
             clause
                 .into_iter()
                 .chain(std::iter::once(!reification_literal))
-                .map(|literal| literal.get_true_predicate()),
+                .map(|literal| literal.to_predicate()),
             constraint_tag,
         )
     }
@@ -72,7 +72,7 @@ impl Constraint for Conjunction {
 
         conjunction
             .into_iter()
-            .try_for_each(|lit| solver.add_clause([lit.get_true_predicate()], constraint_tag))
+            .try_for_each(|lit| solver.add_clause([lit.to_predicate()], constraint_tag))
     }
 
     fn implied_by(
@@ -84,10 +84,7 @@ impl Constraint for Conjunction {
 
         conjunction.into_iter().try_for_each(|lit| {
             solver.add_clause(
-                [
-                    (!(reification_literal)).get_true_predicate(),
-                    lit.get_true_predicate(),
-                ],
+                [(!(reification_literal)).to_predicate(), lit.to_predicate()],
                 constraint_tag,
             )
         })

@@ -325,10 +325,7 @@ fn compile_set_in_reif(
             let forward = context
                 .solver
                 .add_clause(
-                    [
-                        !reif.get_true_predicate(),
-                        predicate![variable >= lower_bound],
-                    ],
+                    [!reif.to_predicate(), predicate![variable >= lower_bound]],
                     constraint_tag,
                 )
                 .is_ok()
@@ -336,7 +333,7 @@ fn compile_set_in_reif(
                     .solver
                     .add_clause(
                         [
-                            !reif.get_true_predicate(),
+                            !reif.to_predicate(),
                             !predicate![variable >= upper_bound + 1],
                         ],
                         constraint_tag,
@@ -349,7 +346,7 @@ fn compile_set_in_reif(
                 .solver
                 .add_clause(
                     [
-                        reif.get_true_predicate(),
+                        reif.to_predicate(),
                         !predicate![variable >= lower_bound],
                         predicate![variable >= upper_bound + 1],
                     ],
@@ -463,7 +460,7 @@ fn compile_bool_clause(
         .iter()
         .cloned()
         .chain(clause_2.iter().map(|literal| !*literal))
-        .map(|literal| literal.get_true_predicate())
+        .map(|literal| literal.to_predicate())
         .collect();
 
     Ok(context.solver.add_clause(clause, constraint_tag).is_ok())
@@ -499,11 +496,11 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(
-        constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
-            .post(context.solver)
-            .is_ok(),
-    )
+    context
+        .solver
+        .reifiy_predicate_with_literal(predicate![b == 1], a, constraint_tag);
+
+    Ok(true)
 }
 
 fn compile_bool_or(
@@ -528,12 +525,8 @@ fn compile_bool_xor(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a = context
-        .resolve_bool_variable(&exprs[0])?
-        .get_true_predicate();
-    let b = context
-        .resolve_bool_variable(&exprs[1])?
-        .get_true_predicate();
+    let a = context.resolve_bool_variable(&exprs[0])?.to_predicate();
+    let b = context.resolve_bool_variable(&exprs[1])?.to_predicate();
 
     let c1 = context.solver.add_clause([!a, !b], constraint_tag).is_ok();
     let c2 = context.solver.add_clause([b, a], constraint_tag).is_ok();
