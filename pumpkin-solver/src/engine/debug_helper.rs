@@ -74,9 +74,7 @@ impl DebugHelper {
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
         for (propagator_id, propagator) in propagators.iter_propagators().enumerate() {
-            notification_engine_clone
-                .predicate_notifier
-                .debug_create_from_assignments(&assignments_clone);
+            notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
@@ -250,9 +248,7 @@ impl DebugHelper {
                 &reason_predicates,
                 &mut notification_engine_clone,
             );
-            notification_engine_clone
-                .predicate_notifier
-                .debug_create_from_assignments(&assignments_clone);
+            notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
@@ -358,9 +354,7 @@ impl DebugHelper {
                 &failing_predicates,
                 &mut notification_engine_clone,
             );
-            notification_engine_clone
-                .predicate_notifier
-                .debug_create_from_assignments(&assignments_clone);
+            notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
@@ -440,9 +434,7 @@ impl DebugHelper {
             &reason_predicates,
             &mut notification_engine_clone,
         );
-        notification_engine_clone
-            .predicate_notifier
-            .debug_create_from_assignments(&assignments_clone);
+        notification_engine_clone.debug_create_from_assignments(&assignments_clone);
 
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method

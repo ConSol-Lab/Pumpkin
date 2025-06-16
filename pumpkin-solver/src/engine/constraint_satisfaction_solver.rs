@@ -762,9 +762,7 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments.increase_decision_level();
-        self.notification_engine
-            .predicate_id_assignments_mut()
-            .increase_decision_level();
+        self.notification_engine.increase_decision_level();
         self.trailed_values.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
