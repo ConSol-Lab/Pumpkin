@@ -265,6 +265,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             assignments: &self.assignments,
             reason_store: &mut self.reason_store,
+            notification_engine: &mut self.notification_engine,
         };
 
         finalize_proof(context);
@@ -761,6 +762,9 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments.increase_decision_level();
+        self.notification_engine
+            .predicate_id_assignments_mut()
+            .increase_decision_level();
         self.trailed_values.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
@@ -971,6 +975,9 @@ impl ConstraintSatisfactionSolver {
         trailed_values.synchronise(backtrack_level);
 
         notification_engine.update_last_notified_index(assignments);
+        notification_engine
+            .predicate_id_assignments_mut()
+            .synchronise(backtrack_level);
 
         reason_store.synchronise(backtrack_level);
         propagator_queue.clear();
@@ -1015,6 +1022,7 @@ impl ConstraintSatisfactionSolver {
             ExplanationContext::without_working_nogood(
                 &self.assignments,
                 self.assignments.num_trail_entries() - 1,
+                &mut self.notification_engine,
             ),
             &mut self.propagators,
             &mut empty_domain_reason,
@@ -1092,6 +1100,7 @@ impl ConstraintSatisfactionSolver {
                             &conflict.conjunction,
                             &self.propagators[propagator_id],
                             propagator_id,
+                            &self.notification_engine
                         ));
 
                         let stored_conflict_info = StoredConflictInfo::Propagator(conflict);
@@ -1107,7 +1116,8 @@ impl ConstraintSatisfactionSolver {
                     &self.trailed_values,
                     &self.assignments,
                     &mut self.reason_store,
-                    &mut self.propagators
+                    &mut self.propagators,
+                    &mut self.notification_engine
                 ),
                 "Checking the propagations performed by the propagator led to inconsistencies!"
             );
@@ -1125,6 +1135,7 @@ impl ConstraintSatisfactionSolver {
                     &self.trailed_values,
                     &self.assignments,
                     &self.propagators,
+                    &self.notification_engine
                 )
         );
     }
@@ -1152,7 +1163,11 @@ impl ConstraintSatisfactionSolver {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::without_working_nogood(&self.assignments, trail_idx),
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    trail_idx,
+                    &mut self.notification_engine,
+                ),
                 &mut self.propagators,
                 &mut reason,
             );
@@ -1188,6 +1203,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     assignments: &self.assignments,
                     reason_store: &mut self.reason_store,
+                    notification_engine: &mut self.notification_engine,
                 };
 
                 explain_root_assignment(&mut context, premise);
@@ -1417,6 +1433,7 @@ impl ConstraintSatisfactionSolver {
                 unit_nogood_step_ids: &self.unit_nogood_step_ids,
                 assignments: &self.assignments,
                 reason_store: &mut self.reason_store,
+                notification_engine: &mut self.notification_engine,
             });
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(

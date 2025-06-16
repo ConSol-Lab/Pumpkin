@@ -80,6 +80,7 @@ impl ConflictResolver for ResolutionResolver {
                 unit_nogood_step_ids: context.unit_nogood_step_ids,
                 assignments: context.assignments,
                 reason_store: context.reason_store,
+                notification_engine: context.notification_engine,
             })
         } else {
             None
@@ -168,6 +169,7 @@ impl ConflictResolver for ResolutionResolver {
                             context.proof_log,
                             context.unit_nogood_step_ids,
                             &mut self.reason_buffer,
+                            context.notification_engine,
                         );
 
                         if self.reason_buffer.is_empty() {
@@ -228,6 +230,7 @@ impl ConflictResolver for ResolutionResolver {
                         context.proof_log,
                         context.unit_nogood_step_ids,
                         &mut self.reason_buffer,
+                        context.notification_engine,
                     );
                     pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
@@ -257,6 +260,7 @@ impl ConflictResolver for ResolutionResolver {
                 context.proof_log,
                 context.unit_nogood_step_ids,
                 &mut self.reason_buffer,
+                context.notification_engine,
             );
 
             let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
@@ -266,6 +270,7 @@ impl ConflictResolver for ResolutionResolver {
                     unit_nogood_step_ids: context.unit_nogood_step_ids,
                     assignments: context.assignments,
                     reason_store: context.reason_store,
+                    notification_engine: context.notification_engine,
                 })
             } else {
                 None
@@ -415,16 +420,13 @@ impl ResolutionResolver {
 
     fn pop_predicate_from_conflict_nogood(&mut self) -> Predicate {
         let next_predicate_id = self.to_process_heap.pop_max().unwrap();
-        self.predicate_id_generator
-            .get_predicate(next_predicate_id)
-            .unwrap()
+        self.predicate_id_generator.get_predicate(next_predicate_id)
     }
 
     fn peek_predicate_from_conflict_nogood(&self) -> Predicate {
         let next_predicate_id = self.to_process_heap.peek_max().unwrap().0;
         self.predicate_id_generator
             .get_predicate(*next_predicate_id)
-            .unwrap()
     }
 
     fn replace_predicate_in_conflict_nogood(

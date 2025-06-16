@@ -129,6 +129,7 @@ impl RecursiveMinimiser {
             context.proof_log,
             context.unit_nogood_step_ids,
             &mut reason,
+            context.notification_engine,
         );
 
         for antecedent_predicate in reason.iter().copied() {
@@ -149,6 +150,7 @@ impl RecursiveMinimiser {
                         unit_nogood_step_ids: context.unit_nogood_step_ids,
                         assignments: context.assignments,
                         reason_store: context.reason_store,
+                        notification_engine: context.notification_engine,
                     },
                     antecedent_predicate,
                 );

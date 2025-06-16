@@ -15,6 +15,9 @@ pub(crate) use equality_tracker::EqualityTracker;
 pub(crate) use lower_bound_tracker::LowerBoundTracker;
 pub(crate) use upper_bound_tracker::UpperBoundTracker;
 
+use super::PredicateIdAssignments;
+use super::PredicateIdInfo;
+
 /// A generic structure for keeping track of the polarity of [`Predicate`]s.
 ///
 /// This structure is useful since there is a lot of overlap in the methods for the different
@@ -117,9 +120,6 @@ pub(crate) trait DomainTrackerInformation {
 
     /// Returns true if no [`Predicate`]s are currently being tracked.
     fn is_empty(&self) -> bool;
-
-    /// Returns the [`DomainId`] which is currently being tracked.
-    fn get_domain_id(&self) -> DomainId;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -207,10 +207,6 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
     fn is_empty(&self) -> bool {
         self.get_tracker().values.is_empty()
     }
-
-    fn get_domain_id(&self) -> DomainId {
-        self.get_tracker().domain_id
-    }
 }
 
 /// A trait which defines the common behaviours for structures which track [`Predicate`]s for a
@@ -226,40 +222,40 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     fn predicate_id_has_been_satisfied(
         &self,
         predicate_id: PredicateId,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
         if predicate_id.id == u32::MAX {
             // If it is a placeholder then we ignore it
             return;
         }
-        satisfied_predicates.push(predicate_id)
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
     fn predicate_has_been_satisfied(
         &self,
         index: usize,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
         let predicate_id = self.get_ids()[index];
         if predicate_id.id == u32::MAX {
             // If it is a placeholder then we ignore it
             return;
         }
-        satisfied_predicates.push(predicate_id)
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been falsified.
     fn predicate_has_been_falsified(
         &self,
         index: usize,
-        falsified_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
         let predicate_id = self.get_ids()[index];
         if predicate_id.id == u32::MAX {
             return;
         }
-        falsified_predicates.push(self.get_ids()[index])
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedFalse);
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].
@@ -289,12 +285,10 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         // Then we go over each value to determine where to place the element in the linked list.
         for index in 0..self.get_values().len() {
             let index_value = self.get_values()[index];
-            pumpkin_assert_simple!(
-                index_value != value,
-                "Found {value} already exists for {index_value} with bounds {}, {}",
-                assignments.get_initial_lower_bound(self.get_domain_id()),
-                assignments.get_initial_upper_bound(self.get_domain_id())
-            );
+            if index_value == value {
+                // This value is already being tracked
+                return;
+            }
 
             // We first check whether we have found a value which is smaller than the provided
             // `value` but larger than the one we already found
@@ -384,8 +378,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
-        falsified_predicates: &mut Vec<PredicateId>,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         predicate_id: Option<PredicateId>,
     );
 }

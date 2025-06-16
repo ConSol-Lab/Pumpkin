@@ -53,9 +53,12 @@ impl DebugHelper {
         trailed_values: &TrailedValues,
         assignments: &Assignments,
         propagators: &PropagatorStore,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         let mut assignments_clone = assignments.clone();
         let mut trailed_values_clone = trailed_values.clone();
+        let mut notification_engine_clone =
+            notification_engine.debug_empty_clone(assignments.num_domains() as usize);
         // Check whether constraint programming propagators missed anything
         //
         //  It works by asking each propagator to propagate from scratch, and checking whether any
@@ -71,18 +74,20 @@ impl DebugHelper {
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
         for (propagator_id, propagator) in propagators.iter_propagators().enumerate() {
+            notification_engine_clone
+                .predicate_notifier
+                .debug_create_from_assignments(&assignments_clone);
+
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
-            let mut notification_engine =
-                NotificationEngine::new(assignments.num_domains() as usize);
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
-                &mut notification_engine,
+                &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -125,6 +130,7 @@ impl DebugHelper {
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             trailed_values,
@@ -132,6 +138,7 @@ impl DebugHelper {
             failure_reason,
             propagator,
             propagator_id,
+            notification_engine,
         );
         true
     }
@@ -149,6 +156,7 @@ impl DebugHelper {
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
+        notification_engine: &mut NotificationEngine,
     ) -> bool {
         if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
             return true;
@@ -163,7 +171,11 @@ impl DebugHelper {
                     .reason
                     .expect("Expected checked propagation to have a reason")
                     .0,
-                ExplanationContext::without_working_nogood(assignments, trail_index),
+                ExplanationContext::without_working_nogood(
+                    assignments,
+                    trail_index,
+                    notification_engine,
+                ),
                 propagators,
                 &mut reason,
             );
@@ -175,6 +187,7 @@ impl DebugHelper {
                 assignments,
                 &propagators[propagator_id],
                 propagator_id,
+                notification_engine,
             );
         }
         result
@@ -187,6 +200,7 @@ impl DebugHelper {
         assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        notification_engine: &NotificationEngine,
     ) -> bool {
         if propagator.name() == "NogoodPropagator" {
             return true;
@@ -227,25 +241,29 @@ impl DebugHelper {
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
             let mut trailed_values_clone = trailed_values.debug_create_empty_clone();
+            let mut notification_engine_clone =
+                notification_engine.debug_empty_clone(assignments.num_domains() as usize);
 
             let reason_predicates: Vec<Predicate> = reason.to_vec();
             let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
                 &mut assignments_clone,
                 &reason_predicates,
+                &mut notification_engine_clone,
             );
+            notification_engine_clone
+                .predicate_notifier
+                .debug_create_from_assignments(&assignments_clone);
 
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
-                let mut notification_engine =
-                    NotificationEngine::new(assignments.num_domains() as usize);
                 let context = PropagationContextMut::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
-                    &mut notification_engine,
+                    &mut notification_engine_clone,
                     propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -328,6 +346,8 @@ impl DebugHelper {
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
             let mut trailed_values_clone = trailed_values.debug_create_empty_clone();
+            let mut notification_engine_clone =
+                notification_engine.debug_empty_clone(assignments.num_domains() as usize);
 
             let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
                 .chain(reason.iter().copied())
@@ -336,7 +356,11 @@ impl DebugHelper {
             let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
                 &mut assignments_clone,
                 &failing_predicates,
+                &mut notification_engine_clone,
             );
+            notification_engine_clone
+                .predicate_notifier
+                .debug_create_from_assignments(&assignments_clone);
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
@@ -353,14 +377,12 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let mut notification_engine =
-                        NotificationEngine::new(assignments.num_domains() as usize);
                     let context = PropagationContextMut::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut semantic_minimiser,
-                        &mut notification_engine,
+                        &mut notification_engine_clone,
                         propagator_id,
                     );
                     let debug_propagation_status_cp =
@@ -402,31 +424,36 @@ impl DebugHelper {
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
+        notification_engine: &NotificationEngine,
     ) {
         if propagator.name() == "NogoodPropagator" {
             return;
         }
         let mut assignments_clone = assignments.debug_create_empty_clone();
         let mut trailed_values_clone = trailed_values.debug_create_empty_clone();
+        let mut notification_engine_clone =
+            notification_engine.debug_empty_clone(assignments.num_domains() as usize);
 
         let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
             &mut assignments_clone,
             &reason_predicates,
+            &mut notification_engine_clone,
         );
+        notification_engine_clone
+            .predicate_notifier
+            .debug_create_from_assignments(&assignments_clone);
 
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
-            let mut notification_engine =
-                NotificationEngine::new(assignments.num_domains() as usize);
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
-                &mut notification_engine,
+                &mut notification_engine_clone,
                 propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -453,11 +480,10 @@ impl DebugHelper {
     fn debug_add_predicates_to_assignments(
         assignments: &mut Assignments,
         predicates: &[Predicate],
+        notification_engine: &mut NotificationEngine,
     ) -> bool {
         for predicate in predicates {
-            let mut notification_engine =
-                NotificationEngine::new(assignments.num_domains() as usize);
-            let outcome = assignments.post_predicate(*predicate, None, &mut notification_engine);
+            let outcome = assignments.post_predicate(*predicate, None, notification_engine);
             match outcome {
                 Ok(_) => {
                     // do nothing, everything is okay

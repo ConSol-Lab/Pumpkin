@@ -131,6 +131,7 @@ impl ConflictAnalysisContext<'_> {
                         unit_nogood_step_ids: self.unit_nogood_step_ids,
                         assignments: self.assignments,
                         reason_store: self.reason_store,
+                        notification_engine: self.notification_engine,
                     },
                     predicate,
                 );
@@ -165,6 +166,7 @@ impl ConflictAnalysisContext<'_> {
         proof_log: &mut ProofLog,
         unit_nogood_step_ids: &HashMap<Predicate, StepId>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+        notification_engine: &mut NotificationEngine,
     ) {
         // TODO: this function could be put into the reason store
 
@@ -200,8 +202,12 @@ impl ConflictAnalysisContext<'_> {
 
             let propagator_id = reason_store.get_propagator(reason_ref);
 
-            let explanation_context =
-                ExplanationContext::new(assignments, current_nogood, trail_position);
+            let explanation_context = ExplanationContext::new(
+                assignments,
+                current_nogood,
+                trail_position,
+                notification_engine,
+            );
 
             let reason_exists = reason_store.get_or_compute(
                 reason_ref,

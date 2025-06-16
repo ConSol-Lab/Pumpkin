@@ -3,6 +3,7 @@ use super::HasTracker;
 use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
+use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -39,8 +40,7 @@ impl DomainTracker for DisequalityTracker {
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
-        falsified_predicates: &mut Vec<PredicateId>,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         predicate_id: Option<PredicateId>,
     ) {
         // We are interested in all types of predicates
@@ -58,7 +58,7 @@ impl DomainTracker for DisequalityTracker {
             // lower-bound is _strictly_ larger than the value
             while greater != i64::MAX && value > self.watcher.values[greater as usize] {
                 // The update has caused the predicate to become satisfied
-                self.predicate_has_been_satisfied(greater as usize, satisfied_predicates);
+                self.predicate_has_been_satisfied(greater as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.min_assigned, greater);
                 greater = self.watcher.greater[greater as usize];
             }
@@ -75,7 +75,7 @@ impl DomainTracker for DisequalityTracker {
             // upper-bound is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become satisfied
-                self.predicate_has_been_satisfied(smaller as usize, satisfied_predicates);
+                self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.max_unassigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
@@ -92,7 +92,7 @@ impl DomainTracker for DisequalityTracker {
             // lower-bound is _strictly_ larger than the value
             while greater != i64::MAX && value > self.watcher.values[greater as usize] {
                 // The update has caused the predicate to become satisfied
-                self.predicate_has_been_satisfied(greater as usize, satisfied_predicates);
+                self.predicate_has_been_satisfied(greater as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.min_assigned, greater);
                 greater = self.watcher.greater[greater as usize];
             }
@@ -109,7 +109,7 @@ impl DomainTracker for DisequalityTracker {
             // upper-bound is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become satisfied
-                self.predicate_has_been_satisfied(smaller as usize, satisfied_predicates);
+                self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.max_unassigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
@@ -124,7 +124,7 @@ impl DomainTracker for DisequalityTracker {
                 == self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize]
                 && self.watcher.values[greater as usize] == value
             {
-                self.predicate_has_been_falsified(greater as usize, falsified_predicates);
+                self.predicate_has_been_falsified(greater as usize, predicate_id_assignments);
 
                 trailed_values.assign(self.watcher.min_assigned, greater);
                 trailed_values.assign(self.watcher.max_unassigned, greater);
@@ -135,7 +135,7 @@ impl DomainTracker for DisequalityTracker {
             //
             // TODO: This could be optimised
             if let Some(predicate_id) = predicate_id {
-                self.predicate_id_has_been_satisfied(predicate_id, satisfied_predicates)
+                self.predicate_id_has_been_satisfied(predicate_id, predicate_id_assignments)
             }
         } else {
             panic!()

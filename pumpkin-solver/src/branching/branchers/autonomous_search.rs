@@ -195,10 +195,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             // We peek the next variable, since we do not pop since we do not (yet) want to
             // remove the value from the heap.
             if let Some((candidate, _)) = self.heap.peek_max() {
-                let predicate = self
-                    .predicate_id_info
-                    .get_predicate(*candidate)
-                    .expect("We expected present predicates to be registered.");
+                let predicate = self.predicate_id_info.get_predicate(*candidate);
                 if context.is_predicate_assigned(predicate) {
                     self.statistics.num_assigned_predicates_encountered += 1;
                     let _ = self.heap.pop_max();
@@ -206,7 +203,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                     // We know that this predicate is now dormant
                     let predicate_id = self.predicate_id_info.get_id(predicate);
                     self.heap.delete_key(predicate_id);
-                    self.predicate_id_info.delete_id(predicate_id);
                     self.dormant_predicates.push(predicate);
                 } else {
                     return Some(predicate);

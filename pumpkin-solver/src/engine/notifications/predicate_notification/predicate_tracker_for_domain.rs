@@ -4,6 +4,7 @@ use super::predicate_trackers::DomainTrackerInformation;
 use super::predicate_trackers::EqualityTracker;
 use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
+use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
@@ -70,48 +71,31 @@ impl PredicateTrackerForDomain {
         &mut self,
         predicate: Predicate,
         stateful_trail: &mut TrailedValues,
-        falsified_predicates: &mut Vec<PredicateId>,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         predicate_id: Option<PredicateId>,
     ) {
         if !self.lower_bound.is_empty() {
-            self.lower_bound.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.lower_bound
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
 
         if !self.upper_bound.is_empty() {
-            self.upper_bound.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.upper_bound
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
 
         if !self.disequality.is_empty() {
             self.disequality.on_update(
                 predicate,
                 stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
+                predicate_id_assignments,
                 predicate_id,
             );
         }
 
         if !self.equality.is_empty() {
-            self.equality.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.equality
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
     }
 

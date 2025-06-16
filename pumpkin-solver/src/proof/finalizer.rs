@@ -7,6 +7,7 @@ use drcp_format::steps::StepId;
 use super::ProofLog;
 use crate::basic_types::HashMap;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::reason::ReasonStore;
@@ -21,6 +22,7 @@ pub(crate) struct FinalizingContext<'a> {
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) assignments: &'a Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
 }
 
 /// Finalizes the proof by introducing inferences used to derive root-level unsatisfiability. This
@@ -43,6 +45,7 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
                 unit_nogood_step_ids: context.unit_nogood_step_ids,
                 assignments: context.assignments,
                 reason_store: context.reason_store,
+                notification_engine: context.notification_engine,
             },
             predicate,
         );
@@ -55,6 +58,7 @@ pub(crate) struct RootExplanationContext<'a> {
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) assignments: &'a Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
 }
 
 /// Explain why a given predicate is true. We assume that `predicate` is true at the root.
@@ -95,6 +99,7 @@ pub(crate) fn explain_root_assignment(
         context.proof_log,
         context.unit_nogood_step_ids,
         &mut reason,
+        context.notification_engine,
     );
 
     assert!(!reason.is_empty());

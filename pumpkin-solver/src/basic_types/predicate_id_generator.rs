@@ -1,17 +1,12 @@
 use super::HashMap;
+use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct PredicateIdGenerator {
-    /// The value of the next id, provided there are no delete_ids that can be reused.
-    next_id: u32,
-    /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
-    deleted_ids: Vec<PredicateId>,
-    /// Active predicates are stored here.
-    /// todo: consider direct hashing.
-    id_to_predicate: HashMap<PredicateId, Predicate>,
+    id_to_predicate: KeyedVec<PredicateId, Predicate>,
     predicate_to_id: HashMap<Predicate, PredicateId>,
 }
 
@@ -20,55 +15,23 @@ impl PredicateIdGenerator {
         self.predicate_to_id.contains_key(&predicate)
     }
 
-    fn get_new_predicate_id(&mut self) -> PredicateId {
-        // We either reuse a previously deleted id, or create a new one.
-        if let Some(recycled_id) = self.deleted_ids.pop() {
-            recycled_id
-        } else {
-            let new_id = self.next_id;
-            self.next_id += 1;
-            PredicateId { id: new_id }
-        }
-    }
-
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
-            let id = self.get_new_predicate_id();
-            let a = self.id_to_predicate.insert(id, predicate);
-            let b = self.predicate_to_id.insert(predicate, id);
-            assert!(a.is_none() && b.is_none());
+            let id = self.id_to_predicate.push(predicate);
+            let _ = self.predicate_to_id.insert(predicate, id);
             id
         }
     }
 
-    pub(crate) fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
-        self.id_to_predicate.get(&id).copied()
-    }
-
-    pub(crate) fn delete_id(&mut self, id: PredicateId) {
-        pumpkin_assert_moderate!(!self.deleted_ids.contains(&id));
-        // Add the deleted id for future reuse.
-        self.deleted_ids.push(id);
-        // Remove the mapping id->predicate.
-        let predicate = self
-            .id_to_predicate
-            .remove(&id)
-            .expect("Id must be present.");
-        // Remove the mapping predicate->id.
-        let removed_id = self
-            .predicate_to_id
-            .remove(&predicate)
-            .expect("Predicate must be present");
-        pumpkin_assert_moderate!(removed_id == id);
+    pub(crate) fn get_predicate(&self, id: PredicateId) -> Predicate {
+        self.id_to_predicate[id]
     }
 
     pub(crate) fn clear(&mut self) {
-        self.next_id = 0;
-        self.deleted_ids.clear();
         self.id_to_predicate.clear();
         self.predicate_to_id.clear();
     }
@@ -76,7 +39,11 @@ impl PredicateIdGenerator {
     pub(crate) fn replace_predicate(&mut self, predicate: Predicate, replacement: Predicate) {
         pumpkin_assert_moderate!(self.has_id_for_predicate(predicate));
         let predicate_id = self.get_id(predicate);
-        let _ = self.id_to_predicate.insert(predicate_id, replacement);
+        self.id_to_predicate[predicate_id] = replacement
+    }
+
+    pub(crate) fn num_predicate_ids(&self) -> usize {
+        self.id_to_predicate.len()
     }
 }
 
