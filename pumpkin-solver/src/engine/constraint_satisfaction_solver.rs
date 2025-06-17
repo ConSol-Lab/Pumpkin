@@ -972,11 +972,6 @@ impl ConstraintSatisfactionSolver {
 
         trailed_values.synchronise(backtrack_level);
 
-        notification_engine.update_last_notified_index(assignments);
-        notification_engine
-            .predicate_id_assignments_mut()
-            .synchronise(backtrack_level);
-
         reason_store.synchronise(backtrack_level);
         propagator_queue.clear();
         // For now all propagators are called to synchronise, in the future this will be improved in
@@ -992,6 +987,10 @@ impl ConstraintSatisfactionSolver {
 
         let _ = notification_engine.process_backtrack_events(assignments, propagators);
         notification_engine.clear_event_drain();
+
+        notification_engine.update_last_notified_index(assignments);
+        // Should be done after the assignments and trailed values have been synchronised
+        notification_engine.synchronise(backtrack_level, assignments, trailed_values);
     }
 
     pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {

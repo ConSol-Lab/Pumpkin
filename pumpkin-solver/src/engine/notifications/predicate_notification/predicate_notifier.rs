@@ -33,7 +33,11 @@ impl PredicateNotifier {
     pub(crate) fn debug_empty_clone(&self) -> Self {
         let mut predicate_id_assignments = PredicateIdAssignments::default();
         for predicate_id in self.predicate_id_assignments.predicate_ids() {
-            predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::Untracked);
+            predicate_id_assignments.store_predicate(
+                predicate_id,
+                PredicateIdInfo::Untracked,
+                false,
+            );
         }
         Self {
             predicate_to_id: self.predicate_to_id.clone(),
@@ -65,7 +69,7 @@ impl PredicateNotifier {
                     }
                 };
                 self.predicate_id_assignments
-                    .store_predicate(predicate_id, value);
+                    .store_predicate(predicate_id, value, false);
             });
     }
 
@@ -164,6 +168,12 @@ impl PredicateNotifier {
                 .push(PredicateTrackerForDomain::new(trailed_values));
         }
 
+        self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
+            predicate.get_domain(),
+            assignments.get_initial_lower_bound(predicate.get_domain()),
+            assignments.get_initial_upper_bound(predicate.get_domain()),
+        );
+
         self.predicate_id_assignments.store_predicate(
             id,
             match assignments.evaluate_predicate(predicate) {
@@ -176,12 +186,7 @@ impl PredicateNotifier {
                 }
                 None => PredicateIdInfo::Unassigned,
             },
-        );
-
-        self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-            predicate.get_domain(),
-            assignments.get_initial_lower_bound(predicate.get_domain()),
-            assignments.get_initial_upper_bound(predicate.get_domain()),
+            false,
         );
 
         // Then we update the structures

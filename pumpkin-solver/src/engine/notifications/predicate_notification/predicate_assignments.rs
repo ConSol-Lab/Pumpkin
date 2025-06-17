@@ -7,15 +7,10 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PredicateIdAssignments {
-    trail: Trail<PredicateIdTrailEntry>,
+    trail: Trail<PredicateId>,
     domains: KeyedVec<PredicateId, PredicateIdInfo>,
     falsified_predicates: Vec<PredicateId>,
     satisfied_predicates: Vec<PredicateId>,
-}
-
-#[derive(Clone, Debug)]
-struct PredicateIdTrailEntry {
-    id: PredicateId,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,7 +60,17 @@ impl PredicateIdAssignments {
         self.trail.increase_decision_level()
     }
 
-    pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateIdInfo) {
+    /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
+    /// [`PredicateIdInfo`].
+    ///
+    /// If `synchronisation` is set, then the [`PredicateId`] is added to the trail regardless of
+    /// whether the value in the [`PredicateIdAssignments`] was updated or not.
+    pub(crate) fn store_predicate(
+        &mut self,
+        predicate_id: PredicateId,
+        value: PredicateIdInfo,
+        synchronisation: bool,
+    ) {
         while predicate_id.index() >= self.domains.len() {
             let _ = self.domains.push(PredicateIdInfo::Untracked);
         }
@@ -83,7 +88,9 @@ impl PredicateIdAssignments {
                 _ => {}
             }
             self.domains[predicate_id] = value;
-            self.trail.push(PredicateIdTrailEntry { id: predicate_id })
+            self.trail.push(predicate_id)
+        } else if synchronisation {
+            self.trail.push(predicate_id)
         }
     }
 
@@ -110,9 +117,10 @@ impl PredicateIdAssignments {
         self.domains[predicate_id].is_untracked()
     }
 
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
-        self.trail
-            .synchronise(new_decision_level)
-            .for_each(|entry| self.domains[entry.id] = PredicateIdInfo::Unassigned);
+    pub(crate) fn synchronise(
+        &mut self,
+        new_decision_level: usize,
+    ) -> impl Iterator<Item = PredicateId> + '_ {
+        self.trail.synchronise(new_decision_level)
     }
 }
