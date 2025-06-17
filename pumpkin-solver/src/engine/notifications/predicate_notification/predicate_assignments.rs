@@ -75,10 +75,11 @@ impl PredicateIdAssignments {
             let _ = self.domains.push(PredicateIdInfo::Untracked);
         }
         pumpkin_assert_extreme!(
+            synchronisation ||
             self.domains[predicate_id] == PredicateIdInfo::Untracked
                 || self.domains[predicate_id] == PredicateIdInfo::Unassigned
                 || self.domains[predicate_id] == value,
-            "Expected {:?} to be either untracked or for it to equal {value:?}",
+            "Expected {:?} to be either untracked or for it to equal {value:?} for {predicate_id:?}",
             self.domains[predicate_id]
         );
         if self.domains[predicate_id] != value {

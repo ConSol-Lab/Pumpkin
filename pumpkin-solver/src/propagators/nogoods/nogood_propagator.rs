@@ -252,10 +252,10 @@ impl Propagator for NogoodPropagator {
                 }
 
                 // At this point, nonwatched predicates and nogood[1] are falsified.
-                pumpkin_assert_advanced!(nogood_predicates
-                    .iter()
-                    .skip(1)
-                    .all(|p| context.notification_engine.is_id_satisfied(*p)));
+                pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| {
+                    let predicate = context.notification_engine.get_predicate(*p);
+                    context.is_predicate_satisfied(predicate)
+                }));
 
                 // There are two scenarios:
                 // nogood[0] is unassigned -> propagate the predicate to false
