@@ -35,7 +35,7 @@ Please cite pumpkin using the following citation:
     Pumpkin,
     title={Pumpkin: A Lazy Clause Generation constraint solver in Rust},
     url={https://github.com/ConSol-Lab/Pumpkin},
-    author={Demirović, Emir and Flippo, Maarten and Marijnissen, Imko and Sidorov, Konstantin and Smits Jeff},
+    author={Demirović, Emir and Flippo, Maarten and Marijnissen, Imko and Sidorov, Konstantin and Smits, Jeff},
     year={2024},
     organization={ConSol Lab - Delft University of Technology}
 } 
