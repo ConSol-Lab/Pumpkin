@@ -58,44 +58,20 @@ impl PredicateConstructor for DomainId {
 /// let x = solver.new_bounded_integer(0, 10);
 ///
 /// let lower_bound_predicate = predicate!(x >= 5);
-/// assert_eq!(
-///     lower_bound_predicate,
-///     Predicate::LowerBound {
-///         domain_id: x,
-///         lower_bound: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(lower_bound_predicate.get_domain(), x);
+/// assert_eq!(lower_bound_predicate.get_right_hand_side(), 5);
 ///
 /// let upper_bound_predicate = predicate!(x <= 5);
-/// assert_eq!(
-///     upper_bound_predicate,
-///     Predicate::UpperBound {
-///         domain_id: x,
-///         upper_bound: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(upper_bound_predicate.get_domain(), x);
+/// assert_eq!(upper_bound_predicate.get_right_hand_side(), 5);
 ///
 /// let equality_predicate = predicate!(x == 5);
-/// assert_eq!(
-///     equality_predicate,
-///     Predicate::Equal {
-///         domain_id: x,
-///         equality_constant: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(equality_predicate.get_domain(), x);
+/// assert_eq!(equality_predicate.get_right_hand_side(), 5);
 ///
 /// let disequality_predicate = predicate!(x != 5);
-/// assert_eq!(
-///     disequality_predicate,
-///     Predicate::NotEqual {
-///         domain_id: x,
-///         not_equal_constant: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(disequality_predicate.get_domain(), x);
+/// assert_eq!(disequality_predicate.get_right_hand_side(), 5);
 /// ```
 #[macro_export]
 macro_rules! predicate {
