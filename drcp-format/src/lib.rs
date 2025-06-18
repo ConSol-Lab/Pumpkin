@@ -1,55 +1,8 @@
 //! This crate handles the reading and writing of proofs produced by
 //! [Pumpkin](https://github.com/consol-lab/pumpkin).
 //!
-//! ## Reading Proofs
-//! Proofs can be read using a [`reader::ProofReader`]. It reads the proof line-by-line, and can be
-//! thought of as an Iterator over [`Step`].
-//!
-//! ```
-//! use std::num::NonZero;
-//! use std::rc::Rc;
-//!
-//! use drcp_format::reader::ProofReader;
-//! use drcp_format::Inference;
-//! use drcp_format::IntAtomic;
-//! use drcp_format::IntComparison::*;
-//! use drcp_format::Step;
-//!
-//! let source = r#"
-//!     a 1 [x1 >= 0]
-//!     a 2 [x2 >= 0]
-//!     i 2 1 0 2 c:1 l:inf_name
-//! "#;
-//!
-//! let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
-//!
-//! let inference = reader
-//!     .next_step()
-//!     .expect("no error reading")
-//!     .expect("there is one proof step");
-//!
-//! let a1 = IntAtomic {
-//!     name: Rc::from("x1".to_owned()),
-//!     comparison: GreaterEqual,
-//!     value: 0,
-//! };
-//!
-//! let a2 = IntAtomic {
-//!     name: Rc::from("x2".to_owned()),
-//!     comparison: GreaterEqual,
-//!     value: 0,
-//! };
-//!
-//! let expected_inference = Inference {
-//!     constraint_id: NonZero::new(2).unwrap(),
-//!     premises: vec![a1],
-//!     consequent: Some(a2),
-//!     generated_by: Some(NonZero::new(1).unwrap()),
-//!     label: Some("inf_name".into()),
-//! };
-//!
-//! assert_eq!(Step::Inference(expected_inference), inference);
-//! ```
+//! For reading/parsing of proofs, use the [`reader`] module. To write proofs to string use the
+//! [`writer`] module.
 
 pub mod reader;
 

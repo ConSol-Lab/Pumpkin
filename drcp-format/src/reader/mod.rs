@@ -1,39 +1,124 @@
+//! Proofs can be read using a [`ProofReader`]. It reads the proof line-by-line, and can be thought
+//! of as an Iterator over [`Step`].
+//!
+//! The reader does not do any form of validation of the proof. It is up to the consumer of this
+//! crate to ensure that constraint IDs are valid, that inference labels make sense, etc.
+//!
+//! ```
+//! use std::num::NonZero;
+//! use std::rc::Rc;
+//!
+//! use drcp_format::reader::ProofReader;
+//! use drcp_format::Inference;
+//! use drcp_format::IntAtomic;
+//! use drcp_format::IntComparison::*;
+//! use drcp_format::Step;
+//!
+//! let source = r#"
+//!     a 1 [x1 >= 0]
+//!     a 2 [x2 >= 0]
+//!     i 2 1 0 2 c:1 l:inf_name
+//!     n 3 1 -2 0 2
+//!     c UNSAT
+//! "#;
+//!
+//! let a1 = IntAtomic {
+//!     name: Rc::from("x1".to_owned()),
+//!     comparison: GreaterEqual,
+//!     value: 0,
+//! };
+//!
+//! let a2 = IntAtomic {
+//!     name: Rc::from("x2".to_owned()),
+//!     comparison: GreaterEqual,
+//!     value: 0,
+//! };
+//!
+//! let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+//!
+//! let inference = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(
+//!     inference,
+//!     Step::Inference(Inference {
+//!         constraint_id: NonZero::new(2).unwrap(),
+//!         premises: vec![a1],
+//!         consequent: Some(a2),
+//!         generated_by: Some(NonZero::new(1).unwrap()),
+//!         label: Some("inf_name".into()),
+//!     })
+//! );
+//!
+//! let deduction = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(
+//!     deduction,
+//!     Step::Deduction(Deduction {
+//!         constraint_id: NonZero::new(3).unwrap(),
+//!         premises: vec![a1, !a2],
+//!         sequence: vec![NonZero::new(2).unwrap()],
+//!     })
+//! );
+//!
+//! let conclusion = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(conclusion, Step::Conclusion(Conclusion::Unsat));
+//!
+//! let eof = reader.next_step().expect("no error reading");
+//! assert_eq!(eof, None);
+//! ```
+
+mod error;
+mod parser;
+
 use std::collections::BTreeMap;
-use std::io::BufRead;
-use std::io::{self};
+use std::io;
 use std::num::NonZero;
 use std::rc::Rc;
-use std::str::FromStr;
 
-use chumsky::error::Rich;
-use chumsky::extra;
-use chumsky::prelude::just;
-use chumsky::prelude::{choice, group};
-use chumsky::text::ident;
-use chumsky::text::int;
-use chumsky::IterParser;
 use chumsky::Parser;
+pub use error::*;
 
 use crate::Conclusion;
+use crate::Deduction;
 use crate::Inference;
 use crate::IntAtomic;
-use crate::IntComparison;
-use crate::IntComparison::*;
 use crate::IntValue;
 use crate::Step;
-use crate::{ConstraintId, Deduction};
 
+/// A parser of DRCP proofs. See module documentation on [`crate::reader`] for examples on how to
+/// use it.
 #[derive(Debug)]
 pub struct ProofReader<Source, Int> {
+    /// The source of the proof.
     source: Source,
 
+    /// The defined atomics that are used in the proof.
     atomics: BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
 
+    /// The buffer that holds the current line of `source`.
     line_buffer: String,
+
+    /// The line number currently being processed in the proof.
+    ///
+    /// Used for error reporting.
     line_nr: usize,
 }
 
 impl<Source, Int> ProofReader<Source, Int> {
+    /// Create a new [`ProofReader`].
+    ///
+    /// Note that [`ProofReader::next_step`] is only implemented for sources that implement
+    /// [`io::BufRead`]. It is up to the user to set up the buffered reader.
     pub fn new(source: Source) -> Self {
         ProofReader {
             source,
@@ -60,37 +145,26 @@ impl<Source, Int> ProofReader<Source, Int> {
             .get(&id.unsigned_abs())
             .cloned()
             .map(|atomic| if id.is_negative() { !atomic } else { atomic })
-            .ok_or_else(|| Error::UndefinedAtomic {
+            .ok_or(Error::UndefinedAtomic {
                 line: self.line_nr,
                 code: id,
             })
     }
 }
 
+/// The [`IntAtomic`] type that is produced by the [`ProofReader`].
 pub type ReadAtomic<Int> = IntAtomic<Rc<str>, Int>;
+/// The [`Step`] type that is produced by the [`ProofReader`].
 pub type ReadStep<Int> = Step<Rc<str>, Int, Rc<str>>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("failed to read from source: {0}")]
-    IoError(#[from] io::Error),
-
-    #[error("failed to parse proof line {line} {span:?}: {reason}")]
-    ParseError {
-        line: usize,
-        reason: String,
-        span: (usize, usize),
-    },
-
-    #[error("undefined atomic {code} on line {line}")]
-    UndefinedAtomic { line: usize, code: NonZero<i32> },
-}
 
 impl<Source, Int> ProofReader<Source, Int>
 where
-    Source: BufRead,
+    Source: io::BufRead,
     Int: IntValue,
 {
+    /// Parse the next [`Step`] from the proof file.
+    ///
+    /// The end-of-file is signified by the value `Ok(None)` and is _not_ an error.
     pub fn next_step(&mut self) -> Result<Option<ReadStep<Int>>, Error> {
         loop {
             self.line_buffer.clear();
@@ -111,8 +185,10 @@ where
                 continue;
             }
 
-            let proof_line: ProofLine<'_, Int> =
-                parser().parse(trimmed_line).into_result().map_err(|errs| {
+            let proof_line: parser::ProofLine<'_, Int> = parser::proof_line()
+                .parse(trimmed_line)
+                .into_result()
+                .map_err(|errs| {
                     assert_eq!(
                         errs.len(),
                         1,
@@ -120,17 +196,13 @@ where
                     );
 
                     let reason = format!("{}", errs[0]);
-                    let parse_span = errs[0].span();
+                    let span = errs[0].span();
 
-                    Error::ParseError {
-                        line: self.line_nr,
-                        span: (parse_span.start, parse_span.end),
-                        reason,
-                    }
+                    Error::parse_error(self.line_nr, reason, *span)
                 })?;
 
             match proof_line {
-                ProofLine::AtomDefinition(atomic_id, atomic) => {
+                parser::ProofLine::AtomDefinition(atomic_id, atomic) => {
                     let IntAtomic {
                         name,
                         comparison,
@@ -147,7 +219,7 @@ where
                     );
                 }
 
-                ProofLine::Inference {
+                parser::ProofLine::Inference {
                     constraint_id,
                     premises,
                     consequent,
@@ -165,7 +237,7 @@ where
                     return Ok(Some(Step::Inference(inference)));
                 }
 
-                ProofLine::Deduction {
+                parser::ProofLine::Deduction {
                     constraint_id,
                     premises,
                     sequence,
@@ -179,11 +251,11 @@ where
                     return Ok(Some(Step::Deduction(deduction)));
                 }
 
-                ProofLine::Conclusion(ProofLineConclusion::Unsat) => {
+                parser::ProofLine::Conclusion(parser::ProofLineConclusion::Unsat) => {
                     return Ok(Some(Step::Conclusion(Conclusion::Unsat)));
                 }
 
-                ProofLine::Conclusion(ProofLineConclusion::DualBound(code)) => {
+                parser::ProofLine::Conclusion(parser::ProofLineConclusion::DualBound(code)) => {
                     let bound = self.map_atomic_id(code)?;
                     return Ok(Some(Step::Conclusion(Conclusion::DualBound(bound))));
                 }
@@ -192,168 +264,10 @@ where
     }
 }
 
-fn parser<'src, Int>(
-) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    choice((atom_definition(), inference(), deduction(), conclusion()))
-}
-
-fn atom_definition<'src, Int>(
-) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    just("a")
-        .ignore_then(id())
-        .then(atomic())
-        .map(|(id, atomic)| ProofLine::AtomDefinition(id, atomic))
-}
-
-fn inference<'src, Int>(
-) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    group((
-        just("i"),
-        id(),
-        atom_codes(),
-        atom_code().or_not(),
-        just("c:").ignore_then(id()).padded().or_not(),
-        just("l:").ignore_then(ident()).padded().or_not(),
-    ))
-    .map(
-        |(_, constraint_id, premises, consequent, generated_by, label)| ProofLine::Inference {
-            constraint_id,
-            premises,
-            consequent,
-            generated_by,
-            label,
-        },
-    )
-}
-
-fn deduction<'src, Int>(
-) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    group((just("n"), id(), atom_codes(), id().repeated().collect())).map(
-        |(_, constraint_id, premises, sequence)| ProofLine::Deduction {
-            constraint_id,
-            premises,
-            sequence,
-        },
-    )
-}
-
-fn conclusion<'src, Int>(
-) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    just("c")
-        .ignore_then(choice((
-            just("UNSAT").padded().map(|_| ProofLineConclusion::Unsat),
-            atom_code().map(ProofLineConclusion::DualBound),
-        )))
-        .map(ProofLine::Conclusion)
-}
-
-fn atom_codes<'src>(
-) -> impl Parser<'src, &'src str, Vec<NonZero<i32>>, extra::Err<Rich<'src, char>>> {
-    atom_code()
-        .repeated()
-        .collect()
-        .then_ignore(just("0").padded())
-}
-
-fn atom_code<'src>() -> impl Parser<'src, &'src str, NonZero<i32>, extra::Err<Rich<'src, char>>> {
-    just("-")
-        .or_not()
-        .then(int(10))
-        .to_slice()
-        .try_map(|code: &'src str, span| {
-            code.parse::<NonZero<i32>>()
-                .map_err(|_| Rich::custom(span, "failed to parse atomic code"))
-        })
-        .labelled("atom code")
-        .padded()
-}
-
-fn id<'src>() -> impl Parser<'src, &'src str, NonZero<u32>, extra::Err<Rich<'src, char>>> {
-    int(10)
-        .try_map(|code: &'src str, span| {
-            code.parse::<NonZero<u32>>()
-                .map_err(|_| Rich::custom(span, "failed to parse atomic id"))
-        })
-        .labelled("constraint/atomic id")
-        .padded()
-}
-
-fn atomic<'src, Int>(
-) -> impl Parser<'src, &'src str, IntAtomic<&'src str, Int>, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    group((ident(), comparison(), value()))
-        .delimited_by(just("["), just("]"))
-        .padded()
-        .map(|(name, comparison, value)| IntAtomic {
-            name,
-            comparison,
-            value,
-        })
-}
-
-fn comparison<'src>() -> impl Parser<'src, &'src str, IntComparison, extra::Err<Rich<'src, char>>> {
-    choice((
-        just(">=").to(GreaterEqual),
-        just("<=").to(LessEqual),
-        just("==").to(Equal),
-        just("!=").to(NotEqual),
-    ))
-    .padded()
-}
-
-fn value<'src, Int>() -> impl Parser<'src, &'src str, Int, extra::Err<Rich<'src, char>>>
-where
-    Int: FromStr,
-{
-    int(10)
-        .try_map(|code, span| {
-            Int::from_str(code).map_err(|_| Rich::custom(span, "failed to parse domain value"))
-        })
-        .padded()
-}
-
-enum ProofLine<'src, Int> {
-    AtomDefinition(NonZero<u32>, IntAtomic<&'src str, Int>),
-    Inference {
-        constraint_id: ConstraintId,
-        premises: Vec<NonZero<i32>>,
-        consequent: Option<NonZero<i32>>,
-        generated_by: Option<ConstraintId>,
-        label: Option<&'src str>,
-    },
-    Deduction {
-        constraint_id: ConstraintId,
-        premises: Vec<NonZero<i32>>,
-        sequence: Vec<ConstraintId>,
-    },
-    Conclusion(ProofLineConclusion),
-}
-
-enum ProofLineConclusion {
-    Unsat,
-    DualBound(NonZero<i32>),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IntComparison::*;
 
     #[test]
     fn inference_with_consequent() {
