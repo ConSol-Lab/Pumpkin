@@ -365,13 +365,13 @@ mod tests {
 
         let a2 = IntAtomic {
             name: Rc::from("x2".to_owned()),
-            comparison: GreaterEqual,
-            value: 0,
+            comparison: LessEqual,
+            value: -1,
         };
 
         let expected_inference = Inference {
             constraint_id: NonZero::new(2).unwrap(),
-            premises: vec![a1, !a2],
+            premises: vec![a1, a2],
             consequent: None,
             generated_by: Some(NonZero::new(1).unwrap()),
             label: Some("inf_name".into()),
