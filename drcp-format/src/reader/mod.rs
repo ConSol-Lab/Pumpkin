@@ -7,8 +7,8 @@ use std::str::FromStr;
 
 use chumsky::error::Rich;
 use chumsky::extra;
-use chumsky::prelude::choice;
 use chumsky::prelude::just;
+use chumsky::prelude::{choice, group};
 use chumsky::text::ident;
 use chumsky::text::int;
 use chumsky::IterParser;
@@ -74,8 +74,12 @@ pub enum Error {
     #[error("failed to read from source: {0}")]
     IoError(#[from] io::Error),
 
-    #[error("failed to parse proof line {line}: {reason}")]
-    ParseError { line: usize, reason: String },
+    #[error("failed to parse proof line {line} {span:?}: {reason}")]
+    ParseError {
+        line: usize,
+        reason: String,
+        span: (usize, usize),
+    },
 
     #[error("undefined atomic {code} on line {line}")]
     UndefinedAtomic { line: usize, code: NonZero<i32> },
@@ -108,11 +112,18 @@ where
 
             let proof_line: ProofLine<'_, Int> =
                 parser().parse(trimmed_line).into_result().map_err(|errs| {
-                    assert_eq!(errs.len(), 1);
+                    assert_eq!(
+                        errs.len(),
+                        1,
+                        "since we do no recovery, any error will terminate the parsing immediately"
+                    );
 
                     let reason = format!("{}", errs[0]);
+                    let parse_span = errs[0].span();
+
                     Error::ParseError {
                         line: self.line_nr,
+                        span: (parse_span.start, parse_span.end),
                         reason,
                     }
                 })?;
@@ -192,55 +203,53 @@ fn inference<'src, Int>(
 where
     Int: FromStr,
 {
-    just("i")
-        .ignore_then(id())
-        .then(atom_codes())
-        .then(atom_code().or_not())
-        .then(just("c:").ignore_then(id()).or_not())
-        .then(just("l:").ignore_then(ident()).or_not())
-        .map(
-            |((((constraint_id, premises), consequent), generated_by), label)| {
-                ProofLine::Inference {
-                    constraint_id,
-                    premises,
-                    consequent,
-                    generated_by,
-                    label,
-                }
-            },
-        )
+    group((
+        just("i"),
+        id(),
+        atom_codes(),
+        atom_code().or_not(),
+        just("c:").ignore_then(id()).padded().or_not(),
+        just("l:").ignore_then(ident()).padded().or_not(),
+    ))
+    .map(
+        |(_, constraint_id, premises, consequent, generated_by, label)| ProofLine::Inference {
+            constraint_id,
+            premises,
+            consequent,
+            generated_by,
+            label,
+        },
+    )
 }
 
 fn atom_codes<'src>(
 ) -> impl Parser<'src, &'src str, Vec<NonZero<i32>>, extra::Err<Rich<'src, char>>> {
-    atom_code().repeated().collect().then_ignore(just("0"))
+    atom_code()
+        .repeated()
+        .collect()
+        .then_ignore(just("0").padded())
 }
 
 fn atom_code<'src>() -> impl Parser<'src, &'src str, NonZero<i32>, extra::Err<Rich<'src, char>>> {
     just("-")
         .or_not()
         .then(int(10))
-        .try_map(|(negation, code): (Option<&'src str>, &'src str), span| {
-            let code = code
-                .parse::<i32>()
-                .map_err(|_| Rich::custom(span, "failed to parse atomic code"))?;
-
-            let code = if negation.is_some() { -code } else { code };
-
-            NonZero::new(code).ok_or_else(|| Rich::custom(span, "atomics cannot have id 0"))
+        .to_slice()
+        .try_map(|code: &'src str, span| {
+            code.parse::<NonZero<i32>>()
+                .map_err(|_| Rich::custom(span, "failed to parse atomic code"))
         })
+        .labelled("atom code")
         .padded()
 }
 
 fn id<'src>() -> impl Parser<'src, &'src str, NonZero<u32>, extra::Err<Rich<'src, char>>> {
     int(10)
         .try_map(|code: &'src str, span| {
-            let code = code
-                .parse::<u32>()
-                .map_err(|_| Rich::custom(span, "failed to parse atomic id"))?;
-
-            NonZero::new(code).ok_or_else(|| Rich::custom(span, "atomics cannot have id 0"))
+            code.parse::<NonZero<u32>>()
+                .map_err(|_| Rich::custom(span, "failed to parse atomic id"))
         })
+        .labelled("constraint/atomic id")
         .padded()
 }
 
@@ -249,12 +258,10 @@ fn atomic<'src, Int>(
 where
     Int: FromStr,
 {
-    ident()
-        .then(comparison())
-        .then(value())
+    group((ident(), comparison(), value()))
         .delimited_by(just("["), just("]"))
         .padded()
-        .map(|((name, comparison), value)| IntAtomic {
+        .map(|(name, comparison, value)| IntAtomic {
             name,
             comparison,
             value,
