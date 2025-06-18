@@ -117,7 +117,7 @@ impl NogoodPropagator {
         id: NogoodId,
         notification_engine: &mut NotificationEngine,
     ) -> bool {
-        if notification_engine.is_id_falsified(self.nogood_predicates[id][0]) {
+        if notification_engine.is_id_falsified(self.nogood_predicates[id][0], assignments) {
             let trail_position = assignments
                 .get_trail_position(
                     &!notification_engine.get_predicate(self.nogood_predicates[id][0]),

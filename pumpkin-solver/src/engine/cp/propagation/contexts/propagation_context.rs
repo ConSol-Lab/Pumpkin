@@ -120,12 +120,14 @@ impl<'a> PropagationContextMut<'a> {
         self.assignments.get_decision_level()
     }
 
-    pub(crate) fn is_id_falsified(&self, predicate_id: PredicateId) -> bool {
-        self.notification_engine.is_id_falsified(predicate_id)
+    pub(crate) fn is_id_falsified(&mut self, predicate_id: PredicateId) -> bool {
+        self.notification_engine
+            .is_id_falsified(predicate_id, self.assignments)
     }
 
-    pub(crate) fn is_id_satisfied(&self, predicate_id: PredicateId) -> bool {
-        self.notification_engine.is_id_satisfied(predicate_id)
+    pub(crate) fn is_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
+        self.notification_engine
+            .is_id_satisfied(predicate_id, self.assignments)
     }
 }
 

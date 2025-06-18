@@ -9,7 +9,6 @@ pub(crate) use domain_event_notification::WatchListDomainEvents;
 pub(crate) use domain_event_notification::Watchers;
 use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateIdAssignments;
-use predicate_notification::PredicateIdInfo;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use super::propagation::PropagationContext;
@@ -25,7 +24,6 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
-use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -33,7 +31,7 @@ use crate::variables::DomainId;
 #[derive(Debug)]
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
-    predicate_notifier: PredicateNotifier,
+    pub(crate) predicate_notifier: PredicateNotifier,
     /// The trail index for which the last notification took place.
     last_notified_trail_index: usize,
     /// Contains information on which propagator to notify upon
@@ -293,58 +291,6 @@ impl NotificationEngine {
         self.notify_predicate_id_satisfied(propagators);
         self.notify_predicate_id_falsified(propagators);
 
-        // We assert that the PredicateIdAssignments are the same as the current Assignments
-        pumpkin_assert_extreme!(self
-            .predicate_notifier
-            .predicate_id_assignments
-            .predicate_ids()
-            .all(|predicate_id| {
-                let result = if self
-                    .predicate_notifier
-                    .predicate_id_assignments
-                    .is_untracked(predicate_id)
-                {
-                    true
-                } else {
-                    let predicate = self
-                        .predicate_notifier
-                        .predicate_to_id
-                        .get_predicate(predicate_id);
-                    match assignments.evaluate_predicate(predicate) {
-                        Some(satisfied) => {
-                            if satisfied {
-                                self.predicate_notifier
-                                    .predicate_id_assignments
-                                    .is_satisfied(predicate_id)
-                            } else {
-                                self.predicate_notifier
-                                    .predicate_id_assignments
-                                    .is_falsified(predicate_id)
-                            }
-                        }
-                        None => self
-                            .predicate_notifier
-                            .predicate_id_assignments
-                            .is_unassigned(predicate_id),
-                    }
-                };
-
-                if !result {
-                    let predicate = self
-                        .predicate_notifier
-                        .predicate_to_id
-                        .get_predicate(predicate_id);
-                    eprintln!(
-                        "Expected {:?} to be equal to {:?} for {predicate:?} with id {predicate_id:?}",
-                        self.predicate_notifier
-                            .predicate_id_assignments
-                            .get_info(predicate_id),
-                        assignments.evaluate_predicate(predicate),
-                    )
-                }
-                result
-            }));
-
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
 
@@ -543,16 +489,32 @@ impl NotificationEngine {
             .debug_create_from_assignments(assignments);
     }
 
-    pub(crate) fn is_id_satisfied(&self, predicate_id: PredicateId) -> bool {
+    pub(crate) fn is_id_satisfied(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+    ) -> bool {
         self.predicate_notifier
             .predicate_id_assignments
-            .is_satisfied(predicate_id)
+            .is_satisfied(
+                predicate_id,
+                assignments,
+                &mut self.predicate_notifier.predicate_to_id,
+            )
     }
 
-    pub(crate) fn is_id_falsified(&self, predicate_id: PredicateId) -> bool {
+    pub(crate) fn is_id_falsified(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+    ) -> bool {
         self.predicate_notifier
             .predicate_id_assignments
-            .is_falsified(predicate_id)
+            .is_falsified(
+                predicate_id,
+                assignments,
+                &mut self.predicate_notifier.predicate_to_id,
+            )
     }
 
     pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
@@ -563,83 +525,14 @@ impl NotificationEngine {
         &mut self,
         backtrack_level: usize,
         assignments: &Assignments,
-        trailed_values: &mut TrailedValues,
+        _trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(
             assignments.get_decision_level() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
         );
-        // First we collect all of the Predicate IDs which have been untrailed
-        let predicate_ids = self
-            .predicate_notifier
+        self.predicate_notifier
             .predicate_id_assignments
             .synchronise(backtrack_level)
-            .collect::<Vec<_>>();
-
-        // For each of these we need to do 2 things to keep the `PredicateIdAssignments` consistent
-        // with `Assignments`
-        for id in predicate_ids {
-            let predicate = self.predicate_notifier.get_predicate(id);
-
-            // 1. It could be that a predicate became assigned (either satisfied or falsified)
-            //    _before_ it was created. Then, it was created and put on the trail at a later
-            //    point. Now that we have backtracked, it is removed from the trail, however, since
-            //    it was true at an earlier point, it should still be on the trail.
-            //
-            //    We ensure that this happens by evaluating the predicate corresponding to the ID
-            //    which was backtracked to check whether it should still be assigned at this point
-            self.predicate_notifier
-                .predicate_id_assignments
-                .store_predicate(
-                    id,
-                    match assignments.evaluate_predicate(predicate) {
-                        Some(satisfied) => {
-                            if satisfied {
-                                PredicateIdInfo::AssignedTrue
-                            } else {
-                                PredicateIdInfo::AssignedFalse
-                            }
-                        }
-                        None => PredicateIdInfo::Unassigned,
-                    },
-                    true,
-                );
-            // 2. It could be the case that now that we have backtracked, the index has skipped over
-            //    a newly added predicate which is currently assigned and should be the position of
-            //    the new sentinel
-            //
-            // Note: The storage is consistent due to the first point. However, this is to update
-            // the index to the correct position.
-            //
-            // TODO: Maybe this is somewhat too much; is this necessary?
-            match predicate {
-                Predicate::NotEqual {
-                    domain_id: _,
-                    not_equal_constant: _,
-                } => {}
-                _ => {
-                    self.predicate_notifier.on_update(
-                        trailed_values,
-                        assignments,
-                        DomainEvent::LowerBound,
-                        predicate.get_domain(),
-                    );
-                    self.predicate_notifier.on_update(
-                        trailed_values,
-                        assignments,
-                        DomainEvent::UpperBound,
-                        predicate.get_domain(),
-                    );
-                    if assignments.is_fixed(predicate.get_domain()) {
-                        self.predicate_notifier.on_update(
-                            trailed_values,
-                            assignments,
-                            DomainEvent::Assign,
-                            predicate.get_domain(),
-                        );
-                    }
-                }
-            }
-        }
     }
 }
