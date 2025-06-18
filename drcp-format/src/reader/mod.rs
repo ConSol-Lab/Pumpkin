@@ -14,13 +14,13 @@ use chumsky::text::int;
 use chumsky::IterParser;
 use chumsky::Parser;
 
-use crate::ConstraintId;
 use crate::Inference;
 use crate::IntAtomic;
 use crate::IntComparison;
 use crate::IntComparison::*;
 use crate::IntValue;
 use crate::Step;
+use crate::{ConstraintId, Deduction};
 
 #[derive(Debug)]
 pub struct ProofReader<Source, Int> {
@@ -174,6 +174,25 @@ where
 
                     return Ok(Some(Step::Inference(inference)));
                 }
+
+                ProofLine::Deduction {
+                    constraint_id,
+                    premises,
+                    sequence,
+                } => {
+                    let deduction = Deduction {
+                        constraint_id,
+                        premises: self.map_atomic_ids(premises).map_err(|code| {
+                            Error::UndefinedAtomic {
+                                line: self.line_nr,
+                                code,
+                            }
+                        })?,
+                        sequence,
+                    };
+
+                    return Ok(Some(Step::Deduction(deduction)));
+                }
             }
         }
     }
@@ -184,7 +203,7 @@ fn parser<'src, Int>(
 where
     Int: FromStr,
 {
-    choice((atom_definition(), inference()))
+    choice((atom_definition(), inference(), deduction()))
 }
 
 fn atom_definition<'src, Int>(
@@ -218,6 +237,20 @@ where
             consequent,
             generated_by,
             label,
+        },
+    )
+}
+
+fn deduction<'src, Int>(
+) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
+where
+    Int: FromStr,
+{
+    group((just("n"), id(), atom_codes(), id().repeated().collect())).map(
+        |(_, constraint_id, premises, sequence)| ProofLine::Deduction {
+            constraint_id,
+            premises,
+            sequence,
         },
     )
 }
@@ -297,6 +330,11 @@ enum ProofLine<'src, Int> {
         consequent: Option<NonZero<i32>>,
         generated_by: Option<ConstraintId>,
         label: Option<&'src str>,
+    },
+    Deduction {
+        constraint_id: ConstraintId,
+        premises: Vec<NonZero<i32>>,
+        sequence: Vec<ConstraintId>,
     },
 }
 
@@ -378,5 +416,82 @@ mod tests {
         };
 
         assert_eq!(Step::Inference(expected_inference), inference);
+    }
+
+    #[test]
+    fn deduction_without_inferences() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            n 2 1 -2 0
+        "#;
+
+        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+
+        let deduction = reader
+            .next_step()
+            .expect("no error reading")
+            .expect("there is one proof step");
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: LessEqual,
+            value: -1,
+        };
+
+        let expected_deduction = Deduction {
+            constraint_id: NonZero::new(2).unwrap(),
+            premises: vec![a1, a2],
+            sequence: vec![],
+        };
+
+        assert_eq!(Step::Deduction(expected_deduction), deduction);
+    }
+
+    #[test]
+    fn deduction_with_inferences() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            n 5 1 -2 0 1 3 2 4
+        "#;
+
+        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+
+        let deduction = reader
+            .next_step()
+            .expect("no error reading")
+            .expect("there is one proof step");
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: LessEqual,
+            value: -1,
+        };
+
+        let expected_deduction = Deduction {
+            constraint_id: NonZero::new(5).unwrap(),
+            premises: vec![a1, a2],
+            sequence: vec![
+                NonZero::new(1).unwrap(),
+                NonZero::new(3).unwrap(),
+                NonZero::new(2).unwrap(),
+                NonZero::new(4).unwrap(),
+            ],
+        };
+
+        assert_eq!(Step::Deduction(expected_deduction), deduction);
     }
 }

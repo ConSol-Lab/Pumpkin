@@ -166,8 +166,21 @@ pub struct Inference<Identifier, Int, Label> {
     pub label: Option<Label>,
 }
 
+/// An deduction step.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Deduction<Identifier, Int> {
+    /// The ID of the step.
+    pub constraint_id: ConstraintId,
+    /// The premises of the proof.
+    pub premises: Vec<IntAtomic<Identifier, Int>>,
+    /// The constraints to apply to derive the deduction. These should point to [`Inference`]s, but
+    /// the parser does not verify that.
+    pub sequence: Vec<ConstraintId>,
+}
+
 /// An individual proof step from the proof.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Step<Identifier, Int, Label> {
     Inference(Inference<Identifier, Int, Label>),
+    Deduction(Deduction<Identifier, Int>),
 }
