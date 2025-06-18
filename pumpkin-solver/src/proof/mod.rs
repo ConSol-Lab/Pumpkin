@@ -7,21 +7,21 @@
 mod dimacs;
 mod finalizer;
 mod inference_code;
-mod proof_literals;
+mod proof_atomics;
 
 use std::fs::File;
-use std::num::NonZeroU64;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 
+use dimacs::DimacsProof;
 use drcp_format::writer::ProofWriter;
-pub use drcp_format::Format;
+use drcp_format::Deduction;
+use drcp_format::Inference;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
+use proof_atomics::ProofAtomics;
 
-use self::dimacs::DimacsProof;
-use self::proof_literals::ProofLiterals;
+use crate::containers::KeyGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
@@ -41,29 +41,20 @@ pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
 }
 
-/// A dummy proof step ID. Used when there is proof logging is not enabled.
-const DUMMY_STEP_ID: NonZeroU64 = NonZeroU64::new(1).unwrap();
-
 impl ProofLog {
     /// Create a CP proof logger.
-    pub fn cp(
-        file_path: &Path,
-        format: Format,
-        log_inferences: bool,
-        log_hints: bool,
-    ) -> std::io::Result<ProofLog> {
-        let definitions_path = file_path.with_extension("lits");
+    pub fn cp(file_path: &Path, log_hints: bool) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
-        let writer = ProofWriter::new(format, file, ProofLiterals::default());
+        let writer = ProofWriter::new(file);
 
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::CpProof {
                 writer,
-                log_inferences,
-                definitions_path,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 inference_codes: KeyedVec::default(),
+                proof_atomics: ProofAtomics::default(),
+                constraint_tags: KeyGenerator::default(),
             }),
         })
     }
@@ -82,88 +73,102 @@ impl ProofLog {
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
-    ) -> std::io::Result<NonZeroU64> {
+        variable_names: &VariableNames,
+    ) -> std::io::Result<ConstraintTag> {
         let Some(ProofImpl::CpProof {
             writer,
-            log_inferences: true,
-            propagation_order_hint,
+            propagation_order_hint: Some(propagation_sequence),
             inference_codes,
-            ..
+            constraint_tags,
+            proof_atomics,
         }) = self.internal_proof.as_mut()
         else {
-            return Ok(DUMMY_STEP_ID);
+            return Ok(ConstraintTag::create_from_index(0));
         };
 
         let (tag, label) = inference_codes[inference_code].clone();
-        let id = writer.log_inference(Some(tag.into()), Some(&label), premises, propagated)?;
 
-        if let Some(hints) = propagation_order_hint {
-            hints.push(id);
-        }
+        let constraint_tag = constraint_tags.next_key();
 
-        Ok(id)
-    }
-
-    /// Record that a step has been used in the derivation of the next nogood.
-    ///
-    /// Inferences are automatically added as a propagation hint when they are logged, this is
-    /// therefore only necessary when nogoods are used in a propagation.
-    pub(crate) fn add_propagation(&mut self, step_id: NonZeroU64) {
-        let Some(ProofImpl::CpProof {
-            propagation_order_hint: Some(ref mut hints),
-            ..
-        }) = self.internal_proof.as_mut()
-        else {
-            return;
+        let inference = Inference {
+            constraint_id: constraint_tag.into(),
+            premises: premises
+                .into_iter()
+                .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
+                .collect(),
+            consequent: propagated.map(|predicate| {
+                proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
+            }),
+            generated_by: Some(tag.into()),
+            label: Some(label),
         };
 
-        hints.push(step_id);
+        writer.log_inference(inference)?;
+
+        propagation_sequence.push(tag);
+
+        Ok(constraint_tag)
     }
 
-    /// Log a learned clause to the proof.
+    /// Log a deduction (learned nogood) to the proof.
     ///
     /// The inferences and marked propagations are assumed to be recorded in reverse-application
     /// order.
-    pub(crate) fn log_learned_clause(
+    pub(crate) fn log_deduction(
         &mut self,
-        literals: impl IntoIterator<Item = Predicate>,
+        premises: impl IntoIterator<Item = Predicate>,
         variable_names: &VariableNames,
-    ) -> std::io::Result<NonZeroU64> {
+    ) -> std::io::Result<ConstraintTag> {
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint,
+                constraint_tags,
+                proof_atomics,
                 ..
             }) => {
-                let propagation_hints = propagation_order_hint
-                    .as_ref()
-                    .map(|vec| vec.iter().rev().copied());
-                let id = writer.log_nogood_clause(literals, propagation_hints)?;
+                let constraint_tag = constraint_tags.next_key();
+
+                let deduction = Deduction {
+                    constraint_id: constraint_tag.into(),
+                    premises: premises
+                        .into_iter()
+                        .map(|premise| {
+                            proof_atomics.map_predicate_to_proof_atomic(premise, variable_names)
+                        })
+                        .collect(),
+                    sequence: propagation_order_hint
+                        .as_ref()
+                        .iter()
+                        .flat_map(|vec| vec.iter().rev().copied())
+                        .map(|tag| tag.into())
+                        .collect(),
+                };
+
+                writer.log_deduction(deduction)?;
 
                 // Clear the hints for the next nogood.
                 if let Some(hints) = propagation_order_hint.as_mut() {
                     hints.clear();
                 }
 
-                Ok(id)
+                Ok(constraint_tag)
             }
 
-            Some(ProofImpl::DimacsProof(writer)) => writer.learned_clause(literals, variable_names),
+            Some(ProofImpl::DimacsProof(writer)) => {
+                let clause = premises.into_iter().map(|predicate| !predicate);
+                writer.learned_clause(clause, variable_names)?;
+                Ok(ConstraintTag::create_from_index(0))
+            }
 
-            None => Ok(DUMMY_STEP_ID),
+            None => Ok(ConstraintTag::create_from_index(0)),
         }
     }
 
     pub(crate) fn unsat(self, variable_names: &VariableNames) -> std::io::Result<()> {
         match self.internal_proof {
-            Some(ProofImpl::CpProof {
-                writer,
-                definitions_path,
-                ..
-            }) => {
-                let literals = writer.unsat()?;
-                let file = File::create(definitions_path)?;
-                literals.write(file, variable_names)
+            Some(ProofImpl::CpProof { mut writer, .. }) => {
+                writer.log_conclusion::<&str>(drcp_format::Conclusion::Unsat)
             }
             Some(ProofImpl::DimacsProof(mut writer)) => writer
                 .learned_clause(std::iter::empty(), variable_names)
@@ -179,13 +184,14 @@ impl ProofLog {
     ) -> std::io::Result<()> {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
-                writer,
-                definitions_path,
+                mut writer,
+                mut proof_atomics,
                 ..
             }) => {
-                let literals = writer.optimal(objective_bound)?;
-                let file = File::create(definitions_path)?;
-                literals.write(file, variable_names)
+                let atomic =
+                    proof_atomics.map_predicate_to_proof_atomic(objective_bound, variable_names);
+
+                writer.log_conclusion::<&str>(drcp_format::Conclusion::DualBound(atomic))
             }
 
             Some(ProofImpl::DimacsProof(_)) => {
@@ -200,18 +206,22 @@ impl ProofLog {
         matches!(
             self.internal_proof,
             Some(ProofImpl::CpProof {
-                log_inferences: true,
+                propagation_order_hint: Some(_),
                 ..
             })
         )
     }
 
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
-        let Some(ProofImpl::CpProof { ref mut writer, .. }) = self.internal_proof else {
+        let Some(ProofImpl::CpProof {
+            ref mut proof_atomics,
+            ..
+        }) = self.internal_proof
+        else {
             return;
         };
 
-        writer.literals_mut().reify_predicate(literal, predicate);
+        proof_atomics.reify_predicate(literal, predicate);
     }
 
     /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
@@ -230,18 +240,30 @@ impl ProofLog {
             _ => InferenceCode::create_from_index(0),
         }
     }
+
+    /// Create a new constraint tag.
+    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
+        match self.internal_proof {
+            Some(ProofImpl::CpProof {
+                ref mut constraint_tags,
+                ..
+            }) => constraint_tags.next_key(),
+            _ => ConstraintTag::create_from_index(0),
+        }
+    }
 }
 
 #[derive(Debug)]
 enum ProofImpl {
     CpProof {
-        writer: ProofWriter<File, ProofLiterals>,
+        writer: ProofWriter<File, i32>,
         inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
-        log_inferences: bool,
-        definitions_path: PathBuf,
+        /// The [`ConstraintTag`]s generated for this proof.
+        constraint_tags: KeyGenerator<ConstraintTag>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the
         // order they can be applied to derive the next nogood.
-        propagation_order_hint: Option<Vec<NonZeroU64>>,
+        propagation_order_hint: Option<Vec<ConstraintTag>>,
+        proof_atomics: ProofAtomics,
     },
     DimacsProof(DimacsProof<File>),
 }

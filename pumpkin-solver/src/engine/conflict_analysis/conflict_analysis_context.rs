@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use drcp_format::steps::StepId;
-
 use super::minimisers::SemanticMinimiser;
 use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
@@ -20,6 +18,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
+use crate::engine::VariableNames;
 use crate::predicate;
 use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
@@ -47,8 +46,9 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
 
-    pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
+    pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
+    pub(crate) variable_names: &'a VariableNames,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -107,6 +107,7 @@ impl ConflictAnalysisContext<'_> {
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
+                    self.variable_names,
                 );
 
                 conflict.conjunction
@@ -128,9 +129,10 @@ impl ConflictAnalysisContext<'_> {
                     &mut RootExplanationContext {
                         propagators: self.propagators,
                         proof_log: self.proof_log,
-                        unit_nogood_step_ids: self.unit_nogood_step_ids,
+                        unit_nogood_inference_codes: self.unit_nogood_inference_codes,
                         assignments: self.assignments,
                         reason_store: self.reason_store,
+                        variable_names: self.variable_names,
                     },
                     predicate,
                 );
@@ -163,8 +165,9 @@ impl ConflictAnalysisContext<'_> {
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
         proof_log: &mut ProofLog,
-        unit_nogood_step_ids: &HashMap<Predicate, StepId>,
+        unit_nogood_step_ids: &HashMap<Predicate, InferenceCode>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+        variable_names: &VariableNames,
     ) {
         // TODO: this function could be put into the reason store
 
@@ -220,7 +223,7 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                let step_id = unit_nogood_step_ids
+                let inference_code = unit_nogood_step_ids
                     .get(&predicate)
                     .or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
@@ -232,13 +235,16 @@ impl ConflictAnalysisContext<'_> {
                         unit_nogood_step_ids.get(&predicate!(domain_id == right_hand_side))
                     })
                     .expect("Expected to be able to retrieve step id for unit nogood");
-                proof_log.add_propagation(*step_id);
+
+                let _ =
+                    proof_log.log_inference(*inference_code, [], Some(predicate), variable_names);
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
+                    variable_names,
                 );
             }
         }

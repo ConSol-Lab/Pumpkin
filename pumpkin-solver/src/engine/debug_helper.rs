@@ -467,9 +467,8 @@ impl DebugHelper {
                     // E.g., this can happen if the propagator reported [x >= a] and [x <= a-1].
                     debug!(
                         "Trivial failure detected in the given reason.\n
-                         The reported failure: {:?}\n
+                         The reported failure: {predicates:?}\n
                          Failure detected after trying to apply '{predicate}'.",
-                        predicates
                     );
                     return false;
                 }

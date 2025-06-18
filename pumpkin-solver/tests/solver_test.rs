@@ -13,13 +13,8 @@ use pumpkin_solver::Solver;
 #[test]
 fn proof_with_reified_literals() {
     let mut solver = Solver::with_options(SolverOptions {
-        proof_log: ProofLog::cp(
-            &PathBuf::from("/tmp/solver_proof.drcp"),
-            drcp_format::Format::Text,
-            true,
-            true,
-        )
-        .expect("created proof"),
+        proof_log: ProofLog::cp(&PathBuf::from("/tmp/solver_proof.drcp"), true)
+            .expect("created proof"),
         ..Default::default()
     });
 
@@ -45,13 +40,8 @@ fn proof_with_reified_literals() {
 #[test]
 fn proof_with_equality_unit_nogood_step() {
     let mut solver = Solver::with_options(SolverOptions {
-        proof_log: ProofLog::cp(
-            &PathBuf::from("/tmp/solver_proof.drcp"),
-            drcp_format::Format::Text,
-            true,
-            true,
-        )
-        .expect("created proof"),
+        proof_log: ProofLog::cp(&PathBuf::from("/tmp/solver_proof.drcp"), true)
+            .expect("created proof"),
         ..Default::default()
     });
 
