@@ -14,6 +14,7 @@ use chumsky::text::int;
 use chumsky::IterParser;
 use chumsky::Parser;
 
+use crate::Conclusion;
 use crate::Inference;
 use crate::IntAtomic;
 use crate::IntComparison;
@@ -42,10 +43,7 @@ impl<Source, Int> ProofReader<Source, Int> {
         }
     }
 
-    fn map_atomic_ids(
-        &self,
-        ids: Vec<NonZero<i32>>,
-    ) -> Result<Vec<IntAtomic<Rc<str>, Int>>, NonZero<i32>>
+    fn map_atomic_ids(&self, ids: Vec<NonZero<i32>>) -> Result<Vec<IntAtomic<Rc<str>, Int>>, Error>
     where
         Int: IntValue,
     {
@@ -54,7 +52,7 @@ impl<Source, Int> ProofReader<Source, Int> {
             .collect()
     }
 
-    fn map_atomic_id(&self, id: NonZero<i32>) -> Result<IntAtomic<Rc<str>, Int>, NonZero<i32>>
+    fn map_atomic_id(&self, id: NonZero<i32>) -> Result<IntAtomic<Rc<str>, Int>, Error>
     where
         Int: IntValue,
     {
@@ -62,7 +60,10 @@ impl<Source, Int> ProofReader<Source, Int> {
             .get(&id.unsigned_abs())
             .cloned()
             .map(|atomic| if id.is_negative() { !atomic } else { atomic })
-            .ok_or(id)
+            .ok_or_else(|| Error::UndefinedAtomic {
+                line: self.line_nr,
+                code: id,
+            })
     }
 }
 
@@ -155,19 +156,8 @@ where
                 } => {
                     let inference = Inference {
                         constraint_id,
-                        premises: self.map_atomic_ids(premises).map_err(|code| {
-                            Error::UndefinedAtomic {
-                                line: self.line_nr,
-                                code,
-                            }
-                        })?,
-                        consequent: consequent
-                            .map(|c| self.map_atomic_id(c))
-                            .transpose()
-                            .map_err(|code| Error::UndefinedAtomic {
-                                line: self.line_nr,
-                                code,
-                            })?,
+                        premises: self.map_atomic_ids(premises)?,
+                        consequent: consequent.map(|c| self.map_atomic_id(c)).transpose()?,
                         generated_by,
                         label: label.map(|label| label.into()),
                     };
@@ -182,16 +172,20 @@ where
                 } => {
                     let deduction = Deduction {
                         constraint_id,
-                        premises: self.map_atomic_ids(premises).map_err(|code| {
-                            Error::UndefinedAtomic {
-                                line: self.line_nr,
-                                code,
-                            }
-                        })?,
+                        premises: self.map_atomic_ids(premises)?,
                         sequence,
                     };
 
                     return Ok(Some(Step::Deduction(deduction)));
+                }
+
+                ProofLine::Conclusion(ProofLineConclusion::Unsat) => {
+                    return Ok(Some(Step::Conclusion(Conclusion::Unsat)));
+                }
+
+                ProofLine::Conclusion(ProofLineConclusion::DualBound(code)) => {
+                    let bound = self.map_atomic_id(code)?;
+                    return Ok(Some(Step::Conclusion(Conclusion::DualBound(bound))));
                 }
             }
         }
@@ -203,7 +197,7 @@ fn parser<'src, Int>(
 where
     Int: FromStr,
 {
-    choice((atom_definition(), inference(), deduction()))
+    choice((atom_definition(), inference(), deduction(), conclusion()))
 }
 
 fn atom_definition<'src, Int>(
@@ -253,6 +247,19 @@ where
             sequence,
         },
     )
+}
+
+fn conclusion<'src, Int>(
+) -> impl Parser<'src, &'src str, ProofLine<'src, Int>, extra::Err<Rich<'src, char>>>
+where
+    Int: FromStr,
+{
+    just("c")
+        .ignore_then(choice((
+            just("UNSAT").padded().map(|_| ProofLineConclusion::Unsat),
+            atom_code().map(ProofLineConclusion::DualBound),
+        )))
+        .map(ProofLine::Conclusion)
 }
 
 fn atom_codes<'src>(
@@ -336,6 +343,12 @@ enum ProofLine<'src, Int> {
         premises: Vec<NonZero<i32>>,
         sequence: Vec<ConstraintId>,
     },
+    Conclusion(ProofLineConclusion),
+}
+
+enum ProofLineConclusion {
+    Unsat,
+    DualBound(NonZero<i32>),
 }
 
 #[cfg(test)]
@@ -350,13 +363,6 @@ mod tests {
             i 2 1 0 2 c:1 l:inf_name
         "#;
 
-        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
-
-        let inference = reader
-            .next_step()
-            .expect("no error reading")
-            .expect("there is one proof step");
-
         let a1 = IntAtomic {
             name: Rc::from("x1".to_owned()),
             comparison: GreaterEqual,
@@ -369,15 +375,16 @@ mod tests {
             value: 0,
         };
 
-        let expected_inference = Inference {
-            constraint_id: NonZero::new(2).unwrap(),
-            premises: vec![a1],
-            consequent: Some(a2),
-            generated_by: Some(NonZero::new(1).unwrap()),
-            label: Some("inf_name".into()),
-        };
-
-        assert_eq!(Step::Inference(expected_inference), inference);
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1],
+                consequent: Some(a2),
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
     }
 
     #[test]
@@ -388,13 +395,6 @@ mod tests {
             i 2 1 -2 0 c:1 l:inf_name
         "#;
 
-        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
-
-        let inference = reader
-            .next_step()
-            .expect("no error reading")
-            .expect("there is one proof step");
-
         let a1 = IntAtomic {
             name: Rc::from("x1".to_owned()),
             comparison: GreaterEqual,
@@ -407,15 +407,16 @@ mod tests {
             value: -1,
         };
 
-        let expected_inference = Inference {
-            constraint_id: NonZero::new(2).unwrap(),
-            premises: vec![a1, a2],
-            consequent: None,
-            generated_by: Some(NonZero::new(1).unwrap()),
-            label: Some("inf_name".into()),
-        };
-
-        assert_eq!(Step::Inference(expected_inference), inference);
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1, a2],
+                consequent: None,
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
     }
 
     #[test]
@@ -426,13 +427,6 @@ mod tests {
             n 2 1 -2 0
         "#;
 
-        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
-
-        let deduction = reader
-            .next_step()
-            .expect("no error reading")
-            .expect("there is one proof step");
-
         let a1 = IntAtomic {
             name: Rc::from("x1".to_owned()),
             comparison: GreaterEqual,
@@ -445,13 +439,14 @@ mod tests {
             value: -1,
         };
 
-        let expected_deduction = Deduction {
-            constraint_id: NonZero::new(2).unwrap(),
-            premises: vec![a1, a2],
-            sequence: vec![],
-        };
-
-        assert_eq!(Step::Deduction(expected_deduction), deduction);
+        test_single_proof_line(
+            source,
+            Step::Deduction(Deduction {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1, a2],
+                sequence: vec![],
+            }),
+        );
     }
 
     #[test]
@@ -462,13 +457,6 @@ mod tests {
             n 5 1 -2 0 1 3 2 4
         "#;
 
-        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
-
-        let deduction = reader
-            .next_step()
-            .expect("no error reading")
-            .expect("there is one proof step");
-
         let a1 = IntAtomic {
             name: Rc::from("x1".to_owned()),
             comparison: GreaterEqual,
@@ -481,17 +469,54 @@ mod tests {
             value: -1,
         };
 
-        let expected_deduction = Deduction {
-            constraint_id: NonZero::new(5).unwrap(),
-            premises: vec![a1, a2],
-            sequence: vec![
-                NonZero::new(1).unwrap(),
-                NonZero::new(3).unwrap(),
-                NonZero::new(2).unwrap(),
-                NonZero::new(4).unwrap(),
-            ],
+        test_single_proof_line(
+            source,
+            Step::Deduction(Deduction {
+                constraint_id: NonZero::new(5).unwrap(),
+                premises: vec![a1, a2],
+                sequence: vec![
+                    NonZero::new(1).unwrap(),
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(2).unwrap(),
+                    NonZero::new(4).unwrap(),
+                ],
+            }),
+        );
+    }
+
+    #[test]
+    fn conclusion_unsat() {
+        let source = r#"
+            c UNSAT
+        "#;
+
+        test_single_proof_line(source, Step::Conclusion(Conclusion::Unsat));
+    }
+
+    #[test]
+    fn conclusion_dual_bound() {
+        let source = r#"
+            a 1 [x1 >= 4]
+            c 1
+        "#;
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 4,
         };
 
-        assert_eq!(Step::Deduction(expected_deduction), deduction);
+        test_single_proof_line(source, Step::Conclusion(Conclusion::DualBound(a1)));
+    }
+
+    fn test_single_proof_line(source: &str, expected_step: ReadStep<i32>) {
+        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+
+        let parsed_step = reader
+            .next_step()
+            .expect("no error reading")
+            .expect("there is one proof step");
+
+        assert_eq!(expected_step, parsed_step);
     }
 }

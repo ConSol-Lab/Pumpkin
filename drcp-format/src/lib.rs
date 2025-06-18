@@ -178,9 +178,20 @@ pub struct Deduction<Identifier, Int> {
     pub sequence: Vec<ConstraintId>,
 }
 
+/// The conclusion of the proof. This is the final line, and a proof without a conclusion can be
+/// considered incomplete. All steps after the conclusion can be ignored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Conclusion<Identifier, Int> {
+    /// The problem is unsatisfiable.
+    Unsat,
+    /// The proof concludes the given dual bound.
+    DualBound(IntAtomic<Identifier, Int>),
+}
+
 /// An individual proof step from the proof.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Step<Identifier, Int, Label> {
     Inference(Inference<Identifier, Int, Label>),
     Deduction(Deduction<Identifier, Int>),
+    Conclusion(Conclusion<Identifier, Int>),
 }
