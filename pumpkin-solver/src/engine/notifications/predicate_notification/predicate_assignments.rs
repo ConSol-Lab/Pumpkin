@@ -40,6 +40,10 @@ impl PredicateIdInfo {
     fn is_unknown(&self) -> bool {
         matches!(self, PredicateIdInfo::Unknown)
     }
+
+    fn is_unassigned(&self) -> bool {
+        matches!(self, PredicateIdInfo::Unassigned)
+    }
 }
 
 impl PredicateIdAssignments {
@@ -151,6 +155,13 @@ impl PredicateIdAssignments {
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
         self.trail
             .synchronise(new_decision_level)
-            .for_each(|predicate_id| self.domains[predicate_id] = PredicateIdInfo::Unknown)
+            .for_each(|predicate_id| {
+                // If the predicate id is unassigned then backtracking will not change anything;
+                // this is more of a sanity check since it should not be on the trail if it is
+                // unassigned
+                if !self.domains[predicate_id].is_unassigned() {
+                    self.domains[predicate_id] = PredicateIdInfo::Unknown
+                }
+            })
     }
 }
