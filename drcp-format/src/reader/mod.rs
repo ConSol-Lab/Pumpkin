@@ -9,6 +9,8 @@
 //! use std::rc::Rc;
 //!
 //! use drcp_format::reader::ProofReader;
+//! use drcp_format::Conclusion;
+//! use drcp_format::Deduction;
 //! use drcp_format::Inference;
 //! use drcp_format::IntAtomic;
 //! use drcp_format::IntComparison::*;
@@ -45,8 +47,8 @@
 //!     inference,
 //!     Step::Inference(Inference {
 //!         constraint_id: NonZero::new(2).unwrap(),
-//!         premises: vec![a1],
-//!         consequent: Some(a2),
+//!         premises: vec![a1.clone()],
+//!         consequent: Some(a2.clone()),
 //!         generated_by: Some(NonZero::new(1).unwrap()),
 //!         label: Some("inf_name".into()),
 //!     })
@@ -61,7 +63,7 @@
 //!     deduction,
 //!     Step::Deduction(Deduction {
 //!         constraint_id: NonZero::new(3).unwrap(),
-//!         premises: vec![a1, !a2],
+//!         premises: vec![a1.clone(), !a2],
 //!         sequence: vec![NonZero::new(2).unwrap()],
 //!     })
 //! );

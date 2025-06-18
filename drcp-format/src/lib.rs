@@ -5,13 +5,14 @@
 //! [`writer`] module.
 
 pub mod reader;
+pub mod writer;
 
 use std::fmt::Display;
 use std::num::NonZero;
 use std::ops::Not;
 use std::str::FromStr;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntComparison {
     GreaterEqual,
     LessEqual,
@@ -32,7 +33,7 @@ impl Display for IntComparison {
     }
 }
 
-pub trait IntValue: Clone + FromStr {
+pub trait IntValue: Clone + Display + FromStr + Ord {
     fn increment(&self) -> Self;
     fn decrement(&self) -> Self;
 }
@@ -57,11 +58,22 @@ impl_int_value!(i32);
 impl_int_value!(i64);
 
 /// An integer atomic constraint of the form `[name op value]`, where `op` is an [`IntComparison`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IntAtomic<Identifier, Int> {
     pub name: Identifier,
     pub comparison: IntComparison,
     pub value: Int,
+}
+
+impl<Identifier, Int> IntAtomic<Identifier, Int> {
+    /// Create a new integer atomic.
+    pub fn new(name: Identifier, comparison: IntComparison, value: Int) -> Self {
+        IntAtomic {
+            name,
+            comparison,
+            value,
+        }
+    }
 }
 
 impl<Identifier: Display, Int: Display> Display for IntAtomic<Identifier, Int> {

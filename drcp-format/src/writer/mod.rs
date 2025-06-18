@@ -1,400 +1,328 @@
 //! Implements the writing of DRCP files.
 //!
-//! See [`ProofWriter`] for more information on how to write proofs.
+//! # Example
+//! ```
+//! use std::num::NonZero;
+//!
+//! use drcp_format::writer::ProofWriter;
+//! use drcp_format::Conclusion;
+//! use drcp_format::Deduction;
+//! use drcp_format::Inference;
+//! use drcp_format::IntAtomic;
+//! use drcp_format::IntComparison::*;
+//!
+//! let mut buffer = Vec::new();
+//! let mut writer = ProofWriter::new(&mut buffer);
+//!
+//! writer
+//!     .log_inference(Inference {
+//!         constraint_id: NonZero::new(2).unwrap(),
+//!         premises: vec![
+//!             IntAtomic::new("x1", GreaterEqual, 1),
+//!             IntAtomic::new("x2", LessEqual, 3),
+//!         ],
+//!         consequent: Some(IntAtomic::new("x3", Equal, -3)),
+//!         generated_by: Some(NonZero::new(1).unwrap()),
+//!         label: Some("inf_name"),
+//!     })
+//!     .unwrap();
+//!
+//! writer
+//!     .log_deduction(Deduction {
+//!         constraint_id: NonZero::new(3).unwrap(),
+//!         premises: vec![
+//!             IntAtomic::new("x1", GreaterEqual, 1),
+//!             IntAtomic::new("x2", GreaterEqual, 4),
+//!         ],
+//!         sequence: vec![NonZero::new(2).unwrap()],
+//!     })
+//!     .unwrap();
+//!
+//! writer.log_conclusion::<&str>(Conclusion::Unsat).unwrap();
+//!
+//! let proof_string = String::from_utf8(buffer).expect("valid utf8");
+//! let expected = r#"
+//! a 1 [x1 >= 1]
+//! a 2 [x2 <= 3]
+//! a 3 [x3 == -3]
+//! i 2 1 2 0 3 c:1 l:inf_name
+//! n 3 1 -2 0 2
+//! c UNSAT
+//! "#;
+//!
+//! assert_eq!(expected.trim(), proof_string.trim());
+//! ```
 
-mod literal_code_provider;
-
-use std::io::BufWriter;
+use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::io::Write;
 use std::num::NonZero;
-use std::num::NonZeroI32;
-use std::num::NonZeroU64;
 
-pub use literal_code_provider::*;
+use crate::Conclusion;
+use crate::Deduction;
+use crate::Inference;
+use crate::IntAtomic;
+use crate::IntValue;
 
-use crate::format::Format;
-use crate::steps::Conclusion;
-use crate::steps::Deletion;
-use crate::steps::Inference;
-use crate::steps::Nogood;
-use crate::steps::StepId;
-
-/// Abstraction for writing DRCP proofs.
+/// Write a DRCP proof to some sink.
 ///
-/// # Example
-/// ```
-/// # use std::num::NonZeroI32;
-/// # use drcp_format::Format;
-/// # use drcp_format::writer::ProofWriter;
-/// # use drcp_format::steps::StepId;
-/// let mut proof: Vec<u8> = Vec::new();
-/// let mut writer = ProofWriter::new(Format::Text, &mut proof, std::convert::identity);
-///
-/// let lit = |num: i32| NonZeroI32::new(num).unwrap();
-/// writer
-///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], Some(lit(-2)))
-///     .unwrap();
-/// let nogood_id = writer
-///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None::<[StepId; 0]>)
-///     .unwrap();
-/// writer.log_deletion(nogood_id).unwrap();
-/// writer.unsat().unwrap();
-///
-/// let expected = "
-/// i 1 4 5 0 -2 l:linear_bound
-/// n 2 1 -3 5
-/// d 2
-/// c UNSAT
-/// ";
-/// assert_eq!(std::str::from_utf8(&proof).unwrap(), expected.trim_start());
-/// ```
+/// See the module documentation of [`crate::writer`] for examples on how to use the
+/// [`ProofWriter`].
 #[derive(Debug)]
-pub struct ProofWriter<W: Write, Literals> {
+pub struct ProofWriter<W, Int> {
     /// The writer to the underlying sink.
-    writer: BufWriter<W>,
-    /// The format in which to log the proof.
-    format: Format,
+    writer: W,
+
     /// A container for all the literals which are seen in the proof. Unseen literals need not be
     /// defined in the literal definition file.
-    encountered_literals: Literals,
-    /// The id for the next step which is logged.
-    next_step_id: StepId,
+    defined_atomics: BTreeMap<IntAtomic<Box<str>, Int>, NonZero<i32>>,
+
+    /// The next ID to use when a new atomic needs to be defined.
+    next_atomic_id: i32,
 }
 
-impl<W: Write, Literals> ProofWriter<W, Literals> {
+impl<W: Write, Int> ProofWriter<W, Int> {
     /// Create a new proof writer which writes the proof to an underlying sink implementing
     /// [`Write`].
-    pub fn new(format: Format, writer: W, encountered_literals: Literals) -> Self {
+    pub fn new(writer: W) -> Self {
         Self {
-            format,
-            writer: BufWriter::new(writer),
-            encountered_literals,
-            next_step_id: NonZeroU64::new(1).unwrap(),
+            writer,
+            defined_atomics: BTreeMap::default(),
+            next_atomic_id: 0,
         }
     }
 }
 
-impl<W: Write, Literals> ProofWriter<W, Literals> {
-    /// Get the encountered literals instance to be mutated.
-    pub fn literals_mut(&mut self) -> &mut Literals {
-        &mut self.encountered_literals
-    }
-}
-
-impl<W, Literals> ProofWriter<W, Literals>
-where
-    W: Write,
-    Literals: LiteralCodeProvider,
-{
-    /// Write a nogood step.
+impl<W: Write, Int: IntValue> ProofWriter<W, Int> {
+    /// Write a deduction step.
     ///
-    /// This step can be referenced by the [`StepId`] that is returned. Such a reference may occur
-    /// when the nogood is deleted, or used in the derivation of another nogood as a hint.
-    ///
-    /// The `propagation_hints` can be optionally given to indicate the order in which the given
-    /// steps can be applied to derive the conflict under reverse propagation.
+    /// The `propagation_hints` can be optionally given to indicate which previously derived facts
+    /// should be applied to derive the conflict.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    ///
-    /// # Note
-    /// The nogood *must* be given in its clausal form, i.e. a disjunction of literals, not as a
-    /// conjunction of literals.
-    pub fn log_nogood_clause(
+    pub fn log_deduction<Identifier: Into<Box<str>>>(
         &mut self,
-        nogood: impl IntoIterator<Item = Literals::Literal>,
-        propagation_hints: Option<impl IntoIterator<Item = StepId>>,
-    ) -> std::io::Result<StepId> {
-        let id = self.next_step_id();
+        deduction: Deduction<Identifier, Int>,
+    ) -> std::io::Result<()> {
+        let Deduction {
+            constraint_id,
+            premises,
+            sequence,
+        } = deduction;
 
-        let nogood = Nogood {
-            id,
-            literals: nogood
-                .into_iter()
-                .map(|pred| self.encountered_literals.to_code(pred)),
-            hints: propagation_hints,
-        };
+        let premises = premises
+            .into_iter()
+            .map(|premise| self.get_atomic_code(premise))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        nogood.write(self.format, &mut self.writer)?;
+        write!(&mut self.writer, "n {constraint_id}")?;
 
-        Ok(id)
-    }
+        for code in premises {
+            write!(&mut self.writer, " {code}")?;
+        }
 
-    fn next_step_id(&mut self) -> NonZero<u64> {
-        let id = self.next_step_id;
-        self.next_step_id = self.next_step_id.checked_add(1).unwrap();
-        id
-    }
+        write!(&mut self.writer, " 0")?;
 
-    /// Log that the nogood with the given ID can be deleted.
-    ///
-    /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_deletion(&mut self, nogood_id: StepId) -> std::io::Result<()> {
-        Deletion::new(nogood_id).write(self.format, &mut self.writer)
+        for constraint_id in sequence {
+            write!(&mut self.writer, " {constraint_id}")?;
+        }
+
+        writeln!(&mut self.writer)?;
+
+        Ok(())
     }
 
     /// Log an inference step.
     ///
-    /// Besides premises and a conclusion, an inference step can optionally include hints regarding
-    /// the constraint that implied the inference, and the label of the filtering algorithm which
+    /// Besides premises and a consequent, an inference step can optionally include hints regarding
+    /// the constraint that generated the inference, and the label of the filtering algorithm which
     /// identified the inference.
     ///
-    /// If there is no conclusion, then the format prescribes that the conclusion is false, so that
+    /// If there is no consequent, then the format prescribes that the consequent is false, so that
     /// the premises form a nogood.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_inference(
+    pub fn log_inference<Identifier: Into<Box<str>>, Label: Display>(
         &mut self,
-        hint_constraint_id: Option<NonZero<u32>>,
-        hint_label: Option<&str>,
-        premises: impl IntoIterator<Item = Literals::Literal>,
-        propagated: Option<Literals::Literal>,
-    ) -> std::io::Result<StepId> {
-        let propagated = propagated.map(|p| self.encountered_literals.to_code(p));
-        let id = self.next_step_id();
+        inference: Inference<Identifier, Int, Label>,
+    ) -> std::io::Result<()> {
+        let Inference {
+            constraint_id,
+            premises,
+            consequent,
+            generated_by,
+            label,
+        } = inference;
 
-        let inference = Inference {
-            id,
-            hint_constraint_id,
-            hint_label,
-            premises: premises
-                .into_iter()
-                .map(|pred| self.encountered_literals.to_code(pred)),
-            propagated,
-        };
+        let premises = premises
+            .into_iter()
+            .map(|premise| self.get_atomic_code(premise))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        inference.write(self.format, &mut self.writer)?;
+        let consequent = consequent
+            .map(|premise| self.get_atomic_code(premise))
+            .transpose()?;
 
-        Ok(id)
-    }
+        write!(&mut self.writer, "i {constraint_id}")?;
 
-    /// Conclude with the unsatisfiable claim.
-    ///
-    /// Since the conclusion is the very last step in the proof, this method takes ownership of
-    /// [`Self`], to ensure no more steps can be written after this one.
-    ///
-    /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn unsat(self) -> std::io::Result<Literals> {
-        self.conclude(Conclusion::Unsatisfiable)
-    }
-
-    /// Conclude the proof with the optimality claim, and log the bound of the objective variable.
-    ///
-    /// Since the conclusion is the very last step in the proof, this method takes ownership of
-    /// [`Self`], to ensure no more steps can be written after this one.
-    ///
-    /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn optimal(mut self, objective_bound: Literals::Literal) -> std::io::Result<Literals> {
-        let code = self.encountered_literals.to_code(objective_bound);
-        self.conclude(Conclusion::Optimal(code))
-    }
-
-    fn conclude(mut self, conclusion: Conclusion<NonZeroI32>) -> std::io::Result<Literals> {
-        conclusion.write(self.format, &mut self.writer)?;
-        Ok(self.encountered_literals)
-    }
-}
-
-trait WritableProofStep: Sized {
-    /// Write the proof step in the string form.
-    fn write_string(self, sink: &mut impl Write) -> std::io::Result<()>;
-
-    /// Write the proof step as binary.
-    fn write_binary(self, sink: &mut impl Write) -> std::io::Result<()>;
-
-    /// Write the step in the given format to the given sink.
-    fn write(self, format: Format, sink: &mut impl Write) -> std::io::Result<()> {
-        match format {
-            Format::Text => self.write_string(sink),
-            Format::Binary => self.write_binary(sink),
-        }
-    }
-}
-
-impl<Literals, Hints> WritableProofStep for Nogood<Literals, Hints>
-where
-    Literals: IntoIterator<Item = NonZeroI32>,
-    Hints: IntoIterator<Item = StepId>,
-{
-    fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        write!(sink, "n {}", self.id)?;
-
-        for literal in self.literals {
-            write!(sink, " {literal}")?;
+        for code in premises {
+            write!(&mut self.writer, " {code}")?;
         }
 
-        if let Some(hints) = self.hints {
-            write!(sink, " 0")?;
+        write!(&mut self.writer, " 0")?;
 
-            for hint in hints {
-                write!(sink, " {hint}")?;
+        if let Some(code) = consequent {
+            write!(&mut self.writer, " {code}")?;
+        }
+
+        if let Some(generated_by) = generated_by {
+            write!(&mut self.writer, " c:{generated_by}")?;
+        }
+
+        if let Some(label) = label {
+            write!(&mut self.writer, " l:{label}")?;
+        }
+
+        writeln!(&mut self.writer)?;
+
+        Ok(())
+    }
+
+    /// Conclude the proof with a conclusion.
+    pub fn log_conclusion<Identifier: Into<Box<str>>>(
+        &mut self,
+        conclusion: Conclusion<Identifier, Int>,
+    ) -> std::io::Result<()> {
+        match conclusion {
+            Conclusion::Unsat => writeln!(&mut self.writer, "c UNSAT"),
+            Conclusion::DualBound(atomic) => {
+                let code = self.get_atomic_code(atomic)?;
+                writeln!(&mut self.writer, "c {code}")
             }
         }
-
-        writeln!(sink)?;
-
-        Ok(())
     }
 
-    fn write_binary(self, _sink: &mut impl Write) -> std::io::Result<()> {
-        todo!()
-    }
-}
+    fn get_atomic_code<Identifier: Into<Box<str>>>(
+        &mut self,
+        atomic: IntAtomic<Identifier, Int>,
+    ) -> std::io::Result<NonZero<i32>> {
+        let key = IntAtomic {
+            name: atomic.name.into(),
+            comparison: atomic.comparison,
+            value: atomic.value,
+        };
 
-impl WritableProofStep for Conclusion<NonZeroI32> {
-    fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        match self {
-            Conclusion::Unsatisfiable => writeln!(sink, "c UNSAT"),
-            Conclusion::Optimal(literal) => writeln!(sink, "c {literal}"),
-        }
-    }
+        if !self.defined_atomics.contains_key(&key) {
+            self.next_atomic_id += 1;
 
-    fn write_binary(self, _sink: &mut impl Write) -> std::io::Result<()> {
-        todo!()
-    }
-}
+            let id = NonZero::new(self.next_atomic_id)
+                .expect("next_atomic_id starts at 0, and is incremented, so it can never be 0");
 
-impl<Premises> WritableProofStep for Inference<'_, Premises, NonZeroI32>
-where
-    Premises: IntoIterator<Item = NonZeroI32>,
-{
-    fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        write!(sink, "i {}", self.id)?;
+            let _ = self.defined_atomics.insert(key.clone(), id);
+            let _ = self.defined_atomics.insert(!key.clone(), -id);
 
-        for literal in self.premises {
-            write!(sink, " {literal}")?;
+            writeln!(&mut self.writer, "a {id} {key}")?;
         }
 
-        if let Some(propagated) = self.propagated {
-            write!(sink, " 0 {propagated}")?;
-        }
-
-        if let Some(constraint_id) = self.hint_constraint_id {
-            write!(sink, " c:{constraint_id}")?;
-        }
-
-        if let Some(label) = self.hint_label {
-            write!(sink, " l:{label}")?;
-        }
-
-        writeln!(sink)?;
-
-        Ok(())
-    }
-
-    fn write_binary(self, _sink: &mut impl Write) -> std::io::Result<()> {
-        todo!()
-    }
-}
-
-impl WritableProofStep for Deletion {
-    fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        writeln!(sink, "d {}", self.id)
-    }
-
-    fn write_binary(self, _sink: &mut impl Write) -> std::io::Result<()> {
-        todo!()
+        Ok(self.defined_atomics[&key])
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use IntComparison::*;
 
-    const TEST_ID: NonZeroU64 = NonZeroU64::new(1).unwrap();
+    use super::*;
+    use crate::ConstraintId;
+    use crate::IntComparison;
+    use crate::Step;
+
+    const TEST_ID: ConstraintId = NonZero::new(5).unwrap();
 
     #[test]
     fn write_basic_inference() {
         test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: None,
-                hint_label: None,
-                premises: [lit(2), lit(-3)],
-                propagated: Some(lit(1)),
-            },
-            "i 1 2 -3 0 1\n",
+            Step::Inference(Inference {
+                constraint_id: TEST_ID,
+                premises: vec![atomic("x1", GreaterEqual, 1), atomic("x2", LessEqual, 3)],
+                consequent: Some(atomic("x3", Equal, -3)),
+                generated_by: None,
+                label: None,
+            }),
+            vec![
+                "a 1 [x1 >= 1]",
+                "a 2 [x2 <= 3]",
+                "a 3 [x3 == -3]",
+                "i 5 1 2 0 3",
+            ],
         );
     }
 
     #[test]
-    fn write_inference_with_label() {
+    fn write_basic_deduction_without_sequence() {
         test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: None,
-                hint_label: Some("inf_label"),
-                premises: [lit(2), lit(-3)],
-                propagated: Some(lit(1)),
-            },
-            "i 1 2 -3 0 1 l:inf_label\n",
+            Step::Deduction(Deduction {
+                constraint_id: TEST_ID,
+                premises: vec![atomic("x1", GreaterEqual, 1), atomic("x2", LessEqual, 3)],
+                sequence: vec![],
+            }),
+            vec!["a 1 [x1 >= 1]", "a 2 [x2 <= 3]", "n 5 1 2 0"],
         );
     }
 
     #[test]
-    fn write_inference_with_constraint_id() {
+    fn write_basic_deduction_with_sequence() {
         test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: Some(NonZero::new(1).unwrap()),
-                hint_label: None,
-                premises: [lit(2), lit(-3)],
-                propagated: Some(lit(1)),
-            },
-            "i 1 2 -3 0 1 c:1\n",
+            Step::Deduction(Deduction {
+                constraint_id: TEST_ID,
+                premises: vec![atomic("x1", GreaterEqual, 1), atomic("x2", LessEqual, 3)],
+                sequence: vec![
+                    NonZero::new(1).unwrap(),
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(4).unwrap(),
+                    NonZero::new(2).unwrap(),
+                ],
+            }),
+            vec!["a 1 [x1 >= 1]", "a 2 [x2 <= 3]", "n 5 1 2 0 1 3 4 2"],
         );
     }
 
     #[test]
-    fn write_inference_with_constraint_id_and_label() {
-        test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: Some(NonZero::new(1).unwrap()),
-                hint_label: Some("inf_label"),
-                premises: [lit(2), lit(-3)],
-                propagated: Some(lit(1)),
-            },
-            "i 1 2 -3 0 1 c:1 l:inf_label\n",
-        );
+    fn write_conclusion_unsat() {
+        test_step_serialization(Step::Conclusion(Conclusion::Unsat), vec!["c UNSAT"]);
     }
 
     #[test]
-    fn write_inference_without_conclusion_with_hints() {
+    fn write_conclusion_dual_bound() {
         test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: Some(NonZero::new(1).unwrap()),
-                hint_label: Some("inf_label"),
-                premises: [lit(2), lit(-3)],
-                propagated: None,
-            },
-            "i 1 2 -3 c:1 l:inf_label\n",
+            Step::Conclusion(Conclusion::DualBound(atomic("x1", GreaterEqual, 100))),
+            vec!["a 1 [x1 >= 100]", "c 1"],
         );
     }
 
-    #[test]
-    fn write_inference_without_conclusion_without_hints() {
-        test_step_serialization(
-            Inference {
-                id: TEST_ID,
-                hint_constraint_id: None,
-                hint_label: None,
-                premises: [lit(2), lit(-3)],
-                propagated: None,
-            },
-            "i 1 2 -3\n",
-        );
+    fn atomic(name: &str, comparison: IntComparison, value: i32) -> IntAtomic<&str, i32> {
+        IntAtomic {
+            name,
+            comparison,
+            value,
+        }
     }
 
-    fn lit(num: i32) -> NonZero<i32> {
-        NonZero::new(num).unwrap()
-    }
-
-    fn test_step_serialization(step: impl WritableProofStep, expected: &str) {
+    fn test_step_serialization(step: Step<&str, i32, &str>, lines: Vec<&str>) {
         let mut buffer = Vec::new();
-        step.write_string(&mut buffer).expect("no error writing");
+
+        {
+            let mut writer = ProofWriter::new(&mut buffer);
+
+            match step {
+                Step::Inference(inference) => writer.log_inference(inference).unwrap(),
+                Step::Deduction(deduction) => writer.log_deduction(deduction).unwrap(),
+                Step::Conclusion(conclusion) => writer.log_conclusion(conclusion).unwrap(),
+            }
+        }
 
         let actual = String::from_utf8(buffer).expect("valid utf8");
-        assert_eq!(expected, actual);
+        let expected = lines.join("\n");
+        assert_eq!(expected.trim(), actual.trim());
     }
 }
