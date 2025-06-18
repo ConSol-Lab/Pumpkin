@@ -33,6 +33,9 @@ impl Display for IntComparison {
     }
 }
 
+/// A contract that must be observed for the value in an [`IntAtomic`].
+///
+/// Implementations are provided for signed machine integers.
 pub trait IntValue: Clone + Display + FromStr + Ord {
     fn increment(&self) -> Self;
     fn decrement(&self) -> Self;
