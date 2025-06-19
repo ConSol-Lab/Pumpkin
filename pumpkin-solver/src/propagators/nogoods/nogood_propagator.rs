@@ -73,6 +73,17 @@ pub(crate) struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
 }
 
+/// Watcher for a single nogood.
+///
+/// A watcher is a combination of a nogood ID and a cached predicate. If the nogood has a predicate
+/// that evaluated to `false`, it will be made the cached predicate. That way, whenever the watcher
+/// is triggered, the propagator can quickly determine if the nogood can be skipped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Watcher {
+    nogood_id: NogoodId,
+    cached_predicate: Predicate,
+}
+
 impl PropagatorConstructor for NogoodPropagator {
     type PropagatorImpl = Self;
 
@@ -238,10 +249,7 @@ impl Propagator for NogoodPropagator {
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
                             nogood_predicates[1],
-                            Watcher {
-                                nogood_id: watcher.nogood_id,
-                                cached_predicate: nogood_predicates[0],
-                            },
+                            watcher,
                             context.notification_engine,
                             context.trailed_values,
                             &mut self.watch_lists,
@@ -896,13 +904,6 @@ impl NogoodPropagator {
         }
         true
     }
-}
-
-/// Watcher for a single nogood. It contains the cached predicate for that nogood.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Watcher {
-    nogood_id: NogoodId,
-    cached_predicate: Predicate,
 }
 
 #[cfg(test)]
