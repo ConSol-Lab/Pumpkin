@@ -76,8 +76,9 @@ pub(crate) struct NogoodPropagator {
 /// Watcher for a single nogood.
 ///
 /// A watcher is a combination of a nogood ID and a cached predicate. If the nogood has a predicate
-/// that evaluated to `false`, it will be made the cached predicate. That way, whenever the watcher
-/// is triggered, the propagator can quickly determine if the nogood can be skipped.
+/// that is observed to be `false`, it will be made the cached predicate. That way, whenever the
+/// watcher is triggered, the propagator may be able to quickly determine if the nogood can be
+/// skipped by looking at the cached predicate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Watcher {
     nogood_id: NogoodId,
