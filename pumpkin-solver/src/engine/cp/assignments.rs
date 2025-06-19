@@ -33,7 +33,7 @@ impl Default for Assignments {
         // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
         // assigned to one. We use it to represent predicates that are trivially true.
         let dummy_variable = assignments.grow(1, 1);
-        assert_eq!(dummy_variable.id, 0);
+        assert_eq!(dummy_variable.id(), 0);
 
         assignments
     }
@@ -108,9 +108,7 @@ impl Assignments {
             "can only create variables at the root"
         );
 
-        let id = DomainId {
-            id: self.num_domains(),
-        };
+        let id = DomainId::new(self.num_domains());
 
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate: predicate!(id >= lower_bound),
@@ -369,9 +367,7 @@ impl Assignments {
     pub fn get_domain_descriptions(&self) -> Vec<Predicate> {
         let mut descriptions: Vec<Predicate> = vec![];
         for domain in self.domains.iter().enumerate() {
-            let domain_id = DomainId {
-                id: domain.0 as u32,
-            };
+            let domain_id = DomainId::new(domain.0 as u32);
             descriptions.append(&mut self.get_domain_description(domain_id));
         }
         descriptions

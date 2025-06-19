@@ -15,7 +15,14 @@ pub struct Predicate {
 }
 
 impl Predicate {
-    pub(super) fn new(id: u32, value: i32) -> Self {
+    pub(super) fn new(id: DomainId, predicate_type: PredicateType, value: i32) -> Self {
+        let code = match predicate_type {
+            PredicateType::LowerBound => LOWER_BOUND_CODE,
+            PredicateType::UpperBound => UPPER_BOUND_CODE,
+            PredicateType::NotEqual => NOT_EQUAL_CODE,
+            PredicateType::Equal => EQUAL_CODE,
+        };
+        let id = id.id() | (code as u32) << 30;
         Self { id, value }
     }
 
@@ -28,10 +35,10 @@ impl Predicate {
     }
 }
 
-pub(crate) const LOWER_BOUND_CODE: u8 = 1;
-pub(crate) const UPPER_BOUND_CODE: u8 = 2;
-pub(crate) const EQUALITY_CODE: u8 = 0;
-pub(crate) const NOT_EQUALS_CODE: u8 = 3;
+const LOWER_BOUND_CODE: u8 = 1;
+const UPPER_BOUND_CODE: u8 = 2;
+const EQUAL_CODE: u8 = 0;
+const NOT_EQUAL_CODE: u8 = 3;
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
 pub enum PredicateType {
@@ -46,8 +53,8 @@ impl From<Predicate> for PredicateType {
         match value.get_type_code() {
             LOWER_BOUND_CODE => Self::LowerBound,
             UPPER_BOUND_CODE => Self::UpperBound,
-            EQUALITY_CODE => Self::Equal,
-            NOT_EQUALS_CODE => Self::NotEqual,
+            EQUAL_CODE => Self::Equal,
+            NOT_EQUAL_CODE => Self::NotEqual,
             code => panic!("Unknown type code {code}"),
         }
     }
@@ -86,7 +93,7 @@ impl Predicate {
         }
     }
     pub fn is_equality_predicate(&self) -> bool {
-        self.get_type_code() == EQUALITY_CODE
+        self.get_type_code() == EQUAL_CODE
     }
 
     pub fn is_lower_bound_predicate(&self) -> bool {
@@ -98,7 +105,7 @@ impl Predicate {
     }
 
     pub fn is_not_equal_predicate(&self) -> bool {
-        self.get_type_code() == NOT_EQUALS_CODE
+        self.get_type_code() == NOT_EQUAL_CODE
     }
 
     /// Returns the [`DomainId`] of the [`Predicate`]
@@ -113,14 +120,14 @@ impl Predicate {
     pub fn trivially_true() -> Predicate {
         // By convention, there is a dummy 0-1 variable set to one at root.
         // We use it to denote the trivially true predicate.
-        let domain_id = DomainId { id: 0 };
+        let domain_id = DomainId::new(0);
         predicate!(domain_id == 1)
     }
 
     pub fn trivially_false() -> Predicate {
         // By convention, there is a dummy 0-1 variable set to one at root.
         // We use it to denote the trivially true predicate.
-        let domain_id = DomainId { id: 0 };
+        let domain_id = DomainId::new(0);
         predicate!(domain_id != 1)
     }
 }
@@ -170,6 +177,35 @@ impl std::fmt::Debug for Predicate {
 #[cfg(test)]
 mod test {
     use super::Predicate;
+    use crate::predicate;
+    use crate::variables::DomainId;
+
+    #[test]
+    fn are_mutually_exclusive() {
+        let domain_id = DomainId::new(0);
+
+        assert!(!predicate!(domain_id >= 5).is_mutually_exclusive_with(predicate!(domain_id >= 7)));
+        assert!(!predicate!(domain_id >= 5).is_mutually_exclusive_with(predicate!(domain_id != 2)));
+        assert!(!predicate!(domain_id <= 5).is_mutually_exclusive_with(predicate!(domain_id <= 8)));
+        assert!(!predicate!(domain_id <= 5).is_mutually_exclusive_with(predicate!(domain_id != 8)));
+        assert!(!predicate!(domain_id != 9).is_mutually_exclusive_with(predicate!(domain_id >= 8)));
+        assert!(!predicate!(domain_id != 9).is_mutually_exclusive_with(predicate!(domain_id <= 8)));
+        assert!(!predicate!(domain_id != 9).is_mutually_exclusive_with(predicate!(domain_id != 8)));
+
+        assert!(predicate!(domain_id <= 7).is_mutually_exclusive_with(predicate!(domain_id >= 8)));
+        assert!(predicate!(domain_id >= 8).is_mutually_exclusive_with(predicate!(domain_id <= 7)));
+
+        assert!(predicate!(domain_id >= 8).is_mutually_exclusive_with(predicate!(domain_id == 7)));
+        assert!(predicate!(domain_id == 7).is_mutually_exclusive_with(predicate!(domain_id >= 8)));
+
+        assert!(predicate!(domain_id == 7).is_mutually_exclusive_with(predicate!(domain_id <= 6)));
+        assert!(predicate!(domain_id <= 6).is_mutually_exclusive_with(predicate!(domain_id == 7)));
+
+        assert!(predicate!(domain_id != 8).is_mutually_exclusive_with(predicate!(domain_id == 8)));
+        assert!(predicate!(domain_id == 8).is_mutually_exclusive_with(predicate!(domain_id != 8)));
+
+        assert!(predicate!(domain_id == 7).is_mutually_exclusive_with(predicate!(domain_id == 8)));
+    }
 
     #[test]
     fn negating_trivially_true_predicate() {

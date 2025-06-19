@@ -1,9 +1,6 @@
 use super::predicate::Predicate;
-use crate::engine::predicates::predicate::LOWER_BOUND_CODE;
-use crate::engine::predicates::predicate::NOT_EQUALS_CODE;
-use crate::engine::predicates::predicate::UPPER_BOUND_CODE;
+use super::predicate::PredicateType;
 use crate::engine::variables::DomainId;
-use crate::pumpkin_assert_moderate;
 
 /// A trait which defines methods for creating a [`Predicate`].
 pub trait PredicateConstructor {
@@ -27,23 +24,19 @@ impl PredicateConstructor for DomainId {
     type Value = i32;
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        pumpkin_assert_moderate!(self.id >> 30 == 0);
-        Predicate::new(self.id, bound)
+        Predicate::new(*self, PredicateType::Equal, bound)
     }
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        pumpkin_assert_moderate!(self.id >> 30 == 0);
-        Predicate::new(self.id | (LOWER_BOUND_CODE as u32) << 30, bound)
+        Predicate::new(*self, PredicateType::LowerBound, bound)
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        pumpkin_assert_moderate!(self.id >> 30 == 0);
-        Predicate::new(self.id | (UPPER_BOUND_CODE as u32) << 30, bound)
+        Predicate::new(*self, PredicateType::UpperBound, bound)
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        pumpkin_assert_moderate!(self.id >> 30 == 0);
-        Predicate::new(self.id | (NOT_EQUALS_CODE as u32) << 30, bound)
+        Predicate::new(*self, PredicateType::NotEqual, bound)
     }
 }
 
@@ -103,7 +96,7 @@ mod tests {
 
     #[test]
     fn macro_local_identifiers_are_matched() {
-        let x = DomainId { id: 0 };
+        let x = DomainId::new(0);
 
         assert_eq!(x, predicate![x >= 2].get_domain());
         assert_eq!(x, predicate![x <= 3].get_domain());
@@ -143,7 +136,7 @@ mod tests {
         }
 
         let wrapper = Wrapper {
-            x: DomainId { id: 0 },
+            x: DomainId::new(0),
         };
 
         assert_eq!(wrapper.x, predicate![wrapper.x >= 2].get_domain());
@@ -159,7 +152,7 @@ mod tests {
 
     #[test]
     fn macro_index_expressions_are_matched() {
-        let wrapper = [DomainId { id: 0 }];
+        let wrapper = [DomainId::new(0)];
 
         assert_eq!(wrapper[0], predicate![wrapper[0] >= 2].get_domain());
         assert_eq!(wrapper[0], predicate![wrapper[0] <= 3].get_domain());

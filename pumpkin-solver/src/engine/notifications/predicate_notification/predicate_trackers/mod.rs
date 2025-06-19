@@ -53,7 +53,7 @@ impl PredicateTracker {
         let min_unassigned = trailed_values.grow(0);
         let max_unassigned = trailed_values.grow(1);
         Self {
-            domain_id: DomainId { id: 0 },
+            domain_id: DomainId::new(0),
             min_assigned: min_unassigned,
             max_unassigned,
             smaller: Vec::default(),

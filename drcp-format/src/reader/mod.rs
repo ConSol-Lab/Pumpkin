@@ -1,364 +1,438 @@
-//! Implements the parsing of DRCP proof files.
+//! Proofs can be read using a [`ProofReader`]. It reads the proof line-by-line, and can be thought
+//! of as an Iterator over [`Step`].
 //!
-//! See [`ProofReader`] for information on how to parse a DRCP file.
+//! The reader does not do any form of validation of the proof. It is up to the consumer of this
+//! crate to ensure that constraint IDs are valid, that inference labels make sense, etc.
+//!
+//! ```
+//! use std::num::NonZero;
+//! use std::rc::Rc;
+//!
+//! use drcp_format::reader::ProofReader;
+//! use drcp_format::Conclusion;
+//! use drcp_format::Deduction;
+//! use drcp_format::Inference;
+//! use drcp_format::IntAtomic;
+//! use drcp_format::IntComparison::*;
+//! use drcp_format::Step;
+//!
+//! let source = r#"
+//!     a 1 [x1 >= 0]
+//!     a 2 [x2 >= 0]
+//!     i 2 1 0 2 c:1 l:inf_name
+//!     n 3 1 -2 0 2
+//!     c UNSAT
+//! "#;
+//!
+//! let a1 = IntAtomic {
+//!     name: Rc::from("x1".to_owned()),
+//!     comparison: GreaterEqual,
+//!     value: 0,
+//! };
+//!
+//! let a2 = IntAtomic {
+//!     name: Rc::from("x2".to_owned()),
+//!     comparison: GreaterEqual,
+//!     value: 0,
+//! };
+//!
+//! let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+//!
+//! let inference = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(
+//!     inference,
+//!     Step::Inference(Inference {
+//!         constraint_id: NonZero::new(2).unwrap(),
+//!         premises: vec![a1.clone()],
+//!         consequent: Some(a2.clone()),
+//!         generated_by: Some(NonZero::new(1).unwrap()),
+//!         label: Some("inf_name".into()),
+//!     })
+//! );
+//!
+//! let deduction = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(
+//!     deduction,
+//!     Step::Deduction(Deduction {
+//!         constraint_id: NonZero::new(3).unwrap(),
+//!         premises: vec![a1.clone(), !a2],
+//!         sequence: vec![NonZero::new(2).unwrap()],
+//!     })
+//! );
+//!
+//! let conclusion = reader
+//!     .next_step()
+//!     .expect("no error reading")
+//!     .expect("proof step exists");
+//!
+//! assert_eq!(conclusion, Step::Conclusion(Conclusion::Unsat));
+//!
+//! let eof = reader.next_step().expect("no error reading");
+//! assert_eq!(eof, None);
+//! ```
 
 mod error;
-mod literal_atomic_map;
+mod parser;
 
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Read;
+use std::collections::BTreeMap;
+use std::io;
 use std::num::NonZero;
+use std::rc::Rc;
 
-pub use error::DrcpError;
-pub use literal_atomic_map::LiteralAtomicMap;
-use nom::branch::alt;
-use nom::bytes::complete::tag;
-use nom::character::complete::alpha1;
-use nom::character::complete::alphanumeric1;
-use nom::combinator::all_consuming;
-use nom::combinator::map;
-use nom::combinator::map_opt;
-use nom::combinator::opt;
-use nom::combinator::recognize;
-use nom::combinator::value;
-use nom::multi::many0_count;
-use nom::multi::separated_list0;
-use nom::sequence::pair;
-use nom::sequence::preceded;
-use nom::sequence::tuple;
-use nom::IResult;
+use chumsky::Parser;
+pub use error::*;
 
-use crate::steps::Conclusion;
-use crate::steps::Deletion;
-use crate::steps::Inference;
-use crate::steps::Nogood;
-use crate::steps::Step;
-use crate::steps::StepId;
+use crate::Conclusion;
+use crate::Deduction;
+use crate::Inference;
+use crate::IntAtomic;
+use crate::IntValue;
+use crate::Step;
 
-/// The output of [`ProofReader::next_step`].
-pub type ReadStep<'a, AtomicConstraint> =
-    Step<'a, Vec<AtomicConstraint>, AtomicConstraint, Vec<StepId>>;
-
-/// Used to read and parse DRCP proofs.
-///
-/// The reader will read the proof line-by-line, using the fact that DRCP is a line-based format.
-/// Any leading or trailing whitespace, and empty lines, will be ignored. Literals that are
-/// encountered are mapped to atomics through an implementation of [`LiteralAtomicMap`]. It is
-/// assumed this is a total mapping, i.e. all literals encountered in the proof can be mapped to an
-/// atomic constraint.
-///
-/// Note that the reader does not perform any type of validity checking of the proof. It will
-/// happily parse any garbage that is within the format specification. For example, a valid DRCP
-/// proof will contain exactly one conclusion step, which is the last step of the proof. This
-/// reader does not validate this, and obtaining a conclusion step does not mean the next
-/// invocation to [`ProofReader::next_step`] will return [`None`].
-///
-/// # Example
-/// ```
-/// use std::num::NonZero;
-///
-/// use drcp_format::reader::ProofReader;
-/// use drcp_format::steps::*;
-///
-/// let source = r#"
-/// i 1 4 5 0 -2 c:20 l:linear_bound
-/// n 2 1 -3 5 0 1
-/// d 2
-/// c UNSAT
-/// "#;
-///
-/// let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
-/// let lit = |num: i32| NonZero::new(num).unwrap();
-/// let step_id = |num: u64| NonZero::new(num).unwrap();
-///
-/// let inference_step = reader.next_step().expect("valid drcp inference step");
-/// let expected_inference = Inference {
-///     id: step_id(1),
-///     hint_constraint_id: Some(NonZero::new(20).unwrap()),
-///     hint_label: Some("linear_bound"),
-///     premises: vec![lit(4), lit(5)],
-///     propagated: Some(lit(-2)),
-/// };
-/// assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
-///
-/// let nogood_step = reader.next_step().expect("valid drcp nogood step");
-/// let expected_nogood = Nogood {
-///     id: step_id(2),
-///     hints: Some(vec![step_id(1)]),
-///     literals: vec![lit(1), lit(-3), lit(5)],
-/// };
-/// assert_eq!(Some(Step::Nogood(expected_nogood)), nogood_step);
-///
-/// let deletion_step = reader.next_step().expect("valid drcp deletion step");
-/// let expected_deletion = Deletion { id: step_id(2) };
-/// assert_eq!(Some(Step::Delete(expected_deletion)), deletion_step);
-///
-/// let conclusion_step = reader.next_step().expect("valid drcp conclusion step");
-/// assert_eq!(
-///     Some(Step::Conclusion(Conclusion::Unsatisfiable)),
-///     conclusion_step
-/// );
-///
-/// let end = reader.next_step().expect("finished reading source");
-/// assert_eq!(None, end);
-/// ```
+/// A parser of DRCP proofs. See module documentation on [`crate::reader`] for examples on how to
+/// use it.
 #[derive(Debug)]
-pub struct ProofReader<R, AtomicConstraints> {
-    source: BufReader<R>,
-    string_buffer: String,
-    atomics: AtomicConstraints,
+pub struct ProofReader<Source, Int> {
+    /// The source of the proof.
+    source: Source,
+
+    /// The defined atomics that are used in the proof.
+    atomics: BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+
+    /// The buffer that holds the current line of `source`.
+    line_buffer: String,
+
+    /// The line number currently being processed in the proof.
+    ///
+    /// Used for error reporting.
+    line_nr: usize,
 }
 
-impl<R: Read, AtomicConstraints> ProofReader<R, AtomicConstraints> {
-    /// Construct a new proof reader which reads from `source`.
+impl<Source, Int> ProofReader<Source, Int> {
+    /// Create a new [`ProofReader`].
     ///
-    /// The `atomics` are used to map the proof literals to atomic constraints. This is likely
-    /// based on a parsed `.lits` file, but that does not have to be the case.
-    pub fn new(source: R, atomics: AtomicConstraints) -> ProofReader<R, AtomicConstraints> {
+    /// Note that [`ProofReader::next_step`] is only implemented for sources that implement
+    /// [`io::BufRead`]. It is up to the user to set up the buffered reader.
+    pub fn new(source: Source) -> Self {
         ProofReader {
-            source: BufReader::new(source),
-            string_buffer: String::new(),
-            atomics,
+            source,
+            atomics: BTreeMap::default(),
+            line_buffer: String::new(),
+            line_nr: 0,
         }
+    }
+
+    fn map_atomic_ids(&self, ids: Vec<NonZero<i32>>) -> Result<Vec<IntAtomic<Rc<str>, Int>>, Error>
+    where
+        Int: IntValue,
+    {
+        ids.into_iter()
+            .map(|code| self.map_atomic_id(code))
+            .collect()
+    }
+
+    fn map_atomic_id(&self, id: NonZero<i32>) -> Result<IntAtomic<Rc<str>, Int>, Error>
+    where
+        Int: IntValue,
+    {
+        self.atomics
+            .get(&id.unsigned_abs())
+            .cloned()
+            .map(|atomic| if id.is_negative() { !atomic } else { atomic })
+            .ok_or(Error::UndefinedAtomic {
+                line: self.line_nr,
+                code: id,
+            })
     }
 }
 
-impl<R, AtomicConstraints> ProofReader<R, AtomicConstraints>
+/// The [`IntAtomic`] type that is produced by the [`ProofReader`].
+pub type ReadAtomic<Int> = IntAtomic<Rc<str>, Int>;
+/// The [`Step`] type that is produced by the [`ProofReader`].
+pub type ReadStep<Int> = Step<Rc<str>, Int, Rc<str>>;
+
+impl<Source, Int> ProofReader<Source, Int>
 where
-    R: Read,
-    AtomicConstraints: LiteralAtomicMap,
+    Source: io::BufRead,
+    Int: IntValue,
 {
-    /// Read the next step in the proof.
+    /// Parse the next [`Step`] from the proof file.
     ///
-    /// If reading is successful, `Some(step)` is returned with the next step, or `None` if the end
-    /// of the proof is reached. On an error, be it from IO or other, the `Err` variant is
-    /// returned.
-    pub fn next_step(
-        &mut self,
-    ) -> Result<Option<ReadStep<'_, AtomicConstraints::Atomic>>, DrcpError> {
-        self.string_buffer.clear();
+    /// The end-of-file is signified by the value `Ok(None)` and is _not_ an error.
+    pub fn next_step(&mut self) -> Result<Option<ReadStep<Int>>, Error> {
+        loop {
+            self.line_buffer.clear();
+            let read_bytes = self.source.read_line(&mut self.line_buffer)?;
 
-        // Read lines until we find a non-empty line. The contents of `line` will be trimmed.
-        while self.string_buffer.trim().is_empty() {
-            let read_bytes = self.source.read_line(&mut self.string_buffer)?;
-
+            // Reading 0 bytes indicates we have reached the end of the file.
             if read_bytes == 0 {
-                // The end of the file has been reached.
                 return Ok(None);
             }
-        }
 
-        let (_, step) = proof_step(self.string_buffer.trim())?;
+            self.line_nr += 1;
 
-        let step = self.map_step(step);
+            // We should get rid of leading or trailing whitespace.
+            let trimmed_line = self.line_buffer.trim();
 
-        Ok(Some(step))
-    }
-
-    /// Map the literals to the atomic constraints in the proof step.
-    fn map_step<'s>(
-        &self,
-        step: ReadStep<'s, NonZero<i32>>,
-    ) -> ReadStep<'s, AtomicConstraints::Atomic> {
-        match step {
-            Step::Inference(Inference {
-                id,
-                hint_constraint_id,
-                hint_label,
-                premises,
-                propagated,
-            }) => Step::Inference(Inference {
-                id,
-                hint_constraint_id,
-                hint_label,
-                premises: premises
-                    .into_iter()
-                    .map(|literal| self.atomics.to_atomic(literal))
-                    .collect(),
-                propagated: propagated.map(|p| self.atomics.to_atomic(p)),
-            }),
-
-            Step::Nogood(Nogood {
-                id,
-                literals,
-                hints,
-            }) => Step::Nogood(Nogood {
-                id,
-                literals: literals
-                    .into_iter()
-                    .map(|literal| self.atomics.to_atomic(literal))
-                    .collect(),
-                hints,
-            }),
-
-            // Here we cannot just forward the input value, as it has a different type due to the
-            // generics on `Step`.
-            Step::Delete(Deletion { id }) => Step::Delete(Deletion { id }),
-
-            Step::Conclusion(Conclusion::Unsatisfiable) => {
-                Step::Conclusion(Conclusion::Unsatisfiable)
+            // If the line is empty, go on to the next line.
+            if trimmed_line.is_empty() {
+                continue;
             }
 
-            Step::Conclusion(Conclusion::Optimal(literal)) => {
-                Step::Conclusion(Conclusion::Optimal(self.atomics.to_atomic(literal)))
+            let proof_line: parser::ProofLine<'_, Int> = parser::proof_line()
+                .parse(trimmed_line)
+                .into_result()
+                .map_err(|errs| {
+                    assert_eq!(
+                        errs.len(),
+                        1,
+                        "since we do no recovery, any error will terminate the parsing immediately"
+                    );
+
+                    let reason = format!("{}", errs[0]);
+                    let span = errs[0].span();
+
+                    Error::parse_error(self.line_nr, reason, *span)
+                })?;
+
+            match proof_line {
+                parser::ProofLine::AtomDefinition(atomic_id, atomic) => {
+                    let IntAtomic {
+                        name,
+                        comparison,
+                        value,
+                    } = atomic;
+
+                    let _ = self.atomics.insert(
+                        atomic_id,
+                        IntAtomic {
+                            name: name.into(),
+                            comparison,
+                            value,
+                        },
+                    );
+                }
+
+                parser::ProofLine::Inference {
+                    constraint_id,
+                    premises,
+                    consequent,
+                    generated_by,
+                    label,
+                } => {
+                    let inference = Inference {
+                        constraint_id,
+                        premises: self.map_atomic_ids(premises)?,
+                        consequent: consequent.map(|c| self.map_atomic_id(c)).transpose()?,
+                        generated_by,
+                        label: label.map(|label| label.into()),
+                    };
+
+                    return Ok(Some(Step::Inference(inference)));
+                }
+
+                parser::ProofLine::Deduction {
+                    constraint_id,
+                    premises,
+                    sequence,
+                } => {
+                    let deduction = Deduction {
+                        constraint_id,
+                        premises: self.map_atomic_ids(premises)?,
+                        sequence,
+                    };
+
+                    return Ok(Some(Step::Deduction(deduction)));
+                }
+
+                parser::ProofLine::Conclusion(parser::ProofLineConclusion::Unsat) => {
+                    return Ok(Some(Step::Conclusion(Conclusion::Unsat)));
+                }
+
+                parser::ProofLine::Conclusion(parser::ProofLineConclusion::DualBound(code)) => {
+                    let bound = self.map_atomic_id(code)?;
+                    return Ok(Some(Step::Conclusion(Conclusion::DualBound(bound))));
+                }
             }
         }
     }
-}
-
-/// Parse a proof step from a line.
-///
-/// `input` is assumed to be a single line, with leading and trailing whitespace removed. If this
-/// is not the case, the parser will fail.
-fn proof_step(input: &str) -> IResult<&str, ReadStep<'_, NonZero<i32>>> {
-    all_consuming(alt((
-        map(inference_step, Step::Inference),
-        map(nogood_step, Step::Nogood),
-        map(deletion_step, Step::Delete),
-        map(conclusion_step, Step::Conclusion),
-    )))(input)
-}
-
-/// `i <step_id> <premises> 0 <propagated> [c:<constraint tag>] [l:<filtering algorithm>]`
-fn inference_step(input: &str) -> IResult<&str, Inference<'_, Vec<NonZero<i32>>, NonZero<i32>>> {
-    map(
-        tuple((
-            tag("i "),
-            step_id,
-            tag(" "),
-            literal_list,
-            opt(preceded(tag(" 0 "), literal)),
-            opt(preceded(tag(" c:"), constraint_id)),
-            opt(preceded(tag(" l:"), identifier)),
-        )),
-        |(_, id, _, premises, propagated, hint_constraint_id, hint_label)| Inference {
-            id,
-            hint_constraint_id,
-            hint_label,
-            premises,
-            propagated,
-        },
-    )(input)
-}
-
-/// `n <step_id> <atomic constraint ids> [0 <propagation hint>]`
-fn nogood_step(input: &str) -> IResult<&str, Nogood<Vec<NonZero<i32>>, Vec<StepId>>> {
-    map(
-        tuple((
-            tag("n "),
-            step_id,
-            tag(" "),
-            literal_list,
-            opt(preceded(
-                // Hack! If `literal_list` is empty, then the space will be parsed already.
-                alt((tag("0 "), tag(" 0 "))),
-                separated_list0(tag(" "), step_id),
-            )),
-        )),
-        |(_, id, _, literals, hints)| Nogood {
-            id,
-            hints,
-            literals,
-        },
-    )(input)
-}
-
-/// `d <step_id>`
-fn deletion_step(input: &str) -> IResult<&str, Deletion> {
-    preceded(tag("d "), map(step_id, |id| Deletion { id }))(input)
-}
-
-/// `c UNSAT` or `c <objective bound literal>`
-fn conclusion_step(input: &str) -> IResult<&str, Conclusion<NonZero<i32>>> {
-    preceded(
-        tag("c "),
-        alt((
-            value(Conclusion::Unsatisfiable, tag("UNSAT")),
-            map(literal, Conclusion::Optimal),
-        )),
-    )(input)
-}
-
-/// Parses a space-separated list of non-zero signed integers.
-fn literal_list(input: &str) -> IResult<&str, Vec<NonZero<i32>>> {
-    separated_list0(tag(" "), literal)(input)
-}
-
-/// Parses a single non-zero signed integer.
-fn literal(input: &str) -> IResult<&str, NonZero<i32>> {
-    map_opt(nom::character::complete::i32, NonZero::new)(input)
-}
-
-/// Parses a single unsigned non-zero 64-bit integer.
-fn step_id(input: &str) -> IResult<&str, NonZero<u64>> {
-    map_opt(nom::character::complete::u64, NonZero::new)(input)
-}
-
-/// Parses a single unsigned non-zero 32-bit integer.
-fn constraint_id(input: &str) -> IResult<&str, NonZero<u32>> {
-    map_opt(nom::character::complete::u32, NonZero::new)(input)
-}
-
-/// Parses identifiers according to the minizinc spec: `[A-Za-z_][A-Za-z0-9_]*`
-fn identifier(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
-        alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IntComparison::*;
 
     #[test]
-    fn inference_nogood_without_hints() {
-        let source = "i 1 4 5\n";
-        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+    fn inference_with_consequent() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            i 2 1 0 2 c:1 l:inf_name
+        "#;
 
-        let inference_step = reader.next_step().expect("valid drcp inference step");
-        let expected_inference = Inference {
-            id: NonZero::new(1).unwrap(),
-            hint_constraint_id: None,
-            hint_label: None,
-            premises: vec![NonZero::new(4).unwrap(), NonZero::new(5).unwrap()],
-            propagated: None,
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
         };
-        assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1],
+                consequent: Some(a2),
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
     }
 
     #[test]
-    fn inference_nogood_with_constraint_tag_and_label() {
-        let source = "i 1 4 5 c:20 l:linear_bound\n";
-        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+    fn inference_without_consequent() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            i 2 1 -2 0 c:1 l:inf_name
+        "#;
 
-        let inference_step = reader.next_step().expect("valid drcp inference step");
-        let expected_inference = Inference {
-            id: NonZero::new(1).unwrap(),
-            hint_constraint_id: Some(NonZero::new(20).unwrap()),
-            hint_label: Some("linear_bound"),
-            premises: vec![NonZero::new(4).unwrap(), NonZero::new(5).unwrap()],
-            propagated: None,
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
         };
-        assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: LessEqual,
+            value: -1,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1, a2],
+                consequent: None,
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
     }
 
     #[test]
-    fn empty_nogood_with_hints() {
-        let source = "n 100 0 1 4 5\n";
-        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+    fn deduction_without_inferences() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            n 2 1 -2 0
+        "#;
 
-        let nogood_step = reader.next_step().expect("valid drcp nogood step");
-        let expected_nogood = Nogood {
-            id: NonZero::new(100).unwrap(),
-            literals: vec![],
-            hints: Some(vec![
-                NonZero::new(1).unwrap(),
-                NonZero::new(4).unwrap(),
-                NonZero::new(5).unwrap(),
-            ]),
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
         };
-        assert_eq!(Some(Step::Nogood(expected_nogood)), nogood_step);
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: LessEqual,
+            value: -1,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Deduction(Deduction {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1, a2],
+                sequence: vec![],
+            }),
+        );
+    }
+
+    #[test]
+    fn deduction_with_inferences() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            n 5 1 -2 0 1 3 2 4
+        "#;
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: LessEqual,
+            value: -1,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Deduction(Deduction {
+                constraint_id: NonZero::new(5).unwrap(),
+                premises: vec![a1, a2],
+                sequence: vec![
+                    NonZero::new(1).unwrap(),
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(2).unwrap(),
+                    NonZero::new(4).unwrap(),
+                ],
+            }),
+        );
+    }
+
+    #[test]
+    fn conclusion_unsat() {
+        let source = r#"
+            c UNSAT
+        "#;
+
+        test_single_proof_line(source, Step::Conclusion(Conclusion::Unsat));
+    }
+
+    #[test]
+    fn conclusion_dual_bound() {
+        let source = r#"
+            a 1 [x1 >= 4]
+            c 1
+        "#;
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 4,
+        };
+
+        test_single_proof_line(source, Step::Conclusion(Conclusion::DualBound(a1)));
+    }
+
+    fn test_single_proof_line(source: &str, expected_step: ReadStep<i32>) {
+        let mut reader = ProofReader::<_, i32>::new(source.as_bytes());
+
+        let parsed_step = reader
+            .next_step()
+            .expect("no error reading")
+            .expect("there is one proof step");
+
+        assert_eq!(expected_step, parsed_step);
     }
 }

@@ -1,16 +1,34 @@
-use thiserror::Error;
+use std::io;
+use std::num::NonZero;
 
-#[derive(Debug, Error)]
-pub enum DrcpError {
-    #[error("Failed to read: {0}")]
-    Io(#[from] std::io::Error),
+use chumsky::span::SimpleSpan;
 
-    #[error("Syntax error: {0}")]
-    Syntax(String),
+#[cfg(doc)]
+use super::ProofReader;
+
+/// The errors that can be encountered by the [`ProofReader`].
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("failed to read from source: {0}")]
+    IoError(#[from] io::Error),
+
+    #[error("failed to parse proof line {line_nr} {span:?}: {reason}")]
+    ParseError {
+        line_nr: usize,
+        reason: String,
+        span: (usize, usize),
+    },
+
+    #[error("undefined atomic {code} on line {line}")]
+    UndefinedAtomic { line: usize, code: NonZero<i32> },
 }
 
-impl From<nom::Err<nom::error::Error<&str>>> for DrcpError {
-    fn from(value: nom::Err<nom::error::Error<&str>>) -> Self {
-        DrcpError::Syntax(value.to_string())
+impl Error {
+    pub(super) fn parse_error(line_nr: usize, reason: String, span: SimpleSpan) -> Self {
+        Error::ParseError {
+            line_nr,
+            span: (span.start, span.end),
+            reason,
+        }
     }
 }

@@ -355,7 +355,7 @@ impl NotificationEngine {
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
         // For this reason, its local id matches the domain id.
         // This is special only for the nogood propagator.
-        let local_id = LocalId::from(domain.id);
+        let local_id = LocalId::from(domain.id());
         Self::notify_propagator(
             nogood_propagator_id,
             local_id,

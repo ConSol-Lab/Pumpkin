@@ -19,7 +19,7 @@ pub(crate) struct SemanticMinimiser {
 
 impl Default for SemanticMinimiser {
     fn default() -> Self {
-        let mapping = |x: &DomainId| x.id as usize;
+        let mapping = |x: &DomainId| x.id() as usize;
         Self {
             original_domains: Default::default(),
             domains: Default::default(),
@@ -99,9 +99,7 @@ impl SemanticMinimiser {
         assert!(self.domains.len() == self.original_domains.len());
 
         while (self.domains.len() as u32) < assignments.num_domains() {
-            let domain_id = DomainId {
-                id: self.domains.len() as u32,
-            };
+            let domain_id = DomainId::new(self.domains.len() as u32);
             let lower_bound = assignments.get_initial_lower_bound(domain_id);
             let upper_bound = assignments.get_initial_upper_bound(domain_id);
             let holes = assignments.get_initial_holes(domain_id);
