@@ -167,22 +167,20 @@ impl Propagator for NogoodPropagator {
             context.notification_engine,
         );
 
-        if self.watch_lists.len() <= context.notification_engine.num_predicate_ids() {
-            self.watch_lists.resize(
-                context.notification_engine.num_predicate_ids() + 1,
-                Vec::default(),
-            );
+        if self.watch_lists.len() <= context.num_predicate_ids() {
+            self.watch_lists
+                .resize(context.num_predicate_ids() + 1, Vec::default());
         }
 
         // TODO: should drop all elements afterwards
         for predicate_id in self.updated_predicate_ids.drain(..) {
             pumpkin_assert_moderate!(
                 {
-                    let predicate = context.notification_engine.get_predicate(predicate_id);
+                    let predicate = context.get_predicate(predicate_id);
                     context.is_predicate_satisfied(predicate)
                 },
                 "The predicate {} with id {predicate_id:?} should be satisfied but was not",
-                context.notification_engine.get_predicate(predicate_id),
+                context.get_predicate(predicate_id),
             );
             let mut index = 0;
             while index < self.watch_lists[predicate_id].len() {
@@ -219,9 +217,7 @@ impl Propagator for NogoodPropagator {
                 for i in 2..nogood_predicates.len() {
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
-                    let predicate = context
-                        .notification_engine
-                        .get_predicate(nogood_predicates[i]);
+                    let predicate = context.get_predicate(nogood_predicates[i]);
                     if !context.is_predicate_satisfied(predicate) {
                         // Found another predicate that can be the watcher.
                         found_new_watch = true;
@@ -253,7 +249,7 @@ impl Propagator for NogoodPropagator {
 
                 // At this point, nonwatched predicates and nogood[1] are falsified.
                 pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| {
-                    let predicate = context.notification_engine.get_predicate(*p);
+                    let predicate = context.get_predicate(*p);
                     context.is_predicate_satisfied(predicate)
                 }));
 
@@ -262,9 +258,7 @@ impl Propagator for NogoodPropagator {
                 // nogood[0] is assigned true -> conflict.
                 let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
-                let predicate = !context
-                    .notification_engine
-                    .get_predicate(nogood_predicates[0]);
+                let predicate = !context.get_predicate(nogood_predicates[0]);
                 let result = context.post(predicate, reason, self.inference_codes[nogood_id]);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
@@ -303,12 +297,12 @@ impl Propagator for NogoodPropagator {
     ///
     /// In case of the noogood propagator, lazy explanations internally also update information
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
-    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
         self.temp_nogood = self.nogood_predicates[id].as_slice()[1..]
             .iter()
-            .map(|predicate_id| context.notification_engine.get_predicate(*predicate_id))
+            .map(|predicate_id| context.get_predicate(*predicate_id))
             .collect::<Vec<_>>();
 
         // Update the LBD and activity of the nogood, if appropriate.
@@ -395,7 +389,7 @@ impl NogoodPropagator {
 
         let nogood = nogood
             .iter()
-            .map(|predicate| context.notification_engine.get_id(*predicate))
+            .map(|predicate| context.get_id(*predicate))
             .collect::<Vec<_>>();
 
         // Add the nogood to the database.
@@ -513,7 +507,7 @@ impl NogoodPropagator {
         else {
             let nogood = nogood
                 .iter()
-                .map(|predicate| context.notification_engine.get_id(*predicate))
+                .map(|predicate| context.get_id(*predicate))
                 .collect::<Vec<_>>();
             // Add the nogood to the database.
             // If there is an available nogood id, use it, otherwise allocate a fresh id.
@@ -798,7 +792,7 @@ impl NogoodPropagator {
 
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood.iter().any(|predicate| {
-            let predicate = context.notification_engine.get_predicate(*predicate);
+            let predicate = context.get_predicate(*predicate);
             context.is_predicate_falsified(predicate)
         });
 
@@ -810,7 +804,7 @@ impl NogoodPropagator {
         let num_satisfied_predicates = nogood
             .iter()
             .filter(|predicate| {
-                let predicate = context.notification_engine.get_predicate(**predicate);
+                let predicate = context.get_predicate(**predicate);
                 context.is_predicate_satisfied(predicate)
             })
             .count();
@@ -822,7 +816,7 @@ impl NogoodPropagator {
             return Err(PropagatorConflict {
                 conjunction: nogood
                     .iter()
-                    .map(|predicate_id| context.notification_engine.get_predicate(*predicate_id))
+                    .map(|predicate_id| context.get_predicate(*predicate_id))
                     .collect::<PropositionalConjunction>(),
                 inference_code,
             }
@@ -837,7 +831,7 @@ impl NogoodPropagator {
             let propagated_predicate = nogood
                 .iter()
                 .find_map(|predicate_id| {
-                    let predicate = context.notification_engine.get_predicate(*predicate_id);
+                    let predicate = context.get_predicate(*predicate_id);
 
                     context
                         .evaluate_predicate(predicate)
@@ -847,9 +841,9 @@ impl NogoodPropagator {
                 .unwrap()
                 .not();
 
-            assert!(nogood.iter().any(
-                |p| context.notification_engine.get_predicate(*p) == propagated_predicate.not()
-            ));
+            assert!(nogood
+                .iter()
+                .any(|p| context.get_predicate(*p) == propagated_predicate.not()));
 
             // Cannot use lazy explanations when propagating from scratch
             // since the propagated predicate may not be at position zero.
@@ -858,7 +852,7 @@ impl NogoodPropagator {
             // So an eager reason is constructed
             let reason = nogood
                 .iter()
-                .map(|&p| context.notification_engine.get_predicate(p))
+                .map(|&p| context.get_predicate(p))
                 .filter(|&p| p != !propagated_predicate)
                 .collect::<PropositionalConjunction>();
 

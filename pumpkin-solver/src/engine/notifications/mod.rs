@@ -31,7 +31,7 @@ use crate::variables::DomainId;
 #[derive(Debug)]
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
-    pub(crate) predicate_notifier: PredicateNotifier,
+    predicate_notifier: PredicateNotifier,
     /// The trail index for which the last notification took place.
     last_notified_trail_index: usize,
     /// Contains information on which propagator to notify upon

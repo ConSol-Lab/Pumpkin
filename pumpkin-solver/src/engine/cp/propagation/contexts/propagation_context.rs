@@ -92,6 +92,14 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
+    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
+    }
+
+    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.get_id(predicate)
+    }
+
     /// Apply a reification literal to all the explanations that are passed to the context.
     pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
         pumpkin_assert_simple!(
@@ -128,6 +136,10 @@ impl<'a> PropagationContextMut<'a> {
     pub(crate) fn is_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
         self.notification_engine
             .is_id_satisfied(predicate_id, self.assignments)
+    }
+
+    pub(crate) fn num_predicate_ids(&self) -> usize {
+        self.notification_engine.num_predicate_ids()
     }
 }
 

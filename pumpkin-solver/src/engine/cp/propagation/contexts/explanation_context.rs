@@ -13,7 +13,7 @@ use crate::predicates::Predicate;
 /// See [`pumpkin_solver::engine::propagation::Propagator`] for more information.
 pub(crate) struct ExplanationContext<'a> {
     assignments: &'a Assignments,
-    pub notification_engine: &'a mut NotificationEngine,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
     current_nogood: CurrentNogood<'a>,
     trail_position: usize,
 }
@@ -44,6 +44,10 @@ impl<'a> ExplanationContext<'a> {
             trail_position,
             notification_engine,
         }
+    }
+
+    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
     }
 
     pub(crate) fn without_working_nogood(
