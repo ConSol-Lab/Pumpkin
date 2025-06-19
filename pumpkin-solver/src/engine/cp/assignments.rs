@@ -16,6 +16,9 @@ use crate::variables::IntegerVariable;
 #[derive(Clone, Debug)]
 pub struct Assignments {
     pub(crate) trail: Trail<ConstraintProgrammingTrailEntry>,
+    /// The current bounds of the domain. This is a quick lookup of the data stored more verbosely
+    /// in `domains`.
+    bounds: KeyedVec<DomainId, (i32, i32)>,
     domains: KeyedVec<DomainId, IntegerDomain>,
     /// The number of values that have been pruned from the domain.
     pruned_values: u64,
@@ -25,6 +28,7 @@ impl Default for Assignments {
     fn default() -> Self {
         let mut assignments = Self {
             trail: Default::default(),
+            bounds: Default::default(),
             domains: Default::default(),
             pruned_values: 0,
         };
@@ -131,6 +135,8 @@ impl Assignments {
             self.trail.len() - 1,
         ));
 
+        let _ = self.bounds.push((lower_bound, upper_bound));
+
         id
     }
     pub fn create_new_integer_variable_sparse(&mut self, mut values: Vec<i32>) -> DomainId {
@@ -170,6 +176,8 @@ impl Assignments {
 
     pub(crate) fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
+        let mut bounds = self.bounds.clone();
+
         let maximum_trail_entry = domains
             .iter()
             .map(|domain| domain.initial_bounds_below_trail + 1)
@@ -183,7 +191,7 @@ impl Assignments {
                 domains[entry.predicate.get_domain()].undo_trail_entry(entry);
             });
 
-        for domain in domains.iter_mut() {
+        for (id, domain) in self.domains.keys().zip(domains.iter_mut()) {
             domain
                 .lower_bound_updates
                 .retain(|update| update.trail_position < domain.initial_bounds_below_trail);
@@ -203,10 +211,13 @@ impl Assignments {
 
                 is_initial_bound
             });
+
+            bounds[id] = (domain.lower_bound(), domain.upper_bound());
         }
 
         Assignments {
             trail: Default::default(),
+            bounds,
             domains,
             pruned_values: self.pruned_values,
         }
@@ -244,7 +255,7 @@ impl Assignments {
 // methods for getting info about the domains
 impl Assignments {
     pub(crate) fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].lower_bound()
+        self.bounds[domain_id].0
     }
 
     pub(crate) fn get_lower_bound_at_trail_position(
@@ -256,7 +267,7 @@ impl Assignments {
     }
 
     pub(crate) fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].upper_bound()
+        self.bounds[domain_id].1
     }
 
     pub(crate) fn get_upper_bound_at_trail_position(
@@ -340,6 +351,12 @@ impl Assignments {
     }
 
     pub(crate) fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
+        let (lower_bound, upper_bound) = self.bounds[domain_id];
+
+        if value < lower_bound || value > upper_bound {
+            return false;
+        }
+
         let domain = &self.domains[domain_id];
         domain.contains(value)
     }
@@ -425,6 +442,8 @@ impl Assignments {
         let update_took_place =
             domain.set_lower_bound(new_lower_bound, decision_level, trail_position);
 
+        self.bounds[domain_id].0 = new_lower_bound;
+
         self.pruned_values += domain.lower_bound().abs_diff(old_lower_bound) as u64;
 
         let _ = domain.verify_consistency()?;
@@ -466,6 +485,8 @@ impl Assignments {
 
         let update_took_place =
             domain.set_upper_bound(new_upper_bound, decision_level, trail_position);
+
+        self.bounds[domain_id].1 = new_upper_bound;
 
         self.pruned_values += old_upper_bound.abs_diff(domain.upper_bound()) as u64;
 
@@ -530,6 +551,8 @@ impl Assignments {
 
         let _ = domain.remove_value(removed_value_from_domain, decision_level, trail_position);
 
+        self.bounds[domain_id] = (domain.lower_bound(), domain.upper_bound());
+
         let changed_lower_bound = domain.lower_bound().abs_diff(old_lower_bound) as u64;
         let changed_upper_bound = old_upper_bound.abs_diff(domain.upper_bound()) as u64;
 
@@ -556,8 +579,7 @@ impl Assignments {
         reason: Option<AssignmentReason>,
         notification_engine: &mut NotificationEngine,
     ) -> Result<bool, EmptyDomain> {
-        let lower_bound_before = self.domains[predicate.get_domain()].lower_bound();
-        let upper_bound_before = self.domains[predicate.get_domain()].upper_bound();
+        let (lower_bound_before, upper_bound_before) = self.bounds[predicate.get_domain()];
 
         let mut removal_took_place = false;
         let update_took_place = match predicate {
@@ -741,6 +763,7 @@ impl Assignments {
 
             let new_lower_bound = self.domains[domain_id].lower_bound();
             let new_upper_bound = self.domains[domain_id].upper_bound();
+            self.bounds[domain_id] = (new_lower_bound, new_upper_bound);
 
             notification_engine.undo_trail_entry(fixed_before, lower_bound_before, upper_bound_before, new_lower_bound, new_upper_bound, trail_index, entry.predicate);
 
