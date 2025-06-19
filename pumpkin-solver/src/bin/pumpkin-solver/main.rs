@@ -621,7 +621,7 @@ enum ProofType {
     /// Log only the proof scaffold.
     #[default]
     Scaffold,
-    /// Log the full proof without hints.
+    /// Log the full proof with hints.
     Full,
 }
 

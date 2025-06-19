@@ -165,7 +165,7 @@ impl ConflictAnalysisContext<'_> {
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
         proof_log: &mut ProofLog,
-        unit_nogood_step_ids: &HashMap<Predicate, InferenceCode>,
+        unit_nogood_inference_codes: &HashMap<Predicate, InferenceCode>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         variable_names: &VariableNames,
     ) {
@@ -223,7 +223,7 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                let inference_code = unit_nogood_step_ids
+                let inference_code = unit_nogood_inference_codes
                     .get(&predicate)
                     .or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
@@ -232,7 +232,7 @@ impl ConflictAnalysisContext<'_> {
                         let domain_id = predicate.get_domain();
                         let right_hand_side = predicate.get_right_hand_side();
 
-                        unit_nogood_step_ids.get(&predicate!(domain_id == right_hand_side))
+                        unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
                     })
                     .expect("Expected to be able to retrieve step id for unit nogood");
 
