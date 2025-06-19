@@ -83,10 +83,10 @@ impl PredicateIdAssignments {
         }
         pumpkin_assert_extreme!(
             synchronisation ||
-            self.domains[predicate_id] == PredicateIdInfo::Untracked
+            self.domains[predicate_id] == PredicateIdInfo::Untracked ||self.domains[predicate_id] == PredicateIdInfo::Unknown
                 || self.domains[predicate_id] == PredicateIdInfo::Unassigned
                 || self.domains[predicate_id] == value,
-            "Expected {:?} to be either untracked or for it to equal {value:?} for {predicate_id:?}",
+            "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
             self.domains[predicate_id]
         );
         if self.domains[predicate_id] != value {
@@ -109,17 +109,17 @@ impl PredicateIdAssignments {
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         let predicate = predicate_id_generator.get_predicate(predicate_id);
-        match assignments.evaluate_predicate(predicate) {
+        let value = match assignments.evaluate_predicate(predicate) {
             Some(satisfied) => {
                 if satisfied {
-                    self.domains[predicate_id] = PredicateIdInfo::AssignedTrue
+                    PredicateIdInfo::AssignedTrue
                 } else {
-                    self.domains[predicate_id] = PredicateIdInfo::AssignedFalse
+                    PredicateIdInfo::AssignedFalse
                 }
-                self.trail.push(predicate_id);
             }
-            None => self.domains[predicate_id] = PredicateIdInfo::Unassigned,
-        }
+            None => PredicateIdInfo::Unassigned,
+        };
+        self.store_predicate(predicate_id, value, false);
     }
 
     pub(crate) fn is_satisfied(
@@ -153,6 +153,8 @@ impl PredicateIdAssignments {
     }
 
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
+        self.satisfied_predicates.clear();
+        self.falsified_predicates.clear();
         self.trail
             .synchronise(new_decision_level)
             .for_each(|predicate_id| {

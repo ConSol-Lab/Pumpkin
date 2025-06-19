@@ -181,8 +181,24 @@ impl Propagator for NogoodPropagator {
                     let predicate = context.notification_engine.get_predicate(predicate_id);
                     context.is_predicate_satisfied(predicate)
                 },
-                "The predicate {} should be satisfied but was not",
+                "The predicate {} with id {predicate_id:?} should be satisfied but was not - Current bounds: {}, {}",
                 context.notification_engine.get_predicate(predicate_id),
+                {
+                    let predicate = context
+                        .notification_engine
+                        .get_predicate(predicate_id)
+                        .get_domain();
+
+                    context.lower_bound(&predicate)
+                },
+                {
+                    let predicate = context
+                        .notification_engine
+                        .get_predicate(predicate_id)
+                        .get_domain();
+
+                    context.upper_bound(&predicate)
+                },
             );
             let mut index = 0;
             while index < self.watch_lists[predicate_id].len() {
