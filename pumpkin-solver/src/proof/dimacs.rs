@@ -1,6 +1,5 @@
 use std::io::BufWriter;
 use std::io::Write;
-use std::num::NonZeroU64;
 
 use crate::engine::VariableNames;
 use crate::predicates::Predicate;
@@ -8,14 +7,12 @@ use crate::predicates::Predicate;
 #[derive(Debug)]
 pub(crate) struct DimacsProof<W: Write> {
     writer: BufWriter<W>,
-    next_clause_id: NonZeroU64,
 }
 
 impl<W: Write> DimacsProof<W> {
     pub(crate) fn new(writer: W) -> DimacsProof<W> {
         DimacsProof {
             writer: BufWriter::new(writer),
-            next_clause_id: NonZeroU64::new(1).unwrap(),
         }
     }
 
@@ -23,7 +20,7 @@ impl<W: Write> DimacsProof<W> {
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
         variable_names: &VariableNames,
-    ) -> std::io::Result<NonZeroU64> {
+    ) -> std::io::Result<()> {
         for predicate in predicates.into_iter() {
             assert!(
                 predicate.get_right_hand_side() <= 1,
@@ -66,12 +63,6 @@ impl<W: Write> DimacsProof<W> {
 
         writeln!(self.writer, "0")?;
 
-        let id = self.next_clause_id;
-        self.next_clause_id = self
-            .next_clause_id
-            .checked_add(1)
-            .expect("we are not adding u64::MAX clauses (hopefully)");
-
-        Ok(id)
+        Ok(())
     }
 }

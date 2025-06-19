@@ -8,7 +8,6 @@ use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
-use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
@@ -361,7 +360,7 @@ impl Model {
         proof: Option<PathBuf>,
     ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
         let proof_log = proof
-            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
+            .map(|path| ProofLog::cp(&path, true))
             .transpose()
             .map(|proof| proof.unwrap_or_default())
             .expect("failed to create proof file");

@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::time::Instant;
 
 use clap::ValueEnum;
-use drcp_format::steps::StepId;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -38,7 +37,6 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::containers::KeyGenerator;
 use crate::declare_inference_label;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
@@ -113,9 +111,6 @@ pub struct ConstraintSatisfactionSolver {
     /// happen. The list is only traversed during synchronisation for now.
     propagators: PropagatorStore,
 
-    /// The [`ConstraintTag`]s generated for this solver instance.
-    constraint_tags: KeyGenerator<ConstraintTag>,
-
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
@@ -138,8 +133,8 @@ pub struct ConstraintSatisfactionSolver {
     variable_names: VariableNames,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
-    /// A map from clause references to nogood step ids in the proof.
-    unit_nogood_step_ids: HashMap<Predicate, StepId>,
+    /// A map from predicates that are propagated at the root to inference codes in the proof.
+    unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
     /// Keep track of trailed values (i.e. values which automatically backtrack)
@@ -248,6 +243,7 @@ impl ConstraintSatisfactionSolver {
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
+                    &self.variable_names,
                 );
 
                 conflict.conjunction.clone()
@@ -262,10 +258,11 @@ impl ConstraintSatisfactionSolver {
             conflict,
             propagators: &mut self.propagators,
             proof_log: &mut self.internal_parameters.proof_log,
-            unit_nogood_step_ids: &self.unit_nogood_step_ids,
+            unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
             assignments: &self.assignments,
             reason_store: &mut self.reason_store,
             notification_engine: &mut self.notification_engine,
+            variable_names: &self.variable_names,
         };
 
         finalize_proof(context);
@@ -273,15 +270,13 @@ impl ConstraintSatisfactionSolver {
         let _ = self
             .internal_parameters
             .proof_log
-            .log_learned_clause([], &self.variable_names);
+            .log_deduction([], &self.variable_names);
     }
 }
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
-        let constraint_tags = KeyGenerator::default();
-
         let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
@@ -294,7 +289,7 @@ impl ConstraintSatisfactionSolver {
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
             lbd_helper: Lbd::default(),
-            unit_nogood_step_ids: Default::default(),
+            unit_nogood_inference_codes: Default::default(),
             conflict_resolver: match solver_options.conflict_resolver {
                 ConflictResolver::NoLearning => Box::new(NoLearningResolver),
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
@@ -302,7 +297,6 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
             notification_engine: NotificationEngine::default(),
-            constraint_tags,
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -452,7 +446,7 @@ impl ConstraintSatisfactionSolver {
 
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
-        self.constraint_tags.next_key()
+        self.internal_parameters.proof_log.new_constraint_tag()
     }
 
     /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
@@ -552,8 +546,9 @@ impl ConstraintSatisfactionSolver {
                     propagator_queue: &mut self.propagator_queue,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
-                    unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                    unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                     trailed_values: &mut self.trailed_values,
+                    variable_names: &self.variable_names,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -794,8 +789,9 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: &mut self.propagator_queue,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
-            unit_nogood_step_ids: &self.unit_nogood_step_ids,
+            unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
             trailed_values: &mut self.trailed_values,
+            variable_names: &self.variable_names,
         };
 
         let learned_nogood = self
@@ -831,22 +827,24 @@ impl ConstraintSatisfactionSolver {
         }
 
         if let Some(learned_nogood) = learned_nogood {
-            let constraint_tag = self.new_constraint_tag();
-
-            let learned_clause = learned_nogood
-                .predicates
-                .iter()
-                .map(|&predicate| !predicate);
-            let step_id = self
+            let constraint_tag = self
                 .internal_parameters
                 .proof_log
-                .log_learned_clause(learned_clause, &self.variable_names)
+                .log_deduction(
+                    learned_nogood.predicates.iter().copied(),
+                    &self.variable_names,
+                )
                 .expect("Failed to write proof log");
+
+            let inference_code = self
+                .internal_parameters
+                .proof_log
+                .create_inference_code(constraint_tag, NogoodLabel);
 
             if learned_nogood.predicates.len() == 1 {
                 let _ = self
-                    .unit_nogood_step_ids
-                    .insert(!learned_nogood.predicates[0], step_id);
+                    .unit_nogood_inference_codes
+                    .insert(!learned_nogood.predicates[0], inference_code);
             }
 
             self.solver_statistics
@@ -858,18 +856,13 @@ impl ConstraintSatisfactionSolver {
                 .average_learned_clause_length
                 .add_term(learned_nogood.predicates.len() as u64);
 
-            self.add_learned_nogood(learned_nogood, constraint_tag);
+            self.add_learned_nogood(learned_nogood, inference_code);
         }
 
         self.state.declare_solving();
     }
 
-    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood, constraint_tag: ConstraintTag) {
-        let inference_code = self
-            .internal_parameters
-            .proof_log
-            .create_inference_code(constraint_tag, NogoodLabel);
-
+    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood, inference_code: InferenceCode) {
         let mut context = PropagationContextMut::new(
             &mut self.trailed_values,
             &mut self.assignments,
@@ -1030,6 +1023,7 @@ impl ConstraintSatisfactionSolver {
             entry_inference_code,
             empty_domain_reason.iter().copied(),
             Some(entry.predicate),
+            &self.variable_names,
         );
 
         empty_domain_reason.extend([
@@ -1177,6 +1171,7 @@ impl ConstraintSatisfactionSolver {
                 inference_code,
                 inference_premises,
                 None,
+                &self.variable_names,
             );
 
             // Since inference steps are only related to the nogood they directly precede,
@@ -1197,23 +1192,31 @@ impl ConstraintSatisfactionSolver {
                 let mut context = RootExplanationContext {
                     propagators: &mut self.propagators,
                     proof_log: &mut self.internal_parameters.proof_log,
-                    unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                    unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                     assignments: &self.assignments,
                     reason_store: &mut self.reason_store,
                     notification_engine: &mut self.notification_engine,
+                    variable_names: &self.variable_names,
                 };
 
                 explain_root_assignment(&mut context, premise);
             }
 
             // Log the nogood which adds the root-level knowledge to the proof.
-            let nogood_step_id = self
+            let constraint_tag = self
                 .internal_parameters
                 .proof_log
-                .log_learned_clause([propagated], &self.variable_names);
+                .log_deduction([!propagated], &self.variable_names);
 
-            if let Ok(nogood_step_id) = nogood_step_id {
-                let _ = self.unit_nogood_step_ids.insert(propagated, nogood_step_id);
+            if let Ok(constraint_tag) = constraint_tag {
+                let inference_code = self
+                    .internal_parameters
+                    .proof_log
+                    .create_inference_code(constraint_tag, NogoodLabel);
+
+                let _ = self
+                    .unit_nogood_inference_codes
+                    .insert(propagated, inference_code);
             }
         }
     }
@@ -1427,10 +1430,11 @@ impl ConstraintSatisfactionSolver {
                 conflict: predicates.into(),
                 propagators: &mut self.propagators,
                 proof_log: &mut self.internal_parameters.proof_log,
-                unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                 assignments: &self.assignments,
                 reason_store: &mut self.reason_store,
                 notification_engine: &mut self.notification_engine,
+                variable_names: &self.variable_names,
             });
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(

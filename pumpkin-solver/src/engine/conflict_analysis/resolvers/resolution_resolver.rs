@@ -77,10 +77,11 @@ impl ConflictResolver for ResolutionResolver {
             Some(RootExplanationContext {
                 propagators: context.propagators,
                 proof_log: context.proof_log,
-                unit_nogood_step_ids: context.unit_nogood_step_ids,
+                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
                 assignments: context.assignments,
                 reason_store: context.reason_store,
                 notification_engine: context.notification_engine,
+                variable_names: context.variable_names,
             })
         } else {
             None
@@ -167,9 +168,10 @@ impl ConflictResolver for ResolutionResolver {
                             context.reason_store,
                             context.propagators,
                             context.proof_log,
-                            context.unit_nogood_step_ids,
+                            context.unit_nogood_inference_codes,
                             &mut self.reason_buffer,
                             context.notification_engine,
+                            context.variable_names,
                         );
 
                         if self.reason_buffer.is_empty() {
@@ -228,9 +230,10 @@ impl ConflictResolver for ResolutionResolver {
                         context.reason_store,
                         context.propagators,
                         context.proof_log,
-                        context.unit_nogood_step_ids,
+                        context.unit_nogood_inference_codes,
                         &mut self.reason_buffer,
                         context.notification_engine,
+                        context.variable_names,
                     );
                     pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
@@ -258,19 +261,21 @@ impl ConflictResolver for ResolutionResolver {
                 context.reason_store,
                 context.propagators,
                 context.proof_log,
-                context.unit_nogood_step_ids,
+                context.unit_nogood_inference_codes,
                 &mut self.reason_buffer,
                 context.notification_engine,
+                context.variable_names,
             );
 
             let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
                 Some(RootExplanationContext {
                     propagators: context.propagators,
                     proof_log: context.proof_log,
-                    unit_nogood_step_ids: context.unit_nogood_step_ids,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
                     assignments: context.assignments,
                     reason_store: context.reason_store,
                     notification_engine: context.notification_engine,
+                    variable_names: context.variable_names,
                 })
             } else {
                 None
