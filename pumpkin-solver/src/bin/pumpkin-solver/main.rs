@@ -28,7 +28,6 @@ use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
-use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::results::ProblemSolution;
@@ -447,7 +446,7 @@ fn main() {
     match run() {
         Ok(()) => {}
         Err(e) => {
-            error!("Execution failed, error: {}", e);
+            error!("Execution failed, error: {e}");
             std::process::exit(1);
         }
     }
@@ -486,12 +485,7 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => {
-                let log_inferences =
-                    matches!(args.proof_type, ProofType::Full | ProofType::WithHints);
-                let log_hints = matches!(args.proof_type, ProofType::WithHints);
-                ProofLog::cp(&path_buf, Format::Text, log_inferences, log_hints)?
-            }
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, args.proof_type == ProofType::Full)?,
         }
     } else {
         ProofLog::default()
@@ -622,15 +616,13 @@ fn stringify_solution(
         .collect::<String>()
 }
 
-#[derive(Default, Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 enum ProofType {
     /// Log only the proof scaffold.
     #[default]
     Scaffold,
-    /// Log the full proof without hints.
-    Full,
     /// Log the full proof with hints.
-    WithHints,
+    Full,
 }
 
 impl Display for ProofType {
@@ -638,7 +630,6 @@ impl Display for ProofType {
         match self {
             ProofType::Scaffold => write!(f, "scaffold"),
             ProofType::Full => write!(f, "full"),
-            ProofType::WithHints => write!(f, "with-hints"),
         }
     }
 }

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use drcp_format::Format;
 use pumpkin_solver::constraints;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ProofLog;
@@ -36,7 +35,7 @@ fn main() {
 
     let Ok(proof_log) = proof_path
         .as_ref()
-        .map(|path| ProofLog::cp(path, Format::Text, true, true))
+        .map(|path| ProofLog::cp(path, true))
         .transpose()
         .map(|proof| proof.unwrap_or_default())
     else {
