@@ -33,11 +33,7 @@ impl PredicateNotifier {
     pub(crate) fn debug_empty_clone(&self) -> Self {
         let mut predicate_id_assignments = PredicateIdAssignments::default();
         for predicate_id in self.predicate_id_assignments.predicate_ids() {
-            predicate_id_assignments.store_predicate(
-                predicate_id,
-                PredicateIdInfo::Untracked,
-                false,
-            );
+            predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::Untracked);
         }
         Self {
             predicate_to_id: self.predicate_to_id.clone(),
@@ -69,7 +65,7 @@ impl PredicateNotifier {
                     }
                 };
                 self.predicate_id_assignments
-                    .store_predicate(predicate_id, value, false);
+                    .store_predicate(predicate_id, value);
             });
     }
 
@@ -186,7 +182,6 @@ impl PredicateNotifier {
                 }
                 None => PredicateIdInfo::Unassigned,
             },
-            false,
         );
 
         // Then we update the structures

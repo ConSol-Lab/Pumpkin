@@ -214,11 +214,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        predicate_id_assignments.store_predicate(
-            predicate_id,
-            PredicateIdInfo::AssignedTrue,
-            false,
-        );
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
@@ -232,11 +228,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        predicate_id_assignments.store_predicate(
-            predicate_id,
-            PredicateIdInfo::AssignedTrue,
-            false,
-        );
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been falsified.
@@ -249,11 +241,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         if predicate_id.id == u32::MAX {
             return;
         }
-        predicate_id_assignments.store_predicate(
-            predicate_id,
-            PredicateIdInfo::AssignedFalse,
-            false,
-        );
+        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedFalse);
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].

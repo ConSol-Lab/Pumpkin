@@ -69,20 +69,11 @@ impl PredicateIdAssignments {
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
     /// [`PredicateIdInfo`].
-    ///
-    /// If `synchronisation` is set, then the [`PredicateId`] is added to the trail regardless of
-    /// whether the value in the [`PredicateIdAssignments`] was updated or not.
-    pub(crate) fn store_predicate(
-        &mut self,
-        predicate_id: PredicateId,
-        value: PredicateIdInfo,
-        synchronisation: bool,
-    ) {
+    pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateIdInfo) {
         while predicate_id.index() >= self.domains.len() {
             let _ = self.domains.push(PredicateIdInfo::Untracked);
         }
         pumpkin_assert_extreme!(
-            synchronisation ||
             self.domains[predicate_id] == PredicateIdInfo::Untracked ||self.domains[predicate_id] == PredicateIdInfo::Unknown
                 || self.domains[predicate_id] == PredicateIdInfo::Unassigned
                 || self.domains[predicate_id] == value,
@@ -96,8 +87,6 @@ impl PredicateIdAssignments {
                 _ => {}
             }
             self.domains[predicate_id] = value;
-            self.trail.push(predicate_id)
-        } else if synchronisation {
             self.trail.push(predicate_id)
         }
     }
@@ -119,7 +108,7 @@ impl PredicateIdAssignments {
             }
             None => PredicateIdInfo::Unassigned,
         };
-        self.store_predicate(predicate_id, value, false);
+        self.store_predicate(predicate_id, value);
     }
 
     pub(crate) fn is_satisfied(
