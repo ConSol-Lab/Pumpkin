@@ -51,6 +51,16 @@ macro_rules! pumpkin_assert_moderate {
 
 #[macro_export]
 #[doc(hidden)]
+macro_rules! pumpkin_assert_eq_moderate {
+    ($($arg:tt)*) => {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_MODERATE {
+            assert_eq!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_ne_moderate {
     ($($arg:tt)*) => {
         if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_MODERATE {

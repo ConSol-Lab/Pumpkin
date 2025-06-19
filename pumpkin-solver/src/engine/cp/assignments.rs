@@ -8,6 +8,7 @@ use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::proof::InferenceCode;
+use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -171,6 +172,8 @@ impl Assignments {
             "Expected all values to have been processed"
         );
 
+        self.update_bounds_snapshot(domain_id);
+
         domain_id
     }
 
@@ -255,7 +258,15 @@ impl Assignments {
 // methods for getting info about the domains
 impl Assignments {
     pub(crate) fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
-        self.bounds[domain_id].0
+        let (lower_bound, _) = self.bounds[domain_id];
+
+        pumpkin_assert_eq_moderate!(
+            lower_bound,
+            self.domains[domain_id].lower_bound(),
+            "bounds for {domain_id} out of sync"
+        );
+
+        lower_bound
     }
 
     pub(crate) fn get_lower_bound_at_trail_position(
@@ -267,7 +278,15 @@ impl Assignments {
     }
 
     pub(crate) fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
-        self.bounds[domain_id].1
+        let (_, upper_bound) = self.bounds[domain_id];
+
+        pumpkin_assert_eq_moderate!(
+            upper_bound,
+            self.domains[domain_id].upper_bound(),
+            "bounds for {domain_id} out of sync"
+        );
+
+        upper_bound
     }
 
     pub(crate) fn get_upper_bound_at_trail_position(
@@ -442,7 +461,7 @@ impl Assignments {
         let update_took_place =
             domain.set_lower_bound(new_lower_bound, decision_level, trail_position);
 
-        self.bounds[domain_id].0 = new_lower_bound;
+        self.bounds[domain_id].0 = domain.lower_bound();
 
         self.pruned_values += domain.lower_bound().abs_diff(old_lower_bound) as u64;
 
@@ -486,7 +505,7 @@ impl Assignments {
         let update_took_place =
             domain.set_upper_bound(new_upper_bound, decision_level, trail_position);
 
-        self.bounds[domain_id].1 = new_upper_bound;
+        self.bounds[domain_id].1 = domain.upper_bound();
 
         self.pruned_values += old_upper_bound.abs_diff(domain.upper_bound()) as u64;
 
@@ -551,8 +570,6 @@ impl Assignments {
 
         let _ = domain.remove_value(removed_value_from_domain, decision_level, trail_position);
 
-        self.bounds[domain_id] = (domain.lower_bound(), domain.upper_bound());
-
         let changed_lower_bound = domain.lower_bound().abs_diff(old_lower_bound) as u64;
         let changed_upper_bound = old_upper_bound.abs_diff(domain.upper_bound()) as u64;
 
@@ -562,7 +579,8 @@ impl Assignments {
             self.pruned_values += 1;
         }
 
-        let _ = domain.verify_consistency()?;
+        self.update_bounds_snapshot(domain_id);
+        let _ = self.domains[domain_id].verify_consistency()?;
 
         Ok(true)
     }
@@ -787,11 +805,19 @@ impl Assignments {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
+        self.update_bounds_snapshot(domain_id);
     }
 
     /// Get the number of values pruned from all the domains.
     pub(crate) fn get_pruned_value_count(&self) -> u64 {
         self.pruned_values
+    }
+
+    fn update_bounds_snapshot(&mut self, domain_id: DomainId) {
+        self.bounds[domain_id] = (
+            self.domains[domain_id].lower_bound(),
+            self.domains[domain_id].upper_bound(),
+        );
     }
 }
 
