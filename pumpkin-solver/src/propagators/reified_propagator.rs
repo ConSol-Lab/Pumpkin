@@ -84,6 +84,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
                 PropagationContextWithTrailedValues::new(
                     context.trailed_values,
                     context.assignments,
+                    context.predicate_id_assignments,
                 ),
                 local_id,
                 event,

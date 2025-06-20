@@ -273,6 +273,7 @@ impl TestSolver {
             ExplanationContext::without_working_nogood(
                 &self.assignments,
                 self.assignments.get_trail_position(&predicate).unwrap(),
+                &mut self.notification_engine,
             ),
             &mut self.propagator_store,
             &mut predicates,

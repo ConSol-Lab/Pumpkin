@@ -1,4 +1,6 @@
 use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
+use super::PredicateIdAssignments;
+use super::PredicateValue;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -17,50 +19,51 @@ use crate::variables::DomainId;
 /// updated [`Predicate`]s, and allowing propagators to indicate that the polarity of a
 /// [`Predicate`] should be tracked (i.e. adding a [`Predicate`] to the scope of
 /// [`PredicateNotifier`]).
+///
+/// It also contains the [`PredicateIdAssignments`] which serves as a (lazy) structure for
+/// retrieving the polarity of [`Predicate`]s (represented by [`PredicateId`]s).
 #[derive(Default, Debug)]
 pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
     pub(crate) predicate_to_id: PredicateIdGenerator,
+    /// Tracks the current status for [`PredicateId`]s.
+    pub(crate) predicate_id_assignments: PredicateIdAssignments,
     /// Contains the [`PredicateTrackerForDomain`] for each [`DomainId`]
     domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTrackerForDomain>,
-    /// A list of the predicates which have been found to be falsified since the last round of
-    /// notifications
-    falsified_predicates: Vec<PredicateId>,
-    /// A list of the predicates which have been found to be satisfied since the last round of
-    /// notifications
-    pub(crate) satisfied_predicates: Vec<PredicateId>,
 }
 
 impl PredicateNotifier {
+    pub(crate) fn debug_empty_clone(&self) -> Self {
+        let predicate_id_assignments = self.predicate_id_assignments.debug_empty_clone();
+        Self {
+            predicate_to_id: self.predicate_to_id.clone(),
+            predicate_id_assignments,
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
+        self.predicate_id_assignments
+            .debug_create_from_assignments(assignments, &mut self.predicate_to_id);
+    }
+
     /// Returns the falsified predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.falsified_predicates.drain(..)
+        self.predicate_id_assignments.drain_falsified_predicates()
     }
 
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.satisfied_predicates.drain(..)
+        self.predicate_id_assignments.drain_satisfied_predicates()
     }
 
     /// Returns the [`Predicate`] corresponding to a [`PredicateId`].
     ///
     /// This method will panic if there is no [`Predicate`] for the provided [`PredicateId`].
-    pub(crate) fn get_predicate_for_id(&self, predicate_id: PredicateId) -> Predicate {
-        self.predicate_to_id.get_predicate(predicate_id).unwrap()
-    }
-
-    /// Returns the [`PredicateId`] for the provided [`Predicate`].
-    ///
-    /// If there exists no [`PredicateId`] for the [`Predicate`] then this method will return
-    /// [`None`].
-    pub(crate) fn get_id_for_predicate(&mut self, predicate: Predicate) -> Option<PredicateId> {
-        if !self.predicate_to_id.has_id_for_predicate(predicate) {
-            return None;
-        }
-
-        Some(self.predicate_to_id.get_id(predicate))
+    pub(crate) fn get_predicate(&self, predicate_id: PredicateId) -> Predicate {
+        self.predicate_to_id.get_predicate(predicate_id)
     }
 
     /// Method which is called when an update to a [`DomainId`] has taken place
@@ -116,8 +119,7 @@ impl PredicateNotifier {
         self.domain_id_to_predicate_tracker[predicate.get_domain()].on_update(
             predicate,
             trailed_values,
-            &mut self.falsified_predicates,
-            &mut self.satisfied_predicates,
+            &mut self.predicate_id_assignments,
             self.predicate_to_id
                 .has_id_for_predicate(predicate)
                 .then(|| self.predicate_to_id.get_id(predicate)),
@@ -128,38 +130,54 @@ impl PredicateNotifier {
     /// [`Predicate`] to its scope.
     pub(crate) fn track_predicate(
         &mut self,
-        predicate: Predicate,
+        id: PredicateId,
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
-    ) -> PredicateId {
-        // If it is already watched then at the moment we do nothing
-        let has_id_for_predicate = self.predicate_to_id.has_id_for_predicate(predicate);
+    ) {
+        let predicate = self.predicate_to_id.get_predicate(id);
 
-        // We create a new predicate ID for the predicate
-        let id = self.predicate_to_id.get_id(predicate);
-
-        if !has_id_for_predicate {
-            while self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
-                let _ = self
-                    .domain_id_to_predicate_tracker
-                    .push(PredicateTrackerForDomain::new(trailed_values));
-            }
-
-            self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-                predicate.get_domain(),
-                assignments.get_initial_lower_bound(predicate.get_domain()),
-                assignments.get_initial_upper_bound(predicate.get_domain()),
-            );
-
-            // Then we update the structures
-            self.domain_id_to_predicate_tracker[predicate.get_domain()].watch_predicate(
-                predicate,
-                id,
-                trailed_values,
-                assignments,
+        // First, we resize the number of DomainIds for which we store predicate trackers
+        if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
+            self.domain_id_to_predicate_tracker.resize(
+                predicate.get_domain().index() + 1,
+                PredicateTrackerForDomain::new(),
             );
         }
 
-        id
+        // Now we initialise the predicate tracker; this does not add it to the scope yet but it
+        // initialises the structures
+        self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
+            predicate,
+            assignments.get_initial_lower_bound(predicate.get_domain()),
+            assignments.get_initial_upper_bound(predicate.get_domain()),
+            trailed_values,
+        );
+
+        // Now we add it to the scope of the tracker
+        //
+        // We check whether it was already tracked or not
+        let was_not_already_tracked = self.domain_id_to_predicate_tracker[predicate.get_domain()]
+            .watch_predicate(predicate, id);
+
+        // If it was not already tracked then we store the update; otherwise we assume that the
+        // cache has already been informed of its value
+        if was_not_already_tracked {
+            // Then we cache the known value of the predicate; note that this method also ensures
+            // that it is added to the list of PredicateIds which the propagators should
+            // be notified about if it has not done so already
+            self.predicate_id_assignments.store_predicate(
+                id,
+                match assignments.evaluate_predicate(predicate) {
+                    Some(satisfied) => {
+                        if satisfied {
+                            PredicateValue::AssignedTrue
+                        } else {
+                            PredicateValue::AssignedFalse
+                        }
+                    }
+                    None => PredicateValue::Unassigned,
+                },
+            );
+        }
     }
 }

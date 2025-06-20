@@ -1,5 +1,7 @@
+use crate::basic_types::PredicateId;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
+use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
@@ -17,13 +19,19 @@ use crate::pumpkin_assert_simple;
 pub(crate) struct PropagationContextWithTrailedValues<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
+    pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
 }
 
 impl<'a> PropagationContextWithTrailedValues<'a> {
-    pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
+    pub(crate) fn new(
+        trailed_values: &'a mut TrailedValues,
+        assignments: &'a Assignments,
+        predicate_id_assignments: &'a PredicateIdAssignments,
+    ) -> Self {
         Self {
             trailed_values,
             assignments,
+            predicate_id_assignments,
         }
     }
 
@@ -84,6 +92,14 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
+    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
+    }
+
+    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.get_id(predicate)
+    }
+
     /// Apply a reification literal to all the explanations that are passed to the context.
     pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
         pumpkin_assert_simple!(
@@ -98,6 +114,7 @@ impl<'a> PropagationContextMut<'a> {
         PropagationContextWithTrailedValues {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
+            predicate_id_assignments: self.notification_engine.predicate_id_assignments(),
         }
     }
 
@@ -109,6 +126,25 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
+    }
+
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
+    pub(crate) fn is_predicate_id_falsified(&mut self, predicate_id: PredicateId) -> bool {
+        self.notification_engine
+            .is_predicate_id_falsified(predicate_id, self.assignments)
+    }
+
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
+    pub(crate) fn is_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
+        self.notification_engine
+            .is_predicate_id_satisfied(predicate_id, self.assignments)
+    }
+
+    /// Returns the number of [`PredicateId`]s.
+    pub(crate) fn num_predicate_ids(&self) -> usize {
+        self.notification_engine.num_predicate_ids()
     }
 }
 

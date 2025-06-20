@@ -779,6 +779,7 @@ pub(crate) mod test_propagation_handler {
                 ExplanationContext::without_working_nogood(
                     &self.assignments,
                     self.assignments.get_trail_position(&predicate).unwrap(),
+                    &mut self.notification_engine,
                 ),
                 &mut propagator_store,
                 &mut reason,

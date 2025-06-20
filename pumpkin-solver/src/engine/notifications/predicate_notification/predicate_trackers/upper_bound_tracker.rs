@@ -3,6 +3,7 @@ use super::HasTracker;
 use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
+use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -13,9 +14,9 @@ pub(crate) struct UpperBoundTracker {
 }
 
 impl UpperBoundTracker {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            watcher: PredicateTracker::new(trailed_values),
+            watcher: PredicateTracker::new(),
         }
     }
 }
@@ -39,8 +40,7 @@ impl DomainTracker for UpperBoundTracker {
         &mut self,
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
-        falsified_predicates: &mut Vec<PredicateId>,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         _predicate_id: Option<PredicateId>,
     ) {
         // We only consider lower-bound and upper-bound updates
@@ -56,7 +56,7 @@ impl DomainTracker for UpperBoundTracker {
                 self.watcher.greater[trailed_values.read(self.watcher.min_assigned) as usize];
             while larger != i64::MAX && value > self.watcher.values[larger as usize] {
                 // The update has caused the predicate to become falsified
-                self.predicate_has_been_falsified(larger as usize, falsified_predicates);
+                self.predicate_has_been_falsified(larger as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.min_assigned, larger);
                 larger = self.watcher.greater[larger as usize];
             }
@@ -68,11 +68,11 @@ impl DomainTracker for UpperBoundTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             while smaller != i64::MAX && value <= self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become falsified
-                self.predicate_has_been_satisfied(smaller as usize, satisfied_predicates);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
         }
