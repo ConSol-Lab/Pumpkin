@@ -5,11 +5,10 @@ use crate::predicate;
 /// ([`DomainId`], [`PredicateType`], value).
 ///
 /// To create a [`Predicate`], use [Predicate::new] or the more concise [predicate!] macro.
-///
-/// The two most significant bits of the id stored in the [`Predicate`] contains the type of
-/// predicate.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
+    /// The two most significant bits of the id stored in the [`Predicate`] contains the type of
+    /// predicate.
     id: u32,
     value: i32,
 }
