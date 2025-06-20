@@ -106,6 +106,7 @@ pub mod predicates {
     //! decisions.
     pub use crate::basic_types::PropositionalConjunction;
     pub use crate::engine::predicates::predicate::Predicate;
+    pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
     #[cfg(doc)]
     use crate::variables::Literal;

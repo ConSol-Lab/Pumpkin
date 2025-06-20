@@ -1,12 +1,12 @@
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
-/// Representation of a domain operation.
+/// Representation of a domain operation, also known as an atomic constraint. It is a triple
+/// ([`DomainId`], [`PredicateType`], value).
 ///
-/// It is provided in the form of an atomic constraint over a [`DomainId`]. See the [`predicate!`]
-/// macro on how to construct a predicate.
+/// To create a [`Predicate`], use [Predicate::new] or the more concise [predicate!] macro.
 ///
-/// The 2 most significant bits of the id stored in the [`Predicate`] contains the type of
+/// The two most significant bits of the id stored in the [`Predicate`] contains the type of
 /// predicate.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
@@ -14,8 +14,15 @@ pub struct Predicate {
     value: i32,
 }
 
+const LOWER_BOUND_CODE: u8 = 1;
+const UPPER_BOUND_CODE: u8 = 2;
+const EQUAL_CODE: u8 = 0;
+const NOT_EQUAL_CODE: u8 = 3;
+
 impl Predicate {
-    pub(super) fn new(id: DomainId, predicate_type: PredicateType, value: i32) -> Self {
+    /// Creates a new [`Predicate`] (also known as atomic constraint) which represents a domain
+    /// operation.
+    pub fn new(id: DomainId, predicate_type: PredicateType, value: i32) -> Self {
         let code = match predicate_type {
             PredicateType::LowerBound => LOWER_BOUND_CODE,
             PredicateType::UpperBound => UPPER_BOUND_CODE,
@@ -34,11 +41,6 @@ impl Predicate {
         (*self).into()
     }
 }
-
-const LOWER_BOUND_CODE: u8 = 1;
-const UPPER_BOUND_CODE: u8 = 2;
-const EQUAL_CODE: u8 = 0;
-const NOT_EQUAL_CODE: u8 = 3;
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
 pub enum PredicateType {
