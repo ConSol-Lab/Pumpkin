@@ -8,6 +8,7 @@ use crate::containers::StorageKey;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::ExplanationContext;
@@ -254,17 +255,14 @@ impl ConflictAnalysisContext<'_> {
             // The reason for propagation depends on:
             // 1) The predicate on the trail at the moment the input predicate became true, and
             // 2) The input predicate.
-            match (trail_entry.predicate, predicate) {
-                (
-                    Predicate::LowerBound {
-                        domain_id: _,
-                        lower_bound: trail_lower_bound,
-                    },
-                    Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: input_lower_bound,
-                    },
-                ) => {
+            match (
+                trail_entry.predicate.get_predicate_type(),
+                predicate.get_predicate_type(),
+            ) {
+                (PredicateType::LowerBound, PredicateType::LowerBound) => {
+                    let trail_lower_bound = trail_entry.predicate.get_right_hand_side();
+                    let domain_id = predicate.get_domain();
+                    let input_lower_bound = predicate.get_right_hand_side();
                     // Both the input predicate and the trail predicate are lower bound
                     // literals. Two cases to consider:
                     // 1) The trail predicate has a greater right-hand side, meaning
@@ -295,29 +293,17 @@ impl ConflictAnalysisContext<'_> {
                         // only look for reasons for predicates from the current decision
                         // level, and we never look for reasons at the root level.
 
-                        let one_less_bound_predicate = Predicate::LowerBound {
-                            domain_id,
-                            lower_bound: input_lower_bound - 1,
-                        };
+                        let one_less_bound_predicate =
+                            predicate!(domain_id >= input_lower_bound - 1);
 
-                        let not_equals_predicate = Predicate::NotEqual {
-                            domain_id,
-                            not_equal_constant: input_lower_bound - 1,
-                        };
+                        let not_equals_predicate = predicate!(domain_id != input_lower_bound - 1);
                         reason_buffer.extend(std::iter::once(one_less_bound_predicate));
                         reason_buffer.extend(std::iter::once(not_equals_predicate));
                     }
                 }
-                (
-                    Predicate::LowerBound {
-                        domain_id: _,
-                        lower_bound: trail_lower_bound,
-                    },
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant,
-                    },
-                ) => {
+                (PredicateType::LowerBound, PredicateType::NotEqual) => {
+                    let trail_lower_bound = trail_entry.predicate.get_right_hand_side();
+                    let not_equal_constant = predicate.get_right_hand_side();
                     // The trail entry is a lower bound literal,
                     // and the input predicate is a not equals.
                     // Only one case to consider:
@@ -327,16 +313,9 @@ impl ConflictAnalysisContext<'_> {
                     pumpkin_assert_simple!(trail_lower_bound > not_equal_constant);
                     reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
-                (
-                    Predicate::LowerBound {
-                        domain_id: _,
-                        lower_bound: _,
-                    },
-                    Predicate::Equal {
-                        domain_id,
-                        equality_constant,
-                    },
-                ) => {
+                (PredicateType::LowerBound, PredicateType::Equal) => {
+                    let domain_id = predicate.get_domain();
+                    let equality_constant = predicate.get_right_hand_side();
                     // The input predicate is an equality predicate, and the trail predicate
                     // is a lower bound predicate. This means that the time of posting the
                     // trail predicate is when the input predicate became true.
@@ -349,27 +328,15 @@ impl ConflictAnalysisContext<'_> {
                     // For example, {1, 2, 3, 10}, then posting [x >= 5] will raise the
                     // lower bound to x >= 10.
 
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
+                    let predicate_lb = predicate!(domain_id >= equality_constant);
+                    let predicate_ub = predicate!(domain_id <= equality_constant);
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
                 }
-                (
-                    Predicate::UpperBound {
-                        domain_id: _,
-                        upper_bound: trail_upper_bound,
-                    },
-                    Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: input_upper_bound,
-                    },
-                ) => {
+                (PredicateType::UpperBound, PredicateType::UpperBound) => {
+                    let trail_upper_bound = trail_entry.predicate.get_right_hand_side();
+                    let domain_id = predicate.get_domain();
+                    let input_upper_bound = predicate.get_right_hand_side();
                     // Both the input and trail predicates are upper bound predicates.
                     // There are two scenarios to consider:
                     // 1) The input upper bound is greater than the trail upper bound, meaning that
@@ -391,28 +358,15 @@ impl ConflictAnalysisContext<'_> {
                         // The reason of the input predicate [x <= a] is computed recursively as
                         // the reason for [x <= a + 1] & [x != a + 1].
 
-                        let new_ub_predicate = Predicate::UpperBound {
-                            domain_id,
-                            upper_bound: input_upper_bound + 1,
-                        };
-                        let not_equal_predicate = Predicate::NotEqual {
-                            domain_id,
-                            not_equal_constant: input_upper_bound + 1,
-                        };
+                        let new_ub_predicate = predicate!(domain_id <= input_upper_bound + 1);
+                        let not_equal_predicate = predicate!(domain_id != input_upper_bound + 1);
                         reason_buffer.extend(std::iter::once(new_ub_predicate));
                         reason_buffer.extend(std::iter::once(not_equal_predicate));
                     }
                 }
-                (
-                    Predicate::UpperBound {
-                        domain_id: _,
-                        upper_bound: trail_upper_bound,
-                    },
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant,
-                    },
-                ) => {
+                (PredicateType::UpperBound, PredicateType::NotEqual) => {
+                    let trail_upper_bound = trail_entry.predicate.get_right_hand_side();
+                    let not_equal_constant = predicate.get_right_hand_side();
                     // The input predicate is a not equal predicate, and the trail predicate is
                     // an upper bound predicate. This is only possible when the upper bound was
                     // pushed below the not equals value. Otherwise the hole would have been
@@ -423,16 +377,9 @@ impl ConflictAnalysisContext<'_> {
                     // reason. todo: can do lifting here.
                     reason_buffer.extend(std::iter::once(trail_entry.predicate));
                 }
-                (
-                    Predicate::UpperBound {
-                        domain_id: _,
-                        upper_bound: _,
-                    },
-                    Predicate::Equal {
-                        domain_id,
-                        equality_constant,
-                    },
-                ) => {
+                (PredicateType::UpperBound, PredicateType::Equal) => {
+                    let domain_id = predicate.get_domain();
+                    let equality_constant = predicate.get_right_hand_side();
                     // The input predicate is an equality predicate, and the trail predicate
                     // is an upper bound predicate. This means that the time of posting the
                     // trail predicate is when the input predicate became true.
@@ -448,27 +395,15 @@ impl ConflictAnalysisContext<'_> {
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
 
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
+                    let predicate_lb = predicate!(domain_id >= equality_constant);
+                    let predicate_ub = predicate!(domain_id <= equality_constant);
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
                 }
-                (
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant,
-                    },
-                    Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: input_lower_bound,
-                    },
-                ) => {
+                (PredicateType::NotEqual, PredicateType::LowerBound) => {
+                    let not_equal_constant = trail_entry.predicate.get_right_hand_side();
+                    let domain_id = predicate.get_domain();
+                    let input_lower_bound = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is a lower
                     // bound predicate. This means that creating the hole in the domain resulted
                     // in raising the lower bound.
@@ -482,28 +417,16 @@ impl ConflictAnalysisContext<'_> {
 
                     // The reason for the input predicate [x >= a] is computed recursively as
                     // the reason for [x >= a - 1] & [x != a - 1].
-                    let new_lb_predicate = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: input_lower_bound - 1,
-                    };
-                    let new_not_equals_predicate = Predicate::NotEqual {
-                        domain_id,
-                        not_equal_constant: input_lower_bound - 1,
-                    };
+                    let new_lb_predicate = predicate!(domain_id >= input_lower_bound - 1);
+                    let new_not_equals_predicate = predicate!(domain_id != input_lower_bound - 1);
 
                     reason_buffer.extend(std::iter::once(new_lb_predicate));
                     reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
-                (
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant,
-                    },
-                    Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: input_upper_bound,
-                    },
-                ) => {
+                (PredicateType::NotEqual, PredicateType::UpperBound) => {
+                    let not_equal_constant = trail_entry.predicate.get_right_hand_side();
+                    let domain_id = predicate.get_domain();
+                    let input_upper_bound = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is an upper
                     // bound predicate. This means that creating the hole in the domain resulted
                     // in lower the upper bound.
@@ -517,28 +440,15 @@ impl ConflictAnalysisContext<'_> {
 
                     // The reason for the input predicate [x <= a] is computed recursively as
                     // the reason for [x <= a + 1] & [x != a + 1].
-                    let new_ub_predicate = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: input_upper_bound + 1,
-                    };
-                    let new_not_equals_predicate = Predicate::NotEqual {
-                        domain_id,
-                        not_equal_constant: input_upper_bound + 1,
-                    };
+                    let new_ub_predicate = predicate!(domain_id <= input_upper_bound + 1);
+                    let new_not_equals_predicate = predicate!(domain_id != input_upper_bound + 1);
 
                     reason_buffer.extend(std::iter::once(new_ub_predicate));
                     reason_buffer.extend(std::iter::once(new_not_equals_predicate));
                 }
-                (
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant: _,
-                    },
-                    Predicate::Equal {
-                        domain_id,
-                        equality_constant,
-                    },
-                ) => {
+                (PredicateType::NotEqual, PredicateType::Equal) => {
+                    let domain_id = predicate.get_domain();
+                    let equality_constant = predicate.get_right_hand_side();
                     // The trail predicate is not equals, but the input predicate is
                     // equals. The only time this could is when the not equals forces the
                     // lower/upper bounds to meet. So we simply look for the reasons for those
@@ -547,14 +457,8 @@ impl ConflictAnalysisContext<'_> {
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
 
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
+                    let predicate_lb = predicate!(domain_id >= equality_constant);
+                    let predicate_ub = predicate!(domain_id <= equality_constant);
 
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));

@@ -63,7 +63,7 @@ impl Solution {
     }
 
     pub fn contains_domain_id(&self, domain_id: DomainId) -> bool {
-        domain_id.id < self.assignments.num_domains()
+        domain_id.id() < self.assignments.num_domains()
     }
 
     pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {

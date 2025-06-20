@@ -580,8 +580,8 @@ impl NogoodPropagator {
         assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
-        if predicate.get_domain().id as usize >= watch_lists.len() {
-            watch_lists.resize((predicate.get_domain().id + 1) as usize, Vec::default());
+        if predicate.get_domain().id() as usize >= watch_lists.len() {
+            watch_lists.resize((predicate.get_domain().id() + 1) as usize, Vec::default());
         }
 
         let predicate_id =
@@ -940,7 +940,7 @@ mod tests {
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id(), dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -958,12 +958,12 @@ mod tests {
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 0);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 0);
 
         solver.propagate_until_fixed_point(propagator).expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
 
         solver.propagate(propagator).expect("");
 
@@ -1001,9 +1001,9 @@ mod tests {
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 1);
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
 
         let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_err());

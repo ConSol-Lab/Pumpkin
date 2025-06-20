@@ -1,4 +1,5 @@
 use super::predicate::Predicate;
+use super::predicate::PredicateType;
 use crate::engine::variables::DomainId;
 
 /// A trait which defines methods for creating a [`Predicate`].
@@ -22,32 +23,20 @@ pub trait PredicateConstructor {
 impl PredicateConstructor for DomainId {
     type Value = i32;
 
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::Equal, bound)
+    }
+
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::LowerBound {
-            domain_id: *self,
-            lower_bound: bound,
-        }
+        Predicate::new(*self, PredicateType::LowerBound, bound)
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::UpperBound {
-            domain_id: *self,
-            upper_bound: bound,
-        }
-    }
-
-    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::Equal {
-            domain_id: *self,
-            equality_constant: bound,
-        }
+        Predicate::new(*self, PredicateType::UpperBound, bound)
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::NotEqual {
-            domain_id: *self,
-            not_equal_constant: bound,
-        }
+        Predicate::new(*self, PredicateType::NotEqual, bound)
     }
 }
 
@@ -62,44 +51,20 @@ impl PredicateConstructor for DomainId {
 /// let x = solver.new_bounded_integer(0, 10);
 ///
 /// let lower_bound_predicate = predicate!(x >= 5);
-/// assert_eq!(
-///     lower_bound_predicate,
-///     Predicate::LowerBound {
-///         domain_id: x,
-///         lower_bound: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(lower_bound_predicate.get_domain(), x);
+/// assert_eq!(lower_bound_predicate.get_right_hand_side(), 5);
 ///
 /// let upper_bound_predicate = predicate!(x <= 5);
-/// assert_eq!(
-///     upper_bound_predicate,
-///     Predicate::UpperBound {
-///         domain_id: x,
-///         upper_bound: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(upper_bound_predicate.get_domain(), x);
+/// assert_eq!(upper_bound_predicate.get_right_hand_side(), 5);
 ///
 /// let equality_predicate = predicate!(x == 5);
-/// assert_eq!(
-///     equality_predicate,
-///     Predicate::Equal {
-///         domain_id: x,
-///         equality_constant: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(equality_predicate.get_domain(), x);
+/// assert_eq!(equality_predicate.get_right_hand_side(), 5);
 ///
 /// let disequality_predicate = predicate!(x != 5);
-/// assert_eq!(
-///     disequality_predicate,
-///     Predicate::NotEqual {
-///         domain_id: x,
-///         not_equal_constant: 5
-///     }
-///     .into()
-/// );
+/// assert_eq!(disequality_predicate.get_domain(), x);
+/// assert_eq!(disequality_predicate.get_right_hand_side(), 5);
 /// ```
 #[macro_export]
 macro_rules! predicate {
@@ -131,29 +96,37 @@ mod tests {
 
     #[test]
     fn macro_local_identifiers_are_matched() {
-        let x = DomainId { id: 0 };
+        let x = DomainId::new(0);
 
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: x,
-            lower_bound: 2,
-        };
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: x,
-            upper_bound: 3,
-        };
-        let equality_predicate = Predicate::Equal {
-            domain_id: x,
-            equality_constant: 5,
-        };
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: x,
-            not_equal_constant: 5,
-        };
+        assert_eq!(x, predicate![x >= 2].get_domain());
+        assert_eq!(x, predicate![x <= 3].get_domain());
+        assert_eq!(x, predicate![x == 5].get_domain());
+        assert_eq!(x, predicate![x != 5].get_domain());
 
-        assert_eq!(lower_bound_predicate, predicate![x >= 2]);
-        assert_eq!(upper_bound_predicate, predicate![x <= 3]);
-        assert_eq!(equality_predicate, predicate![x == 5]);
-        assert_eq!(disequality_predicate, predicate![x != 5]);
+        assert_eq!(2, predicate![x >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![x <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![x == 5].get_right_hand_side());
+        assert_eq!(5, predicate![x != 5].get_right_hand_side());
+
+        assert!(predicate!(x >= 2).is_lower_bound_predicate());
+        assert!(!predicate!(x >= 2).is_upper_bound_predicate());
+        assert!(!predicate!(x >= 2).is_equality_predicate());
+        assert!(!predicate!(x >= 2).is_not_equal_predicate());
+
+        assert!(predicate!(x <= 3).is_upper_bound_predicate());
+        assert!(!predicate!(x <= 3).is_lower_bound_predicate());
+        assert!(!predicate!(x <= 3).is_equality_predicate());
+        assert!(!predicate!(x <= 3).is_not_equal_predicate());
+
+        assert!(predicate!(x == 5).is_equality_predicate());
+        assert!(!predicate!(x == 5).is_lower_bound_predicate());
+        assert!(!predicate!(x == 5).is_upper_bound_predicate());
+        assert!(!predicate!(x == 5).is_not_equal_predicate());
+
+        assert!(predicate!(x != 5).is_not_equal_predicate());
+        assert!(!predicate!(x != 5).is_lower_bound_predicate());
+        assert!(!predicate!(x != 5).is_upper_bound_predicate());
+        assert!(!predicate!(x != 5).is_equality_predicate());
     }
 
     #[test]
@@ -163,60 +136,32 @@ mod tests {
         }
 
         let wrapper = Wrapper {
-            x: DomainId { id: 0 },
+            x: DomainId::new(0),
         };
 
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: wrapper.x,
-            lower_bound: 2,
-        };
-        assert_eq!(lower_bound_predicate, predicate![wrapper.x >= 2]);
+        assert_eq!(wrapper.x, predicate![wrapper.x >= 2].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x <= 3].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x == 5].get_domain());
+        assert_eq!(wrapper.x, predicate![wrapper.x != 5].get_domain());
 
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: wrapper.x,
-            upper_bound: 3,
-        };
-        assert_eq!(upper_bound_predicate, predicate![wrapper.x <= 3]);
-
-        let equality_predicate = Predicate::Equal {
-            domain_id: wrapper.x,
-            equality_constant: 5,
-        };
-        assert_eq!(equality_predicate, predicate![wrapper.x == 5]);
-
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: wrapper.x,
-            not_equal_constant: 5,
-        };
-        assert_eq!(disequality_predicate, predicate![wrapper.x != 5]);
+        assert_eq!(2, predicate![wrapper.x >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![wrapper.x <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper.x == 5].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper.x != 5].get_right_hand_side());
     }
 
     #[test]
     fn macro_index_expressions_are_matched() {
-        let wrapper = [DomainId { id: 0 }];
+        let wrapper = [DomainId::new(0)];
 
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: wrapper[0],
-            lower_bound: 2,
-        };
-        assert_eq!(lower_bound_predicate, predicate![wrapper[0] >= 2]);
+        assert_eq!(wrapper[0], predicate![wrapper[0] >= 2].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] <= 3].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] == 5].get_domain());
+        assert_eq!(wrapper[0], predicate![wrapper[0] != 5].get_domain());
 
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: wrapper[0],
-            upper_bound: 3,
-        };
-        assert_eq!(upper_bound_predicate, predicate![wrapper[0] <= 3]);
-
-        let equality_predicate = Predicate::Equal {
-            domain_id: wrapper[0],
-            equality_constant: 5,
-        };
-        assert_eq!(equality_predicate, predicate![wrapper[0] == 5]);
-
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: wrapper[0],
-            not_equal_constant: 5,
-        };
-        assert_eq!(disequality_predicate, predicate![wrapper[0] != 5]);
+        assert_eq!(2, predicate![wrapper[0] >= 2].get_right_hand_side());
+        assert_eq!(3, predicate![wrapper[0] <= 3].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper[0] == 5].get_right_hand_side());
+        assert_eq!(5, predicate![wrapper[0] != 5].get_right_hand_side());
     }
 }

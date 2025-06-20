@@ -8,17 +8,23 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
+use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct DomainId {
-    pub id: u32,
+    id: u32,
 }
 
 impl DomainId {
     pub fn new(id: u32) -> Self {
+        pumpkin_assert_simple!(id >> 30 == 0, "The first two bits are used as flags");
         DomainId { id }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
     }
 }
 

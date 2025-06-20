@@ -201,13 +201,7 @@ impl NotificationEngine {
                 self.backtrack_events
                     .event_occurred(DomainEvent::UpperBound, predicate.get_domain())
             }
-            if matches!(
-                predicate,
-                Predicate::NotEqual {
-                    domain_id: _,
-                    not_equal_constant: _
-                }
-            ) {
+            if predicate.is_not_equal_predicate() {
                 self.backtrack_events
                     .event_occurred(DomainEvent::Removal, predicate.get_domain())
             }
@@ -361,7 +355,7 @@ impl NotificationEngine {
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
         // For this reason, its local id matches the domain id.
         // This is special only for the nogood propagator.
-        let local_id = LocalId::from(domain.id);
+        let local_id = LocalId::from(domain.id());
         Self::notify_propagator(
             nogood_propagator_id,
             local_id,
