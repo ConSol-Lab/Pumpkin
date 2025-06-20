@@ -4,21 +4,47 @@ use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
+#[cfg(doc)]
+use crate::predicates::Predicate;
 use crate::pumpkin_assert_extreme;
 
+/// A structure for (lazily) storing information concerning the value of [`Predicate`]s.
+///
+/// When the status of a [`Predicate`] is unknown, this structure recalculates it using the
+/// [`Assignments`].
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PredicateIdAssignments {
+    /// A trail of the [`PredicateId`]s which have been assigned.
+    ///
+    /// Note that this structure will not be fully accurate as it is dependent on when a
+    /// [`Predicate`] is stored.
     trail: Trail<PredicateId>,
+    /// The known value for each [`Predicate`] (represented by a [`PredicateId`]).
     predicate_values: KeyedVec<PredicateId, PredicateValue>,
+    /// The [`Predicate`]s which are currently known to be falsified used for notification.
+    ///
+    /// Note that this structure does not contain _all_ of the falsified [`Predicate`]s but rather
+    /// the one which have been falsified since the last round of notifications.
     falsified_predicates: Vec<PredicateId>,
+    /// The [`Predicate`]s which are currently known to be satisfied used for notification.
+    ///
+    /// Note that this structure does not contain _all_ of the satisfied [`Predicate`]s but rather
+    /// the one which have been satisfied since the last round of notifications.
     satisfied_predicates: Vec<PredicateId>,
 }
 
+/// The current value of a [`Predicate`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PredicateValue {
+    /// The [`Predicate`] is currently unassigned.
     Unassigned,
+    /// The [`Predicate`] is currently true.
     AssignedTrue,
+    /// The [`Predicate`] is currently false.
     AssignedFalse,
+    /// The [`Predicate`] is currently unknown.
+    ///
+    /// If the value of a [`Predicate`] with this value is retrieved then it will be recalculated.
     Unknown,
 }
 
@@ -62,7 +88,10 @@ impl PredicateIdAssignments {
     }
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
-    /// [`PredicateIdInfo`].
+    /// [`PredicateValue`].
+    ///
+    /// If the [`Predicate`] is true/false then it will be checked whether this information is
+    /// already stored; if it is not, then it will also store the [`Predicate`] for notification.
     pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateValue) {
         while predicate_id.index() >= self.predicate_values.len() {
             let _ = self.predicate_values.push(PredicateValue::Unknown);
@@ -85,53 +114,65 @@ impl PredicateIdAssignments {
         }
     }
 
-    fn update_unknown(
+    /// Recalculates the value of a [`Predicate`] *if* it is unknown.
+    fn update_if_unknown(
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
-        let predicate = predicate_id_generator.get_predicate(predicate_id);
-        let value = match assignments.evaluate_predicate(predicate) {
-            Some(satisfied) => {
-                if satisfied {
-                    PredicateValue::AssignedTrue
-                } else {
-                    PredicateValue::AssignedFalse
+        if self.predicate_values[predicate_id].is_unknown() {
+            let predicate = predicate_id_generator.get_predicate(predicate_id);
+            let value = match assignments.evaluate_predicate(predicate) {
+                Some(satisfied) => {
+                    if satisfied {
+                        PredicateValue::AssignedTrue
+                    } else {
+                        PredicateValue::AssignedFalse
+                    }
                 }
-            }
-            None => PredicateValue::Unassigned,
-        };
-        self.store_predicate(predicate_id, value);
+                None => PredicateValue::Unassigned,
+            };
+            self.store_predicate(predicate_id, value);
+        }
     }
 
+    /// Returns whether the [`Predicate`] is currently satsified.
+    ///
+    /// If the value of the [`Predicate`] is unknown then it will be recalculated using the
+    /// provided [`Assignments`].
     pub(crate) fn is_satisfied(
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        if self.predicate_values[predicate_id].is_unknown() {
-            self.update_unknown(predicate_id, assignments, predicate_id_generator);
-        }
+        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
+
         self.predicate_values[predicate_id].is_satisified()
     }
 
+    /// Returns whether the [`Predicate`] is currently falsified.
+    ///
+    /// If the value of the [`Predicate`] is unknown then it will be recalculated using the
+    /// provided [`Assignments`].
     pub(crate) fn is_falsified(
         &mut self,
         predicate_id: PredicateId,
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        if self.predicate_values[predicate_id].is_unknown() {
-            self.update_unknown(predicate_id, assignments, predicate_id_generator);
-        }
+        self.update_if_unknown(predicate_id, assignments, predicate_id_generator);
+
         self.predicate_values[predicate_id].is_falsified()
     }
 
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
+        // We also need to clear the stored updated predicates; if this is not done, then it can be
+        // the case that a predicate is erroneously said to be satisfied/falsified while it is not
         self.satisfied_predicates.clear();
         self.falsified_predicates.clear();
+
         self.trail
             .synchronise(new_decision_level)
             .for_each(|predicate_id| {
@@ -144,6 +185,7 @@ impl PredicateIdAssignments {
             })
     }
 
+    /// Returns whether the status of the [`Predicate`] is unknown.
     pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
         self.predicate_values[predicate_id].is_unknown()
     }
