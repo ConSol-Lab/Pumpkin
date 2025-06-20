@@ -1,6 +1,6 @@
 use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use super::PredicateIdAssignments;
-use super::PredicateIdInfo;
+use super::PredicateValue;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -31,10 +31,7 @@ pub(crate) struct PredicateNotifier {
 
 impl PredicateNotifier {
     pub(crate) fn debug_empty_clone(&self) -> Self {
-        let mut predicate_id_assignments = PredicateIdAssignments::default();
-        for predicate_id in self.predicate_id_assignments.predicate_ids() {
-            predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::Unknown);
-        }
+        let predicate_id_assignments = self.predicate_id_assignments.debug_empty_clone();
         Self {
             predicate_to_id: self.predicate_to_id.clone(),
             predicate_id_assignments,
@@ -44,29 +41,7 @@ impl PredicateNotifier {
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
         self.predicate_id_assignments
-            .predicate_ids()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .for_each(|predicate_id| {
-                let predicate = self.predicate_to_id.get_predicate(predicate_id);
-
-                let value = if self.predicate_id_assignments.is_unknown(predicate_id) {
-                    PredicateIdInfo::Unknown
-                } else {
-                    match assignments.evaluate_predicate(predicate) {
-                        Some(assigned) => {
-                            if assigned {
-                                PredicateIdInfo::AssignedTrue
-                            } else {
-                                PredicateIdInfo::AssignedFalse
-                            }
-                        }
-                        None => PredicateIdInfo::Unassigned,
-                    }
-                };
-                self.predicate_id_assignments
-                    .store_predicate(predicate_id, value);
-            });
+            .debug_create_from_assignments(assignments, &mut self.predicate_to_id);
     }
 
     /// Returns the falsified predicates; note that this structure will be cleared once it is
@@ -175,12 +150,12 @@ impl PredicateNotifier {
             match assignments.evaluate_predicate(predicate) {
                 Some(satisfied) => {
                     if satisfied {
-                        PredicateIdInfo::AssignedTrue
+                        PredicateValue::AssignedTrue
                     } else {
-                        PredicateIdInfo::AssignedFalse
+                        PredicateValue::AssignedFalse
                     }
                 }
-                None => PredicateIdInfo::Unassigned,
+                None => PredicateValue::Unassigned,
             },
         );
 

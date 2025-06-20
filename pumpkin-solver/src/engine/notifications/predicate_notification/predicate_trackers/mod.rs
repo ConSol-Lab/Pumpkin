@@ -15,7 +15,7 @@ pub(crate) use lower_bound_tracker::LowerBoundTracker;
 pub(crate) use upper_bound_tracker::UpperBoundTracker;
 
 use super::PredicateIdAssignments;
-use super::PredicateIdInfo;
+use super::PredicateValue;
 
 /// A generic structure for keeping track of the polarity of [`Predicate`]s.
 ///
@@ -214,7 +214,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
+        predicate_id_assignments.store_predicate(predicate_id, PredicateValue::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
@@ -228,7 +228,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             // If it is a placeholder then we ignore it
             return;
         }
-        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedTrue);
+        predicate_id_assignments.store_predicate(predicate_id, PredicateValue::AssignedTrue);
     }
 
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been falsified.
@@ -241,7 +241,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         if predicate_id.id == u32::MAX {
             return;
         }
-        predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::AssignedFalse);
+        predicate_id_assignments.store_predicate(predicate_id, PredicateValue::AssignedFalse);
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].

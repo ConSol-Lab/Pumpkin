@@ -9,40 +9,40 @@ use crate::pumpkin_assert_extreme;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PredicateIdAssignments {
     trail: Trail<PredicateId>,
-    domains: KeyedVec<PredicateId, PredicateIdInfo>,
+    predicate_values: KeyedVec<PredicateId, PredicateValue>,
     falsified_predicates: Vec<PredicateId>,
     satisfied_predicates: Vec<PredicateId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum PredicateIdInfo {
+pub(crate) enum PredicateValue {
     Unassigned,
     AssignedTrue,
     AssignedFalse,
     Unknown,
 }
 
-impl PredicateIdInfo {
+impl PredicateValue {
     fn is_satisified(&self) -> bool {
-        matches!(self, PredicateIdInfo::AssignedTrue)
+        matches!(self, PredicateValue::AssignedTrue)
     }
 
     fn is_falsified(&self) -> bool {
-        matches!(self, PredicateIdInfo::AssignedFalse)
+        matches!(self, PredicateValue::AssignedFalse)
     }
 
     fn is_unknown(&self) -> bool {
-        matches!(self, PredicateIdInfo::Unknown)
+        matches!(self, PredicateValue::Unknown)
     }
 
     fn is_unassigned(&self) -> bool {
-        matches!(self, PredicateIdInfo::Unassigned)
+        matches!(self, PredicateValue::Unassigned)
     }
 }
 
 impl PredicateIdAssignments {
-    pub(crate) fn predicate_ids(&self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.domains.keys()
+    fn predicate_ids(&self) -> impl Iterator<Item = PredicateId> + '_ {
+        self.predicate_values.keys()
     }
 
     /// Returns the falsified predicates; note that this structure will be cleared once it is
@@ -63,24 +63,24 @@ impl PredicateIdAssignments {
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
     /// [`PredicateIdInfo`].
-    pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateIdInfo) {
-        while predicate_id.index() >= self.domains.len() {
-            let _ = self.domains.push(PredicateIdInfo::Unknown);
+    pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateValue) {
+        while predicate_id.index() >= self.predicate_values.len() {
+            let _ = self.predicate_values.push(PredicateValue::Unknown);
         }
         pumpkin_assert_extreme!(
-            self.domains[predicate_id] == PredicateIdInfo::Unknown
-                || self.domains[predicate_id] == PredicateIdInfo::Unassigned
-                || self.domains[predicate_id] == value,
+            self.predicate_values[predicate_id] == PredicateValue::Unknown
+                || self.predicate_values[predicate_id] == PredicateValue::Unassigned
+                || self.predicate_values[predicate_id] == value,
             "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
-            self.domains[predicate_id]
+            self.predicate_values[predicate_id]
         );
-        if self.domains[predicate_id] != value {
+        if self.predicate_values[predicate_id] != value {
             match value {
-                PredicateIdInfo::AssignedTrue => self.satisfied_predicates.push(predicate_id),
-                PredicateIdInfo::AssignedFalse => self.falsified_predicates.push(predicate_id),
+                PredicateValue::AssignedTrue => self.satisfied_predicates.push(predicate_id),
+                PredicateValue::AssignedFalse => self.falsified_predicates.push(predicate_id),
                 _ => {}
             }
-            self.domains[predicate_id] = value;
+            self.predicate_values[predicate_id] = value;
             self.trail.push(predicate_id)
         }
     }
@@ -95,12 +95,12 @@ impl PredicateIdAssignments {
         let value = match assignments.evaluate_predicate(predicate) {
             Some(satisfied) => {
                 if satisfied {
-                    PredicateIdInfo::AssignedTrue
+                    PredicateValue::AssignedTrue
                 } else {
-                    PredicateIdInfo::AssignedFalse
+                    PredicateValue::AssignedFalse
                 }
             }
-            None => PredicateIdInfo::Unassigned,
+            None => PredicateValue::Unassigned,
         };
         self.store_predicate(predicate_id, value);
     }
@@ -111,10 +111,10 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        if self.domains[predicate_id].is_unknown() {
+        if self.predicate_values[predicate_id].is_unknown() {
             self.update_unknown(predicate_id, assignments, predicate_id_generator);
         }
-        self.domains[predicate_id].is_satisified()
+        self.predicate_values[predicate_id].is_satisified()
     }
 
     pub(crate) fn is_falsified(
@@ -123,10 +123,10 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        if self.domains[predicate_id].is_unknown() {
+        if self.predicate_values[predicate_id].is_unknown() {
             self.update_unknown(predicate_id, assignments, predicate_id_generator);
         }
-        self.domains[predicate_id].is_falsified()
+        self.predicate_values[predicate_id].is_falsified()
     }
 
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
@@ -138,13 +138,50 @@ impl PredicateIdAssignments {
                 // If the predicate id is unassigned then backtracking will not change anything;
                 // this is more of a sanity check since it should not be on the trail if it is
                 // unassigned
-                if !self.domains[predicate_id].is_unassigned() {
-                    self.domains[predicate_id] = PredicateIdInfo::Unknown
+                if !self.predicate_values[predicate_id].is_unassigned() {
+                    self.predicate_values[predicate_id] = PredicateValue::Unknown
                 }
             })
     }
 
     pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
-        self.domains[predicate_id].is_unknown()
+        self.predicate_values[predicate_id].is_unknown()
+    }
+
+    pub(crate) fn debug_empty_clone(&self) -> Self {
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+        for predicate_id in self.predicate_ids() {
+            predicate_id_assignments.store_predicate(predicate_id, PredicateValue::Unknown);
+        }
+        predicate_id_assignments
+    }
+
+    pub(crate) fn debug_create_from_assignments(
+        &mut self,
+        assignments: &Assignments,
+        predicate_to_id: &mut PredicateIdGenerator,
+    ) {
+        self.predicate_ids()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .for_each(|predicate_id| {
+                let predicate = predicate_to_id.get_predicate(predicate_id);
+
+                let value = if self.is_unknown(predicate_id) {
+                    PredicateValue::Unknown
+                } else {
+                    match assignments.evaluate_predicate(predicate) {
+                        Some(assigned) => {
+                            if assigned {
+                                PredicateValue::AssignedTrue
+                            } else {
+                                PredicateValue::AssignedFalse
+                            }
+                        }
+                        None => PredicateValue::Unassigned,
+                    }
+                };
+                self.store_predicate(predicate_id, value);
+            });
     }
 }
