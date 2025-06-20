@@ -483,6 +483,8 @@ impl NotificationEngine {
             .debug_create_from_assignments(assignments);
     }
 
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
     pub(crate) fn is_predicate_id_satisfied(
         &mut self,
         predicate_id: PredicateId,
@@ -497,6 +499,8 @@ impl NotificationEngine {
             )
     }
 
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// falsified.
     pub(crate) fn is_predicate_id_falsified(
         &mut self,
         predicate_id: PredicateId,

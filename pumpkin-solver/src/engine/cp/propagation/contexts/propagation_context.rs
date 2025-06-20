@@ -128,16 +128,21 @@ impl<'a> PropagationContextMut<'a> {
         self.assignments.get_decision_level()
     }
 
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
     pub(crate) fn is_predicate_id_falsified(&mut self, predicate_id: PredicateId) -> bool {
         self.notification_engine
             .is_predicate_id_falsified(predicate_id, self.assignments)
     }
 
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
     pub(crate) fn is_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
         self.notification_engine
             .is_predicate_id_satisfied(predicate_id, self.assignments)
     }
 
+    /// Returns the number of [`PredicateId`]s.
     pub(crate) fn num_predicate_ids(&self) -> usize {
         self.notification_engine.num_predicate_ids()
     }

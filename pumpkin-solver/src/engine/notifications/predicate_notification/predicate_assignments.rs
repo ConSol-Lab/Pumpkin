@@ -12,6 +12,9 @@ use crate::pumpkin_assert_extreme;
 ///
 /// When the status of a [`Predicate`] is unknown, this structure recalculates it using the
 /// [`Assignments`].
+///
+/// It is also responsible for storing the updates which have occurred since the last round of
+/// notifications.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PredicateIdAssignments {
     /// A trail of the [`PredicateId`]s which have been assigned.
@@ -93,6 +96,7 @@ impl PredicateIdAssignments {
     /// If the [`Predicate`] is true/false then it will be checked whether this information is
     /// already stored; if it is not, then it will also store the [`Predicate`] for notification.
     pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateValue) {
+        // First we make space for it if we have not seen the predicate yet
         while predicate_id.index() >= self.predicate_values.len() {
             let _ = self.predicate_values.push(PredicateValue::Unknown);
         }
@@ -103,7 +107,10 @@ impl PredicateIdAssignments {
             "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
             self.predicate_values[predicate_id]
         );
+        // If we already have the value in the cache then we do not do anything
         if self.predicate_values[predicate_id] != value {
+            // If it is not the same as what is already in the cache then we need to store it and
+            // (potentially) update the predicates which should be notified
             match value {
                 PredicateValue::AssignedTrue => self.satisfied_predicates.push(predicate_id),
                 PredicateValue::AssignedFalse => self.falsified_predicates.push(predicate_id),
@@ -122,6 +129,7 @@ impl PredicateIdAssignments {
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
         if self.predicate_values[predicate_id].is_unknown() {
+            // First we calculate the current value of the predicate in the assignments structure
             let predicate = predicate_id_generator.get_predicate(predicate_id);
             let value = match assignments.evaluate_predicate(predicate) {
                 Some(satisfied) => {
@@ -133,6 +141,7 @@ impl PredicateIdAssignments {
                 }
                 None => PredicateValue::Unassigned,
             };
+            // Then we store it in the cache
             self.store_predicate(predicate_id, value);
         }
     }

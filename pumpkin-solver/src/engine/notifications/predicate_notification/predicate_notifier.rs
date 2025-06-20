@@ -19,6 +19,9 @@ use crate::variables::DomainId;
 /// updated [`Predicate`]s, and allowing propagators to indicate that the polarity of a
 /// [`Predicate`] should be tracked (i.e. adding a [`Predicate`] to the scope of
 /// [`PredicateNotifier`]).
+///
+/// It also contains the [`PredicateIdAssignments`] which serves as a (lazy) structure for
+/// retrieving the polarity of [`Predicate`]s (represented by [`PredicateId`]s).
 #[derive(Default, Debug)]
 pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
