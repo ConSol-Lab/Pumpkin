@@ -14,9 +14,9 @@ pub(crate) struct UpperBoundTracker {
 }
 
 impl UpperBoundTracker {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            watcher: PredicateTracker::new(trailed_values),
+            watcher: PredicateTracker::new(),
         }
     }
 }
@@ -68,11 +68,11 @@ impl DomainTracker for UpperBoundTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             while smaller != i64::MAX && value <= self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become falsified
                 self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
         }

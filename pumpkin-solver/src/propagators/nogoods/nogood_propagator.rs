@@ -13,7 +13,6 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -585,10 +584,6 @@ impl NogoodPropagator {
         }
 
         notification_engine.track_predicate(predicate, trailed_values, assignments);
-
-        while watch_lists.len() <= predicate.index() {
-            let _ = watch_lists.push(Vec::default());
-        }
 
         watch_lists[predicate].push(watcher);
     }

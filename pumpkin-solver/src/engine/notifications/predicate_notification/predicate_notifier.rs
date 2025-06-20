@@ -136,33 +136,48 @@ impl PredicateNotifier {
     ) {
         let predicate = self.predicate_to_id.get_predicate(id);
 
-        while self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
-            let _ = self
-                .domain_id_to_predicate_tracker
-                .push(PredicateTrackerForDomain::new(trailed_values));
+        // First, we resize the number of DomainIds for which we store predicate trackers
+        if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
+            self.domain_id_to_predicate_tracker.resize(
+                predicate.get_domain().index() + 1,
+                PredicateTrackerForDomain::new(),
+            );
         }
 
+        // Now we initialise the predicate tracker; this does not add it to the scope yet but it
+        // initialises the structures
         self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-            predicate.get_domain(),
+            predicate,
             assignments.get_initial_lower_bound(predicate.get_domain()),
             assignments.get_initial_upper_bound(predicate.get_domain()),
+            trailed_values,
         );
 
-        self.predicate_id_assignments.store_predicate(
-            id,
-            match assignments.evaluate_predicate(predicate) {
-                Some(satisfied) => {
-                    if satisfied {
-                        PredicateValue::AssignedTrue
-                    } else {
-                        PredicateValue::AssignedFalse
+        // Now we add it to the scope of the tracker
+        //
+        // We check whether it was already tracked or not
+        let was_not_already_tracked = self.domain_id_to_predicate_tracker[predicate.get_domain()]
+            .watch_predicate(predicate, id);
+
+        // If it was not already tracked then we store the update; otherwise we assume that the
+        // cache has already been informed of its value
+        if was_not_already_tracked {
+            // Then we cache the known value of the predicate; note that this method also ensures
+            // that it is added to the list of PredicateIds which the propagators should
+            // be notified about if it has not done so already
+            self.predicate_id_assignments.store_predicate(
+                id,
+                match assignments.evaluate_predicate(predicate) {
+                    Some(satisfied) => {
+                        if satisfied {
+                            PredicateValue::AssignedTrue
+                        } else {
+                            PredicateValue::AssignedFalse
+                        }
                     }
-                }
-                None => PredicateValue::Unassigned,
-            },
-        );
-
-        // Then we update the structures
-        self.domain_id_to_predicate_tracker[predicate.get_domain()].watch_predicate(predicate, id);
+                    None => PredicateValue::Unassigned,
+                },
+            );
+        }
     }
 }

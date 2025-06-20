@@ -15,9 +15,9 @@ pub(crate) struct DisequalityTracker {
 }
 
 impl DisequalityTracker {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            watcher: PredicateTracker::new(trailed_values),
+            watcher: PredicateTracker::new(),
         }
     }
 }
@@ -71,13 +71,13 @@ impl DomainTracker for DisequalityTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             // Note that a disequality predicate can only become satisfied if the new
             // upper-bound is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become satisfied
                 self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
         } else if predicate.is_equality_predicate() {
@@ -105,13 +105,13 @@ impl DomainTracker for DisequalityTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             // Note that a disequality predicate can only become satisfied if the new
             // upper-bound is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become satisfied
                 self.predicate_has_been_satisfied(smaller as usize, predicate_id_assignments);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
 
@@ -122,13 +122,13 @@ impl DomainTracker for DisequalityTracker {
             let greater =
                 self.watcher.greater[trailed_values.read(self.watcher.min_assigned) as usize];
             if greater
-                == self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize]
+                == self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize]
                 && self.watcher.values[greater as usize] == value
             {
                 self.predicate_has_been_falsified(greater as usize, predicate_id_assignments);
 
                 trailed_values.assign(self.watcher.min_assigned, greater);
-                trailed_values.assign(self.watcher.max_unassigned, greater);
+                trailed_values.assign(self.watcher.max_assigned, greater);
             }
         } else if predicate.is_not_equal_predicate() {
             // A relatively simple case stating that a predicate has now become satisfied for

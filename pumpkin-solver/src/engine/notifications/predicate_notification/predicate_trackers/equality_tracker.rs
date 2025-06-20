@@ -14,9 +14,9 @@ pub(crate) struct EqualityTracker {
 }
 
 impl EqualityTracker {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            watcher: PredicateTracker::new(trailed_values),
+            watcher: PredicateTracker::new(),
         }
     }
 }
@@ -69,13 +69,13 @@ impl DomainTracker for EqualityTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             // Note that an equality predicate can only become falsified if the new upper-bound
             // is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become falsified
                 self.predicate_has_been_falsified(smaller as usize, predicate_id_assignments);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
         } else if predicate.is_not_equal_predicate() {
@@ -88,8 +88,7 @@ impl DomainTracker for EqualityTracker {
 
             // If the right-hand side of the disequality predicate is larger than the value
             // pointed to by `max_assigned` then no updates can take place
-            if value
-                >= self.watcher.values[trailed_values.read(self.watcher.max_unassigned) as usize]
+            if value >= self.watcher.values[trailed_values.read(self.watcher.max_assigned) as usize]
             {
                 return;
             }
@@ -149,13 +148,13 @@ impl DomainTracker for EqualityTracker {
             // First we get the element which is greater than the one pointed to by
             // `max_assigned`. This can never be `i64::MAX` due to sentinels being placed.
             let mut smaller =
-                self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize];
+                self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize];
             // Note that an equality predicate can only become falsified if the new upper-bound
             // is _strictly_ smaller than the value
             while smaller != i64::MAX && value < self.watcher.values[smaller as usize] {
                 // The update has caused the predicate to become falsified
                 self.predicate_has_been_falsified(smaller as usize, predicate_id_assignments);
-                trailed_values.assign(self.watcher.max_unassigned, smaller);
+                trailed_values.assign(self.watcher.max_assigned, smaller);
                 smaller = self.watcher.smaller[smaller as usize];
             }
 
@@ -166,13 +165,13 @@ impl DomainTracker for EqualityTracker {
             let greater =
                 self.watcher.greater[trailed_values.read(self.watcher.min_assigned) as usize];
             if greater
-                == self.watcher.smaller[trailed_values.read(self.watcher.max_unassigned) as usize]
+                == self.watcher.smaller[trailed_values.read(self.watcher.max_assigned) as usize]
                 && self.watcher.values[greater as usize] == value
             {
                 // The update has caused the predicate to become satisfied
                 self.predicate_has_been_satisfied(greater as usize, predicate_id_assignments);
                 trailed_values.assign(self.watcher.min_assigned, greater);
-                trailed_values.assign(self.watcher.max_unassigned, greater);
+                trailed_values.assign(self.watcher.max_assigned, greater);
             }
         } else {
             panic!()

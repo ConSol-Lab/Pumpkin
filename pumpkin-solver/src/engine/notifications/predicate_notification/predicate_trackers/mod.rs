@@ -1,4 +1,5 @@
 use crate::basic_types::PredicateId;
+use crate::containers::StorageKey;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
@@ -40,7 +41,7 @@ pub(crate) struct PredicateTracker {
     ///
     /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x <= 8]` holds,
     /// then [`PredicateTracker::min_assigned`] will point to index 3.
-    max_unassigned: TrailedInteger,
+    max_assigned: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
     /// Note that there is no specific order in which these values are stored.
@@ -51,13 +52,12 @@ pub(crate) struct PredicateTracker {
 }
 
 impl PredicateTracker {
-    pub(super) fn new(trailed_values: &mut TrailedValues) -> Self {
-        let min_unassigned = trailed_values.grow(0);
-        let max_unassigned = trailed_values.grow(1);
+    pub(super) fn new() -> Self {
         Self {
             domain_id: DomainId::new(0),
-            min_assigned: min_unassigned,
-            max_unassigned,
+            // We do not want to create the trailed integers until necessary
+            min_assigned: TrailedInteger::create_from_index(0),
+            max_assigned: TrailedInteger::create_from_index(0),
             smaller: Vec::default(),
             greater: Vec::default(),
             values: Vec::default(),
@@ -85,6 +85,7 @@ pub(crate) trait DomainTrackerInformation {
         domain_id: DomainId,
         initial_lower_bound: i32,
         initial_upper_bound: i32,
+        trailed_values: &mut TrailedValues,
     );
 
     /// Returns a reference to the stored [`PredicateId`]s.
@@ -121,11 +122,15 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
         domain_id: DomainId,
         initial_lower_bound: i32,
         initial_upper_bound: i32,
+        trailed_values: &mut TrailedValues,
     ) {
         if !self.get_values().is_empty() {
             // The structures has been initialised previously
             return;
         }
+
+        self.get_tracker_mut().min_assigned = trailed_values.grow(0);
+        self.get_tracker_mut().max_assigned = trailed_values.grow(1);
 
         // We set the tracking domain id
         self.get_tracker_mut().domain_id = domain_id;
@@ -245,7 +250,9 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     }
 
     /// Tracks a [`Predicate`] with a provided `value` and [`PredicateId`].
-    fn track(&mut self, value: i32, predicate_id: PredicateId) {
+    ///
+    /// Returns true if it was not already tracked and false otherwise.
+    fn track(&mut self, value: i32, predicate_id: PredicateId) -> bool {
         pumpkin_assert_simple!(
             self.get_values().len() >= 2,
             "Initialise should have been called previously"
@@ -267,7 +274,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             let index_value = self.get_values()[index];
             if index_value == value {
                 // This value is already being tracked
-                return;
+                return false;
             }
 
             // We first check whether we have found a value which is smaller than the provided
@@ -324,6 +331,8 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
                 && self.get_greater().len() == self.get_values().len()
                 && self.get_values().len() == self.get_ids().len()
         );
+
+        true
     }
 
     /// Method which is called when an update to a [`DomainId`] has taken place (provided in the
