@@ -28,7 +28,18 @@ The solver currently supports integer variables and a number of (global) constra
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
-
+# Citing
+Please cite pumpkin using the following citation:
+```
+@misc{
+    Pumpkin,
+    title={Pumpkin: A Lazy Clause Generation constraint solver in Rust},
+    url={https://github.com/ConSol-Lab/Pumpkin},
+    author={Demirović, Emir and Flippo, Maarten and Marijnissen, Imko and Sidorov, Konstantin and Smits, Jeff},
+    year={2024},
+    organization={ConSol Lab - Delft University of Technology}
+} 
+```
 
 # Usage
 

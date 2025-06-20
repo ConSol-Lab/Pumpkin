@@ -23,9 +23,7 @@ impl Iterator for DomainGeneratorIterator {
             return None;
         }
 
-        let variable = DomainId {
-            id: self.current_index,
-        };
+        let variable = DomainId::new(self.current_index);
         self.current_index += 1;
 
         Some(variable)

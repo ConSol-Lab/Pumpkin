@@ -97,15 +97,16 @@ pub mod predicates {
     //! Contains structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
     //!
     //! The solver only utilizes the following types of predicates:
-    //! - A [`Predicate::LowerBound`] of the form `[x >= v]`
-    //! - A [`Predicate::UpperBound`] of the form `[x <= v]`
-    //! - A [`Predicate::Equal`] of the form `[x = v]`
-    //! - A [`Predicate::NotEqual`] of the form `[x != v]`
+    //! - A predicate of the form `[x >= v]`
+    //! - A predicate of the form `[x <= v]`
+    //! - A predicate of the form `[x = v]`
+    //! - A predicate of the form `[x != v]`
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
     pub use crate::basic_types::PropositionalConjunction;
     pub use crate::engine::predicates::predicate::Predicate;
+    pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
     #[cfg(doc)]
     use crate::variables::Literal;

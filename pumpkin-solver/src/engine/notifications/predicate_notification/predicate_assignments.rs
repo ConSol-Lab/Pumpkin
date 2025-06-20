@@ -5,7 +5,6 @@ use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::pumpkin_assert_extreme;
-use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PredicateIdAssignments {
@@ -20,7 +19,6 @@ pub(crate) enum PredicateIdInfo {
     Unassigned,
     AssignedTrue,
     AssignedFalse,
-    Untracked,
     Unknown,
 }
 
@@ -31,10 +29,6 @@ impl PredicateIdInfo {
 
     fn is_falsified(&self) -> bool {
         matches!(self, PredicateIdInfo::AssignedFalse)
-    }
-
-    fn is_untracked(&self) -> bool {
-        matches!(self, PredicateIdInfo::Untracked)
     }
 
     fn is_unknown(&self) -> bool {
@@ -71,10 +65,10 @@ impl PredicateIdAssignments {
     /// [`PredicateIdInfo`].
     pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateIdInfo) {
         while predicate_id.index() >= self.domains.len() {
-            let _ = self.domains.push(PredicateIdInfo::Untracked);
+            let _ = self.domains.push(PredicateIdInfo::Unknown);
         }
         pumpkin_assert_extreme!(
-            self.domains[predicate_id] == PredicateIdInfo::Untracked ||self.domains[predicate_id] == PredicateIdInfo::Unknown
+            self.domains[predicate_id] == PredicateIdInfo::Unknown
                 || self.domains[predicate_id] == PredicateIdInfo::Unassigned
                 || self.domains[predicate_id] == value,
             "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
@@ -117,7 +111,6 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        pumpkin_assert_simple!(!self.domains[predicate_id].is_untracked());
         if self.domains[predicate_id].is_unknown() {
             self.update_unknown(predicate_id, assignments, predicate_id_generator);
         }
@@ -130,15 +123,10 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) -> bool {
-        pumpkin_assert_simple!(!self.domains[predicate_id].is_untracked());
         if self.domains[predicate_id].is_unknown() {
             self.update_unknown(predicate_id, assignments, predicate_id_generator);
         }
         self.domains[predicate_id].is_falsified()
-    }
-
-    pub(crate) fn is_untracked(&self, predicate_id: PredicateId) -> bool {
-        self.domains[predicate_id].is_untracked()
     }
 
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
@@ -154,5 +142,9 @@ impl PredicateIdAssignments {
                     self.domains[predicate_id] = PredicateIdInfo::Unknown
                 }
             })
+    }
+
+    pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
+        self.domains[predicate_id].is_unknown()
     }
 }

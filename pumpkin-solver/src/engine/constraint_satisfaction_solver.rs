@@ -312,7 +312,7 @@ impl ConstraintSatisfactionSolver {
             csp_solver.internal_parameters.learning_options,
         ));
 
-        assert!(dummy_id.id == 0);
+        assert!(dummy_id.id() == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
         assert!(csp_solver.assignments.get_upper_bound(dummy_id) == 1);
 

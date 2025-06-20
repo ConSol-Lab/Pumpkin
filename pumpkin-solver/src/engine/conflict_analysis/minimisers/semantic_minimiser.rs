@@ -3,6 +3,7 @@ use std::cmp;
 use crate::basic_types::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::Assignments;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -18,7 +19,7 @@ pub(crate) struct SemanticMinimiser {
 
 impl Default for SemanticMinimiser {
     fn default() -> Self {
-        let mapping = |x: &DomainId| x.id as usize;
+        let mapping = |x: &DomainId| x.id() as usize;
         Self {
             original_domains: Default::default(),
             domains: Default::default(),
@@ -68,30 +69,21 @@ impl SemanticMinimiser {
         for predicate in nogood {
             self.present_ids.insert(predicate.get_domain());
 
-            match *predicate {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => {
-                    self.domains[domain_id].tighten_lower_bound(lower_bound);
+            let domain_id = predicate.get_domain();
+            let value = predicate.get_right_hand_side();
+
+            match predicate.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.domains[domain_id].tighten_lower_bound(value);
                 }
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => {
-                    self.domains[domain_id].tighten_upper_bound(upper_bound);
+                PredicateType::UpperBound => {
+                    self.domains[domain_id].tighten_upper_bound(value);
                 }
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => {
-                    self.domains[domain_id].add_hole(not_equal_constant);
+                PredicateType::NotEqual => {
+                    self.domains[domain_id].add_hole(value);
                 }
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => {
-                    self.domains[domain_id].assign(equality_constant);
+                PredicateType::Equal => {
+                    self.domains[domain_id].assign(value);
                 }
             }
         }
@@ -107,9 +99,7 @@ impl SemanticMinimiser {
         assert!(self.domains.len() == self.original_domains.len());
 
         while (self.domains.len() as u32) < assignments.num_domains() {
-            let domain_id = DomainId {
-                id: self.domains.len() as u32,
-            };
+            let domain_id = DomainId::new(self.domains.len() as u32);
             let lower_bound = assignments.get_initial_lower_bound(domain_id);
             let upper_bound = assignments.get_initial_upper_bound(domain_id);
             let holes = assignments.get_initial_holes(domain_id);

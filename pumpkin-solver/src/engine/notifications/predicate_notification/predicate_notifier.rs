@@ -33,7 +33,7 @@ impl PredicateNotifier {
     pub(crate) fn debug_empty_clone(&self) -> Self {
         let mut predicate_id_assignments = PredicateIdAssignments::default();
         for predicate_id in self.predicate_id_assignments.predicate_ids() {
-            predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::Untracked);
+            predicate_id_assignments.store_predicate(predicate_id, PredicateIdInfo::Unknown);
         }
         Self {
             predicate_to_id: self.predicate_to_id.clone(),
@@ -50,8 +50,8 @@ impl PredicateNotifier {
             .for_each(|predicate_id| {
                 let predicate = self.predicate_to_id.get_predicate(predicate_id);
 
-                let value = if self.predicate_id_assignments.is_untracked(predicate_id) {
-                    PredicateIdInfo::Untracked
+                let value = if self.predicate_id_assignments.is_unknown(predicate_id) {
+                    PredicateIdInfo::Unknown
                 } else {
                     match assignments.evaluate_predicate(predicate) {
                         Some(assigned) => {

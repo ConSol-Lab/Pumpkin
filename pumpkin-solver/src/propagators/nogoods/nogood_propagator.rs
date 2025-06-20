@@ -51,10 +51,6 @@ pub(crate) struct NogoodPropagator {
     nogood_predicates: KeyedVec<NogoodId, Vec<PredicateId>>,
     /// The information corresponding to each nogood; including activity, and lbd.
     nogood_info: KeyedVec<NogoodId, NogoodInfo>,
-    /// For each nogood, this structure stores the predicate which was last found to be falsified;
-    /// we store this predicate to allow for simple checking of whether a nogood might be
-    /// satisfied
-    cached_predicates: KeyedVec<NogoodId, PredicateId>,
     /// The inference codes for the nogoods.
     inference_codes: KeyedVec<NogoodId, InferenceCode>,
     /// Nogoods which are permanently present
@@ -65,8 +61,7 @@ pub(crate) struct NogoodPropagator {
     /// Ids which have been deleted and can now be re-used
     delete_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
-    // TODO: could improve the data structure for watching.
-    watch_lists: KeyedVec<PredicateId, Vec<NogoodId>>,
+    watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
     updated_predicate_ids: Vec<PredicateId>,
     /// A helper for calculating the LBD for the nogoods.
@@ -78,6 +73,18 @@ pub(crate) struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
     /// Used to return lazy reasons
     temp_nogood: Vec<Predicate>,
+}
+
+/// Watcher for a single nogood.
+///
+/// A watcher is a combination of a nogood ID and a cached predicate. If the nogood has a predicate
+/// that is observed to be `false`, it will be made the cached predicate. That way, whenever the
+/// watcher is triggered, the propagator may be able to quickly determine if the nogood can be
+/// skipped by looking at the cached predicate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Watcher {
+    nogood_id: NogoodId,
+    cached_predicate: PredicateId,
 }
 
 impl PropagatorConstructor for NogoodPropagator {
@@ -117,7 +124,8 @@ impl NogoodPropagator {
         id: NogoodId,
         notification_engine: &mut NotificationEngine,
     ) -> bool {
-        if notification_engine.is_id_falsified(self.nogood_predicates[id][0], assignments) {
+        if notification_engine.is_predicate_id_falsified(self.nogood_predicates[id][0], assignments)
+        {
             let trail_position = assignments
                 .get_trail_position(
                     &!notification_engine.get_predicate(self.nogood_predicates[id][0]),
@@ -182,30 +190,32 @@ impl Propagator for NogoodPropagator {
                 "The predicate {} with id {predicate_id:?} should be satisfied but was not",
                 context.get_predicate(predicate_id),
             );
+
             let mut index = 0;
             while index < self.watch_lists[predicate_id].len() {
-                let nogood_id = self.watch_lists[predicate_id][index];
+                let watcher = self.watch_lists[predicate_id][index];
 
                 // We first check whether the cached predicate might already make the nogood
                 // satisfied
-                if context.is_id_falsified(self.cached_predicates[nogood_id]) {
+                if context.is_predicate_id_falsified(watcher.cached_predicate) {
                     index += 1;
                     continue;
                 }
-                let nogood_predicates = &mut self.nogood_predicates[nogood_id];
+
+                let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
 
                 // Place the watched predicate at position 1 for simplicity.
                 if nogood_predicates[0] == predicate_id {
                     nogood_predicates.swap(0, 1);
                 }
 
-                pumpkin_assert_moderate!(context.is_id_satisfied(nogood_predicates[1]));
+                pumpkin_assert_moderate!(context.is_predicate_id_satisfied(nogood_predicates[1]));
 
                 // Check the other watched predicate is already falsified, in which case
                 // no propagation can take place. Recall that the other watched
                 // predicate is at position 0 due to previous code.
-                if context.is_id_falsified(nogood_predicates[0]) {
-                    self.cached_predicates[nogood_id] = nogood_predicates[0];
+                if context.is_predicate_id_falsified(nogood_predicates[0]) {
+                    self.watch_lists[predicate_id][index].cached_predicate = nogood_predicates[0];
                     index += 1;
                     continue;
                 }
@@ -228,11 +238,11 @@ impl Propagator for NogoodPropagator {
                         nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
+                            nogood_predicates[1],
+                            watcher,
                             context.notification_engine,
                             context.trailed_values,
                             &mut self.watch_lists,
-                            nogood_predicates[1],
-                            nogood_id,
                             context.assignments,
                         );
 
@@ -256,10 +266,11 @@ impl Propagator for NogoodPropagator {
                 // There are two scenarios:
                 // nogood[0] is unassigned -> propagate the predicate to false
                 // nogood[0] is assigned true -> conflict.
-                let reason = Reason::DynamicLazy(nogood_id.id as u64);
+                let reason = Reason::DynamicLazy(watcher.nogood_id.id as u64);
 
                 let predicate = !context.get_predicate(nogood_predicates[0]);
-                let result = context.post(predicate, reason, self.inference_codes[nogood_id]);
+                let result =
+                    context.post(predicate, reason, self.inference_codes[watcher.nogood_id]);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
                     return Err(e.into());
@@ -395,15 +406,13 @@ impl NogoodPropagator {
         // Add the nogood to the database.
         //
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
-        let new_id = if let Some(reused_id) = self.delete_ids.pop() {
-            self.cached_predicates[reused_id] = nogood[0];
+        let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
             self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood_info(lbd);
             self.nogood_predicates[reused_id] = nogood;
             self.inference_codes[reused_id] = inference_code;
             reused_id
         } else {
-            let new_id = self.cached_predicates.push(nogood[0]);
-            let _ = self
+            let new_id = self
                 .nogood_info
                 .push(NogoodInfo::new_learned_nogood_info(lbd));
             let _ = self.inference_codes.push(inference_code);
@@ -411,41 +420,46 @@ impl NogoodPropagator {
             new_id
         };
 
+        let watcher = Watcher {
+            nogood_id,
+            cached_predicate: self.nogood_predicates[nogood_id][0],
+        };
+
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
+            self.nogood_predicates[nogood_id][0],
+            watcher,
             context.notification_engine,
             context.trailed_values,
             &mut self.watch_lists,
-            self.nogood_predicates[new_id][0],
-            new_id,
             context.assignments,
         );
         NogoodPropagator::add_watcher(
+            self.nogood_predicates[nogood_id][1],
+            watcher,
             context.notification_engine,
             context.trailed_values,
             &mut self.watch_lists,
-            self.nogood_predicates[new_id][1],
-            new_id,
             context.assignments,
         );
 
         // Then we propagate the asserting predicate and as reason we give the index to the
         // asserting nogood such that we can re-create the reason when asked for it
-        let reason = Reason::DynamicLazy(new_id.id as u64);
-        let inference_code = self.inference_codes[new_id];
+        let reason = Reason::DynamicLazy(nogood_id.id as u64);
+        let inference_code = self.inference_codes[nogood_id];
 
         let predicate = !context
             .notification_engine
-            .get_predicate(self.nogood_predicates[new_id][0]);
+            .get_predicate(self.nogood_predicates[nogood_id][0]);
         context
             .post(predicate, reason, inference_code)
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then divide the new nogood based on the LBD level
         if lbd <= self.parameters.lbd_threshold {
-            self.learned_nogood_ids.low_lbd.push(new_id);
+            self.learned_nogood_ids.low_lbd.push(nogood_id);
         } else {
-            self.learned_nogood_ids.high_lbd.push(new_id);
+            self.learned_nogood_ids.high_lbd.push(nogood_id);
         }
     }
 
@@ -511,15 +525,13 @@ impl NogoodPropagator {
                 .collect::<Vec<_>>();
             // Add the nogood to the database.
             // If there is an available nogood id, use it, otherwise allocate a fresh id.
-            let new_id = if let Some(reused_id) = self.delete_ids.pop() {
-                self.cached_predicates[reused_id] = nogood[0];
+            let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
                 self.nogood_info[reused_id] = NogoodInfo::new_permanent_nogood_info();
                 self.nogood_predicates[reused_id] = nogood;
                 self.inference_codes[reused_id] = inference_code;
                 reused_id
             } else {
-                let new_id = self.cached_predicates.push(nogood[0]);
-                let _ = self
+                let new_id = self
                     .nogood_info
                     .push(NogoodInfo::new_permanent_nogood_info());
                 let _ = self.nogood_predicates.push(nogood);
@@ -527,22 +539,27 @@ impl NogoodPropagator {
                 new_id
             };
 
-            self.permanent_nogoods.push(new_id);
+            self.permanent_nogoods.push(nogood_id);
+
+            let watcher = Watcher {
+                nogood_id,
+                cached_predicate: self.nogood_predicates[nogood_id][0],
+            };
 
             NogoodPropagator::add_watcher(
+                self.nogood_predicates[nogood_id][0],
+                watcher,
                 context.notification_engine,
                 context.trailed_values,
                 &mut self.watch_lists,
-                self.nogood_predicates[new_id][0],
-                new_id,
                 context.assignments,
             );
             NogoodPropagator::add_watcher(
+                self.nogood_predicates[nogood_id][1],
+                watcher,
                 context.notification_engine,
                 context.trailed_values,
                 &mut self.watch_lists,
-                self.nogood_predicates[new_id][1],
-                new_id,
                 context.assignments,
             );
 
@@ -553,18 +570,18 @@ impl NogoodPropagator {
 
 /// Methods concerning the watchers and watch lists
 impl NogoodPropagator {
-    /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
+    /// Adds a watcher to the predicate.
     fn add_watcher(
+        predicate: PredicateId,
+        watcher: Watcher,
         notification_engine: &mut NotificationEngine,
         trailed_values: &mut TrailedValues,
-        watch_lists: &mut KeyedVec<PredicateId, Vec<NogoodId>>,
-        predicate: PredicateId,
-        nogood_id: NogoodId,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
-        if predicate.index() >= watch_lists.len() {
-            watch_lists.resize(predicate.index() + 1, Vec::default());
+        if predicate.id as usize >= watch_lists.len() {
+            watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
 
         notification_engine.track_predicate(predicate, trailed_values, assignments);
@@ -572,16 +589,17 @@ impl NogoodPropagator {
         while watch_lists.len() <= predicate.index() {
             let _ = watch_lists.push(Vec::default());
         }
-        watch_lists[predicate].push(nogood_id);
+
+        watch_lists[predicate].push(watcher);
     }
 
     /// Removes the noogd from the watch list
     fn remove_nogood_from_watch_list(
-        watch_lists: &mut KeyedVec<PredicateId, Vec<NogoodId>>,
+        watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         predicate_id: PredicateId,
         id: NogoodId,
     ) {
-        watch_lists[predicate_id].retain(|nogood_id| *nogood_id != id);
+        watch_lists[predicate_id].retain(|watcher| watcher.nogood_id != id);
     }
 }
 
@@ -864,7 +882,10 @@ impl NogoodPropagator {
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
     fn debug_is_properly_watched(&self) -> bool {
         let is_watching = |predicate_id: PredicateId, nogood_id: NogoodId| -> bool {
-            self.watch_lists[predicate_id].contains(&nogood_id)
+            self.watch_lists[predicate_id]
+                .iter()
+                .copied()
+                .any(|watcher| watcher.nogood_id == nogood_id)
         };
 
         for nogood in self.nogood_predicates.iter().enumerate() {
@@ -926,7 +947,7 @@ mod tests {
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id(), dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -944,12 +965,12 @@ mod tests {
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 0);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 0);
 
         solver.propagate_until_fixed_point(propagator).expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
 
         solver.propagate(propagator).expect("");
 
@@ -987,9 +1008,9 @@ mod tests {
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 1);
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
 
         let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_err());

@@ -603,9 +603,9 @@ fn stringify_solution(
             let value = solution.get_integer_value(domain_id);
             pumpkin_assert_simple!((0..=1).contains(&value));
             if value == 1 {
-                format!("{} ", domain_id.id)
+                format!("{} ", domain_id.id())
             } else {
-                format!("-{} ", domain_id.id)
+                format!("-{} ", domain_id.id())
             }
         })
         .chain(if terminate_with_zero {
