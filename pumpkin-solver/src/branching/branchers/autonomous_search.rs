@@ -1,8 +1,8 @@
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::DeletablePredicateIdGenerator;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::value_selection::RandomSplitter;
 use crate::branching::variable_selection::RandomSelector;
@@ -63,7 +63,7 @@ use crate::DefaultBrancher;
 #[derive(Debug)]
 pub struct AutonomousSearch<BackupBrancher> {
     /// Predicates are mapped to ids. This is used internally in the heap.
-    predicate_id_info: PredicateIdGenerator,
+    predicate_id_info: DeletablePredicateIdGenerator,
     /// Stores the activities for a predicate, represented with its id.
     heap: KeyValueHeap<PredicateId, f64>,
     /// After popping predicates off the heap that current have a truth value, the predicates are
@@ -114,7 +114,7 @@ impl DefaultBrancher {
     /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         AutonomousSearch {
-            predicate_id_info: PredicateIdGenerator::default(),
+            predicate_id_info: DeletablePredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
             dormant_predicates: vec![],
             increment: DEFAULT_VSIDS_INCREMENT,
@@ -138,7 +138,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     /// Uses the `backup_brancher` in case there are no more predicates to be selected by VSIDS.
     pub fn new(backup_brancher: BackupSelector) -> Self {
         AutonomousSearch {
-            predicate_id_info: PredicateIdGenerator::default(),
+            predicate_id_info: DeletablePredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
             dormant_predicates: vec![],
             increment: DEFAULT_VSIDS_INCREMENT,
@@ -195,7 +195,10 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             // We peek the next variable, since we do not pop since we do not (yet) want to
             // remove the value from the heap.
             if let Some((candidate, _)) = self.heap.peek_max() {
-                let predicate = self.predicate_id_info.get_predicate(*candidate);
+                let predicate = self
+                    .predicate_id_info
+                    .get_predicate(*candidate)
+                    .expect("Expected predicate id to exist");
                 if context.is_predicate_assigned(predicate) {
                     self.statistics.num_assigned_predicates_encountered += 1;
                     let _ = self.heap.pop_max();
@@ -203,6 +206,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                     // We know that this predicate is now dormant
                     let predicate_id = self.predicate_id_info.get_id(predicate);
                     self.heap.delete_key(predicate_id);
+                    self.predicate_id_info.delete_id(predicate_id);
                     self.dormant_predicates.push(predicate);
                 } else {
                     return Some(predicate);

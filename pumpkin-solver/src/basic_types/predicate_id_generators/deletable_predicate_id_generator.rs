@@ -1,18 +1,40 @@
-use super::HashMap;
-use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
+#[cfg(doc)]
+use super::PredicateIdGenerator;
+use crate::basic_types::predicate_id_generators::PredicateId;
+use crate::basic_types::HashMap;
 use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 
+/// A [`PredicateIdGenerator`] which allows the deletion of stored [`PredicateId`]s.
+///
+/// This can be useful when numerous [`PredicateId`]s are defined, not all of which are required to
+/// be defined at the moment.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct PredicateIdGenerator {
-    id_to_predicate: KeyedVec<PredicateId, Predicate>,
+pub(crate) struct DeletablePredicateIdGenerator {
+    /// The value of the next id, provided there are no delete_ids that can be reused.
+    next_id: u32,
+    /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
+    deleted_ids: Vec<PredicateId>,
+    /// Active predicates are stored here.
+    /// todo: consider direct hashing.
+    id_to_predicate: HashMap<PredicateId, Predicate>,
     predicate_to_id: HashMap<Predicate, PredicateId>,
 }
 
-impl PredicateIdGenerator {
+impl DeletablePredicateIdGenerator {
     pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
         self.predicate_to_id.contains_key(&predicate)
+    }
+
+    fn get_new_predicate_id(&mut self) -> PredicateId {
+        // We either reuse a previously deleted id, or create a new one.
+        if let Some(recycled_id) = self.deleted_ids.pop() {
+            recycled_id
+        } else {
+            let new_id = self.next_id;
+            self.next_id += 1;
+            PredicateId { id: new_id }
+        }
     }
 
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
@@ -21,119 +43,40 @@ impl PredicateIdGenerator {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
-            let id = self.id_to_predicate.push(predicate);
-            let _ = self.predicate_to_id.insert(predicate, id);
+            let id = self.get_new_predicate_id();
+            let a = self.id_to_predicate.insert(id, predicate);
+            let b = self.predicate_to_id.insert(predicate, id);
+            assert!(a.is_none() && b.is_none());
             id
         }
     }
 
-    pub(crate) fn get_predicate(&self, id: PredicateId) -> Predicate {
-        self.id_to_predicate[id]
+    pub(crate) fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
+        self.id_to_predicate.get(&id).copied()
     }
 
-    pub(crate) fn clear(&mut self) {
-        self.id_to_predicate.clear();
-        self.predicate_to_id.clear();
-    }
-
-    pub(crate) fn replace_predicate(&mut self, predicate: Predicate, replacement: Predicate) {
-        pumpkin_assert_moderate!(self.has_id_for_predicate(predicate));
-        let predicate_id = self.get_id(predicate);
-        self.id_to_predicate[predicate_id] = replacement
-    }
-
-    pub(crate) fn num_predicate_ids(&self) -> usize {
-        self.id_to_predicate.len()
-    }
-}
-
-#[cfg(test)]
-#[derive(Debug)]
-pub(crate) struct PredicateIdIterator {
-    sorted_deleted_ids: Vec<PredicateId>,
-    current_id: u32,
-    next_deleted: u32,
-}
-
-#[cfg(test)]
-impl PredicateIdIterator {
-    fn new(end_id: u32, mut deleted_ids: Vec<PredicateId>) -> PredicateIdIterator {
-        deleted_ids.sort();
-        deleted_ids.push(PredicateId { id: end_id });
-
-        let mut iterator = PredicateIdIterator {
-            sorted_deleted_ids: deleted_ids,
-            current_id: 0,
-            next_deleted: 0,
-        };
-
-        // If the initial value is not present, increment.
-        if iterator.current_id == iterator.sorted_deleted_ids.first().unwrap().id {
-            iterator.increment();
-        }
-
-        iterator
-    }
-
-    fn increment(&mut self) {
-        if self.next_deleted == self.sorted_deleted_ids.len() as u32 {
-            // Do nothing, iterator has been exhausted.
-            return;
-        }
-
-        // Recall that deleted ids are kept sorted.
-        // The worst case currently is if the deleted ids are all consecutive,
-        // this could be handled better.
-        if self.current_id == self.sorted_deleted_ids[self.next_deleted as usize].id {
-            self.next_deleted += 1;
-            self.increment();
-        } else {
-            assert!(self.current_id < self.sorted_deleted_ids[self.next_deleted as usize].id);
-            self.current_id += 1;
-
-            if self.current_id == self.sorted_deleted_ids[self.next_deleted as usize].id {
-                self.increment();
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-impl Iterator for PredicateIdIterator {
-    type Item = PredicateId;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_deleted == self.sorted_deleted_ids.len() as u32 {
-            None
-        } else {
-            let id = PredicateId {
-                id: self.current_id,
-            };
-            self.increment();
-            Some(id)
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub(crate) struct PredicateId {
-    pub(crate) id: u32,
-}
-
-impl StorageKey for PredicateId {
-    fn index(&self) -> usize {
-        self.id as usize
-    }
-
-    fn create_from_index(index: usize) -> Self {
-        PredicateId { id: index as u32 }
+    pub(crate) fn delete_id(&mut self, id: PredicateId) {
+        pumpkin_assert_moderate!(!self.deleted_ids.contains(&id));
+        // Add the deleted id for future reuse.
+        self.deleted_ids.push(id);
+        // Remove the mapping id->predicate.
+        let predicate = self
+            .id_to_predicate
+            .remove(&id)
+            .expect("Id must be present.");
+        // Remove the mapping predicate->id.
+        let removed_id = self
+            .predicate_to_id
+            .remove(&predicate)
+            .expect("Predicate must be present");
+        pumpkin_assert_moderate!(removed_id == id);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PredicateId;
-    use super::PredicateIdIterator;
+    use crate::basic_types::predicate_id_generators::predicate_id_generator::PredicateIdIterator;
+    use crate::basic_types::PredicateId;
 
     fn new_predicate_ids(ids: Vec<u32>) -> Vec<PredicateId> {
         ids.iter().map(|id| PredicateId { id: *id }).collect()
