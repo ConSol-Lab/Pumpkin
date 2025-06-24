@@ -685,7 +685,7 @@ impl NogoodPropagator {
 
         // Process low-lbd nogoods.
         if self.learned_nogood_ids.low_lbd.len() > self.parameters.limit_low_lbd_nogoods {
-            NogoodPropagator::sort_nogoods_by_decreasing_lbd_and_size(
+            NogoodPropagator::sort_nogoods_by_increasing_lbd_and_size(
                 &mut self.learned_nogood_ids.low_lbd,
                 &self.nogood_predicates,
                 &self.nogood_info,
@@ -908,7 +908,7 @@ impl NogoodPropagator {
         });
     }
 
-    fn sort_nogoods_by_decreasing_lbd_and_size(
+    fn sort_nogoods_by_increasing_lbd_and_size(
         nogood_ids: &mut [NogoodId],
         nogoods: &KeyedVec<NogoodId, Vec<Predicate>>,
         nogood_info: &KeyedVec<NogoodId, NogoodInfo>,
