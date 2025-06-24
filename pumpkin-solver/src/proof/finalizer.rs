@@ -76,8 +76,11 @@ pub(crate) fn explain_root_assignment(
         return;
     }
 
-    // If the predicate is a root-level assignment, there is nothing to explain.
+    // If the predicate is a root-level assignment, add the appropriate inference to the proof.
     if context.assignments.is_initial_bound(predicate) {
+        let _ = context
+            .proof_log
+            .log_domain_inference(predicate, context.variable_names);
         return;
     }
 

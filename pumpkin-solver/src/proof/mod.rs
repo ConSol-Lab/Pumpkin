@@ -88,10 +88,10 @@ impl ProofLog {
 
         let (tag, label) = inference_codes[inference_code].clone();
 
-        let constraint_tag = constraint_tags.next_key();
+        let inference_tag = constraint_tags.next_key();
 
         let inference = Inference {
-            constraint_id: constraint_tag.into(),
+            constraint_id: inference_tag.into(),
             premises: premises
                 .into_iter()
                 .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
@@ -105,9 +105,45 @@ impl ProofLog {
 
         writer.log_inference(inference)?;
 
-        propagation_sequence.push(tag);
+        propagation_sequence.push(inference_tag);
 
-        Ok(constraint_tag)
+        Ok(inference_tag)
+    }
+
+    /// Log an inference that claims the given predicate is part of the initial domain.
+    pub(crate) fn log_domain_inference(
+        &mut self,
+        predicate: Predicate,
+        variable_names: &VariableNames,
+    ) -> std::io::Result<ConstraintTag> {
+        let Some(ProofImpl::CpProof {
+            writer,
+            propagation_order_hint: Some(propagation_sequence),
+            constraint_tags,
+            proof_atomics,
+            ..
+        }) = self.internal_proof.as_mut()
+        else {
+            return Ok(ConstraintTag::create_from_index(0));
+        };
+
+        let inference_tag = constraint_tags.next_key();
+
+        let inference = Inference {
+            constraint_id: inference_tag.into(),
+            premises: vec![],
+            consequent: Some(
+                proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names),
+            ),
+            generated_by: None,
+            label: Some("initial_domain"),
+        };
+
+        writer.log_inference(inference)?;
+
+        propagation_sequence.push(inference_tag);
+
+        Ok(inference_tag)
     }
 
     /// Log a deduction (learned nogood) to the proof.
