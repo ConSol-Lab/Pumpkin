@@ -1,6 +1,7 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use crate::basic_types::HashMap;
 use crate::basic_types::PredicateId;
 use crate::containers::StorageKey;
 use crate::propagators::nogoods::NogoodId;
@@ -8,23 +9,39 @@ use crate::propagators::nogoods::NogoodId;
 #[derive(Clone, Default, Debug)]
 pub(crate) struct ArenaAllocator {
     nogoods: Vec<PredicateId>,
+    nogood_id_to_index: HashMap<NogoodId, u32>,
+    current_index: u32,
 }
 
 impl ArenaAllocator {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
             nogoods: Vec::with_capacity(capacity),
+            nogood_id_to_index: HashMap::default(),
+            current_index: 0,
         }
     }
 
     pub(crate) fn insert(&mut self, nogood: Vec<PredicateId>) -> NogoodId {
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
+        let _ = self
+            .nogood_id_to_index
+            .insert(nogood_id, self.current_index);
+        self.current_index += 1;
+
         self.nogoods
             .push(PredicateId::create_from_index(nogood.len()));
         self.nogoods.extend(nogood);
 
         nogood_id
+    }
+
+    pub(crate) fn get_index_of_nogood(&self, nogood_id: &NogoodId) -> u32 {
+        *self
+            .nogood_id_to_index
+            .get(nogood_id)
+            .expect("Expected nogood predicate to exist")
     }
 
     pub(crate) fn nogoods_ids(&self) -> impl Iterator<Item = NogoodId> + '_ {

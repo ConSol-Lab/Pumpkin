@@ -121,17 +121,6 @@ impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
         self.elements.resize(new_len, value)
     }
 
-    pub(crate) fn accomodate(&mut self, key: Key, value: Value) {
-        if key.index() >= self.len() {
-            self.resize(key.index() + 1, value);
-        }
-    }
-
-    pub(crate) fn accomodate_and_insert(&mut self, key: Key, value: Value, default_value: Value) {
-        self.accomodate(key.clone(), default_value);
-        self[key] = value
-    }
-
     pub(crate) fn clear(&mut self) {
         self.elements.clear();
     }
@@ -168,6 +157,17 @@ impl StorageKey for usize {
         index
     }
 }
+
+impl StorageKey for u32 {
+    fn index(&self) -> usize {
+        *self as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        index as u32
+    }
+}
+
 /// A simple trait which requires that the structures implementing this trait can generate an index.
 pub trait StorageKey: Clone {
     fn index(&self) -> usize;
