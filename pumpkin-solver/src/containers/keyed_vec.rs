@@ -63,6 +63,7 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     /// ```
     /// # use pumpkin_solver::containers::StorageKey;
     /// # use pumpkin_solver::containers::KeyedVec;
+    /// #[derive(Clone)]
     /// struct Key(usize);
     ///
     /// impl StorageKey for Key {

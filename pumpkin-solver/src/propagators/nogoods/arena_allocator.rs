@@ -66,7 +66,7 @@ impl Iterator for NogoodIdIterator<'_> {
     type Item = NogoodId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index >= self.nogoods.capacity() {
+        if self.current_index >= self.nogoods.len() {
             return None;
         }
         let id = NogoodId::create_from_index(self.current_index);
