@@ -33,6 +33,7 @@ use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
 use crate::proof::InferenceCode;
+use crate::propagators::nogoods::PredicateArena;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -48,7 +49,8 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct NogoodPropagator {
     /// The predicates corresponding to each Nogood.
-    nogood_predicates: KeyedVec<NogoodId, Vec<Predicate>>,
+    // nogood_predicates: KeyedVec<NogoodId, Vec<Predicate>>,
+    nogood_predicates: PredicateArena,
     /// The information corresponding to each nogood; including activity, and lbd.
     nogood_info: KeyedVec<NogoodId, NogoodInfo>,
     /// The inference codes for the nogoods.
@@ -58,8 +60,6 @@ pub(crate) struct NogoodPropagator {
     /// The ids of the nogoods sorted based on whether they have a "low" LBD score or a "high" LBD
     /// score.
     learned_nogood_ids: LearnedNogoodIds,
-    /// Ids which have been deleted and can now be re-used
-    delete_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
     watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
@@ -181,6 +181,7 @@ impl Propagator for NogoodPropagator {
             context.notification_engine,
         );
 
+        // TODO: Could rewrite with the newly added 'resize_if_smaller'
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(
                 context.assignments().num_domains() as usize + 1,
@@ -309,7 +310,14 @@ impl Propagator for NogoodPropagator {
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
-        for nogood_id in self.nogood_predicates.keys() {
+
+        let all_nogood_ids = self
+            .permanent_nogoods
+            .iter()
+            .chain(self.learned_nogood_ids.low_lbd.iter())
+            .chain(self.learned_nogood_ids.high_lbd.iter());
+
+        for &nogood_id in all_nogood_ids {
             self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
         }
         Ok(())
@@ -337,7 +345,7 @@ impl Propagator for NogoodPropagator {
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
-                &self.nogood_predicates[id].as_slice()[1..],
+                &self.nogood_predicates[id][1..],
                 #[allow(deprecated, reason = "should be refactored later")]
                 context.assignments(),
             );
@@ -366,7 +374,7 @@ impl Propagator for NogoodPropagator {
             self.nogood_info[id].activity += self.parameters.activity_bump_increment;
         }
         // update LBD, so we need code plus assignments as input.
-        &self.nogood_predicates[id].as_slice()[1..]
+        &self.nogood_predicates[id][1..]
     }
 }
 
@@ -407,21 +415,28 @@ impl NogoodPropagator {
             .add_term(lbd as u64);
 
         // Add the nogood to the database.
-        //
-        // If there is an available nogood id, use it, otherwise allocate a fresh id.
-        let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
-            self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood_info(lbd);
-            self.nogood_predicates[reused_id] = nogood;
-            self.inference_codes[reused_id] = inference_code;
-            reused_id
-        } else {
-            let new_id = self
-                .nogood_info
-                .push(NogoodInfo::new_learned_nogood_info(lbd));
-            let _ = self.inference_codes.push(inference_code);
-            let _ = self.nogood_predicates.push(nogood);
-            new_id
-        };
+        // Note that for now, we do not delete nogoods from memory
+        let nogood_id = self.nogood_predicates.store_predicates(nogood);
+        // Recall that nogood ids are not consecutive numbers.
+        // Since we access self.nogood_info and self.inference_codes using direct hashing,
+        // we need to insert dummy elements for nogoods ids that will never be used.
+        // In this future, we could optimise this memory waste.
+
+        // Add nogood info
+        let dummy_nogood_info = NogoodInfo::new_permanent_nogood_info();
+        self.nogood_info
+            .resize_if_smaller(nogood_id.index() + 1, dummy_nogood_info);
+        self.nogood_info[nogood_id] = NogoodInfo::new_learned_nogood_info(lbd);
+
+        // Add the inference code
+        let dummy_inference_code = InferenceCode::create_from_index(0);
+        self.inference_codes
+            .resize_if_smaller(nogood_id.index() + 1, dummy_inference_code);
+        self.inference_codes[nogood_id] = inference_code;
+
+        // TODO: For readability, it might be good to already here add the nogood to the
+        // self.learned_nogood_ids, and possibly make a separate method for creating a
+        // nogood in memory, since the code above is almost duplicated later on.
 
         let watcher = Watcher {
             nogood_id,
@@ -490,7 +505,7 @@ impl NogoodPropagator {
             "Only allowed to add nogoods permanently at the root for now."
         );
 
-        // If the nogood is empty then it is automatically satisfied (though it is unusual!)
+        // If the nogood is empty then it is automatically satisfied (though this is unusual!)
         if nogood.is_empty() {
             warn!("Adding empty nogood, unusual!");
             return Ok(());
@@ -524,20 +539,24 @@ impl NogoodPropagator {
         // The preprocessing ensures that all predicates are unassigned.
         else {
             // Add the nogood to the database.
-            // If there is an available nogood id, use it, otherwise allocate a fresh id.
-            let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
-                self.nogood_info[reused_id] = NogoodInfo::new_permanent_nogood_info();
-                self.nogood_predicates[reused_id] = nogood;
-                self.inference_codes[reused_id] = inference_code;
-                reused_id
-            } else {
-                let new_id = self
-                    .nogood_info
-                    .push(NogoodInfo::new_permanent_nogood_info());
-                let _ = self.nogood_predicates.push(nogood);
-                let _ = self.inference_codes.push(inference_code);
-                new_id
-            };
+            // Note that for now, we do not delete nogoods from memory
+            let nogood_id = self.nogood_predicates.store_predicates(nogood);
+            // Recall that nogood ids are not consecutive numbers.
+            // Since we access self.nogood_info and self.inference_codes using direct hashing,
+            // we need to insert dummy elements for nogoods ids that will never be used.
+            // In this future, we could optimise this memory waste.
+
+            // Add nogood info
+            let dummy_nogood_info = NogoodInfo::new_permanent_nogood_info();
+            self.nogood_info
+                .resize_if_smaller(nogood_id.index() + 1, dummy_nogood_info);
+            self.nogood_info[nogood_id] = NogoodInfo::new_permanent_nogood_info();
+
+            // Add inference code
+            let dummy_inference_code = InferenceCode::create_from_index(0);
+            self.inference_codes
+                .resize_if_smaller(nogood_id.index() + 1, dummy_inference_code);
+            self.inference_codes[nogood_id] = inference_code;
 
             self.permanent_nogoods.push(nogood_id);
 
@@ -698,13 +717,14 @@ impl NogoodPropagator {
             // for propagation. A new nogood may take the place of a deleted nogood, this makes it
             // simpler, since other nogood ids remain unchanged.
             self.nogood_info[id].is_deleted = true;
-            self.delete_ids.push(id);
+            // Note that in the current version, we do not delete the nogood from memory.
+            // Instead it is only marked as deleted and never used.
 
             num_clauses_to_remove -= 1;
         }
 
         // Now we remove all of the nogoods from the `high_lbd` nogoods; note that this does not
-        // remove it from the database.
+        // remove it from the database - removal from the watch lists is done in the above loop.
         self.learned_nogood_ids
             .high_lbd
             .retain(|&id| !self.nogood_info[id].is_deleted);
@@ -881,27 +901,29 @@ impl NogoodPropagator {
                 .any(|watcher| watcher.nogood_id == nogood_id)
         };
 
-        for nogood in self.nogood_predicates.iter().enumerate() {
-            let nogood_id = NogoodId {
-                id: nogood.0 as u32,
-            };
+        let all_nogood_ids = self
+            .permanent_nogoods
+            .iter()
+            .chain(self.learned_nogood_ids.low_lbd.iter())
+            .chain(self.learned_nogood_ids.high_lbd.iter());
+
+        for &nogood_id in all_nogood_ids {
+            let nogood = &self.nogood_predicates[nogood_id];
 
             if self.nogood_info[nogood_id].is_deleted {
                 // If the clause is deleted then it will have no watchers
-                assert!(
-                    !is_watching(nogood.1[0], nogood_id) && !is_watching(nogood.1[1], nogood_id)
-                );
+                assert!(!is_watching(nogood[0], nogood_id) && !is_watching(nogood[1], nogood_id));
                 continue;
             }
 
-            if !(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id)) {
+            if !(is_watching(nogood[0], nogood_id) && is_watching(nogood[1], nogood_id)) {
                 eprintln!("Nogood id: {}", nogood_id.id);
                 eprintln!("Nogood: {nogood:?}");
-                eprintln!("watching 0: {}", is_watching(nogood.1[0], nogood_id));
-                eprintln!("watching 1: {}", is_watching(nogood.1[1], nogood_id));
+                eprintln!("watching 0: {}", is_watching(nogood[0], nogood_id));
+                eprintln!("watching 1: {}", is_watching(nogood[1], nogood_id));
             }
 
-            assert!(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id));
+            assert!(is_watching(nogood[0], nogood_id) && is_watching(nogood[1], nogood_id));
         }
         true
     }
