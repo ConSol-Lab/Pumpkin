@@ -61,35 +61,44 @@ impl StorageKey for InferenceCode {
 
 /// Conveniently creates [`InferenceLabel`] for use in a propagator.
 ///
+/// In case it is desirable, the exact string that is printed in the DRCP proof can be
+/// provided as a second parameter. Otherwise, the type name is converted to snake
+///
 /// # Example
 /// ```ignore
 /// declare_inference_label!(SomeInference);
+/// declare_inference_label!(OtherInference, "label");
 ///
-/// // Now we can use `SomeInference` when creating an inference code as it implements
-/// // `InferenceLabel`.
+/// // Now we can use `SomeInference` and `OtherInference` when creating an inference
+/// // code as it implements `InferenceLabel`.
 /// ```
+/// case.
 #[macro_export]
 macro_rules! declare_inference_label {
     ($name:ident) => {
+        declare_inference_label!($name, {
+            let ident_str = stringify!($name);
+            <&str as convert_case::Casing<&str>>::to_case(
+                &ident_str,
+                convert_case::Case::Snake,
+            )
+        });
+    };
+
+    ($name:ident, $label:expr) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         struct $name;
 
-        declare_inference_label!(@impl_trait $name);
+        declare_inference_label!(@impl_trait $name, $label);
     };
 
-    (@impl_trait $name:ident) => {
+    (@impl_trait $name:ident, $label:expr) => {
         impl $crate::proof::InferenceLabel for $name {
             fn to_str(&self) -> std::sync::Arc<str> {
                 static LABEL: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
 
                 let label = LABEL.get_or_init(|| {
-                    let ident_str = stringify!($name);
-                    let label = <&str as convert_case::Casing<&str>>::to_case(
-                        &ident_str,
-                        convert_case::Case::Snake,
-                    );
-
-                    std::sync::Arc::from(label)
+                    std::sync::Arc::from($label)
                 });
 
                 std::sync::Arc::clone(label)

@@ -1580,7 +1580,7 @@ impl CSPSolverState {
     }
 }
 
-declare_inference_label!(NogoodLabel);
+declare_inference_label!(NogoodLabel, "nogood");
 
 #[cfg(test)]
 mod tests {
