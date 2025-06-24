@@ -349,6 +349,11 @@ struct Args {
     /// Determine what type of optimisation strategy is used by the solver
     #[arg(long = "optimisation-strategy", default_value_t)]
     optimisation_strategy: OptimisationStrategy,
+
+    /// The amount of MB which are preallocated for use by the arena allocator of the nogood
+    /// propagator.
+    #[arg(long = "memory-preallocated", default_value_t = 1000)]
+    memory_preallocated: usize,
 }
 
 fn configure_logging(
@@ -511,6 +516,8 @@ fn run() -> PumpkinResult<()> {
     };
 
     let solver_options = SolverOptions {
+        // 1 MB is 1_000_000 bytes
+        memory_preallocated: args.memory_preallocated,
         restart_options,
         learning_clause_minimisation: !args.no_learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),

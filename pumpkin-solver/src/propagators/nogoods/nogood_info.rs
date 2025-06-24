@@ -2,7 +2,7 @@
 /// the same time).
 ///
 /// It additionally contains certain fields related to how the clause was created/activity.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct NogoodInfo {
     /// Indicates whether the nogood is a learned nogood or not.
     pub(crate) is_learned: bool,

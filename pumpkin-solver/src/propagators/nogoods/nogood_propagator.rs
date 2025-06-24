@@ -13,6 +13,7 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
+use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -32,6 +33,7 @@ use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
 use crate::proof::InferenceCode;
+use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -47,7 +49,7 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct NogoodPropagator {
     /// The predicates corresponding to each Nogood.
-    nogood_predicates: KeyedVec<NogoodId, Vec<PredicateId>>,
+    nogood_predicates: ArenaAllocator,
     /// The information corresponding to each nogood; including activity, and lbd.
     nogood_info: KeyedVec<NogoodId, NogoodInfo>,
     /// The inference codes for the nogoods.
@@ -103,9 +105,10 @@ struct LearnedNogoodIds {
 }
 
 impl NogoodPropagator {
-    pub(crate) fn with_options(parameters: LearningOptions) -> Self {
+    pub(crate) fn with_options(capacity: usize, parameters: LearningOptions) -> Self {
         Self {
             parameters,
+            nogood_predicates: ArenaAllocator::new(capacity),
             ..Default::default()
         }
     }
@@ -123,12 +126,10 @@ impl NogoodPropagator {
         id: NogoodId,
         notification_engine: &mut NotificationEngine,
     ) -> bool {
-        if notification_engine.is_predicate_id_falsified(self.nogood_predicates[id][0], assignments)
-        {
+        let nogood_predicates = &self.nogood_predicates[id];
+        if notification_engine.is_predicate_id_falsified(nogood_predicates[0], assignments) {
             let trail_position = assignments
-                .get_trail_position(
-                    &!notification_engine.get_predicate(self.nogood_predicates[id][0]),
-                )
+                .get_trail_position(&!notification_engine.get_predicate(nogood_predicates[0]))
                 .unwrap();
             let trail_entry = assignments.get_trail_entry(trail_position);
             if let Some((reason_ref, _)) = trail_entry.reason {
@@ -295,7 +296,7 @@ impl Propagator for NogoodPropagator {
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
-        for nogood_id in self.nogood_predicates.keys() {
+        for nogood_id in self.nogood_predicates.nogoods_ids() {
             self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
         }
         Ok(())
@@ -310,7 +311,7 @@ impl Propagator for NogoodPropagator {
     fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
-        self.temp_nogood = self.nogood_predicates[id].as_slice()[1..]
+        self.temp_nogood = self.nogood_predicates[id][1..]
             .iter()
             .map(|predicate_id| context.get_predicate(*predicate_id))
             .collect::<Vec<_>>();
@@ -404,20 +405,18 @@ impl NogoodPropagator {
 
         // Add the nogood to the database.
         //
-        // If there is an available nogood id, use it, otherwise allocate a fresh id.
-        let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
-            self.nogood_info[reused_id] = NogoodInfo::new_learned_nogood_info(lbd);
-            self.nogood_predicates[reused_id] = nogood;
-            self.inference_codes[reused_id] = inference_code;
-            reused_id
-        } else {
-            let new_id = self
-                .nogood_info
-                .push(NogoodInfo::new_learned_nogood_info(lbd));
-            let _ = self.inference_codes.push(inference_code);
-            let _ = self.nogood_predicates.push(nogood);
-            new_id
-        };
+        // Currently we always allocate a fresh ID
+        let nogood_id = self.nogood_predicates.insert(nogood);
+        self.nogood_info.accomodate_and_insert(
+            nogood_id,
+            NogoodInfo::new_learned_nogood_info(lbd),
+            NogoodInfo::default(),
+        );
+        self.inference_codes.accomodate_and_insert(
+            nogood_id,
+            inference_code,
+            InferenceCode::create_from_index(0),
+        );
 
         let watcher = Watcher {
             nogood_id,
@@ -522,21 +521,21 @@ impl NogoodPropagator {
                 .iter()
                 .map(|predicate| context.get_id(*predicate))
                 .collect::<Vec<_>>();
+
             // Add the nogood to the database.
-            // If there is an available nogood id, use it, otherwise allocate a fresh id.
-            let nogood_id = if let Some(reused_id) = self.delete_ids.pop() {
-                self.nogood_info[reused_id] = NogoodInfo::new_permanent_nogood_info();
-                self.nogood_predicates[reused_id] = nogood;
-                self.inference_codes[reused_id] = inference_code;
-                reused_id
-            } else {
-                let new_id = self
-                    .nogood_info
-                    .push(NogoodInfo::new_permanent_nogood_info());
-                let _ = self.nogood_predicates.push(nogood);
-                let _ = self.inference_codes.push(inference_code);
-                new_id
-            };
+            //
+            // Currently we always allocate a fresh ID
+            let nogood_id = self.nogood_predicates.insert(nogood);
+            self.nogood_info.accomodate_and_insert(
+                nogood_id,
+                NogoodInfo::new_permanent_nogood_info(),
+                NogoodInfo::default(),
+            );
+            self.inference_codes.accomodate_and_insert(
+                nogood_id,
+                inference_code,
+                InferenceCode::create_from_index(0),
+            );
 
             self.permanent_nogoods.push(nogood_id);
 
@@ -883,27 +882,37 @@ impl NogoodPropagator {
                 .any(|watcher| watcher.nogood_id == nogood_id)
         };
 
-        for nogood in self.nogood_predicates.iter().enumerate() {
-            let nogood_id = NogoodId {
-                id: nogood.0 as u32,
-            };
+        for nogood_id in self.nogood_predicates.nogoods_ids() {
+            let nogood_predicates = &self.nogood_predicates[nogood_id];
 
             if self.nogood_info[nogood_id].is_deleted {
                 // If the clause is deleted then it will have no watchers
                 assert!(
-                    !is_watching(nogood.1[0], nogood_id) && !is_watching(nogood.1[1], nogood_id)
+                    !is_watching(nogood_predicates[0], nogood_id)
+                        && !is_watching(nogood_predicates[1], nogood_id)
                 );
                 continue;
             }
 
-            if !(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id)) {
+            if !(is_watching(nogood_predicates[0], nogood_id)
+                && is_watching(nogood_predicates[1], nogood_id))
+            {
                 eprintln!("Nogood id: {}", nogood_id.id);
-                eprintln!("Nogood: {nogood:?}");
-                eprintln!("watching 0: {}", is_watching(nogood.1[0], nogood_id));
-                eprintln!("watching 1: {}", is_watching(nogood.1[1], nogood_id));
+                eprintln!("Nogood: {nogood_predicates:?}");
+                eprintln!(
+                    "watching 0: {}",
+                    is_watching(nogood_predicates[0], nogood_id)
+                );
+                eprintln!(
+                    "watching 1: {}",
+                    is_watching(nogood_predicates[1], nogood_id)
+                );
             }
 
-            assert!(is_watching(nogood.1[0], nogood_id) && is_watching(nogood.1[1], nogood_id));
+            assert!(
+                is_watching(nogood_predicates[0], nogood_id)
+                    && is_watching(nogood_predicates[1], nogood_id)
+            );
         }
         true
     }
