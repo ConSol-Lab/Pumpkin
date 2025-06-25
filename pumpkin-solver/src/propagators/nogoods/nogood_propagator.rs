@@ -725,6 +725,11 @@ impl NogoodPropagator {
 
     /// Remove deleted nogoods from watchers.
     /// Also removes some but not all trivially false nogoods on the way.
+    ///
+    /// TODO: the function is implemented as going through all watchers.
+    /// If we only store few learned nogoods, but have many permanent nogoods,
+    /// then this function will be called often and may be a bottleneck.
+    /// Note that this is not a realistic scenario.
     fn remove_deleted_nogoods_from_watchers(&mut self, context: PropagationContext) {
         // The idea is to go through the watchers and remove watchers that contain deleted nogoods.
 
