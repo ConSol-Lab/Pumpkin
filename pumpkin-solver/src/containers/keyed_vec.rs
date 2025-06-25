@@ -120,6 +120,15 @@ impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
         self.elements.resize(new_len, value)
     }
 
+    /// Resizes the vector if the length of the vector is smaller than the provided minimum length.
+    /// Does nothing if the vector is already large enough.
+    /// Convenient when using the vector to implement direct hashing.
+    pub(crate) fn resize_if_smaller(&mut self, minimum_length: usize, value: Value) {
+        if self.elements.len() <= minimum_length {
+            self.elements.resize(minimum_length, value);
+        }
+    }
+
     pub(crate) fn clear(&mut self) {
         self.elements.clear();
     }
