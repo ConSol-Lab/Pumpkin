@@ -1,3 +1,4 @@
+mod arena_allocator;
 mod learning_options;
 mod nogood_id;
 mod nogood_info;

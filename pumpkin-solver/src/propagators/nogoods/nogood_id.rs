@@ -1,6 +1,6 @@
 use crate::containers::StorageKey;
 
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct NogoodId {
     pub(crate) id: u32,
 }

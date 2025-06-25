@@ -63,6 +63,7 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     /// ```
     /// # use pumpkin_solver::containers::StorageKey;
     /// # use pumpkin_solver::containers::KeyedVec;
+    /// #[derive(Clone)]
     /// struct Key(usize);
     ///
     /// impl StorageKey for Key {
@@ -156,8 +157,19 @@ impl StorageKey for usize {
         index
     }
 }
+
+impl StorageKey for u32 {
+    fn index(&self) -> usize {
+        *self as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        index as u32
+    }
+}
+
 /// A simple trait which requires that the structures implementing this trait can generate an index.
-pub trait StorageKey {
+pub trait StorageKey: Clone {
     fn index(&self) -> usize;
 
     fn create_from_index(index: usize) -> Self;
