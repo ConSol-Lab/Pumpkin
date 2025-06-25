@@ -856,7 +856,7 @@ impl NogoodPropagator {
             if NogoodPropagator::is_nogood_propagating(&nogoods[id], context, reason_store, id)
                 && context
                     .assignments
-                    .get_decision_level_for_predicate(&nogoods[id][0])
+                    .get_decision_level_for_predicate(&!nogoods[id][0])
                     .expect("A propagating predicate must have a decision level.")
                     == 0
             {
