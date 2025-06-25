@@ -8,12 +8,14 @@ pub(crate) struct NogoodInfo {
     pub(crate) is_learned: bool,
     /// The LBD score of the nogood; this is an indication of how "good" the nogood is.
     pub(crate) lbd: u32,
-    /// If a nogood is protected then it is not considered for removal for a single iteration.
-    pub(crate) is_protected: bool,
     /// Whether the nogood has been marked as deleted; this means that it can be replaced by
     /// another nogood in the future.
     pub(crate) is_deleted: bool,
     /// Whether to not allow the nogood to have their activity bumped.
+    /// The idea was to prevent a single nogood from being bumped multiple times.
+    /// Note that in conflict analysis, a nogood can only appear once in conflict analysis,
+    /// and when using recursive minimisation, it may appear one more time, a total of two times.
+    /// TODO: not clear whether this is a problem or whether it makes sense.
     pub(crate) block_bumps: bool,
     /// The activity score of the nogood.
     pub(crate) activity: f32,
@@ -24,7 +26,6 @@ impl NogoodInfo {
         NogoodInfo {
             is_learned: true,
             lbd,
-            is_protected: false,
             is_deleted: false,
             block_bumps: false,
             activity: 0.0,
@@ -35,7 +36,6 @@ impl NogoodInfo {
         NogoodInfo {
             is_learned: false,
             lbd: 0,
-            is_protected: false,
             is_deleted: false,
             block_bumps: false,
             activity: 0.0,

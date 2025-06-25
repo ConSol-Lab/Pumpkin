@@ -394,6 +394,8 @@ impl Assignments {
             .map(|u| u.trail_position)
     }
 
+    /// If the predicate is assigned true, returns the decision level of the predicate.
+    /// Otherwise returns None.
     pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
