@@ -113,7 +113,7 @@ struct Args {
     ///
     /// Possible values: usize
     #[arg(
-        long = "learning-max-num-mid-lbd-nogoods",
+        long = "learning-max-num-low-lbd-nogoods",
         default_value_t = 100_000,
         verbatim_doc_comment
     )]

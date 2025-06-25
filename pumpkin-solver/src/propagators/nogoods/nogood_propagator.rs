@@ -361,7 +361,6 @@ impl Propagator for NogoodPropagator {
                     .high_lbd
                     .iter()
                     .chain(self.learned_nogood_ids.mid_lbd.iter())
-                    .chain(self.learned_nogood_ids.low_lbd.iter())
                     .for_each(|i| {
                         self.nogood_info[*i].activity /= self.parameters.max_activity;
                     });
@@ -704,7 +703,7 @@ impl NogoodPropagator {
         self.remove_deleted_nogoods_from_watchers(context);
     }
 
-    fn are_watched_predicates_falsified_at_root_level(
+    fn has_a_watched_predicate_falsified_at_root_level(
         nogood: &[Predicate],
         context: PropagationContext,
     ) -> bool {
@@ -713,13 +712,13 @@ impl NogoodPropagator {
         context.is_predicate_falsified(watcher1)
             && context
                 .assignments
-                .get_decision_level_for_predicate(&watcher1)
+                .get_decision_level_for_predicate(&!watcher1)
                 .expect("Falsified predicates must have a decision level.")
                 == 0
             || context.is_predicate_falsified(watcher2)
                 && context
                     .assignments
-                    .get_decision_level_for_predicate(&watcher2)
+                    .get_decision_level_for_predicate(&!watcher2)
                     .expect("Falsified predicates must have a decision level.")
                     == 0
     }
@@ -736,11 +735,16 @@ impl NogoodPropagator {
         // The code below goes through the watchers.
         // We maintain a flag that signals if the process below will require another pass.
         // This can happen when the cached predicate is falsified at the root level.
-        // Note that each nogood is watched twice.
-        // Since we do not know if this is the first or second watcher with this nogood,
-        // we need another pass in case this was the second watcher.
-        // We expect this to happen not so often, so we have this flag telling us to check again.
-        // Most of the time this flag will stay false.
+        //
+        // Recall that each nogood is watched twice.
+        // When we encounter a watcher where its cached predicate is falsified
+        // at the root, we mark it as deleted. However, we could have encountered
+        // the other watcher (with a different cached predicate) attached to this
+        // nogood prior to encountering this watcher with a falsified cached predicate;
+        // to ensure that we delete this other watcher as well, we require another pass
+        //
+        // We expect that root-level falsified cached predicates are rare in practice,
+        // so the second pass will not take place often.
         let mut another_pass_needed = false;
 
         // We also track if we have deleted a trivial nogood, because afterwards we need to also
@@ -754,7 +758,7 @@ impl NogoodPropagator {
                 // If the nogood has been deleted, do not keep this watcher
                 if self.nogood_info[watcher.nogood_id].is_deleted {
                     false
-                } else if NogoodPropagator::are_watched_predicates_falsified_at_root_level(
+                } else if NogoodPropagator::has_a_watched_predicate_falsified_at_root_level(
                     &self.nogood_predicates[watcher.nogood_id],
                     context,
                 ) {
@@ -768,7 +772,7 @@ impl NogoodPropagator {
                 else if context.is_predicate_falsified(watcher.cached_predicate)
                     && context
                         .assignments
-                        .get_decision_level_for_predicate(&watcher.cached_predicate)
+                        .get_decision_level_for_predicate(&!watcher.cached_predicate)
                         .expect("Falsified predicates must have a decision level.")
                         == 0
                 {
@@ -887,6 +891,10 @@ impl NogoodPropagator {
         self.learned_nogood_ids.mid_lbd.retain(|id| {
             // Still a mid-tier nogood?
             if self.nogood_info[*id].lbd > self.parameters.lbd_low {
+                // Since this nogood is in the mid-lbd tier,
+                // and the above check concluded that its lbd is not low enough
+                // for the low-lbd tier,
+                // it stays in the mid-lbd tier.
                 true
             } else {
                 // Promote to low-lbd tier.
