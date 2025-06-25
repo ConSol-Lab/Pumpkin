@@ -512,7 +512,12 @@ fn run() -> PumpkinResult<()> {
 
     let solver_options = SolverOptions {
         restart_options,
-        learning_clause_minimisation: !args.no_learning_clause_minimisation,
+        learning_clause_minimisation: if args.proof_type == ProofType::Full {
+            warn!("Recursive minimisation is disabled when logging the full proof.");
+            false
+        } else {
+            !args.no_learning_clause_minimisation
+        },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         conflict_resolver: args.conflict_resolver,
