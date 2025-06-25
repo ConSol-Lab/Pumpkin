@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::ops::Not;
 
 use log::warn;
@@ -644,6 +645,7 @@ impl NogoodPropagator {
         // for deletion anyway.
         // TODO: check this.
 
+        let mut removed_at_least_one_nogood = false;
         // Process high-lbd nogoods.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_high_lbd_nogoods {
             self.promote_high_lbd_nogoods();
@@ -653,7 +655,7 @@ impl NogoodPropagator {
                 &self.nogood_info,
             );
 
-            NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
+            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -672,7 +674,7 @@ impl NogoodPropagator {
                 &self.nogood_info,
             );
 
-            NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
+            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -690,7 +692,7 @@ impl NogoodPropagator {
                 &self.nogood_info,
             );
 
-            NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
+            removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_bottom_half_nogood_ids(
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -700,7 +702,9 @@ impl NogoodPropagator {
             );
         }
 
-        self.remove_deleted_nogoods_from_watchers(context);
+        if removed_at_least_one_nogood {
+            self.remove_deleted_nogoods_from_watchers(context);
+        }
     }
 
     fn has_a_watched_predicate_falsified_at_root_level(
@@ -819,6 +823,8 @@ impl NogoodPropagator {
 
     // Attempts to remove the bottom half from nogood_ids.
     // The removed nogood ids are transfered to the deleted_ids vector.
+    // Returns true if at least one nogood has been removed.
+    //
     // A nogood is not removed if it is currently propagating at a non-root level.
     // This means that the function may remove some nogoods from the first half if
     // some of the bottom nogoods are currently propagating.
@@ -829,13 +835,14 @@ impl NogoodPropagator {
         deleted_ids: &mut Vec<NogoodId>,
         context: PropagationContext,
         reason_store: &mut ReasonStore,
-    ) {
+    ) -> bool {
         // The removal is done in two phases.
         // 1) Nogoods are deleted in the database, but the ids are not removed from nogood_ids.
         // 2) The corresponding ids are removed from the nogood_ids.
         // Recall that these deleted nogoods are not yet removed from the watch lists.
-        let mut num_nogoods_to_remove = nogood_ids.len() / 2;
 
+        // Schedule to remove at least nogood, likely more than one.
+        let mut num_nogoods_to_remove = max(nogood_ids.len() / 2, 1);
         // Note the 'rev', since we are removing the bottom half.
         // The aim is to remove half of the nogoods,
         // but less could be removed if many are involved in propagation.
@@ -869,7 +876,11 @@ impl NogoodPropagator {
 
         // Now we remove the nogood ids from vector;
         // note that this does not remove it from the database or watchers.
+        let num_nogoods_before_removal = nogood_ids.len();
         nogood_ids.retain(|&id| !nogood_info[id].is_deleted);
+        let num_nogoods_after_removal = nogood_ids.len();
+
+        num_nogoods_before_removal != num_nogoods_after_removal
     }
 
     /// Goes through all of the "high" LBD nogoods and promotes nogoods which have been updated to
