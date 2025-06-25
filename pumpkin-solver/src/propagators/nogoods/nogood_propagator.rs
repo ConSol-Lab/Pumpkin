@@ -858,7 +858,7 @@ impl NogoodPropagator {
                     .assignments
                     .get_decision_level_for_predicate(&!nogoods[id][0])
                     .expect("A propagating predicate must have a decision level.")
-                    == 0
+                    > 0
             {
                 continue;
             }
