@@ -618,6 +618,8 @@ impl ConstraintSatisfactionSolver {
                 &mut self.trailed_values,
             );
             self.state.declare_ready();
+        } else if self.state.internal_state == CSPSolverStateInternal::ContainsSolution {
+            self.state.declare_ready();
         }
     }
 }
@@ -1450,7 +1452,7 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 enum CSPSolverStateInternal {
     #[default]
     Ready,

@@ -21,6 +21,7 @@ pub mod results {
     pub use crate::api::outputs::ProblemSolution;
     pub use crate::api::outputs::SatisfactionResult;
     pub use crate::api::outputs::SatisfactionResultUnderAssumptions;
+    pub use crate::api::outputs::Satisfiable;
     pub use crate::api::outputs::SolutionReference;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
