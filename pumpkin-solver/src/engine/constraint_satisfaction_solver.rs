@@ -1065,7 +1065,7 @@ impl ConstraintSatisfactionSolver {
             };
 
             if self.assignments.get_decision_level() == 0 {
-                self.log_root_propagation_to_proof(num_trail_entries_before);
+                self.handle_root_propagation(num_trail_entries_before);
             }
             match propagation_status {
                 Ok(_) => {
@@ -1135,18 +1135,24 @@ impl ConstraintSatisfactionSolver {
     /// The inference `R -> l` is logged to the proof as follows:
     /// 1. Infernce `R /\ ~l -> false`
     /// 2. Nogood (clause) `l`
-    fn log_root_propagation_to_proof(&mut self, start_trail_index: usize) {
+    fn handle_root_propagation(&mut self, start_trail_index: usize) {
         pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
-
-        if !self.internal_parameters.proof_log.is_logging_inferences() {
-            return;
-        }
 
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
             let (reason_ref, inference_code) = entry
                 .reason
                 .expect("Added by a propagator and must therefore have a reason");
+
+            if !self.internal_parameters.proof_log.is_logging_inferences() {
+                // In case we are not logging inferences, we only need to keep track
+                // of the root-level inferences to allow us to correctly finalize the
+                // proof.
+                let _ = self
+                    .unit_nogood_inference_codes
+                    .insert(entry.predicate, inference_code);
+                continue;
+            }
 
             // Get the conjunction of predicates explaining the propagation.
             let mut reason = vec![];
@@ -1319,18 +1325,18 @@ impl ConstraintSatisfactionSolver {
 
         if addition_result.is_err() || self.state.is_conflicting() {
             self.prepare_for_conflict_resolution();
-            self.log_root_propagation_to_proof(num_trail_entries);
+            self.handle_root_propagation(num_trail_entries);
             self.complete_proof();
             return Err(ConstraintOperationError::InfeasibleNogood);
         }
 
-        self.log_root_propagation_to_proof(num_trail_entries);
+        self.handle_root_propagation(num_trail_entries);
 
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();
 
-        self.log_root_propagation_to_proof(num_trail_entries);
+        self.handle_root_propagation(num_trail_entries);
 
         if self.state.is_infeasible() {
             self.prepare_for_conflict_resolution();

@@ -94,6 +94,12 @@ fn get_required_assumptions(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) -> Vec<Predicate> {
+    if context.assignments.get_decision_level() == 0 {
+        // If we are at the root, no assumptions are necessary to explain why the given predicate is
+        // true.
+        return vec![];
+    }
+
     if context.assignments.is_decision_predicate(&predicate) {
         return vec![predicate];
     }
