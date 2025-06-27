@@ -87,7 +87,6 @@ pub mod termination {
     //! the time budget is exceeded.
     pub use crate::engine::termination::combinator::*;
     pub use crate::engine::termination::indefinite::*;
-    pub use crate::engine::termination::os_signal::*;
     pub use crate::engine::termination::time_budget::*;
     pub use crate::engine::termination::TerminationCondition;
     #[cfg(doc)]

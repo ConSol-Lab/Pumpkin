@@ -7,7 +7,6 @@ use std::ops::DerefMut;
 
 pub(crate) mod combinator;
 pub(crate) mod indefinite;
-pub(crate) mod os_signal;
 pub(crate) mod time_budget;
 
 /// The central trait that defines a termination condition. A termination condition determines when

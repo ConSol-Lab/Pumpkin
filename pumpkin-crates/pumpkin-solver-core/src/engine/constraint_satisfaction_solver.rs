@@ -4,7 +4,6 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::time::Instant;
 
-use clap::ValueEnum;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -173,7 +172,7 @@ pub enum CoreExtractionResult {
 ///
 /// The manner in which conflict resolution is done greatly impacts the performance of the
 /// solver.
-#[derive(ValueEnum, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum ConflictResolver {
     NoLearning,
     #[default]

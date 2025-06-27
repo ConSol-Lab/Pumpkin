@@ -27,7 +27,6 @@ use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
-use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
@@ -37,6 +36,7 @@ use self::instance::FlatZincInstance;
 use self::instance::Output;
 use crate::flatzinc::error::FlatZincError;
 use crate::ProofType;
+use crate::os_signal_termination::OsSignal;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";

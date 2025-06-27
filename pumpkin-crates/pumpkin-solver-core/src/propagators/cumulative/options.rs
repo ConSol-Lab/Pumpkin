@@ -1,7 +1,3 @@
-use std::fmt::Display;
-
-use clap::ValueEnum;
-
 use super::CumulativeExplanationType;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -49,7 +45,7 @@ impl CumulativeOptions {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, ValueEnum)]
+#[derive(Debug, Default, Clone, Copy)]
 pub enum CumulativePropagationMethod {
     TimeTablePerPoint,
     TimeTablePerPointIncremental,
@@ -58,27 +54,4 @@ pub enum CumulativePropagationMethod {
     #[default]
     TimeTableOverIntervalIncremental,
     TimeTableOverIntervalIncrementalSynchronised,
-}
-
-impl Display for CumulativePropagationMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "time-table-per-point"),
-            CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                write!(f, "time-table-per-point-incremental")
-            }
-            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
-                write!(f, "time-table-per-point-incremental-synchronised")
-            }
-            CumulativePropagationMethod::TimeTableOverInterval => {
-                write!(f, "time-table-over-interval")
-            }
-            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                write!(f, "time-table-over-interval-incremental")
-            }
-            CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
-                write!(f, "time-table-over-interval-incremental-synchronised")
-            }
-        }
-    }
 }

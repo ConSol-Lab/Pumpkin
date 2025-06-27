@@ -1,6 +1,7 @@
 mod file_format;
 mod flatzinc;
 mod maxsat;
+mod os_signal_termination;
 mod parsers;
 mod result;
 
@@ -14,9 +15,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
-use convert_case::Case;
 use file_format::FileFormat;
-use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
@@ -26,25 +25,23 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::optimisation::OptimisationStrategy;
+use pumpkin_solver::convert_case::Case;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
+use pumpkin_solver::rand::rngs::SmallRng;
+use pumpkin_solver::rand::SeedableRng;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
-
-pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -347,7 +344,7 @@ struct Args {
     cumulative_incremental_backtracking: bool,
 
     /// Determine what type of optimisation strategy is used by the solver
-    #[arg(long = "optimisation-strategy", default_value_t)]
+    #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
 }
 
@@ -492,7 +489,7 @@ fn run() -> PumpkinResult<()> {
     };
 
     let restart_options = RestartOptions {
-        sequence_generator_type: args.restart_sequence_generator_type,
+        sequence_generator_type: args.restart_sequence_generator_type.into(),
         base_interval: args.restart_base_interval,
         min_num_conflicts_before_first_restart: args.restart_min_num_conflicts_before_first_restart,
         lbd_coef: args.restart_lbd_coef,
@@ -506,7 +503,7 @@ fn run() -> PumpkinResult<()> {
         activity_decay_factor: 0.99,
         limit_num_high_lbd_nogoods: args.learning_max_num_clauses,
         lbd_threshold: args.learning_lbd_threshold,
-        nogood_sorting_strategy: args.learning_sorting_strategy,
+        nogood_sorting_strategy: args.learning_sorting_strategy.into(),
         activity_bump_increment: 1.0,
     };
 
@@ -520,7 +517,7 @@ fn run() -> PumpkinResult<()> {
         },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
-        conflict_resolver: args.conflict_resolver,
+        conflict_resolver: args.conflict_resolver.into(),
         learning_options,
     };
 
@@ -547,9 +544,9 @@ fn run() -> PumpkinResult<()> {
                 all_solutions: args.all_solutions,
                 cumulative_options: CumulativeOptions::new(
                     args.cumulative_allow_holes,
-                    args.cumulative_explanation_type,
+                    args.cumulative_explanation_type.into(),
                     args.cumulative_generate_sequence,
-                    args.cumulative_propagation_method,
+                    args.cumulative_propagation_method.into(),
                     args.cumulative_incremental_backtracking,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
@@ -642,3 +639,70 @@ impl Display for ProofType {
         }
     }
 }
+
+macro_rules! wrap_with_value_enum {
+    ($value_enum:ident => $solver_enum:path { $($variants:ident),+ $(,)? }) => {
+        #[derive(Clone, Copy, Debug, clap::ValueEnum)]
+        enum $value_enum {
+            $($variants),+
+        }
+
+        impl From<$value_enum> for $solver_enum {
+            fn from(value: $value_enum) -> $solver_enum {
+                match value {
+                    $($value_enum::$variants => <$solver_enum>::$variants),+
+                }
+            }
+        }
+
+        impl From<$solver_enum> for $value_enum {
+            fn from(value: $solver_enum) -> $value_enum {
+                 match value {
+                    $(<$solver_enum>::$variants => $value_enum::$variants),+
+                }
+            }
+        }
+
+        impl Default for $value_enum {
+            fn default() -> Self {
+                <$solver_enum as Default>::default().into()
+            }
+        }
+    };
+}
+
+wrap_with_value_enum!(LearnedNogoodSortingStrategy => pumpkin_solver::options::LearnedNogoodSortingStrategy {
+    Activity,
+    Lbd,
+});
+
+wrap_with_value_enum!(SequenceGeneratorType => pumpkin_solver::options::SequenceGeneratorType {
+    Constant,
+    Geometric,
+    Luby,
+});
+
+wrap_with_value_enum!(ConflictResolver => pumpkin_solver::options::ConflictResolver {
+    NoLearning,
+    UIP,
+});
+
+wrap_with_value_enum!(CumulativeExplanationType => pumpkin_solver::options::CumulativeExplanationType {
+    Naive,
+    BigStep,
+    Pointwise,
+});
+
+wrap_with_value_enum!(CumulativePropagationMethod => pumpkin_solver::options::CumulativePropagationMethod {
+    TimeTablePerPoint,
+    TimeTablePerPointIncremental,
+    TimeTablePerPointIncrementalSynchronised,
+    TimeTableOverInterval,
+    TimeTableOverIntervalIncremental,
+    TimeTableOverIntervalIncrementalSynchronised,
+});
+
+wrap_with_value_enum!(OptimisationStrategy => pumpkin_solver::optimisation::OptimisationStrategy {
+    LinearSatUnsat,
+    LinearUnsatSat,
+});
