@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.0...pumpkin-solver-v0.2.1) (2025-06-27)
+
+
+### Features
+
+* Add assignment-like structure for predicate ids + Store PredicateId in nogood propagator ([#202](https://github.com/ConSol-Lab/Pumpkin/issues/202)) ([bcd171d](https://github.com/ConSol-Lab/Pumpkin/commit/bcd171de9e25e7e66c59034db80f7496e07c861d))
+* Enforce constraint ID and inference label are provided in propagators ([#179](https://github.com/ConSol-Lab/Pumpkin/issues/179)) ([74126a1](https://github.com/ConSol-Lab/Pumpkin/commit/74126a13adf08fdaca3f56bea4ee9c0d3098f5ce))
+* Expose a timeout flag in the Python API ([#195](https://github.com/ConSol-Lab/Pumpkin/issues/195)) ([7d4a74f](https://github.com/ConSol-Lab/Pumpkin/commit/7d4a74fe14b7f26e53d3dacd9729780574318ac8))
+* Implement the table and negative table constraints ([#194](https://github.com/ConSol-Lab/Pumpkin/issues/194)) ([49344d6](https://github.com/ConSol-Lab/Pumpkin/commit/49344d6c10d2489b8cabcc5e9abcbb241e1490ec))
+* Improving notification system for nogood propagator ([#190](https://github.com/ConSol-Lab/Pumpkin/issues/190)) ([b04ac58](https://github.com/ConSol-Lab/Pumpkin/commit/b04ac587089e26c49b8e0cd299145fad50600469))
+* Reduce size of Predicate ([#203](https://github.com/ConSol-Lab/Pumpkin/issues/203)) ([430253a](https://github.com/ConSol-Lab/Pumpkin/commit/430253af992f99caf7c3c33ce4c19ae84f0322b1))
+* Update the DRCP crate to make it easier to use ([#204](https://github.com/ConSol-Lab/Pumpkin/issues/204)) ([5cdc747](https://github.com/ConSol-Lab/Pumpkin/commit/5cdc747d8f241859dfea806297595f7feb12fa7e))
+
+
+### Bug Fixes
+
+* Disable recursive minimisation when logging the full proof ([#215](https://github.com/ConSol-Lab/Pumpkin/issues/215)) ([7a0a08e](https://github.com/ConSol-Lab/Pumpkin/commit/7a0a08e4080221682438adf478f105d1d291b9ae))
+* explain root assignments in recursive minimisation ([#173](https://github.com/ConSol-Lab/Pumpkin/issues/173)) ([c0eab65](https://github.com/ConSol-Lab/Pumpkin/commit/c0eab6504b412df48a76f0d317afce9e48762caa))
+* fixing issue with element lazy explanation by adding trail position to explanation context ([#191](https://github.com/ConSol-Lab/Pumpkin/issues/191)) ([60e2bea](https://github.com/ConSol-Lab/Pumpkin/commit/60e2bea7ba403990b147a0b3a27546fccd27ee73))
+* Log the initial bounds in the full proof as inferences ([#211](https://github.com/ConSol-Lab/Pumpkin/issues/211)) ([7624035](https://github.com/ConSol-Lab/Pumpkin/commit/7624035b39c3b5a10b99ad3f3ae7a3a37afbdb43))
+* Properly explain root-level explanations that are not considered during conflict analysis ([#176](https://github.com/ConSol-Lab/Pumpkin/issues/176)) ([d237293](https://github.com/ConSol-Lab/Pumpkin/commit/d237293fddb8970df8ad0e5b89eaf98b19d4013b))
+* Update outdated documentation from before the v0.2 release ([#177](https://github.com/ConSol-Lab/Pumpkin/issues/177)) ([8e4009f](https://github.com/ConSol-Lab/Pumpkin/commit/8e4009fe45838f244e130ff4f6e4d3aa1f75ea5e))
+* Use variable inline in format string ([#180](https://github.com/ConSol-Lab/Pumpkin/issues/180)) ([35d5f47](https://github.com/ConSol-Lab/Pumpkin/commit/35d5f47698d11246a21f9d112459bfcdb031a090))
+
 ## [0.2.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.4...pumpkin-solver-v0.2.0) (2025-04-11)
 
 
