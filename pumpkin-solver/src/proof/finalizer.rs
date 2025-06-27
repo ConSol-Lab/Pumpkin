@@ -69,6 +69,13 @@ pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) {
+    assert_eq!(
+        context
+            .assignments
+            .get_decision_level_for_predicate(&predicate),
+        Some(0)
+    );
+
     if !context.proof_log.is_logging_inferences() {
         return;
     }
