@@ -54,11 +54,6 @@ where
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
 
-        // If we are maximising then when we simply scale the variable by -1, however, this will
-        // lead to the printed objective value in the statistics to be multiplied by -1; this
-        // objective_multiplier ensures that the objective is correctly logged.
-        let objective_multiplier = if is_maximising { -1 } else { 1 };
-
         // First we will solve the satisfaction problem without constraining the objective.
         let mut best_solution: Solution = match solver.satisfy(brancher, termination) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
@@ -105,9 +100,9 @@ where
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
                     let dual_bound = if is_maximising {
-                        predicate![objective <= best_objective_value * objective_multiplier]
+                        predicate![objective <= best_objective_value]
                     } else {
-                        predicate![objective >= best_objective_value * objective_multiplier]
+                        predicate![objective >= best_objective_value]
                     };
                     solver.conclude_proof_optimal(dual_bound);
                     return OptimisationResult::Optimal(solution);
