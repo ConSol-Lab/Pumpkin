@@ -368,7 +368,6 @@ impl Solver {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
-                self.satisfaction_solver.restore_state_at_root(brancher);
                 brancher.on_solution(solution.as_reference());
                 SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(self, brancher))
             }
