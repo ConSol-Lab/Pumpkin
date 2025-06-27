@@ -4,6 +4,7 @@ use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 
@@ -12,42 +13,53 @@ use crate::predicates::Predicate;
 /// See [`pumpkin_solver::engine::propagation::Propagator`] for more information.
 pub(crate) struct ExplanationContext<'a> {
     assignments: &'a Assignments,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
     current_nogood: CurrentNogood<'a>,
     trail_position: usize,
 }
 
-#[cfg(test)]
-impl<'a> From<&'a Assignments> for ExplanationContext<'a> {
-    fn from(value: &'a Assignments) -> Self {
+impl<'a> ExplanationContext<'a> {
+    #[cfg(test)]
+    pub(crate) fn test_new(
+        value: &'a Assignments,
+        notification_engine: &'a mut NotificationEngine,
+    ) -> Self {
         ExplanationContext {
             assignments: value,
+            notification_engine,
             current_nogood: CurrentNogood::empty(),
             trail_position: 0,
         }
     }
-}
 
-impl<'a> ExplanationContext<'a> {
     pub(crate) fn new(
         assignments: &'a Assignments,
         current_nogood: CurrentNogood<'a>,
         trail_position: usize,
+        notification_engine: &'a mut NotificationEngine,
     ) -> Self {
         ExplanationContext {
             assignments,
             current_nogood,
             trail_position,
+            notification_engine,
         }
+    }
+
+    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
     }
 
     pub(crate) fn without_working_nogood(
         assignments: &'a Assignments,
         trail_position: usize,
+        notification_engine: &'a mut NotificationEngine,
     ) -> Self {
         ExplanationContext {
             assignments,
             current_nogood: CurrentNogood::empty(),
             trail_position,
+            notification_engine,
         }
     }
 
@@ -110,7 +122,7 @@ impl<'a> CurrentNogood<'a> {
     {
         self.heap
             .keys()
-            .map(|id| self.ids.get_predicate(id).unwrap())
+            .map(|id| self.ids.get_predicate(id))
             .chain(self.visited.iter().copied())
     }
 }

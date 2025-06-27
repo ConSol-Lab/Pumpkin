@@ -129,6 +129,7 @@ impl RecursiveMinimiser {
             context.proof_log,
             context.unit_nogood_inference_codes,
             &mut reason,
+            context.notification_engine,
             context.variable_names,
         );
 
@@ -150,6 +151,7 @@ impl RecursiveMinimiser {
                         unit_nogood_inference_codes: context.unit_nogood_inference_codes,
                         assignments: context.assignments,
                         reason_store: context.reason_store,
+                        notification_engine: context.notification_engine,
                         variable_names: context.variable_names,
                     },
                     antecedent_predicate,
