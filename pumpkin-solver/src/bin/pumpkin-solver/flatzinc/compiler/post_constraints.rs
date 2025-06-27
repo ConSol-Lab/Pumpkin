@@ -19,14 +19,12 @@ use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
+    _: &FlatZincAst,
     context: &mut CompilationContext,
     options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
-    for constraint_item in &ast.constraint_decls {
-        let constraint_tag = context.solver.new_constraint_tag();
-
-        let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
+    for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
+        let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
             "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,

@@ -25,10 +25,10 @@
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
 //! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(solution) = result {
+//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     variables.into_iter().for_each(|variable| {
-//!         solver.get_literal_value(variable);
+//!         satisfiable.solution().get_literal_value(variable);
 //!     });
 //! } else {
 //!     panic!("Solving should have returned satsifiable")
@@ -52,10 +52,10 @@
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
 //! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(solution) = result {
+//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     literals.into_iter().for_each(|literal| {
-//!         solution.get_literal_value(literal);
+//!         satisfiable.solution().get_literal_value(literal);
 //!     })
 //! } else {
 //!     panic!("Solving should have returned satsifiable")

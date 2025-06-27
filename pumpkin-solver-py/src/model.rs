@@ -160,18 +160,22 @@ impl Model {
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
 
-        match solver.satisfy(&mut brancher, &mut termination) {
-            pumpkin_solver::results::SatisfactionResult::Satisfiable(solution) => {
+        let result = match solver.satisfy(&mut brancher, &mut termination) {
+            pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution {
-                    solver_solution: solution,
+                    solver_solution: satisfiable.solution().into(),
                     variable_map,
                 })
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable => {
+            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown => SatisfactionResult::Unknown(),
-        }
+            pumpkin_solver::results::SatisfactionResult::Unknown(_) => {
+                SatisfactionResult::Unknown()
+            }
+        };
+
+        result
     }
 
     #[pyo3(signature = (assumptions,timeout=None))]
@@ -195,16 +199,10 @@ impl Model {
             .map(|pred| pred.to_solver_predicate(&variable_map))
             .collect::<Vec<_>>();
 
-        // Maarten: I do not understand why it is necessary, but we have to create a local variable
-        // here     that is the result of the `match` statement. Otherwise the compiler
-        // complains that     `solver` and `brancher` potentially do not live long enough.
-        //
-        //     Ideally this would not be necessary, but perhaps it is unavoidable with the setup we
-        //     currently have. Either way, we take the suggestion by the compiler.
         let result = match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(solution) => {
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
-                    solver_solution: solution,
+                    solver_solution: satisfiable.solution().into(),
                     variable_map,
                 })
             }
@@ -230,10 +228,10 @@ impl Model {
 
                 SatisfactionUnderAssumptionsResult::UnsatisfiableUnderAssumptions(core)
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable => {
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
                 SatisfactionUnderAssumptionsResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown => {
+            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
         };

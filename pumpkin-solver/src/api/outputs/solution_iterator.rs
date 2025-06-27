@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
+use super::SolutionReference;
 use crate::branching::Brancher;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -56,22 +57,43 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             }
         }
 
-        match self.solver.satisfy(self.brancher, self.termination) {
-            Satisfiable(solution) => {
+        let result = match self.solver.satisfy(self.brancher, self.termination) {
+            Satisfiable(satisfiable) => {
+                let solution: Solution = satisfiable.solution().into();
                 self.has_solution = true;
-                self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(solution, self.solver, self.brancher)
+                self.next_blocking_clause = Some(get_blocking_clause(solution.as_reference()));
+                IterationResult::Solution(solution)
             }
-            Unsatisfiable => {
+            Unsatisfiable(_) => {
                 if self.has_solution {
-                    IteratedSolution::Finished
+                    IterationResult::Finished
                 } else {
-                    IteratedSolution::Unsatisfiable
+                    IterationResult::Unsatisfiable
                 }
             }
-            Unknown => IteratedSolution::Unknown,
+            Unknown(_) => IterationResult::Unknown,
+        };
+
+        match result {
+            IterationResult::Solution(solution) => {
+                IteratedSolution::Solution(solution, self.solver, self.brancher)
+            }
+            IterationResult::Finished => IteratedSolution::Finished,
+            IterationResult::Unsatisfiable => IteratedSolution::Unsatisfiable,
+            IterationResult::Unknown => IteratedSolution::Unknown,
         }
     }
+}
+
+/// The different results we can get from the next solution call. We need this type because
+/// [`IteratedSolution`] takes a reference to [`Solver`], which, at the time where
+/// [`IterationResult::Solution`] is created, cannot be given as there is an exclusive borrow of the
+/// solver alive as well.
+enum IterationResult {
+    Solution(Solution),
+    Finished,
+    Unsatisfiable,
+    Unknown,
 }
 
 /// Creates a clause which prevents the current solution from occurring again by going over the
@@ -79,7 +101,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 /// being assigned.
 ///
 /// This method is used when attempting to find multiple solutions.
-fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
+fn get_blocking_clause(solution: SolutionReference) -> Vec<Predicate> {
     solution
         .get_domains()
         .map(|variable| predicate!(variable != solution.get_integer_value(variable)))

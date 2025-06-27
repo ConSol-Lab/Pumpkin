@@ -34,7 +34,7 @@ fn proof_with_reified_literals() {
 
     let mut brancher = solver.default_brancher();
     let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable));
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_)));
 }
 
 #[test]
@@ -61,5 +61,5 @@ fn proof_with_equality_unit_nogood_step() {
 
     let mut brancher = solver.default_brancher();
     let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable));
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_)));
 }

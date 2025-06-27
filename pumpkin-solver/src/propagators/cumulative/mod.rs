@@ -72,7 +72,9 @@
 //! let result = solver.satisfy(&mut brancher, &mut termination);
 //!
 //! // We check whether the result was feasible
-//! if let SatisfactionResult::Satisfiable(solution) = result {
+//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
+//!     let solution = satisfiable.solution();
+//!
 //!     let horizon = durations.iter().sum::<i32>();
 //!     let start_times = [start_0, start_1, start_2];
 //!

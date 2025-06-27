@@ -93,7 +93,9 @@
 //! // Then we find a solution to the problem
 //! let result = solver.satisfy(&mut brancher, &mut termination);
 //!
-//! if let SatisfactionResult::Satisfiable(solution) = result {
+//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
+//!     let solution = satisfiable.solution();
+//!
 //!     let value_x = solution.get_integer_value(x);
 //!     let value_y = solution.get_integer_value(y);
 //!     let value_z = solution.get_integer_value(z);

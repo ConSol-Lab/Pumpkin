@@ -147,7 +147,9 @@ fn main() {
 
     let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
-        SatisfactionResult::Satisfiable(solution) => {
+        SatisfactionResult::Satisfiable(satisfiable) => {
+            let solution = satisfiable.solution();
+
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 
             for row in matrix.iter() {
@@ -167,13 +169,13 @@ fn main() {
 
             println!("{row_separator}");
         }
-        SatisfactionResult::Unsatisfiable => {
+        SatisfactionResult::Unsatisfiable(_) => {
             println!("UNSATISFIABLE")
         }
-        SatisfactionResult::Unknown => {
+        SatisfactionResult::Unknown(_) => {
             println!("UNKNOWN")
         }
-    }
+    };
 }
 
 fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {

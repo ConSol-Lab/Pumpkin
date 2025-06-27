@@ -299,10 +299,7 @@ impl Assignments {
         self.domains[domain_id].initial_holes.clone()
     }
 
-    pub(crate) fn get_assigned_value<Var: IntegerVariable + 'static>(
-        &self,
-        var: &Var,
-    ) -> Option<i32> {
+    pub(crate) fn get_assigned_value<Var: IntegerVariable>(&self, var: &Var) -> Option<i32> {
         self.is_domain_assigned(var).then(|| var.lower_bound(self))
     }
 
