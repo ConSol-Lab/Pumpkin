@@ -168,7 +168,10 @@ fn value<'src, Int>() -> impl Parser<'src, &'src str, Int, extra::Err<Rich<'src,
 where
     Int: FromStr,
 {
-    int(10)
+    just("-")
+        .or_not()
+        .then(int(10))
+        .to_slice()
         .try_map(|code, span| {
             Int::from_str(code).map_err(|_| Rich::custom(span, "failed to parse domain value"))
         })
