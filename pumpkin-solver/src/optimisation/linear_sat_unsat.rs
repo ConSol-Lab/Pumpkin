@@ -39,6 +39,7 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
 impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
+    Var::AffineView: std::fmt::Debug,
     B: Brancher,
     Callback: SolutionCallback<B>,
 {
@@ -48,7 +49,6 @@ where
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
-        let is_maximising = matches!(self.direction, OptimisationDirection::Maximise);
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
@@ -69,17 +69,12 @@ where
             );
 
             let best_objective_value = best_solution.get_integer_value(objective.clone());
-            let objective_bound_predicate = if is_maximising {
-                predicate![objective >= best_objective_value + 1]
-            } else {
-                predicate![objective <= best_objective_value - 1]
-            };
 
             let conclusion = {
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
                     termination,
-                    &[objective_bound_predicate],
+                    &[predicate![objective <= best_objective_value - 1]],
                 );
 
                 match solve_result {
@@ -99,12 +94,7 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    let dual_bound = if is_maximising {
-                        predicate![objective <= best_objective_value]
-                    } else {
-                        predicate![objective >= best_objective_value]
-                    };
-                    solver.conclude_proof_optimal(dual_bound);
+                    solver.conclude_proof_optimal(predicate![objective >= best_objective_value]);
                     return OptimisationResult::Optimal(solution);
                 }
                 Some(result) => return result,
