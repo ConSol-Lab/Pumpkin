@@ -38,6 +38,7 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
 impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
+    Var::AffineView: std::fmt::Debug,
     B: Brancher,
     Callback: SolutionCallback<B>,
 {

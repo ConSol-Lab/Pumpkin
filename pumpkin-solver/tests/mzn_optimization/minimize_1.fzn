@@ -1,9 +1,0 @@
-var 5..10: x :: output_var;
-var -3..15: y :: output_var;
-var 7..25: z :: output_var;
-var -10..30: objective :: output_var;
-
-constraint int_lin_eq([1, 1, 1], [x, y, z], 17);
-constraint array_int_maximum(objective, [x, y, z]);
-
-solve minimize objective;
