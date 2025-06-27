@@ -53,6 +53,7 @@ where
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
+
         // If we are maximising then when we simply scale the variable by -1, however, this will
         // lead to the printed objective value in the statistics to be multiplied by -1; this
         // objective_multiplier ensures that the objective is correctly logged.
@@ -74,9 +75,9 @@ where
 
             let best_objective_value = best_solution.get_integer_value(objective.clone());
             let objective_bound_predicate = if is_maximising {
-                predicate![objective >= best_objective_value * objective_multiplier + 1]
+                predicate![objective >= best_objective_value + 1]
             } else {
-                predicate![objective <= best_objective_value * objective_multiplier - 1]
+                predicate![objective <= best_objective_value - 1]
             };
 
             let conclusion = {
