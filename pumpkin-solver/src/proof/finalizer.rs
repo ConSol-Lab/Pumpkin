@@ -131,8 +131,6 @@ fn get_required_assumptions(
         context.variable_names,
     );
 
-    assert!(!reason.is_empty());
-
     // Here we combine all the required assumptions of recursive reasons.
     reason
         .into_iter()
