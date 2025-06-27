@@ -12,7 +12,11 @@ use crate::termination::TerminationCondition;
 /// The result of a call to [`Solver::satisfy`].
 #[derive(Debug)]
 pub enum SatisfactionResult<'solver, 'brancher, B: Brancher> {
-    /// Indicates that a solution was found and provides the corresponding [`Solution`].
+    /// Indicates that a solution was found.
+    ///
+    /// The solution can be obtained with [`Satisfiable::solution`], as well as the solver and
+    /// brancher. The solver and brancher may be of interest to e.g. log statistics. When the
+    /// result is dropped, the solver will be reset to the root, ready for further use.
     Satisfiable(Satisfiable<'solver, 'brancher, B>),
     /// Indicates that there is no solution to the satisfaction problem.
     Unsatisfiable(&'solver Solver),
@@ -24,8 +28,7 @@ pub enum SatisfactionResult<'solver, 'brancher, B: Brancher> {
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
 pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
-    /// Indicates that a solution was found and provides the corresponding [`Solution`] via
-    /// [`Satisfiable::solution`].
+    /// See documentation on [`SatisfactionResult::Satisfiable`].
     Satisfiable(Satisfiable<'solver, 'brancher, B>),
     /// Indicates that there is no solution to the satisfaction problem due to the provided
     /// assumptions. It returns an [`UnsatisfiableUnderAssumptions`] which can be used to retrieve
