@@ -93,7 +93,7 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    solver.conclude_proof_optimal(predicate![objective >= best_objective_value]);
+                    solver.conclude_proof_dual_bound(predicate![objective >= best_objective_value]);
                     return OptimisationResult::Optimal(solution);
                 }
                 Some(result) => return result,

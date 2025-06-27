@@ -512,7 +512,7 @@ impl Solver {
     /// Conclude the proof with the optimality claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_optimal(&mut self, bound: Predicate) {
+    pub fn conclude_proof_dual_bound(&mut self, bound: Predicate) {
         let _ = self.satisfaction_solver.conclude_proof_optimal(bound);
     }
 }

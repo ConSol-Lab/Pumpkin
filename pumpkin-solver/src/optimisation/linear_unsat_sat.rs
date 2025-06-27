@@ -66,7 +66,14 @@ where
         // Then, we iterate from the lower bound of the objective until (excluding) the primal
         // objective, to find a better solution. The first solution we encounter must be the
         // optimal solution.
-        for objective_lower_bound in initial_objective_lower_bound..primal_objective {
+        //
+        // We purposefully start at one less than the initial lower bound of the objective. Even
+        // though this is a trivial case, this first iteration will output the correct steps to the
+        // proof that allow us to conclude a lower bound even if we are never able to conclude
+        // unsat for `objective <= initial_objective_lower_bound`. If we did not have this, then
+        // the proof would not contain the initial lower bound as an inference, and the dual bound
+        // claim can therefore not be checked.
+        for objective_lower_bound in (initial_objective_lower_bound - 1)..primal_objective {
             let conclusion = {
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
@@ -97,15 +104,21 @@ where
                         brancher,
                     );
 
-                    solver.conclude_proof_optimal(predicate![objective >= objective_lower_bound]);
+                    solver
+                        .conclude_proof_dual_bound(predicate![objective >= objective_lower_bound]);
                     return OptimisationResult::Optimal(solution);
+                }
+                Some(OptimisationResult::Unknown) => {
+                    solver.conclude_proof_dual_bound(predicate![
+                        objective >= objective_lower_bound - 1
+                    ]);
                 }
                 Some(result) => return result,
                 None => {}
             }
         }
 
-        solver.conclude_proof_optimal(predicate![objective >= primal_objective]);
+        solver.conclude_proof_dual_bound(predicate![objective >= primal_objective]);
         OptimisationResult::Optimal(primal_solution)
     }
 }
