@@ -8,7 +8,6 @@ use crate::results::ProblemSolution;
 use crate::results::SatisfactionResult;
 use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
-use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
@@ -108,9 +107,5 @@ where
 
         solver.conclude_proof_optimal(predicate![objective >= primal_objective]);
         OptimisationResult::Optimal(primal_solution)
-    }
-
-    fn on_solution_callback(&self, _: &Solver, _: SolutionReference, _: &B) {
-        unreachable!()
     }
 }

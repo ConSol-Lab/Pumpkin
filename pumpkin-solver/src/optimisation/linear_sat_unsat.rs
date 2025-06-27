@@ -8,7 +8,6 @@ use crate::results::ProblemSolution;
 use crate::results::SatisfactionResult;
 use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
-use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
@@ -101,9 +100,5 @@ where
                 None => {}
             }
         }
-    }
-
-    fn on_solution_callback(&self, _: &Solver, _: SolutionReference, _: &B) {
-        unreachable!()
     }
 }
