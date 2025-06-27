@@ -1,12 +1,12 @@
-use log::info;
-
 use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
-use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::results::OptimisationResult;
+use crate::results::ProblemSolution;
+use crate::results::SatisfactionResult;
+use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
 use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
@@ -48,106 +48,69 @@ where
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
-        let is_maximising = matches!(self.direction, OptimisationDirection::Maximise);
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
-        // If we are maximising then when we simply scale the variable by -1, however, this will
-        // lead to the printed objective value in the statistics to be multiplied by -1; this
-        // objective_multiplier ensures that the objective is correctly logged.
-        let objective_multiplier = if is_maximising { -1 } else { 1 };
 
-        // First we do a feasibility check
-        let feasibility_check = solver.satisfaction_solver.solve(termination, brancher);
-        match feasibility_check {
-            CSPSolverExecutionFlag::Feasible => {}
-            CSPSolverExecutionFlag::Infeasible => {
-                // Reset the state whenever we return a result
-                solver.satisfaction_solver.restore_state_at_root(brancher);
-                let _ = solver.satisfaction_solver.conclude_proof_unsat();
-                return OptimisationResult::Unsatisfiable;
-            }
-            CSPSolverExecutionFlag::Timeout => {
-                // Reset the state whenever we return a result
-                solver.satisfaction_solver.restore_state_at_root(brancher);
-                return OptimisationResult::Unknown;
-            }
-        }
-        let mut best_objective_value = Default::default();
-        let mut best_solution = Solution::default();
+        let initial_objective_lower_bound = solver.lower_bound(&objective);
 
-        self.update_best_solution_and_process(
-            objective_multiplier,
-            &objective,
-            &mut best_objective_value,
-            &mut best_solution,
-            brancher,
-            solver,
-        );
-        solver.satisfaction_solver.restore_state_at_root(brancher);
+        // First we will solve the satisfaction problem without constraining the objective.
+        let primal_solution: Solution = match solver.satisfy(brancher, termination) {
+            SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
+            SatisfactionResult::Unsatisfiable(_) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_) => return OptimisationResult::Unknown,
+        };
 
-        loop {
-            let assumption = predicate!(objective <= solver.lower_bound(&objective));
+        let primal_objective = primal_solution.get_integer_value(objective.clone());
 
-            info!(
-                "Lower-Bounding Search - Attempting to find solution with assumption {assumption}"
-            );
+        // Then, we iterate from the lower bound of the objective until (excluding) the primal
+        // objective, to find a better solution. The first solution we encounter must be the
+        // optimal solution.
+        for objective_lower_bound in initial_objective_lower_bound..primal_objective {
+            let conclusion = {
+                let solve_result = solver.satisfy_under_assumptions(
+                    brancher,
+                    termination,
+                    &[predicate![objective <= objective_lower_bound]],
+                );
 
-            // Solve under the assumption that the objective variable is lower than `lower-bound`
-            let solve_result = solver.satisfaction_solver.solve_under_assumptions(
-                &[assumption],
-                termination,
-                brancher,
-            );
-            match solve_result {
-                CSPSolverExecutionFlag::Feasible => {
-                    self.update_best_solution_and_process(
-                        objective_multiplier,
-                        &objective,
-                        &mut best_objective_value,
-                        &mut best_solution,
-                        brancher,
+                match solve_result {
+                    SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
+                        Some(OptimisationResult::Optimal(satisfiable.solution().into()))
+                    }
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
+                        _,
+                    ) => {
+                        None
+                    }
+                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) =>
+                        unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Unknown),
+                }
+            };
+
+            match conclusion {
+                Some(OptimisationResult::Optimal(solution)) => {
+                    self.solution_callback.on_solution_callback(
                         solver,
+                        primal_solution.as_reference(),
+                        brancher,
                     );
 
-                    // Reset the state whenever we return a result
-                    solver.satisfaction_solver.restore_state_at_root(brancher);
-
-                    // We create a predicate specifying the best-found solution for the proof
-                    // logging
-                    let objective_bound_predicate = if is_maximising {
-                        predicate![objective >= best_objective_value as i32 * objective_multiplier]
-                    } else {
-                        predicate![objective <= best_objective_value as i32 * objective_multiplier]
-                    };
-                    let _ = solver
-                        .satisfaction_solver
-                        .conclude_proof_optimal(objective_bound_predicate);
-
-                    return OptimisationResult::Optimal(best_solution);
+                    solver.conclude_proof_optimal(predicate![objective >= objective_lower_bound]);
+                    return OptimisationResult::Optimal(solution);
                 }
-                CSPSolverExecutionFlag::Infeasible => {
-                    solver.satisfaction_solver.restore_state_at_root(brancher);
-                    // We add the (hard) constraint that the negated assumption should hold (i.e.,
-                    // the solution should be at least as large as the found solution)
-
-                    // TODO: For now this breaks the proof, but we want this to compile
-                    // and run first.
-                    let constraint_tag = solver.new_constraint_tag();
-                    let _ = solver.add_clause([!assumption], constraint_tag);
-                }
-                CSPSolverExecutionFlag::Timeout => {
-                    // Reset the state whenever we return a result
-                    solver.satisfaction_solver.restore_state_at_root(brancher);
-                    return OptimisationResult::Satisfiable(best_solution);
-                }
+                Some(result) => return result,
+                None => {}
             }
         }
+
+        solver.conclude_proof_optimal(predicate![objective >= primal_objective]);
+        OptimisationResult::Optimal(primal_solution)
     }
 
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
-        self.solution_callback
-            .on_solution_callback(solver, solution, brancher)
+    fn on_solution_callback(&self, _: &Solver, _: SolutionReference, _: &B) {
+        unreachable!()
     }
 }
