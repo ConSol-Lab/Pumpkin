@@ -275,22 +275,14 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn synchronise(&mut self, assignments: &Assignments) {
         // Note that while iterating with 'retain', the function also
         // re-adds the predicates to the heap that are no longer dormant.
-        self.dormant_predicates.retain(|predicate| {
-            // Only unassigned predicates are readded.
-            if assignments.evaluate_predicate(*predicate).is_none() {
-                let id = self.predicate_id_info.get_id(*predicate);
+        self.dormant_predicates.drain(..).for_each(|predicate| {
+            let id = self.predicate_id_info.get_id(predicate);
 
-                while self.heap.len() <= id.index() {
-                    self.heap.grow(id, DEFAULT_VSIDS_VALUE);
-                }
+            while self.heap.len() <= id.index() {
+                self.heap.grow(id, DEFAULT_VSIDS_VALUE);
+            }
 
-                self.heap.restore_key(id);
-                false
-            }
-            // Otherwise the predicate has a truth value, so it can be kept in the dormant vector.
-            else {
-                true
-            }
+            self.heap.restore_key(id);
         });
         self.backup_brancher.synchronise(assignments);
     }
