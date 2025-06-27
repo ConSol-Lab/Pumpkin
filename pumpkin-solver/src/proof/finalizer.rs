@@ -32,23 +32,27 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
-    if !context.proof_log.is_logging_inferences() {
-        return;
-    }
+    let final_nogood = context
+        .conflict
+        .into_iter()
+        .filter(|&predicate| {
+            explain_root_assignment_impl(
+                &mut RootExplanationContext {
+                    propagators: context.propagators,
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    assignments: context.assignments,
+                    reason_store: context.reason_store,
+                    variable_names: context.variable_names,
+                },
+                predicate,
+            )
+        })
+        .collect::<Vec<_>>();
 
-    for predicate in context.conflict {
-        explain_root_assignment(
-            &mut RootExplanationContext {
-                propagators: context.propagators,
-                proof_log: context.proof_log,
-                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                assignments: context.assignments,
-                reason_store: context.reason_store,
-                variable_names: context.variable_names,
-            },
-            predicate,
-        );
-    }
+    let _ = context
+        .proof_log
+        .log_deduction(final_nogood, context.variable_names);
 }
 
 pub(crate) struct RootExplanationContext<'a> {
@@ -65,15 +69,26 @@ pub(crate) fn explain_root_assignment(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
 ) {
-    assert_eq!(
-        context
-            .assignments
-            .get_decision_level_for_predicate(&predicate),
-        Some(0)
-    );
-
     if !context.proof_log.is_logging_inferences() {
         return;
+    }
+
+    let _ = explain_root_assignment_impl(context, predicate);
+}
+
+/// Explain a predicate being true, and assume it is true because of root-level assignments or it
+/// is a decision (likely an assumption). Returns true if it is a decision, and false if it is a
+/// propagation.
+///
+/// This does the explaining at the root. When finalizing the proof, we need to always explain at
+/// the root, even if we are not logging inferences. Therefore this function is separate from
+/// [`explain_root_assignment`].
+fn explain_root_assignment_impl(
+    context: &mut RootExplanationContext<'_>,
+    predicate: Predicate,
+) -> bool {
+    if context.assignments.is_decision_predicate(&predicate) {
+        return true;
     }
 
     // If the predicate is a root-level assignment, add the appropriate inference to the proof.
@@ -81,7 +96,7 @@ pub(crate) fn explain_root_assignment(
         let _ = context
             .proof_log
             .log_domain_inference(predicate, context.variable_names);
-        return;
+        return false;
     }
 
     // If the predicate is a unit-nogood, we simply add that nogood step as a propagation.
@@ -92,7 +107,7 @@ pub(crate) fn explain_root_assignment(
             Some(predicate),
             context.variable_names,
         );
-        return;
+        return false;
     }
 
     // There must be some combination of other factors.
@@ -112,6 +127,8 @@ pub(crate) fn explain_root_assignment(
     assert!(!reason.is_empty());
 
     for p in reason {
-        explain_root_assignment(context, p);
+        let _ = explain_root_assignment_impl(context, p);
     }
+
+    false
 }

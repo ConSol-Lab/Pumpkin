@@ -265,11 +265,6 @@ impl ConstraintSatisfactionSolver {
         };
 
         finalize_proof(context);
-
-        let _ = self
-            .internal_parameters
-            .proof_log
-            .log_deduction([], &self.variable_names);
     }
 }
 
@@ -663,19 +658,28 @@ impl ConstraintSatisfactionSolver {
 
                 let branching_result = self.make_next_decision(brancher);
 
+                match branching_result {
+                    Err(CSPSolverExecutionFlag::Infeasible) => {
+                        // Can happen when the branching decision was an assumption
+                        // that is inconsistent with the current assignment. We do not
+                        // have to declare a new state, as it will be done inside the
+                        // `make_next_decision` function.
+                        pumpkin_assert_simple!(self.state.is_infeasible_under_assumptions());
+
+                        self.complete_proof();
+                        return CSPSolverExecutionFlag::Infeasible;
+                    }
+
+                    Err(flag) => return flag,
+                    Ok(()) => {}
+                }
+
                 if let Err(flag) = branching_result {
                     return flag;
                 }
             } else {
                 if self.get_decision_level() == 0 {
-                    if self.assumptions.is_empty() {
-                        // Only complete the proof when _not_ solving under assumptions. It is
-                        // unclear what a proof would look like with assumptions, as there is extra
-                        // state to consider. It also means that the learned clause could be
-                        // non-empty, messing with all kinds of asserts.
-                        self.complete_proof();
-                    }
-
+                    self.complete_proof();
                     self.state.declare_infeasible();
 
                     return CSPSolverExecutionFlag::Infeasible;
