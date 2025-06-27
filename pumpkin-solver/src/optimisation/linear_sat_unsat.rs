@@ -36,18 +36,6 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
     }
 }
 
-impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
-    fn on_solution<B>(&self, solver: &Solver, solution: SolutionReference, brancher: &mut B)
-    where
-        Callback: SolutionCallback<B>,
-        B: Brancher,
-    {
-        brancher.on_solution(solution);
-        self.solution_callback
-            .on_solution_callback(solver, solution, brancher)
-    }
-}
-
 impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
@@ -78,7 +66,11 @@ where
         };
 
         loop {
-            self.on_solution(solver, best_solution.as_reference(), brancher);
+            self.solution_callback.on_solution_callback(
+                solver,
+                best_solution.as_reference(),
+                brancher,
+            );
 
             let best_objective_value = best_solution.get_integer_value(objective.clone());
             let objective_bound_predicate = if is_maximising {
