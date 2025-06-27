@@ -6,7 +6,6 @@ use std::rc::Rc;
 
 use big_step::create_big_step_predicate_propagating_task_lower_bound_propagation;
 use big_step::create_big_step_predicate_propagating_task_upper_bound_propagation;
-use clap::ValueEnum;
 use naive::create_naive_predicate_propagating_task_lower_bound_propagation;
 use naive::create_naive_predicate_propagating_task_upper_bound_propagation;
 use pointwise::create_pointwise_predicate_propagating_task_lower_bound_propagation;
@@ -30,7 +29,7 @@ use crate::variables::IntegerVariable;
 /// # Bibliography
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum CumulativeExplanationType {
     /// The naive explanation approach simply uses the current bounds of the profile and the
     /// propagated task in the explanation.

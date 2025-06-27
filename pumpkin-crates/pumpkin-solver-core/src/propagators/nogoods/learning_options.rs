@@ -1,5 +1,3 @@
-use clap::ValueEnum;
-
 /// Options which determine how the learned clauses are handled .
 ///
 /// These options influence when the learned clause database removed clauses.
@@ -35,7 +33,7 @@ impl Default for LearningOptions {
 }
 
 /// The sorting strategy which is used when considering removal from the clause database.
-#[derive(ValueEnum, Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LearnedNogoodSortingStrategy {
     /// Sorts based on the activity, the activity is bumped when a literal is encountered during
     /// conflict analysis.
@@ -44,13 +42,4 @@ pub enum LearnedNogoodSortingStrategy {
     /// Sorts based on the literal block distance (LBD) which is an indication of how "good" a
     /// learned clause is.
     Lbd,
-}
-
-impl std::fmt::Display for LearnedNogoodSortingStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            LearnedNogoodSortingStrategy::Lbd => write!(f, "lbd"),
-            LearnedNogoodSortingStrategy::Activity => write!(f, "activity"),
-        }
-    }
 }
