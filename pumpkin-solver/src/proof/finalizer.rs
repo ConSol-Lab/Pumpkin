@@ -6,6 +6,7 @@ use super::InferenceCode;
 use super::ProofLog;
 use crate::basic_types::HashMap;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::reason::ReasonStore;
@@ -21,6 +22,7 @@ pub(crate) struct FinalizingContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) assignments: &'a Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
     pub(crate) variable_names: &'a VariableNames,
 }
 
@@ -43,6 +45,7 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
                     unit_nogood_inference_codes: context.unit_nogood_inference_codes,
                     assignments: context.assignments,
                     reason_store: context.reason_store,
+                    notification_engine: context.notification_engine,
                     variable_names: context.variable_names,
                 },
                 predicate,
@@ -61,6 +64,7 @@ pub(crate) struct RootExplanationContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) assignments: &'a Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) notification_engine: &'a mut NotificationEngine,
     pub(crate) variable_names: &'a VariableNames,
 }
 
@@ -128,6 +132,7 @@ fn get_required_assumptions(
         context.proof_log,
         context.unit_nogood_inference_codes,
         &mut reason,
+        context.notification_engine,
         context.variable_names,
     );
 
