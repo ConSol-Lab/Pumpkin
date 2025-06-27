@@ -1,8 +1,6 @@
-use clap::ValueEnum;
-
 /// Specifies the type of sequence which is used to generate conflict limits before a restart
 /// occurs.
-#[derive(Default, Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug)]
 pub enum SequenceGeneratorType {
     /// Indicates that the restart strategy should restart every `x` conflicts.
     #[default]
@@ -26,14 +24,4 @@ pub enum SequenceGeneratorType {
     /// \[1\] M. Luby, A. Sinclair, and D. Zuckerman, ‘Optimal speedup of Las Vegas algorithms’,
     /// Information Processing Letters, vol. 47, no. 4, pp. 173–180, 1993.
     Luby,
-}
-
-impl std::fmt::Display for SequenceGeneratorType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SequenceGeneratorType::Constant => write!(f, "constant"),
-            SequenceGeneratorType::Geometric => write!(f, "geometric"),
-            SequenceGeneratorType::Luby => write!(f, "luby"),
-        }
-    }
 }
