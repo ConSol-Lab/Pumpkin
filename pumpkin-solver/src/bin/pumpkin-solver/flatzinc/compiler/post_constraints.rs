@@ -1,5 +1,6 @@
 //! Compile constraints into CP propagators
 
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use pumpkin_solver::constraints;
@@ -41,7 +42,7 @@ pub(crate) fn run(
             }
 
             // We rewrite `array_int_element` to `array_var_int_element`.
-            "array_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
+            "array_int_element" => compile_array_int_element(context, exprs, constraint_tag)?,
             "array_var_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
 
             "int_eq_imp" => compile_binary_int_imp(context, exprs, annos, "int_eq_imp", constraint_tag, constraints::binary_equals)?,
@@ -389,6 +390,53 @@ fn compile_set_in_reif(
     };
 
     Ok(success)
+}
+
+fn compile_array_int_element(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "array_int_element");
+
+    let index = context.resolve_integer_variable(&exprs[0])?.offset(-1);
+    let array = context.resolve_array_integer_constants(&exprs[1])?;
+    let rhs = context.resolve_integer_variable(&exprs[2])?;
+
+    // Add the clauses [rhs != array[i]] -> [index != i]
+    for (i, value) in array.iter().copied().enumerate() {
+        if context
+            .solver
+            .add_clause(
+                [predicate![rhs == value], predicate![index != i as i32]],
+                constraint_tag,
+            )
+            .is_err()
+        {
+            return Ok(false);
+        }
+    }
+
+    // Add the clauses [rhs == array[i]] -> ([index == i_1] \/ [index == i_2] \/ ...), where
+    // i_1, i_2, ... are indices where array[i] has the same value.
+    let mut value_to_clause_index: BTreeMap<i32, usize> = BTreeMap::new();
+    let mut clauses: Vec<Vec<Predicate>> = vec![];
+    for (value_idx, value) in array.iter().copied().enumerate() {
+        let clause_idx = *value_to_clause_index.entry(value).or_insert_with(|| {
+            clauses.push(vec![predicate![rhs != value]]);
+            clauses.len() - 1
+        });
+
+        clauses[clause_idx].push(predicate![index == value_idx as i32]);
+    }
+
+    for clause in clauses {
+        if context.solver.add_clause(clause, constraint_tag).is_err() {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
 }
 
 fn compile_array_var_int_element(
