@@ -41,7 +41,6 @@ pub(crate) fn run(
                 })?
             }
 
-            // We rewrite `array_int_element` to `array_var_int_element`.
             "array_int_element" => compile_array_int_element(context, exprs, constraint_tag)?,
             "array_var_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
 
