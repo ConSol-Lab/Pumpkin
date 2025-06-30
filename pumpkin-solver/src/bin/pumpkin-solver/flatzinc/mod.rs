@@ -36,6 +36,7 @@ use pumpkin_solver::Solver;
 use self::instance::FlatZincInstance;
 use self::instance::Output;
 use crate::flatzinc::error::FlatZincError;
+use crate::ProofType;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
@@ -54,6 +55,9 @@ pub(crate) struct FlatZincOptions {
 
     /// Determines which type of search is performed by the solver
     pub(crate) optimisation_strategy: OptimisationStrategy,
+
+    /// The type of proof that is logged. This influences which preprocessing steps we can do.
+    pub(crate) proof_type: Option<ProofType>,
 }
 
 fn solution_callback(
