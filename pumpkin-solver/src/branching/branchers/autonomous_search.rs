@@ -87,8 +87,9 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// If the heap does not contain any more unfixed predicates then this backup_brancher will be
     /// used instead.
     backup_brancher: BackupBrancher,
-
+    /// The statistics gathered by the autonomous search
     statistics: AutonomousSearchStatistics,
+    should_synchronise: bool,
 }
 
 create_statistics_struct!(AutonomousSearchStatistics {
@@ -98,6 +99,8 @@ create_statistics_struct!(AutonomousSearchStatistics {
     num_predicates_added: usize,
     average_size_of_heap: CumulativeMovingAverage<usize>,
     num_assigned_predicates_encountered: usize,
+    num_synchronised: usize,
+    num_actual_synchronised: usize,
 });
 
 const DEFAULT_VSIDS_INCREMENT: f64 = 1.0;
@@ -121,6 +124,7 @@ impl DefaultBrancher {
             max_threshold: DEFAULT_VSIDS_MAX_THRESHOLD,
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
+            should_synchronise: false,
             backup_brancher: IndependentVariableValueBrancher::new(
                 RandomSelector::new(assignments.get_domains()),
                 RandomSplitter,
@@ -145,6 +149,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             max_threshold: DEFAULT_VSIDS_MAX_THRESHOLD,
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
+            should_synchronise: false,
             backup_brancher,
             statistics: Default::default(),
         }
@@ -242,10 +247,29 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             predicate
         }
     }
+
+    fn synchronise_internal(&mut self) {
+        self.statistics.num_actual_synchronised += 1;
+        // Note that while iterating with 'retain', the function also
+        // re-adds the predicates to the heap that are no longer dormant.
+        self.dormant_predicates.drain(..).for_each(|predicate| {
+            let id = self.predicate_id_info.get_id(predicate);
+
+            while self.heap.len() <= id.index() {
+                self.heap.grow(id, DEFAULT_VSIDS_VALUE);
+            }
+
+            self.heap.restore_key(id);
+        });
+    }
 }
 
 impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        if self.should_synchronise {
+            self.synchronise_internal();
+            self.should_synchronise = false;
+        }
         self.statistics.num_calls += 1;
         self.statistics
             .average_size_of_heap
@@ -273,17 +297,8 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     /// Restores dormant predicates after backtracking.
     fn synchronise(&mut self, assignments: &Assignments) {
-        // Note that while iterating with 'retain', the function also
-        // re-adds the predicates to the heap that are no longer dormant.
-        self.dormant_predicates.drain(..).for_each(|predicate| {
-            let id = self.predicate_id_info.get_id(predicate);
-
-            while self.heap.len() <= id.index() {
-                self.heap.grow(id, DEFAULT_VSIDS_VALUE);
-            }
-
-            self.heap.restore_key(id);
-        });
+        self.statistics.num_synchronised += 1;
+        self.should_synchronise = true;
         self.backup_brancher.synchronise(assignments);
     }
 
