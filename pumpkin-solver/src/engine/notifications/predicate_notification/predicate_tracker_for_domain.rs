@@ -4,11 +4,11 @@ use super::predicate_trackers::DomainTrackerInformation;
 use super::predicate_trackers::EqualityTracker;
 use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
+use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
-use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
-use crate::variables::DomainId;
+use crate::predicates::PredicateType;
 
 /// A structure for managing the trackers of the polarity for a specific [`DomainId`].
 #[derive(Debug, Clone)]
@@ -24,12 +24,12 @@ pub(crate) struct PredicateTrackerForDomain {
 }
 
 impl PredicateTrackerForDomain {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            lower_bound: LowerBoundTracker::new(trailed_values),
-            upper_bound: UpperBoundTracker::new(trailed_values),
-            disequality: DisequalityTracker::new(trailed_values),
-            equality: EqualityTracker::new(trailed_values),
+            lower_bound: LowerBoundTracker::new(),
+            upper_bound: UpperBoundTracker::new(),
+            disequality: DisequalityTracker::new(),
+            equality: EqualityTracker::new(),
         }
     }
 }
@@ -37,27 +37,15 @@ impl PredicateTrackerForDomain {
 impl PredicateTrackerForDomain {
     /// This method will extend the scope of [`PredicateTrackerForDomain`] by adding the provided
     /// [`Predicate`] to the scope of the correct tracker.
-    pub(crate) fn watch_predicate(
-        &mut self,
-        predicate: Predicate,
-        id: PredicateId,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
+    ///
+    /// Returns true if it was not already tracked and false otherwise.
+    pub(crate) fn watch_predicate(&mut self, predicate: Predicate, id: PredicateId) -> bool {
         let value = predicate.get_right_hand_side();
-        if predicate.is_lower_bound_predicate() {
-            self.lower_bound
-                .track(value, id, trailed_values, assignments)
-        } else if predicate.is_upper_bound_predicate() {
-            self.upper_bound
-                .track(value, id, trailed_values, assignments)
-        } else if predicate.is_not_equal_predicate() {
-            self.disequality
-                .track(value, id, trailed_values, assignments)
-        } else if predicate.is_equality_predicate() {
-            self.equality.track(value, id, trailed_values, assignments)
-        } else {
-            panic!()
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => self.lower_bound.track(value, id),
+            PredicateType::UpperBound => self.upper_bound.track(value, id),
+            PredicateType::NotEqual => self.disequality.track(value, id),
+            PredicateType::Equal => self.equality.track(value, id),
         }
     }
 
@@ -70,65 +58,75 @@ impl PredicateTrackerForDomain {
         &mut self,
         predicate: Predicate,
         stateful_trail: &mut TrailedValues,
-        falsified_predicates: &mut Vec<PredicateId>,
-        satisfied_predicates: &mut Vec<PredicateId>,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         predicate_id: Option<PredicateId>,
     ) {
         if !self.lower_bound.is_empty() {
-            self.lower_bound.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.lower_bound
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
 
         if !self.upper_bound.is_empty() {
-            self.upper_bound.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.upper_bound
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
 
         if !self.disequality.is_empty() {
             self.disequality.on_update(
                 predicate,
                 stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
+                predicate_id_assignments,
                 predicate_id,
             );
         }
 
         if !self.equality.is_empty() {
-            self.equality.on_update(
-                predicate,
-                stateful_trail,
-                falsified_predicates,
-                satisfied_predicates,
-                None,
-            );
+            self.equality
+                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
         }
     }
 
     /// Initialises all of the trackers.
     pub(crate) fn initialise(
         &mut self,
-        domain_id: DomainId,
+        predicate: Predicate,
         initial_lower_bound: i32,
         initial_upper_bound: i32,
+        trailed_values: &mut TrailedValues,
     ) {
-        self.lower_bound
-            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
-        self.upper_bound
-            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
-        self.disequality
-            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
-        self.equality
-            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                self.lower_bound.initialise(
+                    predicate.get_domain(),
+                    initial_lower_bound,
+                    initial_upper_bound,
+                    trailed_values,
+                );
+            }
+            PredicateType::UpperBound => {
+                self.upper_bound.initialise(
+                    predicate.get_domain(),
+                    initial_lower_bound,
+                    initial_upper_bound,
+                    trailed_values,
+                );
+            }
+            PredicateType::NotEqual => {
+                self.disequality.initialise(
+                    predicate.get_domain(),
+                    initial_lower_bound,
+                    initial_upper_bound,
+                    trailed_values,
+                );
+            }
+            PredicateType::Equal => {
+                self.equality.initialise(
+                    predicate.get_domain(),
+                    initial_lower_bound,
+                    initial_upper_bound,
+                    trailed_values,
+                );
+            }
+        }
     }
 }

@@ -184,6 +184,7 @@ impl Slot<'_> {
 mod tests {
     use super::*;
     use crate::conjunction;
+    use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::Propagator;
     use crate::engine::variables::DomainId;
     use crate::engine::Assignments;
@@ -192,6 +193,7 @@ mod tests {
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
         let integers = Assignments::default();
+        let mut notification_engine = NotificationEngine::default();
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
@@ -201,7 +203,7 @@ mod tests {
 
         let mut out_reason = vec![];
         reason.compute(
-            ExplanationContext::from(&integers),
+            ExplanationContext::test_new(&integers, &mut notification_engine),
             PropagatorId(0),
             &mut PropagatorStore::default(),
             &mut out_reason,
@@ -214,6 +216,7 @@ mod tests {
     fn pushing_a_reason_gives_a_reason_ref_that_can_be_computed() {
         let mut reason_store = ReasonStore::default();
         let integers = Assignments::default();
+        let mut notification_engine = NotificationEngine::default();
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
@@ -227,7 +230,7 @@ mod tests {
         let mut out_reason = vec![];
         let _ = reason_store.get_or_compute(
             reason_ref,
-            ExplanationContext::from(&integers),
+            ExplanationContext::test_new(&integers, &mut notification_engine),
             &mut PropagatorStore::default(),
             &mut out_reason,
         );
@@ -239,6 +242,7 @@ mod tests {
     fn reified_lazy_explanation_has_reification_added_after_compute() {
         let mut reason_store = ReasonStore::default();
         let mut integers = Assignments::default();
+        let mut notification_engine = NotificationEngine::default();
 
         let x = integers.grow(1, 5);
         let reif = Literal::new(integers.grow(0, 1));
@@ -275,7 +279,7 @@ mod tests {
         let mut reason = vec![];
         let _ = reason_store.get_or_compute(
             reason_ref,
-            ExplanationContext::from(&integers),
+            ExplanationContext::test_new(&integers, &mut notification_engine),
             &mut propagator_store,
             &mut reason,
         );

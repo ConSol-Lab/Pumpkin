@@ -261,6 +261,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
             assignments: &self.assignments,
             reason_store: &mut self.reason_store,
+            notification_engine: &mut self.notification_engine,
             variable_names: &self.variable_names,
         };
 
@@ -756,6 +757,7 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments.increase_decision_level();
+        self.notification_engine.increase_decision_level();
         self.trailed_values.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
@@ -963,8 +965,6 @@ impl ConstraintSatisfactionSolver {
 
         trailed_values.synchronise(backtrack_level);
 
-        notification_engine.update_last_notified_index(assignments);
-
         reason_store.synchronise(backtrack_level);
         propagator_queue.clear();
         // For now all propagators are called to synchronise, in the future this will be improved in
@@ -980,6 +980,10 @@ impl ConstraintSatisfactionSolver {
 
         let _ = notification_engine.process_backtrack_events(assignments, propagators);
         notification_engine.clear_event_drain();
+
+        notification_engine.update_last_notified_index(assignments);
+        // Should be done after the assignments and trailed values have been synchronised
+        notification_engine.synchronise(backtrack_level, assignments, trailed_values);
     }
 
     pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
@@ -1008,6 +1012,7 @@ impl ConstraintSatisfactionSolver {
             ExplanationContext::without_working_nogood(
                 &self.assignments,
                 self.assignments.num_trail_entries() - 1,
+                &mut self.notification_engine,
             ),
             &mut self.propagators,
             &mut empty_domain_reason,
@@ -1086,6 +1091,7 @@ impl ConstraintSatisfactionSolver {
                             &conflict.conjunction,
                             &self.propagators[propagator_id],
                             propagator_id,
+                            &self.notification_engine
                         ));
 
                         let stored_conflict_info = StoredConflictInfo::Propagator(conflict);
@@ -1101,7 +1107,8 @@ impl ConstraintSatisfactionSolver {
                     &self.trailed_values,
                     &self.assignments,
                     &mut self.reason_store,
-                    &mut self.propagators
+                    &mut self.propagators,
+                    &self.notification_engine
                 ),
                 "Checking the propagations performed by the propagator led to inconsistencies!"
             );
@@ -1119,6 +1126,7 @@ impl ConstraintSatisfactionSolver {
                     &self.trailed_values,
                     &self.assignments,
                     &self.propagators,
+                    &self.notification_engine
                 )
         );
     }
@@ -1146,7 +1154,11 @@ impl ConstraintSatisfactionSolver {
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
                 reason_ref,
-                ExplanationContext::without_working_nogood(&self.assignments, trail_idx),
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    trail_idx,
+                    &mut self.notification_engine,
+                ),
                 &mut self.propagators,
                 &mut reason,
             );
@@ -1183,6 +1195,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                     assignments: &self.assignments,
                     reason_store: &mut self.reason_store,
+                    notification_engine: &mut self.notification_engine,
                     variable_names: &self.variable_names,
                 };
 
@@ -1420,6 +1433,7 @@ impl ConstraintSatisfactionSolver {
                 unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                 assignments: &self.assignments,
                 reason_store: &mut self.reason_store,
+                notification_engine: &mut self.notification_engine,
                 variable_names: &self.variable_names,
             });
             self.state
