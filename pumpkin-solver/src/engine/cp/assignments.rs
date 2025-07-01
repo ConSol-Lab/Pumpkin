@@ -56,6 +56,13 @@ impl Assignments {
         self.domains[domain_id].get_holes_from_decision_level(decision_level)
     }
 
+    pub(crate) fn get_holes_on_current_decision_level(
+        &self,
+        domain_id: DomainId,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
+    }
+
     pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
@@ -1295,6 +1302,17 @@ impl IntegerDomain {
         self.hole_updates
             .iter()
             .filter(move |entry| entry.decision_level == decision_level)
+            .map(|entry| entry.removed_value)
+    }
+
+    pub(crate) fn get_holes_from_current_decision_level(
+        &self,
+        current_decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.hole_updates
+            .iter()
+            .rev()
+            .take_while(move |entry| entry.decision_level == current_decision_level)
             .map(|entry| entry.removed_value)
     }
 }

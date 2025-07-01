@@ -83,6 +83,13 @@ impl IntegerVariable for DomainId {
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         event.unwrap()
     }
+
+    fn get_holes_on_current_decision_level(
+        &self,
+        assignments: &Assignments,
+    ) -> impl Iterator<Item = i32> {
+        assignments.get_holes_on_current_decision_level(*self)
+    }
 }
 
 impl TransformableVariable<AffineView<DomainId>> for DomainId {

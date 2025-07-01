@@ -248,6 +248,13 @@ pub(crate) trait ReadDomains: HasAssignments {
         self.is_fixed(literal)
     }
 
+    fn get_holes_on_current_decision_level<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+    ) -> impl Iterator<Item = i32> {
+        var.get_holes_on_current_decision_level(self.assignments())
+    }
+
     /// Returns `true` if the domain of the given variable is singleton.
     fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool {
         self.lower_bound(var) == self.upper_bound(var)

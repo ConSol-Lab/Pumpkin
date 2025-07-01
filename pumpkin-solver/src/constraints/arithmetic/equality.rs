@@ -2,7 +2,9 @@ use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
 use crate::proof::ConstraintTag;
+use crate::propagators::binary::BinaryEqualsPropagatorArgs;
 use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -31,7 +33,11 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
     rhs: Var,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+    BinaryEqualConstraint {
+        a: lhs,
+        b: rhs,
+        constraint_tag,
+    }
 }
 
 /// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
@@ -54,6 +60,55 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+}
+
+struct BinaryEqualConstraint<Var> {
+    a: Var,
+    b: Var,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var> Constraint for BinaryEqualConstraint<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(BinaryEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+        })
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: BinaryEqualsPropagatorArgs {
+                a: self.a,
+                b: self.b,
+                constraint_tag: self.constraint_tag,
+            },
+            reification_literal,
+        })
+    }
+}
+
+impl<Var> NegatableConstraint for BinaryEqualConstraint<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    type NegatedConstraint = NotEqualConstraint<Var::AffineView>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        NotEqualConstraint {
+            terms: vec![self.a.scaled(1), self.b.scaled(-1)].into_boxed_slice(),
+            rhs: 0,
+            constraint_tag: self.constraint_tag,
+        }
+    }
 }
 
 struct EqualConstraint<Var> {
