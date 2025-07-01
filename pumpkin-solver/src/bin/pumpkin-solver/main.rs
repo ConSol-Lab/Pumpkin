@@ -479,13 +479,13 @@ fn run() -> PumpkinResult<()> {
         warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path {
+    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
         match file_format {
-            FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+            FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => ProofLog::cp(&path_buf, args.proof_type == ProofType::Full)?,
+            FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }
     } else {
         ProofLog::default()
@@ -553,6 +553,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_incremental_backtracking,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
+                proof_type: args.proof_path.map(|_| args.proof_type),
             },
         )?,
     }

@@ -21,7 +21,7 @@ use crate::flatzinc::FlatZincOptions;
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
-    options: FlatZincOptions,
+    options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
@@ -232,7 +232,7 @@ pub(crate) fn run(
                 true
             }
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs, &options, constraint_tag)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
             unknown => todo!("unsupported constraint {unknown}"),
         };

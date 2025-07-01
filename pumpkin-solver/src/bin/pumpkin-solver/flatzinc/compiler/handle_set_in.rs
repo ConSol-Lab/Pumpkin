@@ -24,10 +24,12 @@ pub(crate) fn run(
             flatzinc::Expr::VarParIdentifier(id) => id,
             _ => return Err(FlatZincError::UnexpectedExpr),
         });
-        let domain = context.integer_equivalences.get_mut_domain(&id);
+
+        let mut domain = context.integer_equivalences.get_mut_domain(&id);
 
         // We take the intersection between the two domains
-        domain.merge(set.into())
+        let new_domain = domain.merge(&set.into());
+        *domain = new_domain;
     }
     Ok(())
 }
