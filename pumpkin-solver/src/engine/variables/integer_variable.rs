@@ -50,8 +50,12 @@ pub trait IntegerVariable:
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
 
+    /// Returns all of the holes in the domain which were created at the current decision level
     fn get_holes_on_current_decision_level(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32>;
+
+    /// Returns all of the holes in the domain
+    fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32>;
 }

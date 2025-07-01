@@ -34,6 +34,8 @@ impl DomainEvents {
     /// DomainEvents with only assigning to a single value.
     pub(crate) const ASSIGN: DomainEvents =
         DomainEvents::create_with_int_events(enum_set!(DomainEvent::Assign));
+    pub(crate) const ASSIGN_AND_REMOVAL: DomainEvents =
+        DomainEvents::create_with_int_events(enum_set!(DomainEvent::Assign | DomainEvent::Removal));
 }
 
 impl DomainEvents {

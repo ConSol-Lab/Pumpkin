@@ -134,6 +134,10 @@ impl IntegerVariable for Literal {
         self.integer_variable
             .get_holes_on_current_decision_level(assignments)
     }
+
+    fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
+        self.integer_variable.get_holes(assignments)
+    }
 }
 
 impl PredicateConstructor for Literal {

@@ -3,6 +3,7 @@ use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::binary::BinaryEqualsPropagatorArgs;
+use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
 use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::IntegerVariable;
@@ -59,7 +60,11 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     rhs: Var,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+    BinaryNotEqualsConstraint {
+        a: lhs,
+        b: rhs,
+        constraint_tag,
+    }
 }
 
 struct BinaryEqualConstraint<Var> {
@@ -100,12 +105,61 @@ impl<Var> NegatableConstraint for BinaryEqualConstraint<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type NegatedConstraint = NotEqualConstraint<Var::AffineView>;
+    type NegatedConstraint = BinaryNotEqualsConstraint<Var>;
 
     fn negation(&self) -> Self::NegatedConstraint {
-        NotEqualConstraint {
-            terms: vec![self.a.scaled(1), self.b.scaled(-1)].into_boxed_slice(),
-            rhs: 0,
+        BinaryNotEqualsConstraint {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}
+
+struct BinaryNotEqualsConstraint<Var> {
+    a: Var,
+    b: Var,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var> Constraint for BinaryNotEqualsConstraint<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+        })
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: BinaryNotEqualsPropagatorArgs {
+                a: self.a,
+                b: self.b,
+                constraint_tag: self.constraint_tag,
+            },
+            reification_literal,
+        })
+    }
+}
+
+impl<Var> NegatableConstraint for BinaryNotEqualsConstraint<Var>
+where
+    Var: IntegerVariable + 'static,
+{
+    type NegatedConstraint = BinaryEqualConstraint<Var>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        BinaryEqualConstraint {
+            a: self.a.clone(),
+            b: self.b.clone(),
             constraint_tag: self.constraint_tag,
         }
     }

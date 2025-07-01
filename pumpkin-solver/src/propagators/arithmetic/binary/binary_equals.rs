@@ -23,7 +23,7 @@ use crate::pumpkin_assert_advanced;
 
 declare_inference_label!(BinaryEquals);
 
-/// The [`PropagatorConstructor`] for the [`LinearLessOrEqualPropagator`].
+/// The [`PropagatorConstructor`] for the [`BinaryEqualsPropagator`].
 #[derive(Clone, Debug)]
 pub(crate) struct BinaryEqualsPropagatorArgs<AVar, BVar> {
     pub(crate) a: AVar,
@@ -48,6 +48,7 @@ where
         context.register(a.clone(), DomainEvents::ANY_INT, LocalId::from(0));
         context.register(b.clone(), DomainEvents::ANY_INT, LocalId::from(1));
 
+        // If we backtrack then we need to update the removable values
         context.register_for_backtrack_events(a.clone(), DomainEvents::REMOVAL, LocalId::from(0));
         context.register_for_backtrack_events(b.clone(), DomainEvents::REMOVAL, LocalId::from(1));
 
@@ -66,16 +67,28 @@ where
     }
 }
 
-/// Propagator for the constraint `\sum x_i <= c`.
+/// Propagator for the constraint `a = b`.
 #[derive(Clone, Debug)]
 pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
     a: AVar,
     b: BVar,
 
+    /// The removed value from [`Self::a`].
+    ///
+    /// These are tracked to make sure that they are also removed from [`Self::b`].
     a_removed_values: HashSet<i32>,
+    /// The removed value from [`Self::b`]
+    ///
+    /// These are tracked to make sure that they are also removed from [`Self::a`].
     b_removed_values: HashSet<i32>,
 
+    /// If a backtrack has occurred which caused one of the removals to be backtracked then we need
+    /// to ensure that we do not erroneously remove values which are now part of the domain after
+    /// backtracking.
     has_backtracked: bool,
+
+    /// If it is the first time that the propagator is called then we need to ensure that the
+    /// domains of [`Self::a`] and [`Self::b`] are equal to the intersection of these domains.
     first_propagation_loop: bool,
 
     inference_code: InferenceCode,
@@ -97,11 +110,17 @@ where
         let b_ub = context.upper_bound(&self.b);
 
         if a_ub < b_lb {
+            // If `a` is fully before `b` then we report a conflict
+            //
+            // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.a <= b_lb - 1] & [self.b >= b_lb]),
                 inference_code: self.inference_code,
             })
         } else if b_ub < a_lb {
+            // If `b` is fully before `a` then we report a conflict
+            //
+            // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
                 inference_code: self.inference_code,
@@ -120,12 +139,16 @@ where
         match local_id.unpack() {
             0 => {
                 if matches!(self.a.unpack_event(event), DomainEvent::Removal) {
+                    // If it is a removal then we need to make sure that all of the removed values
+                    // from `a` are also removed from `b`
                     self.a_removed_values
                         .extend(context.get_holes_on_current_decision_level(&self.a));
                 }
             }
             1 => {
                 if matches!(self.b.unpack_event(event), DomainEvent::Removal) {
+                    // If it is a removal then we need to make sure that all of the removed values
+                    // from `b` are also removed from `a`
                     self.b_removed_values
                         .extend(context.get_holes_on_current_decision_level(&self.b));
                 }
@@ -142,6 +165,7 @@ where
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) {
+        // Recall that we need to ensure that the stored removed values could now be inaccurate
         self.has_backtracked = true;
     }
 
@@ -155,6 +179,7 @@ where
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if self.first_propagation_loop {
+            // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
             return self.debug_propagate_from_scratch(context);
         }
@@ -169,6 +194,7 @@ where
         let b_lb = context.lower_bound(&self.b);
         let b_ub = context.upper_bound(&self.b);
 
+        // Now we must ensure that the bounds are equal
         context.post(
             predicate!(self.a >= b_lb),
             conjunction!([self.b >= b_lb]),
@@ -190,6 +216,8 @@ where
             self.inference_code,
         )?;
 
+        // Now we check whether a backtrack operation has occurred which means that we need to
+        // re-evaluate the values which have been removed
         if self.has_backtracked {
             self.has_backtracked = false;
             self.a_removed_values
@@ -198,6 +226,7 @@ where
                 .retain(|element| context.is_predicate_satisfied(predicate!(self.b != *element)));
         }
 
+        // Then we remove all of the values which have been removed from `a` from `b`
         for removed_value_a in self.a_removed_values.drain() {
             pumpkin_assert_advanced!(
                 context.is_predicate_satisfied(predicate!(self.a != removed_value_a))
@@ -208,6 +237,8 @@ where
                 self.inference_code,
             )?;
         }
+
+        // Then we remove all of the values which have been removed from `b` from `a`
         for removed_value_b in self.b_removed_values.drain() {
             pumpkin_assert_advanced!(
                 context.is_predicate_satisfied(predicate!(self.b != removed_value_b))
@@ -257,24 +288,20 @@ where
             self.inference_code,
         )?;
 
-        for value_a in context.lower_bound(&self.a)..context.upper_bound(&self.a) {
-            if !context.contains(&self.a, value_a) {
-                context.post(
-                    predicate!(self.b != value_a),
-                    conjunction!([self.a != value_a]),
-                    self.inference_code,
-                )?;
-            }
+        for value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
+            context.post(
+                predicate!(self.b != value_a),
+                conjunction!([self.a != value_a]),
+                self.inference_code,
+            )?;
         }
 
-        for value_b in context.lower_bound(&self.b)..context.upper_bound(&self.b) {
-            if !context.contains(&self.b, value_b) {
-                context.post(
-                    predicate!(self.a != value_b),
-                    conjunction!([self.b != value_b]),
-                    self.inference_code,
-                )?;
-            }
+        for value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
+            context.post(
+                predicate!(self.a != value_b),
+                conjunction!([self.b != value_b]),
+                self.inference_code,
+            )?;
         }
 
         Ok(())
