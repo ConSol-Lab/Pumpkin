@@ -469,7 +469,10 @@ pub(crate) struct VariableEquivalences {
 
 #[derive(Debug)]
 struct EquivalenceClass {
+    /// The variables that are part of the equivalence class. We use a BTreeSet so that we can
+    /// consistently get a representative, which will be the first element in the set.
     variables: BTreeSet<Rc<str>>,
+    /// The domain to associate with these variables.
     domain: Domain,
 }
 
