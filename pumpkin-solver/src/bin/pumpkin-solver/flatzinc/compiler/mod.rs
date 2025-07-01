@@ -8,8 +8,8 @@ mod handle_set_in;
 mod merge_equivalences;
 mod post_constraints;
 mod prepare_variables;
-mod reserve_constraint_tags;
 mod remove_unused_variables;
+mod reserve_constraint_tags;
 
 use context::CompilationContext;
 use pumpkin_solver::Solver;
