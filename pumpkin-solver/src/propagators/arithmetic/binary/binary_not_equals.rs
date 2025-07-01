@@ -46,19 +46,6 @@ where
         context.register(a.clone(), DomainEvents::ASSIGN, LocalId::from(0));
         context.register(b.clone(), DomainEvents::ASSIGN, LocalId::from(1));
 
-        // We also need to ensure that we know when propagation can take place; note that we might
-        // need to re-do a removal after backtracking
-        context.register_for_backtrack_events(
-            a.clone(),
-            DomainEvents::ASSIGN_AND_REMOVAL,
-            LocalId::from(0),
-        );
-        context.register_for_backtrack_events(
-            b.clone(),
-            DomainEvents::ASSIGN_AND_REMOVAL,
-            LocalId::from(1),
-        );
-
         BinaryNotEqualsPropagator {
             a,
             b,
@@ -125,12 +112,7 @@ where
         }
     }
 
-    fn notify_backtrack(
-        &mut self,
-        _context: PropagationContext,
-        _local_id: LocalId,
-        _event: OpaqueDomainEvent,
-    ) {
+    fn synchronise(&mut self, _context: PropagationContext) {
         // Either one of the variables has become unassigned or one of the removals could have
         // become undone
         self.is_satisfied = false;
