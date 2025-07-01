@@ -34,24 +34,28 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
-    if !context.proof_log.is_logging_inferences() {
-        return;
-    }
+    let final_nogood = context
+        .conflict
+        .into_iter()
+        .flat_map(|predicate| {
+            get_required_assumptions(
+                &mut RootExplanationContext {
+                    propagators: context.propagators,
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    assignments: context.assignments,
+                    reason_store: context.reason_store,
+                    notification_engine: context.notification_engine,
+                    variable_names: context.variable_names,
+                },
+                predicate,
+            )
+        })
+        .collect::<Vec<_>>();
 
-    for predicate in context.conflict {
-        explain_root_assignment(
-            &mut RootExplanationContext {
-                propagators: context.propagators,
-                proof_log: context.proof_log,
-                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                assignments: context.assignments,
-                reason_store: context.reason_store,
-                notification_engine: context.notification_engine,
-                variable_names: context.variable_names,
-            },
-            predicate,
-        );
-    }
+    let _ = context
+        .proof_log
+        .log_deduction(final_nogood, context.variable_names);
 }
 
 pub(crate) struct RootExplanationContext<'a> {
@@ -80,15 +84,33 @@ pub(crate) fn explain_root_assignment(
         return;
     }
 
+    let _ = get_required_assumptions(context, predicate);
+}
+
+/// Returns the predicates that should be assumed are true to make the given predicate true. It may
+/// be that the given predicate is part of that list. Any propagations encountered along the way
+/// are logged to the proof.
+///
+/// Note this function is private, as we do not expect it to be called outside this file. Returning
+/// vectors will probably add allocations, but they will be small and this is not called in the
+/// solver's hot loop so it should be fine.
+fn get_required_assumptions(
+    context: &mut RootExplanationContext<'_>,
+    predicate: Predicate,
+) -> Vec<Predicate> {
+    if context.assignments.is_decision_predicate(&predicate) {
+        return vec![predicate];
+    }
+
     // If the predicate is a root-level assignment, add the appropriate inference to the proof.
     if context.assignments.is_initial_bound(predicate) {
         let _ = context
             .proof_log
             .log_domain_inference(predicate, context.variable_names);
-        return;
+        return vec![];
     }
 
-    // If the predicate is a unit-nogood, we simply add that nogood step as a propagation.
+    // If the predicate is a unit-nogood, we explain the root-level assignment.
     if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
         let _ = context.proof_log.log_inference(
             *inference_code,
@@ -96,7 +118,7 @@ pub(crate) fn explain_root_assignment(
             Some(predicate),
             context.variable_names,
         );
-        return;
+        return vec![];
     }
 
     // There must be some combination of other factors.
@@ -114,9 +136,9 @@ pub(crate) fn explain_root_assignment(
         context.variable_names,
     );
 
-    assert!(!reason.is_empty());
-
-    for p in reason {
-        explain_root_assignment(context, p);
-    }
+    // Here we combine all the required assumptions of recursive reasons.
+    reason
+        .into_iter()
+        .flat_map(|predicate| get_required_assumptions(context, predicate))
+        .collect()
 }

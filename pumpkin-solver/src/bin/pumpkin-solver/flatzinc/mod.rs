@@ -202,19 +202,19 @@ fn satisfy(
         }
     } else {
         match solver.satisfy(&mut brancher, &mut termination) {
-            SatisfactionResult::Satisfiable(solution) => solution_callback(
-                &brancher,
+            SatisfactionResult::Satisfiable(satisfiable) => solution_callback(
+                satisfiable.brancher(),
                 None,
                 options.all_solutions,
                 &outputs,
-                &*solver,
-                solution.as_reference(),
+                satisfiable.solver(),
+                satisfiable.solution(),
             ),
-            SatisfactionResult::Unsatisfiable => {
+            SatisfactionResult::Unsatisfiable(solver) => {
                 println!("{MSG_UNSATISFIABLE}");
                 solver.log_statistics();
             }
-            SatisfactionResult::Unknown => {
+            SatisfactionResult::Unknown(solver) => {
                 println!("{MSG_UNKNOWN}");
                 solver.log_statistics();
             }

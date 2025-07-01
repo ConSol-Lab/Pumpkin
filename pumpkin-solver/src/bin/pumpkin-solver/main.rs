@@ -32,7 +32,7 @@ use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
+use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
@@ -573,31 +573,34 @@ fn cnf_problem(
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut termination) {
-        SatisfactionResult::Satisfiable(solution) => {
-            solver.log_statistics();
+        SatisfactionResult::Satisfiable(satisfiable) => {
+            satisfiable.solver().log_statistics();
             println!("s SATISFIABLE");
             println!(
                 "v {}",
-                stringify_solution(&solution, solution.num_domains(), true)
+                stringify_solution(
+                    satisfiable.solution(),
+                    satisfiable.solution().num_domains(),
+                    true
+                )
             );
         }
-        SatisfactionResult::Unsatisfiable => {
+        SatisfactionResult::Unsatisfiable(solver) => {
             solver.log_statistics();
-            solver.conclude_proof_unsat();
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown => {
+        SatisfactionResult::Unknown(solver) => {
             solver.log_statistics();
             println!("s UNKNOWN");
         }
-    };
+    }
 
     Ok(())
 }
 
 fn stringify_solution(
-    solution: &Solution,
+    solution: SolutionReference,
     number_of_variables: usize,
     terminate_with_zero: bool,
 ) -> String {

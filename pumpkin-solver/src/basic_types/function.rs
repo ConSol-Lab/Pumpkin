@@ -1,5 +1,4 @@
 use super::solution::ProblemSolution;
-use super::Solution;
 use crate::basic_types::HashMap;
 use crate::basic_types::SolutionReference;
 use crate::variables::Literal;
@@ -41,7 +40,7 @@ impl Function {
         value
     }
 
-    pub fn evaluate_assignment(&self, solution: &Solution) -> u64 {
+    pub fn evaluate_assignment(&self, solution: SolutionReference) -> u64 {
         let mut value: u64 = self.constant_term;
         for (literal, weight) in self.get_literal_terms() {
             value += weight * solution.get_literal_value(*literal) as u32 as u64;

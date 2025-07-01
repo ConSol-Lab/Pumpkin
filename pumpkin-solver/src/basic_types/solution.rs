@@ -13,7 +13,7 @@ pub trait ProblemSolution: HasAssignments {
         self.assignments().num_domains() as usize
     }
 
-    fn get_integer_value<Var: IntegerVariable + 'static>(&self, var: Var) -> i32 {
+    fn get_integer_value<Var: IntegerVariable>(&self, var: Var) -> i32 {
         self.assignments()
             .get_assigned_value(&var)
             .expect("Expected retrieved integer variable from solution to be assigned")
@@ -35,6 +35,11 @@ pub struct SolutionReference<'a> {
 impl<'a> SolutionReference<'a> {
     pub fn new(assignments: &'a Assignments) -> SolutionReference<'a> {
         SolutionReference { assignments }
+    }
+
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
+        self.assignments.get_domains()
+        // todo: Should we skip the first element as it could be the always true domain id?
     }
 }
 

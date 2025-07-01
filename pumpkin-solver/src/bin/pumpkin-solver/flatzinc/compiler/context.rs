@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::Solver;
@@ -56,6 +57,9 @@ pub(crate) struct CompilationContext<'a> {
 
     /// All set parameters.
     pub(crate) set_constants: HashMap<Rc<str>, Set>,
+
+    /// All the constraints with their constraint tags.
+    pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
 }
 
 /// A set parameter.
@@ -93,6 +97,8 @@ impl CompilationContext<'_> {
             integer_variable_arrays: Default::default(),
 
             set_constants: Default::default(),
+
+            constraints: Default::default(),
         }
     }
 

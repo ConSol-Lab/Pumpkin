@@ -1,16 +1,15 @@
 use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
-use crate::basic_types::CSPSolverExecutionFlag;
 use crate::branching::Brancher;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
-use crate::pumpkin_assert_simple;
 use crate::results::OptimisationResult;
+use crate::results::ProblemSolution;
+use crate::results::SatisfactionResult;
+use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
-use crate::results::SolutionReference;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
-use crate::ConstraintOperationError;
 use crate::Solver;
 
 /// Implements the linear SAT-UNSAT (LSU) optimisation procedure.
@@ -36,53 +35,6 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
     }
 }
 
-impl<Var: IntegerVariable, Callback> LinearSatUnsat<Var, Callback> {
-    /// Given the current objective value `best_objective_value`, it adds a constraint specifying
-    /// that the objective value should be at most `best_objective_value - 1`. Note that it is
-    /// assumed that we are always minimising the variable.
-    fn strengthen(
-        &mut self,
-        objective_variable: &impl IntegerVariable,
-        best_objective_value: i64,
-        solver: &mut Solver,
-    ) -> Result<(), ConstraintOperationError> {
-        // This screws up the proof, but for now I just want things to compile and run
-        // before proceeding with correctness of the proof.
-        let constraint_tag = solver.new_constraint_tag();
-
-        solver.satisfaction_solver.add_clause(
-            [predicate!(
-                objective_variable <= (best_objective_value - 1) as i32
-            )],
-            constraint_tag,
-        )
-    }
-
-    fn debug_bound_change(
-        &self,
-        objective_variable: &impl IntegerVariable,
-        best_objective_value: i64,
-        solver: &Solver,
-    ) {
-        pumpkin_assert_simple!(
-            (solver
-                .satisfaction_solver
-                .get_assigned_integer_value(objective_variable)
-                .expect("expected variable to be assigned") as i64)
-                < best_objective_value,
-            "{}",
-            format!(
-                "The current bound {} should be smaller than the previous bound {}",
-                solver
-                    .satisfaction_solver
-                    .get_assigned_integer_value(objective_variable)
-                    .expect("expected variable to be assigned"),
-                best_objective_value
-            )
-        );
-    }
-}
-
 impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
@@ -95,106 +47,57 @@ where
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
     ) -> OptimisationResult {
-        let is_maximising = matches!(self.direction, OptimisationDirection::Maximise);
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
-        // If we are maximising then when we simply scale the variable by -1, however, this will
-        // lead to the printed objective value in the statistics to be multiplied by -1; this
-        // objective_multiplier ensures that the objective is correctly logged.
-        let objective_multiplier = if is_maximising { -1 } else { 1 };
 
-        let initial_solve = solver.satisfaction_solver.solve(termination, brancher);
-        match initial_solve {
-            CSPSolverExecutionFlag::Feasible => {}
-            CSPSolverExecutionFlag::Infeasible => {
-                // Reset the state whenever we return a result
-                solver.satisfaction_solver.restore_state_at_root(brancher);
-                let _ = solver.satisfaction_solver.conclude_proof_unsat();
-                return OptimisationResult::Unsatisfiable;
-            }
-            CSPSolverExecutionFlag::Timeout => {
-                // Reset the state whenever we return a result
-                solver.satisfaction_solver.restore_state_at_root(brancher);
-                return OptimisationResult::Unknown;
-            }
-        }
-        let mut best_objective_value = Default::default();
-        let mut best_solution = Solution::default();
-
-        self.update_best_solution_and_process(
-            objective_multiplier,
-            &objective,
-            &mut best_objective_value,
-            &mut best_solution,
-            brancher,
-            solver,
-        );
+        // First we will solve the satisfaction problem without constraining the objective.
+        let mut best_solution: Solution = match solver.satisfy(brancher, termination) {
+            SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
+            SatisfactionResult::Unsatisfiable(_) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_) => return OptimisationResult::Unknown,
+        };
 
         loop {
-            solver.satisfaction_solver.restore_state_at_root(brancher);
+            self.solution_callback.on_solution_callback(
+                solver,
+                best_solution.as_reference(),
+                brancher,
+            );
 
-            let objective_bound_predicate = if is_maximising {
-                predicate![objective >= best_objective_value as i32 * objective_multiplier]
-            } else {
-                predicate![objective <= best_objective_value as i32 * objective_multiplier]
+            let best_objective_value = best_solution.get_integer_value(objective.clone());
+
+            let conclusion = {
+                let solve_result = solver.satisfy_under_assumptions(
+                    brancher,
+                    termination,
+                    &[predicate![objective <= best_objective_value - 1]],
+                );
+
+                match solve_result {
+                    SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
+                        best_solution = satisfiable.solution().into();
+                        None
+                    }
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
+                        _,
+                    ) => {
+                        Some(OptimisationResult::Optimal(best_solution.clone()))
+                    }
+                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Unknown),
+                }
             };
 
-            if self
-                .strengthen(
-                    &objective,
-                    best_objective_value * objective_multiplier as i64,
-                    solver,
-                )
-                .is_err()
-            {
-                // Reset the state whenever we return a result
-                solver.satisfaction_solver.restore_state_at_root(brancher);
-                let _ = solver
-                    .satisfaction_solver
-                    .conclude_proof_optimal(objective_bound_predicate);
-                return OptimisationResult::Optimal(best_solution);
-            }
-
-            let solve_result = solver.satisfaction_solver.solve(termination, brancher);
-            match solve_result {
-                CSPSolverExecutionFlag::Feasible => {
-                    self.debug_bound_change(
-                        &objective,
-                        best_objective_value * objective_multiplier as i64,
-                        solver,
-                    );
-                    self.update_best_solution_and_process(
-                        objective_multiplier,
-                        &objective,
-                        &mut best_objective_value,
-                        &mut best_solution,
-                        brancher,
-                        solver,
-                    );
+            match conclusion {
+                Some(OptimisationResult::Optimal(solution)) => {
+                    solver.conclude_proof_dual_bound(predicate![objective >= best_objective_value]);
+                    return OptimisationResult::Optimal(solution);
                 }
-                CSPSolverExecutionFlag::Infeasible => {
-                    {
-                        // Reset the state whenever we return a result
-                        solver.satisfaction_solver.restore_state_at_root(brancher);
-                        let _ = solver
-                            .satisfaction_solver
-                            .conclude_proof_optimal(objective_bound_predicate);
-                        return OptimisationResult::Optimal(best_solution);
-                    }
-                }
-                CSPSolverExecutionFlag::Timeout => {
-                    // Reset the state whenever we return a result
-                    solver.satisfaction_solver.restore_state_at_root(brancher);
-                    return OptimisationResult::Satisfiable(best_solution);
-                }
+                Some(result) => return result,
+                None => {}
             }
         }
-    }
-
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
-        self.solution_callback
-            .on_solution_callback(solver, solution, brancher)
     }
 }

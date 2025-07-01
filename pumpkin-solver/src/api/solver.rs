@@ -1,3 +1,4 @@
+use super::outputs::Satisfiable;
 use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
@@ -303,31 +304,28 @@ impl Solver {
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
     /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
     /// which can be used to obtain the found solution or find other solutions.
-    pub fn satisfy<B: Brancher, T: TerminationCondition>(
-        &mut self,
-        brancher: &mut B,
+    pub fn satisfy<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+        &'this mut self,
+        brancher: &'brancher mut B,
         termination: &mut T,
-    ) -> SatisfactionResult {
+    ) -> SatisfactionResult<'this, 'brancher, B> {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
-                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
-                self.satisfaction_solver.restore_state_at_root(brancher);
+                brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
-                brancher.on_solution(solution.as_reference());
-
-                SatisfactionResult::Satisfiable(solution)
+                SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 let _ = self.satisfaction_solver.conclude_proof_unsat();
 
-                SatisfactionResult::Unsatisfiable
+                SatisfactionResult::Unsatisfiable(self)
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResult::Unknown
+                SatisfactionResult::Unknown(self)
             }
         }
     }
@@ -370,9 +368,8 @@ impl Solver {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
-                self.satisfaction_solver.restore_state_at_root(brancher);
                 brancher.on_solution(solution.as_reference());
-                SatisfactionResultUnderAssumptions::Satisfiable(solution)
+                SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(self, brancher))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 if self
@@ -387,13 +384,13 @@ impl Solver {
                 } else {
                     // Reset the state whenever we return a result
                     self.satisfaction_solver.restore_state_at_root(brancher);
-                    SatisfactionResultUnderAssumptions::Unsatisfiable
+                    SatisfactionResultUnderAssumptions::Unsatisfiable(self)
                 }
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResultUnderAssumptions::Unknown
+                SatisfactionResultUnderAssumptions::Unknown(self)
             }
         }
     }
@@ -512,14 +509,11 @@ impl Solver {
         let _ = self.satisfaction_solver.conclude_proof_unsat();
     }
 
-    #[doc(hidden)]
     /// Conclude the proof with the optimality claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_optimal(&mut self, bound: Literal) {
-        let _ = self
-            .satisfaction_solver
-            .conclude_proof_optimal(bound.get_true_predicate());
+    pub fn conclude_proof_dual_bound(&mut self, bound: Predicate) {
+        let _ = self.satisfaction_solver.conclude_proof_optimal(bound);
     }
 }
 
