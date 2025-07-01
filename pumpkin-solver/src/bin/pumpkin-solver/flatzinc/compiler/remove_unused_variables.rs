@@ -22,10 +22,26 @@ pub(crate) fn run(
     mark_identifiers_in_constraints(ast, context, &mut marked_identifiers);
     mark_identifiers_in_arrays(ast, context, &mut marked_identifiers);
 
+    // Make sure the objective, which can be unconstrained, is always marked.
+    match &ast.solve_item.goal {
+        flatzinc::Goal::OptimizeBool(_, flatzinc::BoolExpr::VarParIdentifier(id))
+        | flatzinc::Goal::OptimizeInt(_, flatzinc::IntExpr::VarParIdentifier(id))
+        | flatzinc::Goal::OptimizeFloat(_, flatzinc::FloatExpr::VarParIdentifier(id))
+        | flatzinc::Goal::OptimizeSet(_, flatzinc::SetExpr::VarParIdentifier(id)) => {
+            let _ = marked_identifiers.insert(context.identifiers.get_interned(id));
+        }
+        _ => {}
+    }
+
     ast.single_variables.retain(|decl| match decl {
-        crate::flatzinc::ast::SingleVarDecl::Bool { id, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInRange { id, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInSet { id, .. } => {
+        crate::flatzinc::ast::SingleVarDecl::Bool { id, annos, .. }
+        | crate::flatzinc::ast::SingleVarDecl::IntInRange { id, annos, .. }
+        | crate::flatzinc::ast::SingleVarDecl::IntInSet { id, annos, .. } => {
+            // If the variable is an output variable, then always keep it.
+            if annos.iter().any(|annotation| annotation.id == "output_var") {
+                return true;
+            }
+
             marked_identifiers.contains(id.as_str())
         }
     });
