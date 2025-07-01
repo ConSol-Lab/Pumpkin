@@ -21,6 +21,17 @@ pub(crate) fn run(
     Ok(())
 }
 
+/// Used when parsing FlatZinc of the following structure:
+///
+/// ```
+/// var 1..5: a;
+/// var 1..5: b = a;
+/// ```
+///
+/// The assignment of `a` to `b` is something we cannot correctly proof-log, as there is no
+/// associated constraint tag. Since logging a full proof is not the default, it is likely only
+/// done when somebody wants to use the full proof. That is why we panic here instead of log a
+/// warning, since the proof would most likely be incorrect.
 fn panic_if_logging_proof(options: &FlatZincOptions) {
     if matches!(options.proof_type, Some(ProofType::Full)) {
         panic!("Variable assignment expressions unsupported when logging a full proof.")
@@ -107,19 +118,14 @@ fn remove_int_eq_constraints(
     }
 
     ast.constraint_decls
-        .retain(|constraint| possibly_remove_constraint(constraint, context));
+        .retain(|constraint| should_keep_constraint(constraint, context));
 
     Ok(())
 }
 
 /// Possibly merges some equivalence classes based on the constraint. Returns `true` if the
 /// constraint needs to be retained, and `false` if it can be removed from the AST.
-fn possibly_remove_constraint(
-    constraint: &ConstraintItem,
-    context: &mut CompilationContext,
-) -> bool {
-    dbg!(constraint);
-
+fn should_keep_constraint(constraint: &ConstraintItem, context: &mut CompilationContext) -> bool {
     if constraint.id != "int_eq" {
         return true;
     }
