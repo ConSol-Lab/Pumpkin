@@ -8,6 +8,7 @@ mod handle_set_in;
 mod merge_equivalences;
 mod post_constraints;
 mod prepare_variables;
+mod remove_unused_variables;
 mod reserve_constraint_tags;
 
 use context::CompilationContext;
@@ -26,6 +27,7 @@ pub(crate) fn compile(
     let mut context = CompilationContext::new(solver);
 
     define_constants::run(&ast, &mut context)?;
+    remove_unused_variables::run(&mut ast, &mut context)?;
     prepare_variables::run(&ast, &mut context)?;
     merge_equivalences::run(&mut ast, &mut context, &options)?;
     handle_set_in::run(&ast, &mut context)?;
