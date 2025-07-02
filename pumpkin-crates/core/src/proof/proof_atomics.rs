@@ -1,7 +1,7 @@
 use drcp_format::IntAtomic;
 use drcp_format::IntComparison;
 
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
 use crate::predicates::Predicate;

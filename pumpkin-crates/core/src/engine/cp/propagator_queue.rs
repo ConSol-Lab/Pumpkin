@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 
-use crate::basic_types::HashSet;
+use crate::containers::HashSet;
 use crate::engine::cp::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 

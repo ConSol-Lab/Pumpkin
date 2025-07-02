@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
-use fnv::FnvBuildHasher;
 use log::debug;
+use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::pumpkin_assert_moderate;
 use pumpkin_solver::pumpkin_assert_simple;
@@ -129,7 +127,7 @@ impl GeneralisedTotaliserEncoder {
 
         // these are to be used in the loop below
         //  will be reused to avoid allocating each iteration
-        let mut value_to_literal_map: HashMap<u64, Literal, FnvBuildHasher> = HashMap::default();
+        let mut value_to_literal_map: HashMap<u64, Literal> = HashMap::default();
         let mut partial_sums: Vec<u64> = Vec::new();
 
         //  in each iteration, the literals of the next_layer are created and appropriate clauses

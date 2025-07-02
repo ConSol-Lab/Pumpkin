@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use super::minimisers::SemanticMinimiser;
-use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
+use crate::containers::HashMap;
 use crate::containers::StorageKey;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::notifications::NotificationEngine;

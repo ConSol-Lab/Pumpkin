@@ -1,6 +1,6 @@
 use super::solution::ProblemSolution;
-use crate::basic_types::HashMap;
 use crate::basic_types::SolutionReference;
+use crate::containers::HashMap;
 use crate::variables::Literal;
 
 /// A struct which represents a linear function over weighted [`Literal`]s, and a

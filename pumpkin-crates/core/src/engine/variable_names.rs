@@ -1,4 +1,4 @@
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::engine::variables::DomainId;
 
 #[derive(Debug, Default)]

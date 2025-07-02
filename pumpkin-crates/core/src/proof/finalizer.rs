@@ -4,7 +4,7 @@
 
 use super::InferenceCode;
 use super::ProofLog;
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::store::PropagatorStore;

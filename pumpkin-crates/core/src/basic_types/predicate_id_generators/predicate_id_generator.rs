@@ -1,4 +1,4 @@
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;

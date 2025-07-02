@@ -1,7 +1,7 @@
 #[cfg(doc)]
 use super::PredicateIdGenerator;
 use crate::basic_types::predicate_id_generators::PredicateId;
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 

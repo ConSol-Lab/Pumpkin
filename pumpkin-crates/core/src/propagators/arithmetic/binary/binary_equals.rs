@@ -1,7 +1,7 @@
-use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
+use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;

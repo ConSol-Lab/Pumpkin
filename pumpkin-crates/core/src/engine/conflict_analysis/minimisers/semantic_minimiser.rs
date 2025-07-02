@@ -1,6 +1,6 @@
 use std::cmp;
 
-use crate::basic_types::HashSet;
+use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
 use crate::engine::predicates::predicate::PredicateType;

@@ -1,5 +1,5 @@
-use crate::basic_types::HashMap;
 use crate::basic_types::Trail;
+use crate::containers::HashMap;
 use crate::containers::KeyedVec;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::notifications::NotificationEngine;

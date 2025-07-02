@@ -21,7 +21,7 @@ pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
 
-use crate::basic_types::HashMap;
+use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;

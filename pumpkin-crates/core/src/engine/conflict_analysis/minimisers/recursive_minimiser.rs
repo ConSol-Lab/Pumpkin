@@ -1,6 +1,6 @@
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::HashMap;
-use crate::basic_types::HashSet;
+use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;

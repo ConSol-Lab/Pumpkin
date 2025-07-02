@@ -1,7 +1,7 @@
 /// Contains functions related to debugging
 use std::ops::Range;
 
-use crate::basic_types::HashSet;
+use crate::containers::HashSet;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_over_interval_from_scratch;
