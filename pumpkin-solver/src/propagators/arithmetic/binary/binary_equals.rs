@@ -257,10 +257,6 @@ where
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
-            return Err(conflict.into());
-        }
-
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 
