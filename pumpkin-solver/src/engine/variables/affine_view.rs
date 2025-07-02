@@ -164,6 +164,21 @@ where
             self.inner.unpack_event(event)
         }
     }
+
+    fn get_holes_on_current_decision_level(
+        &self,
+        assignments: &Assignments,
+    ) -> impl Iterator<Item = i32> {
+        self.inner
+            .get_holes_on_current_decision_level(assignments)
+            .map(|value| self.map(value))
+    }
+
+    fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
+        self.inner
+            .get_holes(assignments)
+            .map(|value| self.map(value))
+    }
 }
 
 impl<View> TransformableVariable<AffineView<View>> for AffineView<View>

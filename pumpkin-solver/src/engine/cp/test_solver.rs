@@ -15,6 +15,7 @@ use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
@@ -66,6 +67,11 @@ impl TestSolver {
         self.assignments.grow(lb, ub)
     }
 
+    pub(crate) fn new_sparse_variable(&mut self, values: Vec<i32>) -> DomainId {
+        self.notification_engine.grow();
+        self.assignments.create_new_integer_variable_sparse(values)
+    }
+
     pub(crate) fn new_literal(&mut self) -> Literal {
         let domain_id = self.new_variable(0, 1);
         Literal::new(domain_id)
@@ -114,6 +120,33 @@ impl TestSolver {
 
     pub(crate) fn lower_bound(&self, var: DomainId) -> i32 {
         self.assignments.get_lower_bound(var)
+    }
+
+    pub(crate) fn remove_and_notify(
+        &mut self,
+        propagator: PropagatorId,
+        var: DomainId,
+        value: i32,
+    ) -> EnqueueDecision {
+        let result = self.assignments.post_predicate(
+            predicate!(var != value),
+            None,
+            &mut self.notification_engine,
+        );
+        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        let mut propagator_queue = PropagatorQueue::new(4);
+        self.notification_engine
+            .notify_propagators_about_domain_events_test(
+                &mut self.assignments,
+                &mut self.trailed_values,
+                &mut self.propagator_store,
+                &mut propagator_queue,
+            );
+        if propagator_queue.is_propagator_present(propagator) {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
+        }
     }
 
     pub(crate) fn increase_lower_bound_and_notify(
@@ -310,5 +343,26 @@ impl TestSolver {
 
     pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
         self.inference_codes.next_key()
+    }
+
+    pub(crate) fn increase_decision_level(&mut self) {
+        self.assignments.increase_decision_level();
+        self.notification_engine.increase_decision_level();
+        self.trailed_values.increase_decision_level();
+    }
+
+    pub(crate) fn synchronise(&mut self, level: usize) {
+        let _ = self
+            .assignments
+            .synchronise(level, &mut self.notification_engine);
+        self.notification_engine
+            .synchronise(level, &self.assignments, &mut self.trailed_values);
+        self.trailed_values.synchronise(level);
+
+        self.propagator_store
+            .iter_propagators_mut()
+            .for_each(|propagator| {
+                propagator.synchronise(PropagationContext::new(&self.assignments))
+            })
     }
 }

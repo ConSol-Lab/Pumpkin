@@ -48,12 +48,27 @@ impl Default for Assignments {
 pub(crate) struct EmptyDomain;
 
 impl Assignments {
+    /// Returns all of the holes in the domain which were created at the provided decision level
     pub(crate) fn get_holes_on_decision_level(
         &self,
         domain_id: DomainId,
         decision_level: usize,
     ) -> impl Iterator<Item = i32> + '_ {
         self.domains[domain_id].get_holes_from_decision_level(decision_level)
+    }
+
+    /// Returns all of the holes in the domain which were created at the current decision level
+    pub(crate) fn get_holes_on_current_decision_level(
+        &self,
+        domain_id: DomainId,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
+    }
+
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
+    pub(crate) fn get_holes(&self, domain_id: DomainId) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id].get_holes()
     }
 
     pub(crate) fn increase_decision_level(&mut self) {
@@ -1285,6 +1300,7 @@ impl IntegerDomain {
         }
     }
 
+    /// Returns the holes which were created on the provided decision level.
     pub(crate) fn get_holes_from_decision_level(
         &self,
         decision_level: usize,
@@ -1293,6 +1309,24 @@ impl IntegerDomain {
             .iter()
             .filter(move |entry| entry.decision_level == decision_level)
             .map(|entry| entry.removed_value)
+    }
+
+    /// Returns the holes which were created on the current decision level.
+    pub(crate) fn get_holes_from_current_decision_level(
+        &self,
+        current_decision_level: usize,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.hole_updates
+            .iter()
+            .rev()
+            .take_while(move |entry| entry.decision_level == current_decision_level)
+            .map(|entry| entry.removed_value)
+    }
+
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
+    pub(crate) fn get_holes(&self) -> impl Iterator<Item = i32> + '_ {
+        self.holes.keys().copied()
     }
 }
 

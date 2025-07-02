@@ -126,6 +126,18 @@ impl IntegerVariable for Literal {
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         self.integer_variable.watch_all_backtrack(watchers, events)
     }
+
+    fn get_holes_on_current_decision_level(
+        &self,
+        assignments: &Assignments,
+    ) -> impl Iterator<Item = i32> {
+        self.integer_variable
+            .get_holes_on_current_decision_level(assignments)
+    }
+
+    fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
+        self.integer_variable.get_holes(assignments)
+    }
 }
 
 impl PredicateConstructor for Literal {

@@ -2,7 +2,10 @@ use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
 use crate::proof::ConstraintTag;
+use crate::propagators::binary::BinaryEqualsPropagatorArgs;
+use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
 use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -26,12 +29,16 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
 /// Creates the [`NegatableConstraint`] `lhs = rhs`.
 ///
 /// Its negation is [`binary_not_equals`].
-pub fn binary_equals<Var: IntegerVariable + 'static>(
-    lhs: Var,
-    rhs: Var,
+pub fn binary_equals<AVar: IntegerVariable + 'static, BVar: IntegerVariable + 'static>(
+    lhs: AVar,
+    rhs: BVar,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+    BinaryEqualConstraint {
+        a: lhs,
+        b: rhs,
+        constraint_tag,
+    }
 }
 
 /// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
@@ -48,12 +55,118 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
 /// Creates the [`NegatableConstraint`] `lhs != rhs`.
 ///
 /// Its negation is [`binary_equals`].
-pub fn binary_not_equals<Var: IntegerVariable + 'static>(
-    lhs: Var,
-    rhs: Var,
+pub fn binary_not_equals<AVar: IntegerVariable + 'static, BVar: IntegerVariable + 'static>(
+    lhs: AVar,
+    rhs: BVar,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+    BinaryNotEqualsConstraint {
+        a: lhs,
+        b: rhs,
+        constraint_tag,
+    }
+}
+
+struct BinaryEqualConstraint<AVar, BVar> {
+    a: AVar,
+    b: BVar,
+    constraint_tag: ConstraintTag,
+}
+
+impl<AVar, BVar> Constraint for BinaryEqualConstraint<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(BinaryEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+        })
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: BinaryEqualsPropagatorArgs {
+                a: self.a,
+                b: self.b,
+                constraint_tag: self.constraint_tag,
+            },
+            reification_literal,
+        })
+    }
+}
+
+impl<AVar, BVar> NegatableConstraint for BinaryEqualConstraint<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    type NegatedConstraint = BinaryNotEqualsConstraint<AVar, BVar>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        BinaryNotEqualsConstraint {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            constraint_tag: self.constraint_tag,
+        }
+    }
+}
+
+struct BinaryNotEqualsConstraint<AVar, BVar> {
+    a: AVar,
+    b: BVar,
+    constraint_tag: ConstraintTag,
+}
+
+impl<AVar, BVar> Constraint for BinaryNotEqualsConstraint<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a: self.a,
+            b: self.b,
+            constraint_tag: self.constraint_tag,
+        })
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(ReifiedPropagatorArgs {
+            propagator: BinaryNotEqualsPropagatorArgs {
+                a: self.a,
+                b: self.b,
+                constraint_tag: self.constraint_tag,
+            },
+            reification_literal,
+        })
+    }
+}
+
+impl<AVar, BVar> NegatableConstraint for BinaryNotEqualsConstraint<AVar, BVar>
+where
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
+{
+    type NegatedConstraint = BinaryEqualConstraint<AVar, BVar>;
+
+    fn negation(&self) -> Self::NegatedConstraint {
+        BinaryEqualConstraint {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            constraint_tag: self.constraint_tag,
+        }
+    }
 }
 
 struct EqualConstraint<Var> {

@@ -1,4 +1,5 @@
 pub(crate) mod absolute_value;
+pub(crate) mod binary;
 pub(crate) mod division;
 pub(crate) mod integer_multiplication;
 pub(crate) mod linear_less_or_equal;

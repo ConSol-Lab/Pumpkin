@@ -22,6 +22,8 @@ impl DomainEvents {
             | DomainEvent::UpperBound
             | DomainEvent::Removal
     ));
+    pub(crate) const REMOVAL: DomainEvents =
+        DomainEvents::create_with_int_events(enum_set!(DomainEvent::Removal));
     /// DomainEvents with only lower bound tightening.
     pub(crate) const LOWER_BOUND: DomainEvents =
         DomainEvents::create_with_int_events(enum_set!(DomainEvent::LowerBound));
