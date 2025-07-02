@@ -35,8 +35,8 @@ use pumpkin_solver::Solver;
 use self::instance::FlatZincInstance;
 use self::instance::Output;
 use crate::flatzinc::error::FlatZincError;
-use crate::ProofType;
 use crate::os_signal_termination::OsSignal;
+use crate::ProofType;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";

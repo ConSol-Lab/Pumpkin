@@ -10,7 +10,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-thiserror = "1.0.39"
+thiserror = "2.0.12"
 log = "0.4.17"
 bitfield = "0.14.0"
 enumset = "1.1.2"

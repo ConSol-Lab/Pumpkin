@@ -549,7 +549,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_propagation_method.into(),
                     args.cumulative_incremental_backtracking,
                 ),
-                optimisation_strategy: args.optimisation_strategy,
+                optimisation_strategy: args.optimisation_strategy.into(),
                 proof_type: args.proof_path.map(|_| args.proof_type),
             },
         )?,
@@ -641,10 +641,11 @@ impl Display for ProofType {
 }
 
 macro_rules! wrap_with_value_enum {
-    ($value_enum:ident => $solver_enum:path { $($variants:ident),+ $(,)? }) => {
+    ($(#[$struct_annotations:meta])* $value_enum:ident => $solver_enum:path { $($(#[$variant_annotations:meta])* $variants:ident),+ $(,)? }) => {
+        $(#[$struct_annotations])*
         #[derive(Clone, Copy, Debug, clap::ValueEnum)]
         enum $value_enum {
-            $($variants),+
+            $($(#[$variant_annotations])* $variants),+
         }
 
         impl From<$value_enum> for $solver_enum {
@@ -684,6 +685,7 @@ wrap_with_value_enum!(SequenceGeneratorType => pumpkin_solver::options::Sequence
 
 wrap_with_value_enum!(ConflictResolver => pumpkin_solver::options::ConflictResolver {
     NoLearning,
+    #[allow(clippy::upper_case_acronyms, reason = "this is how the library defines it")]
     UIP,
 });
 
@@ -693,14 +695,17 @@ wrap_with_value_enum!(CumulativeExplanationType => pumpkin_solver::options::Cumu
     Pointwise,
 });
 
-wrap_with_value_enum!(CumulativePropagationMethod => pumpkin_solver::options::CumulativePropagationMethod {
-    TimeTablePerPoint,
-    TimeTablePerPointIncremental,
-    TimeTablePerPointIncrementalSynchronised,
-    TimeTableOverInterval,
-    TimeTableOverIntervalIncremental,
-    TimeTableOverIntervalIncrementalSynchronised,
-});
+wrap_with_value_enum!(
+    #[allow(clippy::enum_variant_names, reason = "this is how the library defines them")]
+    CumulativePropagationMethod => pumpkin_solver::options::CumulativePropagationMethod {
+        TimeTablePerPoint,
+        TimeTablePerPointIncremental,
+        TimeTablePerPointIncrementalSynchronised,
+        TimeTableOverInterval,
+        TimeTableOverIntervalIncremental,
+        TimeTableOverIntervalIncrementalSynchronised,
+    }
+);
 
 wrap_with_value_enum!(OptimisationStrategy => pumpkin_solver::optimisation::OptimisationStrategy {
     LinearSatUnsat,
