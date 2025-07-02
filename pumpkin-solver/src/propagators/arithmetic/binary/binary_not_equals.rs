@@ -208,3 +208,90 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::propagation::EnqueueDecision;
+    use crate::engine::test_solver::TestSolver;
+    use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
+
+    #[test]
+    fn detects_conflict() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 0);
+        let b = solver.new_variable(0, 0);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(BinaryNotEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect_err("Expected conflict to be detected");
+    }
+
+    #[test]
+    fn propagate_when_one_is_fixed() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 0);
+        let b = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(BinaryNotEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect("Expected no conflict to be detected");
+
+        solver.assert_bounds(b, 1, 1);
+    }
+
+    #[test]
+    fn incremental_propagation() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 0);
+        let b = solver.new_variable(0, 10);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let propagator = solver
+            .new_propagator(BinaryNotEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect("Expected no conflict to be detected");
+
+        solver.assert_bounds(b, 1, 10);
+
+        solver.increase_decision_level();
+
+        let should_enqueue = solver.decrease_upper_bound_and_notify(propagator, 1, b, 5);
+        assert_eq!(should_enqueue, EnqueueDecision::Skip);
+
+        solver.synchronise(0);
+        let should_enqueue = solver.decrease_upper_bound_and_notify(propagator, 1, b, 1);
+        assert_eq!(should_enqueue, EnqueueDecision::Enqueue);
+    }
+
+    #[test]
+    fn non_overlapping_is_ok() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 5);
+        let b = solver.new_variable(6, 10);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(BinaryNotEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect("Expected no conflict to be detected");
+
+        solver.assert_bounds(a, 0, 5);
+        solver.assert_bounds(b, 6, 10);
+    }
+}

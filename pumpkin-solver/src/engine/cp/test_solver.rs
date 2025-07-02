@@ -15,6 +15,7 @@ use crate::containers::KeyGenerator;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
@@ -342,5 +343,26 @@ impl TestSolver {
 
     pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
         self.inference_codes.next_key()
+    }
+
+    pub(crate) fn increase_decision_level(&mut self) {
+        self.assignments.increase_decision_level();
+        self.notification_engine.increase_decision_level();
+        self.trailed_values.increase_decision_level();
+    }
+
+    pub(crate) fn synchronise(&mut self, level: usize) {
+        let _ = self
+            .assignments
+            .synchronise(level, &mut self.notification_engine);
+        self.notification_engine
+            .synchronise(level, &self.assignments, &mut self.trailed_values);
+        self.trailed_values.synchronise(level);
+
+        self.propagator_store
+            .iter_propagators_mut()
+            .for_each(|propagator| {
+                propagator.synchronise(PropagationContext::new(&self.assignments))
+            })
     }
 }
