@@ -1,6 +1,7 @@
 /// Specifies the type of sequence which is used to generate conflict limits before a restart
 /// occurs.
 #[derive(Default, Clone, Copy, Debug)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum SequenceGeneratorType {
     /// Indicates that the restart strategy should restart every `x` conflicts.
     #[default]

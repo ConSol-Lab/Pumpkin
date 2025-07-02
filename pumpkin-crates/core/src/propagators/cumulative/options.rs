@@ -46,6 +46,7 @@ impl CumulativeOptions {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum CumulativePropagationMethod {
     TimeTablePerPoint,
     TimeTablePerPointIncremental,

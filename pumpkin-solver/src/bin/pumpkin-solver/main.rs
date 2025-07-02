@@ -6,7 +6,6 @@ mod parsers;
 mod result;
 
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -26,6 +25,7 @@ use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use pumpkin_solver::convert_case::Case;
+use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
@@ -489,7 +489,7 @@ fn run() -> PumpkinResult<()> {
     };
 
     let restart_options = RestartOptions {
-        sequence_generator_type: args.restart_sequence_generator_type.into(),
+        sequence_generator_type: args.restart_sequence_generator_type,
         base_interval: args.restart_base_interval,
         min_num_conflicts_before_first_restart: args.restart_min_num_conflicts_before_first_restart,
         lbd_coef: args.restart_lbd_coef,
@@ -503,7 +503,7 @@ fn run() -> PumpkinResult<()> {
         activity_decay_factor: 0.99,
         limit_num_high_lbd_nogoods: args.learning_max_num_clauses,
         lbd_threshold: args.learning_lbd_threshold,
-        nogood_sorting_strategy: args.learning_sorting_strategy.into(),
+        nogood_sorting_strategy: args.learning_sorting_strategy,
         activity_bump_increment: 1.0,
     };
 
@@ -517,7 +517,7 @@ fn run() -> PumpkinResult<()> {
         },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
-        conflict_resolver: args.conflict_resolver.into(),
+        conflict_resolver: args.conflict_resolver,
         learning_options,
     };
 
@@ -544,12 +544,12 @@ fn run() -> PumpkinResult<()> {
                 all_solutions: args.all_solutions,
                 cumulative_options: CumulativeOptions::new(
                     args.cumulative_allow_holes,
-                    args.cumulative_explanation_type.into(),
+                    args.cumulative_explanation_type,
                     args.cumulative_generate_sequence,
-                    args.cumulative_propagation_method.into(),
+                    args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
                 ),
-                optimisation_strategy: args.optimisation_strategy.into(),
+                optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),
             },
         )?,
@@ -630,84 +630,3 @@ enum ProofType {
     /// Log the full proof with hints.
     Full,
 }
-
-impl Display for ProofType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProofType::Scaffold => write!(f, "scaffold"),
-            ProofType::Full => write!(f, "full"),
-        }
-    }
-}
-
-macro_rules! wrap_with_value_enum {
-    ($(#[$struct_annotations:meta])* $value_enum:ident => $solver_enum:path { $($(#[$variant_annotations:meta])* $variants:ident),+ $(,)? }) => {
-        $(#[$struct_annotations])*
-        #[derive(Clone, Copy, Debug, clap::ValueEnum)]
-        enum $value_enum {
-            $($(#[$variant_annotations])* $variants),+
-        }
-
-        impl From<$value_enum> for $solver_enum {
-            fn from(value: $value_enum) -> $solver_enum {
-                match value {
-                    $($value_enum::$variants => <$solver_enum>::$variants),+
-                }
-            }
-        }
-
-        impl From<$solver_enum> for $value_enum {
-            fn from(value: $solver_enum) -> $value_enum {
-                 match value {
-                    $(<$solver_enum>::$variants => $value_enum::$variants),+
-                }
-            }
-        }
-
-        impl Default for $value_enum {
-            fn default() -> Self {
-                <$solver_enum as Default>::default().into()
-            }
-        }
-    };
-}
-
-wrap_with_value_enum!(LearnedNogoodSortingStrategy => pumpkin_solver::options::LearnedNogoodSortingStrategy {
-    Activity,
-    Lbd,
-});
-
-wrap_with_value_enum!(SequenceGeneratorType => pumpkin_solver::options::SequenceGeneratorType {
-    Constant,
-    Geometric,
-    Luby,
-});
-
-wrap_with_value_enum!(ConflictResolver => pumpkin_solver::options::ConflictResolver {
-    NoLearning,
-    #[allow(clippy::upper_case_acronyms, reason = "this is how the library defines it")]
-    UIP,
-});
-
-wrap_with_value_enum!(CumulativeExplanationType => pumpkin_solver::options::CumulativeExplanationType {
-    Naive,
-    BigStep,
-    Pointwise,
-});
-
-wrap_with_value_enum!(
-    #[allow(clippy::enum_variant_names, reason = "this is how the library defines them")]
-    CumulativePropagationMethod => pumpkin_solver::options::CumulativePropagationMethod {
-        TimeTablePerPoint,
-        TimeTablePerPointIncremental,
-        TimeTablePerPointIncrementalSynchronised,
-        TimeTableOverInterval,
-        TimeTableOverIntervalIncremental,
-        TimeTableOverIntervalIncrementalSynchronised,
-    }
-);
-
-wrap_with_value_enum!(OptimisationStrategy => pumpkin_solver::optimisation::OptimisationStrategy {
-    LinearSatUnsat,
-    LinearUnsatSat,
-});

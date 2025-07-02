@@ -34,6 +34,7 @@ impl Default for LearningOptions {
 
 /// The sorting strategy which is used when considering removal from the clause database.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum LearnedNogoodSortingStrategy {
     /// Sorts based on the activity, the activity is bumped when a literal is encountered during
     /// conflict analysis.

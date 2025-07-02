@@ -30,6 +30,7 @@ use crate::variables::IntegerVariable;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum CumulativeExplanationType {
     /// The naive explanation approach simply uses the current bounds of the profile and the
     /// propagated task in the explanation.

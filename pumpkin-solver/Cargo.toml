@@ -14,7 +14,7 @@ env_logger = "0.10.0"
 flatzinc = "0.3.21"
 fnv = "1.0.7"
 log = "0.4.27"
-pumpkin-solver-core = { path = "../pumpkin-crates/pumpkin-solver-core/" }
+pumpkin-solver-core = { path = "../pumpkin-crates/core/", features = ["clap"] }
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 

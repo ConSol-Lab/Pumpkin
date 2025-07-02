@@ -173,6 +173,7 @@ pub enum CoreExtractionResult {
 /// The manner in which conflict resolution is done greatly impacts the performance of the
 /// solver.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolver {
     NoLearning,
     #[default]

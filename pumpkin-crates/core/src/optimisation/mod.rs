@@ -22,6 +22,7 @@ pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
 
 /// The type of search which is performed by the solver.
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum OptimisationStrategy {
     /// Linear SAT-UNSAT - Starts with a satisfiable solution and tightens the bound on the
     /// objective variable until an UNSAT result is reached. Can be seen as upper-bounding search.
