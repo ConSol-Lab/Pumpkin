@@ -29,9 +29,9 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
 /// Creates the [`NegatableConstraint`] `lhs = rhs`.
 ///
 /// Its negation is [`binary_not_equals`].
-pub fn binary_equals<Var: IntegerVariable + 'static>(
-    lhs: Var,
-    rhs: Var,
+pub fn binary_equals<AVar: IntegerVariable + 'static, BVar: IntegerVariable + 'static>(
+    lhs: AVar,
+    rhs: BVar,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     BinaryEqualConstraint {
@@ -67,15 +67,16 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     }
 }
 
-struct BinaryEqualConstraint<Var> {
-    a: Var,
-    b: Var,
+struct BinaryEqualConstraint<AVar, BVar> {
+    a: AVar,
+    b: BVar,
     constraint_tag: ConstraintTag,
 }
 
-impl<Var> Constraint for BinaryEqualConstraint<Var>
+impl<AVar, BVar> Constraint for BinaryEqualConstraint<AVar, BVar>
 where
-    Var: IntegerVariable + 'static,
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         solver.add_propagator(BinaryEqualsPropagatorArgs {
@@ -101,11 +102,12 @@ where
     }
 }
 
-impl<Var> NegatableConstraint for BinaryEqualConstraint<Var>
+impl<AVar, BVar> NegatableConstraint for BinaryEqualConstraint<AVar, BVar>
 where
-    Var: IntegerVariable + 'static,
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
 {
-    type NegatedConstraint = BinaryNotEqualsConstraint<Var>;
+    type NegatedConstraint = BinaryNotEqualsConstraint<AVar, BVar>;
 
     fn negation(&self) -> Self::NegatedConstraint {
         BinaryNotEqualsConstraint {
@@ -116,15 +118,16 @@ where
     }
 }
 
-struct BinaryNotEqualsConstraint<Var> {
-    a: Var,
-    b: Var,
+struct BinaryNotEqualsConstraint<AVar, BVar> {
+    a: AVar,
+    b: BVar,
     constraint_tag: ConstraintTag,
 }
 
-impl<Var> Constraint for BinaryNotEqualsConstraint<Var>
+impl<AVar, BVar> Constraint for BinaryNotEqualsConstraint<AVar, BVar>
 where
-    Var: IntegerVariable + 'static,
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         solver.add_propagator(BinaryNotEqualsPropagatorArgs {
@@ -150,11 +153,12 @@ where
     }
 }
 
-impl<Var> NegatableConstraint for BinaryNotEqualsConstraint<Var>
+impl<AVar, BVar> NegatableConstraint for BinaryNotEqualsConstraint<AVar, BVar>
 where
-    Var: IntegerVariable + 'static,
+    AVar: IntegerVariable + 'static,
+    BVar: IntegerVariable + 'static,
 {
-    type NegatedConstraint = BinaryEqualConstraint<Var>;
+    type NegatedConstraint = BinaryEqualConstraint<AVar, BVar>;
 
     fn negation(&self) -> Self::NegatedConstraint {
         BinaryEqualConstraint {

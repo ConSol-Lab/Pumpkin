@@ -307,3 +307,104 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::propagation::EnqueueDecision;
+    use crate::engine::test_solver::TestSolver;
+    use crate::propagators::binary::BinaryEqualsPropagatorArgs;
+
+    #[test]
+    fn test_propagation_of_bounds() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 5);
+        let b = solver.new_variable(3, 7);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let result = solver.new_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+
+        assert!(result.is_ok());
+
+        solver.assert_bounds(a, 3, 5);
+        solver.assert_bounds(b, 3, 5);
+    }
+
+    #[test]
+    fn test_propagation_of_holes() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_sparse_variable(vec![2, 4, 6, 9]);
+        let b = solver.new_sparse_variable(vec![3, 4, 7, 9]);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let result = solver.new_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+
+        assert!(result.is_ok());
+
+        solver.assert_bounds(a, 4, 9);
+        solver.assert_bounds(b, 4, 9);
+
+        for i in 5..=8 {
+            assert!(!solver.contains(a, i));
+            assert!(!solver.contains(b, i));
+        }
+    }
+
+    #[test]
+    fn test_propagation_of_holes_incremental() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(2, 9);
+        let b = solver.new_variable(3, 9);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let propagator = solver
+            .new_propagator(BinaryEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect("Expected result to be okay");
+
+        solver.assert_bounds(a, 3, 9);
+        solver.assert_bounds(b, 3, 9);
+
+        let should_enqueue = solver.remove_and_notify(propagator, a, 5);
+        assert_eq!(should_enqueue, EnqueueDecision::Enqueue);
+
+        let should_enqueue = solver.remove_and_notify(propagator, a, 6);
+        assert_eq!(should_enqueue, EnqueueDecision::Enqueue);
+
+        let should_enqueue = solver.remove_and_notify(propagator, b, 4);
+        assert_eq!(should_enqueue, EnqueueDecision::Enqueue);
+
+        let result = solver.propagate(propagator);
+        assert!(result.is_ok());
+
+        assert!(!solver.contains(b, 5));
+        assert!(!solver.contains(b, 6));
+        assert!(!solver.contains(a, 4));
+    }
+
+    #[test]
+    fn test_conflict() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(0, 5);
+        let b = solver.new_variable(6, 9);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(BinaryEqualsPropagatorArgs {
+                a,
+                b,
+                constraint_tag,
+            })
+            .expect_err("Expected result to be err");
+    }
+}

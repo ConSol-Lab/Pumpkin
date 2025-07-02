@@ -248,6 +248,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         self.is_fixed(literal)
     }
 
+    /// Returns the holes which were created on the current decision level.
     fn get_holes_on_current_decision_level<Var: IntegerVariable>(
         &self,
         var: &Var,
@@ -255,6 +256,8 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.get_holes_on_current_decision_level(self.assignments())
     }
 
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
     fn get_holes<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
         var.get_holes(self.assignments())
     }

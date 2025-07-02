@@ -1299,6 +1299,7 @@ impl IntegerDomain {
         }
     }
 
+    /// Returns the holes which were created on the provided decision level.
     pub(crate) fn get_holes_from_decision_level(
         &self,
         decision_level: usize,
@@ -1309,6 +1310,7 @@ impl IntegerDomain {
             .map(|entry| entry.removed_value)
     }
 
+    /// Returns the holes which were created on the current decision level.
     pub(crate) fn get_holes_from_current_decision_level(
         &self,
         current_decision_level: usize,
@@ -1320,6 +1322,8 @@ impl IntegerDomain {
             .map(|entry| entry.removed_value)
     }
 
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
     pub(crate) fn get_holes(&self) -> impl Iterator<Item = i32> + '_ {
         self.holes.keys().copied()
     }
