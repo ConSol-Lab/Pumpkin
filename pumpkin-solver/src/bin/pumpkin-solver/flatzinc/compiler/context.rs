@@ -1,9 +1,12 @@
+use std::cell::RefCell;
+use std::cell::RefMut;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_solver::containers::HashMap;
+use pumpkin_solver::containers::HashSet;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::Solver;
@@ -56,6 +59,9 @@ pub(crate) struct CompilationContext<'a> {
 
     /// All set parameters.
     pub(crate) set_constants: HashMap<Rc<str>, Set>,
+
+    /// All the constraints with their constraint tags.
+    pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
 }
 
 /// A set parameter.
@@ -93,6 +99,8 @@ impl CompilationContext<'_> {
             integer_variable_arrays: Default::default(),
 
             set_constants: Default::default(),
+
+            constraints: Default::default(),
         }
     }
 
@@ -455,13 +463,17 @@ impl Identifiers {
 
 #[derive(Debug, Default)]
 pub(crate) struct VariableEquivalences {
-    /// The equivalence classes.
-    classes: Vec<BTreeSet<Rc<str>>>,
-    /// The domain information associated with each equivalence class.
-    domains: Vec<Domain>,
+    /// For each variable, the equivalence class it belongs to.
+    classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
+}
 
-    /// For each variable, the index into `classes` is the equivalence class it belongs to.
-    belongs_to: HashMap<Rc<str>, usize>,
+#[derive(Debug)]
+struct EquivalenceClass {
+    /// The variables that are part of the equivalence class. We use a BTreeSet so that we can
+    /// consistently get a representative, which will be the first element in the set.
+    variables: BTreeSet<Rc<str>>,
+    /// The domain to associate with these variables.
+    domain: Domain,
 }
 
 impl VariableEquivalences {
@@ -472,64 +484,67 @@ impl VariableEquivalences {
     ///  - One of the variables, or both, do not belong to an equivalence class. In this case the
     ///    method will panic.
     pub(crate) fn merge(&mut self, variable_1: Rc<str>, variable_2: Rc<str>) {
-        let equiv_1_idx = self.belongs_to.get(&variable_1).copied().unwrap();
-        let equiv_2_idx = self.belongs_to.get(&variable_2).copied().unwrap();
+        let equiv_1 = Rc::clone(&self.classes[&variable_1]);
+        let equiv_2 = Rc::clone(&self.classes[&variable_2]);
 
-        // The two variables are in the same equivalence class already.
-        if equiv_1_idx == equiv_2_idx {
-            return;
+        let merged_domain = equiv_1.borrow().domain.merge(&equiv_2.borrow().domain);
+        let merged_variables: BTreeSet<Rc<str>> = equiv_1
+            .borrow()
+            .variables
+            .iter()
+            .cloned()
+            .chain(equiv_2.borrow().variables.iter().cloned())
+            .collect();
+
+        let new_equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: merged_variables.clone(),
+            domain: merged_domain,
+        }));
+
+        // Update the equivalence class for all the variables in the class.
+        for variable in merged_variables {
+            let _ = self
+                .classes
+                .insert(variable, Rc::clone(&new_equivalence_class));
         }
-
-        let equiv_1 = self.classes.swap_remove(equiv_1_idx);
-        let domain_1 = self.domains.swap_remove(equiv_1_idx);
-
-        if equiv_1_idx != self.classes.len() {
-            // rewire the last class that was moved by calls to `swap_remove`
-            self.classes[equiv_1_idx].iter().for_each(|class| {
-                let _ = self.belongs_to.insert(Rc::clone(class), equiv_1_idx);
-            });
-        }
-
-        self.classes[equiv_2_idx].extend(equiv_1);
-        self.domains[equiv_2_idx].merge(domain_1);
-        let _ = self.belongs_to.insert(variable_1, equiv_2_idx);
     }
 
     /// Create a new equivalence class with the given representative.
     pub(crate) fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
-        let _ = self
-            .belongs_to
-            .insert(Rc::clone(&representative), self.classes.len());
-        self.classes.push([representative].into());
-        self.domains
-            .push(Domain::from_lower_bound_and_upper_bound(lb, ub));
+        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: [Rc::clone(&representative)].into_iter().collect(),
+            domain: Domain::IntervalDomain { lb, ub },
+        }));
+
+        let _ = self.classes.insert(representative, equivalence_class);
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable
     /// belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
     pub(crate) fn representative(&self, variable: &str) -> Rc<str> {
-        let equiv_idx = self.belongs_to[variable];
-
-        self.classes[equiv_idx].first().cloned().unwrap()
+        self.classes[variable]
+            .borrow()
+            .variables
+            .first()
+            .cloned()
+            .expect("all classes have at least one representative")
     }
 
     /// Get the domain for the given variable, based on the equivalence class it belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
     pub(crate) fn domain(&self, variable: &str) -> Domain {
-        let equiv_idx = self.belongs_to[variable];
-
-        self.domains[equiv_idx].clone()
+        self.classes[variable].borrow().domain.clone()
     }
 
-    pub(crate) fn get_mut_domain(&mut self, variable: &str) -> &mut Domain {
-        let equiv_idx = self.belongs_to[variable];
-
-        &mut self.domains[equiv_idx]
+    pub(crate) fn get_mut_domain(&mut self, variable: &str) -> RefMut<'_, Domain> {
+        RefMut::map(self.classes[variable].borrow_mut(), |class| {
+            &mut class.domain
+        })
     }
 
     pub(crate) fn is_defined(&self, variable: &str) -> bool {
-        self.belongs_to.contains_key(variable)
+        self.classes.contains_key(variable)
     }
 }
 
@@ -557,8 +572,8 @@ impl From<Set> for Domain {
 }
 
 impl Domain {
-    pub(crate) fn merge(&mut self, other: Domain) {
-        let domain = match (self.clone(), other) {
+    pub(crate) fn merge(&self, other: &Domain) -> Domain {
+        match (self, other) {
             (
                 Domain::IntervalDomain { lb, ub },
                 Domain::IntervalDomain {
@@ -566,8 +581,8 @@ impl Domain {
                     ub: ub_other,
                 },
             ) => {
-                let lb = i32::max(lb, lb_other);
-                let ub = i32::min(ub, ub_other);
+                let lb = i32::max(*lb, *lb_other);
+                let ub = i32::min(*ub, *ub_other);
 
                 Domain::from_lower_bound_and_upper_bound(lb, ub)
             }
@@ -578,8 +593,9 @@ impl Domain {
                 // that we do not check whether the resulting values represent an interval
                 Domain::SparseDomain {
                     values: values
-                        .into_iter()
-                        .filter(|value| *value >= lb && *value <= ub)
+                        .iter()
+                        .copied()
+                        .filter(|value| *value >= *lb && *value <= *ub)
                         .collect::<Vec<_>>(),
                 }
             }
@@ -591,15 +607,15 @@ impl Domain {
             ) => {
                 // We simply take the intersection of the two
                 let intersection = values
-                    .into_iter()
+                    .iter()
+                    .copied()
                     .filter(|value| values_other.contains(value))
                     .collect::<Vec<_>>();
                 Domain::SparseDomain {
                     values: intersection,
                 }
             }
-        };
-        *self = domain
+        }
     }
 
     pub(crate) fn is_constant(&self) -> bool {
@@ -703,10 +719,10 @@ mod tests {
 
     #[test]
     fn merge_two_intervals() {
-        let mut interval_1 = Domain::IntervalDomain { lb: -5, ub: 10 };
+        let interval_1 = Domain::IntervalDomain { lb: -5, ub: 10 };
         let interval_2 = Domain::IntervalDomain { lb: 0, ub: 20 };
 
-        interval_1.merge(interval_2);
+        let interval_1 = interval_1.merge(&interval_2);
         assert!(match interval_1 {
             Domain::IntervalDomain { lb, ub } => lb == 0 && ub == 10,
             Domain::SparseDomain { values: _ } => false,
@@ -715,14 +731,14 @@ mod tests {
 
     #[test]
     fn merge_sparse_domains() {
-        let mut sparse_domain_1 = Domain::SparseDomain {
+        let sparse_domain_1 = Domain::SparseDomain {
             values: vec![0, 1, 2],
         };
 
         let sparse_domain_2 = Domain::SparseDomain {
             values: vec![2, 3, 4],
         };
-        sparse_domain_1.merge(sparse_domain_2);
+        let sparse_domain_1 = sparse_domain_1.merge(&sparse_domain_2);
         assert!(match sparse_domain_1 {
             Domain::IntervalDomain { lb: _, ub: _ } => false,
             Domain::SparseDomain { values } => values == vec![2],
@@ -731,12 +747,12 @@ mod tests {
 
     #[test]
     fn merge_sparse_with_interval() {
-        let mut sparse_domain_1 = Domain::SparseDomain {
+        let sparse_domain_1 = Domain::SparseDomain {
             values: vec![2, 3, 4],
         };
         let interval = Domain::IntervalDomain { lb: 3, ub: 20 };
 
-        sparse_domain_1.merge(interval);
+        let sparse_domain_1 = sparse_domain_1.merge(&interval);
         assert!(match sparse_domain_1 {
             Domain::IntervalDomain { lb: _, ub: _ } => false,
             Domain::SparseDomain { values } => {
@@ -747,12 +763,12 @@ mod tests {
 
     #[test]
     fn merge_interval_with_sparse() {
-        let mut interval = Domain::IntervalDomain { lb: 3, ub: 20 };
+        let interval = Domain::IntervalDomain { lb: 3, ub: 20 };
         let sparse_domain_1 = Domain::SparseDomain {
             values: vec![2, 3, 4],
         };
 
-        interval.merge(sparse_domain_1);
+        let interval = interval.merge(&sparse_domain_1);
         assert!(match interval {
             Domain::IntervalDomain { lb: _, ub: _ } => false,
             Domain::SparseDomain { values } => {
