@@ -22,7 +22,7 @@ fn replace_bool2int_identifiers_with_representatives(context: &mut CompilationCo
     for (bool_id, int_id) in entries {
         let _ = context.bool2int.insert(
             context.literal_equivalences.representative(&bool_id),
-            context.integer_equivalences.representative(&int_id),
+            int_id,
         );
     }
 }
@@ -45,16 +45,17 @@ pub(crate) fn run(
                     .boolean_variable_map
                     .entry(representative.clone())
                     .or_insert_with(|| {
-                        if let Some(int_representative) = context.bool2int.get(&representative) {
-                            context.integer_equivalences.binarise(int_representative);
-                            let int_domain =
-                                context.integer_equivalences.domain(&int_representative);
+                        if let Some(int_id) = context.bool2int.get(&representative) {
+                            let int_representative =
+                                context.integer_equivalences.representative(&int_id);
+                            let int_domain = context.integer_equivalences.domain(&int_id);
+                            context.integer_equivalences.binarise(&int_id);
                             let domain_id = *context
                                 .integer_variable_map
-                                .entry(Rc::clone(int_representative))
+                                .entry(int_representative)
                                 .or_insert_with(|| {
                                     if int_domain.is_constant() {
-                                        *context
+                                        let result = *context
                                             .constant_domain_ids
                                             .entry(match &int_domain {
                                                 Domain::IntervalDomain { lb, ub: _ } => *lb,
@@ -63,14 +64,12 @@ pub(crate) fn run(
                                             .or_insert_with(|| {
                                                 int_domain.into_variable(
                                                     context.solver,
-                                                    int_representative.to_string(),
+                                                    int_id.to_string(),
                                                 )
-                                            })
+                                            });
+                                        result
                                     } else {
-                                        int_domain.into_variable(
-                                            context.solver,
-                                            int_representative.to_string(),
-                                        )
+                                        int_domain.into_variable(context.solver, int_id.to_string())
                                     }
                                 });
                             Literal::new(domain_id)
