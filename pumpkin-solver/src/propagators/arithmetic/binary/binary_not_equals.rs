@@ -3,13 +3,10 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
-use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
@@ -51,8 +48,6 @@ where
             b,
 
             inference_code: context.create_inference_code(constraint_tag, BinaryNotEquals),
-
-            is_satisfied: false,
         }
     }
 }
@@ -64,9 +59,6 @@ pub(crate) struct BinaryNotEqualsPropagator<AVar, BVar> {
     b: BVar,
 
     inference_code: InferenceCode,
-
-    /// Keeps track of whether the constraint is currently satisfied
-    is_satisfied: bool,
 }
 
 impl<AVar, BVar> Propagator for BinaryNotEqualsPropagator<AVar, BVar>
@@ -98,26 +90,6 @@ where
         }
     }
 
-    fn notify(
-        &mut self,
-        _context: PropagationContextWithTrailedValues,
-        _local_id: LocalId,
-        _event: OpaqueDomainEvent,
-    ) -> EnqueueDecision {
-        if self.is_satisfied {
-            // If it is already satisfied then we simply skip
-            EnqueueDecision::Skip
-        } else {
-            EnqueueDecision::Enqueue
-        }
-    }
-
-    fn synchronise(&mut self, _context: PropagationContext) {
-        // Either one of the variables has become unassigned or one of the removals could have
-        // become undone
-        self.is_satisfied = false;
-    }
-
     fn priority(&self) -> u32 {
         0
     }
@@ -127,11 +99,6 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if self.is_satisfied {
-            // If it is already satisfied then we simply skip
-            return Ok(());
-        }
-
         if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
             return Err(conflict.into());
         }
@@ -144,13 +111,11 @@ where
 
         if a_ub < b_lb || b_ub < a_lb {
             // The domains are non-overlapping
-            self.is_satisfied = true;
             return Ok(());
         }
 
         // If `a` is fixed then we can propagate
         if a_lb == a_ub {
-            self.is_satisfied = true;
             context.post(
                 predicate!(self.b != a_lb),
                 conjunction!([self.a == a_lb]),
@@ -160,7 +125,6 @@ where
 
         // If `b` is fixed then we can propagate
         if b_lb == b_ub {
-            self.is_satisfied = true;
             context.post(
                 predicate!(self.a != b_lb),
                 conjunction!([self.b == b_lb]),
