@@ -21,6 +21,7 @@ pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
 
+use crate::basic_types::HashMap;
 use crate::containers::KeyGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
@@ -52,6 +53,7 @@ impl ProofLog {
             internal_proof: Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
+                logged_domain_inferences: HashMap::default(),
                 inference_codes: KeyedVec::default(),
                 proof_atomics: ProofAtomics::default(),
                 constraint_tags: KeyGenerator::default(),
@@ -81,6 +83,7 @@ impl ProofLog {
             inference_codes,
             constraint_tags,
             proof_atomics,
+            ..
         }) = self.internal_proof.as_mut()
         else {
             return Ok(ConstraintTag::create_from_index(0));
@@ -119,6 +122,7 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
+            logged_domain_inferences,
             constraint_tags,
             proof_atomics,
             ..
@@ -126,6 +130,10 @@ impl ProofLog {
         else {
             return Ok(ConstraintTag::create_from_index(0));
         };
+
+        if let Some(tag) = logged_domain_inferences.get(&predicate) {
+            return Ok(*tag);
+        }
 
         let inference_tag = constraint_tags.next_key();
 
@@ -142,6 +150,8 @@ impl ProofLog {
         writer.log_inference(inference)?;
 
         propagation_sequence.push(inference_tag);
+
+        let _ = logged_domain_inferences.insert(predicate, inference_tag);
 
         Ok(inference_tag)
     }
@@ -161,8 +171,12 @@ impl ProofLog {
                 propagation_order_hint,
                 constraint_tags,
                 proof_atomics,
+                logged_domain_inferences,
                 ..
             }) => {
+                // Reset the logged domain inferences.
+                logged_domain_inferences.clear();
+
                 let constraint_tag = constraint_tags.next_key();
 
                 let deduction = Deduction {
@@ -300,6 +314,8 @@ enum ProofImpl {
         // order they can be applied to derive the next nogood.
         propagation_order_hint: Option<Vec<ConstraintTag>>,
         proof_atomics: ProofAtomics,
+        /// The domain inferences that are logged for the next deduction.
+        logged_domain_inferences: HashMap<Predicate, ConstraintTag>,
     },
     DimacsProof(DimacsProof<File>),
 }
