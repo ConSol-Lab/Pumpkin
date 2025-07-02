@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use flatzinc::Annotation;
+use pumpkin_solver::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -11,10 +12,27 @@ use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
+fn replace_bool2int_identifiers_with_representatives(context: &mut CompilationContext) {
+    let entries = context
+        .bool2int
+        .iter()
+        .map(|(bool_id, int_id)| (Rc::clone(bool_id), Rc::clone(int_id)))
+        .collect::<Vec<_>>();
+    context.bool2int.clear();
+    for (bool_id, int_id) in entries {
+        let _ = context.bool2int.insert(
+            context.literal_equivalences.representative(&bool_id),
+            context.integer_equivalences.representative(&int_id),
+        );
+    }
+}
+
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
+    replace_bool2int_identifiers_with_representatives(context);
+
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, annos, .. } => {
@@ -25,8 +43,41 @@ pub(crate) fn run(
 
                 let literal = *context
                     .boolean_variable_map
-                    .entry(representative)
-                    .or_insert_with(|| domain.into_boolean(context.solver, id.to_string()));
+                    .entry(representative.clone())
+                    .or_insert_with(|| {
+                        if let Some(int_representative) = context.bool2int.get(&representative) {
+                            context.integer_equivalences.binarise(int_representative);
+                            let int_domain =
+                                context.integer_equivalences.domain(&int_representative);
+                            let domain_id = *context
+                                .integer_variable_map
+                                .entry(Rc::clone(int_representative))
+                                .or_insert_with(|| {
+                                    if int_domain.is_constant() {
+                                        *context
+                                            .constant_domain_ids
+                                            .entry(match &int_domain {
+                                                Domain::IntervalDomain { lb, ub: _ } => *lb,
+                                                Domain::SparseDomain { values } => values[0],
+                                            })
+                                            .or_insert_with(|| {
+                                                int_domain.into_variable(
+                                                    context.solver,
+                                                    int_representative.to_string(),
+                                                )
+                                            })
+                                    } else {
+                                        int_domain.into_variable(
+                                            context.solver,
+                                            int_representative.to_string(),
+                                        )
+                                    }
+                                });
+                            Literal::new(domain_id)
+                        } else {
+                            domain.into_boolean(context.solver, id.to_string())
+                        }
+                    });
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
