@@ -55,9 +55,9 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
 /// Creates the [`NegatableConstraint`] `lhs != rhs`.
 ///
 /// Its negation is [`binary_equals`].
-pub fn binary_not_equals<Var: IntegerVariable + 'static>(
-    lhs: Var,
-    rhs: Var,
+pub fn binary_not_equals<AVar: IntegerVariable + 'static, BVar: IntegerVariable + 'static>(
+    lhs: AVar,
+    rhs: BVar,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
     BinaryNotEqualsConstraint {

@@ -48,6 +48,7 @@ impl Default for Assignments {
 pub(crate) struct EmptyDomain;
 
 impl Assignments {
+    /// Returns all of the holes in the domain which were created at the provided decision level
     pub(crate) fn get_holes_on_decision_level(
         &self,
         domain_id: DomainId,
@@ -56,6 +57,7 @@ impl Assignments {
         self.domains[domain_id].get_holes_from_decision_level(decision_level)
     }
 
+    /// Returns all of the holes in the domain which were created at the current decision level
     pub(crate) fn get_holes_on_current_decision_level(
         &self,
         domain_id: DomainId,
@@ -63,6 +65,8 @@ impl Assignments {
         self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
     }
 
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
     pub(crate) fn get_holes(&self, domain_id: DomainId) -> impl Iterator<Item = i32> + '_ {
         self.domains[domain_id].get_holes()
     }
