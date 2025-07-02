@@ -89,6 +89,11 @@ pub struct AutonomousSearch<BackupBrancher> {
     backup_brancher: BackupBrancher,
     /// The statistics gathered by the autonomous search
     statistics: AutonomousSearchStatistics,
+    /// Whether synchronisation should take place in the next call to
+    /// [`AutonomousSearch::next_decision`].
+    ///
+    /// This is used to prevent unnecessary work when [`AutonomousSearch::synchronise`] is called
+    /// multiple times in a row without a call to [`AutonomousSearch::next_decision`].
     should_synchronise: bool,
 }
 
@@ -99,8 +104,6 @@ create_statistics_struct!(AutonomousSearchStatistics {
     num_predicates_added: usize,
     average_size_of_heap: CumulativeMovingAverage<usize>,
     num_assigned_predicates_encountered: usize,
-    num_synchronised: usize,
-    num_actual_synchronised: usize,
 });
 
 const DEFAULT_VSIDS_INCREMENT: f64 = 1.0;
@@ -249,9 +252,9 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     }
 
     fn synchronise_internal(&mut self) {
-        self.statistics.num_actual_synchronised += 1;
-        // Note that while iterating with 'retain', the function also
-        // re-adds the predicates to the heap that are no longer dormant.
+        // We drain the dormant predicates and add them back to the heap; we could check here
+        // whether the predicates are already satisfied but this appeared to introduce too much
+        // overhead in some cases.
         self.dormant_predicates.drain(..).for_each(|predicate| {
             let id = self.predicate_id_info.get_id(predicate);
 
@@ -297,7 +300,6 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     /// Restores dormant predicates after backtracking.
     fn synchronise(&mut self, assignments: &Assignments) {
-        self.statistics.num_synchronised += 1;
         self.should_synchronise = true;
         self.backup_brancher.synchronise(assignments);
     }
