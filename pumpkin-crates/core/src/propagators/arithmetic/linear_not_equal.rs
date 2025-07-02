@@ -2,8 +2,10 @@ use std::rc::Rc;
 
 use enumset::enum_set;
 
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
+use crate::conjunction;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
@@ -24,7 +26,6 @@ use crate::proof::InferenceCode;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::{basic_types::PropagationStatusCP, conjunction};
 
 declare_inference_label!(LinearNotEquals);
 
