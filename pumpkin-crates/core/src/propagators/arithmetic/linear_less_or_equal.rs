@@ -1,3 +1,6 @@
+use itertools::Itertools;
+use log::warn;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
@@ -39,10 +42,21 @@ where
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs {
-            x,
-            c,
+            mut x,
+            mut c,
             constraint_tag,
         } = self;
+
+        c -= x
+            .iter()
+            .filter(|var| context.lower_bound(*var) == context.upper_bound(*var))
+            .map(|var| context.lower_bound(var))
+            .sum::<i32>();
+        x = x
+            .iter()
+            .filter(|var| context.lower_bound(*var) != context.upper_bound(*var))
+            .cloned()
+            .collect();
 
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
@@ -307,8 +321,8 @@ mod tests {
     fn overflow_leads_to_conflict() {
         let mut solver = TestSolver::default();
 
-        let x = solver.new_variable(i32::MAX, i32::MAX);
-        let y = solver.new_variable(1, 1);
+        let x = solver.new_variable(0, i32::MAX);
+        let y = solver.new_variable(1, 2);
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
@@ -324,8 +338,8 @@ mod tests {
     fn underflow_leads_to_no_propagation() {
         let mut solver = TestSolver::default();
 
-        let x = solver.new_variable(i32::MIN, i32::MIN);
-        let y = solver.new_variable(-1, -1);
+        let x = solver.new_variable(i32::MIN, 0);
+        let y = solver.new_variable(-2, -1);
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
@@ -335,5 +349,31 @@ mod tests {
                 constraint_tag,
             })
             .expect("Expected no error to be detected");
+    }
+
+    #[test]
+    fn const_inline() {
+        let mut solver = TestSolver::default();
+
+        let x = solver.new_variable(-1, 1);
+        let y = solver.new_variable(-1, -1);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let prop_id = solver
+            .new_propagator(LinearLessOrEqualPropagatorArgs {
+                x: [x, y].into(),
+                c: 0,
+                constraint_tag,
+            })
+            .expect("Expected no error to be detected");
+        let prop = solver.propagator_store[prop_id]
+            .downcast_ref::<LinearLessOrEqualPropagator<crate::variables::DomainId>>()
+            .expect("Expected to downcast to LinearLessOrEqualPropagator");
+        assert_eq!(prop.c, 1, "RHS has to be equal to negative constant");
+        assert_eq!(
+            prop.x,
+            Box::from(vec![x]),
+            "LHS has to have exactly one non-constant term"
+        );
     }
 }

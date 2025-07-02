@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use enumset::enum_set;
 
-use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
@@ -25,6 +24,7 @@ use crate::proof::InferenceCode;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::{basic_types::PropagationStatusCP, conjunction};
 
 declare_inference_label!(LinearNotEquals);
 
@@ -47,10 +47,21 @@ where
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearNotEqualPropagatorArgs {
-            terms,
-            rhs,
+            mut terms,
+            mut rhs,
             constraint_tag,
         } = self;
+
+        rhs -= terms
+            .iter()
+            .filter(|var| context.lower_bound(*var) == context.upper_bound(*var))
+            .map(|var| context.lower_bound(var))
+            .sum::<i32>();
+        terms = terms
+            .iter()
+            .filter(|var| context.lower_bound(*var) != context.upper_bound(*var))
+            .cloned()
+            .collect();
 
         for (i, x_i) in terms.iter().enumerate() {
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
@@ -179,6 +190,18 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        // If the propagator has no terms in LHS, then compare RHS with zero and conflict or pass
+        if self.terms.is_empty() {
+            return match self.rhs {
+                0 => Err(PropagatorConflict {
+                    conjunction: conjunction!(),
+                    inference_code: self.inference_code,
+                }
+                .into()),
+                _ => Ok(()),
+            };
+        }
+
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
@@ -416,7 +439,9 @@ mod tests {
             })
             .expect_err("empty domain");
 
-        let expected = conjunction!([x == 2] & [y == 2]);
+        // FIXME That should be a root conflict, no?
+        // let expected = conjunction!([x == 2] & [y == 2]);
+        let expected = conjunction!();
 
         match err {
             Inconsistency::EmptyDomain => panic!("expected an explicit conflict"),
@@ -427,22 +452,31 @@ mod tests {
     #[test]
     fn explanation_for_propagation() {
         let mut solver = TestSolver::default();
-        let x = solver.new_variable(2, 2).scaled(1);
-        let y = solver.new_variable(1, 5).scaled(-1);
+        let x = solver.new_variable(0, 3);
+        let y = solver.new_variable(0, 3);
 
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
             .new_propagator(LinearNotEqualPropagatorArgs {
-                terms: [x, y].into(),
+                terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
                 constraint_tag,
             })
             .expect("non-empty domain");
 
+        solver.remove(x, 0).expect("non-empty domain");
+        solver.remove(x, 1).expect("non-empty domain");
+        solver.remove(x, 3).expect("non-empty domain");
+
+        solver.remove(y, 0).expect("non-empty domain");
+        solver.remove(y, 1).expect("non-empty domain");
+
+        solver.notify_propagator(propagator);
+
         solver.propagate(propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let reason = solver.get_reason_int(predicate![y != 2]);
 
         assert_eq!(conjunction!([x == 2]), reason);
     }
@@ -474,5 +508,31 @@ mod tests {
         solver.notify_propagator(propagator);
 
         solver.propagate(propagator).expect("non-empty domain");
+    }
+
+    #[test]
+    fn const_inline() {
+        let mut solver = TestSolver::default();
+
+        let x = solver.new_variable(-1, 1);
+        let y = solver.new_variable(-1, -1);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let prop_id = solver
+            .new_propagator(LinearNotEqualPropagatorArgs {
+                terms: [x, y].into(),
+                rhs: 0,
+                constraint_tag,
+            })
+            .expect("Expected no error to be detected");
+        let prop = solver.propagator_store[prop_id]
+            .downcast_ref::<LinearNotEqualPropagator<crate::variables::DomainId>>()
+            .expect("Expected to downcast to LinearNotEqualPropagator");
+        assert_eq!(prop.rhs, 1, "RHS has to be equal to negative constant");
+        assert_eq!(
+            prop.terms,
+            Rc::from(vec![x]),
+            "LHS has to have exactly one non-constant term"
+        );
     }
 }
