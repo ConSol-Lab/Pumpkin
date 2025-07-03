@@ -108,7 +108,7 @@ impl ProofLog {
 
         writer.log_inference(inference)?;
 
-        propagation_sequence.push(inference_tag);
+        propagation_sequence.push(Some(inference_tag));
 
         Ok(inference_tag)
     }
@@ -131,8 +131,15 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        if let Some(tag) = logged_domain_inferences.get(&predicate) {
-            return Ok(*tag);
+        if let Some(hint_idx) = logged_domain_inferences.get(&predicate).copied() {
+            let tag = propagation_sequence[hint_idx]
+                .take()
+                .expect("the logged_domain_inferences always points to some index");
+            propagation_sequence.push(Some(tag));
+
+            let _ = logged_domain_inferences.insert(predicate, propagation_sequence.len() - 1);
+
+            return Ok(tag);
         }
 
         let inference_tag = constraint_tags.next_key();
@@ -149,9 +156,9 @@ impl ProofLog {
 
         writer.log_inference(inference)?;
 
-        propagation_sequence.push(inference_tag);
+        propagation_sequence.push(Some(inference_tag));
 
-        let _ = logged_domain_inferences.insert(predicate, inference_tag);
+        let _ = logged_domain_inferences.insert(predicate, propagation_sequence.len() - 1);
 
         Ok(inference_tag)
     }
@@ -191,6 +198,7 @@ impl ProofLog {
                         .as_ref()
                         .iter()
                         .flat_map(|vec| vec.iter().rev().copied())
+                        .flatten()
                         .map(|tag| tag.into())
                         .collect(),
                 };
@@ -312,10 +320,16 @@ enum ProofImpl {
         constraint_tags: KeyGenerator<ConstraintTag>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the
         // order they can be applied to derive the next nogood.
-        propagation_order_hint: Option<Vec<ConstraintTag>>,
+        //
+        // Every element is optional, because when we log a domain inference multiple
+        // times, we have to move the corresponding constraint tag to the end of the hint.
+        // We do this by replacing the existing value with `None` and appending `Some` at
+        // the end.
+        propagation_order_hint: Option<Vec<Option<ConstraintTag>>>,
         proof_atomics: ProofAtomics,
-        /// The domain inferences that are logged for the next deduction.
-        logged_domain_inferences: HashMap<Predicate, ConstraintTag>,
+        /// The domain inferences that are logged for the next deduction. For each
+        /// inference we keep the index in the propagation order hint.
+        logged_domain_inferences: HashMap<Predicate, usize>,
     },
     DimacsProof(DimacsProof<File>),
 }
