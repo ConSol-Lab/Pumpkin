@@ -1,14 +1,10 @@
 //! Scan through all constraint definition and determine whether a `set_in` constraint is present;
 //! if this is the case then update the domain of the variable directly.
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::error::FlatZincError;
 
-pub(crate) fn run(
-    ast: &FlatZincAst,
-    context: &mut CompilationContext,
-) -> Result<(), FlatZincError> {
-    for constraint_item in &ast.constraint_decls {
+pub(crate) fn run(context: &mut CompilationContext) -> Result<(), FlatZincError> {
+    for (_, constraint_item) in &context.constraints {
         let flatzinc::ConstraintItem {
             id,
             exprs,

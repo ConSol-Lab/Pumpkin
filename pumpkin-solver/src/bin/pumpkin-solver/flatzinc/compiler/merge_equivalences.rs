@@ -288,6 +288,8 @@ mod tests {
         let mut context = CompilationContext::new(&mut solver);
         let options = FlatZincOptions::default();
 
+        super::super::reserve_constraint_tags::run(&ast, &mut context)
+            .expect("step should not fail");
         super::super::prepare_variables::run(&ast, &mut context).expect("step should not fail");
         run(&mut ast, &mut context, &options).expect("step should not fail");
 
@@ -296,7 +298,7 @@ mod tests {
             context.integer_equivalences.representative("y")
         );
 
-        assert!(ast.constraint_decls.is_empty());
+        assert!(context.constraints.is_empty());
     }
 
     #[test]
@@ -338,6 +340,8 @@ mod tests {
             ..Default::default()
         };
 
+        super::super::reserve_constraint_tags::run(&ast, &mut context)
+            .expect("step should not fail");
         super::super::prepare_variables::run(&ast, &mut context).expect("step should not fail");
         run(&mut ast, &mut context, &options).expect("step should not fail");
 
@@ -346,6 +350,6 @@ mod tests {
             context.integer_equivalences.representative("y")
         );
 
-        assert_eq!(ast.constraint_decls.len(), 1);
+        assert_eq!(context.constraints.len(), 1);
     }
 }
