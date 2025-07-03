@@ -36,6 +36,28 @@ predicate bool_xor(var bool: a, var bool: b, var bool: r) = pumpkin_bool_xor_rei
 predicate pumpkin_bool_xor(var bool: a, var bool: b);
 predicate pumpkin_bool_xor_reif(var bool: a, var bool: b, var bool: r);
 
+% Big-M reformulation of reified constraints
+predicate int_lin_le_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) =
+    let {
+        set of int: I = index_set(as),
+        int: Mtrue = sum(i in I)(
+            if as[i] > 0 then as[i] * ub(bs[i])
+            else as[i] * lb(bs[i])
+            endif
+        ) - c,
+        int: Mfalse = c + 1 - sum(i in I)(
+            if as[i] > 0 then as[i] * lb(bs[i])
+            else as[i] * ub(bs[i])
+            endif
+        )
+    } in
+    int_lin_le([-Mtrue] ++ as, [not r] ++ bs, c) /\
+    int_lin_le([-Mfalse] ++ [-a | a in as], [r] ++ bs, -c - 1);
+
+
 % Redefinition taken from chuffed:
 % https://github.com/chuffed/chuffed/blob/7b3cd017f17f7a4091a5b2569dc4f1a18f07c121/chuffed/flatzinc/mznlib/redefinitions.mzn#L89C1-L90C19
 predicate int_mod(var int: x, var int: y, var int: z) =
