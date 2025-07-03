@@ -48,6 +48,15 @@ pub enum PredicateType {
     NotEqual,
     Equal,
 }
+impl PredicateType {
+    pub(crate) fn is_lower_bound(&self) -> bool {
+        matches!(self, PredicateType::LowerBound)
+    }
+
+    pub(crate) fn is_upper_bound(&self) -> bool {
+        matches!(self, PredicateType::UpperBound)
+    }
+}
 
 impl From<Predicate> for PredicateType {
     fn from(value: Predicate) -> Self {
