@@ -9,7 +9,6 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
-use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::variables::DomainId;
@@ -73,7 +72,7 @@ impl PredicateTrackerForDomain {
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.lower_bound.on_update(
-                predicate!(domain >= assignments.get_lower_bound(domain)),
+                predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
                 None,
@@ -84,7 +83,7 @@ impl PredicateTrackerForDomain {
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.upper_bound.on_update(
-                predicate!(domain <= assignments.get_upper_bound(domain)),
+                predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
                 None,
@@ -92,8 +91,7 @@ impl PredicateTrackerForDomain {
         }
 
         if !self.disequality.is_empty() {
-            let predicate =
-                predicate!(domain != removed_value.expect("Expected removed value to be provided"));
+            let predicate = predicate_type.into_predicate(domain, assignments, removed_value);
             self.disequality.on_update(
                 predicate,
                 stateful_trail,
@@ -104,12 +102,7 @@ impl PredicateTrackerForDomain {
 
         if !self.equality.is_empty() {
             self.equality.on_update(
-                predicate!(
-                    domain
-                        == assignments.get_assigned_value(&domain).expect(
-                            "Expected variable to be assigned when such an event is generated"
-                        )
-                ),
+                predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
                 None,

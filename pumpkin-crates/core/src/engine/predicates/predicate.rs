@@ -1,4 +1,5 @@
 use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
 use crate::predicate;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple
@@ -55,6 +56,31 @@ impl PredicateType {
 
     pub(crate) fn is_upper_bound(&self) -> bool {
         matches!(self, PredicateType::UpperBound)
+    }
+
+    pub(crate) fn into_predicate(
+        self,
+        domain: DomainId,
+        assignments: &Assignments,
+        removed_value: Option<i32>,
+    ) -> Predicate {
+        match self {
+            PredicateType::LowerBound => {
+                predicate!(domain >= assignments.get_lower_bound(domain))
+            }
+            PredicateType::UpperBound => predicate!(domain <= assignments.get_upper_bound(domain)),
+            PredicateType::NotEqual => predicate!(
+                domain
+                    != removed_value
+                        .expect("For a `NotEqual`, the removed value should be provided")
+            ),
+            PredicateType::Equal => predicate!(
+                domain
+                    == assignments.get_assigned_value(&domain).expect(
+                        "Expected domain to be assigned when creating an `Equal` predicate"
+                    )
+            ),
+        }
     }
 }
 
