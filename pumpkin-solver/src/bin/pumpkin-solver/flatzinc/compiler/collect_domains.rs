@@ -43,13 +43,13 @@ pub(crate) fn run(
 
                 let literal = *context
                     .boolean_variable_map
-                    .entry(representative.clone())
+                    .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
                         if let Some(int_id) = context.bool2int.get(&representative) {
                             let int_representative =
-                                context.integer_equivalences.representative(&int_id);
-                            let int_domain = context.integer_equivalences.domain(&int_id);
-                            context.integer_equivalences.binarise(&int_id);
+                                context.integer_equivalences.representative(int_id);
+                            let int_domain = context.integer_equivalences.domain(int_id);
+                            context.integer_equivalences.binarise(int_id);
                             let domain_id = *context
                                 .integer_variable_map
                                 .entry(int_representative)
