@@ -48,6 +48,7 @@ impl Default for Assignments {
 pub(crate) struct EmptyDomain;
 
 impl Assignments {
+    #[allow(unused, reason = "Could be used in the future")]
     /// Returns all of the holes in the domain which were created at the provided decision level
     pub(crate) fn get_holes_on_decision_level(
         &self,

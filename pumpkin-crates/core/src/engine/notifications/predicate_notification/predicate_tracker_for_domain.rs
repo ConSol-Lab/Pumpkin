@@ -6,9 +6,12 @@ use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
 use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
+use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
+use crate::variables::DomainId;
 
 /// A structure for managing the trackers of the polarity for a specific [`DomainId`].
 #[derive(Debug, Clone)]
@@ -54,35 +57,56 @@ impl PredicateTrackerForDomain {
     ///
     /// This method will pass it along to the correct tracker; if no [`Predicate`] are being
     /// watched by the corresponding tracker then no updates will take place.
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     pub(crate) fn on_update(
         &mut self,
-        predicate: Predicate,
+        domain: DomainId,
+        predicate_type: PredicateType,
+        assignments: &Assignments,
+        predicate_id_generator: &mut PredicateIdGenerator,
         stateful_trail: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        predicate_id: Option<PredicateId>,
+        removed_value: Option<i32>,
     ) {
-        if !self.lower_bound.is_empty() {
-            self.lower_bound
-                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
+        if !self.lower_bound.is_empty()
+            && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
+        {
+            self.lower_bound.on_update(
+                predicate_type.into_predicate(domain, assignments, removed_value),
+                stateful_trail,
+                predicate_id_assignments,
+                None,
+            );
         }
 
-        if !self.upper_bound.is_empty() {
-            self.upper_bound
-                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
+        if !self.upper_bound.is_empty()
+            && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
+        {
+            self.upper_bound.on_update(
+                predicate_type.into_predicate(domain, assignments, removed_value),
+                stateful_trail,
+                predicate_id_assignments,
+                None,
+            );
         }
 
         if !self.disequality.is_empty() {
+            let predicate = predicate_type.into_predicate(domain, assignments, removed_value);
             self.disequality.on_update(
                 predicate,
                 stateful_trail,
                 predicate_id_assignments,
-                predicate_id,
+                Some(predicate_id_generator.get_id(predicate)),
             );
         }
 
         if !self.equality.is_empty() {
-            self.equality
-                .on_update(predicate, stateful_trail, predicate_id_assignments, None);
+            self.equality.on_update(
+                predicate_type.into_predicate(domain, assignments, removed_value),
+                stateful_trail,
+                predicate_id_assignments,
+                None,
+            );
         }
     }
 
