@@ -1,3 +1,5 @@
+use static_assertions::assert_eq_size;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
@@ -10,13 +12,16 @@ use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
+use crate::engine::EmptyDomain;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::pumpkin_assert_advanced;
@@ -59,6 +64,7 @@ where
 
             has_backtracked: false,
             first_propagation_loop: true,
+            reason_buffer: vec![Predicate::trivially_false()],
         }
     }
 }
@@ -88,6 +94,26 @@ pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
     first_propagation_loop: bool,
 
     inference_code: InferenceCode,
+
+    /// A re-usable buffer to store the explanations of propagations. This will always have
+    /// length 1.
+    reason_buffer: Vec<Predicate>,
+}
+
+impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar> {
+    fn post(
+        &self,
+        context: &mut PropagationContextMut,
+        predicate: Predicate,
+    ) -> Result<(), EmptyDomain> {
+        // Safety: Can be done because of the static assertion.
+        let reason_code: u64 = unsafe {
+            assert_eq_size!(Predicate, u64);
+            std::mem::transmute(predicate)
+        };
+
+        context.post(predicate, reason_code, self.inference_code)
+    }
 }
 
 impl<AVar, BVar> Propagator for BinaryEqualsPropagator<AVar, BVar>
@@ -186,26 +212,10 @@ where
         let b_ub = context.upper_bound(&self.b);
 
         // Now we must ensure that the bounds are equal
-        context.post(
-            predicate!(self.a >= b_lb),
-            conjunction!([self.b >= b_lb]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.a <= b_ub),
-            conjunction!([self.b <= b_ub]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.b >= a_lb),
-            conjunction!([self.a >= a_lb]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.b <= a_ub),
-            conjunction!([self.a <= a_ub]),
-            self.inference_code,
-        )?;
+        self.post(&mut context, predicate!(self.a >= b_lb))?;
+        self.post(&mut context, predicate!(self.a <= b_ub))?;
+        self.post(&mut context, predicate!(self.b >= a_lb))?;
+        self.post(&mut context, predicate!(self.b <= a_ub))?;
 
         // Now we check whether a backtrack operation has occurred which means that we need to
         // re-evaluate the values which have been removed
@@ -224,7 +234,7 @@ where
             );
             context.post(
                 predicate!(self.b != removed_value_a),
-                conjunction!([self.a != removed_value_a]),
+                0,
                 self.inference_code,
             )?;
         }
@@ -236,12 +246,45 @@ where
             );
             context.post(
                 predicate!(self.a != removed_value_b),
-                conjunction!([self.b != removed_value_b]),
+                0,
                 self.inference_code,
             )?;
         }
 
         Ok(())
+    }
+
+    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
+        // Safety: The code is created in the same way.
+        let predicate: Predicate = unsafe { std::mem::transmute(code) };
+
+        let comparator = predicate.get_predicate_type();
+        let value = predicate.get_right_hand_side();
+
+        let (a_reason, b_reason) = match comparator {
+            crate::predicates::PredicateType::LowerBound => {
+                (predicate![self.a >= value], predicate![self.b >= value])
+            }
+            crate::predicates::PredicateType::UpperBound => {
+                (predicate![self.a <= value], predicate![self.b <= value])
+            }
+            crate::predicates::PredicateType::NotEqual => {
+                (predicate![self.a != value], predicate![self.b != value])
+            }
+            crate::predicates::PredicateType::Equal => {
+                (predicate![self.a == value], predicate![self.b == value])
+            }
+        };
+
+        if a_reason == predicate {
+            self.reason_buffer[0] = b_reason;
+        } else if b_reason == predicate {
+            self.reason_buffer[0] = a_reason;
+        } else {
+            unreachable!()
+        }
+
+        &self.reason_buffer
     }
 
     fn debug_propagate_from_scratch(
@@ -254,41 +297,17 @@ where
         let b_lb = context.lower_bound(&self.b);
         let b_ub = context.upper_bound(&self.b);
 
-        context.post(
-            predicate!(self.a >= b_lb),
-            conjunction!([self.b >= b_lb]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.a <= b_ub),
-            conjunction!([self.b <= b_ub]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.b >= a_lb),
-            conjunction!([self.a >= a_lb]),
-            self.inference_code,
-        )?;
-        context.post(
-            predicate!(self.b <= a_ub),
-            conjunction!([self.a <= a_ub]),
-            self.inference_code,
-        )?;
+        self.post(&mut context, predicate!(self.a >= b_lb))?;
+        self.post(&mut context, predicate!(self.a <= b_ub))?;
+        self.post(&mut context, predicate!(self.b >= a_lb))?;
+        self.post(&mut context, predicate!(self.b <= a_ub))?;
 
         for value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
-            context.post(
-                predicate!(self.b != value_a),
-                conjunction!([self.a != value_a]),
-                self.inference_code,
-            )?;
+            context.post(predicate!(self.b != value_a), 0, self.inference_code)?;
         }
 
         for value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
-            context.post(
-                predicate!(self.a != value_b),
-                conjunction!([self.b != value_b]),
-                self.inference_code,
-            )?;
+            context.post(predicate!(self.a != value_b), 0, self.inference_code)?;
         }
 
         Ok(())

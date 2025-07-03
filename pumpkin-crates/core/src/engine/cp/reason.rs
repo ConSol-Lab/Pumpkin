@@ -162,6 +162,12 @@ impl From<PropositionalConjunction> for Reason {
     }
 }
 
+impl From<u64> for Reason {
+    fn from(value: u64) -> Self {
+        Reason::DynamicLazy(value)
+    }
+}
+
 /// A reserved slot for a new reason in the [`ReasonStore`].
 #[derive(Debug)]
 pub(crate) struct Slot<'a> {
