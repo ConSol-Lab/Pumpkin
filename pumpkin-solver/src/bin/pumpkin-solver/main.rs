@@ -1,11 +1,11 @@
 mod file_format;
 mod flatzinc;
 mod maxsat;
+mod os_signal_termination;
 mod parsers;
 mod result;
 
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -14,9 +14,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
-use convert_case::Case;
 use file_format::FileFormat;
-use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
@@ -26,25 +24,24 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use pumpkin_solver::convert_case::Case;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
+use pumpkin_solver::rand::rngs::SmallRng;
+use pumpkin_solver::rand::SeedableRng;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
-
-pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -347,7 +344,7 @@ struct Args {
     cumulative_incremental_backtracking: bool,
 
     /// Determine what type of optimisation strategy is used by the solver
-    #[arg(long = "optimisation-strategy", default_value_t)]
+    #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
 }
 
@@ -632,13 +629,4 @@ enum ProofType {
     Scaffold,
     /// Log the full proof with hints.
     Full,
-}
-
-impl Display for ProofType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProofType::Scaffold => write!(f, "scaffold"),
-            ProofType::Full => write!(f, "full"),
-        }
-    }
 }

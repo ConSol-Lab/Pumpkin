@@ -3,10 +3,11 @@ use std::cell::RefMut;
 use std::cmp::max;
 use std::cmp::min;
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_solver::containers::HashMap;
+use pumpkin_solver::containers::HashSet;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
@@ -14,7 +15,6 @@ use pumpkin_solver::Solver;
 
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
-use crate::HashMap;
 
 pub(crate) struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.

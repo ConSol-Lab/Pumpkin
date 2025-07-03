@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use flatzinc::ConstraintItem;
 use log::warn;
+use pumpkin_solver::containers::HashMap;
 
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
@@ -12,7 +13,6 @@ use crate::flatzinc::compiler::context::Identifiers;
 use crate::flatzinc::compiler::context::VariableEquivalences;
 use crate::flatzinc::FlatZincError;
 use crate::FlatZincOptions;
-use crate::HashMap;
 use crate::ProofType;
 
 pub(crate) fn run(
