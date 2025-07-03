@@ -84,42 +84,14 @@ pub(crate) fn run(
                 }
             }
 
-            SingleVarDecl::IntInRange { id, annos, .. } => {
-                let id = context.identifiers.get_interned(id);
-
-                let representative = context.integer_equivalences.representative(&id);
-                let domain = context.integer_equivalences.domain(&id);
-
-                let domain_id = *context
-                    .integer_variable_map
-                    .entry(representative)
-                    .or_insert_with(|| {
-                        if domain.is_constant() {
-                            *context
-                                .constant_domain_ids
-                                .entry(match &domain {
-                                    Domain::IntervalDomain { lb, ub: _ } => *lb,
-                                    Domain::SparseDomain { values } => values[0],
-                                })
-                                .or_insert_with(|| {
-                                    domain.into_variable(context.solver, id.to_string())
-                                })
-                        } else {
-                            domain.into_variable(context.solver, id.to_string())
-                        }
-                    });
-
-                if is_output_variable(annos) {
-                    context.outputs.push(Output::int(id, domain_id));
-                }
-            }
-
-            SingleVarDecl::IntInSet {
+            SingleVarDecl::IntInRange { id, annos, .. }
+            | SingleVarDecl::IntInSet {
                 id, set: _, annos, ..
             } => {
                 let id = context.identifiers.get_interned(id);
-                let domain = context.integer_equivalences.domain(&id);
+
                 let representative = context.integer_equivalences.representative(&id);
+                let domain = context.integer_equivalences.domain(&id);
 
                 let domain_id = *context
                     .integer_variable_map
