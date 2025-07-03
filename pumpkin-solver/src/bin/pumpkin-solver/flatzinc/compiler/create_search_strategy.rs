@@ -2,9 +2,14 @@ use std::rc::Rc;
 
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_solver::branching::value_selection::InDomainMax;
+use pumpkin_solver::branching::value_selection::InDomainMin;
+use pumpkin_solver::branching::variable_selection::InputOrder;
+use pumpkin_solver::branching::variable_selection::VariableSelector;
 use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
+use pumpkin_solver::DefaultBrancher;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -13,18 +18,21 @@ use crate::flatzinc::ast::SearchStrategy;
 use crate::flatzinc::ast::ValueSelectionStrategy;
 use crate::flatzinc::ast::VariableSelectionStrategy;
 use crate::flatzinc::error::FlatZincError;
+use crate::flatzinc::instance::FlatzincObjective;
 
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
+    objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context, true)
+    create_from_search_strategy(&ast.search, context, true, objective)
 }
 
 fn create_from_search_strategy(
     strategy: &Search,
     context: &mut CompilationContext,
     append_default_search: bool,
+    objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
     let mut brancher = match strategy {
         Search::Bool(SearchStrategy {
@@ -72,7 +80,7 @@ fn create_from_search_strategy(
                 .iter()
                 .map(|strategy| {
                     let downcast: Box<dyn Brancher> = Box::new(
-                        create_from_search_strategy(strategy, context, false)
+                        create_from_search_strategy(strategy, context, false, objective)
                             .expect("Expected nested sequential strategy to be able to be created"),
                     );
                     downcast
@@ -96,6 +104,23 @@ fn create_from_search_strategy(
         // fixed; we ensure this by adding a brancher after the
         // user-provided search which searches over the remainder of the
         // variables
+        match objective {
+            Some(inner) => match inner {
+                FlatzincObjective::Maximize(domain_id) => {
+                    brancher.add_brancher(Box::new(IndependentVariableValueBrancher::new(
+                        InputOrder::new(&[domain_id]),
+                        InDomainMax,
+                    )))
+                }
+                FlatzincObjective::Minimize(domain_id) => {
+                    brancher.add_brancher(Box::new(IndependentVariableValueBrancher::new(
+                        InputOrder::new(&[domain_id]),
+                        InDomainMin,
+                    )))
+                }
+            },
+            None => {}
+        }
         brancher.add_brancher(Box::new(context.solver.default_brancher()));
     }
 
