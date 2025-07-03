@@ -1,4 +1,4 @@
-use static_assertions::assert_eq_size;
+use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -22,6 +22,8 @@ use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
+use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::pumpkin_assert_advanced;
@@ -100,19 +102,41 @@ pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
     reason_buffer: Vec<Predicate>,
 }
 
-impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar> {
+impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
+where
+    AVar: PredicateConstructor<Value = i32>,
+    BVar: PredicateConstructor<Value = i32>,
+{
     fn post(
         &self,
         context: &mut PropagationContextMut,
-        predicate: Predicate,
+        variable: Variable,
+        predicate_type: PredicateType,
+        value: i32,
     ) -> Result<(), EmptyDomain> {
-        // Safety: Can be done because of the static assertion.
-        let reason_code: u64 = unsafe {
-            assert_eq_size!(Predicate, u64);
-            std::mem::transmute(predicate)
+        use PredicateType::*;
+        use Variable::*;
+
+        let predicate = match (variable, predicate_type) {
+            (A, LowerBound) => predicate![self.a >= value],
+            (A, UpperBound) => predicate![self.a <= value],
+            (A, NotEqual) => predicate![self.a != value],
+            (A, Equal) => predicate![self.a == value],
+            (B, LowerBound) => predicate![self.b >= value],
+            (B, UpperBound) => predicate![self.b <= value],
+            (B, NotEqual) => predicate![self.b != value],
+            (B, Equal) => predicate![self.b == value],
         };
 
-        context.post(predicate, reason_code, self.inference_code)
+        context.post(
+            predicate,
+            BinaryEqualsPropagation::new()
+                .with_variable(variable)
+                .with_predicate_type(predicate_type)
+                .with_value(value)
+                .into_bits(),
+            self.inference_code,
+        )
     }
 }
 
@@ -212,10 +236,10 @@ where
         let b_ub = context.upper_bound(&self.b);
 
         // Now we must ensure that the bounds are equal
-        self.post(&mut context, predicate!(self.a >= b_lb))?;
-        self.post(&mut context, predicate!(self.a <= b_ub))?;
-        self.post(&mut context, predicate!(self.b >= a_lb))?;
-        self.post(&mut context, predicate!(self.b <= a_ub))?;
+        self.post(&mut context, Variable::A, PredicateType::LowerBound, b_lb)?;
+        self.post(&mut context, Variable::A, PredicateType::UpperBound, b_ub)?;
+        self.post(&mut context, Variable::B, PredicateType::LowerBound, a_lb)?;
+        self.post(&mut context, Variable::B, PredicateType::UpperBound, a_ub)?;
 
         // Now we check whether a backtrack operation has occurred which means that we need to
         // re-evaluate the values which have been removed
@@ -228,61 +252,57 @@ where
         }
 
         // Then we remove all of the values which have been removed from `a` from `b`
-        for removed_value_a in self.a_removed_values.drain() {
+        let mut a_removed_values = std::mem::take(&mut self.a_removed_values);
+        for removed_value_a in a_removed_values.drain() {
             pumpkin_assert_advanced!(
                 context.is_predicate_satisfied(predicate!(self.a != removed_value_a))
             );
-            context.post(
-                predicate!(self.b != removed_value_a),
-                0,
-                self.inference_code,
+            self.post(
+                &mut context,
+                Variable::B,
+                PredicateType::NotEqual,
+                removed_value_a,
             )?;
         }
 
         // Then we remove all of the values which have been removed from `b` from `a`
-        for removed_value_b in self.b_removed_values.drain() {
+        let mut b_removed_values = std::mem::take(&mut self.b_removed_values);
+        for removed_value_b in b_removed_values.drain() {
             pumpkin_assert_advanced!(
                 context.is_predicate_satisfied(predicate!(self.b != removed_value_b))
             );
-            context.post(
-                predicate!(self.a != removed_value_b),
-                0,
-                self.inference_code,
+            self.post(
+                &mut context,
+                Variable::A,
+                PredicateType::NotEqual,
+                removed_value_b,
             )?;
         }
+
+        self.a_removed_values = a_removed_values;
+        self.b_removed_values = b_removed_values;
 
         Ok(())
     }
 
     fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
-        // Safety: The code is created in the same way.
-        let predicate: Predicate = unsafe { std::mem::transmute(code) };
+        use PredicateType::*;
+        use Variable::*;
 
-        let comparator = predicate.get_predicate_type();
-        let value = predicate.get_right_hand_side();
+        let propagated = BinaryEqualsPropagation::from_bits(code);
 
-        let (a_reason, b_reason) = match comparator {
-            crate::predicates::PredicateType::LowerBound => {
-                (predicate![self.a >= value], predicate![self.b >= value])
-            }
-            crate::predicates::PredicateType::UpperBound => {
-                (predicate![self.a <= value], predicate![self.b <= value])
-            }
-            crate::predicates::PredicateType::NotEqual => {
-                (predicate![self.a != value], predicate![self.b != value])
-            }
-            crate::predicates::PredicateType::Equal => {
-                (predicate![self.a == value], predicate![self.b == value])
-            }
+        let explanation = match (propagated.variable(), propagated.predicate_type()) {
+            (A, LowerBound) => predicate![self.b >= propagated.value()],
+            (A, UpperBound) => predicate![self.b <= propagated.value()],
+            (A, NotEqual) => predicate![self.b != propagated.value()],
+            (A, Equal) => predicate![self.b == propagated.value()],
+            (B, LowerBound) => predicate![self.a >= propagated.value()],
+            (B, UpperBound) => predicate![self.a <= propagated.value()],
+            (B, NotEqual) => predicate![self.a != propagated.value()],
+            (B, Equal) => predicate![self.a == propagated.value()],
         };
 
-        if a_reason == predicate {
-            self.reason_buffer[0] = b_reason;
-        } else if b_reason == predicate {
-            self.reason_buffer[0] = a_reason;
-        } else {
-            unreachable!()
-        }
+        self.reason_buffer[0] = explanation;
 
         &self.reason_buffer
     }
@@ -297,10 +317,10 @@ where
         let b_lb = context.lower_bound(&self.b);
         let b_ub = context.upper_bound(&self.b);
 
-        self.post(&mut context, predicate!(self.a >= b_lb))?;
-        self.post(&mut context, predicate!(self.a <= b_ub))?;
-        self.post(&mut context, predicate!(self.b >= a_lb))?;
-        self.post(&mut context, predicate!(self.b <= a_ub))?;
+        self.post(&mut context, Variable::A, PredicateType::LowerBound, b_lb)?;
+        self.post(&mut context, Variable::A, PredicateType::UpperBound, b_ub)?;
+        self.post(&mut context, Variable::B, PredicateType::LowerBound, a_lb)?;
+        self.post(&mut context, Variable::B, PredicateType::UpperBound, a_ub)?;
 
         for value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
             context.post(predicate!(self.b != value_a), 0, self.inference_code)?;
@@ -312,6 +332,38 @@ where
 
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum Variable {
+    A = 0,
+    B = 1,
+}
+
+impl Variable {
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
+
+    const fn from_bits(value: u8) -> Variable {
+        match value {
+            0 => Variable::A,
+            _ => Variable::B,
+        }
+    }
+}
+
+#[bitfield(u64)]
+struct BinaryEqualsPropagation {
+    #[bits(8)]
+    variable: Variable,
+    #[bits(8)]
+    predicate_type: PredicateType,
+    value: i32,
+    /// Padding
+    #[bits(16)]
+    __: u16,
 }
 
 #[cfg(test)]
