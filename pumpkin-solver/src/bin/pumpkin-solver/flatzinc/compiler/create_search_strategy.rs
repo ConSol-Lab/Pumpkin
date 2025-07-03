@@ -5,11 +5,9 @@ use pumpkin_solver::branching::branchers::independent_variable_value_brancher::I
 use pumpkin_solver::branching::value_selection::InDomainMax;
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::InputOrder;
-use pumpkin_solver::branching::variable_selection::VariableSelector;
 use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
-use pumpkin_solver::DefaultBrancher;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -105,20 +103,12 @@ fn create_from_search_strategy(
         // user-provided search which searches over the remainder of the
         // variables
         match objective {
-            Some(inner) => match inner {
-                FlatzincObjective::Maximize(domain_id) => {
-                    brancher.add_brancher(Box::new(IndependentVariableValueBrancher::new(
-                        InputOrder::new(&[domain_id]),
-                        InDomainMax,
-                    )))
-                }
-                FlatzincObjective::Minimize(domain_id) => {
-                    brancher.add_brancher(Box::new(IndependentVariableValueBrancher::new(
-                        InputOrder::new(&[domain_id]),
-                        InDomainMin,
-                    )))
-                }
-            },
+            Some(FlatzincObjective::Maximize(domain_id)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMax),
+            )),
+            Some(FlatzincObjective::Minimize(domain_id)) => brancher.add_brancher(Box::new(
+                IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMin),
+            )),
             None => {}
         }
         brancher.add_brancher(Box::new(context.solver.default_brancher()));
