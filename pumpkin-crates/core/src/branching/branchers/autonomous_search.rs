@@ -14,7 +14,6 @@ use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
-use crate::pumpkin_assert_eq_simple;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -120,7 +119,6 @@ impl DefaultBrancher {
     /// If there are no more predicates left to select, this [`Brancher`] switches to
     /// [`RandomSelector`] with [`RandomSplitter`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
-        pumpkin_assert_eq_simple!(assignments.get_decision_level(), 0);
         AutonomousSearch {
             predicate_id_info: DeletablePredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
