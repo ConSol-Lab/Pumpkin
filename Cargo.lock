@@ -345,6 +345,20 @@ version = "1.0.7"
 source = "git+https://github.com/servo/rust-fnv?branch=main#4e55052a343a4372c191141f29a17ab829cf1dbc"
 
 [[package]]
+name = "foldhash"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "fzn_rs"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "thiserror",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
