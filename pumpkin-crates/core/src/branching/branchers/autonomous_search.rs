@@ -131,11 +131,7 @@ impl DefaultBrancher {
             best_known_solution: None,
             should_synchronise: false,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::new(
-                    assignments
-                        .get_domains()
-                        .filter(|domain| !assignments.is_fixed(*domain)),
-                ),
+                RandomSelector::new(assignments.get_domains()),
                 RandomSplitter,
             ),
             statistics: Default::default(),
