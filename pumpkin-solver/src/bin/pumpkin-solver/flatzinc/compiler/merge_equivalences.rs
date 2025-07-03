@@ -181,6 +181,7 @@ fn should_keep_bool2int_constraint(
     constraint: &ConstraintItem,
     bool2int: &mut HashMap<Rc<str>, Rc<str>>,
     identifiers: &mut Identifiers,
+    integer_equivalences: &mut VariableEquivalences,
 ) -> bool {
     let v1 = match &constraint.exprs[0] {
         flatzinc::Expr::VarParIdentifier(id) => identifiers.get_interned(id),
@@ -216,7 +217,11 @@ fn should_keep_bool2int_constraint(
         | flatzinc::Expr::ArrayOfSet(_) => unreachable!(),
     };
 
-    let _ = bool2int.insert(v1, v2);
+    let previous = bool2int.insert(v1, Rc::clone(&v2));
+
+    if let Some(replaced) = previous {
+        integer_equivalences.merge(v2, replaced);
+    }
 
     false
 }
@@ -231,7 +236,9 @@ fn should_keep_constraint(
 ) -> bool {
     match constraint.id.as_str() {
         "int_eq" => should_keep_int_eq_constraint(constraint, identifiers, integer_equivalences),
-        "bool2int" => should_keep_bool2int_constraint(constraint, bool2int, identifiers),
+        "bool2int" => {
+            should_keep_bool2int_constraint(constraint, bool2int, identifiers, integer_equivalences)
+        }
         _ => true,
     }
 }

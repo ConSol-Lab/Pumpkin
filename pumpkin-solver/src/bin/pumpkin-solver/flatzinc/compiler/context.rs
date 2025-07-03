@@ -523,6 +523,19 @@ impl VariableEquivalences {
         let _ = self.classes.insert(representative, equivalence_class);
     }
 
+    pub(crate) fn create_equivalence_class_sparse(
+        &mut self,
+        representative: Rc<str>,
+        values: Vec<i32>,
+    ) {
+        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: [Rc::clone(&representative)].into_iter().collect(),
+            domain: Domain::SparseDomain { values },
+        }));
+
+        let _ = self.classes.insert(representative, equivalence_class);
+    }
+
     /// Get the name of the representative variable of the equivalence class the given variable
     /// belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
@@ -535,18 +548,26 @@ impl VariableEquivalences {
             .expect("all classes have at least one representative")
     }
 
-    pub(crate) fn binarise(&self, variable: &str) {
-        match &mut self.classes[variable].borrow_mut().domain {
+    pub(crate) fn binarise(&mut self, variable: &str) {
+        let new_domain = match &self.classes[variable].borrow().domain {
             Domain::IntervalDomain { lb, ub } => {
                 assert!(*lb <= 1 && *ub >= 0);
-                *lb = max(*lb, 0);
-                *ub = min(*ub, 1);
+                Domain::IntervalDomain {
+                    lb: max(*lb, 0),
+                    ub: min(*ub, 1),
+                }
             }
-            Domain::SparseDomain { values } => {
-                values.retain(|value| *value >= 0 && *value <= 1);
-                assert!(!values.is_empty());
-            }
-        }
+            Domain::SparseDomain { values } => Domain::SparseDomain {
+                values: values
+                    .iter()
+                    .filter(|&value| *value >= 0 && *value <= 1)
+                    .copied()
+                    .collect(),
+            },
+        };
+
+        let mut domain = self.get_mut_domain(variable);
+        *domain = new_domain;
     }
 
     /// Get the domain for the given variable, based on the equivalence class it belongs to.
