@@ -284,7 +284,7 @@ impl NotificationEngine {
             }
         }
 
-        let _ = std::mem::replace(&mut self.events, events);
+        self.events = events;
 
         // Then we notify the propagators that a predicate has been satisfied
         self.notify_predicate_id_satisfied(propagators);
