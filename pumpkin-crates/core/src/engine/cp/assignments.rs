@@ -258,6 +258,10 @@ impl Assignments {
             }
         }
     }
+
+    pub(crate) fn is_fixed(&self, domain_id: DomainId) -> bool {
+        self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
+    }
 }
 
 // methods for getting info about the domains

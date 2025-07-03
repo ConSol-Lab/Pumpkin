@@ -102,6 +102,8 @@ fn create_from_search_strategy(
         // fixed; we ensure this by adding a brancher after the
         // user-provided search which searches over the remainder of the
         // variables
+
+        // First we ensure that the objective is fixed to its extremum.
         match objective {
             Some(FlatzincObjective::Maximize(domain_id)) => brancher.add_brancher(Box::new(
                 IndependentVariableValueBrancher::new(InputOrder::new(&[domain_id]), InDomainMax),
