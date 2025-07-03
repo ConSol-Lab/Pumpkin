@@ -84,7 +84,7 @@ impl PredicateTrackerForDomain {
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.upper_bound.on_update(
-                predicate!(domain >= assignments.get_upper_bound(domain)),
+                predicate!(domain <= assignments.get_upper_bound(domain)),
                 stateful_trail,
                 predicate_id_assignments,
                 None,
