@@ -77,12 +77,17 @@ pub(crate) fn run(
             SingleVarDecl::IntInSet { id, set, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                let lb = i32::try_from(set[0])?;
-                let ub = i32::try_from(set[set.len() - 1])?;
-
                 context
                     .integer_equivalences
-                    .create_equivalence_class(id, lb, ub);
+                    .create_equivalence_class_sparse(
+                        id,
+                        set.iter()
+                            .map(|&element| {
+                                i32::try_from(element)
+                                    .expect("Expected value to be able to fit into i32")
+                            })
+                            .collect(),
+                    );
             }
         }
     }
