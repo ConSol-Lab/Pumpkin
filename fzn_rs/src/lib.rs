@@ -28,8 +28,8 @@ pub struct Instance<InstanceConstraint, ConstraintAnn = (), VariableAnn = ()> {
 
 #[derive(Clone, Debug)]
 pub struct Constraint<InstanceConstraint, ConstraintAnn> {
-    pub constraint: InstanceConstraint,
-    pub annotations: Vec<ConstraintAnn>,
+    pub constraint: ast::Node<InstanceConstraint>,
+    pub annotations: Vec<ast::Node<ConstraintAnn>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,13 +80,9 @@ where
             .into_iter()
             .map(|(id, variable)| {
                 let variable = Variable {
-                    domain: variable.domain,
-                    value: variable.value,
-                    annotations: variable
-                        .annotations
-                        .into_iter()
-                        .filter_map(|annotation| VariableAnn::from_ast(&annotation).transpose())
-                        .collect::<Result<Vec<VariableAnn>, _>>()?,
+                    domain: variable.node.domain,
+                    value: variable.node.value,
+                    annotations: map_annotations(&variable.node.annotations)?,
                 };
 
                 Ok((id, variable))
@@ -97,16 +93,16 @@ where
             .constraints
             .iter()
             .map(|constraint| {
-                let annotations = constraint
-                    .annotations
-                    .iter()
-                    .filter_map(|annotation| ConstraintAnn::from_ast(annotation).transpose())
-                    .collect::<Result<_, _>>()?;
+                let annotations = map_annotations(&constraint.node.annotations)?;
 
-                let instance_constraint = InstanceConstraint::from_ast(constraint, &ast.arrays)?;
+                let instance_constraint =
+                    InstanceConstraint::from_ast(&constraint.node, &ast.arrays)?;
 
                 Ok(Constraint {
-                    constraint: instance_constraint,
+                    constraint: ast::Node {
+                        node: instance_constraint,
+                        span: constraint.span,
+                    },
                     annotations,
                 })
             })
@@ -118,4 +114,22 @@ where
             solve: ast.solve,
         })
     }
+}
+
+fn map_annotations<Ann: FlatZincAnnotation>(
+    annotations: &[ast::Node<ast::Annotation>],
+) -> Result<Vec<ast::Node<Ann>>, InstanceError> {
+    annotations
+        .into_iter()
+        .filter_map(|annotation| {
+            Ann::from_ast(&annotation.node)
+                .map(|maybe_node| {
+                    maybe_node.map(|node| ast::Node {
+                        node,
+                        span: annotation.span,
+                    })
+                })
+                .transpose()
+        })
+        .collect()
 }
