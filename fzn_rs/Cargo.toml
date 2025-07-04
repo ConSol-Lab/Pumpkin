@@ -9,9 +9,11 @@ authors.workspace = true
 [dependencies]
 chumsky = { version = "0.10.1", optional = true }
 thiserror = "2.0.12"
+fzn_rs_derive = { path = "../fzn_rs_derive/", optional = true }
 
 [features]
 fzn = ["dep:chumsky"]
+derive = ["dep:fzn_rs_derive"]
 
 [lints]
 workspace = true
