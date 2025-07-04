@@ -1,0 +1,22 @@
+[package]
+name = "fzn_rs_derive"
+version = "0.1.0"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+convert_case = "0.8.0"
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+syn = { version = "2.0.104", features = ["extra-traits"] }
+
+[dev-dependencies]
+fzn_rs = { path = "../fzn_rs/" }
+
+[lints]
+workspace = true
