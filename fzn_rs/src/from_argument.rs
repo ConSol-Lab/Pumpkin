@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use crate::ast;
+use crate::error::Token;
 use crate::InstanceError;
 use crate::IntVariable;
 
@@ -19,9 +20,21 @@ impl FromLiteral for i64 {
     ) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Int(value) => Ok(*value),
-            ast::Literal::Identifier(_) => todo!(),
-            ast::Literal::Bool(_) => todo!(),
-            ast::Literal::IntSet(_) => todo!(),
+            ast::Literal::Identifier(_) => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntLiteral,
+                actual: Token::Identifier,
+                span: node.span,
+            }),
+            ast::Literal::Bool(_) => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntLiteral,
+                actual: Token::BoolLiteral,
+                span: node.span,
+            }),
+            ast::Literal::IntSet(_) => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntLiteral,
+                actual: Token::IntSetLiteral,
+                span: node.span,
+            }),
         }
     }
 }
@@ -36,8 +49,16 @@ impl FromLiteral for IntVariable {
                 Ok(IntVariable::Identifier(Rc::clone(identifier)))
             }
             ast::Literal::Int(constant) => Ok(IntVariable::Constant(*constant)),
-            ast::Literal::Bool(_) => todo!(),
-            ast::Literal::IntSet(_) => todo!(),
+            ast::Literal::Bool(_) => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntVariable,
+                actual: Token::BoolLiteral,
+                span: node.span,
+            }),
+            ast::Literal::IntSet(_) => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntVariable,
+                actual: Token::IntSetLiteral,
+                span: node.span,
+            }),
         }
     }
 }
