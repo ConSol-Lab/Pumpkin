@@ -4,6 +4,26 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+/// Describes a range `[start, end)` in the source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    /// The index in the source that starts the span.
+    pub start: usize,
+    /// The index in the source that ends the span.
+    ///
+    /// Note the end is exclusive.
+    pub end: usize,
+}
+
+/// A node in the [`Ast`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Node<T> {
+    /// The span in the source of this node.
+    pub span: Span,
+    /// The parsed node.
+    pub node: T,
+}
+
 /// Represents a FlatZinc instance.
 ///
 /// In the `.fzn` format, identifiers can point to both constants and variables (either single or
@@ -14,11 +34,11 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 pub struct Ast {
     /// A mapping from identifiers to variables.
-    pub variables: BTreeMap<Rc<str>, Variable<Annotation>>,
+    pub variables: BTreeMap<Rc<str>, Node<Variable<Annotation>>>,
     /// The arrays in this instance.
     pub arrays: BTreeMap<Rc<str>, Array>,
     /// A list of constraints.
-    pub constraints: Vec<Constraint>,
+    pub constraints: Vec<Node<Constraint>>,
     /// The goal of the model.
     pub solve: SolveObjective,
 }
@@ -27,11 +47,11 @@ pub struct Ast {
 #[derive(Clone, Debug)]
 pub struct Variable<Ann> {
     /// The domain of the variable.
-    pub domain: Domain,
+    pub domain: Node<Domain>,
     /// The value that the variable is equal to.
-    pub value: Option<Literal>,
+    pub value: Option<Node<Literal>>,
     /// The annotations on this variable.
-    pub annotations: Vec<Ann>,
+    pub annotations: Vec<Node<Ann>>,
 }
 
 /// A named array of literals.
@@ -115,18 +135,18 @@ pub enum OptimizationDirection {
 #[derive(Clone, Debug)]
 pub struct Constraint {
     /// The name of the constraint.
-    pub name: Rc<str>,
+    pub name: Node<Rc<str>>,
     /// The list of arguments.
-    pub arguments: Vec<Argument>,
+    pub arguments: Vec<Node<Argument>>,
     /// Any annotations on the constraint.
-    pub annotations: Vec<Annotation>,
+    pub annotations: Vec<Node<Annotation>>,
 }
 
 /// An argument for a [`Constraint`].
 #[derive(Clone, Debug)]
 pub enum Argument {
-    Array(Vec<Literal>),
-    Literal(Literal),
+    Array(Vec<Node<Literal>>),
+    Literal(Node<Literal>),
 }
 
 #[derive(Clone, Debug)]
