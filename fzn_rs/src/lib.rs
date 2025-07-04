@@ -1,5 +1,6 @@
 pub mod ast;
 
+mod from_argument;
 #[cfg(feature = "fzn")]
 mod fzn;
 
@@ -9,6 +10,7 @@ use std::rc::Rc;
 use ast::Array;
 use ast::SolveObjective;
 use ast::Variable;
+pub use from_argument::FromArgument;
 
 #[derive(Clone, Debug)]
 pub struct Instance<InstanceConstraint, ConstraintAnn = (), VariableAnn = ()> {
@@ -30,9 +32,17 @@ pub struct Constraint<InstanceConstraint, ConstraintAnn> {
     pub annotations: Vec<ConstraintAnn>,
 }
 
-#[derive(Clone, Copy, Debug, thiserror::Error)]
-#[error("failed to parse constraint from ast")]
-pub struct InstanceError;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntVariable {
+    Identifier(Rc<str>),
+    Constant(i64),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum InstanceError {
+    #[error("constraint '{0}' is not supported")]
+    UnsupportedConstraint(String),
+}
 
 pub trait FlatZincConstraint: Sized {
     fn from_ast(
@@ -48,6 +58,13 @@ pub trait FlatZincConstraint: Sized {
 /// the annotation is not of interest in the final [`Instance`].
 pub trait FlatZincAnnotation: Sized {
     fn from_ast(annotation: &ast::Annotation) -> Result<Option<Self>, InstanceError>;
+}
+
+/// A default implementation that ignores all annotations.
+impl FlatZincAnnotation for () {
+    fn from_ast(_: &ast::Annotation) -> Result<Option<Self>, InstanceError> {
+        Ok(None)
+    }
 }
 
 impl<InstanceConstraint, ConstraintAnn, VariableAnn>
