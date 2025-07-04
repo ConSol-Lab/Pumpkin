@@ -1,18 +1,17 @@
 pub mod ast;
 
 mod error;
-mod from_argument;
+mod from_ast;
 #[cfg(feature = "fzn")]
 mod fzn;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use ast::Array;
 use ast::SolveObjective;
 use ast::Variable;
-pub use error::InstanceError;
-pub use from_argument::FromArgument;
+pub use error::*;
+pub use from_ast::*;
 
 #[derive(Clone, Debug)]
 pub struct Instance<InstanceConstraint, ConstraintAnn = (), VariableAnn = ()> {
@@ -38,29 +37,6 @@ pub struct Constraint<InstanceConstraint, ConstraintAnn> {
 pub enum IntVariable {
     Identifier(Rc<str>),
     Constant(i64),
-}
-
-pub trait FlatZincConstraint: Sized {
-    fn from_ast(
-        constraint: &ast::Constraint,
-        arrays: &BTreeMap<Rc<str>, ast::Node<Array>>,
-    ) -> Result<Self, InstanceError>;
-}
-
-/// Parse an annotation into the instance.
-///
-/// The difference with [`FlatZincConstraint::from_ast`] is that annotations can be ignored.
-/// [`FlatZincAnnotation::from_ast`] can successfully parse an annotation into nothing, signifying
-/// the annotation is not of interest in the final [`Instance`].
-pub trait FlatZincAnnotation: Sized {
-    fn from_ast(annotation: &ast::Annotation) -> Result<Option<Self>, InstanceError>;
-}
-
-/// A default implementation that ignores all annotations.
-impl FlatZincAnnotation for () {
-    fn from_ast(_: &ast::Annotation) -> Result<Option<Self>, InstanceError> {
-        Ok(None)
-    }
 }
 
 impl<InstanceConstraint, ConstraintAnn, VariableAnn>
@@ -116,7 +92,7 @@ fn map_annotations<Ann: FlatZincAnnotation>(
     annotations: &[ast::Node<ast::Annotation>],
 ) -> Result<Vec<ast::Node<Ann>>, InstanceError> {
     annotations
-        .into_iter()
+        .iter()
         .filter_map(|annotation| {
             Ann::from_ast(&annotation.node)
                 .map(|maybe_node| {

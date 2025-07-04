@@ -29,6 +29,17 @@ pub enum Token {
     IntVariable,
 }
 
+impl From<&'_ ast::Literal> for Token {
+    fn from(value: &'_ ast::Literal) -> Self {
+        match value {
+            ast::Literal::Int(_) => Token::IntLiteral,
+            ast::Literal::Identifier(_) => Token::Identifier,
+            ast::Literal::Bool(_) => Token::BoolLiteral,
+            ast::Literal::IntSet(_) => Token::IntSetLiteral,
+        }
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
