@@ -7,16 +7,22 @@ use crate::InstanceError;
 use crate::IntVariable;
 
 pub trait FromLiteral: Sized {
+    fn expected() -> Token;
+
     fn from_literal(
         node: &ast::Node<ast::Literal>,
-        arrays: &BTreeMap<Rc<str>, ast::Array>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError>;
 }
 
 impl FromLiteral for i64 {
+    fn expected() -> Token {
+        Token::IntLiteral
+    }
+
     fn from_literal(
         node: &ast::Node<ast::Literal>,
-        _: &BTreeMap<Rc<str>, ast::Array>,
+        _: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Int(value) => Ok(*value),
@@ -40,9 +46,13 @@ impl FromLiteral for i64 {
 }
 
 impl FromLiteral for IntVariable {
+    fn expected() -> Token {
+        Token::IntVariable
+    }
+
     fn from_literal(
         node: &ast::Node<ast::Literal>,
-        _: &BTreeMap<Rc<str>, ast::Array>,
+        _: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Identifier(identifier) => {
@@ -66,18 +76,22 @@ impl FromLiteral for IntVariable {
 pub trait FromArgument: Sized {
     fn from_argument(
         argument: &ast::Node<ast::Argument>,
-        arrays: &BTreeMap<Rc<str>, ast::Array>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError>;
 }
 
 impl<T: FromLiteral> FromArgument for T {
     fn from_argument(
         argument: &ast::Node<ast::Argument>,
-        arrays: &BTreeMap<Rc<str>, ast::Array>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
         match &argument.node {
             ast::Argument::Literal(literal) => T::from_literal(literal, arrays),
-            ast::Argument::Array(literals) => todo!(),
+            ast::Argument::Array(_) => Err(InstanceError::UnexpectedToken {
+                expected: T::expected(),
+                actual: Token::Array,
+                span: argument.span,
+            }),
         }
     }
 }
@@ -85,15 +99,47 @@ impl<T: FromLiteral> FromArgument for T {
 impl<T: FromLiteral> FromArgument for Vec<T> {
     fn from_argument(
         argument: &ast::Node<ast::Argument>,
-        arrays: &BTreeMap<Rc<str>, ast::Array>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
-        match &argument.node {
-            ast::Argument::Array(literals) => literals
-                .iter()
-                .map(|literal| T::from_literal(literal, arrays))
-                .collect::<Result<_, _>>(),
+        let literals = match &argument.node {
+            ast::Argument::Array(literals) => literals,
 
-            ast::Argument::Literal(literal) => todo!(),
-        }
+            ast::Argument::Literal(literal) => match &literal.node {
+                ast::Literal::Identifier(identifier) => {
+                    let array = arrays
+                        .get(identifier)
+                        .ok_or_else(|| InstanceError::UndefinedArray(identifier.as_ref().into()))?;
+
+                    &array.node.contents
+                }
+
+                ast::Literal::Int(_) => {
+                    return Err(InstanceError::UnexpectedToken {
+                        expected: Token::Array,
+                        actual: Token::IntLiteral,
+                        span: argument.span,
+                    })
+                }
+                ast::Literal::Bool(_) => {
+                    return Err(InstanceError::UnexpectedToken {
+                        expected: Token::Array,
+                        actual: Token::BoolLiteral,
+                        span: argument.span,
+                    })
+                }
+                ast::Literal::IntSet(_) => {
+                    return Err(InstanceError::UnexpectedToken {
+                        expected: Token::Array,
+                        actual: Token::IntSetLiteral,
+                        span: argument.span,
+                    })
+                }
+            },
+        };
+
+        literals
+            .iter()
+            .map(|literal| T::from_literal(literal, arrays))
+            .collect::<Result<_, _>>()
     }
 }
