@@ -8,7 +8,9 @@ use fzn_rs::ast::Argument;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Domain;
 use fzn_rs::ast::Literal;
+use fzn_rs::ast::Node;
 use fzn_rs::ast::SolveObjective;
+use fzn_rs::ast::Span;
 use fzn_rs::ast::Variable;
 use fzn_rs::Instance;
 use fzn_rs::IntVariable;
@@ -21,15 +23,29 @@ fn satisfy_solve() -> SolveObjective {
     }
 }
 
-fn unbounded_int_variable(name: &str) -> (Rc<str>, Variable<Annotation>) {
-    (
-        name.into(),
-        Variable {
-            domain: Domain::UnboundedInt,
-            value: None,
-            annotations: vec![],
-        },
-    )
+fn test_node<T>(node: T) -> Node<T> {
+    Node {
+        node,
+        span: Span { start: 0, end: 0 },
+    }
+}
+
+fn unbounded_variables<'a>(
+    names: impl IntoIterator<Item = &'a str>,
+) -> BTreeMap<Rc<str>, Node<Variable<Annotation>>> {
+    names
+        .into_iter()
+        .map(|name| {
+            (
+                Rc::from(name),
+                test_node(Variable {
+                    domain: test_node(Domain::UnboundedInt),
+                    value: None,
+                    annotations: vec![],
+                }),
+            )
+        })
+        .collect()
 }
 
 #[test]
@@ -40,34 +56,32 @@ fn variant_with_unnamed_fields() {
     }
 
     let ast = Ast {
-        variables: vec![
-            unbounded_int_variable("x1"),
-            unbounded_int_variable("x2"),
-            unbounded_int_variable("x3"),
-        ]
-        .into_iter()
-        .collect(),
+        variables: unbounded_variables(["x1", "x2", "x3"]),
         arrays: BTreeMap::new(),
-        constraints: vec![fzn_rs::ast::Constraint {
-            name: "int_lin_le".into(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("int_lin_le".into()),
             arguments: vec![
-                Argument::Array(vec![Literal::Int(2), Literal::Int(3), Literal::Int(5)]),
-                Argument::Array(vec![
-                    Literal::Identifier("x1".into()),
-                    Literal::Identifier("x2".into()),
-                    Literal::Identifier("x3".into()),
-                ]),
-                Argument::Literal(Literal::Int(3)),
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Int(2)),
+                    test_node(Literal::Int(3)),
+                    test_node(Literal::Int(5)),
+                ])),
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Identifier("x1".into())),
+                    test_node(Literal::Identifier("x2".into())),
+                    test_node(Literal::Identifier("x3".into())),
+                ])),
+                test_node(Argument::Literal(test_node(Literal::Int(3)))),
             ],
             annotations: vec![],
-        }],
+        })],
         solve: satisfy_solve(),
     };
 
     let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
-        instance.constraints[0].constraint,
+        instance.constraints[0].constraint.node,
         InstanceConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
@@ -92,34 +106,32 @@ fn variant_with_named_fields() {
     }
 
     let ast = Ast {
-        variables: vec![
-            unbounded_int_variable("x1"),
-            unbounded_int_variable("x2"),
-            unbounded_int_variable("x3"),
-        ]
-        .into_iter()
-        .collect(),
+        variables: unbounded_variables(["x1", "x2", "x3"]),
         arrays: BTreeMap::new(),
-        constraints: vec![fzn_rs::ast::Constraint {
-            name: "int_lin_le".into(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("int_lin_le".into()),
             arguments: vec![
-                Argument::Array(vec![Literal::Int(2), Literal::Int(3), Literal::Int(5)]),
-                Argument::Array(vec![
-                    Literal::Identifier("x1".into()),
-                    Literal::Identifier("x2".into()),
-                    Literal::Identifier("x3".into()),
-                ]),
-                Argument::Literal(Literal::Int(3)),
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Int(2)),
+                    test_node(Literal::Int(3)),
+                    test_node(Literal::Int(5)),
+                ])),
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Identifier("x1".into())),
+                    test_node(Literal::Identifier("x2".into())),
+                    test_node(Literal::Identifier("x3".into())),
+                ])),
+                test_node(Argument::Literal(test_node(Literal::Int(3)))),
             ],
             annotations: vec![],
-        }],
+        })],
         solve: satisfy_solve(),
     };
 
     let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
-        instance.constraints[0].constraint,
+        instance.constraints[0].constraint.node,
         InstanceConstraint::IntLinLe {
             weights: vec![2, 3, 5],
             variables: vec![

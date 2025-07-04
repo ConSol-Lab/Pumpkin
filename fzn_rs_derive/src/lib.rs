@@ -92,7 +92,7 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
             ) -> Result<Self, ::fzn_rs::InstanceError> {
                 use #constraint_enum_name::*;
 
-                match constraint.name.as_ref() {
+                match constraint.name.node.as_ref() {
                     #(#constraints)*
                     unknown => Err(::fzn_rs::InstanceError::UnsupportedConstraint(
                         String::from(unknown)
