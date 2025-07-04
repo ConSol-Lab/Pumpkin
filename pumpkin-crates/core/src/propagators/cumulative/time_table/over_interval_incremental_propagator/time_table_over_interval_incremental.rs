@@ -4,7 +4,10 @@ use std::rc::Rc;
 
 use super::insertion;
 use super::removal;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
+use crate::conjunction;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -380,6 +383,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             ),
             "Bounds were not equal when propagating"
         );
+
+        if self.parameters.is_infeasible {
+            return Err(Inconsistency::Conflict(PropagatorConflict {
+                conjunction: conjunction!(),
+                inference_code: self.inference_code.unwrap(),
+            }));
+        }
 
         self.update_time_table(&mut context)?;
 
