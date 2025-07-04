@@ -7,17 +7,17 @@ use crate::IntVariable;
 
 pub trait FromLiteral: Sized {
     fn from_literal(
-        literal: &ast::Literal,
+        node: &ast::Node<ast::Literal>,
         arrays: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError>;
 }
 
 impl FromLiteral for i64 {
     fn from_literal(
-        literal: &ast::Literal,
+        node: &ast::Node<ast::Literal>,
         _: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError> {
-        match literal {
+        match &node.node {
             ast::Literal::Int(value) => Ok(*value),
             ast::Literal::Identifier(_) => todo!(),
             ast::Literal::Bool(_) => todo!(),
@@ -28,10 +28,10 @@ impl FromLiteral for i64 {
 
 impl FromLiteral for IntVariable {
     fn from_literal(
-        literal: &ast::Literal,
+        node: &ast::Node<ast::Literal>,
         _: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError> {
-        match literal {
+        match &node.node {
             ast::Literal::Identifier(identifier) => {
                 Ok(IntVariable::Identifier(Rc::clone(identifier)))
             }
@@ -44,17 +44,17 @@ impl FromLiteral for IntVariable {
 
 pub trait FromArgument: Sized {
     fn from_argument(
-        argument: &ast::Argument,
+        argument: &ast::Node<ast::Argument>,
         arrays: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError>;
 }
 
 impl<T: FromLiteral> FromArgument for T {
     fn from_argument(
-        argument: &ast::Argument,
+        argument: &ast::Node<ast::Argument>,
         arrays: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError> {
-        match argument {
+        match &argument.node {
             ast::Argument::Literal(literal) => T::from_literal(literal, arrays),
             ast::Argument::Array(literals) => todo!(),
         }
@@ -63,10 +63,10 @@ impl<T: FromLiteral> FromArgument for T {
 
 impl<T: FromLiteral> FromArgument for Vec<T> {
     fn from_argument(
-        argument: &ast::Argument,
+        argument: &ast::Node<ast::Argument>,
         arrays: &BTreeMap<Rc<str>, ast::Array>,
     ) -> Result<Self, InstanceError> {
-        match argument {
+        match &argument.node {
             ast::Argument::Array(literals) => literals
                 .iter()
                 .map(|literal| T::from_literal(literal, arrays))
