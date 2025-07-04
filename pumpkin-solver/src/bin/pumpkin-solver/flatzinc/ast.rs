@@ -228,35 +228,47 @@ impl FlatZincAstBuilder {
 
     pub(crate) fn set_solve_item(&mut self, solve_item: flatzinc::SolveItem) {
         if let Some(annotation) = solve_item.annotations.first() {
-            self.search = Some(FlatZincAstBuilder::find_search(annotation));
+            self.search = FlatZincAstBuilder::find_search(annotation);
         } else {
             self.search = Some(Search::Unspecified)
         }
         let _ = self.solve_item.insert(solve_item);
     }
 
-    fn find_search(annotation: &flatzinc::Annotation) -> Search {
+    fn find_search(annotation: &flatzinc::Annotation) -> Option<Search> {
         match &annotation.id[..] {
-            "bool_search" => Search::Bool(FlatZincAstBuilder::find_direct_search(annotation)),
+            "bool_search" => Some(Search::Bool(FlatZincAstBuilder::find_direct_search(
+                annotation,
+            ))),
             "float_search" => panic!("Search over floats is currently not supported"),
-            "int_search" => Search::Int(FlatZincAstBuilder::find_direct_search(annotation)),
+            "int_search" => Some(Search::Int(FlatZincAstBuilder::find_direct_search(
+                annotation,
+            ))),
             "seq_search" => {
                 pumpkin_assert_eq_simple!(
                     annotation.expressions.len(),
                     1,
                     "Expected a single expression for sequential search"
                 );
-                Search::Seq(match &annotation.expressions[0] {
+                Some(Search::Seq(match &annotation.expressions[0] {
                     flatzinc::AnnExpr::Annotations(annotations) => annotations
                         .iter()
-                        .map(FlatZincAstBuilder::find_search)
+                        .filter_map(FlatZincAstBuilder::find_search)
                         .collect::<Vec<_>>(),
                     other => {
                         panic!("Expected a list of annotations for `seq_search` but was {other:?}")
                     }
-                })
+                }))
             }
             "set_search" => panic!("Search over sets is currently not supported"),
+            "warm_start" => {
+                warn!("`warm_start` is currently not supported; ignoring search annotation");
+                None
+            }
+            "constraint_name" => {
+                warn!("`constraint_name` is currently not supported; ignoring search annotation");
+                None
+            }
             other => panic!("Did not recognise search strategy {other}"),
         }
     }
