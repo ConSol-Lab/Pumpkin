@@ -2,67 +2,65 @@ use convert_case::Case;
 use convert_case::Casing;
 use proc_macro::TokenStream;
 use quote::quote;
-use quote::ToTokens;
 use syn::parse_macro_input;
 use syn::DeriveInput;
 
-struct Constraint {
-    variant: syn::Variant,
-}
+fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenStream {
+    let name = variant.ident.to_string().to_case(Case::Snake);
+    let variant_ident = &variant.ident;
 
-impl ToTokens for Constraint {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let Constraint { variant } = self;
-
-        let name = variant.ident.to_string().to_case(Case::Snake);
-        let variant_ident = &variant.ident;
-
-        let constraint_value = match &variant.fields {
-            syn::Fields::Named(fields) => {
-                let arguments = fields.named.iter().enumerate().map(|(idx, field)| {
-                    let field_name = field.ident.as_ref().expect("we are in a syn::Fields::Named");
-                    let ty = &field.ty;
-
-                    quote! {
-                        #field_name: <#ty as ::fzn_rs::FromArgument>::from_argument(&constraint.arguments[#idx], arrays)?
-                    }
-                });
+    let constraint_value = match &variant.fields {
+        syn::Fields::Named(fields) => {
+            let arguments = fields.named.iter().enumerate().map(|(idx, field)| {
+                let field_name = field
+                    .ident
+                    .as_ref()
+                    .expect("we are in a syn::Fields::Named");
+                let ty = &field.ty;
 
                 quote! {
-                    #variant_ident {
-                        #(#arguments),*
-                    }
+                    #field_name: <#ty as ::fzn_rs::FromArgument>::from_argument(
+                        &constraint.arguments[#idx],
+                        arrays,
+                    )?
+                }
+            });
+
+            quote! {
+                #variant_ident {
+                    #(#arguments),*
                 }
             }
+        }
 
-            syn::Fields::Unnamed(fields) => {
-                let arguments = fields.unnamed.iter().enumerate().map(|(idx, field)| {
-                    let ty = &field.ty;
-
-                    quote! {
-                        <#ty as ::fzn_rs::FromArgument>::from_argument(&constraint.arguments[#idx], arrays)?
-                    }
-                });
+        syn::Fields::Unnamed(fields) => {
+            let arguments = fields.unnamed.iter().enumerate().map(|(idx, field)| {
+                let ty = &field.ty;
 
                 quote! {
-                    #variant_ident(
-                        #(#arguments),*
-                    )
+                    <#ty as ::fzn_rs::FromArgument>::from_argument(
+                        &constraint.arguments[#idx],
+                        arrays,
+                    )?
                 }
+            });
+
+            quote! {
+                #variant_ident(
+                    #(#arguments),*
+                )
             }
+        }
 
-            syn::Fields::Unit => quote! {
-                compiler_error!("A FlatZinc constraint must have at least one field")
-            },
-        };
+        syn::Fields::Unit => quote! {
+            compiler_error!("A FlatZinc constraint must have at least one field")
+        },
+    };
 
-        let extra_tokens = quote! {
-            #name => {
-                Ok(#constraint_value)
-            },
-        };
-
-        tokens.extend(extra_tokens);
+    quote! {
+        #name => {
+            Ok(#constraint_value)
+        },
     }
 }
 
@@ -80,9 +78,8 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
 
     let constraints = data_enum
         .variants
-        .into_iter()
-        .map(|variant| Constraint { variant })
-        .collect::<Vec<_>>();
+        .iter()
+        .map(variant_to_constraint_argument);
 
     let token_stream = quote! {
         impl ::fzn_rs::FlatZincConstraint for #constraint_enum_name {
