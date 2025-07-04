@@ -43,7 +43,7 @@ pub enum IntVariable {
 pub trait FlatZincConstraint: Sized {
     fn from_ast(
         constraint: &ast::Constraint,
-        arrays: &BTreeMap<Rc<str>, Array>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<Array>>,
     ) -> Result<Self, InstanceError>;
 }
 

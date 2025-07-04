@@ -13,6 +13,9 @@ pub enum InstanceError {
         actual: Token,
         span: ast::Span,
     },
+
+    #[error("array {0} is undefined")]
+    UndefinedArray(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +25,7 @@ pub enum Token {
     BoolLiteral,
     IntSetLiteral,
 
+    Array,
     IntVariable,
 }
 
@@ -34,6 +38,7 @@ impl Display for Token {
             Token::BoolLiteral => write!(f, "bool literal"),
             Token::IntSetLiteral => write!(f, "int set literal"),
 
+            Token::Array => write!(f, "array"),
             Token::IntVariable => write!(f, "int variable"),
         }
     }
