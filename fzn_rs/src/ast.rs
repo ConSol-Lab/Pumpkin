@@ -43,7 +43,7 @@ pub struct Ast {
     /// A mapping from identifiers to variables.
     pub variables: BTreeMap<Rc<str>, Node<Variable<Annotation>>>,
     /// The arrays in this instance.
-    pub arrays: BTreeMap<Rc<str>, Array>,
+    pub arrays: BTreeMap<Rc<str>, Node<Array>>,
     /// A list of constraints.
     pub constraints: Vec<Node<Constraint>>,
     /// The goal of the model.
@@ -65,9 +65,9 @@ pub struct Variable<Ann> {
 #[derive(Clone, Debug)]
 pub struct Array {
     /// The elements of the array.
-    pub contents: Vec<Literal>,
+    pub contents: Vec<Node<Literal>>,
     /// The annotations associated with this array.
-    pub annotations: Vec<Annotation>,
+    pub annotations: Vec<Node<Annotation>>,
 }
 
 /// The domain of a [`Variable`].

@@ -85,7 +85,7 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
         impl ::fzn_rs::FlatZincConstraint for #constraint_enum_name {
             fn from_ast(
                 constraint: &::fzn_rs::ast::Constraint,
-                arrays: &std::collections::BTreeMap<std::rc::Rc<str>, ::fzn_rs::ast::Array>,
+                arrays: &std::collections::BTreeMap<std::rc::Rc<str>, ::fzn_rs::ast::Node<::fzn_rs::ast::Array>>,
             ) -> Result<Self, ::fzn_rs::InstanceError> {
                 use #constraint_enum_name::*;
 
