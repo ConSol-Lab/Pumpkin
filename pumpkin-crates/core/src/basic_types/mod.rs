@@ -14,7 +14,6 @@ mod trail;
 pub use constraint_operation_error::ConstraintOperationError;
 pub(crate) use csp_solver_execution_flag::CSPSolverExecutionFlag;
 pub use function::Function;
-pub(crate) use predicate_id_generators::DeletablePredicateIdGenerator;
 pub(crate) use predicate_id_generators::PredicateId;
 pub(crate) use predicate_id_generators::PredicateIdGenerator;
 pub(crate) use propagation_status_cp::*;

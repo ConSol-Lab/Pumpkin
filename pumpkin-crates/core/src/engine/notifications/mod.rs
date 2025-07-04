@@ -14,6 +14,7 @@ pub(crate) use predicate_notification::PredicateNotifier;
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
 use crate::basic_types::PredicateId;
+use crate::branching::Brancher;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::EnqueueDecision;
@@ -245,6 +246,7 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
+        brancher: &mut impl Brancher,
     ) {
         // We first take the events because otherwise we get mutability issues when calling methods
         // on self
@@ -287,8 +289,8 @@ impl NotificationEngine {
         self.events = events;
 
         // Then we notify the propagators that a predicate has been satisfied
-        self.notify_predicate_id_satisfied(propagators);
-        self.notify_predicate_id_falsified(propagators);
+        self.notify_predicate_id_satisfied(propagators, brancher);
+        self.notify_predicate_id_falsified(propagators, brancher);
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -326,21 +328,62 @@ impl NotificationEngine {
     /// Notifies propagators that certain [`Predicate`]s have been falsified.
     ///
     /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self, _propagators: &mut PropagatorStore) {
-        for _predicate_id in self.predicate_notifier.drain_falsified_predicates() {
+    fn notify_predicate_id_falsified(
+        &mut self,
+        _propagators: &mut PropagatorStore,
+        brancher: &mut impl Brancher,
+    ) {
+        let mut falsified_predicates = std::mem::take(
+            &mut self
+                .predicate_notifier
+                .predicate_id_assignments
+                .falsified_predicates,
+        );
+        for predicate_id in falsified_predicates.drain(..) {
             // At the moment this does nothing
+            brancher.on_predicate_assigned(
+                self.predicate_notifier
+                    .predicate_to_id
+                    .get_predicate(predicate_id),
+                false,
+            );
         }
+        self.predicate_notifier
+            .predicate_id_assignments
+            .falsified_predicates = falsified_predicates;
     }
 
     /// Notifies propagators that certain [`Predicate`]s have been satisfied.
     ///
     /// Currently, only the [`NogoodPropagator`] is notified.
-    fn notify_predicate_id_satisfied(&mut self, propagators: &mut PropagatorStore) {
-        for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        propagators: &mut PropagatorStore,
+        brancher: &mut impl Brancher,
+    ) {
+        let mut satisifed_predicates = std::mem::take(
+            &mut self
+                .predicate_notifier
+                .predicate_id_assignments
+                .satisfied_predicates,
+        );
+
+        for predicate_id in satisifed_predicates.drain(..) {
             let nogood_propagator =
                 &mut propagators[ConstraintSatisfactionSolver::get_nogood_propagator_id()];
             nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+
+            brancher.on_predicate_assigned(
+                self.predicate_notifier
+                    .predicate_to_id
+                    .get_predicate(predicate_id),
+                true,
+            );
         }
+
+        self.predicate_notifier
+            .predicate_id_assignments
+            .satisfied_predicates = satisifed_predicates;
     }
 
     fn notify_nogood_propagator(
@@ -406,6 +449,17 @@ impl NotificationEngine {
     }
 
     pub(crate) fn track_predicate(
+        &mut self,
+        predicate: Predicate,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) {
+        let predicate_id = self.predicate_notifier.predicate_to_id.get_id(predicate);
+        self.predicate_notifier
+            .track_predicate(predicate_id, trailed_values, assignments)
+    }
+
+    pub(crate) fn track_predicate_id(
         &mut self,
         predicate: PredicateId,
         trailed_values: &mut TrailedValues,

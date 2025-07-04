@@ -9,8 +9,10 @@ use crate::engine::conflict_analysis::minimisers::Mode;
 use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
+use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
+use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::proof::explain_root_assignment;
 use crate::proof::RootExplanationContext;
@@ -73,19 +75,23 @@ impl ConflictResolver for ResolutionResolver {
 
         let conflict_nogood = context.get_conflict_nogood();
 
-        let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
-            Some(RootExplanationContext {
-                propagators: context.propagators,
-                proof_log: context.proof_log,
-                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                assignments: context.assignments,
-                reason_store: context.reason_store,
-                notification_engine: context.notification_engine,
-                variable_names: context.variable_names,
-            })
-        } else {
-            None
-        };
+        let (mut root_explanation_context, mut test_notification_engine) =
+            if context.proof_log.is_logging_inferences() {
+                (
+                    Some(RootExplanationContext {
+                        propagators: context.propagators,
+                        proof_log: context.proof_log,
+                        unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                        assignments: context.assignments,
+                        reason_store: context.reason_store,
+                        notification_engine: context.notification_engine,
+                        variable_names: context.variable_names,
+                    }),
+                    None,
+                )
+            } else {
+                (None, Some(&mut context.notification_engine))
+            };
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -95,6 +101,8 @@ impl ConflictResolver for ResolutionResolver {
                 context.brancher,
                 self.mode,
                 root_explanation_context.as_mut(),
+                context.trailed_values,
+                &mut test_notification_engine,
             );
         }
 
@@ -267,19 +275,23 @@ impl ConflictResolver for ResolutionResolver {
                 context.variable_names,
             );
 
-            let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
-                Some(RootExplanationContext {
-                    propagators: context.propagators,
-                    proof_log: context.proof_log,
-                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                    assignments: context.assignments,
-                    reason_store: context.reason_store,
-                    notification_engine: context.notification_engine,
-                    variable_names: context.variable_names,
-                })
-            } else {
-                None
-            };
+            let (mut root_explanation_context, mut test_notification_engine) =
+                if context.proof_log.is_logging_inferences() {
+                    (
+                        Some(RootExplanationContext {
+                            propagators: context.propagators,
+                            proof_log: context.proof_log,
+                            unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                            assignments: context.assignments,
+                            reason_store: context.reason_store,
+                            notification_engine: context.notification_engine,
+                            variable_names: context.variable_names,
+                        }),
+                        None,
+                    )
+                } else {
+                    (None, Some(&mut context.notification_engine))
+                };
 
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(
@@ -288,6 +300,8 @@ impl ConflictResolver for ResolutionResolver {
                     context.brancher,
                     self.mode,
                     root_explanation_context.as_mut(),
+                    context.trailed_values,
+                    &mut test_notification_engine,
                 );
             }
         }
@@ -319,6 +333,7 @@ impl ResolutionResolver {
     ///
     /// If a `root_explanation_context` is provided, then root-level assignments are explained as
     /// well in the proof log.
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
@@ -326,6 +341,9 @@ impl ResolutionResolver {
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
         root_explanation_context: Option<&mut RootExplanationContext>,
+        trailed_values: &mut TrailedValues,
+
+        notification_engine: &mut Option<&mut &mut NotificationEngine>,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -378,7 +396,19 @@ impl ResolutionResolver {
             if !self.to_process_heap.is_key_present(predicate_id)
                 && *self.to_process_heap.get_value(predicate_id) == 0
             {
-                brancher.on_appearance_in_conflict_predicate(predicate);
+                if brancher.on_appearance_in_conflict_predicate(predicate) {
+                    if let Some(root_explanation_context) = root_explanation_context {
+                        root_explanation_context
+                            .notification_engine
+                            .track_predicate(predicate, trailed_values, assignments);
+                    } else {
+                        notification_engine.as_mut().unwrap().track_predicate(
+                            predicate,
+                            trailed_values,
+                            assignments,
+                        );
+                    }
+                }
 
                 let trail_position = assignments.get_trail_position(&predicate).unwrap();
 
@@ -519,9 +549,16 @@ impl ResolutionResolver {
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
         for predicate in clean_nogood.iter() {
-            context
+            if context
                 .brancher
-                .on_appearance_in_conflict_predicate(*predicate);
+                .on_appearance_in_conflict_predicate(*predicate)
+            {
+                context.notification_engine.track_predicate(
+                    *predicate,
+                    context.trailed_values,
+                    context.assignments,
+                );
+            }
         }
 
         LearnedNogood {

@@ -86,7 +86,9 @@ pub trait Brancher {
     ///
     /// To receive information about this event, use
     /// [`BrancherEvent::AppearanceInConflictPredicate`] in [`Self::subscribe_to_events`]
-    fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
+    fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) -> bool {
+        false
+    }
 
     /// This method is called whenever a restart is performed.
     /// To receive information about this event, use [`BrancherEvent::Restart`] in
@@ -119,6 +121,8 @@ pub trait Brancher {
     /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which [`VariableSelector`] should be called.
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
+
+    fn on_predicate_assigned(&mut self, _predicate: Predicate, _value: bool) {}
 }
 
 /// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
@@ -140,4 +144,6 @@ pub enum BrancherEvent {
     Restart,
     /// Event which is called with the new state after a backtrack has occurred
     Synchronise,
+    /// Event which is called when a tracked [`Predicate`] is assigned.
+    PredicateAssigned,
 }

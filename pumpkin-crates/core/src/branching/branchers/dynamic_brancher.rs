@@ -128,12 +128,15 @@ impl Brancher for DynamicBrancher {
             });
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) -> bool {
+        let mut should_track = false;
         self.relevant_event_to_index[BrancherEvent::AppearanceInConflictPredicate]
             .iter()
             .for_each(|&brancher_index| {
-                self.branchers[brancher_index].on_appearance_in_conflict_predicate(predicate)
+                should_track |=
+                    self.branchers[brancher_index].on_appearance_in_conflict_predicate(predicate)
             });
+        should_track
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
@@ -162,6 +165,14 @@ impl Brancher for DynamicBrancher {
         self.branchers[..=current_brancher_index]
             .iter_mut()
             .all(|brancher| brancher.is_restart_pointless())
+    }
+
+    fn on_predicate_assigned(&mut self, predicate: Predicate, value: bool) {
+        self.relevant_event_to_index[BrancherEvent::PredicateAssigned]
+            .iter()
+            .for_each(|&brancher_index| {
+                self.branchers[brancher_index].on_predicate_assigned(predicate, value)
+            })
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {

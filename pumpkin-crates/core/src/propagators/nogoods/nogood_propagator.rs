@@ -583,7 +583,7 @@ impl NogoodPropagator {
             watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
 
-        notification_engine.track_predicate(predicate, trailed_values, assignments);
+        notification_engine.track_predicate_id(predicate, trailed_values, assignments);
 
         watch_lists[predicate].push(watcher);
     }

@@ -17,6 +17,7 @@ use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
+use crate::engine::constraint_satisfaction_solver::DummyBrancher;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::termination::TerminationCondition;
@@ -193,8 +194,12 @@ impl Solver {
         predicate: Predicate,
         constraint_tag: ConstraintTag,
     ) -> Literal {
-        self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None, constraint_tag)
+        self.satisfaction_solver.create_new_literal_for_predicate(
+            predicate,
+            None,
+            constraint_tag,
+            &mut DummyBrancher,
+        )
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
@@ -467,7 +472,8 @@ impl Solver {
         clause: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause(clause, constraint_tag)
+        self.satisfaction_solver
+            .add_clause(clause, constraint_tag, &mut DummyBrancher)
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined

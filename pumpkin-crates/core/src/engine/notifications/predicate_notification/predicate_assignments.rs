@@ -28,12 +28,12 @@ pub(crate) struct PredicateIdAssignments {
     ///
     /// Note that this structure does not contain _all_ of the falsified [`Predicate`]s but rather
     /// the one which have been falsified since the last round of notifications.
-    falsified_predicates: Vec<PredicateId>,
+    pub(crate) falsified_predicates: Vec<PredicateId>,
     /// The [`Predicate`]s which are currently known to be satisfied used for notification.
     ///
     /// Note that this structure does not contain _all_ of the satisfied [`Predicate`]s but rather
     /// the one which have been satisfied since the last round of notifications.
-    satisfied_predicates: Vec<PredicateId>,
+    pub(crate) satisfied_predicates: Vec<PredicateId>,
 }
 
 /// The current value of a [`Predicate`].
@@ -72,18 +72,6 @@ impl PredicateValue {
 impl PredicateIdAssignments {
     fn predicate_ids(&self) -> impl Iterator<Item = PredicateId> + '_ {
         self.predicate_values.keys()
-    }
-
-    /// Returns the falsified predicates; note that this structure will be cleared once it is
-    /// dropped.
-    pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.falsified_predicates.drain(..)
-    }
-
-    /// Returns the satisfied predicates; note that this structure will be cleared once it is
-    /// dropped.
-    pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.satisfied_predicates.drain(..)
     }
 
     pub(crate) fn increase_decision_level(&mut self) {

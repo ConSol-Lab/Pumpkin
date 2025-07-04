@@ -78,9 +78,10 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) -> bool {
         self.variable_selector
-            .on_appearance_in_conflict_predicate(predicate)
+            .on_appearance_in_conflict_predicate(predicate);
+        false
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

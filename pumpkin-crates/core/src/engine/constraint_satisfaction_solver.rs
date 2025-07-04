@@ -34,6 +34,7 @@ use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;
 use crate::declare_inference_label;
@@ -141,6 +142,17 @@ pub struct ConstraintSatisfactionSolver {
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
     notification_engine: NotificationEngine,
+}
+
+pub(crate) struct DummyBrancher;
+impl Brancher for DummyBrancher {
+    fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+        unreachable!()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        unreachable!()
+    }
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -378,6 +390,7 @@ impl ConstraintSatisfactionSolver {
         predicate: Predicate,
         name: Option<String>,
         constraint_tag: ConstraintTag,
+        brancher: &mut impl Brancher,
     ) -> Literal {
         let literal = self.create_new_literal(name);
 
@@ -389,12 +402,14 @@ impl ConstraintSatisfactionSolver {
         let _ = self.add_clause(
             vec![!literal.get_true_predicate(), predicate],
             constraint_tag,
+            brancher,
         );
 
         // If !literal --> !predicate
         let _ = self.add_clause(
             vec![!literal.get_false_predicate(), !predicate],
             constraint_tag,
+            brancher,
         );
 
         literal
@@ -643,7 +658,7 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
-            self.propagate();
+            self.propagate(brancher);
 
             if self.state.no_conflict() {
                 // Restarts should only occur after a new decision level has been declared to
@@ -1041,7 +1056,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    pub(crate) fn propagate(&mut self) {
+    pub(crate) fn propagate(&mut self, brancher: &mut impl Brancher) {
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
@@ -1051,6 +1066,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.trailed_values,
                 &mut self.propagators,
                 &mut self.propagator_queue,
+                brancher,
             );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
@@ -1081,6 +1097,7 @@ impl ConstraintSatisfactionSolver {
                             &mut self.trailed_values,
                             &mut self.propagators,
                             &mut self.propagator_queue,
+                            brancher,
                         );
                 }
                 Err(inconsistency) => match inconsistency {
@@ -1281,7 +1298,7 @@ impl ConstraintSatisfactionSolver {
         self.propagator_queue
             .enqueue_propagator(new_propagator_id, new_propagator.priority());
 
-        self.propagate();
+        self.propagate(&mut DummyBrancher);
 
         if self.state.no_conflict() {
             Ok(())
@@ -1315,6 +1332,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
+        brancher: &mut impl Brancher,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
         let num_trail_entries = self.assignments.num_trail_entries();
@@ -1347,7 +1365,7 @@ impl ConstraintSatisfactionSolver {
 
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
-        self.propagate();
+        self.propagate(brancher);
 
         self.handle_root_propagation(num_trail_entries);
 
@@ -1404,6 +1422,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
         constraint_tag: ConstraintTag,
+        brancher: &mut impl Brancher,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             self.get_decision_level() == 0,
@@ -1459,7 +1478,9 @@ impl ConstraintSatisfactionSolver {
             .internal_parameters
             .proof_log
             .create_inference_code(constraint_tag, NogoodLabel);
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
+        if let Err(constraint_operation_error) =
+            self.add_nogood(predicates, inference_code, brancher)
+        {
             let _ = self.conclude_proof_unsat();
 
             self.state

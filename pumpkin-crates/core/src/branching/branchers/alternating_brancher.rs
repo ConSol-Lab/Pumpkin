@@ -117,13 +117,17 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         self.other_brancher.log_statistics(statistic_logger);
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.default_brancher
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) -> bool {
+        let mut should_track = false;
+        should_track |= self
+            .default_brancher
             .on_appearance_in_conflict_predicate(predicate);
         if !self.will_always_use_default() {
-            self.other_brancher
-                .on_appearance_in_conflict_predicate(predicate)
+            should_track |= self
+                .other_brancher
+                .on_appearance_in_conflict_predicate(predicate);
         }
+        should_track
     }
 
     fn on_conflict(&mut self) {
@@ -225,6 +229,14 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
             .chain(self.default_brancher.subscribe_to_events())
             .chain(self.other_brancher.subscribe_to_events())
             .collect()
+    }
+
+    fn on_predicate_assigned(&mut self, predicate: Predicate, value: bool) {
+        self.default_brancher
+            .on_predicate_assigned(predicate, value);
+        if !self.will_always_use_default() {
+            self.other_brancher.on_predicate_assigned(predicate, value);
+        }
     }
 }
 
