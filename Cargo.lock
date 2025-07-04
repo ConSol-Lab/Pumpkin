@@ -359,6 +359,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fzn_rs_derive"
+version = "0.1.0"
+dependencies = [
+ "convert_case 0.8.0",
+ "fzn_rs",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -643,7 +654,7 @@ dependencies = [
  "bitfield",
  "bitfield-struct",
  "clap",
- "convert_case",
+ "convert_case 0.6.0",
  "downcast-rs",
  "drcp-format",
  "enum-map",
@@ -933,9 +944,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "syn"
-version = "2.0.103"
+version = "2.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4307e30089d6fd6aff212f2da3a1f9e32f3223b1f010fb09b7c95f90f3ca1e8"
+checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
 dependencies = [
  "proc-macro2",
  "quote",
