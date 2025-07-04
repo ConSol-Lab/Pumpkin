@@ -4,9 +4,36 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
 use syn::DeriveInput;
+use syn::LitStr;
+
+fn get_constraint_name(variant: &syn::Variant) -> syn::Result<String> {
+    variant
+        .attrs
+        .iter()
+        .find_map(|attr| {
+            let ident = attr.path().get_ident()?;
+
+            if ident != "name" {
+                return None;
+            }
+
+            match attr.parse_args::<LitStr>() {
+                Ok(string_lit) => Some(Ok(string_lit.value())),
+                Err(e) => Some(Err(e)),
+            }
+        })
+        .unwrap_or_else(|| Ok(variant.ident.to_string().to_case(Case::Snake)))
+}
 
 fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenStream {
-    let name = variant.ident.to_string().to_case(Case::Snake);
+    let name = match get_constraint_name(variant) {
+        Ok(name) => name,
+        Err(_) => {
+            return quote! {
+                compiler_error!("Invalid usage of #[name(...)");
+            }
+        }
+    };
     let variant_ident = &variant.ident;
 
     let constraint_value = match &variant.fields {
@@ -64,7 +91,7 @@ fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenS
     }
 }
 
-#[proc_macro_derive(FlatZincConstraint)]
+#[proc_macro_derive(FlatZincConstraint, attributes(name))]
 pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(item as DeriveInput);
     let constraint_enum_name = derive_input.ident;
