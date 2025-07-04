@@ -34,6 +34,7 @@ impl ToTokens for Constraint {
                     }
                 }
             }
+
             syn::Fields::Unnamed(fields) => {
                 let arguments = fields.unnamed.iter().enumerate().map(|(idx, field)| {
                     let ty = &field.ty;
@@ -49,7 +50,10 @@ impl ToTokens for Constraint {
                     )
                 }
             }
-            syn::Fields::Unit => panic!("A FlatZinc constraint must have at least one field"),
+
+            syn::Fields::Unit => quote! {
+                compiler_error!("A FlatZinc constraint must have at least one field")
+            },
         };
 
         let extra_tokens = quote! {
@@ -68,7 +72,10 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
     let constraint_enum_name = derive_input.ident;
 
     let syn::Data::Enum(data_enum) = derive_input.data else {
-        panic!("Derive macro only works on enums");
+        return quote! {
+            compiler_error!("derive(FlatZincConstraint) only works on enums")
+        }
+        .into();
     };
 
     let constraints = data_enum
