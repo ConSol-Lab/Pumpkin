@@ -354,6 +354,7 @@ name = "fzn_rs"
 version = "0.1.0"
 dependencies = [
  "chumsky",
+ "fzn_rs_derive",
  "thiserror",
 ]
 
