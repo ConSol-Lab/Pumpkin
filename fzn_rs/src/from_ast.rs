@@ -1,3 +1,6 @@
+//! This module contains traits that help with extracting a [`crate::Instance`] from an
+//! [`crate::ast::Ast`].
+
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -6,9 +9,36 @@ use crate::error::Token;
 use crate::InstanceError;
 use crate::IntVariable;
 
+/// Parse an [`ast::Constraint`] into a specific constraint type.
+pub trait FlatZincConstraint: Sized {
+    fn from_ast(
+        constraint: &ast::Constraint,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
+    ) -> Result<Self, InstanceError>;
+}
+
+/// Parse an [`ast::Annotation`] into a specific annotation type.
+///
+/// The difference with [`FlatZincConstraint::from_ast`] is that annotations can be ignored.
+/// [`FlatZincAnnotation::from_ast`] can successfully parse an annotation into nothing, signifying
+/// the annotation is not of interest in the final [`crate::Instance`].
+pub trait FlatZincAnnotation: Sized {
+    fn from_ast(annotation: &ast::Annotation) -> Result<Option<Self>, InstanceError>;
+}
+
+/// A default implementation that ignores all annotations.
+impl FlatZincAnnotation for () {
+    fn from_ast(_: &ast::Annotation) -> Result<Option<Self>, InstanceError> {
+        Ok(None)
+    }
+}
+
+/// Extract a value from an [`ast::Literal`].
 pub trait FromLiteral: Sized {
+    /// The [`Token`] that is expected for this implementation. Used to create error messages.
     fn expected() -> Token;
 
+    /// Extract `Self` from a literal AST node.
     fn from_literal(
         node: &ast::Node<ast::Literal>,
         arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
@@ -26,19 +56,9 @@ impl FromLiteral for i64 {
     ) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Int(value) => Ok(*value),
-            ast::Literal::Identifier(_) => Err(InstanceError::UnexpectedToken {
+            literal => Err(InstanceError::UnexpectedToken {
                 expected: Token::IntLiteral,
-                actual: Token::Identifier,
-                span: node.span,
-            }),
-            ast::Literal::Bool(_) => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntLiteral,
-                actual: Token::BoolLiteral,
-                span: node.span,
-            }),
-            ast::Literal::IntSet(_) => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntLiteral,
-                actual: Token::IntSetLiteral,
+                actual: literal.into(),
                 span: node.span,
             }),
         }
@@ -58,21 +78,16 @@ impl FromLiteral for IntVariable {
             ast::Literal::Identifier(identifier) => {
                 Ok(IntVariable::Identifier(Rc::clone(identifier)))
             }
-            ast::Literal::Int(constant) => Ok(IntVariable::Constant(*constant)),
-            ast::Literal::Bool(_) => Err(InstanceError::UnexpectedToken {
+            literal => Err(InstanceError::UnexpectedToken {
                 expected: Token::IntVariable,
-                actual: Token::BoolLiteral,
-                span: node.span,
-            }),
-            ast::Literal::IntSet(_) => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntVariable,
-                actual: Token::IntSetLiteral,
+                actual: literal.into(),
                 span: node.span,
             }),
         }
     }
 }
 
+/// Extract an argument from the [`ast::Argument`] node.
 pub trait FromArgument: Sized {
     fn from_argument(
         argument: &ast::Node<ast::Argument>,
@@ -113,24 +128,10 @@ impl<T: FromLiteral> FromArgument for Vec<T> {
                     &array.node.contents
                 }
 
-                ast::Literal::Int(_) => {
+                literal => {
                     return Err(InstanceError::UnexpectedToken {
                         expected: Token::Array,
-                        actual: Token::IntLiteral,
-                        span: argument.span,
-                    })
-                }
-                ast::Literal::Bool(_) => {
-                    return Err(InstanceError::UnexpectedToken {
-                        expected: Token::Array,
-                        actual: Token::BoolLiteral,
-                        span: argument.span,
-                    })
-                }
-                ast::Literal::IntSet(_) => {
-                    return Err(InstanceError::UnexpectedToken {
-                        expected: Token::Array,
-                        actual: Token::IntSetLiteral,
+                        actual: literal.into(),
                         span: argument.span,
                     })
                 }
