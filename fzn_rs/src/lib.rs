@@ -1,5 +1,6 @@
 pub mod ast;
 
+mod error;
 mod from_argument;
 #[cfg(feature = "fzn")]
 mod fzn;
@@ -10,6 +11,7 @@ use std::rc::Rc;
 use ast::Array;
 use ast::SolveObjective;
 use ast::Variable;
+pub use error::InstanceError;
 pub use from_argument::FromArgument;
 
 #[derive(Clone, Debug)]
@@ -36,12 +38,6 @@ pub struct Constraint<InstanceConstraint, ConstraintAnn> {
 pub enum IntVariable {
     Identifier(Rc<str>),
     Constant(i64),
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum InstanceError {
-    #[error("constraint '{0}' is not supported")]
-    UnsupportedConstraint(String),
 }
 
 pub trait FlatZincConstraint: Sized {
