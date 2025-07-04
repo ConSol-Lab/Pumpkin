@@ -2,6 +2,7 @@
 //! the original FZN format, and is a modified version of the `FlatZinc` type from
 //! [`flatzinc-serde`](https://docs.rs/flatzinc-serde).
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::rc::Rc;
 
 /// Describes a range `[start, end)` in the source.
@@ -13,6 +14,12 @@ pub struct Span {
     ///
     /// Note the end is exclusive.
     pub end: usize,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.start, self.end)
+    }
 }
 
 /// A node in the [`Ast`].
