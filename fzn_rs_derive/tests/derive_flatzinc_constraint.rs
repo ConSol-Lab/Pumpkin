@@ -146,6 +146,57 @@ fn variant_with_named_fields() {
 }
 
 #[test]
+fn variant_with_name_attribute() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum InstanceConstraint {
+        #[name("int_lin_le")]
+        LinearInequality {
+            weights: Vec<i64>,
+            variables: Vec<IntVariable>,
+            bound: i64,
+        },
+    }
+
+    let ast = Ast {
+        variables: unbounded_variables(["x1", "x2", "x3"]),
+        arrays: BTreeMap::new(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("int_lin_le".into()),
+            arguments: vec![
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Int(2)),
+                    test_node(Literal::Int(3)),
+                    test_node(Literal::Int(5)),
+                ])),
+                test_node(Argument::Array(vec![
+                    test_node(Literal::Identifier("x1".into())),
+                    test_node(Literal::Identifier("x2".into())),
+                    test_node(Literal::Identifier("x3".into())),
+                ])),
+                test_node(Argument::Literal(test_node(Literal::Int(3)))),
+            ],
+            annotations: vec![],
+        })],
+        solve: satisfy_solve(),
+    };
+
+    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.constraints[0].constraint.node,
+        InstanceConstraint::LinearInequality {
+            weights: vec![2, 3, 5],
+            variables: vec![
+                IntVariable::Identifier("x1".into()),
+                IntVariable::Identifier("x2".into()),
+                IntVariable::Identifier("x3".into())
+            ],
+            bound: 3
+        }
+    )
+}
+
+#[test]
 fn constraint_referencing_arrays() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum InstanceConstraint {
