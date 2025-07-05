@@ -15,5 +15,8 @@ fzn_rs_derive = { path = "../fzn_rs_derive/", optional = true }
 fzn = ["dep:chumsky"]
 derive = ["dep:fzn_rs_derive"]
 
+[package.metadata.docs.rs]
+features = ["derive"]
+
 [lints]
 workspace = true

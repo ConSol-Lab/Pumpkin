@@ -14,12 +14,12 @@ use fzn_rs::ast::SolveObjective;
 use fzn_rs::ast::Span;
 use fzn_rs::ast::Variable;
 use fzn_rs::Instance;
-use fzn_rs::IntVariable;
+use fzn_rs::VariableArgument;
 use fzn_rs_derive::FlatZincConstraint;
 
 fn satisfy_solve() -> SolveObjective {
     SolveObjective {
-        method: fzn_rs::ast::Method::Satisfy,
+        method: test_node(fzn_rs::ast::Method::Satisfy),
         annotations: vec![],
     }
 }
@@ -53,7 +53,7 @@ fn unbounded_variables<'a>(
 fn variant_with_unnamed_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum InstanceConstraint {
-        IntLinLe(Vec<i64>, Vec<IntVariable>, i64),
+        IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
     }
 
     let ast = Ast {
@@ -86,9 +86,9 @@ fn variant_with_unnamed_fields() {
         InstanceConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
-                IntVariable::Identifier("x1".into()),
-                IntVariable::Identifier("x2".into()),
-                IntVariable::Identifier("x3".into())
+                VariableArgument::Identifier("x1".into()),
+                VariableArgument::Identifier("x2".into()),
+                VariableArgument::Identifier("x3".into())
             ],
             3
         )
@@ -101,7 +101,7 @@ fn variant_with_named_fields() {
     enum InstanceConstraint {
         IntLinLe {
             weights: Vec<i64>,
-            variables: Vec<IntVariable>,
+            variables: Vec<VariableArgument<i64>>,
             bound: i64,
         },
     }
@@ -136,9 +136,9 @@ fn variant_with_named_fields() {
         InstanceConstraint::IntLinLe {
             weights: vec![2, 3, 5],
             variables: vec![
-                IntVariable::Identifier("x1".into()),
-                IntVariable::Identifier("x2".into()),
-                IntVariable::Identifier("x3".into())
+                VariableArgument::Identifier("x1".into()),
+                VariableArgument::Identifier("x2".into()),
+                VariableArgument::Identifier("x3".into())
             ],
             bound: 3
         }
@@ -152,7 +152,7 @@ fn variant_with_name_attribute() {
         #[name("int_lin_le")]
         LinearInequality {
             weights: Vec<i64>,
-            variables: Vec<IntVariable>,
+            variables: Vec<VariableArgument<i64>>,
             bound: i64,
         },
     }
@@ -187,9 +187,9 @@ fn variant_with_name_attribute() {
         InstanceConstraint::LinearInequality {
             weights: vec![2, 3, 5],
             variables: vec![
-                IntVariable::Identifier("x1".into()),
-                IntVariable::Identifier("x2".into()),
-                IntVariable::Identifier("x3".into())
+                VariableArgument::Identifier("x1".into()),
+                VariableArgument::Identifier("x2".into()),
+                VariableArgument::Identifier("x3".into())
             ],
             bound: 3
         }
@@ -200,7 +200,7 @@ fn variant_with_name_attribute() {
 fn constraint_referencing_arrays() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum InstanceConstraint {
-        IntLinLe(Vec<i64>, Vec<IntVariable>, i64),
+        IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
     }
 
     let ast = Ast {
@@ -254,9 +254,9 @@ fn constraint_referencing_arrays() {
         InstanceConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
-                IntVariable::Identifier("x1".into()),
-                IntVariable::Identifier("x2".into()),
-                IntVariable::Identifier("x3".into())
+                VariableArgument::Identifier("x1".into()),
+                VariableArgument::Identifier("x2".into()),
+                VariableArgument::Identifier("x3".into())
             ],
             3
         )
