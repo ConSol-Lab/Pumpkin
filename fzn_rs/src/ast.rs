@@ -3,6 +3,7 @@
 //! [`flatzinc-serde`](https://docs.rs/flatzinc-serde).
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 /// Describes a range `[start, end)` in the source.
@@ -22,6 +23,23 @@ impl Display for Span {
     }
 }
 
+#[cfg(feature = "fzn")]
+impl From<chumsky::span::SimpleSpan> for Span {
+    fn from(value: chumsky::span::SimpleSpan) -> Self {
+        Span {
+            start: value.start,
+            end: value.end,
+        }
+    }
+}
+
+#[cfg(feature = "fzn")]
+impl From<Span> for chumsky::span::SimpleSpan {
+    fn from(value: Span) -> Self {
+        chumsky::span::SimpleSpan::from(value.start..value.end)
+    }
+}
+
 /// A node in the [`Ast`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node<T> {
@@ -38,7 +56,7 @@ pub struct Node<T> {
 /// form. Therefore, any [`Literal::Identifier`] points to a variable.
 ///
 /// All identifiers are [`Rc`]s to allow parsers to re-use the allocation of the variable name.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ast {
     /// A mapping from identifiers to variables.
     pub variables: BTreeMap<Rc<str>, Node<Variable<Annotation>>>,
@@ -51,7 +69,7 @@ pub struct Ast {
 }
 
 /// A decision variable.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variable<Ann> {
     /// The domain of the variable.
     pub domain: Node<Domain>,
@@ -62,7 +80,7 @@ pub struct Variable<Ann> {
 }
 
 /// A named array of literals.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Array {
     /// The elements of the array.
     pub contents: Vec<Node<Literal>>,
@@ -71,16 +89,18 @@ pub struct Array {
 }
 
 /// The domain of a [`Variable`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Domain {
     /// The set of all integers.
     UnboundedInt,
     /// A finite set of integer values.
     Int(RangeList<i64>),
+    /// A boolean domain.
+    Bool,
 }
 
 /// Holds a non-empty set of values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RangeList<E> {
     /// A sorted list of intervals.
     ///
@@ -108,8 +128,25 @@ impl<E: PartialOrd> RangeList<E> {
     }
 }
 
+impl<E: Copy + Ord> From<RangeInclusive<E>> for RangeList<E> {
+    fn from(value: RangeInclusive<E>) -> Self {
+        RangeList {
+            intervals: vec![(*value.start(), *value.end())],
+        }
+    }
+}
+
+impl<E: Copy + Ord> FromIterator<E> for RangeList<E> {
+    fn from_iter<T: IntoIterator<Item = E>>(iter: T) -> Self {
+        let mut intervals: Vec<_> = iter.into_iter().map(|e| (e, e)).collect();
+        intervals.sort();
+
+        RangeList { intervals }
+    }
+}
+
 /// A literal in the instance.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     Identifier(Rc<str>),
@@ -117,13 +154,13 @@ pub enum Literal {
     IntSet(RangeList<i64>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolveObjective {
-    pub method: Method,
-    pub annotations: Vec<Annotation>,
+    pub method: Node<Method>,
+    pub annotations: Vec<Node<Annotation>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Method {
     Satisfy,
     Optimize {
@@ -132,14 +169,14 @@ pub enum Method {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptimizationDirection {
     Minimize,
     Maximize,
 }
 
 /// A constraint definition.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Constraint {
     /// The name of the constraint.
     pub name: Node<Rc<str>>,
@@ -150,19 +187,19 @@ pub struct Constraint {
 }
 
 /// An argument for a [`Constraint`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Argument {
     Array(Vec<Node<Literal>>),
     Literal(Node<Literal>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Annotation {
     Atom(Rc<str>),
     Call(AnnotationCall),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotationCall {
     /// The name of the annotation.
     pub name: Rc<str>,
@@ -171,13 +208,13 @@ pub struct AnnotationCall {
 }
 
 /// An individual argument for an [`Annotation`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationArgument {
     Array(Vec<AnnotationLiteral>),
     Literal(AnnotationLiteral),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationLiteral {
     BaseLiteral(Literal),
     Annotation(Annotation),
