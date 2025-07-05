@@ -1,53 +1,17 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use std::collections::BTreeMap;
-use std::rc::Rc;
+mod utils;
 
-use fzn_rs::ast::Annotation;
+use std::collections::BTreeMap;
+
 use fzn_rs::ast::Argument;
 use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
-use fzn_rs::ast::Domain;
 use fzn_rs::ast::Literal;
-use fzn_rs::ast::Node;
-use fzn_rs::ast::SolveObjective;
-use fzn_rs::ast::Span;
-use fzn_rs::ast::Variable;
 use fzn_rs::Instance;
 use fzn_rs::VariableArgument;
 use fzn_rs_derive::FlatZincConstraint;
-
-fn satisfy_solve() -> SolveObjective {
-    SolveObjective {
-        method: test_node(fzn_rs::ast::Method::Satisfy),
-        annotations: vec![],
-    }
-}
-
-fn test_node<T>(node: T) -> Node<T> {
-    Node {
-        node,
-        span: Span { start: 0, end: 0 },
-    }
-}
-
-fn unbounded_variables<'a>(
-    names: impl IntoIterator<Item = &'a str>,
-) -> BTreeMap<Rc<str>, Node<Variable<Annotation>>> {
-    names
-        .into_iter()
-        .map(|name| {
-            (
-                Rc::from(name),
-                test_node(Variable {
-                    domain: test_node(Domain::UnboundedInt),
-                    value: None,
-                    annotations: vec![],
-                }),
-            )
-        })
-        .collect()
-}
+use utils::*;
 
 #[test]
 fn variant_with_unnamed_fields() {
