@@ -205,18 +205,18 @@ pub struct AnnotationCall {
     /// The name of the annotation.
     pub name: Rc<str>,
     /// Any arguments for the annotation.
-    pub arguments: Vec<AnnotationArgument>,
+    pub arguments: Vec<Node<AnnotationArgument>>,
 }
 
 /// An individual argument for an [`Annotation`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationArgument {
-    Array(Vec<AnnotationLiteral>),
-    Literal(AnnotationLiteral),
+    Array(Vec<Node<AnnotationLiteral>>),
+    Literal(Node<AnnotationLiteral>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationLiteral {
     BaseLiteral(Literal),
-    Annotation(Annotation),
+    Annotation(AnnotationCall),
 }
