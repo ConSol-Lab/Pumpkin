@@ -20,17 +20,20 @@
 //!
 //! When using this crate with the `derive` feature, you can instead do the following:
 //! ```rust
+//! use fzn_rs::FlatZincConstraint;
+//! use fzn_rs::VariableArgument;
+//!
 //! #[derive(FlatZincConstraint)]
 //! pub enum MyConstraints {
 //!     /// The variant name is converted to snake_case to serve as the constraint identifier by
 //!     /// default.
-//!     IntLinLe(Vec<i64>, Vec<IntVariable>, i64),
+//!     IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
 //!
 //!     /// If the snake_case version of the variant name is different from the constraint
 //!     /// identifier, then the `#[name(...)], attribute allows you to set the constraint
 //!     /// identifier explicitly.
 //!     #[name("int_lin_eq")]
-//!     LinearEquality(Vec<i64>, Vec<IntVariable>, i64),
+//!     LinearEquality(Vec<i64>, Vec<VariableArgument<i64>>, i64),
 //! }
 //! ```
 //! The macro automatically implements [`from_ast::FlatZincConstraint`] and will handle the parsing
@@ -56,37 +59,29 @@ pub use error::*;
 pub use from_ast::*;
 
 #[derive(Clone, Debug)]
-pub struct Instance<InstanceConstraint, ConstraintAnn = (), VariableAnn = ()> {
+pub struct Instance<InstanceConstraint, Annotation = ()> {
     /// The variables that are in the instance.
     ///
     /// The key is the identifier of the variable, and the value is the domain of the variable.
-    pub variables: BTreeMap<Rc<str>, Variable<VariableAnn>>,
+    pub variables: BTreeMap<Rc<str>, Variable<Annotation>>,
 
     /// The constraints in the instance.
-    pub constraints: Vec<Constraint<InstanceConstraint, ConstraintAnn>>,
+    pub constraints: Vec<Constraint<InstanceConstraint, Annotation>>,
 
     /// The solve item indicating the type of model.
     pub solve: SolveObjective,
 }
 
 #[derive(Clone, Debug)]
-pub struct Constraint<InstanceConstraint, ConstraintAnn> {
+pub struct Constraint<InstanceConstraint, Annotation> {
     pub constraint: ast::Node<InstanceConstraint>,
-    pub annotations: Vec<ast::Node<ConstraintAnn>>,
+    pub annotations: Vec<ast::Node<Annotation>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IntVariable {
-    Identifier(Rc<str>),
-    Constant(i64),
-}
-
-impl<InstanceConstraint, ConstraintAnn, VariableAnn>
-    Instance<InstanceConstraint, ConstraintAnn, VariableAnn>
+impl<InstanceConstraint, Annotation> Instance<InstanceConstraint, Annotation>
 where
     InstanceConstraint: FlatZincConstraint,
-    ConstraintAnn: FlatZincAnnotation,
-    VariableAnn: FlatZincAnnotation,
+    Annotation: FlatZincAnnotation,
 {
     pub fn from_ast(ast: ast::Ast) -> Result<Self, InstanceError> {
         let variables = ast
