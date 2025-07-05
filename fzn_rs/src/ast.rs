@@ -1,6 +1,7 @@
-//! The AST representing a FlatZinc instance. This AST is compatible with both the JSON format and
-//! the original FZN format, and is a modified version of the `FlatZinc` type from
-//! [`flatzinc-serde`](https://docs.rs/flatzinc-serde).
+//! The AST representing a FlatZinc instance, compatible with both the JSON format and
+//! the original FZN format.
+//!
+//! It is a modified version of the `FlatZinc` type from [`flatzinc-serde`](https://docs.rs/flatzinc-serde).
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
