@@ -16,6 +16,9 @@ pub enum InstanceError {
 
     #[error("array {0} is undefined")]
     UndefinedArray(String),
+
+    #[error("expected {expected} arguments, got {actual}")]
+    IncorrectNumberOfArguments { expected: usize, actual: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +30,7 @@ pub enum Token {
 
     Array,
     Variable(Box<Token>),
+    AnnotationCall,
 }
 
 impl From<&'_ ast::Literal> for Token {
@@ -40,6 +44,24 @@ impl From<&'_ ast::Literal> for Token {
     }
 }
 
+impl From<&'_ ast::AnnotationArgument> for Token {
+    fn from(value: &'_ ast::AnnotationArgument) -> Self {
+        match value {
+            ast::AnnotationArgument::Array(_) => Token::Array,
+            ast::AnnotationArgument::Literal(literal) => (&literal.node).into(),
+        }
+    }
+}
+
+impl From<&'_ ast::AnnotationLiteral> for Token {
+    fn from(value: &'_ ast::AnnotationLiteral) -> Self {
+        match value {
+            ast::AnnotationLiteral::BaseLiteral(literal) => literal.into(),
+            ast::AnnotationLiteral::Annotation(_) => Token::AnnotationCall,
+        }
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -48,6 +70,8 @@ impl Display for Token {
             Token::IntLiteral => write!(f, "int"),
             Token::BoolLiteral => write!(f, "bool"),
             Token::IntSetLiteral => write!(f, "int set"),
+
+            Token::AnnotationCall => write!(f, "annotation"),
 
             Token::Array => write!(f, "array"),
             Token::Variable(token) => write!(f, "{token} variable"),
