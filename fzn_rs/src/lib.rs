@@ -45,7 +45,7 @@ pub mod ast;
 mod error;
 mod from_ast;
 #[cfg(feature = "fzn")]
-mod fzn;
+pub mod fzn;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
