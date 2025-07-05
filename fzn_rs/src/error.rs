@@ -18,7 +18,7 @@ pub enum InstanceError {
     UndefinedArray(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
     Identifier,
     IntLiteral,
@@ -26,7 +26,7 @@ pub enum Token {
     IntSetLiteral,
 
     Array,
-    IntVariable,
+    Variable(Box<Token>),
 }
 
 impl From<&'_ ast::Literal> for Token {
@@ -45,12 +45,12 @@ impl Display for Token {
         match self {
             Token::Identifier => write!(f, "identifier"),
 
-            Token::IntLiteral => write!(f, "int literal"),
-            Token::BoolLiteral => write!(f, "bool literal"),
-            Token::IntSetLiteral => write!(f, "int set literal"),
+            Token::IntLiteral => write!(f, "int"),
+            Token::BoolLiteral => write!(f, "bool"),
+            Token::IntSetLiteral => write!(f, "int set"),
 
             Token::Array => write!(f, "array"),
-            Token::IntVariable => write!(f, "int variable"),
+            Token::Variable(token) => write!(f, "{token} variable"),
         }
     }
 }

@@ -7,7 +7,14 @@ use std::rc::Rc;
 use crate::ast;
 use crate::error::Token;
 use crate::InstanceError;
-use crate::IntVariable;
+
+/// Models a variable in the FlatZinc AST. Since `var T` is a subtype of `T`, a variable can also
+/// be a constant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VariableArgument<T> {
+    Identifier(Rc<str>),
+    Constant(T),
+}
 
 /// Parse an [`ast::Constraint`] into a specific constraint type.
 pub trait FlatZincConstraint: Sized {
@@ -65,24 +72,26 @@ impl FromLiteral for i64 {
     }
 }
 
-impl FromLiteral for IntVariable {
+impl<T: FromLiteral> FromLiteral for VariableArgument<T> {
     fn expected() -> Token {
-        Token::IntVariable
+        Token::Variable(Box::new(T::expected()))
     }
 
     fn from_literal(
         node: &ast::Node<ast::Literal>,
-        _: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
+        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Identifier(identifier) => {
-                Ok(IntVariable::Identifier(Rc::clone(identifier)))
+                Ok(VariableArgument::Identifier(Rc::clone(identifier)))
             }
-            literal => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntVariable,
-                actual: literal.into(),
-                span: node.span,
-            }),
+            literal => T::from_literal(node, arrays)
+                .map(VariableArgument::Constant)
+                .map_err(|_| InstanceError::UnexpectedToken {
+                    expected: Self::expected(),
+                    actual: literal.into(),
+                    span: node.span,
+                }),
         }
     }
 }
