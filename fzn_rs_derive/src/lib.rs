@@ -142,16 +142,19 @@ fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::TokenStream {
         syn::Fields::Unnamed(fields) => {
             let num_arguments = fields.unnamed.len();
             let arguments = fields.unnamed.iter().enumerate().map(|(idx, field)| {
+                let ty = &field.ty;
+
                 if field.attrs.iter().any(|attr| {
                     attr.path()
                         .get_ident()
                         .is_some_and(|ident| ident == "annotation")
                 }) {
                     quote! {
-                        ::fzn_rs::from_nested_annotation(&arguments[#idx])?
+                        <#ty as ::fzn_rs::FromNestedAnnotation>::from_argument(
+                            &arguments[#idx],
+                        )?
                     }
                 } else {
-                    let ty = &field.ty;
                     quote! {
                         <#ty as ::fzn_rs::FromAnnotationArgument>::from_argument(
                             &arguments[#idx],
