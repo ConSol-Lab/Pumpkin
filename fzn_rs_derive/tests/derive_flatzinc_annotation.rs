@@ -212,3 +212,101 @@ fn nested_annotation_as_argument() {
         TypedAnnotation::SomeAnnotation(SomeAnnotationArgs::ArgTwo("ident".into())),
     );
 }
+
+#[test]
+fn arrays_as_annotation_arguments_with_literal_elements() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum InstanceConstraint {
+        SomeConstraint(VariableArgument<i64>),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum TypedAnnotation {
+        SomeAnnotation(Vec<i64>),
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("some_constraint".into()),
+            arguments: vec![test_node(Argument::Literal(test_node(
+                Literal::Identifier("x3".into()),
+            )))],
+            annotations: vec![test_node(Annotation::Call(AnnotationCall {
+                name: "some_annotation".into(),
+                arguments: vec![test_node(AnnotationArgument::Array(vec![
+                    test_node(AnnotationLiteral::BaseLiteral(Literal::Int(1))),
+                    test_node(AnnotationLiteral::BaseLiteral(Literal::Int(2))),
+                ]))],
+            }))],
+        })],
+
+        solve: satisfy_solve(),
+    };
+
+    let instance =
+        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.constraints[0].annotations[0].node,
+        TypedAnnotation::SomeAnnotation(vec![1, 2]),
+    );
+}
+
+#[test]
+fn arrays_as_annotation_arguments_with_annotation_elements() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum InstanceConstraint {
+        SomeConstraint(VariableArgument<i64>),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum TypedAnnotation {
+        SomeAnnotation(#[annotation] Vec<ArrayElements>),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum ArrayElements {
+        ElementOne,
+        ElementTwo(i64),
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("some_constraint".into()),
+            arguments: vec![test_node(Argument::Literal(test_node(
+                Literal::Identifier("x3".into()),
+            )))],
+            annotations: vec![test_node(Annotation::Call(AnnotationCall {
+                name: "some_annotation".into(),
+                arguments: vec![test_node(AnnotationArgument::Array(vec![
+                    test_node(AnnotationLiteral::BaseLiteral(Literal::Identifier(
+                        "element_one".into(),
+                    ))),
+                    test_node(AnnotationLiteral::Annotation(AnnotationCall {
+                        name: "element_two".into(),
+                        arguments: vec![test_node(AnnotationArgument::Literal(test_node(
+                            AnnotationLiteral::BaseLiteral(Literal::Int(4)),
+                        )))],
+                    })),
+                ]))],
+            }))],
+        })],
+
+        solve: satisfy_solve(),
+    };
+
+    let instance =
+        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.constraints[0].annotations[0].node,
+        TypedAnnotation::SomeAnnotation(vec![
+            ArrayElements::ElementOne,
+            ArrayElements::ElementTwo(4)
+        ]),
+    );
+}
