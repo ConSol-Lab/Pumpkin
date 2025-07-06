@@ -103,8 +103,8 @@ impl<const ORDERED: bool> FromStr for Solutions<ORDERED> {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
 
-        if !s.ends_with("==========") {
-            return Err("solutions should end with '=========='".into());
+        if !s.contains("==========") {
+            return Err("solutions should contain '=========='".into());
         }
 
         let assignments = s

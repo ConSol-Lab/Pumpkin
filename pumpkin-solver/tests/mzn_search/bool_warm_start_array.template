@@ -1,0 +1,7 @@
+var bool: x;
+var bool: y;
+
+array[1..2] of var bool: variables = [x, y];
+
+solve :: warm_start_array([warm_start([x], [true]), warm_start([y], [false])]) maximize x + y;
+

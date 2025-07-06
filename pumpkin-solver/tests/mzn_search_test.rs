@@ -40,3 +40,6 @@ mzn_search_unordered!(search_annotation_does_not_fix_all_variables);
 
 mzn_search_ordered!(bool_warm_start);
 mzn_search_ordered!(int_warm_start);
+
+mzn_search_ordered!(bool_warm_start_array);
+mzn_search_ordered!(int_warm_start_array);

@@ -173,6 +173,7 @@ pub(crate) enum Search {
         variables: flatzinc::AnnExpr,
         values: flatzinc::AnnExpr,
     },
+    WarmStartArray(Vec<Search>),
 }
 
 pub(crate) struct SearchStrategy {
@@ -269,6 +270,17 @@ impl FlatZincAstBuilder {
                 variables: annotation.expressions[0].clone(),
                 values: annotation.expressions[1].clone(),
             }),
+            "warm_start_array" => {
+                Some(Search::WarmStartArray(match &annotation.expressions[0] {
+                    flatzinc::AnnExpr::Annotations(annotations) => annotations
+                        .iter()
+                        .filter_map(FlatZincAstBuilder::find_search)
+                        .collect::<Vec<_>>(),
+                    other => {
+                        panic!("Expected a list of annotations for `warm_start_array` but was {other:?}")
+                    }
+                }))
+            }
             "constraint_name" => {
                 warn!("`constraint_name` is currently not supported; ignoring search annotation");
                 None
