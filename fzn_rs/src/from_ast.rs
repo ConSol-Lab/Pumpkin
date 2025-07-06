@@ -47,10 +47,7 @@ pub trait FromLiteral: Sized {
     fn expected() -> Token;
 
     /// Extract `Self` from a literal AST node.
-    fn from_literal(
-        node: &ast::Node<ast::Literal>,
-        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
-    ) -> Result<Self, InstanceError>;
+    fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError>;
 }
 
 impl FromLiteral for i64 {
@@ -58,10 +55,7 @@ impl FromLiteral for i64 {
         Token::IntLiteral
     }
 
-    fn from_literal(
-        node: &ast::Node<ast::Literal>,
-        _: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
-    ) -> Result<Self, InstanceError> {
+    fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Int(value) => Ok(*value),
             literal => Err(InstanceError::UnexpectedToken {
@@ -78,21 +72,72 @@ impl<T: FromLiteral> FromLiteral for VariableArgument<T> {
         Token::Variable(Box::new(T::expected()))
     }
 
-    fn from_literal(
-        node: &ast::Node<ast::Literal>,
-        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
-    ) -> Result<Self, InstanceError> {
+    fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Identifier(identifier) => {
                 Ok(VariableArgument::Identifier(Rc::clone(identifier)))
             }
-            literal => T::from_literal(node, arrays)
+            literal => T::from_literal(node)
                 .map(VariableArgument::Constant)
                 .map_err(|_| InstanceError::UnexpectedToken {
-                    expected: Self::expected(),
+                    expected: <Self as FromLiteral>::expected(),
                     actual: literal.into(),
                     span: node.span,
                 }),
+        }
+    }
+}
+
+impl FromLiteral for Rc<str> {
+    fn expected() -> Token {
+        Token::Identifier
+    }
+
+    fn from_literal(argument: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
+        match &argument.node {
+            ast::Literal::Identifier(ident) => Ok(Rc::clone(ident)),
+
+            node => Err(InstanceError::UnexpectedToken {
+                expected: Token::Identifier,
+                actual: node.into(),
+                span: argument.span,
+            }),
+        }
+    }
+}
+
+impl FromLiteral for bool {
+    fn expected() -> Token {
+        Token::BoolLiteral
+    }
+
+    fn from_literal(argument: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
+        match &argument.node {
+            ast::Literal::Bool(boolean) => Ok(*boolean),
+
+            node => Err(InstanceError::UnexpectedToken {
+                expected: Token::BoolLiteral,
+                actual: node.into(),
+                span: argument.span,
+            }),
+        }
+    }
+}
+
+impl FromLiteral for RangeList<i64> {
+    fn expected() -> Token {
+        Token::IntSetLiteral
+    }
+
+    fn from_literal(argument: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
+        match &argument.node {
+            ast::Literal::IntSet(set) => Ok(set.clone()),
+
+            node => Err(InstanceError::UnexpectedToken {
+                expected: Token::IntSetLiteral,
+                actual: node.into(),
+                span: argument.span,
+            }),
         }
     }
 }
@@ -108,10 +153,10 @@ pub trait FromArgument: Sized {
 impl<T: FromLiteral> FromArgument for T {
     fn from_argument(
         argument: &ast::Node<ast::Argument>,
-        arrays: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
+        _: &BTreeMap<Rc<str>, ast::Node<ast::Array>>,
     ) -> Result<Self, InstanceError> {
         match &argument.node {
-            ast::Argument::Literal(literal) => T::from_literal(literal, arrays),
+            ast::Argument::Literal(literal) => T::from_literal(literal),
             ast::Argument::Array(_) => Err(InstanceError::UnexpectedToken {
                 expected: T::expected(),
                 actual: Token::Array,
@@ -150,19 +195,39 @@ impl<T: FromLiteral> FromArgument for Vec<T> {
 
         literals
             .iter()
-            .map(|literal| T::from_literal(literal, arrays))
+            .map(|literal| T::from_literal(literal))
             .collect::<Result<_, _>>()
     }
 }
 
-pub trait FromAnnotationArgument: Sized {
-    fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError>;
+pub trait FromAnnotationArgument<Out = Self>: Sized {
+    fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Out, InstanceError>;
 }
 
 pub trait FromAnnotationLiteral: Sized {
     fn expected() -> Token;
 
     fn from_literal(literal: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError>;
+}
+
+impl<T: FromLiteral> FromAnnotationLiteral for T {
+    fn expected() -> Token {
+        T::expected()
+    }
+
+    fn from_literal(literal: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError> {
+        match &literal.node {
+            ast::AnnotationLiteral::BaseLiteral(base_literal) => T::from_literal(&ast::Node {
+                node: base_literal.clone(),
+                span: literal.span,
+            }),
+            ast::AnnotationLiteral::Annotation(_) => Err(InstanceError::UnexpectedToken {
+                expected: T::expected(),
+                actual: Token::AnnotationCall,
+                span: literal.span,
+            }),
+        }
+    }
 }
 
 impl<T: FromAnnotationLiteral> FromAnnotationArgument for T {
@@ -179,76 +244,36 @@ impl<T: FromAnnotationLiteral> FromAnnotationArgument for T {
     }
 }
 
-impl FromAnnotationLiteral for Rc<str> {
-    fn expected() -> Token {
-        Token::Identifier
-    }
-
-    fn from_literal(argument: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError> {
-        match &argument.node {
+/// Parse a nested annotation from an annotation argument.
+pub fn from_nested_annotation<T: FlatZincAnnotation>(
+    argument: &ast::Node<ast::AnnotationArgument>,
+) -> Result<T, InstanceError> {
+    let annotation = match &argument.node {
+        ast::AnnotationArgument::Literal(literal) => match &literal.node {
             ast::AnnotationLiteral::BaseLiteral(ast::Literal::Identifier(ident)) => {
-                Ok(Rc::clone(ident))
+                ast::Annotation::Atom(Rc::clone(ident))
             }
-
-            node => Err(InstanceError::UnexpectedToken {
-                expected: Token::Identifier,
-                actual: node.into(),
+            ast::AnnotationLiteral::Annotation(annotation_call) => {
+                ast::Annotation::Call(annotation_call.clone())
+            }
+            ast::AnnotationLiteral::BaseLiteral(lit) => {
+                return Err(InstanceError::UnexpectedToken {
+                    expected: Token::Annotation,
+                    actual: lit.into(),
+                    span: literal.span,
+                });
+            }
+        },
+        ast::AnnotationArgument::Array(_) => {
+            return Err(InstanceError::UnexpectedToken {
+                expected: Token::Annotation,
+                actual: Token::Array,
                 span: argument.span,
-            }),
+            });
         }
-    }
-}
+    };
 
-impl FromAnnotationLiteral for i64 {
-    fn expected() -> Token {
-        Token::IntLiteral
-    }
+    let outcome = T::from_ast(&annotation)?;
 
-    fn from_literal(argument: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError> {
-        match &argument.node {
-            ast::AnnotationLiteral::BaseLiteral(ast::Literal::Int(int)) => Ok(*int),
-
-            node => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntLiteral,
-                actual: node.into(),
-                span: argument.span,
-            }),
-        }
-    }
-}
-
-impl FromAnnotationLiteral for bool {
-    fn expected() -> Token {
-        Token::BoolLiteral
-    }
-
-    fn from_literal(argument: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError> {
-        match &argument.node {
-            ast::AnnotationLiteral::BaseLiteral(ast::Literal::Bool(boolean)) => Ok(*boolean),
-
-            node => Err(InstanceError::UnexpectedToken {
-                expected: Token::BoolLiteral,
-                actual: node.into(),
-                span: argument.span,
-            }),
-        }
-    }
-}
-
-impl FromAnnotationLiteral for RangeList<i64> {
-    fn expected() -> Token {
-        Token::IntSetLiteral
-    }
-
-    fn from_literal(argument: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError> {
-        match &argument.node {
-            ast::AnnotationLiteral::BaseLiteral(ast::Literal::IntSet(set)) => Ok(set.clone()),
-
-            node => Err(InstanceError::UnexpectedToken {
-                expected: Token::IntSetLiteral,
-                actual: node.into(),
-                span: argument.span,
-            }),
-        }
-    }
+    outcome.ok_or_else(|| InstanceError::UnsupportedAnnotation(annotation.name().into()))
 }

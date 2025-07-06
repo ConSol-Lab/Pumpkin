@@ -200,6 +200,15 @@ pub enum Annotation {
     Call(AnnotationCall),
 }
 
+impl Annotation {
+    pub fn name(&self) -> &str {
+        match self {
+            Annotation::Atom(name) => &name,
+            Annotation::Call(call) => &call.name,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotationCall {
     /// The name of the annotation.
@@ -218,5 +227,8 @@ pub enum AnnotationArgument {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationLiteral {
     BaseLiteral(Literal),
+    /// In the FZN grammar, this is an `Annotation` instead of an `AnnotationCall`. We divirge from
+    /// the grammar to avoid the case where the same input can parse to either a
+    /// `Annotation::Atom(ident)` or an `Literal::Identifier`.
     Annotation(AnnotationCall),
 }
