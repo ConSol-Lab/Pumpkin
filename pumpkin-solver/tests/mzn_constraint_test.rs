@@ -33,6 +33,7 @@ mzn_test!(int_lin_le);
 mzn_test!(int_lin_le_reif);
 mzn_test!(int_lin_eq);
 mzn_test!(int_lin_eq_reif);
+mzn_test!(binary_int_lin_eq);
 
 mzn_test!(int_eq);
 mzn_test!(int_eq_reif);
