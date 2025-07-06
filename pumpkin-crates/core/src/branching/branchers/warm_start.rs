@@ -6,6 +6,12 @@ use crate::predicates::Predicate;
 use crate::pumpkin_assert_eq_simple;
 use crate::variables::IntegerVariable;
 
+/// A [`Brancher`] which represents warm starting.
+///
+/// It takes a list of variables and values (of equal size) and attempts to assign each variable to
+/// the value *once* if possible. If it is not possible, then this [`Brancher`] will not attempt to
+/// assign that variable to that value again (unless it is specified multiple times in the warm
+/// start).
 #[derive(Debug)]
 pub struct WarmStart<Var> {
     variables: Vec<Var>,
