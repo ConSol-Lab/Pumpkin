@@ -148,3 +148,67 @@ fn annotation_with_named_arguments() {
         },
     );
 }
+
+#[test]
+fn nested_annotation_as_argument() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum InstanceConstraint {
+        SomeConstraint(VariableArgument<i64>),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum TypedAnnotation {
+        SomeAnnotation(#[annotation] SomeAnnotationArgs),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum SomeAnnotationArgs {
+        ArgOne,
+        ArgTwo(Rc<str>),
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("some_constraint".into()),
+            arguments: vec![test_node(Argument::Literal(test_node(
+                Literal::Identifier("x3".into()),
+            )))],
+            annotations: vec![
+                test_node(Annotation::Call(AnnotationCall {
+                    name: "some_annotation".into(),
+                    arguments: vec![test_node(AnnotationArgument::Literal(test_node(
+                        AnnotationLiteral::BaseLiteral(Literal::Identifier("arg_one".into())),
+                    )))],
+                })),
+                test_node(Annotation::Call(AnnotationCall {
+                    name: "some_annotation".into(),
+                    arguments: vec![test_node(AnnotationArgument::Literal(test_node(
+                        AnnotationLiteral::Annotation(AnnotationCall {
+                            name: "arg_two".into(),
+                            arguments: vec![test_node(AnnotationArgument::Literal(test_node(
+                                AnnotationLiteral::BaseLiteral(Literal::Identifier("ident".into())),
+                            )))],
+                        }),
+                    )))],
+                })),
+            ],
+        })],
+
+        solve: satisfy_solve(),
+    };
+
+    let instance =
+        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.constraints[0].annotations[0].node,
+        TypedAnnotation::SomeAnnotation(SomeAnnotationArgs::ArgOne),
+    );
+
+    assert_eq!(
+        instance.constraints[0].annotations[1].node,
+        TypedAnnotation::SomeAnnotation(SomeAnnotationArgs::ArgTwo("ident".into())),
+    );
+}

@@ -7,6 +7,9 @@ pub enum InstanceError {
     #[error("constraint '{0}' is not supported")]
     UnsupportedConstraint(String),
 
+    #[error("annotation '{0}' is not supported")]
+    UnsupportedAnnotation(String),
+
     #[error("expected {expected}, got {actual} at {span}")]
     UnexpectedToken {
         expected: Token,
@@ -31,6 +34,7 @@ pub enum Token {
     Array,
     Variable(Box<Token>),
     AnnotationCall,
+    Annotation,
 }
 
 impl From<&'_ ast::Literal> for Token {
@@ -72,6 +76,7 @@ impl Display for Token {
             Token::IntSetLiteral => write!(f, "int set"),
 
             Token::AnnotationCall => write!(f, "annotation"),
+            Token::Annotation => write!(f, "annotation"),
 
             Token::Array => write!(f, "array"),
             Token::Variable(token) => write!(f, "{token} variable"),
