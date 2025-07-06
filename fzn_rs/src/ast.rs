@@ -66,7 +66,7 @@ pub struct Ast {
     /// A list of constraints.
     pub constraints: Vec<Node<Constraint>>,
     /// The goal of the model.
-    pub solve: SolveObjective,
+    pub solve: SolveObjective<Annotation>,
 }
 
 /// A decision variable.
@@ -156,9 +156,9 @@ pub enum Literal {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SolveObjective {
+pub struct SolveObjective<Ann> {
     pub method: Node<Method>,
-    pub annotations: Vec<Node<Annotation>>,
+    pub annotations: Vec<Node<Ann>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
