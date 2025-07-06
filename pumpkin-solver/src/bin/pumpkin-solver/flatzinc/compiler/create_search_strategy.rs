@@ -142,13 +142,16 @@ fn create_from_search_strategy(
             search_strategies
                 .iter()
                 .map(|strategy| {
-                    assert!(matches!(
-                        strategy,
-                        Search::WarmStart {
-                            variables: _,
-                            values: _
-                        }
-                    ));
+                    assert!(
+                        matches!(
+                            strategy,
+                            Search::WarmStart {
+                                variables: _,
+                                values: _
+                            }
+                        ) || matches!(strategy, Search::WarmStartArray(_))
+                    , "Expected warm start strategy to consist of either `warm_start` or other `warm_start_array` annotations"
+                    );
                     let downcast: Box<dyn Brancher> = Box::new(
                         create_from_search_strategy(strategy, context, false, objective)
                             .expect("Expected nested sequential strategy to be able to be created"),
