@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use fzn_rs::ast::{self};
 
-pub(crate) fn satisfy_solve() -> ast::SolveObjective {
+pub(crate) fn satisfy_solve() -> ast::SolveObjective<ast::Annotation> {
     ast::SolveObjective {
         method: test_node(ast::Method::Satisfy),
         annotations: vec![],

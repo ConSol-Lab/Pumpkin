@@ -59,6 +59,9 @@
 //!     ArgTwo(Rc<str>),
 //! }
 //! ```
+//! Different to parsing constraints, is that annotations can be ignored. If the AST contains an
+//! annotation whose name does not match one of the variants in the enum, then the annotation is
+//! simply ignored.
 //!
 //! [1]: https://docs.minizinc.dev/en/stable/lib-flatzinc-int.html#int-lin-le
 #[cfg(feature = "derive")]
@@ -74,8 +77,6 @@ pub mod fzn;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use ast::SolveObjective;
-use ast::Variable;
 pub use error::*;
 pub use from_ast::*;
 
@@ -84,13 +85,13 @@ pub struct Instance<InstanceConstraint, Annotation = ()> {
     /// The variables that are in the instance.
     ///
     /// The key is the identifier of the variable, and the value is the domain of the variable.
-    pub variables: BTreeMap<Rc<str>, Variable<Annotation>>,
+    pub variables: BTreeMap<Rc<str>, ast::Variable<Annotation>>,
 
     /// The constraints in the instance.
     pub constraints: Vec<Constraint<InstanceConstraint, Annotation>>,
 
     /// The solve item indicating the type of model.
-    pub solve: SolveObjective,
+    pub solve: ast::SolveObjective<Annotation>,
 }
 
 #[derive(Clone, Debug)]
@@ -109,7 +110,7 @@ where
             .variables
             .into_iter()
             .map(|(id, variable)| {
-                let variable = Variable {
+                let variable = ast::Variable {
                     domain: variable.node.domain,
                     value: variable.node.value,
                     annotations: map_annotations(&variable.node.annotations)?,
@@ -138,10 +139,15 @@ where
             })
             .collect::<Result<_, _>>()?;
 
+        let solve = ast::SolveObjective {
+            method: ast.solve.method,
+            annotations: map_annotations(&ast.solve.annotations)?,
+        };
+
         Ok(Instance {
             variables,
             constraints,
-            solve: ast.solve,
+            solve,
         })
     }
 }
