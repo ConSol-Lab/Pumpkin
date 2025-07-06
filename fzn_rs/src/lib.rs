@@ -39,6 +39,27 @@
 //! The macro automatically implements [`from_ast::FlatZincConstraint`] and will handle the parsing
 //! of arguments for you.
 //!
+//! Similar to typed constraints, the derive macro for [`FlatZincAnnotation`] allows for easy
+//! parsing of annotations:
+//! ```
+//! #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+//! enum TypedAnnotation {
+//!     /// Matches the snake-case atom "annotation".
+//!     Annotation,
+//!
+//!     /// Supports nested annotations with the `#[annotation]` attribute.
+//!     SomeAnnotation(#[annotation] SomeAnnotationArgs),
+//! }
+//!
+//! #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+//! enum SomeAnnotationArgs {
+//!     /// Just as constraints, the name can be explicitly set.
+//!     #[name("arg_one")]
+//!     Arg1,
+//!     ArgTwo(Rc<str>),
+//! }
+//! ```
+//!
 //! [1]: https://docs.minizinc.dev/en/stable/lib-flatzinc-int.html#int-lin-le
 #[cfg(feature = "derive")]
 pub use fzn_rs_derive::*;
