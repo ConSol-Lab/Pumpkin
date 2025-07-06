@@ -6,6 +6,7 @@ use crate::predicates::Predicate;
 use crate::pumpkin_assert_eq_simple;
 use crate::variables::IntegerVariable;
 
+#[derive(Debug)]
 pub struct WarmStart<Var> {
     variables: Vec<Var>,
     values: Vec<i32>,
@@ -23,10 +24,8 @@ impl<Var: Clone> WarmStart<Var> {
 
 impl<Var: IntegerVariable> Brancher for WarmStart<Var> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
-        while !self.variables.is_empty() {
-            let variable = self.variables.pop().unwrap();
-            let value = self.values.pop().unwrap();
-
+        pumpkin_assert_eq_simple!(self.variables.len(), self.values.len());
+        while let (Some(variable), Some(value)) = (self.variables.pop(), self.values.pop()) {
             let predicate = predicate!(variable == value);
 
             if context.assignments.evaluate_predicate(predicate).is_none() {
@@ -34,7 +33,7 @@ impl<Var: IntegerVariable> Brancher for WarmStart<Var> {
             }
         }
 
-        return None;
+        None
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {

@@ -169,6 +169,10 @@ pub(crate) enum Search {
     Int(SearchStrategy),
     Seq(Vec<Search>),
     Unspecified,
+    WarmStart {
+        variables: flatzinc::AnnExpr,
+        values: flatzinc::AnnExpr,
+    },
 }
 
 pub(crate) struct SearchStrategy {
@@ -261,10 +265,10 @@ impl FlatZincAstBuilder {
                 }))
             }
             "set_search" => panic!("Search over sets is currently not supported"),
-            "warm_start" => {
-                warn!("`warm_start` is currently not supported; ignoring search annotation");
-                None
-            }
+            "warm_start" => Some(Search::WarmStart {
+                variables: annotation.expressions[0].clone(),
+                values: annotation.expressions[1].clone(),
+            }),
             "constraint_name" => {
                 warn!("`constraint_name` is currently not supported; ignoring search annotation");
                 None
