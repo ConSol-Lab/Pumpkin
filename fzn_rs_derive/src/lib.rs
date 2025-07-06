@@ -142,12 +142,21 @@ fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::TokenStream {
         syn::Fields::Unnamed(fields) => {
             let num_arguments = fields.unnamed.len();
             let arguments = fields.unnamed.iter().enumerate().map(|(idx, field)| {
-                let ty = &field.ty;
-
-                quote! {
-                    <#ty as ::fzn_rs::FromAnnotationArgument>::from_argument(
-                        &arguments[#idx],
-                    )?
+                if field.attrs.iter().any(|attr| {
+                    attr.path()
+                        .get_ident()
+                        .is_some_and(|ident| ident == "annotation")
+                }) {
+                    quote! {
+                        ::fzn_rs::from_nested_annotation(&arguments[#idx])?
+                    }
+                } else {
+                    let ty = &field.ty;
+                    quote! {
+                        <#ty as ::fzn_rs::FromAnnotationArgument>::from_argument(
+                            &arguments[#idx],
+                        )?
+                    }
                 }
             });
 
@@ -214,7 +223,7 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
     token_stream.into()
 }
 
-#[proc_macro_derive(FlatZincAnnotation, attributes(name))]
+#[proc_macro_derive(FlatZincAnnotation, attributes(name, annotation))]
 pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(item as DeriveInput);
     let annotatation_enum_name = derive_input.ident;
