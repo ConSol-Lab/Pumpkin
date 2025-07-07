@@ -54,8 +54,38 @@ predicate int_lin_le_reif(array [int] of int: as,
             endif
         )
     } in
-    int_lin_le([-Mtrue] ++ as, [not r] ++ bs, c) /\
-    int_lin_le([-Mfalse] ++ [-a | a in as], [r] ++ bs, -c - 1);
+    (if Mtrue > 0 then int_lin_le([-Mtrue] ++ as, [bool2int(not r)] ++ bs, c) else r endif) /\
+    (if Mfalse > 0 then int_lin_le([-Mfalse] ++ [-a | a in as], [bool2int(r)] ++ bs, -c - 1) else not r endif);
+
+predicate int_lin_ne_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) = int_lin_eq_reif(as, bs, c, not r);
+
+predicate int_lin_eq_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) =
+    let {
+        set of int: I = index_set(as),
+        int: Mtrue = sum(i in I)(
+            if as[i] > 0 then as[i] * ub(bs[i])
+            else as[i] * lb(bs[i])
+            endif
+        ) - c,
+        int: Mfalse = c - sum(i in I)(
+            if as[i] > 0 then as[i] * lb(bs[i])
+            else as[i] * ub(bs[i])
+            endif
+        )
+    } in
+    if Mtrue >= 0 /\ Mfalse >= 0
+    then
+      (-Mfalse * bool2int(not r) <= sum(i in I)(as[i] * bs[i]) - c) /\
+      (sum(i in I)(as[i] * bs[i]) - c <= Mtrue * bool2int(not r)) /\
+      (not r -> sum(i in I)(as[i] * bs[i]) != c)
+    else not r
+    endif;
 
 
 % Redefinition taken from chuffed:
