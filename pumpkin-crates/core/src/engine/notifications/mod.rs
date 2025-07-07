@@ -246,8 +246,11 @@ impl NotificationEngine {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
     ) {
-        // Collect so that we can pass the assignments to the methods within the loop
-        for (event, domain) in self.events.drain().collect::<Vec<_>>() {
+        // We first take the events because otherwise we get mutability issues when calling methods
+        // on self
+        let mut events = std::mem::take(&mut self.events);
+
+        for (event, domain) in events.drain() {
             // First we notify the predicate_notifier that a domain has been updated
             self.predicate_notifier
                 .on_update(trailed_values, assignments, event, domain);
@@ -280,6 +283,8 @@ impl NotificationEngine {
                 );
             }
         }
+
+        self.events = events;
 
         // Then we notify the propagators that a predicate has been satisfied
         self.notify_predicate_id_satisfied(propagators);

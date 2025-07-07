@@ -48,10 +48,6 @@ where
         context.register(a.clone(), DomainEvents::ANY_INT, LocalId::from(0));
         context.register(b.clone(), DomainEvents::ANY_INT, LocalId::from(1));
 
-        // If we backtrack then we need to update the removable values
-        context.register_for_backtrack_events(a.clone(), DomainEvents::REMOVAL, LocalId::from(0));
-        context.register_for_backtrack_events(b.clone(), DomainEvents::REMOVAL, LocalId::from(1));
-
         BinaryEqualsPropagator {
             a,
             b,
@@ -159,12 +155,7 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn notify_backtrack(
-        &mut self,
-        _context: PropagationContext,
-        _local_id: LocalId,
-        _event: OpaqueDomainEvent,
-    ) {
+    fn synchronise(&mut self, _context: PropagationContext) {
         // Recall that we need to ensure that the stored removed values could now be inaccurate
         self.has_backtracked = true;
     }
