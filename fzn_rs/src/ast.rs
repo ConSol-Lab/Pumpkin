@@ -25,6 +25,30 @@ impl Display for Span {
 }
 
 #[cfg(feature = "fzn")]
+impl chumsky::span::Span for Span {
+    type Context = ();
+
+    type Offset = usize;
+
+    fn new(_: Self::Context, range: std::ops::Range<Self::Offset>) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+        }
+    }
+
+    fn context(&self) -> Self::Context {}
+
+    fn start(&self) -> Self::Offset {
+        self.start
+    }
+
+    fn end(&self) -> Self::Offset {
+        self.end
+    }
+}
+
+#[cfg(feature = "fzn")]
 impl From<chumsky::span::SimpleSpan> for Span {
     fn from(value: chumsky::span::SimpleSpan) -> Self {
         Span {
@@ -203,7 +227,7 @@ pub enum Annotation {
 impl Annotation {
     pub fn name(&self) -> &str {
         match self {
-            Annotation::Atom(name) => &name,
+            Annotation::Atom(name) => name,
             Annotation::Call(call) => &call.name,
         }
     }

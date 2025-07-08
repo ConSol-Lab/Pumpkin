@@ -42,6 +42,10 @@
 //! Similar to typed constraints, the derive macro for [`FlatZincAnnotation`] allows for easy
 //! parsing of annotations:
 //! ```
+//! use std::rc::Rc;
+//!
+//! use fzn_rs::FlatZincAnnotation;
+//!
 //! #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
 //! enum TypedAnnotation {
 //!     /// Matches the snake-case atom "annotation".
