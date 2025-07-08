@@ -9,6 +9,7 @@ use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
 use chumsky::prelude::choice;
 use chumsky::prelude::just;
+use chumsky::prelude::recursive;
 use chumsky::select;
 use chumsky::span::SimpleSpan;
 use chumsky::IterParser;
@@ -203,6 +204,7 @@ where
         .ignore_then(domain())
         .ignore_then(just(Colon))
         .ignore_then(identifier())
+        .then(annotations())
         .then_ignore(just(Equal))
         .then(
             literal()
@@ -211,13 +213,13 @@ where
                 .delimited_by(just(OpenBracket), just(CloseBracket)),
         )
         .then_ignore(just(SemiColon))
-        .map_with(|(name, contents), extra| {
+        .map_with(|((name, annotations), contents), extra| {
             (
                 name,
                 ast::Node {
                     node: ast::Array {
                         contents,
-                        annotations: vec![],
+                        annotations,
                     },
                     span: extra.span(),
                 },
@@ -249,19 +251,20 @@ where
         .ignore_then(domain())
         .then_ignore(just(Colon))
         .then(identifier())
+        .then(annotations())
         .then(just(Equal).ignore_then(literal()).or_not())
         .then_ignore(just(SemiColon))
         .map_with(to_node)
         .map(|node| {
             let ast::Node {
-                node: ((domain, name), value),
+                node: (((domain, name), annotations), value),
                 span,
             } = node;
 
             let variable = ast::Variable {
                 domain,
                 value,
-                annotations: vec![],
+                annotations,
             };
 
             (
@@ -308,11 +311,12 @@ where
                 .collect::<Vec<_>>()
                 .delimited_by(just(OpenParen), just(CloseParen)),
         )
+        .then(annotations())
         .then_ignore(just(SemiColon))
-        .map(|(name, arguments)| ast::Constraint {
+        .map(|((name, arguments), annotations)| ast::Constraint {
             name,
             arguments,
-            annotations: vec![],
+            annotations,
         })
         .map_with(to_node)
 }
@@ -339,11 +343,12 @@ where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     just(Ident("solve"))
-        .ignore_then(solve_method())
+        .ignore_then(annotations())
+        .then(solve_method())
         .then_ignore(just(SemiColon))
-        .map(|method| ast::SolveObjective {
+        .map(|(annotations, method)| ast::SolveObjective {
             method,
-            annotations: vec![],
+            annotations,
         })
 }
 
@@ -370,6 +375,78 @@ where
     .map_with(to_node)
 }
 
+fn annotations<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Vec<ast::Node<ast::Annotation>>, FznExtra<'tokens, 'src>>
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    annotation().repeated().collect()
+}
+
+fn annotation<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, ast::Node<ast::Annotation>, FznExtra<'tokens, 'src>>
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    just(DoubleColon)
+        .ignore_then(choice((
+            annotation_call().map(ast::Annotation::Call),
+            identifier().map(ast::Annotation::Atom),
+        )))
+        .map_with(to_node)
+}
+
+fn annotation_call<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>>
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    recursive(|call| {
+        identifier()
+            .then(
+                annotation_argument(call)
+                    .separated_by(just(Comma))
+                    .collect::<Vec<_>>()
+                    .delimited_by(just(OpenParen), just(CloseParen)),
+            )
+            .map(|(name, arguments)| ast::AnnotationCall { name, arguments })
+    })
+}
+
+fn annotation_argument<'tokens, 'src: 'tokens, I>(
+    call_parser: impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>> + Clone,
+) -> impl Parser<'tokens, I, ast::Node<ast::AnnotationArgument>, FznExtra<'tokens, 'src>> + Clone
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    choice((
+        annotation_literal(call_parser.clone()).map(ast::AnnotationArgument::Literal),
+        annotation_literal(call_parser)
+            .separated_by(just(Comma))
+            .collect::<Vec<_>>()
+            .delimited_by(just(OpenBracket), just(CloseBracket))
+            .map(ast::AnnotationArgument::Array),
+    ))
+    .map_with(to_node)
+}
+
+fn annotation_literal<'tokens, 'src: 'tokens, I>(
+    call_parser: impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>> + Clone,
+) -> impl Parser<'tokens, I, ast::Node<ast::AnnotationLiteral>, FznExtra<'tokens, 'src>> + Clone
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    choice((
+        call_parser
+            .map(ast::AnnotationLiteral::Annotation)
+            .map_with(to_node),
+        literal().map(|node| ast::Node {
+            node: ast::AnnotationLiteral::BaseLiteral(node.node),
+            span: node.span,
+        }),
+    ))
+}
+
 fn to_node<'tokens, 'src: 'tokens, I, T>(
     node: T,
     extra: &mut MapExtra<'tokens, '_, I, FznExtra<'tokens, 'src>>,
@@ -384,15 +461,15 @@ where
 }
 
 fn literal<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Literal>, FznExtra<'tokens, 'src>>
+) -> impl Parser<'tokens, I, ast::Node<ast::Literal>, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
+        set_of(integer()).map(ast::Literal::IntSet),
         integer().map(ast::Literal::Int),
         boolean().map(ast::Literal::Bool),
         identifier().map(ast::Literal::Identifier),
-        set_of(integer()).map(ast::Literal::IntSet),
     ))
     .map_with(|literal, extra| {
         let state = extra.state();
@@ -403,7 +480,7 @@ where
 
 fn set_of<'tokens, 'src: 'tokens, I, T: Copy + Ord>(
     value_parser: impl Parser<'tokens, I, T, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, ast::RangeList<T>, FznExtra<'tokens, 'src>>
+) -> impl Parser<'tokens, I, ast::RangeList<T>, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -422,7 +499,7 @@ where
 
 fn interval_set<'tokens, 'src: 'tokens, I, T: Copy + Ord>(
     value_parser: impl Parser<'tokens, I, T, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, (T, T), FznExtra<'tokens, 'src>>
+) -> impl Parser<'tokens, I, (T, T), FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -764,6 +841,187 @@ mod tests {
                 solve: ast::SolveObjective {
                     method: node(71, 78, ast::Method::Satisfy),
                     annotations: vec![],
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn annotations_on_variables() {
+        let source = r#"
+        var 5..5: x1 :: output_var = 5;
+        solve satisfy;
+        "#;
+
+        let ast = parse(source).expect("valid fzn");
+
+        assert_eq!(
+            ast,
+            ast::Ast {
+                variables: btreemap! {
+                    "x1".into() => node(9, 40, ast::Variable {
+                        domain: node(13, 17, ast::Domain::Int(ast::RangeList::from(5..=5))),
+                        value: Some(node(38, 39, ast::Literal::Int(5))),
+                        annotations: vec![node(22, 35, ast::Annotation::Atom("output_var".into()))],
+                    }),
+                },
+                arrays: BTreeMap::default(),
+                constraints: vec![],
+                solve: ast::SolveObjective {
+                    method: node(55, 62, ast::Method::Satisfy),
+                    annotations: vec![],
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn annotations_on_arrays() {
+        let source = r#"
+        array [1..2] of var 1..10: xs :: output_array([1..2]) = [];
+        solve satisfy;
+        "#;
+
+        let ast = parse(source).expect("valid fzn");
+
+        assert_eq!(
+            ast,
+            ast::Ast {
+                variables: BTreeMap::default(),
+                arrays: btreemap! {
+                    "xs".into() => node(9, 68, ast::Array {
+                        contents: vec![],
+                        annotations: vec![
+                            node(39, 62, ast::Annotation::Call(ast::AnnotationCall {
+                                name: "output_array".into(),
+                                arguments: vec![node(55, 61,
+                                    ast::AnnotationArgument::Array(vec![node(56, 60,
+                                        ast::AnnotationLiteral::BaseLiteral(
+                                            ast::Literal::IntSet(
+                                                ast::RangeList::from(1..=2)
+                                            )
+                                        )
+                                    )])
+                                )],
+                            })),
+                        ],
+                    }),
+                },
+                constraints: vec![],
+                solve: ast::SolveObjective {
+                    method: node(83, 90, ast::Method::Satisfy),
+                    annotations: vec![],
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn annotations_on_constraints() {
+        let source = r#"
+        constraint predicate() :: defines_var(x1);
+        solve satisfy;
+        "#;
+
+        let ast = parse(source).expect("valid fzn");
+
+        assert_eq!(
+            ast,
+            ast::Ast {
+                variables: BTreeMap::default(),
+                arrays: BTreeMap::default(),
+                constraints: vec![node(
+                    9,
+                    51,
+                    ast::Constraint {
+                        name: node(20, 29, "predicate".into()),
+                        arguments: vec![],
+                        annotations: vec![node(
+                            32,
+                            50,
+                            ast::Annotation::Call(ast::AnnotationCall {
+                                name: "defines_var".into(),
+                                arguments: vec![node(
+                                    47,
+                                    49,
+                                    ast::AnnotationArgument::Literal(node(
+                                        47,
+                                        49,
+                                        ast::AnnotationLiteral::BaseLiteral(
+                                            ast::Literal::Identifier("x1".into())
+                                        )
+                                    ))
+                                )]
+                            })
+                        )],
+                    }
+                )],
+                solve: ast::SolveObjective {
+                    method: node(66, 73, ast::Method::Satisfy),
+                    annotations: vec![],
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn annotations_on_solve_item() {
+        let source = r#"
+        solve :: int_search(first_fail(xs), indomain_min) satisfy;
+        "#;
+
+        let ast = parse(source).expect("valid fzn");
+
+        assert_eq!(
+            ast,
+            ast::Ast {
+                variables: BTreeMap::default(),
+                arrays: BTreeMap::default(),
+                constraints: vec![],
+                solve: ast::SolveObjective {
+                    method: node(59, 66, ast::Method::Satisfy),
+                    annotations: vec![node(
+                        15,
+                        58,
+                        ast::Annotation::Call(ast::AnnotationCall {
+                            name: "int_search".into(),
+                            arguments: vec![
+                                node(
+                                    29,
+                                    43,
+                                    ast::AnnotationArgument::Literal(node(
+                                        29,
+                                        43,
+                                        ast::AnnotationLiteral::Annotation(ast::AnnotationCall {
+                                            name: "first_fail".into(),
+                                            arguments: vec![node(
+                                                40,
+                                                42,
+                                                ast::AnnotationArgument::Literal(node(
+                                                    40,
+                                                    42,
+                                                    ast::AnnotationLiteral::BaseLiteral(
+                                                        ast::Literal::Identifier("xs".into())
+                                                    )
+                                                ))
+                                            )]
+                                        })
+                                    ))
+                                ),
+                                node(
+                                    45,
+                                    57,
+                                    ast::AnnotationArgument::Literal(node(
+                                        45,
+                                        57,
+                                        ast::AnnotationLiteral::BaseLiteral(
+                                            ast::Literal::Identifier("indomain_min".into())
+                                        )
+                                    ))
+                                ),
+                            ]
+                        })
+                    )],
                 }
             }
         );
