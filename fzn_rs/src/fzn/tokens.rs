@@ -20,6 +20,7 @@ pub enum Token<'src> {
     CloseBrace,
     Comma,
     Colon,
+    DoubleColon,
     SemiColon,
     DoublePeriod,
     Equal,
@@ -51,6 +52,7 @@ fn token<'src>(
     choice((
         // Punctuation
         just(";").to(Token::SemiColon),
+        just("::").to(Token::DoubleColon),
         just(":").to(Token::Colon),
         just(",").to(Token::Comma),
         just("..").to(Token::DoublePeriod),
