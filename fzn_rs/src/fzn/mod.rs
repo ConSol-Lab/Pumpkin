@@ -7,6 +7,7 @@ use chumsky::extra;
 use chumsky::input::Input;
 use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
+use chumsky::prelude::any;
 use chumsky::prelude::choice;
 use chumsky::prelude::just;
 use chumsky::prelude::recursive;
@@ -92,7 +93,8 @@ pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
         |node| (&node.node, &node.span),
     );
 
-    let ast = parameters()
+    let ast = predicates()
+        .ignore_then(parameters())
         .ignore_then(arrays())
         .then(variables())
         .then(arrays())
@@ -127,6 +129,23 @@ pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
 
 type FznExtra<'tokens, 'src> =
     extra::Full<Rich<'tokens, Token<'src>, ast::Span>, extra::SimpleState<ParseState>, ()>;
+
+fn predicates<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    predicate().repeated().collect::<Vec<_>>().ignored()
+}
+
+fn predicate<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+where
+    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+{
+    just(Ident("predicate"))
+        .ignore_then(any().and_is(just(SemiColon).not()).repeated())
+        .then(just(SemiColon))
+        .ignored()
+}
 
 fn parameters<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
 where
@@ -577,6 +596,29 @@ mod tests {
                 constraints: vec![],
                 solve: ast::SolveObjective {
                     method: node(15, 22, ast::Method::Satisfy),
+                    annotations: vec![],
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn predicate_statements_are_ignored() {
+        let source = r#"
+        predicate some_predicate(int: xs, var int: ys);
+        solve satisfy;
+        "#;
+
+        let ast = parse(source).expect("valid fzn");
+
+        assert_eq!(
+            ast,
+            ast::Ast {
+                variables: BTreeMap::default(),
+                arrays: BTreeMap::default(),
+                constraints: vec![],
+                solve: ast::SolveObjective {
+                    method: node(71, 78, ast::Method::Satisfy),
                     annotations: vec![],
                 }
             }
