@@ -86,7 +86,9 @@ fn main() {
 
     let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
-        SatisfactionResult::Satisfiable(solution) => {
+        SatisfactionResult::Satisfiable(satisfiable) => {
+            let solution = satisfiable.solution();
+
             let row_separator = format!("{}+", "+---".repeat(n as usize));
 
             for row in 0..n {
@@ -105,11 +107,11 @@ fn main() {
 
             println!("{row_separator}");
         }
-        SatisfactionResult::Unsatisfiable => {
+        SatisfactionResult::Unsatisfiable(_) => {
             println!("{n}-queens is unsatisfiable.");
         }
-        SatisfactionResult::Unknown => {
+        SatisfactionResult::Unknown(_) => {
             println!("Timeout.");
         }
-    }
+    };
 }

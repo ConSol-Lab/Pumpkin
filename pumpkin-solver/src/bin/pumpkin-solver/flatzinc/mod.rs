@@ -27,7 +27,6 @@ use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
-use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
@@ -36,6 +35,8 @@ use pumpkin_solver::Solver;
 use self::instance::FlatZincInstance;
 use self::instance::Output;
 use crate::flatzinc::error::FlatZincError;
+use crate::os_signal_termination::OsSignal;
+use crate::ProofType;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
@@ -54,6 +55,9 @@ pub(crate) struct FlatZincOptions {
 
     /// Determines which type of search is performed by the solver
     pub(crate) optimisation_strategy: OptimisationStrategy,
+
+    /// The type of proof that is logged. This influences which preprocessing steps we can do.
+    pub(crate) proof_type: Option<ProofType>,
 }
 
 fn solution_callback(
@@ -202,19 +206,19 @@ fn satisfy(
         }
     } else {
         match solver.satisfy(&mut brancher, &mut termination) {
-            SatisfactionResult::Satisfiable(solution) => solution_callback(
-                &brancher,
+            SatisfactionResult::Satisfiable(satisfiable) => solution_callback(
+                satisfiable.brancher(),
                 None,
                 options.all_solutions,
                 &outputs,
-                &*solver,
-                solution.as_reference(),
+                satisfiable.solver(),
+                satisfiable.solution(),
             ),
-            SatisfactionResult::Unsatisfiable => {
+            SatisfactionResult::Unsatisfiable(solver) => {
                 println!("{MSG_UNSATISFIABLE}");
                 solver.log_statistics();
             }
-            SatisfactionResult::Unknown => {
+            SatisfactionResult::Unknown(solver) => {
                 println!("{MSG_UNKNOWN}");
                 solver.log_statistics();
             }

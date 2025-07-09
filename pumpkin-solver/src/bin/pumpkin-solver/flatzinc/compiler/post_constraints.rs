@@ -19,14 +19,12 @@ use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
+    _: &FlatZincAst,
     context: &mut CompilationContext,
-    options: FlatZincOptions,
+    options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
-    for constraint_item in &ast.constraint_decls {
-        let constraint_tag = context.solver.new_constraint_tag();
-
-        let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
+    for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
+        let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
             "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,
@@ -45,6 +43,20 @@ pub(crate) fn run(
             // We rewrite `array_int_element` to `array_var_int_element`.
             "array_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
             "array_var_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
+
+            "int_eq_imp" => compile_binary_int_imp(context, exprs, annos, "int_eq_imp", constraint_tag, constraints::binary_equals)?,
+            "int_ge_imp" => compile_binary_int_imp(context, exprs, annos, "int_ge_imp", constraint_tag, constraints::binary_greater_than_or_equals)?,
+            "int_gt_imp" => compile_binary_int_imp(context, exprs, annos, "int_gt_imp", constraint_tag, constraints::binary_greater_than)?,
+            "int_le_imp" => compile_binary_int_imp(context, exprs, annos, "int_le_imp", constraint_tag, constraints::binary_less_than_or_equals)?,
+            "int_lt_imp" => compile_binary_int_imp(context, exprs, annos, "int_lt_imp", constraint_tag, constraints::binary_less_than)?,
+            "int_ne_imp" => compile_binary_int_imp(context, exprs, annos, "int_ne_imp", constraint_tag, constraints::binary_not_equals)?,
+
+            "int_lin_eq_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_eq_imp", constraint_tag, constraints::equals)?,
+            "int_lin_ge_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_ge_imp", constraint_tag, constraints::greater_than_or_equals)?,
+            "int_lin_gt_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_gt_imp", constraint_tag, constraints::greater_than)?,
+            "int_lin_le_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_le_imp", constraint_tag, constraints::less_than_or_equals)?,
+            "int_lin_lt_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_lt_imp", constraint_tag, constraints::less_than)?,
+            "int_lin_ne_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_ne_imp", constraint_tag, constraints::not_equals)?,
 
             "int_lin_ne" => compile_int_lin_predicate(
                 context,
@@ -220,7 +232,7 @@ pub(crate) fn run(
                 true
             }
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs, &options, constraint_tag)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
             unknown => todo!("unsupported constraint {unknown}"),
         };
@@ -703,6 +715,45 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     Ok(constraint.reify(context.solver, reif).is_ok())
+}
+
+fn compile_int_lin_imp_predicate<C: Constraint>(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    predicate_name: &str,
+    constraint_tag: ConstraintTag,
+    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 4, predicate_name);
+
+    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+    let vars = context.resolve_integer_variable_array(&exprs[1])?;
+    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+    let reif = context.resolve_bool_variable(&exprs[3])?;
+
+    let terms = weighted_vars(weights, vars);
+
+    let constraint = create_constraint(terms, rhs, constraint_tag);
+    Ok(constraint.implied_by(context.solver, reif).is_ok())
+}
+
+fn compile_binary_int_imp<C: Constraint>(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    predicate_name: &str,
+    constraint_tag: ConstraintTag,
+    create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, predicate_name);
+
+    let a = context.resolve_integer_variable(&exprs[0])?;
+    let b = context.resolve_integer_variable(&exprs[1])?;
+    let reif = context.resolve_bool_variable(&exprs[2])?;
+
+    let constraint = create_constraint(a, b, constraint_tag);
+    Ok(constraint.implied_by(context.solver, reif).is_ok())
 }
 
 fn compile_bool_lin_eq_predicate(

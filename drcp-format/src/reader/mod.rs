@@ -304,6 +304,38 @@ mod tests {
     }
 
     #[test]
+    fn inference_with_consequent_and_negative_atomic_values() {
+        let source = r#"
+            a 1 [x1 >= -1]
+            a 2 [x2 >= -10]
+            i 2 1 0 2 c:1 l:inf_name
+        "#;
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: -1,
+        };
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: GreaterEqual,
+            value: -10,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1],
+                consequent: Some(a2),
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
+    }
+
+    #[test]
     fn inference_without_consequent() {
         let source = r#"
             a 1 [x1 >= 0]
