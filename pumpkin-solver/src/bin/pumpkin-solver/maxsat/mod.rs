@@ -41,14 +41,14 @@ pub(crate) fn wcnf_problem(
             println!("s OPTIMUM FOUND");
             println!(
                 "v {}",
-                stringify_solution(&solution, variables.len(), false)
+                stringify_solution(solution.as_reference(), variables.len(), false)
             );
         }
         MaxSatOptimisationResult::Satisfiable { best_solution } => {
             println!("s SATISFIABLE");
             println!(
                 "v {}",
-                stringify_solution(&best_solution, variables.len(), false)
+                stringify_solution(best_solution.as_reference(), variables.len(), false)
             );
         }
         MaxSatOptimisationResult::Infeasible => {

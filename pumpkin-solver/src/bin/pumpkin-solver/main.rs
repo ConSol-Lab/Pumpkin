@@ -1,11 +1,11 @@
 mod file_format;
 mod flatzinc;
 mod maxsat;
+mod os_signal_termination;
 mod parsers;
 mod result;
 
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -14,9 +14,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
-use convert_case::Case;
 use file_format::FileFormat;
-use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
@@ -26,25 +24,24 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use pumpkin_solver::convert_case::Case;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
+use pumpkin_solver::rand::rngs::SmallRng;
+use pumpkin_solver::rand::SeedableRng;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
+use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
-
-pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -347,7 +344,7 @@ struct Args {
     cumulative_incremental_backtracking: bool,
 
     /// Determine what type of optimisation strategy is used by the solver
-    #[arg(long = "optimisation-strategy", default_value_t)]
+    #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
 
     /// The amount of MB which are preallocated for use by the arena allocator of the nogood
@@ -484,13 +481,13 @@ fn run() -> PumpkinResult<()> {
         warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path {
+    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
         match file_format {
-            FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+            FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => ProofLog::cp(&path_buf, args.proof_type == ProofType::Full)?,
+            FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }
     } else {
         ProofLog::default()
@@ -519,7 +516,12 @@ fn run() -> PumpkinResult<()> {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        learning_clause_minimisation: !args.no_learning_clause_minimisation,
+        learning_clause_minimisation: if args.proof_type == ProofType::Full {
+            warn!("Recursive minimisation is disabled when logging the full proof.");
+            false
+        } else {
+            !args.no_learning_clause_minimisation
+        },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         conflict_resolver: args.conflict_resolver,
@@ -555,6 +557,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_incremental_backtracking,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
+                proof_type: args.proof_path.map(|_| args.proof_type),
             },
         )?,
     }
@@ -575,31 +578,34 @@ fn cnf_problem(
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut termination) {
-        SatisfactionResult::Satisfiable(solution) => {
-            solver.log_statistics();
+        SatisfactionResult::Satisfiable(satisfiable) => {
+            satisfiable.solver().log_statistics();
             println!("s SATISFIABLE");
             println!(
                 "v {}",
-                stringify_solution(&solution, solution.num_domains(), true)
+                stringify_solution(
+                    satisfiable.solution(),
+                    satisfiable.solution().num_domains(),
+                    true
+                )
             );
         }
-        SatisfactionResult::Unsatisfiable => {
+        SatisfactionResult::Unsatisfiable(solver) => {
             solver.log_statistics();
-            solver.conclude_proof_unsat();
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown => {
+        SatisfactionResult::Unknown(solver) => {
             solver.log_statistics();
             println!("s UNKNOWN");
         }
-    };
+    }
 
     Ok(())
 }
 
 fn stringify_solution(
-    solution: &Solution,
+    solution: SolutionReference,
     number_of_variables: usize,
     terminate_with_zero: bool,
 ) -> String {
@@ -630,13 +636,4 @@ enum ProofType {
     Scaffold,
     /// Log the full proof with hints.
     Full,
-}
-
-impl Display for ProofType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProofType::Scaffold => write!(f, "scaffold"),
-            ProofType::Full => write!(f, "full"),
-        }
-    }
 }

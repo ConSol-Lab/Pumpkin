@@ -12,4 +12,4 @@ workspace = true
 
 [dependencies]
 chumsky = "0.10.1"
-thiserror = "1.0.59"
+thiserror = "2.0.12"
