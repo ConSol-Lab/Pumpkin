@@ -548,6 +548,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-core"
+version = "0.2.1"
+dependencies = [
+ "bitfield",
+ "bitfield-struct",
+ "clap",
+ "convert_case",
+ "downcast-rs",
+ "drcp-format",
+ "enum-map",
+ "enumset",
+ "fnv",
+ "itertools",
+ "log",
+ "num",
+ "once_cell",
+ "rand",
+ "thiserror",
+]
+
+[[package]]
 name = "pumpkin-macros"
 version = "0.1.0"
 dependencies = [
@@ -568,34 +589,13 @@ dependencies = [
  "flatzinc",
  "fnv",
  "log",
+ "pumpkin-core",
  "pumpkin-macros",
- "pumpkin-solver-core",
  "regex",
  "signal-hook",
  "stringcase",
  "thiserror",
  "wait-timeout",
-]
-
-[[package]]
-name = "pumpkin-solver-core"
-version = "0.2.0"
-dependencies = [
- "bitfield",
- "bitfield-struct",
- "clap",
- "convert_case",
- "downcast-rs",
- "drcp-format",
- "enum-map",
- "enumset",
- "fnv",
- "itertools",
- "log",
- "num",
- "once_cell",
- "rand",
- "thiserror",
 ]
 
 [[package]]
