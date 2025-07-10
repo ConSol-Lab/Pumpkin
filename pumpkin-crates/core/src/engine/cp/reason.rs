@@ -9,7 +9,6 @@ use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
-use crate::variables::Literal;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 #[derive(Default, Debug)]
@@ -59,10 +58,6 @@ impl ReasonStore {
             Some(reason) => match &reason.1 {
                 StoredReason::Eager(_) => None,
                 StoredReason::DynamicLazy(code) => Some(code),
-                StoredReason::ReifiedLazy(_, _) => {
-                    // If this happens, we need to rethink this API.
-                    unimplemented!("cannot get code of reified lazy explanation")
-                }
             },
             None => None,
         }
@@ -119,8 +114,6 @@ pub(crate) enum StoredReason {
     /// propagation the reason is for. The payload should be enough for the propagator to construct
     /// an explanation based on its internal state.
     DynamicLazy(u64),
-    /// A lazy explanation that has been reified.
-    ReifiedLazy(Literal, u64),
 }
 
 impl StoredReason {
@@ -143,15 +136,6 @@ impl StoredReason {
                     .copied(),
             ),
             StoredReason::Eager(result) => destination_buffer.extend(result.iter().copied()),
-            StoredReason::ReifiedLazy(literal, code) => {
-                destination_buffer.extend(
-                    propagators[propagator_id]
-                        .lazy_explanation(*code, context)
-                        .iter()
-                        .copied(),
-                );
-                destination_buffer.extend(std::iter::once(literal.get_true_predicate()));
-            }
         }
     }
 }
