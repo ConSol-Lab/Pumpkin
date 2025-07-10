@@ -10,22 +10,36 @@ use crate::propagators::nogoods::NogoodId;
 /// An arena allocator for storing nogoods.
 ///
 /// The idea is to avoid double indirection by storing one large structure with [`PredicateId`]s.
-/// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
-/// contain the length `x` of the nogood. The next `i + 1 + x` elements are then the nogood pointed
-/// to by the [`NogoodId`] with value `i`.
 ///
-/// Currently, this structure does not support deleting clauses.
+/// Currently, deleting nogoods is not supported.
 #[derive(Clone, Default, Debug)]
 pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
+    ///
+    /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
+    /// contain the length `x` of the nogood. The next `i + 1 + x` elements are then the nogood
+    /// pointed to by the [`NogoodId`] with value `i`.
     nogoods: Vec<PredicateId>,
     /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
     /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
     /// about nogoods.
-    nogood_id_to_index: HashMap<NogoodId, u32>,
+    nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
+}
+
+#[derive(Clone, Copy, Debug, Hash)]
+pub(crate) struct NogoodIndex(u32);
+
+impl StorageKey for NogoodIndex {
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        NogoodIndex(index as u32)
+    }
 }
 
 impl ArenaAllocator {
@@ -45,7 +59,7 @@ impl ArenaAllocator {
         // We store the NogoodId with its index.
         let _ = self
             .nogood_id_to_index
-            .insert(nogood_id, self.current_index);
+            .insert(nogood_id, NogoodIndex(self.current_index));
         self.current_index += 1;
 
         // We push a PredicateId which stores the length of the nogood
@@ -60,7 +74,7 @@ impl ArenaAllocator {
     ///
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then
     /// this method will return `n`.
-    pub(crate) fn get_index_of_nogood(&self, nogood_id: &NogoodId) -> u32 {
+    pub(crate) fn get_index_of_nogood(&self, nogood_id: &NogoodId) -> NogoodIndex {
         *self
             .nogood_id_to_index
             .get(nogood_id)

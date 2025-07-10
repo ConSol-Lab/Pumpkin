@@ -347,8 +347,7 @@ struct Args {
     #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
 
-    /// The amount of MB which are preallocated for use by the arena allocator of the nogood
-    /// propagator.
+    /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 1000)]
     memory_preallocated: usize,
 }
