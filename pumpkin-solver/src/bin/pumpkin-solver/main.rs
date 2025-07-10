@@ -346,6 +346,10 @@ struct Args {
     /// Determine what type of optimisation strategy is used by the solver
     #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
+
+    /// The amount of memory (in MB) that is preallocated for storing nogoods.
+    #[arg(long = "memory-preallocated", default_value_t = 1000)]
+    memory_preallocated: usize,
 }
 
 fn configure_logging(
@@ -508,6 +512,8 @@ fn run() -> PumpkinResult<()> {
     };
 
     let solver_options = SolverOptions {
+        // 1 MB is 1_000_000 bytes
+        memory_preallocated: args.memory_preallocated,
         restart_options,
         learning_clause_minimisation: if args.proof_type == ProofType::Full {
             warn!("Recursive minimisation is disabled when logging the full proof.");

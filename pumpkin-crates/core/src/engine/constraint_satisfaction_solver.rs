@@ -28,6 +28,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
@@ -195,6 +196,8 @@ pub struct SatisfactionSolverOptions {
     pub conflict_resolver: ConflictResolver,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
+    /// The number of MBs which are preallocated by the nogood propagator.
+    pub memory_preallocated: usize,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -206,6 +209,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             conflict_resolver: ConflictResolver::default(),
             learning_options: LearningOptions::default(),
+            memory_preallocated: 1000,
         }
     }
 }
@@ -304,6 +308,9 @@ impl ConstraintSatisfactionSolver {
             .add_integer(dummy_id, "Dummy".to_owned());
 
         let _ = csp_solver.add_propagator(NogoodPropagator::with_options(
+            // 1_000_000 bytes in 1 MB
+            (csp_solver.internal_parameters.memory_preallocated * 1_000_000)
+                / size_of::<PredicateId>(),
             csp_solver.internal_parameters.learning_options,
         ));
 
