@@ -12,9 +12,12 @@ pub(crate) struct NogoodInfo {
     /// another nogood in the future.
     pub(crate) is_deleted: bool,
     /// Whether to not allow the nogood to have their activity bumped.
+    ///
     /// The idea was to prevent a single nogood from being bumped multiple times.
+    ///
     /// Note that in conflict analysis, a nogood can only appear once in conflict analysis,
     /// and when using recursive minimisation, it may appear one more time, a total of two times.
+    ///
     /// TODO: not clear whether this is a problem or whether it makes sense.
     pub(crate) block_bumps: bool,
     /// The activity score of the nogood.

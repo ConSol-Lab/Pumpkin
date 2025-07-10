@@ -81,6 +81,7 @@ struct Args {
     proof_type: ProofType,
 
     /// The number of high-lbd learned nogoods that are kept in the database.
+    ///
     /// Learned nogoods are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
     ///
@@ -93,7 +94,8 @@ struct Args {
     learning_max_num_high_lbd_nogoods: usize,
 
     /// The number of mid-lbd learned nogoods that are kept in the database.
-    /// This is based on the variation of the three-tier system proposed in
+    ///
+    /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
     ///
     /// Possible values: usize
@@ -105,7 +107,8 @@ struct Args {
     learning_max_num_mid_lbd_nogoods: usize,
 
     /// The number of low-lbd learned nogoods that are kept in the database.
-    /// This is based on the variation of the three-tier system proposed in
+    ///
+    /// This is based on the variation of the three-tiered system proposed in
     /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
     ///
     /// Possible values: usize
@@ -116,7 +119,10 @@ struct Args {
     )]
     learning_max_num_low_lbd_nogoods: usize,
 
-    /// Learned nogoods with this threshold LBD or lower are kept longer.
+    /// The treshold determining whether a learned nogood is "low" LBD.
+    ///
+    /// "Low" LBD nogood are kept around for longer since they are of better "quality".
+    ///
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
@@ -129,7 +135,11 @@ struct Args {
     )]
     learning_low_lbd_threshold: u32,
 
-    /// Learned nogoods with this threshold LBD or greater are kept shortly.
+    /// The treshold determining whether a learned nogood is "low" LBD.
+    ///
+    /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
+    /// "quality".
+    ///
     /// Learned nogoods are kept based on the tiered system introduced "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
     /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
@@ -533,11 +543,11 @@ fn run() -> PumpkinResult<()> {
     let learning_options = LearningOptions {
         max_activity: 1e20,
         activity_decay_factor: 0.99,
-        limit_high_lbd_nogoods: args.learning_max_num_high_lbd_nogoods,
-        limit_mid_lbd_nogoods: args.learning_max_num_mid_lbd_nogoods,
-        limit_low_lbd_nogoods: args.learning_max_num_low_lbd_nogoods,
-        lbd_low: args.learning_low_lbd_threshold,
-        lbd_high: args.learning_high_lbd_threshold,
+        max_num_high_lbd_nogoods: args.learning_max_num_high_lbd_nogoods,
+        max_num_mid_lbd_nogoods: args.learning_max_num_mid_lbd_nogoods,
+        max_num_low_lbd_nogoods: args.learning_max_num_low_lbd_nogoods,
+        lbd_threshold_low: args.learning_low_lbd_threshold,
+        lbd_threshold_high: args.learning_high_lbd_threshold,
         activity_bump_increment: 1.0,
     };
 
