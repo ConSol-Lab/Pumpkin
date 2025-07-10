@@ -5,12 +5,14 @@ use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::DomainEvents;
+use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::Literal;
 
@@ -50,6 +52,7 @@ where
             reification_literal,
             reification_literal_id,
             name,
+            reason_buffer: vec![],
         }
     }
 }
@@ -70,6 +73,9 @@ pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
     reification_literal_id: LocalId,
+
+    /// Holds the lazy explanations.
+    reason_buffer: Vec<Predicate>,
 }
 
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
@@ -150,6 +156,15 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         }
 
         Ok(())
+    }
+
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+        self.reason_buffer.clear();
+        self.reason_buffer
+            .push(self.reification_literal.get_true_predicate());
+        self.reason_buffer
+            .extend(self.propagator.lazy_explanation(code, context));
+        &self.reason_buffer
     }
 }
 
