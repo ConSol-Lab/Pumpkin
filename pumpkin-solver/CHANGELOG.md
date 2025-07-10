@@ -10,34 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
-* Add assignment-like structure for predicate ids + Store PredicateId in nogood propagator ([#202](https://github.com/ConSol-Lab/Pumpkin/issues/202)) ([bcd171d](https://github.com/ConSol-Lab/Pumpkin/commit/bcd171de9e25e7e66c59034db80f7496e07c861d))
-* Add objective brancher to default search ([#230](https://github.com/ConSol-Lab/Pumpkin/issues/230)) ([d676430](https://github.com/ConSol-Lab/Pumpkin/commit/d67643031e5ef7144953885608c15d94c10223e8))
+* Branch on objective variable first if not everything is assigned after the FlatZinc search strategy ([#230](https://github.com/ConSol-Lab/Pumpkin/issues/230)) ([d676430](https://github.com/ConSol-Lab/Pumpkin/commit/d67643031e5ef7144953885608c15d94c10223e8))
 * Arena allocation for the Nogood propagator ([#212](https://github.com/ConSol-Lab/Pumpkin/issues/212)) ([6f647e8](https://github.com/ConSol-Lab/Pumpkin/commit/6f647e80eae28862b78cf05d99449241ae50e25b))
 * Enforce constraint ID and inference label are provided in propagators ([#179](https://github.com/ConSol-Lab/Pumpkin/issues/179)) ([74126a1](https://github.com/ConSol-Lab/Pumpkin/commit/74126a13adf08fdaca3f56bea4ee9c0d3098f5ce))
 * Expose a timeout flag in the Python API ([#195](https://github.com/ConSol-Lab/Pumpkin/issues/195)) ([7d4a74f](https://github.com/ConSol-Lab/Pumpkin/commit/7d4a74fe14b7f26e53d3dacd9729780574318ac8))
-* Implement *_imp constraints for linear arithmetic ([#219](https://github.com/ConSol-Lab/Pumpkin/issues/219)) ([c00050f](https://github.com/ConSol-Lab/Pumpkin/commit/c00050f963a1b07b1018b7808f297560c16a16aa))
+* Implement *_imp FlatZinc constraints for linear arithmetic ([#219](https://github.com/ConSol-Lab/Pumpkin/issues/219)) ([c00050f](https://github.com/ConSol-Lab/Pumpkin/commit/c00050f963a1b07b1018b7808f297560c16a16aa))
 * Implement the table and negative table constraints ([#194](https://github.com/ConSol-Lab/Pumpkin/issues/194)) ([49344d6](https://github.com/ConSol-Lab/Pumpkin/commit/49344d6c10d2489b8cabcc5e9abcbb241e1490ec))
 * Improving notification system for nogood propagator ([#190](https://github.com/ConSol-Lab/Pumpkin/issues/190)) ([b04ac58](https://github.com/ConSol-Lab/Pumpkin/commit/b04ac587089e26c49b8e0cd299145fad50600469))
-* Merge equivalence classes of variables in int_eq ([#221](https://github.com/ConSol-Lab/Pumpkin/issues/221)) ([9b5c1cc](https://github.com/ConSol-Lab/Pumpkin/commit/9b5c1ccc85a4a8f3c7551d53f37951a0aa846afa))
-* Propagator for `int_ne` and `int_eq` ([#223](https://github.com/ConSol-Lab/Pumpkin/issues/223)) ([00a16e0](https://github.com/ConSol-Lab/Pumpkin/commit/00a16e06f934a808413ac869f5392027f1301a8a))
-* Reduce size of Predicate ([#203](https://github.com/ConSol-Lab/Pumpkin/issues/203)) ([430253a](https://github.com/ConSol-Lab/Pumpkin/commit/430253af992f99caf7c3c33ce4c19ae84f0322b1))
-* Remove unused variables from the FlatZinc AST  ([#222](https://github.com/ConSol-Lab/Pumpkin/issues/222)) ([223a26a](https://github.com/ConSol-Lab/Pumpkin/commit/223a26ad33b5cff250afe20d87798004e902ba54))
-* Rewrite `int_lin_eq` and `int_lin_ne` into their binary equivalents ([#240](https://github.com/ConSol-Lab/Pumpkin/issues/240)) ([a370866](https://github.com/ConSol-Lab/Pumpkin/commit/a370866149683befbf8d529a54064cadeee20738))
-* Update the DRCP crate to make it easier to use ([#204](https://github.com/ConSol-Lab/Pumpkin/issues/204)) ([5cdc747](https://github.com/ConSol-Lab/Pumpkin/commit/5cdc747d8f241859dfea806297595f7feb12fa7e))
+* Merge equivalence classes of variables in int_eq as a preprocessing step ([#221](https://github.com/ConSol-Lab/Pumpkin/issues/221)) ([9b5c1cc](https://github.com/ConSol-Lab/Pumpkin/commit/9b5c1ccc85a4a8f3c7551d53f37951a0aa846afa))
+* Propagator for binary arithmetic constraints `int_ne` and `int_eq` ([#223](https://github.com/ConSol-Lab/Pumpkin/issues/223)) ([00a16e0](https://github.com/ConSol-Lab/Pumpkin/commit/00a16e06f934a808413ac869f5392027f1301a8a))
+* Remove unused variables from the FlatZinc AST ([#222](https://github.com/ConSol-Lab/Pumpkin/issues/222)) ([223a26a](https://github.com/ConSol-Lab/Pumpkin/commit/223a26ad33b5cff250afe20d87798004e902ba54))
+* Rewrite `int_lin_eq` and `int_lin_ne` over two variables into their binary equivalents ([#240](https://github.com/ConSol-Lab/Pumpkin/issues/240)) ([a370866](https://github.com/ConSol-Lab/Pumpkin/commit/a370866149683befbf8d529a54064cadeee20738))
 
 
 ### Bug Fixes
 
-* Creating sparse domains did not use updated domains ([#243](https://github.com/ConSol-Lab/Pumpkin/issues/243)) ([6225ff5](https://github.com/ConSol-Lab/Pumpkin/commit/6225ff5406f35960827c1b68f44180c0b6589b0d))
+* Create sparse domains properly for a sparse FlatZinc domain ([#243](https://github.com/ConSol-Lab/Pumpkin/issues/243)) ([6225ff5](https://github.com/ConSol-Lab/Pumpkin/commit/6225ff5406f35960827c1b68f44180c0b6589b0d))
 * Disable recursive minimisation when logging the full proof ([#215](https://github.com/ConSol-Lab/Pumpkin/issues/215)) ([7a0a08e](https://github.com/ConSol-Lab/Pumpkin/commit/7a0a08e4080221682438adf478f105d1d291b9ae))
 * Don't log same domain inference multiple times per deduction ([#227](https://github.com/ConSol-Lab/Pumpkin/issues/227)) ([30a7b53](https://github.com/ConSol-Lab/Pumpkin/commit/30a7b53dd8e0a540317539dc9f2b8a804ff34e28))
-* explain root assignments in recursive minimisation ([#173](https://github.com/ConSol-Lab/Pumpkin/issues/173)) ([c0eab65](https://github.com/ConSol-Lab/Pumpkin/commit/c0eab6504b412df48a76f0d317afce9e48762caa))
-* fixing issue with element lazy explanation by adding trail position to explanation context ([#191](https://github.com/ConSol-Lab/Pumpkin/issues/191)) ([60e2bea](https://github.com/ConSol-Lab/Pumpkin/commit/60e2bea7ba403990b147a0b3a27546fccd27ee73))
+* Fix lazy explanations for the element propagator ([#191](https://github.com/ConSol-Lab/Pumpkin/issues/191)) ([60e2bea](https://github.com/ConSol-Lab/Pumpkin/commit/60e2bea7ba403990b147a0b3a27546fccd27ee73))
 * Log the correct proofs when optimising ([#216](https://github.com/ConSol-Lab/Pumpkin/issues/216)) ([ca6e452](https://github.com/ConSol-Lab/Pumpkin/commit/ca6e4528d341d14060868d3135fa365586ea63d2))
 * Log the initial bounds in the full proof as inferences ([#211](https://github.com/ConSol-Lab/Pumpkin/issues/211)) ([7624035](https://github.com/ConSol-Lab/Pumpkin/commit/7624035b39c3b5a10b99ad3f3ae7a3a37afbdb43))
 * Properly explain root-level explanations that are not considered during conflict analysis ([#176](https://github.com/ConSol-Lab/Pumpkin/issues/176)) ([d237293](https://github.com/ConSol-Lab/Pumpkin/commit/d237293fddb8970df8ad0e5b89eaf98b19d4013b))
 * Update outdated documentation from before the v0.2 release ([#177](https://github.com/ConSol-Lab/Pumpkin/issues/177)) ([8e4009f](https://github.com/ConSol-Lab/Pumpkin/commit/8e4009fe45838f244e130ff4f6e4d3aa1f75ea5e))
-* Use variable inline in format string ([#180](https://github.com/ConSol-Lab/Pumpkin/issues/180)) ([35d5f47](https://github.com/ConSol-Lab/Pumpkin/commit/35d5f47698d11246a21f9d112459bfcdb031a090))
 
 ## [0.2.0](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.4...pumpkin-solver-v0.2.0) (2025-04-11)
 
