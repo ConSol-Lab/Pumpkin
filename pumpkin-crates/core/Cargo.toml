@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-core"
-version = "0.2.1"
+version = "0.1.0"
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
