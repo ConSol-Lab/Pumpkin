@@ -519,6 +519,20 @@ impl VariableEquivalences {
         let _ = self.classes.insert(representative, equivalence_class);
     }
 
+    /// Create a new equivalence class with the given representative.
+    pub(crate) fn create_equivalence_class_sparse(
+        &mut self,
+        representative: Rc<str>,
+        values: Vec<i32>,
+    ) {
+        let equivalence_class = Rc::new(RefCell::new(EquivalenceClass {
+            variables: [Rc::clone(&representative)].into_iter().collect(),
+            domain: Domain::SparseDomain { values },
+        }));
+
+        let _ = self.classes.insert(representative, equivalence_class);
+    }
+
     /// Get the name of the representative variable of the equivalence class the given variable
     /// belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.

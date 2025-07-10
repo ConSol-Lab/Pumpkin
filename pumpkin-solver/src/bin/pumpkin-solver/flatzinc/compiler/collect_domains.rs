@@ -1,7 +1,5 @@
 //! Compilation phase that builds a map from flatzinc variables to solver domains.
 
-use std::rc::Rc;
-
 use flatzinc::Annotation;
 
 use super::context::CompilationContext;
@@ -33,7 +31,10 @@ pub(crate) fn run(
                 }
             }
 
-            SingleVarDecl::IntInRange { id, annos, .. } => {
+            SingleVarDecl::IntInRange { id, annos, .. }
+            | SingleVarDecl::IntInSet {
+                id, set: _, annos, ..
+            } => {
                 let id = context.identifiers.get_interned(id);
 
                 let representative = context.integer_equivalences.representative(&id);
@@ -57,39 +58,6 @@ pub(crate) fn run(
                             domain.into_variable(context.solver, id.to_string())
                         }
                     });
-
-                if is_output_variable(annos) {
-                    context.outputs.push(Output::int(id, domain_id));
-                }
-            }
-
-            SingleVarDecl::IntInSet { id, set, annos, .. } => {
-                let id = context.identifiers.get_interned(id);
-
-                let domain_id = if set.len() == 1 {
-                    let value = i32::try_from(set[0])?;
-
-                    *context.constant_domain_ids.entry(value).or_insert_with(|| {
-                        context
-                            .solver
-                            .new_named_bounded_integer(value, value, id.to_string())
-                    })
-                } else {
-                    let values = set
-                        .iter()
-                        .copied()
-                        .map(i32::try_from)
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                    let domain_id = context
-                        .solver
-                        .new_named_sparse_integer(values, id.to_string());
-                    let _ = context
-                        .integer_variable_map
-                        .insert(Rc::clone(&id), domain_id);
-
-                    domain_id
-                };
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::int(id, domain_id));
