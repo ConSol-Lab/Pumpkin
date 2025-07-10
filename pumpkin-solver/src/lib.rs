@@ -1,1 +1,1 @@
-pub use pumpkin_solver_core::*;
+pub use pumpkin_core::*;
