@@ -86,7 +86,7 @@ where
                         Some(OptimisationResult::Optimal(best_solution.clone()))
                     }
                     SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
-                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Unknown),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Satisfiable(best_solution.clone())),
                 }
             };
 

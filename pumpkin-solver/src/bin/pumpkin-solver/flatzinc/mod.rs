@@ -176,9 +176,11 @@ fn satisfy(
 ) {
     if options.all_solutions {
         let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
+        let mut has_found_solution = false;
         loop {
             match solution_iterator.next_solution() {
                 IteratedSolution::Solution(solution, solver, brancher) => {
+                    has_found_solution = true;
                     solution_callback(
                         brancher,
                         None,
@@ -189,15 +191,20 @@ fn satisfy(
                     );
                 }
                 IteratedSolution::Finished => {
+                    assert!(has_found_solution);
                     println!("==========");
                     solver.log_statistics();
                     break;
                 }
                 IteratedSolution::Unknown => {
+                    if !has_found_solution {
+                        println!("{MSG_UNKNOWN}");
+                    }
                     solver.log_statistics();
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
+                    assert!(!has_found_solution);
                     println!("{MSG_UNSATISFIABLE}");
                     solver.log_statistics();
                     break;
