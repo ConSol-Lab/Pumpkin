@@ -19,7 +19,7 @@ use crate::engine::Assignments;
 /// generator.
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
-    assignments: &'a Assignments,
+    pub(crate) assignments: &'a Assignments,
     random_generator: &'a mut dyn Random,
 }
 

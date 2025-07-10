@@ -1,0 +1,6 @@
+var 0..3: x;
+var 0..3: y;
+
+array[1..2] of var int: variables = [x, y];
+
+solve :: warm_start(variables, [1, 2]) maximize x + y;

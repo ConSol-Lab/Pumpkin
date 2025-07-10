@@ -1,0 +1,6 @@
+var 0..3: x:: output_var;
+var 0..3: y:: output_var;
+var 0..6: X_INTRODUCED_0_:: is_defined_var :: output_var;
+array [1..2] of var int: variables = [x,y];
+constraint int_lin_eq([1,1,-1],[x,y,X_INTRODUCED_0_],0):: defines_var(X_INTRODUCED_0_):: ctx_pos;
+solve :: warm_start(variables,[1,2]) maximize X_INTRODUCED_0_;
