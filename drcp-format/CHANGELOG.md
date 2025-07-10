@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/drcp-format-v0.2.1...drcp-format-v0.2.2) (2025-07-10)
+
+
+### Features
+
+* Update the DRCP crate to make it easier to use ([#204](https://github.com/ConSol-Lab/Pumpkin/issues/204)) ([5cdc747](https://github.com/ConSol-Lab/Pumpkin/commit/5cdc747d8f241859dfea806297595f7feb12fa7e))
+
+
+### Bug Fixes
+
+* Parse negative values in atomic constraints ([#217](https://github.com/ConSol-Lab/Pumpkin/issues/217)) ([b137f76](https://github.com/ConSol-Lab/Pumpkin/commit/b137f764f308ee3ab02e9a9cc74f650966524fbf))
+* Use variable inline in format string ([#180](https://github.com/ConSol-Lab/Pumpkin/issues/180)) ([35d5f47](https://github.com/ConSol-Lab/Pumpkin/commit/35d5f47698d11246a21f9d112459bfcdb031a090))
+
 ## [0.2.1](https://github.com/consol-lab/pumpkin/compare/drcp-format-v0.2.0...drcp-format-v0.2.1) (2025-04-11)
 
 
