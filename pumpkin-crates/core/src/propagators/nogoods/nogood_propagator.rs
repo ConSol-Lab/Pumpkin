@@ -58,8 +58,6 @@ pub(crate) struct NogoodPropagator {
     /// The ids of the nogoods sorted based on whether they have a "low" LBD score or a "high" LBD
     /// score.
     learned_nogood_ids: LearnedNogoodIds,
-    /// Ids which have been deleted and can now be re-used
-    delete_ids: Vec<NogoodId>,
     /// Watch lists for the nogood propagator.
     watch_lists: KeyedVec<PredicateId, Vec<Watcher>>,
     /// Keep track of the events which the propagator has been notified of.
@@ -687,7 +685,6 @@ impl NogoodPropagator {
             // for propagation. A new nogood may take the place of a deleted nogood, this makes it
             // simpler, since other nogood ids remain unchanged.
             self.nogood_info[info_id].is_deleted = true;
-            self.delete_ids.push(id);
 
             num_clauses_to_remove -= 1;
         }
