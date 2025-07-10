@@ -94,7 +94,7 @@ impl PropagatorConstructor for NogoodPropagator {
     }
 }
 
-/// A struct which keeps track of three tiers of nogoods:
+/// Keeps track of three tiers of nogoods:
 /// - "low" LBD nogoods
 /// - "mid" LBD nogoods
 /// - "high" LBD nogoods
