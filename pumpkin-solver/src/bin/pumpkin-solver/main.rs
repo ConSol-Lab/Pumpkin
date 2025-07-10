@@ -80,35 +80,77 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
-    /// The number of high lbd learned clauses that are kept in the database.
-    /// Learned clauses are kept based on the tiered system introduced in "Improving
+    /// The number of high-lbd learned nogoods that are kept in the database.
+    ///
+    /// Learned nogoods are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
     ///
     /// Possible values: usize
     #[arg(
-        long = "learning-max-num-clauses",
+        long = "learning-max-num-high-lbd-nogoods",
+        default_value_t = 20_000,
+        verbatim_doc_comment
+    )]
+    learning_max_num_high_lbd_nogoods: usize,
+
+    /// The number of mid-lbd learned nogoods that are kept in the database.
+    ///
+    /// This is based on the variation of the three-tiered system proposed in
+    /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
+    ///
+    /// Possible values: usize
+    #[arg(
+        long = "learning-max-num-mid-lbd-nogoods",
+        default_value_t = 7000,
+        verbatim_doc_comment
+    )]
+    learning_max_num_mid_lbd_nogoods: usize,
+
+    /// The number of low-lbd learned nogoods that are kept in the database.
+    ///
+    /// This is based on the variation of the three-tiered system proposed in
+    /// "Improving Implementation of SAT Competitions 2017–2019 Winners".
+    ///
+    /// Possible values: usize
+    #[arg(
+        long = "learning-max-num-low-lbd-nogoods",
         default_value_t = 100_000,
         verbatim_doc_comment
     )]
-    learning_max_num_clauses: usize,
+    learning_max_num_low_lbd_nogoods: usize,
 
-    /// Learned clauses with this threshold LBD or lower are kept permanently
-    /// Learned clauses are kept based on the tiered system introduced "Improving
-    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
+    /// The treshold determining whether a learned nogood is "low" LBD.
+    ///
+    /// "Low" LBD nogood are kept around for longer since they are of better "quality".
+    ///
+    /// Learned nogoods are kept based on the tiered system introduced "Improving
+    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
+    /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
     ///
     /// Possible values: u32
     #[arg(
-        long = "learning-lbd-threshold",
-        default_value_t = 5,
+        long = "learning-low-lbd-threshold",
+        default_value_t = 3,
         verbatim_doc_comment
     )]
-    learning_lbd_threshold: u32,
+    learning_low_lbd_threshold: u32,
 
-    /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
-    /// based on the LBD of a clause (the number of different decision levels) or on the activity
-    /// of a clause (how often it is used in conflict analysis).
-    #[arg(long, value_enum, default_value_t)]
-    learning_sorting_strategy: LearnedNogoodSortingStrategy,
+    /// The treshold determining whether a learned nogood is "low" LBD.
+    ///
+    /// "High" LBD nogood are kept around for a shorter amount of time since they are of bad
+    /// "quality".
+    ///
+    /// Learned nogoods are kept based on the tiered system introduced "Improving
+    /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)"
+    /// with the variation from "Improving Implementation of SAT Competitions 2017–2019 Winners".
+    ///
+    /// Possible values: u32
+    #[arg(
+        long = "learning-high-lbd-threshold",
+        default_value_t = 7,
+        verbatim_doc_comment
+    )]
+    learning_high_lbd_threshold: u32,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
@@ -505,9 +547,11 @@ fn run() -> PumpkinResult<()> {
     let learning_options = LearningOptions {
         max_activity: 1e20,
         activity_decay_factor: 0.99,
-        limit_num_high_lbd_nogoods: args.learning_max_num_clauses,
-        lbd_threshold: args.learning_lbd_threshold,
-        nogood_sorting_strategy: args.learning_sorting_strategy,
+        max_num_high_lbd_nogoods: args.learning_max_num_high_lbd_nogoods,
+        max_num_mid_lbd_nogoods: args.learning_max_num_mid_lbd_nogoods,
+        max_num_low_lbd_nogoods: args.learning_max_num_low_lbd_nogoods,
+        lbd_threshold_low: args.learning_low_lbd_threshold,
+        lbd_threshold_high: args.learning_high_lbd_threshold,
         activity_bump_increment: 1.0,
     };
 

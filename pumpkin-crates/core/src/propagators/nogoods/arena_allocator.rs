@@ -74,7 +74,7 @@ impl ArenaAllocator {
     ///
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then
     /// this method will return `n`.
-    pub(crate) fn get_index_of_nogood(&self, nogood_id: &NogoodId) -> NogoodIndex {
+    pub(crate) fn get_nogood_index(&self, nogood_id: &NogoodId) -> NogoodIndex {
         *self
             .nogood_id_to_index
             .get(nogood_id)
