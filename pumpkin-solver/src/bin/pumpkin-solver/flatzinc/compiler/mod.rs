@@ -14,22 +14,23 @@ mod reserve_constraint_tags;
 use context::CompilationContext;
 use pumpkin_solver::Solver;
 
-use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
 use super::FlatZincError;
 use super::FlatZincOptions;
 
 pub(crate) fn compile(
-    mut ast: FlatZincAst,
+    mut ast: fzn_rs::ast::Ast,
     solver: &mut Solver,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut context = CompilationContext::new(solver);
 
-    define_constants::run(&ast, &mut context)?;
-    remove_unused_variables::run(&mut ast, &mut context)?;
-    prepare_variables::run(&ast, &mut context)?;
-    merge_equivalences::run(&mut ast, &mut context, &options)?;
+    remove_unused_variables::run(&mut ast)?;
+
+    let mut typed_ast = super::ast::Instance::from_ast(ast).expect("handle errors");
+
+    prepare_variables::run(&typed_ast, &mut context)?;
+    merge_equivalences::run(&mut typed_ast, &mut context, &options)?;
     handle_set_in::run(&ast, &mut context)?;
     collect_domains::run(&ast, &mut context)?;
     define_variable_arrays::run(&ast, &mut context)?;
