@@ -11,13 +11,29 @@ use fzn_rs::ast::AnnotationCall;
 use fzn_rs::ast::AnnotationLiteral;
 use fzn_rs::ast::Argument;
 use fzn_rs::ast::Ast;
+use fzn_rs::ast::Domain;
 use fzn_rs::ast::Literal;
 use fzn_rs::ast::RangeList;
+use fzn_rs::ast::Variable;
 use fzn_rs::TypedInstance;
 use fzn_rs::VariableArgument;
 use fzn_rs_derive::FlatZincAnnotation;
 use fzn_rs_derive::FlatZincConstraint;
 use utils::*;
+
+macro_rules! btreemap {
+    ($($key:expr => $value:expr,)+) => (btreemap!($($key => $value),+));
+
+    ( $($key:expr => $value:expr),* ) => {
+        {
+            let mut _map = ::std::collections::BTreeMap::new();
+            $(
+                let _ = _map.insert($key, $value);
+            )*
+            _map
+        }
+    };
+}
 
 #[test]
 fn annotation_without_arguments() {
@@ -314,5 +330,63 @@ fn arrays_as_annotation_arguments_with_annotation_elements() {
             ArrayElements::ElementOne,
             ArrayElements::ElementTwo(4)
         ]),
+    );
+}
+
+#[test]
+fn annotations_can_be_structs_for_arguments() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum TypedConstraint {
+        SomeConstraint(VariableArgument<i64>),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum TypedAnnotation {
+        #[args]
+        SomeAnnotation(AnnotationArgs),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    struct AnnotationArgs {
+        ident: Rc<str>,
+        #[annotation]
+        ann: OtherAnnotation,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
+    enum OtherAnnotation {
+        ElementOne,
+        ElementTwo(i64),
+    }
+
+    type Instance = TypedInstance<TypedConstraint, TypedAnnotation>;
+
+    let ast = Ast {
+        variables: btreemap! {
+            "x1".into() => test_node(Variable {
+                domain: test_node(Domain::UnboundedInt),
+                value: None,
+                annotations: vec![test_node(Annotation::Call(AnnotationCall {
+                    name: "some_annotation".into(),
+                    arguments: vec![
+                        test_node(AnnotationArgument::Literal(test_node(AnnotationLiteral::BaseLiteral(Literal::Identifier("some_ident".into()))))),
+                        test_node(AnnotationArgument::Literal(test_node(AnnotationLiteral::BaseLiteral(Literal::Identifier("element_one".into()))))),
+                    ],
+                }))],
+            }),
+        },
+        arrays: BTreeMap::new(),
+        constraints: vec![],
+        solve: satisfy_solve(),
+    };
+
+    let instance = Instance::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.variables["x1"].annotations[0].node,
+        TypedAnnotation::SomeAnnotation(AnnotationArgs {
+            ident: "some_ident".into(),
+            ann: OtherAnnotation::ElementOne,
+        }),
     );
 }
