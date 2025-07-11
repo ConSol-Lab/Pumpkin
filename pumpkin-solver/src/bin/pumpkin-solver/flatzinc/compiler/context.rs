@@ -29,10 +29,6 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) true_literal: Literal,
     /// Literal which is always false
     pub(crate) false_literal: Literal,
-    /// All boolean parameters.
-    pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
-    /// All boolean array parameters.
-    pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
     /// A mapping from boolean model variables to solver literals.
     pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
     /// A mapping from boolean variable array identifiers to slices of literals.
@@ -43,10 +39,6 @@ pub(crate) struct CompilationContext<'a> {
     // pub(crate) constant_bool_true: BooleanDomainId,
     // A literal which is always false, can be used when using bool constants in the solver
     // pub(crate) constant_bool_false: BooleanDomainId,
-    /// All integer parameters.
-    pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
-    /// All integer array parameters.
-    pub(crate) integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
     /// A mapping from integer model variables to solver literals.
     pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the

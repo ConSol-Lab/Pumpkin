@@ -253,11 +253,16 @@ fn satisfy(
 
 fn parse_and_compile(
     solver: &mut Solver,
-    instance: impl Read,
+    mut instance: impl Read,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
-    let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver, options)
+    let mut source = String::new();
+    instance.read_to_string(&mut source)?;
+
+    let ast = fzn_rs::fzn::parse(&source).expect("should handle errors here");
+    let typed_ast = ast::Instance::from_ast(ast).expect("should handle error here");
+
+    compiler::compile(typed_ast, solver, options)
 }
 
 /// Prints the current solution.

@@ -8,143 +8,70 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::ast::VarArrayDecl;
+use fzn_rs::ast::Ast;
+
 use crate::flatzinc::error::FlatZincError;
 
-pub(crate) fn run(
-    ast: &mut FlatZincAst,
-    context: &mut CompilationContext,
-) -> Result<(), FlatZincError> {
+pub(crate) fn run(ast: &mut Ast) -> Result<(), FlatZincError> {
     let mut marked_identifiers = BTreeSet::new();
 
-    mark_identifiers_in_constraints(ast, context, &mut marked_identifiers);
-    mark_identifiers_in_arrays(ast, context, &mut marked_identifiers);
+    mark_identifiers_in_constraints(ast, &mut marked_identifiers);
+    mark_identifiers_in_arrays(ast, &mut marked_identifiers);
 
     // Make sure the objective, which can be unconstrained, is always marked.
-    match &ast.solve_item.goal {
-        flatzinc::Goal::OptimizeBool(_, flatzinc::BoolExpr::VarParIdentifier(id))
-        | flatzinc::Goal::OptimizeInt(_, flatzinc::IntExpr::VarParIdentifier(id))
-        | flatzinc::Goal::OptimizeFloat(_, flatzinc::FloatExpr::VarParIdentifier(id))
-        | flatzinc::Goal::OptimizeSet(_, flatzinc::SetExpr::VarParIdentifier(id)) => {
-            let _ = marked_identifiers.insert(context.identifiers.get_interned(id));
+    match &ast.solve.method.node {
+        fzn_rs::ast::Method::Satisfy => {}
+        fzn_rs::ast::Method::Optimize { objective, .. } => {
+            let _ = marked_identifiers.insert(Rc::clone(objective));
         }
-        _ => {}
     }
 
-    ast.single_variables.retain(|decl| match decl {
-        crate::flatzinc::ast::SingleVarDecl::Bool { id, annos, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInRange { id, annos, .. }
-        | crate::flatzinc::ast::SingleVarDecl::IntInSet { id, annos, .. } => {
-            // If the variable is an output variable, then always keep it.
-            if annos.iter().any(|annotation| annotation.id == "output_var") {
-                return true;
-            }
-
-            marked_identifiers.contains(id.as_str())
-        }
+    ast.variables.retain(|name, variable| {
+        marked_identifiers.contains(name)
+            || variable
+                .node
+                .annotations
+                .iter()
+                .any(|node| node.node.name() == "output_var")
     });
 
     Ok(())
 }
 
-macro_rules! mark_literal_exprs {
-    ($exprs:ident, $expr_type:ident, $identifiers:ident, $context:ident) => {{
-        for expr in $exprs {
-            if let flatzinc::$expr_type::VarParIdentifier(id) = expr {
-                let _ = $identifiers.insert($context.identifiers.get_interned(id));
-            }
-        }
-    }};
+/// Go over all arrays and mark the identifiers that are elements of the array.
+fn mark_identifiers_in_arrays(ast: &Ast, marked_identifiers: &mut BTreeSet<Rc<str>>) {
+    ast.arrays
+        .values()
+        .flat_map(|array| array.node.contents.iter())
+        .for_each(|node| {
+            mark_literal(&node.node, marked_identifiers);
+        });
 }
 
-/// Go over all arrays and mark the identifiers that are elements of the array.
-fn mark_identifiers_in_arrays(
-    ast: &mut FlatZincAst,
-    context: &mut CompilationContext,
-    marked_identifiers: &mut BTreeSet<Rc<str>>,
-) {
-    for array in &ast.variable_arrays {
-        match array {
-            VarArrayDecl::Bool {
-                array_expr: Some(expr),
-                ..
-            } => match expr {
-                flatzinc::ArrayOfBoolExpr::Array(exprs) => {
-                    mark_literal_exprs!(exprs, BoolExpr, marked_identifiers, context)
-                }
-                flatzinc::ArrayOfBoolExpr::VarParIdentifier(_) => {
-                    // This is the following case:
-                    //
-                    // array [1..4] of var int: as = [...];
-                    // array [1..4] of var int: bs = as;
-                    //
-                    // I don't think this can happen, so for now we panic. If it does happen we
-                    // need to implement it otherwise we may be removing variables that we need
-                    // later on.
-                    panic!("Cannot handle array declarations that are assigned to other arrays.")
-                }
-            },
-            VarArrayDecl::Int {
-                array_expr: Some(expr),
-                ..
-            } => match expr {
-                flatzinc::ArrayOfIntExpr::Array(exprs) => {
-                    mark_literal_exprs!(exprs, IntExpr, marked_identifiers, context)
-                }
-                flatzinc::ArrayOfIntExpr::VarParIdentifier(_) => {
-                    // This is the following case:
-                    //
-                    // array [1..4] of var int: as = [...];
-                    // array [1..4] of var int: bs = as;
-                    //
-                    // I don't think this can happen, so for now we panic. If it does happen we
-                    // need to implement it otherwise we may be removing variables that we need
-                    // later on.
-                    panic!("Cannot handle array declarations that are assigned to other arrays.")
-                }
-            },
-            _ => {}
+/// Go over all constraints and add any identifier in the arguments to the `marked_identifiers` set.
+fn mark_identifiers_in_constraints(ast: &Ast, marked_identifiers: &mut BTreeSet<Rc<str>>) {
+    for argument_node in ast
+        .constraints
+        .iter()
+        .flat_map(|constraint| &constraint.node.arguments)
+    {
+        match &argument_node.node {
+            fzn_rs::ast::Argument::Array(nodes) => nodes.iter().for_each(|node| {
+                mark_literal(&node.node, marked_identifiers);
+            }),
+
+            fzn_rs::ast::Argument::Literal(node) => {
+                mark_literal(&node.node, marked_identifiers);
+            }
         }
     }
 }
 
-/// Go over all constraints and add any identifier in the arguments to the `marked_identifiers` set.
-fn mark_identifiers_in_constraints(
-    ast: &mut FlatZincAst,
-    context: &mut CompilationContext,
-    marked_identifiers: &mut BTreeSet<Rc<str>>,
-) {
-    for expr in ast
-        .constraint_decls
-        .iter()
-        .flat_map(|constraint| &constraint.exprs)
-    {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => {
-                let _ = marked_identifiers.insert(context.identifiers.get_interned(id));
-            }
-
-            flatzinc::Expr::ArrayOfBool(exprs) => {
-                mark_literal_exprs!(exprs, BoolExpr, marked_identifiers, context)
-            }
-
-            flatzinc::Expr::ArrayOfInt(exprs) => {
-                mark_literal_exprs!(exprs, IntExpr, marked_identifiers, context)
-            }
-            flatzinc::Expr::ArrayOfFloat(exprs) => {
-                mark_literal_exprs!(exprs, FloatExpr, marked_identifiers, context)
-            }
-
-            flatzinc::Expr::ArrayOfSet(exprs) => {
-                mark_literal_exprs!(exprs, SetExpr, marked_identifiers, context)
-            }
-
-            flatzinc::Expr::Bool(_)
-            | flatzinc::Expr::Int(_)
-            | flatzinc::Expr::Float(_)
-            | flatzinc::Expr::Set(_) => {}
+fn mark_literal(literal: &fzn_rs::ast::Literal, marked_identifiers: &mut BTreeSet<Rc<str>>) {
+    match literal {
+        fzn_rs::ast::Literal::Identifier(ident) => {
+            let _ = marked_identifiers.insert(Rc::clone(ident));
         }
+        _ => {}
     }
 }
