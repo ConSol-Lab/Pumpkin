@@ -153,6 +153,15 @@ impl<E: PartialOrd> RangeList<E> {
     }
 }
 
+impl RangeList<i64> {
+    /// Obtain an iterator over the values in this set.
+    ///
+    /// Currently only implemented for `i64` elements, as that is what is used in the AST.
+    pub fn iter(&self) -> impl Iterator<Item = i64> + '_ {
+        self.intervals.iter().flat_map(|&(start, end)| start..=end)
+    }
+}
+
 impl<E: Copy + Ord> From<RangeInclusive<E>> for RangeList<E> {
     fn from(value: RangeInclusive<E>) -> Self {
         RangeList {
