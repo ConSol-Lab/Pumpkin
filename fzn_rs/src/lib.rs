@@ -34,6 +34,25 @@
 //!     /// identifier explicitly.
 //!     #[name("int_lin_eq")]
 //!     LinearEquality(Vec<i64>, Vec<VariableArgument<i64>>, i64),
+//!
+//!     /// Constraint arguments can also be named, but the order determines how they are parsed
+//!     /// from the AST.
+//!     Element {
+//!         index: VariableArgument<i64>,
+//!         array: Vec<VariableArgument<i64>>,
+//!         rhs: VariableArgument<i64>,
+//!     },
+//!
+//!     /// Arguments can also be separate structs, if the enum variant has exactly one argument.
+//!     #[args]
+//!     IntTimes(Multiplication),
+//! }
+//!
+//! #[derive(FlatZincConstraint)]
+//! pub struct Multiplication {
+//!     a: VariableArgument<i64>,
+//!     b: VariableArgument<i64>,
+//!     c: VariableArgument<i64>,
 //! }
 //! ```
 //! The macro automatically implements [`from_ast::FlatZincConstraint`] and will handle the parsing
