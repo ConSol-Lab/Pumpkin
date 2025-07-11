@@ -104,29 +104,32 @@ pub use error::*;
 pub use from_ast::*;
 
 #[derive(Clone, Debug)]
-pub struct Instance<InstanceConstraint, Annotation = ()> {
+pub struct TypedInstance<TConstraint, VAnnotations = (), CAnnotations = (), SAnnotations = ()> {
     /// The variables that are in the instance.
     ///
     /// The key is the identifier of the variable, and the value is the domain of the variable.
-    pub variables: BTreeMap<Rc<str>, ast::Variable<Annotation>>,
+    pub variables: BTreeMap<Rc<str>, ast::Variable<VAnnotations>>,
 
     /// The constraints in the instance.
-    pub constraints: Vec<Constraint<InstanceConstraint, Annotation>>,
+    pub constraints: Vec<Constraint<TConstraint, CAnnotations>>,
 
     /// The solve item indicating the type of model.
-    pub solve: ast::SolveObjective<Annotation>,
+    pub solve: ast::SolveObjective<SAnnotations>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Constraint<InstanceConstraint, Annotation> {
-    pub constraint: ast::Node<InstanceConstraint>,
+pub struct Constraint<TConstraint, Annotation> {
+    pub constraint: ast::Node<TConstraint>,
     pub annotations: Vec<ast::Node<Annotation>>,
 }
 
-impl<InstanceConstraint, Annotation> Instance<InstanceConstraint, Annotation>
+impl<TConstraint, VAnnotations, CAnnotations, SAnnotations>
+    TypedInstance<TConstraint, VAnnotations, CAnnotations, SAnnotations>
 where
-    InstanceConstraint: FlatZincConstraint,
-    Annotation: FlatZincAnnotation,
+    TConstraint: FlatZincConstraint,
+    VAnnotations: FlatZincAnnotation,
+    CAnnotations: FlatZincAnnotation,
+    SAnnotations: FlatZincAnnotation,
 {
     pub fn from_ast(ast: ast::Ast) -> Result<Self, InstanceError> {
         let variables = ast
@@ -149,8 +152,7 @@ where
             .map(|constraint| {
                 let annotations = map_annotations(&constraint.node.annotations)?;
 
-                let instance_constraint =
-                    InstanceConstraint::from_ast(&constraint.node, &ast.arrays)?;
+                let instance_constraint = TConstraint::from_ast(&constraint.node, &ast.arrays)?;
 
                 Ok(Constraint {
                     constraint: ast::Node {
@@ -167,7 +169,7 @@ where
             annotations: map_annotations(&ast.solve.annotations)?,
         };
 
-        Ok(Instance {
+        Ok(TypedInstance {
             variables,
             constraints,
             solve,
