@@ -13,7 +13,7 @@ use fzn_rs::ast::Argument;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
 use fzn_rs::ast::RangeList;
-use fzn_rs::Instance;
+use fzn_rs::TypedInstance;
 use fzn_rs::VariableArgument;
 use fzn_rs_derive::FlatZincAnnotation;
 use fzn_rs_derive::FlatZincConstraint;
@@ -22,7 +22,7 @@ use utils::*;
 #[test]
 fn annotation_without_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -30,6 +30,8 @@ fn annotation_without_arguments() {
     enum TypedAnnotation {
         OutputVar,
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -44,8 +46,7 @@ fn annotation_without_arguments() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,
@@ -56,7 +57,7 @@ fn annotation_without_arguments() {
 #[test]
 fn annotation_with_positional_literal_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -65,6 +66,8 @@ fn annotation_with_positional_literal_arguments() {
         DefinesVar(Rc<str>),
         OutputArray(RangeList<i64>),
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -93,8 +96,7 @@ fn annotation_with_positional_literal_arguments() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,
@@ -110,7 +112,7 @@ fn annotation_with_positional_literal_arguments() {
 #[test]
 fn annotation_with_named_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -118,6 +120,8 @@ fn annotation_with_named_arguments() {
     enum TypedAnnotation {
         DefinesVar { variable_id: Rc<str> },
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -138,8 +142,7 @@ fn annotation_with_named_arguments() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,
@@ -152,7 +155,7 @@ fn annotation_with_named_arguments() {
 #[test]
 fn nested_annotation_as_argument() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -166,6 +169,8 @@ fn nested_annotation_as_argument() {
         ArgOne,
         ArgTwo(Rc<str>),
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -199,8 +204,7 @@ fn nested_annotation_as_argument() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,
@@ -216,7 +220,7 @@ fn nested_annotation_as_argument() {
 #[test]
 fn arrays_as_annotation_arguments_with_literal_elements() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -224,6 +228,8 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
     enum TypedAnnotation {
         SomeAnnotation(Vec<i64>),
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -245,8 +251,7 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,
@@ -257,7 +262,7 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
 #[test]
 fn arrays_as_annotation_arguments_with_annotation_elements() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         SomeConstraint(VariableArgument<i64>),
     }
 
@@ -271,6 +276,8 @@ fn arrays_as_annotation_arguments_with_annotation_elements() {
         ElementOne,
         ElementTwo(i64),
     }
+
+    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -299,8 +306,7 @@ fn arrays_as_annotation_arguments_with_annotation_elements() {
         solve: satisfy_solve(),
     };
 
-    let instance =
-        Instance::<InstanceConstraint, TypedAnnotation>::from_ast(ast).expect("valid instance");
+    let instance = Instance::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].annotations[0].node,

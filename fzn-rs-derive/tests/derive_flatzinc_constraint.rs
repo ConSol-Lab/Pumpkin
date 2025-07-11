@@ -8,7 +8,7 @@ use fzn_rs::ast::Argument;
 use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
-use fzn_rs::Instance;
+use fzn_rs::TypedInstance;
 use fzn_rs::VariableArgument;
 use fzn_rs_derive::FlatZincConstraint;
 use utils::*;
@@ -16,7 +16,7 @@ use utils::*;
 #[test]
 fn variant_with_unnamed_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
     }
 
@@ -43,11 +43,11 @@ fn variant_with_unnamed_fields() {
         solve: satisfy_solve(),
     };
 
-    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].constraint.node,
-        InstanceConstraint::IntLinLe(
+        TypedConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
                 VariableArgument::Identifier("x1".into()),
@@ -62,7 +62,7 @@ fn variant_with_unnamed_fields() {
 #[test]
 fn variant_with_named_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         IntLinLe {
             weights: Vec<i64>,
             variables: Vec<VariableArgument<i64>>,
@@ -93,11 +93,11 @@ fn variant_with_named_fields() {
         solve: satisfy_solve(),
     };
 
-    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].constraint.node,
-        InstanceConstraint::IntLinLe {
+        TypedConstraint::IntLinLe {
             weights: vec![2, 3, 5],
             variables: vec![
                 VariableArgument::Identifier("x1".into()),
@@ -112,7 +112,7 @@ fn variant_with_named_fields() {
 #[test]
 fn variant_with_name_attribute() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         #[name("int_lin_le")]
         LinearInequality {
             weights: Vec<i64>,
@@ -144,11 +144,11 @@ fn variant_with_name_attribute() {
         solve: satisfy_solve(),
     };
 
-    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].constraint.node,
-        InstanceConstraint::LinearInequality {
+        TypedConstraint::LinearInequality {
             weights: vec![2, 3, 5],
             variables: vec![
                 VariableArgument::Identifier("x1".into()),
@@ -163,7 +163,7 @@ fn variant_with_name_attribute() {
 #[test]
 fn constraint_referencing_arrays() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
     }
 
@@ -211,11 +211,11 @@ fn constraint_referencing_arrays() {
         solve: satisfy_solve(),
     };
 
-    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].constraint.node,
-        InstanceConstraint::IntLinLe(
+        TypedConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
                 VariableArgument::Identifier("x1".into()),
@@ -230,7 +230,7 @@ fn constraint_referencing_arrays() {
 #[test]
 fn constraint_as_struct_args() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
-    enum InstanceConstraint {
+    enum TypedConstraint {
         #[args]
         IntLinLe(LinearLeq),
     }
@@ -286,11 +286,11 @@ fn constraint_as_struct_args() {
         solve: satisfy_solve(),
     };
 
-    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
 
     assert_eq!(
         instance.constraints[0].constraint.node,
-        InstanceConstraint::IntLinLe(LinearLeq {
+        TypedConstraint::IntLinLe(LinearLeq {
             weights: vec![2, 3, 5],
             variables: vec![
                 VariableArgument::Identifier("x1".into()),
