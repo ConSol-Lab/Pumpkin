@@ -351,20 +351,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
-name = "fzn_rs"
+name = "fzn-rs"
 version = "0.1.0"
 dependencies = [
  "chumsky",
- "fzn_rs_derive",
+ "fzn-rs-derive",
  "thiserror",
 ]
 
 [[package]]
-name = "fzn_rs_derive"
+name = "fzn-rs-derive"
 version = "0.1.0"
 dependencies = [
  "convert_case 0.8.0",
- "fzn_rs",
+ "fzn-rs",
  "proc-macro2",
  "quote",
  "syn",
