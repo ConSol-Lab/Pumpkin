@@ -1,5 +1,8 @@
+use fzn_rs::ast::RangeList;
+use fzn_rs::FromAnnotationArgument;
 use fzn_rs::VariableArgument;
 use log::warn;
+use pumpkin_core::proof::ConstraintTag;
 use pumpkin_solver::branching::value_selection::DynamicValueSelector;
 use pumpkin_solver::branching::value_selection::InDomainInterval;
 use pumpkin_solver::branching::value_selection::InDomainMax;
@@ -186,6 +189,40 @@ pub(crate) struct SearchStrategy {
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) enum Constraints {
     IntEq(VariableArgument<i64>, VariableArgument<i64>),
+    SetIn(VariableArgument<i64>, RangeList<i64>),
 }
 
-pub(crate) type Instance = fzn_rs::TypedInstance<Constraints, (), (), Search>;
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum VariableAnnotations {
+    OutputVar,
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum ConstraintAnnotations {
+    ConstraintTag(TagAnnotation),
+}
+
+pub(crate) struct TagAnnotation(ConstraintTag);
+
+impl From<ConstraintTag> for TagAnnotation {
+    fn from(value: ConstraintTag) -> Self {
+        TagAnnotation(value)
+    }
+}
+
+impl From<TagAnnotation> for ConstraintTag {
+    fn from(value: TagAnnotation) -> Self {
+        value.0
+    }
+}
+
+impl FromAnnotationArgument for TagAnnotation {
+    fn from_argument(
+        _: &fzn_rs::ast::Node<fzn_rs::ast::AnnotationArgument>,
+    ) -> Result<Self, fzn_rs::InstanceError> {
+        unreachable!("This never gets parsed from source")
+    }
+}
+
+pub(crate) type Instance =
+    fzn_rs::TypedInstance<Constraints, VariableAnnotations, ConstraintAnnotations, Search>;
