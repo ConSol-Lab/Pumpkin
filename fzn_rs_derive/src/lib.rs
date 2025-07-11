@@ -3,6 +3,7 @@ use convert_case::Casing;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
+use syn::DataEnum;
 use syn::DeriveInput;
 use syn::LitStr;
 
@@ -23,20 +24,8 @@ fn get_explicit_name(variant: &syn::Variant) -> syn::Result<String> {
         .unwrap_or_else(|| Ok(variant.ident.to_string().to_case(Case::Snake)))
 }
 
-fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenStream {
-    // Determine the flatzinc name of the constraint.
-    let name = match get_explicit_name(variant) {
-        Ok(name) => name,
-        Err(_) => {
-            return quote! {
-                compile_error!("Invalid usage of #[name(...)]");
-            }
-        }
-    };
-
-    let variant_ident = &variant.ident;
-
-    let constraint_value = match &variant.fields {
+fn initialise_value(identifier: &syn::Ident, fields: &syn::Fields) -> proc_macro2::TokenStream {
+    match fields {
         // In case of named fields, the order of the fields is the order of the flatzinc arguments.
         syn::Fields::Named(fields) => {
             let arguments = fields.named.iter().enumerate().map(|(idx, field)| {
@@ -50,15 +39,11 @@ fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenS
                     #field_name: <#ty as ::fzn_rs::FromArgument>::from_argument(
                         &constraint.arguments[#idx],
                         arrays,
-                    )?
+                    )?,
                 }
             });
 
-            quote! {
-                #variant_ident {
-                    #(#arguments),*
-                }
-            }
+            quote! { #identifier { #(#arguments)* } }
         }
 
         syn::Fields::Unnamed(fields) => {
@@ -69,25 +54,15 @@ fn variant_to_constraint_argument(variant: &syn::Variant) -> proc_macro2::TokenS
                     <#ty as ::fzn_rs::FromArgument>::from_argument(
                         &constraint.arguments[#idx],
                         arrays,
-                    )?
+                    )?,
                 }
             });
 
-            quote! {
-                #variant_ident(
-                    #(#arguments),*
-                )
-            }
+            quote! { #identifier ( #(#arguments)* ) }
         }
 
         syn::Fields::Unit => quote! {
             compile_error!("A FlatZinc constraint must have at least one field")
-        },
-    };
-
-    quote! {
-        #name => {
-            Ok(#constraint_value)
         },
     }
 }
@@ -188,37 +163,109 @@ fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::TokenStream {
     }
 }
 
-#[proc_macro_derive(FlatZincConstraint, attributes(name))]
+/// Returns the type of the arguments for the constraint if the variant has exactly the following
+/// shape:
+///
+/// ```ignore
+/// #[args]
+/// Variant(Type)
+/// ```
+fn get_constraint_args_type(variant: &syn::Variant) -> Option<&syn::Type> {
+    let has_args_attr = variant
+        .attrs
+        .iter()
+        .any(|attr| attr.path().get_ident().is_some_and(|ident| ident == "args"));
+
+    if !has_args_attr {
+        return None;
+    }
+
+    if variant.fields.len() != 1 {
+        // If there is not exactly one argument for this variant, then it cannot be a struct
+        // constraint.
+        return None;
+    }
+
+    let field = variant
+        .fields
+        .iter()
+        .next()
+        .expect("there is exactly one field");
+
+    if field.ident.is_none() {
+        Some(&field.ty)
+    } else {
+        None
+    }
+}
+
+/// Generate an implementation of `FlatZincConstraint` for enums.
+fn flatzinc_constraint_for_enum(
+    constraint_enum_name: &syn::Ident,
+    data_enum: &DataEnum,
+) -> proc_macro2::TokenStream {
+    let constraints = data_enum.variants.iter().map(|variant| {
+        // Determine the flatzinc name of the constraint.
+        let name = match get_explicit_name(variant) {
+            Ok(name) => name,
+            Err(_) => {
+                return quote! {
+                    compile_error!("Invalid usage of #[name(...)]");
+                }
+            }
+        };
+
+        let variant_name = &variant.ident;
+        let value = match get_constraint_args_type(variant) {
+            Some(constraint_type) => quote! {
+                #variant_name (<#constraint_type as ::fzn_rs::FlatZincConstraint>::from_ast(constraint, arrays)?)
+            },
+            None => initialise_value(variant_name, &variant.fields),
+        };
+
+        quote! {
+            #name => {
+                Ok(#value)
+            },
+        }
+    });
+
+    quote! {
+        use #constraint_enum_name::*;
+
+        match constraint.name.node.as_ref() {
+            #(#constraints)*
+            unknown => Err(::fzn_rs::InstanceError::UnsupportedConstraint(
+                String::from(unknown)
+            )),
+        }
+    }
+}
+
+#[proc_macro_derive(FlatZincConstraint, attributes(name, args))]
 pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(item as DeriveInput);
-    let constraint_enum_name = derive_input.ident;
 
-    let syn::Data::Enum(data_enum) = derive_input.data else {
-        return quote! {
-            compile_error!("derive(FlatZincConstraint) only works on enums")
+    let type_name = derive_input.ident;
+    let implementation = match &derive_input.data {
+        syn::Data::Struct(data_struct) => {
+            let struct_initialiser = initialise_value(&type_name, &data_struct.fields);
+            quote! { Ok(#struct_initialiser) }
         }
-        .into();
+        syn::Data::Enum(data_enum) => flatzinc_constraint_for_enum(&type_name, data_enum),
+        syn::Data::Union(_) => quote! {
+            compile_error!("Cannot implement FlatZincConstraint on unions.")
+        },
     };
 
-    let constraints = data_enum
-        .variants
-        .iter()
-        .map(variant_to_constraint_argument);
-
     let token_stream = quote! {
-        impl ::fzn_rs::FlatZincConstraint for #constraint_enum_name {
+        #[automatically_derived]
+        impl ::fzn_rs::FlatZincConstraint for #type_name {
             fn from_ast(
                 constraint: &::fzn_rs::ast::Constraint,
                 arrays: &std::collections::BTreeMap<std::rc::Rc<str>, ::fzn_rs::ast::Node<::fzn_rs::ast::Array>>,
             ) -> Result<Self, ::fzn_rs::InstanceError> {
-                use #constraint_enum_name::*;
-
-                match constraint.name.node.as_ref() {
-                    #(#constraints)*
-                    unknown => Err(::fzn_rs::InstanceError::UnsupportedConstraint(
-                        String::from(unknown)
-                    )),
-                }
+                #implementation
             }
         }
     };
@@ -241,6 +288,7 @@ pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
     let annotations = data_enum.variants.iter().map(variant_to_annotation);
 
     let token_stream = quote! {
+        #[automatically_derived]
         impl ::fzn_rs::FlatZincAnnotation for #annotatation_enum_name {
             fn from_ast(
                 annotation: &::fzn_rs::ast::Annotation

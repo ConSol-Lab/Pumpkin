@@ -226,3 +226,78 @@ fn constraint_referencing_arrays() {
         )
     )
 }
+
+#[test]
+fn constraint_as_struct_args() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum InstanceConstraint {
+        #[args]
+        IntLinLe(LinearLeq),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    struct LinearLeq {
+        weights: Vec<i64>,
+        variables: Vec<VariableArgument<i64>>,
+        bound: i64,
+    }
+
+    let ast = Ast {
+        variables: unbounded_variables(["x1", "x2", "x3"]),
+        arrays: [
+            (
+                "array1".into(),
+                test_node(Array {
+                    contents: vec![
+                        test_node(Literal::Int(2)),
+                        test_node(Literal::Int(3)),
+                        test_node(Literal::Int(5)),
+                    ],
+                    annotations: vec![],
+                }),
+            ),
+            (
+                "array2".into(),
+                test_node(Array {
+                    contents: vec![
+                        test_node(Literal::Identifier("x1".into())),
+                        test_node(Literal::Identifier("x2".into())),
+                        test_node(Literal::Identifier("x3".into())),
+                    ],
+                    annotations: vec![],
+                }),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        constraints: vec![test_node(fzn_rs::ast::Constraint {
+            name: test_node("int_lin_le".into()),
+            arguments: vec![
+                test_node(Argument::Literal(test_node(Literal::Identifier(
+                    "array1".into(),
+                )))),
+                test_node(Argument::Literal(test_node(Literal::Identifier(
+                    "array2".into(),
+                )))),
+                test_node(Argument::Literal(test_node(Literal::Int(3)))),
+            ],
+            annotations: vec![],
+        })],
+        solve: satisfy_solve(),
+    };
+
+    let instance = Instance::<InstanceConstraint>::from_ast(ast).expect("valid instance");
+
+    assert_eq!(
+        instance.constraints[0].constraint.node,
+        InstanceConstraint::IntLinLe(LinearLeq {
+            weights: vec![2, 3, 5],
+            variables: vec![
+                VariableArgument::Identifier("x1".into()),
+                VariableArgument::Identifier("x2".into()),
+                VariableArgument::Identifier("x3".into())
+            ],
+            bound: 3,
+        })
+    )
+}
