@@ -3,6 +3,7 @@ use std::cell::RefMut;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use fzn_rs::ast::RangeList;
 use log::warn;
 use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::containers::HashSet;
@@ -31,8 +32,6 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) false_literal: Literal,
     /// A mapping from boolean model variables to solver literals.
     pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
-    /// A mapping from boolean variable array identifiers to slices of literals.
-    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub(crate) literal_equivalences: VariableEquivalences,
     // A literal which is always true, can be used when using bool constants in the solver
@@ -46,14 +45,6 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
-    /// A mapping from integer variable array identifiers to slices of domain ids.
-    pub(crate) integer_variable_arrays: HashMap<Rc<str>, Rc<[DomainId]>>,
-
-    /// All set parameters.
-    pub(crate) set_constants: HashMap<Rc<str>, Set>,
-
-    /// All the constraints with their constraint tags.
-    pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
 }
 
 /// A set parameter.
@@ -573,6 +564,22 @@ impl From<Set> for Domain {
             Set::Sparse { values } => Domain::SparseDomain {
                 values: values.to_vec(),
             },
+        }
+    }
+}
+
+impl TryFrom<&'_ RangeList<i64>> for Domain {
+    type Error = FlatZincError;
+
+    fn try_from(value: &'_ RangeList<i64>) -> Result<Self, Self::Error> {
+        if value.is_continuous() {
+            Ok(Domain::IntervalDomain {
+                lb: i32::try_from(*value.lower_bound())?,
+                ub: i32::try_from(*value.upper_bound())?,
+            })
+        } else {
+            let values = value.iter().map(i32::try_from).collect::<Result<_, _>>()?;
+            Ok(Domain::SparseDomain { values })
         }
     }
 }
