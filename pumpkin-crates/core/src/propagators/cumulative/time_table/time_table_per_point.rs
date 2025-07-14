@@ -8,8 +8,10 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::TimeTable;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
+use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -108,6 +110,13 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        if self.parameters.is_infeasible {
+            return Err(Inconsistency::Conflict(PropagatorConflict {
+                conjunction: conjunction!(),
+                inference_code: self.inference_code.unwrap(),
+            }));
+        }
+
         let time_table = create_time_table_per_point_from_scratch(
             context.as_readonly(),
             self.inference_code.unwrap(),

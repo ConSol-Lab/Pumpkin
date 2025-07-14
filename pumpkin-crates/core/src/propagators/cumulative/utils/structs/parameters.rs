@@ -19,6 +19,10 @@ pub(crate) struct CumulativeParameters<Var> {
     pub(crate) capacity: i32,
     /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
     pub(crate) options: CumulativePropagatorOptions,
+    /// Indicates that the constraint is infeasible.
+    ///
+    /// This can occur when there is a task with a resource usage higher than the capacity.
+    pub(crate) is_infeasible: bool,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
@@ -27,9 +31,13 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
         capacity: i32,
         options: CumulativePropagatorOptions,
     ) -> CumulativeParameters<Var> {
+        let mut is_infeasible = false;
         let tasks = tasks
             .into_iter()
-            .map(Rc::new)
+            .map(|task| {
+                is_infeasible |= task.resource_usage > capacity;
+                Rc::new(task)
+            })
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
@@ -37,6 +45,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
             tasks: tasks.clone(),
             capacity,
             options,
+            is_infeasible,
         }
     }
 }

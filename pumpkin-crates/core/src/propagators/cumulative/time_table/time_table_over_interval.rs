@@ -3,8 +3,10 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::TimeTable;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
+use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -116,6 +118,13 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        if self.parameters.is_infeasible {
+            return Err(Inconsistency::Conflict(PropagatorConflict {
+                conjunction: conjunction!(),
+                inference_code: self.inference_code.unwrap(),
+            }));
+        }
+
         let time_table = create_time_table_over_interval_from_scratch(
             context.as_readonly(),
             &self.parameters,

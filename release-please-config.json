@@ -3,6 +3,9 @@
     "pumpkin-solver": {
       "release-type": "rust"
     },
+    "pumpkin-crates/core": {
+      "release-type": "rust"
+    },
     "drcp-format": {
       "release-type": "rust"
     }

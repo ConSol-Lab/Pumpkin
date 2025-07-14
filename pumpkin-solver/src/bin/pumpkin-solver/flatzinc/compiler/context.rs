@@ -523,6 +523,7 @@ impl VariableEquivalences {
         let _ = self.classes.insert(representative, equivalence_class);
     }
 
+    /// Create a new equivalence class with the given representative.
     pub(crate) fn create_equivalence_class_sparse(
         &mut self,
         representative: Rc<str>,

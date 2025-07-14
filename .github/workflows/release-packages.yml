@@ -49,7 +49,7 @@ jobs:
         tool: cargo-hack
 
     - name: Publish to crates.io
-      if: ${{ contains(needs.parse-release.outputs.package, 'pumpkin-solver') || contains(needs.parse-release.outputs.package, 'drcp-format') }}
+      if: ${{ contains(needs.parse-release.outputs.package, 'pumpkin-core') || contains(needs.parse-release.outputs.package, 'pumpkin-solver') || contains(needs.parse-release.outputs.package, 'drcp-format') }}
       run: cargo hack publish --no-dev-deps --allow-dirty --package ${{ needs.parse-release.outputs.package }} --token ${CRATES_TOKEN}
       env:
         CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}

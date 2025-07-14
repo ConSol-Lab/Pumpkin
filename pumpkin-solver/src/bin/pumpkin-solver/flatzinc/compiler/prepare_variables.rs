@@ -82,12 +82,9 @@ pub(crate) fn run(
                     .create_equivalence_class_sparse(
                         id,
                         set.iter()
-                            .map(|&element| {
-                                i32::try_from(element)
-                                    .expect("Expected value to be able to fit into i32")
-                            })
-                            .collect(),
-                    );
+                            .map(|&value| i32::try_from(value))
+                            .collect::<Result<Vec<i32>, _>>()?,
+                    )
             }
         }
     }
