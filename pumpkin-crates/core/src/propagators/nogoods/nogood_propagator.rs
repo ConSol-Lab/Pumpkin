@@ -32,10 +32,12 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
+use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -525,7 +527,62 @@ impl NogoodPropagator {
             // Get the reason for the propagation. Note that preprocessing removes literals from
             // `nogood` that are still present in `input_nogood`, so this does not necessarily
             // result in an empty reason.
-            input_nogood.retain(|&p| p != nogood[0]);
+            input_nogood = input_nogood
+                .iter()
+                .filter_map(|&p| {
+                    // There is a special case we need to consider;
+                    //
+                    // Imagine we have the following input_nogood: [x = 1] /\ [y != 3] -> false
+                    // Now we preprocess this to the nogood: [x <= 1] -> false (since [x >= 1] is
+                    // a root-level bound)
+                    //
+                    // The reason for [x >= 2] should then be [x >= 1] /\ [y != 3] -> false
+                    //
+                    // Thus we check the following criteria before removal:
+                    // 1. The current predicate and the propagating predicate are not the same
+                    // 2. The current predicate is an equality predicate
+                    // 3. The propagating predicate is either a lower-bound or and upper-bound
+                    //    predicate
+                    // 4. The right-hand side of the current predicate and the propagating predicate
+                    //    are the same
+                    // If all of these conditions hold then we need to replace the current
+                    // predicate with:
+                    // - If the propagating predicate is a lower-bound predicate then it is
+                    // replaced with an upper-bound predicate
+                    // - If the propagating predicate is an upper-bound predicate then it is
+                    // replaced with a lower-bound predicate
+                    if p != nogood[0]
+                        && p.is_equality_predicate()
+                        && p.get_domain() == nogood[0].get_domain()
+                        && (nogood[0].is_lower_bound_predicate()
+                            || nogood[0].is_upper_bound_predicate())
+                        && p.get_right_hand_side() == nogood[0].get_right_hand_side()
+                    {
+                        let domain = p.get_domain();
+                        let rhs = p.get_right_hand_side();
+                        if nogood[0].is_lower_bound_predicate() {
+                            Some(predicate!(domain <= rhs))
+                        } else if nogood[0].is_upper_bound_predicate() {
+                            Some(predicate!(domain >= rhs))
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        // Otherwise, we just check whether they are not the same, if they are not
+                        // then keep the predicte
+                        (p != nogood[0]).then_some(p)
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            pumpkin_assert_extreme!(
+                nogood[0] == Predicate::trivially_false()
+                    || input_nogood
+                        .iter()
+                        .all(|predicate| context.assignments.is_predicate_satisfied(*predicate)),
+                "Expected every element in {input_nogood:?} to be satisfied when propagating {:?} with preprocessed nogood {nogood:?}",
+                !nogood[0]
+            );
 
             // Post the negated predicate at the root to respect the nogood.
             context.post(
