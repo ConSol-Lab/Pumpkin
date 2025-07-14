@@ -39,8 +39,6 @@ pub(crate) struct PredicateIdAssignments {
 /// The current value of a [`Predicate`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PredicateValue {
-    /// The [`Predicate`] is currently unassigned.
-    Unassigned,
     /// The [`Predicate`] is currently true.
     AssignedTrue,
     /// The [`Predicate`] is currently false.
@@ -62,10 +60,6 @@ impl PredicateValue {
 
     fn is_unknown(&self) -> bool {
         matches!(self, PredicateValue::Unknown)
-    }
-
-    fn is_unassigned(&self) -> bool {
-        matches!(self, PredicateValue::Unassigned)
     }
 }
 
@@ -102,7 +96,6 @@ impl PredicateIdAssignments {
         }
         pumpkin_assert_extreme!(
             self.predicate_values[predicate_id] == PredicateValue::Unknown
-                || self.predicate_values[predicate_id] == PredicateValue::Unassigned
                 || self.predicate_values[predicate_id] == value,
             "Expected {:?} to be either unknown/untracked or for it to equal {value:?} for {predicate_id:?}",
             self.predicate_values[predicate_id]
@@ -139,7 +132,7 @@ impl PredicateIdAssignments {
                         PredicateValue::AssignedFalse
                     }
                 }
-                None => PredicateValue::Unassigned,
+                None => PredicateValue::Unknown,
             };
             // Then we store it in the cache
             self.store_predicate(predicate_id, value);
@@ -188,9 +181,7 @@ impl PredicateIdAssignments {
                 // If the predicate id is unassigned then backtracking will not change anything;
                 // this is more of a sanity check since it should not be on the trail if it is
                 // unassigned
-                if !self.predicate_values[predicate_id].is_unassigned() {
-                    self.predicate_values[predicate_id] = PredicateValue::Unknown
-                }
+                self.predicate_values[predicate_id] = PredicateValue::Unknown
             })
     }
 
@@ -229,7 +220,7 @@ impl PredicateIdAssignments {
                                 PredicateValue::AssignedFalse
                             }
                         }
-                        None => PredicateValue::Unassigned,
+                        None => PredicateValue::Unknown,
                     }
                 };
                 self.store_predicate(predicate_id, value);

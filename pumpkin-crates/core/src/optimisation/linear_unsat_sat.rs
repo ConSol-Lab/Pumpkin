@@ -112,6 +112,7 @@ where
                     solver.conclude_proof_dual_bound(predicate![
                         objective >= objective_lower_bound - 1
                     ]);
+                    return OptimisationResult::Satisfiable(primal_solution);
                 }
                 Some(result) => return result,
                 None => {}
