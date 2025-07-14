@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::cell::RefMut;
+use std::cmp::max;
+use std::cmp::min;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -39,10 +41,10 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub(crate) literal_equivalences: VariableEquivalences,
-    // A literal which is always true, can be used when using bool constants in the solver
-    // pub(crate) constant_bool_true: BooleanDomainId,
-    // A literal which is always false, can be used when using bool constants in the solver
-    // pub(crate) constant_bool_false: BooleanDomainId,
+    /// A mapping from a boolean variable identifier to its corresponding integer variable
+    /// identifier which are linked by `bool2int` constraints
+    pub(crate) bool2int: HashMap<Rc<str>, Rc<str>>,
+
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
@@ -97,6 +99,8 @@ impl CompilationContext<'_> {
             integer_equivalences: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
+
+            bool2int: Default::default(),
 
             set_constants: Default::default(),
 
@@ -543,6 +547,28 @@ impl VariableEquivalences {
             .first()
             .cloned()
             .expect("all classes have at least one representative")
+    }
+
+    pub(crate) fn binarise(&mut self, variable: &str) {
+        let new_domain = match &self.classes[variable].borrow().domain {
+            Domain::IntervalDomain { lb, ub } => {
+                assert!(*lb <= 1 && *ub >= 0);
+                Domain::IntervalDomain {
+                    lb: max(*lb, 0),
+                    ub: min(*ub, 1),
+                }
+            }
+            Domain::SparseDomain { values } => Domain::SparseDomain {
+                values: values
+                    .iter()
+                    .filter(|&value| *value >= 0 && *value <= 1)
+                    .copied()
+                    .collect(),
+            },
+        };
+
+        let mut domain = self.get_mut_domain(variable);
+        *domain = new_domain;
     }
 
     /// Get the domain for the given variable, based on the equivalence class it belongs to.
