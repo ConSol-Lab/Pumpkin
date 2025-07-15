@@ -4,6 +4,7 @@
 //! It is a modified version of the `FlatZinc` type from [`flatzinc-serde`](https://docs.rs/flatzinc-serde).
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::iter::FusedIterator;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -153,14 +154,25 @@ impl<E: PartialOrd> RangeList<E> {
     }
 }
 
-impl RangeList<i64> {
-    /// Obtain an iterator over the values in this set.
-    ///
-    /// Currently only implemented for `i64` elements, as that is what is used in the AST.
-    pub fn iter(&self) -> impl Iterator<Item = i64> + '_ {
-        self.intervals.iter().flat_map(|&(start, end)| start..=end)
-    }
+macro_rules! impl_iter_fn {
+    ($int_type:ty) => {
+        impl<'a> IntoIterator for &'a RangeList<$int_type> {
+            type Item = $int_type;
+
+            type IntoIter = RangeListIter<'a, $int_type>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                RangeListIter {
+                    current_interval: self.intervals.first().copied().unwrap_or((1, 0)),
+                    tail: &self.intervals[1..],
+                }
+            }
+        }
+    };
 }
+
+impl_iter_fn!(i32);
+impl_iter_fn!(i64);
 
 impl<E: Copy + Ord> From<RangeInclusive<E>> for RangeList<E> {
     fn from(value: RangeInclusive<E>) -> Self {
@@ -170,14 +182,80 @@ impl<E: Copy + Ord> From<RangeInclusive<E>> for RangeList<E> {
     }
 }
 
-impl<E: Copy + Ord> FromIterator<E> for RangeList<E> {
-    fn from_iter<T: IntoIterator<Item = E>>(iter: T) -> Self {
-        let mut intervals: Vec<_> = iter.into_iter().map(|e| (e, e)).collect();
-        intervals.sort();
+macro_rules! range_list_from_iter {
+    ($int_type:ty) => {
+        impl FromIterator<$int_type> for RangeList<$int_type> {
+            fn from_iter<T: IntoIterator<Item = $int_type>>(iter: T) -> Self {
+                let mut intervals: Vec<_> = iter.into_iter().map(|e| (e, e)).collect();
+                intervals.sort();
+                intervals.dedup();
 
-        RangeList { intervals }
-    }
+                let mut idx = 0;
+
+                while idx < intervals.len() - 1 {
+                    let current = intervals[idx];
+                    let next = intervals[idx + 1];
+
+                    if current.1 >= next.0 - 1 {
+                        intervals[idx] = (current.0, next.1);
+                        let _ = intervals.remove(idx + 1);
+                    } else {
+                        idx += 1;
+                    }
+                }
+
+                RangeList { intervals }
+            }
+        }
+    };
 }
+
+range_list_from_iter!(i32);
+range_list_from_iter!(i64);
+
+/// An [`Iterator`] over a [`RangeList`].
+#[derive(Debug)]
+pub struct RangeListIter<'a, E> {
+    current_interval: (E, E),
+    tail: &'a [(E, E)],
+}
+
+macro_rules! impl_range_list_iter {
+    ($int_type:ty) => {
+        impl<'a> RangeListIter<'a, $int_type> {
+            fn new(intervals: &'a [($int_type, $int_type)]) -> Self {
+                RangeListIter {
+                    current_interval: intervals.first().copied().unwrap_or((1, 0)),
+                    tail: &intervals[1..],
+                }
+            }
+        }
+
+        impl Iterator for RangeListIter<'_, $int_type> {
+            type Item = $int_type;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                let (current_lb, current_ub) = self.current_interval;
+
+                if current_lb > current_ub {
+                    let (next_interval, new_tail) = self.tail.split_first()?;
+                    self.current_interval = *next_interval;
+                    self.tail = new_tail;
+                }
+
+                let current_lb = self.current_interval.0;
+                self.current_interval.0 += 1;
+
+                Some(current_lb)
+            }
+        }
+
+        impl FusedIterator for RangeListIter<'_, $int_type> {}
+    };
+}
+
+impl_range_list_iter!(i32);
+impl_range_list_iter!(i64);
 
 /// A literal in the instance.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -264,4 +342,34 @@ pub enum AnnotationLiteral {
     /// the grammar to avoid the case where the same input can parse to either a
     /// `Annotation::Atom(ident)` or an `Literal::Identifier`.
     Annotation(AnnotationCall),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rangelist_from_iter_identifies_continuous_ranges() {
+        let set = RangeList::from_iter([1, 2, 3, 4]);
+
+        assert!(set.is_continuous());
+    }
+
+    #[test]
+    fn rangelist_from_iter_identifiers_non_continuous_ranges() {
+        let set = RangeList::from_iter([1, 3, 4, 6]);
+
+        assert!(!set.is_continuous());
+    }
+
+    #[test]
+    fn rangelist_iter_produces_elements_in_set() {
+        let set: RangeList<i32> = RangeList::from_iter([1, 3, 5]);
+
+        let mut iter = set.into_iter();
+        assert_eq!(Some(1), iter.next());
+        assert_eq!(Some(3), iter.next());
+        assert_eq!(Some(5), iter.next());
+        assert_eq!(None, iter.next());
+    }
 }
