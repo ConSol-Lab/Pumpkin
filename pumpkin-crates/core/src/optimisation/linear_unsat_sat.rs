@@ -1,8 +1,11 @@
+use std::num::NonZero;
+
 use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
 use crate::branching::Brancher;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
+use crate::proof::ConstraintTag;
 use crate::results::OptimisationResult;
 use crate::results::ProblemSolution;
 use crate::results::SatisfactionResult;
@@ -52,14 +55,18 @@ where
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
 
-        let initial_objective_lower_bound = solver.lower_bound(&objective);
-
         // First we will solve the satisfaction problem without constraining the objective.
         let primal_solution: Solution = match solver.satisfy(brancher, termination) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
             SatisfactionResult::Unsatisfiable(_) => return OptimisationResult::Unsatisfiable,
             SatisfactionResult::Unknown(_) => return OptimisationResult::Unknown,
         };
+
+        self.solution_callback.on_solution_callback(
+            solver,
+            primal_solution.as_reference(),
+            brancher,
+        );
 
         let primal_objective = primal_solution.get_integer_value(objective.clone());
 
@@ -73,7 +80,16 @@ where
         // unsat for `objective <= initial_objective_lower_bound`. If we did not have this, then
         // the proof would not contain the initial lower bound as an inference, and the dual bound
         // claim can therefore not be checked.
-        for objective_lower_bound in (initial_objective_lower_bound - 1)..primal_objective {
+
+        let mut objective_lower_bound = solver.lower_bound(&objective);
+        let mut proven_lower_bound = objective_lower_bound;
+
+        while objective_lower_bound < primal_objective {
+            println!(
+                "solving {:?}",
+                predicate![objective <= objective_lower_bound]
+            );
+            dbg!(proven_lower_bound);
             let conclusion = {
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
@@ -109,14 +125,22 @@ where
                     return OptimisationResult::Optimal(solution);
                 }
                 Some(OptimisationResult::Unknown) => {
-                    solver.conclude_proof_dual_bound(predicate![
-                        objective >= objective_lower_bound - 1
-                    ]);
+                    solver.conclude_proof_dual_bound(predicate![objective >= proven_lower_bound]);
                     return OptimisationResult::Satisfiable(primal_solution);
                 }
                 Some(result) => return result,
                 None => {}
             }
+
+            solver
+                .add_clause(
+                    [predicate![objective >= objective_lower_bound + 1]],
+                    ConstraintTag::from_non_zero(NonZero::<u32>::MAX),
+                )
+                .expect("this should always be valid given the previous solves");
+
+            proven_lower_bound = objective_lower_bound + 1;
+            objective_lower_bound = solver.lower_bound(&objective);
         }
 
         solver.conclude_proof_dual_bound(predicate![objective >= primal_objective]);
