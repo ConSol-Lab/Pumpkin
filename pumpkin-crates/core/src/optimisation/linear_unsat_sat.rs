@@ -85,11 +85,6 @@ where
         let mut proven_lower_bound = objective_lower_bound;
 
         while objective_lower_bound < primal_objective {
-            println!(
-                "solving {:?}",
-                predicate![objective <= objective_lower_bound]
-            );
-            dbg!(proven_lower_bound);
             let conclusion = {
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
