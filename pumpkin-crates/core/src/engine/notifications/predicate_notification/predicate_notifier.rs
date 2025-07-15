@@ -8,8 +8,8 @@ use crate::containers::StorageKey;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
-use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateType;
 use crate::variables::DomainId;
 
 /// An orchestrating struct which serves as the main contact point for the solver with
@@ -68,26 +68,41 @@ impl PredicateNotifier {
         match event {
             DomainEvent::Assign => {
                 self.on_update_predicate(
-                    predicate!(domain == assignments.get_assigned_value(&domain).unwrap()),
+                    domain,
+                    PredicateType::Equal,
+                    assignments,
                     trailed_values,
+                    None,
                 );
             }
             DomainEvent::LowerBound => {
                 self.on_update_predicate(
-                    predicate!(domain >= assignments.get_lower_bound(domain)),
+                    domain,
+                    PredicateType::LowerBound,
+                    assignments,
                     trailed_values,
+                    None,
                 );
             }
             DomainEvent::UpperBound => {
                 self.on_update_predicate(
-                    predicate!(domain <= assignments.get_upper_bound(domain)),
+                    domain,
+                    PredicateType::UpperBound,
+                    assignments,
                     trailed_values,
+                    None,
                 );
             }
             DomainEvent::Removal => assignments
-                .get_holes_on_decision_level(domain, assignments.get_decision_level())
+                .get_holes_on_current_decision_level(domain)
                 .for_each(|value| {
-                    self.on_update_predicate(predicate!(domain != value), trailed_values);
+                    self.on_update_predicate(
+                        domain,
+                        PredicateType::NotEqual,
+                        assignments,
+                        trailed_values,
+                        Some(value),
+                    );
                 }),
         }
     }
@@ -97,20 +112,28 @@ impl PredicateNotifier {
     ///
     /// This method will pass it along to the correct [`PredicateNotifier::on_update`]
     /// corresponding to the [`DomainId`] for which the update took place.
-    fn on_update_predicate(&mut self, predicate: Predicate, trailed_values: &mut TrailedValues) {
-        if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
+    fn on_update_predicate(
+        &mut self,
+        domain: DomainId,
+        predicate_type: PredicateType,
+        assignments: &Assignments,
+        trailed_values: &mut TrailedValues,
+        removed_value: Option<i32>,
+    ) {
+        if self.domain_id_to_predicate_tracker.len() <= domain.index() {
             // If no predicate has been registered for this domain id then we do nothing
             return;
         }
 
         // Otherwise we update the structures
-        self.domain_id_to_predicate_tracker[predicate.get_domain()].on_update(
-            predicate,
+        self.domain_id_to_predicate_tracker[domain].on_update(
+            domain,
+            predicate_type,
+            assignments,
+            &mut self.predicate_to_id,
             trailed_values,
             &mut self.predicate_id_assignments,
-            self.predicate_to_id
-                .has_id_for_predicate(predicate)
-                .then(|| self.predicate_to_id.get_id(predicate)),
+            removed_value,
         );
     }
 
@@ -163,7 +186,7 @@ impl PredicateNotifier {
                             PredicateValue::AssignedFalse
                         }
                     }
-                    None => PredicateValue::Unassigned,
+                    None => PredicateValue::Unknown,
                 },
             );
         }

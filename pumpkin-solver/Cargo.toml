@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-solver"
-version = "0.2.0"
+version = "0.2.1"
 description = "The Pumpkin combinatorial optimisation solver library."
 readme = "../README.md"
 authors.workspace = true
@@ -14,7 +14,7 @@ env_logger = "0.10.0"
 flatzinc = "0.3.21"
 fnv = "1.0.7"
 log = "0.4.27"
-pumpkin-solver-core = { path = "../pumpkin-crates/core/", features = ["clap"] }
+pumpkin-core = { version = "0.2.1", path = "../pumpkin-crates/core/", features = ["clap"] }
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 

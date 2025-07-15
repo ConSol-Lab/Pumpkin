@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "drcp-format"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "chumsky",
  "thiserror",
@@ -548,38 +548,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumpkin-macros"
-version = "0.1.0"
-dependencies = [
- "itertools",
- "proc-macro2",
- "quote",
- "stringcase",
- "syn",
-]
-
-[[package]]
-name = "pumpkin-solver"
-version = "0.2.0"
-dependencies = [
- "cc",
- "clap",
- "env_logger",
- "flatzinc",
- "fnv",
- "log",
- "pumpkin-macros",
- "pumpkin-solver-core",
- "regex",
- "signal-hook",
- "stringcase",
- "thiserror",
- "wait-timeout",
-]
-
-[[package]]
-name = "pumpkin-solver-core"
-version = "0.2.0"
+name = "pumpkin-core"
+version = "0.2.1"
 dependencies = [
  "bitfield",
  "bitfield-struct",
@@ -596,6 +566,36 @@ dependencies = [
  "once_cell",
  "rand",
  "thiserror",
+]
+
+[[package]]
+name = "pumpkin-macros"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "stringcase",
+ "syn",
+]
+
+[[package]]
+name = "pumpkin-solver"
+version = "0.2.1"
+dependencies = [
+ "cc",
+ "clap",
+ "env_logger",
+ "flatzinc",
+ "fnv",
+ "log",
+ "pumpkin-core",
+ "pumpkin-macros",
+ "regex",
+ "signal-hook",
+ "stringcase",
+ "thiserror",
+ "wait-timeout",
 ]
 
 [[package]]

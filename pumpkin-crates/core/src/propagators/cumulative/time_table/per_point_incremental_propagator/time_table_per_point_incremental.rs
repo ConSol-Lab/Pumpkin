@@ -3,7 +3,10 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropagatorConflict;
+use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -390,6 +393,13 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             ),
             "Bound were not equal when propagating"
         );
+
+        if self.parameters.is_infeasible {
+            return Err(Inconsistency::Conflict(PropagatorConflict {
+                conjunction: conjunction!(),
+                inference_code: self.inference_code.unwrap(),
+            }));
+        }
 
         // We update the time-table based on the stored updates
         self.update_time_table(&mut context)?;

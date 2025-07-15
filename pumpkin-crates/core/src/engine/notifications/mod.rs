@@ -25,6 +25,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -549,13 +550,23 @@ impl NotificationEngine {
         predicate_id: PredicateId,
         assignments: &Assignments,
     ) -> bool {
-        self.predicate_notifier
+        let result = self
+            .predicate_notifier
             .predicate_id_assignments
             .is_satisfied(
                 predicate_id,
                 assignments,
                 &mut self.predicate_notifier.predicate_to_id,
-            )
+            );
+        pumpkin_assert_extreme!(
+            {
+                let predicate = self.get_predicate(predicate_id);
+
+                assignments.is_predicate_satisfied(predicate) == result
+            },
+            "Expected status of predicate ID to be the same as the one stored in the Assignments"
+        );
+        result
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
@@ -565,13 +576,25 @@ impl NotificationEngine {
         predicate_id: PredicateId,
         assignments: &Assignments,
     ) -> bool {
-        self.predicate_notifier
+        let result = self
+            .predicate_notifier
             .predicate_id_assignments
             .is_falsified(
                 predicate_id,
                 assignments,
                 &mut self.predicate_notifier.predicate_to_id,
-            )
+            );
+
+        pumpkin_assert_extreme!(
+            {
+                let predicate = self.get_predicate(predicate_id);
+
+                assignments.is_predicate_falsified(predicate) == result
+            },
+            "Expected status of predicate ID to be the same as the one stored in the Assignments"
+        );
+
+        result
     }
 
     pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {

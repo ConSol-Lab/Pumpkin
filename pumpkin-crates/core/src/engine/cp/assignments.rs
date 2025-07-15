@@ -48,6 +48,7 @@ impl Default for Assignments {
 pub(crate) struct EmptyDomain;
 
 impl Assignments {
+    #[allow(unused, reason = "Could be used in the future")]
     /// Returns all of the holes in the domain which were created at the provided decision level
     pub(crate) fn get_holes_on_decision_level(
         &self,
@@ -406,6 +407,8 @@ impl Assignments {
             .map(|u| u.trail_position)
     }
 
+    /// If the predicate is assigned true, returns the decision level of the predicate.
+    /// Otherwise returns None.
     pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
