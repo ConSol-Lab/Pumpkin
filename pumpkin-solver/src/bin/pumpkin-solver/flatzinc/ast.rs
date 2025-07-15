@@ -1,4 +1,3 @@
-use fzn_rs::ast::RangeList;
 use fzn_rs::FromAnnotationArgument;
 use fzn_rs::VariableArgument;
 use log::warn;
@@ -186,12 +185,6 @@ pub(crate) struct SearchStrategy {
     pub(crate) value_selection_strategy: ValueSelectionStrategy,
 }
 
-#[derive(fzn_rs::FlatZincConstraint)]
-pub(crate) enum Constraints {
-    IntEq(VariableArgument<i64>, VariableArgument<i64>),
-    SetIn(VariableArgument<i64>, RangeList<i64>),
-}
-
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum VariableAnnotations {
     OutputVar,
@@ -202,6 +195,7 @@ pub(crate) enum ConstraintAnnotations {
     ConstraintTag(TagAnnotation),
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct TagAnnotation(ConstraintTag);
 
 impl From<ConstraintTag> for TagAnnotation {
@@ -224,5 +218,9 @@ impl FromAnnotationArgument for TagAnnotation {
     }
 }
 
-pub(crate) type Instance =
-    fzn_rs::TypedInstance<Constraints, VariableAnnotations, ConstraintAnnotations, Search>;
+pub(crate) type Instance = fzn_rs::TypedInstance<
+    super::constraints::Constraints,
+    VariableAnnotations,
+    ConstraintAnnotations,
+    Search,
+>;

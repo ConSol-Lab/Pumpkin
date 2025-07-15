@@ -9,6 +9,7 @@ use log::warn;
 use crate::flatzinc::ast::Constraints;
 use crate::flatzinc::ast::Instance;
 use crate::flatzinc::compiler::context::CompilationContext;
+use crate::flatzinc::constraints::Constraints;
 use crate::flatzinc::FlatZincError;
 use crate::FlatZincOptions;
 use crate::ProofType;

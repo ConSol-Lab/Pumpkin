@@ -5,10 +5,7 @@ use std::rc::Rc;
 use fzn_rs::VariableArgument;
 
 use super::context::CompilationContext;
-use crate::flatzinc::{
-    ast::{Constraints, Instance},
-    error::FlatZincError,
-};
+use crate::flatzinc::{ast::Instance, constraints::Constraints, error::FlatZincError};
 
 pub(crate) fn run(
     instance: &mut Instance,
@@ -21,7 +18,7 @@ pub(crate) fn run(
         };
 
         let id = match variable {
-            VariableArgument::Identifier(id) => Rc::clone(id),
+            VariableArgument::Identifier(id) => Rc::clone(&id),
             _ => return Err(FlatZincError::UnexpectedExpr),
         };
 

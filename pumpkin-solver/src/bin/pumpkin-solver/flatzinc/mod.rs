@@ -1,5 +1,6 @@
 mod ast;
 mod compiler;
+mod constraints;
 pub(crate) mod error;
 mod instance;
 mod parser;

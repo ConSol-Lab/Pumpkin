@@ -11,7 +11,7 @@ mod prepare_variables;
 mod remove_unused_variables;
 mod reserve_constraint_tags;
 
-use context::CompilationContext;
+pub(crate) use context::CompilationContext;
 use pumpkin_solver::Solver;
 
 use super::instance::FlatZincInstance;
@@ -34,7 +34,7 @@ pub(crate) fn compile(
     merge_equivalences::run(&mut typed_ast, &mut context, &options)?;
     handle_set_in::run(&mut typed_ast, &mut context)?;
     collect_domains::run(&typed_ast, &mut context)?;
-    post_constraints::run(&ast, &mut context, &options)?;
+    post_constraints::run(&typed_ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
 
