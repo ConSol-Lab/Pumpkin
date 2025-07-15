@@ -322,12 +322,22 @@ where
         self.post(&mut context, Variable::B, PredicateType::LowerBound, a_lb)?;
         self.post(&mut context, Variable::B, PredicateType::UpperBound, a_ub)?;
 
-        for value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
-            context.post(predicate!(self.b != value_a), 0, self.inference_code)?;
+        for removed_value_a in context.get_holes(&self.a).collect::<Vec<_>>() {
+            self.post(
+                &mut context,
+                Variable::B,
+                PredicateType::NotEqual,
+                removed_value_a,
+            )?;
         }
 
-        for value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
-            context.post(predicate!(self.a != value_b), 0, self.inference_code)?;
+        for removed_value_b in context.get_holes(&self.b).collect::<Vec<_>>() {
+            self.post(
+                &mut context,
+                Variable::A,
+                PredicateType::NotEqual,
+                removed_value_b,
+            )?;
         }
 
         Ok(())
