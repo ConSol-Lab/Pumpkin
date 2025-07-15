@@ -502,6 +502,7 @@ fn set_of<'tokens, 'src: 'tokens, I, T: Copy + Ord>(
 ) -> impl Parser<'tokens, I, ast::RangeList<T>, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
+    ast::RangeList<T>: FromIterator<T>,
 {
     let sparse_set = value_parser
         .clone()
