@@ -198,7 +198,7 @@ impl PredicateNotifier {
                             PredicateValue::AssignedFalse
                         }
                     }
-                    None => PredicateValue::Unassigned,
+                    None => PredicateValue::Unknown,
                 },
             );
         }
