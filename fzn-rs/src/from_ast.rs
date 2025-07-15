@@ -64,6 +64,17 @@ pub trait FromLiteral: Sized {
     fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError>;
 }
 
+impl FromLiteral for i32 {
+    fn expected() -> Token {
+        Token::IntLiteral
+    }
+
+    fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
+        let integer = <i64 as FromLiteral>::from_literal(node)?;
+        i32::try_from(integer).map_err(|_| InstanceError::IntegerOverflow(integer))
+    }
+}
+
 impl FromLiteral for i64 {
     fn expected() -> Token {
         Token::IntLiteral
@@ -135,6 +146,20 @@ impl FromLiteral for bool {
                 span: argument.span,
             }),
         }
+    }
+}
+
+impl FromLiteral for RangeList<i32> {
+    fn expected() -> Token {
+        Token::IntSetLiteral
+    }
+
+    fn from_literal(argument: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
+        let set = <RangeList<i64> as FromLiteral>::from_literal(argument)?;
+
+        set.into_iter()
+            .map(|elem| i32::try_from(elem).map_err(|_| InstanceError::IntegerOverflow(elem)))
+            .collect::<Result<_, _>>()
     }
 }
 

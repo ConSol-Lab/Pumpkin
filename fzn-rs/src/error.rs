@@ -22,6 +22,9 @@ pub enum InstanceError {
 
     #[error("expected {expected} arguments, got {actual}")]
     IncorrectNumberOfArguments { expected: usize, actual: usize },
+
+    #[error("value {0} does not fit in the required integer type")]
+    IntegerOverflow(i64),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
