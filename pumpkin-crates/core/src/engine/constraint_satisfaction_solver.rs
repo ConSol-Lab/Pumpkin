@@ -271,6 +271,10 @@ impl ConstraintSatisfactionSolver {
 
         finalize_proof(context);
     }
+
+    pub(crate) fn is_logging_full_proof(&self) -> bool {
+        self.internal_parameters.proof_log.is_logging_inferences()
+    }
 }
 
 // methods that offer basic functionality

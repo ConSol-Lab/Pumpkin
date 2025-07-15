@@ -85,7 +85,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        if self.terms.len() == 2 {
+        if self.terms.len() == 2 && !solver.is_logging_full_proof() {
             solver.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
