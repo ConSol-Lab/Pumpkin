@@ -1,10 +1,10 @@
 use log::debug;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
-use pumpkin_solver::termination::TerminationCondition;
-use pumpkin_solver::Function;
-use pumpkin_solver::Solver;
+use pumpkin_core::branching::Brancher;
+use pumpkin_core::results::SatisfactionResult;
+use pumpkin_core::results::Solution;
+use pumpkin_core::termination::TerminationCondition;
+use pumpkin_core::Function;
+use pumpkin_core::Solver;
 
 use super::linear_search::LinearSearch;
 use super::optimisation_result::MaxSatOptimisationResult;

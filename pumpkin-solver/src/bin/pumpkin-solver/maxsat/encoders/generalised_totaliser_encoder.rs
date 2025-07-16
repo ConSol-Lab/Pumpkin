@@ -1,9 +1,9 @@
 use log::debug;
-use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::pumpkin_assert_moderate;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::variables::Literal;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::pumpkin_assert_moderate;
+use pumpkin_core::pumpkin_assert_simple;
+use pumpkin_core::variables::Literal;
 
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;

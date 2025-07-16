@@ -1,10 +1,10 @@
-use pumpkin_solver::containers::KeyedVec;
-use pumpkin_solver::containers::StorageKey;
-use pumpkin_solver::predicate;
-use pumpkin_solver::variables::AffineView;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_core::containers::KeyedVec;
+use pumpkin_core::containers::StorageKey;
+use pumpkin_core::predicate;
+use pumpkin_core::variables::AffineView;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::Literal;
+use pumpkin_core::variables::TransformableVariable;
 use pyo3::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
@@ -118,7 +118,7 @@ impl Predicate {
     pub(crate) fn to_solver_predicate(
         self,
         variable_map: &VariableMap,
-    ) -> pumpkin_solver::predicates::Predicate {
+    ) -> pumpkin_core::predicates::Predicate {
         let affine_view = self.variable.to_affine_view(variable_map);
 
         match self.comparator {

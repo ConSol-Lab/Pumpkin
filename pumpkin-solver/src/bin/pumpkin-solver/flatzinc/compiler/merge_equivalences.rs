@@ -174,7 +174,7 @@ mod tests {
     use flatzinc::ConstraintItem;
     use flatzinc::Expr;
     use flatzinc::SolveItem;
-    use pumpkin_solver::Solver;
+    use pumpkin_core::Solver;
 
     use super::*;
 

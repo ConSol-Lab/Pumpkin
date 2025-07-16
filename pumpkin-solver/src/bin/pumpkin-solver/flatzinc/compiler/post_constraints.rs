@@ -2,15 +2,15 @@
 
 use std::rc::Rc;
 
-use pumpkin_solver::constraints;
-use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::NegatableConstraint;
-use pumpkin_solver::predicate;
-use pumpkin_solver::predicates::Predicate;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::variables::AffineView;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_core::constraints;
+use pumpkin_core::constraints::Constraint;
+use pumpkin_core::constraints::NegatableConstraint;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::variables::AffineView;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::TransformableVariable;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;

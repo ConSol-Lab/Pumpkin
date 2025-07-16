@@ -1,4 +1,4 @@
-use pumpkin_solver::results::ProblemSolution;
+use pumpkin_core::results::ProblemSolution;
 use pyo3::prelude::*;
 
 use crate::variables::BoolExpression;
@@ -26,7 +26,7 @@ pub enum SatisfactionUnderAssumptionsResult {
 #[pyclass]
 #[derive(Clone)]
 pub struct Solution {
-    pub solver_solution: pumpkin_solver::results::Solution,
+    pub solver_solution: pumpkin_core::results::Solution,
     pub variable_map: VariableMap,
 }
 

@@ -1,10 +1,10 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use pumpkin_solver::constraints;
-use pumpkin_solver::results::solution_iterator::IteratedSolution;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::Solver;
+use pumpkin_core::constraints;
+use pumpkin_core::results::solution_iterator::IteratedSolution;
+use pumpkin_core::results::ProblemSolution;
+use pumpkin_core::termination::Indefinite;
+use pumpkin_core::Solver;
 
 #[test]
 fn iterator_finds_all_solutions() {

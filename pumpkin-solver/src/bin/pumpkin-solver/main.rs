@@ -24,19 +24,19 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::convert_case::Case;
-use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::options::*;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::rand::rngs::SmallRng;
-use pumpkin_solver::rand::SeedableRng;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::statistics::configure_statistic_logging;
-use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::Solver;
+use pumpkin_core::convert_case::Case;
+use pumpkin_core::optimisation::OptimisationStrategy;
+use pumpkin_core::options::*;
+use pumpkin_core::proof::ProofLog;
+use pumpkin_core::pumpkin_assert_simple;
+use pumpkin_core::rand::rngs::SmallRng;
+use pumpkin_core::rand::SeedableRng;
+use pumpkin_core::results::ProblemSolution;
+use pumpkin_core::results::SatisfactionResult;
+use pumpkin_core::results::SolutionReference;
+use pumpkin_core::statistics::configure_statistic_logging;
+use pumpkin_core::termination::TimeBudget;
+use pumpkin_core::Solver;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -516,10 +516,10 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    if pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
-        >= pumpkin_solver::asserts::PUMPKIN_ASSERT_MODERATE
+    if pumpkin_core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+        >= pumpkin_core::asserts::PUMPKIN_ASSERT_MODERATE
     {
-        warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
+        warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
     };
 
     let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {

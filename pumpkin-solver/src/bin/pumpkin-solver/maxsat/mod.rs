@@ -8,8 +8,8 @@ pub(crate) use encoders::PseudoBooleanEncoding;
 use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::termination::TimeBudget;
+use pumpkin_core::options::SolverOptions;
+use pumpkin_core::termination::TimeBudget;
 
 use crate::parsers::dimacs::parse_wcnf;
 use crate::parsers::dimacs::SolverArgs;

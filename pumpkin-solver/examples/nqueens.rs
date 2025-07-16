@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use pumpkin_solver::constraints;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::variables::TransformableVariable;
-use pumpkin_solver::Solver;
+use pumpkin_core::constraints;
+use pumpkin_core::options::SolverOptions;
+use pumpkin_core::proof::ProofLog;
+use pumpkin_core::results::ProblemSolution;
+use pumpkin_core::results::SatisfactionResult;
+use pumpkin_core::termination::Indefinite;
+use pumpkin_core::variables::TransformableVariable;
+use pumpkin_core::Solver;
 
 #[derive(Parser)]
 struct Cli {

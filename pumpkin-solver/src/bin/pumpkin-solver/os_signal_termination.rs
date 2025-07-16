@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_core::termination::TerminationCondition;
 
 /// A [`TerminationCondition`] which triggers due to a SIGINT signal.
 #[derive(Clone, Debug)]

@@ -12,7 +12,7 @@ mod remove_unused_variables;
 mod reserve_constraint_tags;
 
 use context::CompilationContext;
-use pumpkin_solver::Solver;
+use pumpkin_core::Solver;
 
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;

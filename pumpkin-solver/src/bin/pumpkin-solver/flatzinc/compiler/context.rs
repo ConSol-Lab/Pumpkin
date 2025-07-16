@@ -4,12 +4,12 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::containers::HashSet;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
-use pumpkin_solver::Solver;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::HashSet;
+use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::Literal;
+use pumpkin_core::Solver;
 
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;

@@ -48,8 +48,8 @@ use crate::statistics::log_statistic_postfix;
 /// and integer variables.
 ///
 /// ```rust
-/// # use pumpkin_solver::Solver;
-/// # use crate::pumpkin_solver::variables::TransformableVariable;
+/// # use pumpkin_core::Solver;
+/// # use crate::pumpkin_core::variables::TransformableVariable;
 /// let mut solver = Solver::default();
 ///
 /// // Integer Variables
@@ -164,8 +164,8 @@ impl Solver {
     ///
     /// # Example
     /// ```
-    /// # use pumpkin_solver::Solver;
-    /// # use pumpkin_solver::variables::Literal;
+    /// # use pumpkin_core::Solver;
+    /// # use pumpkin_core::variables::Literal;
     /// let mut solver = Solver::default();
     /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
     ///
@@ -182,7 +182,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can create a literal
@@ -206,7 +206,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can also create such a variable with a name
@@ -231,7 +231,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can create an integer variable with a domain in the range [0, 10]
@@ -246,7 +246,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can also create such a variable with a name
@@ -270,7 +270,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can also create an integer variable with a non-continuous domain in the follow way
@@ -287,7 +287,7 @@ impl Solver {
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// // We can also create such a variable with a name
@@ -441,8 +441,8 @@ impl Solver {
     ///
     /// # Example
     /// ```
-    /// # use pumpkin_solver::constraints;
-    /// # use pumpkin_solver::Solver;
+    /// # use pumpkin_core::constraints;
+    /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
     /// let a = solver.new_bounded_integer(0, 3);

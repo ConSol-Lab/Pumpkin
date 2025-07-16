@@ -478,9 +478,9 @@ impl ConstraintSatisfactionSolver {
     /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_solver::Solver;
-    /// # use pumpkin_solver::termination::Indefinite;
-    /// # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
+    /// # use pumpkin_core::Solver;
+    /// # use pumpkin_core::termination::Indefinite;
+    /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.

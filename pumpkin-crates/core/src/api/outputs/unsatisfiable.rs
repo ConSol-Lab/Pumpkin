@@ -46,12 +46,12 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///
     /// # Example
     /// ```rust
-    /// # use pumpkin_solver::Solver;
-    /// # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
-    /// # use pumpkin_solver::termination::Indefinite;
-    /// # use pumpkin_solver::predicate;
-    /// # use pumpkin_solver::constraints;
-    /// # use pumpkin_solver::constraints::Constraint;
+    /// # use pumpkin_core::Solver;
+    /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
+    /// # use pumpkin_core::termination::Indefinite;
+    /// # use pumpkin_core::predicate;
+    /// # use pumpkin_core::constraints;
+    /// # use pumpkin_core::constraints::Constraint;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///

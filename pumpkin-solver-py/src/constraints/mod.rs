@@ -14,9 +14,9 @@ macro_rules! declare_constraints {
         impl Constraint {
             pub fn post(
                 self,
-                solver: &mut pumpkin_solver::Solver,
+                solver: &mut pumpkin_core::Solver,
                 variable_map: &$crate::variables::VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_core::ConstraintOperationError> {
                 match self {
                     $($name::$constraint(cns) => cns.post(solver, variable_map)),+
                 }
@@ -24,10 +24,10 @@ macro_rules! declare_constraints {
 
             pub fn implied_by(
                 self,
-                solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::variables::Literal,
+                solver: &mut pumpkin_core::Solver,
+                reification_literal: pumpkin_core::variables::Literal,
                 variable_map: &$crate::variables::VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_core::ConstraintOperationError> {
                 match self {
                     $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, variable_map)),+
                 }

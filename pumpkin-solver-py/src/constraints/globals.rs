@@ -1,5 +1,5 @@
-use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::{self};
+use pumpkin_core::constraints::Constraint;
+use pumpkin_core::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 
@@ -26,9 +26,9 @@ macro_rules! python_constraint {
         impl $name {
             pub fn post(
                 self,
-                solver: &mut pumpkin_solver::Solver,
+                solver: &mut pumpkin_core::Solver,
                 variable_map: &VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_core::ConstraintOperationError> {
                 let cs = solver.new_constraint_tag();
 
                 constraints::$constraint_func(
@@ -39,10 +39,10 @@ macro_rules! python_constraint {
 
             pub fn implied_by(
                 self,
-                solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::variables::Literal,
+                solver: &mut pumpkin_core::Solver,
+                reification_literal: pumpkin_core::variables::Literal,
                 variable_map: &VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_core::ConstraintOperationError> {
                 let cs = solver.new_constraint_tag();
 
                 constraints::$constraint_func(

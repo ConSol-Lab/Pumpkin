@@ -95,7 +95,7 @@ pub(crate) fn run(
 #[cfg(test)]
 mod tests {
 
-    use pumpkin_solver::Solver;
+    use pumpkin_core::Solver;
 
     use super::*;
     use crate::flatzinc::ast::SearchStrategy;

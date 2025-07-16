@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_solver::branching::value_selection::InDomainMax;
-use pumpkin_solver::branching::value_selection::InDomainMin;
-use pumpkin_solver::branching::variable_selection::InputOrder;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_core::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_core::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_core::branching::value_selection::InDomainMax;
+use pumpkin_core::branching::value_selection::InDomainMin;
+use pumpkin_core::branching::variable_selection::InputOrder;
+use pumpkin_core::branching::Brancher;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;

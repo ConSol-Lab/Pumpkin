@@ -10,7 +10,7 @@ use crate::predicates::Predicate;
 
 /// The context that is available when lazily explaining propagations.
 ///
-/// See [`pumpkin_solver::engine::propagation::Propagator`] for more information.
+/// See [`pumpkin_core::engine::propagation::Propagator`] for more information.
 pub(crate) struct ExplanationContext<'a> {
     assignments: &'a Assignments,
     pub(crate) notification_engine: &'a mut NotificationEngine,

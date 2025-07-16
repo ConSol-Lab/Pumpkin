@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use log::debug;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::Function;
+use pumpkin_core::pumpkin_assert_simple;
+use pumpkin_core::Function;
 use thiserror::Error;
 
 use super::CardinalityNetworkEncoder;
