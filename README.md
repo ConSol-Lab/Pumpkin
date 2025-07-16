@@ -3,6 +3,7 @@
 [![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
 [![DRCP Format on crates.io](https://img.shields.io/crates/v/drcp-format?label=drcp-format)](https://crates.io/crates/drcp-format)
 [![Pumpkin on crates.io](https://img.shields.io/crates/v/pumpkin-solver?label=pumpkin-solver)](https://crates.io/crates/pumpkin-solver)
+[![Pumpkin-core on crates.io](https://img.shields.io/crates/v/pumpkin-core?label=pumpkin-core)](https://crates.io/crates/pumpkin-core)
 
 <p align="center">
     <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg", alt="ASCII art pumpkin logo">
@@ -21,10 +22,10 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 
 The solver currently supports integer variables and a number of (global) constraints:
 
-- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/cumulative).
-- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/element.rs).
-- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
-- Clausal constraints.
+- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/cumulative).
+- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/element.rs).
+- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/absolute_value.rs).
+- [Nogood/clausal constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/nogoods).
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
@@ -73,7 +74,7 @@ To use it as such a backend, follow the following steps:
 
 - Step 1: Clone the repository and build it using `cargo build --release`.
 - Step 2: Install MiniZinc using the [appropriate executable](https://www.minizinc.org/resources/) or [binary archive](https://www.minizinc.org/downloads/).
-- Step 3: Add the following to the `MZN_SOLVER_PATH` environment variable: `<path_to_pumpkin>/pumpkin-cli/minizinc` (see [this thread](https://askubuntu.com/questions/58814/how-do-i-add-environment-variables) on how to do this using a shell).
+- Step 3: Add the following to the `MZN_SOLVER_PATH` environment variable: `<path_to_pumpkin>/minizinc` (see [this thread](https://askubuntu.com/questions/58814/how-do-i-add-environment-variables) on how to do this using a shell).
 - Step 4: Check whether the installation worked using the command `minizinc --help pumpkin`.
 
 ## Components
@@ -81,6 +82,7 @@ Pumpkin consists of 3 different crates:
 
 - The library contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the API through which the solver can be used via Rust.
 - The CLI contained in [here](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/bin/pumpkin-solver); defines the usage of Pumpkin through a command line.
+- Other creates for Pumpkin in [here](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates); defines other crates used by Pumpkin.
 - The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
 - The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin
 
