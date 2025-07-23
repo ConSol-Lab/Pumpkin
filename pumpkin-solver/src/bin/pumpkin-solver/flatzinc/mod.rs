@@ -96,12 +96,24 @@ pub(crate) fn solve(
     let outputs = instance.outputs.clone();
 
     let mut brancher = if options.free_search {
-        // The free search flag is active, we just use the default brancher
-        DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-            &solver,
-            instance.search.expect("Expected a search to be defined"),
-            AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
-        ))])
+        // The free search flag is active
+        if instance.objective_function.is_some() {
+            // If there is an objective, then we use the provided search until the first solution,
+            // and then we switch to default search
+            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
+                &solver,
+                instance.search.expect("Expected a search to be defined"),
+                AlternatingStrategy::EveryRestartThenSwitchToDefaultAfterFirstSolution,
+            ))])
+        } else {
+            // If there is no objective, then we alternate between the provided strategy and the
+            // default search every restart
+            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
+                &solver,
+                instance.search.expect("Expected a search to be defined"),
+                AlternatingStrategy::EveryRestart,
+            ))])
+        }
     } else {
         instance.search.expect("Expected a search to be defined")
     };
