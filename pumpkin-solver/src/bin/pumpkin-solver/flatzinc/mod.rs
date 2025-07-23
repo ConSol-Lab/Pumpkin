@@ -10,8 +10,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use pumpkin_core::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
-use pumpkin_core::branching::branchers::alternating::strategies::every_restart::EveryRestart;
-use pumpkin_core::branching::branchers::alternating::strategies::every_restart_until_solution::EveryRestartUntilSolution;
+use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
+use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
@@ -104,7 +104,7 @@ pub(crate) fn solve(
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
                 &solver,
                 instance.search.expect("Expected a search to be defined"),
-                EveryRestartUntilSolution::default(),
+                UntilSolution::new(EveryXRestarts::new(1)),
             ))])
         } else {
             // If there is no objective, then we alternate between the provided strategy and the
@@ -112,7 +112,7 @@ pub(crate) fn solve(
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
                 &solver,
                 instance.search.expect("Expected a search to be defined"),
-                EveryRestart::default(),
+                EveryXRestarts::new(1),
             ))])
         }
     } else {

@@ -12,7 +12,7 @@ pub trait AlternatingStrategy {
     /// default brancher should be used and false otherwise.
     ///
     /// See [`Brancher::next_decision`].
-    fn next_decision(&mut self, context: &mut SelectionContext) -> bool;
+    fn next_decision(&mut self, context: &mut SelectionContext) -> BrancherToUse;
 
     /// Called when a solution is found.
     ///
@@ -53,7 +53,14 @@ pub trait AlternatingStrategy {
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
 }
 
-pub mod default_after_first_solution;
-pub mod every_restart;
-pub mod every_restart_until_solution;
+/// Indicates which [`Brancher`] to use in the [`AlternatingBrancher`].
+#[derive(Debug, Clone, Copy, Hash)]
+pub enum BrancherToUse {
+    Default,
+    Other,
+}
+
+pub mod every_x_restarts;
 pub mod every_x_solutions;
+pub mod other_only;
+pub mod until_solution;

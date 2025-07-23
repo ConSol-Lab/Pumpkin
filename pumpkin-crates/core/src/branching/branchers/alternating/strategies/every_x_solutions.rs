@@ -1,4 +1,5 @@
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::results::SolutionReference;
@@ -23,8 +24,12 @@ impl EveryXSolutions {
 }
 
 impl AlternatingStrategy for EveryXSolutions {
-    fn next_decision(&mut self, _context: &mut SelectionContext) -> bool {
-        self.use_default_brancher
+    fn next_decision(&mut self, _context: &mut SelectionContext) -> BrancherToUse {
+        if self.use_default_brancher {
+            BrancherToUse::Default
+        } else {
+            BrancherToUse::Other
+        }
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
@@ -47,6 +52,7 @@ impl AlternatingStrategy for EveryXSolutions {
 mod tests {
     use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
     use crate::branching::branchers::alternating::strategies::every_x_solutions::EveryXSolutions;
+    use crate::branching::Brancher;
     use crate::engine::Assignments;
     use crate::results::SolutionReference;
     use crate::Solver;
@@ -60,14 +66,14 @@ mod tests {
         let assignments = Assignments::default();
         let empty_solution_reference = SolutionReference::new(&assignments);
 
-        assert!(!brancher.is_using_default_brancher);
+        assert!(!brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);
-        assert!(!brancher.is_using_default_brancher);
+        assert!(!brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);
-        assert!(brancher.is_using_default_brancher);
+        assert!(brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);
-        assert!(brancher.is_using_default_brancher);
+        assert!(brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);
-        assert!(!brancher.is_using_default_brancher);
+        assert!(!brancher.is_using_default_brancher());
     }
 }

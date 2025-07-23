@@ -1,48 +1,67 @@
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::branchers::alternating::BrancherToUse;
+use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
-use crate::results::SolutionReference;
 
 /// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
-/// the provided brancher every restart until the first solution is found, after which it will
-/// switch to the [`DefaultBrancher`] for the rest of the search.
-#[derive(Default, Debug, Clone, Copy)]
-pub struct EveryRestartUntilSolution {
-    considered_restart: bool,
-    has_solution: bool,
+/// the provided brancher every `x`th considered restart.
+#[derive(Debug, Clone, Copy)]
+pub struct EveryXRestarts {
     use_default_brancher: bool,
+    num_restarts_considered: u32,
+    x: u32,
+    restart_considered: bool,
 }
 
-impl AlternatingStrategy for EveryRestartUntilSolution {
-    fn next_decision(&mut self, _context: &mut SelectionContext) -> bool {
-        self.use_default_brancher
+impl EveryXRestarts {
+    pub fn new(x: u32) -> Self {
+        Self {
+            use_default_brancher: false,
+            num_restarts_considered: 0,
+            x,
+            restart_considered: false,
+        }
     }
+}
 
-    fn is_using_default_brancher(&self) -> bool {
-        self.use_default_brancher
+impl AlternatingStrategy for EveryXRestarts {
+    fn next_decision(&mut self, _context: &mut SelectionContext) -> BrancherToUse {
+        if self.restart_considered {
+            self.num_restarts_considered += 1;
+        }
+
+        if self.num_restarts_considered.is_multiple_of(self.x) {
+            self.use_default_brancher = !self.use_default_brancher
+        }
+
+        if self.use_default_brancher {
+            BrancherToUse::Default
+        } else {
+            BrancherToUse::Other
+        }
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
-        vec![BrancherEvent::Solution, BrancherEvent::Restart]
-    }
-
-    fn on_solution(&mut self, _solution: SolutionReference) {
-        self.has_solution = true;
-        self.use_default_brancher = true;
+        vec![BrancherEvent::Restart]
     }
 
     fn on_restart(&mut self) {
-        self.considered_restart = true;
+        self.restart_considered = true;
+    }
+
+    fn will_always_use_default(&self) -> bool {
+        false
     }
 
     fn is_restart_pointless(
         &mut self,
-        default_brancher: &mut impl crate::branching::Brancher,
-        other_brancher: &mut impl crate::branching::Brancher,
+        default_brancher: &mut impl Brancher,
+        other_brancher: &mut impl Brancher,
     ) -> bool {
         // We indicate that we have considered a restart, this can then be used by the
         // AlternatingStrategy to determine when to switch
-        self.considered_restart = true;
+        self.restart_considered = true;
 
         // Note that we could switch to the other strategy and then the restart is performed
         // so we check whether restarting for the other brancher is
@@ -54,8 +73,8 @@ impl AlternatingStrategy for EveryRestartUntilSolution {
         }
     }
 
-    fn will_always_use_default(&self) -> bool {
-        self.has_solution
+    fn is_using_default_brancher(&self) -> bool {
+        self.use_default_brancher
     }
 }
 
@@ -63,22 +82,18 @@ impl AlternatingStrategy for EveryRestartUntilSolution {
 mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
-    use crate::branching::branchers::alternating::strategies::every_restart_until_solution::EveryRestartUntilSolution;
+    use crate::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
     use crate::engine::Assignments;
-    use crate::results::Solution;
     use crate::Solver;
 
     #[test]
-    fn test_every_restart_until_first_solution() {
+    fn test_every_restart() {
         let assignments = Assignments::default();
         let solver = Solver::default();
-        let mut brancher = AlternatingBrancher::new(
-            &solver,
-            solver.default_brancher(),
-            EveryRestartUntilSolution::default(),
-        );
+        let mut brancher =
+            AlternatingBrancher::new(&solver, solver.default_brancher(), EveryXRestarts::new(1));
 
         assert!(!brancher.is_using_default_brancher());
         brancher.on_restart();
@@ -96,12 +111,31 @@ mod tests {
         ));
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),
         ));
+
         assert!(brancher.is_using_default_brancher());
+    }
+
+    #[test]
+    fn test_every_other_restart() {
+        let assignments = Assignments::default();
+        let solver = Solver::default();
+        let mut brancher =
+            AlternatingBrancher::new(&solver, solver.default_brancher(), EveryXRestarts::new(2));
+
+        assert!(!brancher.is_using_default_brancher());
+
+        brancher.on_restart();
+        // next_decision is called to ensure that the brancher has actually switched
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
@@ -115,13 +149,23 @@ mod tests {
             &assignments,
             &mut TestRandom::default(),
         ));
+
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),
         ));
-        assert!(brancher.is_using_default_brancher());
+
+        assert!(!brancher.is_using_default_brancher());
+
+        brancher.on_restart();
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+
+        assert!(!brancher.is_using_default_brancher());
     }
 }

@@ -1,6 +1,7 @@
 //! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
 //! on the strategy specified in [`AlternatingStrategy`].
 
+use super::BrancherToUse;
 use crate::basic_types::SolutionReference;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
@@ -52,10 +53,9 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
     for AlternatingBrancher<OtherBrancher, Strategy>
 {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
-        if self.strategy.next_decision(context) {
-            self.default_brancher.next_decision(context)
-        } else {
-            self.other_brancher.next_decision(context)
+        match self.strategy.next_decision(context) {
+            BrancherToUse::Default => self.default_brancher.next_decision(context),
+            BrancherToUse::Other => self.other_brancher.next_decision(context),
         }
     }
 
