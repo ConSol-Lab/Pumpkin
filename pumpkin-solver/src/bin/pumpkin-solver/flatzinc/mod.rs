@@ -9,9 +9,9 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use pumpkin_core::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
+use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
