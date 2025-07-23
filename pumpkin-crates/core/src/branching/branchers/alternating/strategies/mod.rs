@@ -54,7 +54,6 @@ pub trait AlternatingStrategy {
 }
 
 pub mod default_after_first_solution;
-pub mod default_only;
 pub mod every_restart;
 pub mod every_restart_until_solution;
 pub mod every_x_solutions;
