@@ -160,6 +160,8 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 
     fn on_solution(&mut self, solution: SolutionReference) {
         self.even_number_of_solutions = !self.even_number_of_solutions;
+        self.has_found_solution = true;
+
         match self.strategy {
             AlternatingStrategy::EverySolution => {
                 // Switch regardless of how many solutions have been found
@@ -173,14 +175,10 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
             }
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution
             | AlternatingStrategy::EveryRestartThenSwitchToDefaultAfterFirstSolution => {
-                // Switch only the first time
-                if !self.has_found_solution {
-                    self.is_using_default_brancher = true;
-                }
+                self.is_using_default_brancher = true;
             }
             _ => {}
         }
-        self.has_found_solution = true;
 
         self.default_brancher.on_solution(solution);
         if !self.will_always_use_default() {
