@@ -4,7 +4,7 @@ use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 
-/// Specifies that the [`AlternatingBrancher`] should always use the [`DefaultBrancher`].
+/// Specifies that the [`AlternatingBrancher`] should always use the other strategy.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct OtherOnly;
 
