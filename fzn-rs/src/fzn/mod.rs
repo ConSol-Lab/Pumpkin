@@ -382,13 +382,13 @@ where
             .ignore_then(identifier())
             .map(|ident| ast::Method::Optimize {
                 direction: ast::OptimizationDirection::Minimize,
-                objective: ident,
+                objective: ast::Literal::Identifier(ident),
             }),
         just(Ident("maximize"))
             .ignore_then(identifier())
             .map(|ident| ast::Method::Optimize {
                 direction: ast::OptimizationDirection::Maximize,
-                objective: ident,
+                objective: ast::Literal::Identifier(ident),
             }),
     ))
     .map_with(to_node)

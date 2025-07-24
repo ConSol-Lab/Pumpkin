@@ -104,7 +104,8 @@ pub use error::*;
 pub use from_ast::*;
 
 #[derive(Clone, Debug)]
-pub struct TypedInstance<TConstraint, VAnnotations = (), CAnnotations = (), SAnnotations = ()> {
+pub struct TypedInstance<Int, TConstraint, VAnnotations = (), CAnnotations = (), SAnnotations = ()>
+{
     /// The variables that are in the instance.
     ///
     /// The key is the identifier of the variable, and the value is the domain of the variable.
@@ -114,7 +115,22 @@ pub struct TypedInstance<TConstraint, VAnnotations = (), CAnnotations = (), SAnn
     pub constraints: Vec<Constraint<TConstraint, CAnnotations>>,
 
     /// The solve item indicating the type of model.
-    pub solve: ast::SolveObjective<SAnnotations>,
+    pub solve: Solve<Int, SAnnotations>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Solve<Int, Ann> {
+    pub method: ast::Node<Method<Int>>,
+    pub annotations: Vec<ast::Node<Ann>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Method<Int> {
+    Satisfy,
+    Optimize {
+        direction: ast::OptimizationDirection,
+        objective: VariableExpr<Int>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -123,13 +139,14 @@ pub struct Constraint<TConstraint, Annotation> {
     pub annotations: Vec<ast::Node<Annotation>>,
 }
 
-impl<TConstraint, VAnnotations, CAnnotations, SAnnotations>
-    TypedInstance<TConstraint, VAnnotations, CAnnotations, SAnnotations>
+impl<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
+    TypedInstance<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
 where
     TConstraint: FlatZincConstraint,
     VAnnotations: FlatZincAnnotation,
     CAnnotations: FlatZincAnnotation,
     SAnnotations: FlatZincAnnotation,
+    VariableExpr<Int>: FromLiteral,
 {
     pub fn from_ast(ast: ast::Ast) -> Result<Self, InstanceError> {
         let variables = ast
@@ -164,8 +181,26 @@ where
             })
             .collect::<Result<_, _>>()?;
 
-        let solve = ast::SolveObjective {
-            method: ast.solve.method,
+        let solve = Solve {
+            method: match ast.solve.method.node {
+                ast::Method::Satisfy => ast::Node {
+                    node: Method::Satisfy,
+                    span: ast.solve.method.span,
+                },
+                ast::Method::Optimize {
+                    direction,
+                    objective,
+                } => ast::Node {
+                    node: Method::Optimize {
+                        direction,
+                        objective: <VariableExpr<Int> as FromLiteral>::from_literal(&ast::Node {
+                            node: objective,
+                            span: ast.solve.method.span,
+                        })?,
+                    },
+                    span: ast.solve.method.span,
+                },
+            },
             annotations: map_annotations(&ast.solve.annotations)?,
         };
 
