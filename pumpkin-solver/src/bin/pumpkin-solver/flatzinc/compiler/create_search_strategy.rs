@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_solver::branching::value_selection::InDomainMax;
@@ -10,20 +8,29 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::ast::BoolSearchStrategy;
+use crate::flatzinc::ast::Instance;
+use crate::flatzinc::ast::IntSearchStrategy;
 use crate::flatzinc::ast::Search;
-use crate::flatzinc::ast::SearchStrategy;
 use crate::flatzinc::ast::ValueSelectionStrategy;
 use crate::flatzinc::ast::VariableSelectionStrategy;
 use crate::flatzinc::error::FlatZincError;
 use crate::flatzinc::instance::FlatzincObjective;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
+    typed_ast: &Instance,
     context: &mut CompilationContext,
     objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context, true, objective)
+    let search = typed_ast
+        .solve
+        .annotations
+        .iter()
+        .map(|node| &node.node)
+        .next()
+        .unwrap_or(&Search::Unspecified);
+
+    create_from_search_strategy(search, context, true, objective)
 }
 
 fn create_from_search_strategy(
@@ -33,20 +40,12 @@ fn create_from_search_strategy(
     objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
     let mut brancher = match strategy {
-        Search::Bool(SearchStrategy {
+        Search::BoolSearch(BoolSearchStrategy {
             variables,
             variable_selection_strategy,
             value_selection_strategy,
         }) => {
-            let search_variables = match variables {
-                flatzinc::AnnExpr::String(identifier) => {
-                    vec![context.resolve_bool_variable_from_identifier(identifier)?]
-                }
-                flatzinc::AnnExpr::Expr(expr) => {
-                    context.resolve_bool_variable_array(expr)?.as_ref().to_vec()
-                }
-                other => panic!("Expected string or expression but got {other:?}"),
-            };
+            let search_variables = context.resolve_bool_variable_array(variables)?;
 
             create_search_over_propositional_variables(
                 &search_variables,
@@ -54,19 +53,13 @@ fn create_from_search_strategy(
                 value_selection_strategy,
             )
         }
-        Search::Int(SearchStrategy {
+        Search::IntSearch(IntSearchStrategy {
             variables,
             variable_selection_strategy,
             value_selection_strategy,
         }) => {
-            let search_variables = match variables {
-                flatzinc::AnnExpr::String(identifier) => {
-                    // TODO: unnecessary to create Rc here, for now it's just for the return type
-                    Rc::new([context.resolve_integer_variable_from_identifier(identifier)?])
-                }
-                flatzinc::AnnExpr::Expr(expr) => context.resolve_integer_variable_array(expr)?,
-                other => panic!("Expected string or expression but got {other:?}"),
-            };
+            let search_variables = context.resolve_integer_variable_array(variables)?;
+
             create_search_over_domains(
                 &search_variables,
                 variable_selection_strategy,

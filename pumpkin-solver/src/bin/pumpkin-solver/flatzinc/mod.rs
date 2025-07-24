@@ -3,7 +3,6 @@ mod compiler;
 mod constraints;
 pub(crate) mod error;
 mod instance;
-mod parser;
 
 use std::fs::File;
 use std::io::Read;
@@ -261,9 +260,8 @@ fn parse_and_compile(
     instance.read_to_string(&mut source)?;
 
     let ast = fzn_rs::fzn::parse(&source).expect("should handle errors here");
-    let typed_ast = ast::Instance::from_ast(ast).expect("should handle error here");
 
-    compiler::compile(typed_ast, solver, options)
+    compiler::compile(ast, solver, options)
 }
 
 /// Prints the current solution.

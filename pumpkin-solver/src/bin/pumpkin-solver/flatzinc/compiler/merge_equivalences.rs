@@ -6,9 +6,9 @@ use fzn_rs::ast;
 use fzn_rs::VariableArgument;
 use log::warn;
 
-use crate::flatzinc::ast::Constraints;
 use crate::flatzinc::ast::Instance;
 use crate::flatzinc::compiler::context::CompilationContext;
+use crate::flatzinc::constraints::Binary;
 use crate::flatzinc::constraints::Constraints;
 use crate::flatzinc::FlatZincError;
 use crate::FlatZincOptions;
@@ -118,7 +118,7 @@ fn should_keep_constraint<Ann>(
     constraint: &fzn_rs::Constraint<Constraints, Ann>,
     context: &mut CompilationContext,
 ) -> bool {
-    let Constraints::IntEq(lhs, rhs) = &constraint.constraint.node else {
+    let Constraints::IntEq(Binary(lhs, rhs)) = &constraint.constraint.node else {
         return true;
     };
 

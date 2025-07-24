@@ -498,7 +498,7 @@ fn compile_bool_xor_reif(
 ) -> Result<bool, FlatZincError> {
     let a = context.resolve_bool_variable(&args.a)?;
     let b = context.resolve_bool_variable(&args.b)?;
-    let r = context.resolve_bool_variable(&args.r)?;
+    let r = context.resolve_bool_variable(&args.reification)?;
 
     let c1 = constraints::clause([!a, !b, !r], constraint_tag)
         .post(context.solver)
