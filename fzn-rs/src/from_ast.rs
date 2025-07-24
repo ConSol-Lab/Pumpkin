@@ -12,7 +12,7 @@ use crate::InstanceError;
 /// Models a variable in the FlatZinc AST. Since `var T` is a subtype of `T`, a variable can also
 /// be a constant.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum VariableArgument<T> {
+pub enum VariableExpr<T> {
     Identifier(Rc<str>),
     Constant(T),
 }
@@ -92,7 +92,7 @@ impl FromLiteral for i64 {
     }
 }
 
-impl<T: FromLiteral> FromLiteral for VariableArgument<T> {
+impl<T: FromLiteral> FromLiteral for VariableExpr<T> {
     fn expected() -> Token {
         Token::Variable(Box::new(T::expected()))
     }
@@ -100,10 +100,10 @@ impl<T: FromLiteral> FromLiteral for VariableArgument<T> {
     fn from_literal(node: &ast::Node<ast::Literal>) -> Result<Self, InstanceError> {
         match &node.node {
             ast::Literal::Identifier(identifier) => {
-                Ok(VariableArgument::Identifier(Rc::clone(identifier)))
+                Ok(VariableExpr::Identifier(Rc::clone(identifier)))
             }
             literal => T::from_literal(node)
-                .map(VariableArgument::Constant)
+                .map(VariableExpr::Constant)
                 .map_err(|_| InstanceError::UnexpectedToken {
                     expected: <Self as FromLiteral>::expected(),
                     actual: literal.into(),
