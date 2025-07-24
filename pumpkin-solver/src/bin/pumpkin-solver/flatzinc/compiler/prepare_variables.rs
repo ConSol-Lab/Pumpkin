@@ -65,7 +65,7 @@ pub(crate) fn run(
                     .integer_equivalences
                     .create_equivalence_class_sparse(
                         Rc::clone(name),
-                        set.iter()
+                        set.into_iter()
                             .map(|value| i32::try_from(value))
                             .collect::<Result<Vec<i32>, _>>()?,
                     )

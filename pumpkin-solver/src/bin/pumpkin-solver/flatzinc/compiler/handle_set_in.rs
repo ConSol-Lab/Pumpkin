@@ -25,7 +25,7 @@ pub(crate) fn run(
         let mut domain = context.integer_equivalences.get_mut_domain(&id);
 
         // We take the intersection between the two domains
-        let new_domain = domain.merge(&set.try_into()?);
+        let new_domain = domain.merge(&set.into());
         *domain = new_domain;
     }
 

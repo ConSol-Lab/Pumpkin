@@ -169,16 +169,25 @@ impl ValueSelectionStrategy {
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum Search {
     #[args]
-    BoolSearch(SearchStrategy),
+    BoolSearch(BoolSearchStrategy),
     #[args]
-    IntSearch(SearchStrategy),
+    IntSearch(IntSearchStrategy),
     Seq(#[annotation] Vec<Search>),
     Unspecified,
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
-pub(crate) struct SearchStrategy {
-    pub(crate) variables: Vec<VariableArgument<i64>>,
+pub(crate) struct IntSearchStrategy {
+    pub(crate) variables: Vec<VariableArgument<i32>>,
+    #[annotation]
+    pub(crate) variable_selection_strategy: VariableSelectionStrategy,
+    #[annotation]
+    pub(crate) value_selection_strategy: ValueSelectionStrategy,
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct BoolSearchStrategy {
+    pub(crate) variables: Vec<VariableArgument<bool>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
