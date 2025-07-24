@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use fzn_rs::ast::RangeList;
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use log::warn;
 use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::variables::DomainId;
@@ -72,31 +72,63 @@ impl CompilationContext<'_> {
     }
 
     pub(crate) fn resolve_bool_variable(
-        &mut self,
-        variable: &VariableArgument<bool>,
+        &self,
+        variable: &VariableExpr<bool>,
     ) -> Result<Literal, FlatZincError> {
-        todo!()
+        match variable {
+            VariableExpr::Identifier(ident) => self
+                .boolean_variable_map
+                .get(ident)
+                .copied()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: Rc::clone(ident),
+                    expected_type: "bool var".into(),
+                }),
+            VariableExpr::Constant(true) => Ok(self.true_literal),
+            VariableExpr::Constant(false) => Ok(self.false_literal),
+        }
     }
 
     pub(crate) fn resolve_bool_variable_array(
         &self,
-        array: &[VariableArgument<bool>],
+        array: &[VariableExpr<bool>],
     ) -> Result<Vec<Literal>, FlatZincError> {
-        todo!()
+        array
+            .iter()
+            .map(|expr| self.resolve_bool_variable(expr))
+            .collect()
     }
 
     pub(crate) fn resolve_integer_variable(
         &mut self,
-        variable: &VariableArgument<i32>,
+        variable: &VariableExpr<i32>,
     ) -> Result<DomainId, FlatZincError> {
-        todo!()
+        match variable {
+            VariableExpr::Identifier(ident) => self
+                .integer_variable_map
+                .get(ident)
+                .copied()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: Rc::clone(ident),
+                    expected_type: "int var".into(),
+                }),
+            VariableExpr::Constant(value) => {
+                Ok(*self.constant_domain_ids.entry(*value).or_insert_with(|| {
+                    self.solver
+                        .new_named_bounded_integer(*value, *value, value.to_string())
+                }))
+            }
+        }
     }
 
     pub(crate) fn resolve_integer_variable_array(
         &mut self,
-        array: &[VariableArgument<i32>],
+        array: &[VariableExpr<i32>],
     ) -> Result<Vec<DomainId>, FlatZincError> {
-        todo!()
+        array
+            .iter()
+            .map(|expr| self.resolve_integer_variable(expr))
+            .collect()
     }
 }
 

@@ -1,8 +1,8 @@
-use fzn_rs::{ast::RangeList, VariableArgument};
+use fzn_rs::{ast::RangeList, VariableExpr};
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) enum Constraints {
-    SetIn(VariableArgument<i32>, RangeList<i32>),
+    SetIn(VariableExpr<i32>, RangeList<i32>),
 
     #[args]
     SetInReif(SetInReifArgs),
@@ -77,7 +77,7 @@ pub(crate) enum Constraints {
     IntDiv(TernaryIntArgs),
 
     #[name("pumpkin_all_different")]
-    AllDifferent(Vec<VariableArgument<i32>>),
+    AllDifferent(Vec<VariableExpr<i32>>),
 
     #[args]
     #[name("pumpkin_table_int")]
@@ -137,7 +137,7 @@ pub(crate) enum Constraints {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct CumulativeArgs {
-    pub(crate) start_times: Vec<VariableArgument<i32>>,
+    pub(crate) start_times: Vec<VariableExpr<i32>>,
     pub(crate) durations: Vec<i32>,
     pub(crate) resource_requirements: Vec<i32>,
     pub(crate) resource_capacity: i32,
@@ -145,120 +145,117 @@ pub(crate) struct CumulativeArgs {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct SetInReifArgs {
-    pub(crate) variable: VariableArgument<i32>,
+    pub(crate) variable: VariableExpr<i32>,
     pub(crate) set: RangeList<i32>,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolClauseArgs {
-    pub(crate) clause_1: Vec<VariableArgument<bool>>,
-    pub(crate) clause_2: Vec<VariableArgument<bool>>,
+    pub(crate) clause_1: Vec<VariableExpr<bool>>,
+    pub(crate) clause_2: Vec<VariableExpr<bool>>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolLinEqArgs {
     pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableArgument<bool>>,
-    pub(crate) sum: VariableArgument<i32>,
+    pub(crate) variables: Vec<VariableExpr<bool>>,
+    pub(crate) sum: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolLinLeArgs {
     pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableArgument<bool>>,
+    pub(crate) variables: Vec<VariableExpr<bool>>,
     pub(crate) bound: i32,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolToIntArgs {
-    pub(crate) integer: VariableArgument<i32>,
-    pub(crate) boolean: VariableArgument<bool>,
+    pub(crate) integer: VariableExpr<i32>,
+    pub(crate) boolean: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ArrayBoolArgs {
-    pub(crate) booleans: Vec<VariableArgument<bool>>,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) booleans: Vec<VariableExpr<bool>>,
+    pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BinaryBool {
-    pub(crate) a: VariableArgument<bool>,
-    pub(crate) b: VariableArgument<bool>,
+    pub(crate) a: VariableExpr<bool>,
+    pub(crate) b: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BinaryBoolReif {
-    pub(crate) a: VariableArgument<bool>,
-    pub(crate) b: VariableArgument<bool>,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) a: VariableExpr<bool>,
+    pub(crate) b: VariableExpr<bool>,
+    pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct TableInt {
-    pub(crate) variables: Vec<VariableArgument<i32>>,
+    pub(crate) variables: Vec<VariableExpr<i32>>,
     pub(crate) table: Vec<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct TableIntReif {
-    pub(crate) variables: Vec<VariableArgument<i32>>,
+    pub(crate) variables: Vec<VariableExpr<i32>>,
     pub(crate) table: Vec<i32>,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ArrayExtremum {
-    pub(crate) array: Vec<VariableArgument<i32>>,
-    pub(crate) extremum: VariableArgument<i32>,
+    pub(crate) array: Vec<VariableExpr<i32>>,
+    pub(crate) extremum: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct TernaryIntArgs {
-    pub(crate) a: VariableArgument<i32>,
-    pub(crate) b: VariableArgument<i32>,
-    pub(crate) c: VariableArgument<i32>,
+    pub(crate) a: VariableExpr<i32>,
+    pub(crate) b: VariableExpr<i32>,
+    pub(crate) c: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct IntElementArgs {
-    pub(crate) index: VariableArgument<i32>,
-    pub(crate) array: Vec<VariableArgument<i32>>,
-    pub(crate) rhs: VariableArgument<i32>,
+    pub(crate) index: VariableExpr<i32>,
+    pub(crate) array: Vec<VariableExpr<i32>>,
+    pub(crate) rhs: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolElementArgs {
-    pub(crate) index: VariableArgument<i32>,
-    pub(crate) array: Vec<VariableArgument<bool>>,
-    pub(crate) rhs: VariableArgument<bool>,
+    pub(crate) index: VariableExpr<i32>,
+    pub(crate) array: Vec<VariableExpr<bool>>,
+    pub(crate) rhs: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
-pub(crate) struct Binary(
-    pub(crate) VariableArgument<i32>,
-    pub(crate) VariableArgument<i32>,
-);
+pub(crate) struct Binary(pub(crate) VariableExpr<i32>, pub(crate) VariableExpr<i32>);
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ReifiedBinary {
-    pub(crate) a: VariableArgument<i32>,
-    pub(crate) b: VariableArgument<i32>,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) a: VariableExpr<i32>,
+    pub(crate) b: VariableExpr<i32>,
+    pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct Linear {
     pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableArgument<i32>>,
+    pub(crate) variables: Vec<VariableExpr<i32>>,
     pub(crate) rhs: i32,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ReifiedLinear {
     pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableArgument<i32>>,
+    pub(crate) variables: Vec<VariableExpr<i32>>,
     pub(crate) rhs: i32,
-    pub(crate) reification: VariableArgument<bool>,
+    pub(crate) reification: VariableExpr<bool>,
 }

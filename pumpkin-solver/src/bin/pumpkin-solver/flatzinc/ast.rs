@@ -1,5 +1,5 @@
 use fzn_rs::FromAnnotationArgument;
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use log::warn;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_solver::branching::value_selection::DynamicValueSelector;
@@ -178,7 +178,7 @@ pub(crate) enum Search {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) struct IntSearchStrategy {
-    pub(crate) variables: Vec<VariableArgument<i32>>,
+    pub(crate) variables: Vec<VariableExpr<i32>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
@@ -187,7 +187,7 @@ pub(crate) struct IntSearchStrategy {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) struct BoolSearchStrategy {
-    pub(crate) variables: Vec<VariableArgument<bool>>,
+    pub(crate) variables: Vec<VariableExpr<bool>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
@@ -228,6 +228,7 @@ impl FromAnnotationArgument for TagAnnotation {
 }
 
 pub(crate) type Instance = fzn_rs::TypedInstance<
+    i32,
     super::constraints::Constraints,
     VariableAnnotations,
     ConstraintAnnotations,

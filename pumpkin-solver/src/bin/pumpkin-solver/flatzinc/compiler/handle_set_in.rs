@@ -2,7 +2,7 @@
 //! is this is the case then update the domain of the variable directly.
 use std::rc::Rc;
 
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 
 use super::context::CompilationContext;
 use crate::flatzinc::{ast::Instance, constraints::Constraints, error::FlatZincError};
@@ -18,7 +18,7 @@ pub(crate) fn run(
         };
 
         let id = match variable {
-            VariableArgument::Identifier(id) => Rc::clone(&id),
+            VariableExpr::Identifier(id) => Rc::clone(&id),
             _ => return Err(FlatZincError::UnexpectedExpr),
         };
 

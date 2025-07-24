@@ -10,12 +10,12 @@ pub(crate) fn run(
     context: &mut CompilationContext,
 ) -> Result<Option<FlatzincObjective>, FlatZincError> {
     match &typed_ast.solve.method.node {
-        fzn_rs::ast::Method::Satisfy => Ok(None),
-        fzn_rs::ast::Method::Optimize {
+        fzn_rs::Method::Satisfy => Ok(None),
+        fzn_rs::Method::Optimize {
             direction,
             objective,
         } => {
-            let variable = context.resolve_integer_variable_from_identifier(&objective)?;
+            let variable = context.resolve_integer_variable(objective)?;
 
             match direction {
                 fzn_rs::ast::OptimizationDirection::Minimize => {
