@@ -268,7 +268,7 @@ pub enum Method {
     Satisfy,
     Optimize {
         direction: OptimizationDirection,
-        objective: Rc<str>,
+        objective: Literal,
     },
 }
 
