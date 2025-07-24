@@ -9,7 +9,7 @@ use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
 use fzn_rs::TypedInstance;
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincConstraint;
 use utils::*;
 
@@ -17,7 +17,7 @@ use utils::*;
 fn variant_with_unnamed_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
+        IntLinLe(Vec<i64>, Vec<VariableExpr<i64>>, i64),
     }
 
     let ast = Ast {
@@ -50,9 +50,9 @@ fn variant_with_unnamed_fields() {
         TypedConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
-                VariableArgument::Identifier("x1".into()),
-                VariableArgument::Identifier("x2".into()),
-                VariableArgument::Identifier("x3".into())
+                VariableExpr::Identifier("x1".into()),
+                VariableExpr::Identifier("x2".into()),
+                VariableExpr::Identifier("x3".into())
             ],
             3
         )
@@ -65,7 +65,7 @@ fn variant_with_named_fields() {
     enum TypedConstraint {
         IntLinLe {
             weights: Vec<i64>,
-            variables: Vec<VariableArgument<i64>>,
+            variables: Vec<VariableExpr<i64>>,
             bound: i64,
         },
     }
@@ -100,9 +100,9 @@ fn variant_with_named_fields() {
         TypedConstraint::IntLinLe {
             weights: vec![2, 3, 5],
             variables: vec![
-                VariableArgument::Identifier("x1".into()),
-                VariableArgument::Identifier("x2".into()),
-                VariableArgument::Identifier("x3".into())
+                VariableExpr::Identifier("x1".into()),
+                VariableExpr::Identifier("x2".into()),
+                VariableExpr::Identifier("x3".into())
             ],
             bound: 3
         }
@@ -116,7 +116,7 @@ fn variant_with_name_attribute() {
         #[name("int_lin_le")]
         LinearInequality {
             weights: Vec<i64>,
-            variables: Vec<VariableArgument<i64>>,
+            variables: Vec<VariableExpr<i64>>,
             bound: i64,
         },
     }
@@ -151,9 +151,9 @@ fn variant_with_name_attribute() {
         TypedConstraint::LinearInequality {
             weights: vec![2, 3, 5],
             variables: vec![
-                VariableArgument::Identifier("x1".into()),
-                VariableArgument::Identifier("x2".into()),
-                VariableArgument::Identifier("x3".into())
+                VariableExpr::Identifier("x1".into()),
+                VariableExpr::Identifier("x2".into()),
+                VariableExpr::Identifier("x3".into())
             ],
             bound: 3
         }
@@ -164,7 +164,7 @@ fn variant_with_name_attribute() {
 fn constraint_referencing_arrays() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
+        IntLinLe(Vec<i64>, Vec<VariableExpr<i64>>, i64),
     }
 
     let ast = Ast {
@@ -218,9 +218,9 @@ fn constraint_referencing_arrays() {
         TypedConstraint::IntLinLe(
             vec![2, 3, 5],
             vec![
-                VariableArgument::Identifier("x1".into()),
-                VariableArgument::Identifier("x2".into()),
-                VariableArgument::Identifier("x3".into())
+                VariableExpr::Identifier("x1".into()),
+                VariableExpr::Identifier("x2".into()),
+                VariableExpr::Identifier("x3".into())
             ],
             3
         )
@@ -238,7 +238,7 @@ fn constraint_as_struct_args() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     struct LinearLeq {
         weights: Vec<i64>,
-        variables: Vec<VariableArgument<i64>>,
+        variables: Vec<VariableExpr<i64>>,
         bound: i64,
     }
 
@@ -293,9 +293,9 @@ fn constraint_as_struct_args() {
         TypedConstraint::IntLinLe(LinearLeq {
             weights: vec![2, 3, 5],
             variables: vec![
-                VariableArgument::Identifier("x1".into()),
-                VariableArgument::Identifier("x2".into()),
-                VariableArgument::Identifier("x3".into())
+                VariableExpr::Identifier("x1".into()),
+                VariableExpr::Identifier("x2".into()),
+                VariableExpr::Identifier("x3".into())
             ],
             bound: 3,
         })

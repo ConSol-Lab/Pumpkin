@@ -16,7 +16,7 @@ use fzn_rs::ast::Literal;
 use fzn_rs::ast::RangeList;
 use fzn_rs::ast::Variable;
 use fzn_rs::TypedInstance;
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincAnnotation;
 use fzn_rs_derive::FlatZincConstraint;
 use utils::*;
@@ -39,7 +39,7 @@ macro_rules! btreemap {
 fn annotation_without_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -74,7 +74,7 @@ fn annotation_without_arguments() {
 fn annotation_with_positional_literal_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -129,7 +129,7 @@ fn annotation_with_positional_literal_arguments() {
 fn annotation_with_named_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -172,7 +172,7 @@ fn annotation_with_named_arguments() {
 fn nested_annotation_as_argument() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -237,7 +237,7 @@ fn nested_annotation_as_argument() {
 fn arrays_as_annotation_arguments_with_literal_elements() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -279,7 +279,7 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
 fn arrays_as_annotation_arguments_with_annotation_elements() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
@@ -337,7 +337,7 @@ fn arrays_as_annotation_arguments_with_annotation_elements() {
 fn annotations_can_be_structs_for_arguments() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        SomeConstraint(VariableArgument<i64>),
+        SomeConstraint(VariableExpr<i64>),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
