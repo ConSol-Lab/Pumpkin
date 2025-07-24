@@ -1,6 +1,5 @@
 //! Compile constraints into CP propagators
 
-use fzn_rs::VariableExpr;
 use pumpkin_core::variables::Literal;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
@@ -45,6 +44,10 @@ pub(crate) fn run(
     use Constraints::*;
 
     for constraint in &instance.constraints {
+        #[allow(
+            clippy::unnecessary_find_map,
+            reason = "when there are more variants on ConstraintAnnotations, this is the cleaner way"
+        )]
         let constraint_tag = constraint
             .annotations
             .iter()
@@ -464,19 +467,6 @@ fn compile_bool2int(
     )
 }
 
-fn compile_bool_or(
-    context: &mut CompilationContext<'_>,
-    args: &ArrayBoolArgs,
-    constraint_tag: ConstraintTag,
-) -> Result<bool, FlatZincError> {
-    let clause = context.resolve_bool_variable_array(&args.booleans)?;
-    let r = context.resolve_bool_variable(&args.reification)?;
-
-    Ok(constraints::clause(clause, constraint_tag)
-        .reify(context.solver, r)
-        .is_ok())
-}
-
 fn compile_bool_xor(
     context: &mut CompilationContext<'_>,
     args: &BinaryBool,
@@ -666,17 +656,6 @@ fn compile_bool_lin_le_predicate(
     )
     .post(context.solver)
     .is_ok())
-}
-
-fn compile_all_different(
-    context: &mut CompilationContext,
-    array: &[VariableExpr<i32>],
-    constraint_tag: ConstraintTag,
-) -> Result<bool, FlatZincError> {
-    let variables = context.resolve_integer_variable_array(array)?;
-    Ok(constraints::all_different(variables, constraint_tag)
-        .post(context.solver)
-        .is_ok())
 }
 
 fn compile_table(

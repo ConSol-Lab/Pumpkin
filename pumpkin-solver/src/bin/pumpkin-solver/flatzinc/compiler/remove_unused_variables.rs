@@ -19,15 +19,12 @@ pub(crate) fn run(ast: &mut Ast) -> Result<(), FlatZincError> {
     mark_identifiers_in_arrays(ast, &mut marked_identifiers);
 
     // Make sure the objective, which can be unconstrained, is always marked.
-    match &ast.solve.method.node {
-        fzn_rs::ast::Method::Optimize {
-            objective: fzn_rs::ast::Literal::Identifier(objective),
-            ..
-        } => {
-            let _ = marked_identifiers.insert(Rc::clone(objective));
-        }
-
-        _ => {}
+    if let fzn_rs::ast::Method::Optimize {
+        objective: fzn_rs::ast::Literal::Identifier(objective),
+        ..
+    } = &ast.solve.method.node
+    {
+        let _ = marked_identifiers.insert(Rc::clone(objective));
     }
 
     ast.variables.retain(|name, variable| {
@@ -72,10 +69,7 @@ fn mark_identifiers_in_constraints(ast: &Ast, marked_identifiers: &mut BTreeSet<
 }
 
 fn mark_literal(literal: &fzn_rs::ast::Literal, marked_identifiers: &mut BTreeSet<Rc<str>>) {
-    match literal {
-        fzn_rs::ast::Literal::Identifier(ident) => {
-            let _ = marked_identifiers.insert(Rc::clone(ident));
-        }
-        _ => {}
+    if let fzn_rs::ast::Literal::Identifier(ident) = literal {
+        let _ = marked_identifiers.insert(Rc::clone(ident));
     }
 }

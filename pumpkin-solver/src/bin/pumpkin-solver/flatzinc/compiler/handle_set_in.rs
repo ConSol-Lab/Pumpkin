@@ -18,7 +18,7 @@ pub(crate) fn run(
         };
 
         let id = match variable {
-            VariableExpr::Identifier(id) => Rc::clone(&id),
+            VariableExpr::Identifier(id) => Rc::clone(id),
             _ => return Err(FlatZincError::UnexpectedExpr),
         };
 

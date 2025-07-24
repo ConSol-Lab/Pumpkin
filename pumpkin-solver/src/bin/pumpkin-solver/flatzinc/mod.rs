@@ -257,7 +257,7 @@ fn parse_and_compile(
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut source = String::new();
-    instance.read_to_string(&mut source)?;
+    let _ = instance.read_to_string(&mut source)?;
 
     let ast = fzn_rs::fzn::parse(&source).expect("should handle errors here");
 
