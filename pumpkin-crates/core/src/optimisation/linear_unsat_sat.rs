@@ -58,8 +58,8 @@ where
         // First we will solve the satisfaction problem without constraining the objective.
         let primal_solution: Solution = match solver.satisfy(brancher, termination) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_) => return OptimisationResult::Unknown,
+            SatisfactionResult::Unsatisfiable(_, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
         };
 
         self.solution_callback.on_solution_callback(

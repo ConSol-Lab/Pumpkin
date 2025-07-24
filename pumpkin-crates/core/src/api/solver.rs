@@ -324,12 +324,12 @@ impl Solver {
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 let _ = self.satisfaction_solver.conclude_proof_unsat();
 
-                SatisfactionResult::Unsatisfiable(self)
+                SatisfactionResult::Unsatisfiable(self, brancher)
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResult::Unknown(self)
+                SatisfactionResult::Unknown(self, brancher)
             }
         }
     }
