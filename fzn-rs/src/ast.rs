@@ -222,15 +222,6 @@ pub struct RangeListIter<'a, E> {
 
 macro_rules! impl_range_list_iter {
     ($int_type:ty) => {
-        impl<'a> RangeListIter<'a, $int_type> {
-            fn new(intervals: &'a [($int_type, $int_type)]) -> Self {
-                RangeListIter {
-                    current_interval: intervals.first().copied().unwrap_or((1, 0)),
-                    tail: &intervals[1..],
-                }
-            }
-        }
-
         impl Iterator for RangeListIter<'_, $int_type> {
             type Item = $int_type;
 
