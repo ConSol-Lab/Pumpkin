@@ -66,7 +66,7 @@ pub(crate) fn run(
                     .create_equivalence_class_sparse(
                         Rc::clone(name),
                         set.into_iter()
-                            .map(|value| i32::try_from(value))
+                            .map(i32::try_from)
                             .collect::<Result<Vec<i32>, _>>()?,
                     )
             }
@@ -82,10 +82,11 @@ pub(crate) fn run(
 
 #[cfg(test)]
 mod tests {
+    use fzn_rs::{Method, Solve};
     use pumpkin_solver::Solver;
 
     use super::*;
-    use crate::flatzinc::compiler::context::Domain;
+    use crate::flatzinc::{ast::VariableAnnotations, compiler::context::Domain};
 
     #[test]
     fn bool_variable_creates_equivalence_class() {
@@ -188,16 +189,16 @@ mod tests {
     }
 
     fn create_dummy_instance(
-        variables: impl IntoIterator<Item = (&'static str, ast::Variable<()>)>,
+        variables: impl IntoIterator<Item = (&'static str, ast::Variable<VariableAnnotations>)>,
     ) -> Instance {
         Instance {
             variables: variables
                 .into_iter()
-                .map(|(name, data)| (name.into(), data))
+                .map(|(name, data)| (Rc::from(name), data))
                 .collect(),
             constraints: vec![],
-            solve: ast::SolveObjective {
-                method: test_node(ast::Method::Satisfy),
+            solve: Solve {
+                method: test_node(Method::Satisfy),
                 annotations: vec![],
             },
         }

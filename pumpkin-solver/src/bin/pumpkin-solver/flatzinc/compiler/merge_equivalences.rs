@@ -151,10 +151,9 @@ fn should_keep_constraint<Ann>(
 mod tests {
     use std::collections::BTreeMap;
 
-    use flatzinc::ConstraintItem;
-    use flatzinc::Expr;
-    use flatzinc::SolveItem;
     use fzn_rs::Constraint;
+    use fzn_rs::Method;
+    use fzn_rs::Solve;
     use pumpkin_solver::Solver;
 
     use super::*;
@@ -181,14 +180,14 @@ mod tests {
                 ),
             ]),
             constraints: vec![Constraint {
-                constraint: test_node(Constraints::IntEq(
+                constraint: test_node(Constraints::IntEq(Binary(
                     VariableExpr::Identifier("x".into()),
                     VariableExpr::Identifier("y".into()),
-                )),
+                ))),
                 annotations: vec![],
             }],
-            solve: ast::SolveObjective {
-                method: test_node(ast::Method::Satisfy),
+            solve: Solve {
+                method: test_node(Method::Satisfy),
                 annotations: vec![],
             },
         };
@@ -231,14 +230,14 @@ mod tests {
                 ),
             ]),
             constraints: vec![Constraint {
-                constraint: test_node(Constraints::IntEq(
+                constraint: test_node(Constraints::IntEq(Binary(
                     VariableExpr::Identifier("x".into()),
                     VariableExpr::Identifier("y".into()),
-                )),
+                ))),
                 annotations: vec![],
             }],
-            solve: ast::SolveObjective {
-                method: test_node(ast::Method::Satisfy),
+            solve: Solve {
+                method: test_node(Method::Satisfy),
                 annotations: vec![],
             },
         };
