@@ -633,12 +633,12 @@ fn cnf_problem(
                 )
             );
         }
-        SatisfactionResult::Unsatisfiable(solver) => {
+        SatisfactionResult::Unsatisfiable(solver, _) => {
             solver.log_statistics();
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown(solver) => {
+        SatisfactionResult::Unknown(solver, _) => {
             solver.log_statistics();
             println!("s UNKNOWN");
         }

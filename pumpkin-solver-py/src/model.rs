@@ -167,10 +167,10 @@ impl Model {
                     variable_map,
                 })
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_) => {
+            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown(_) => {
+            pumpkin_solver::results::SatisfactionResult::Unknown(_, _) => {
                 SatisfactionResult::Unknown()
             }
         };
