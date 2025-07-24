@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use fzn_rs::ast;
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use log::warn;
 
 use crate::flatzinc::ast::Instance;
@@ -123,8 +123,8 @@ fn should_keep_constraint<Ann>(
     };
 
     let v1 = match lhs {
-        VariableArgument::Identifier(id) => Rc::clone(id),
-        VariableArgument::Constant(_) => {
+        VariableExpr::Identifier(id) => Rc::clone(id),
+        VariableExpr::Constant(_) => {
             // I don't expect this to be called, but I am not sure. To make it obvious when it does
             // happen, the warning is logged.
             warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
@@ -133,8 +133,8 @@ fn should_keep_constraint<Ann>(
     };
 
     let v2 = match rhs {
-        VariableArgument::Identifier(id) => Rc::clone(id),
-        VariableArgument::Constant(_) => {
+        VariableExpr::Identifier(id) => Rc::clone(id),
+        VariableExpr::Constant(_) => {
             // I don't expect this to be called, but I am not sure. To make it obvious when it does
             // happen, the warning is logged.
             warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
@@ -182,8 +182,8 @@ mod tests {
             ]),
             constraints: vec![Constraint {
                 constraint: test_node(Constraints::IntEq(
-                    VariableArgument::Identifier("x".into()),
-                    VariableArgument::Identifier("y".into()),
+                    VariableExpr::Identifier("x".into()),
+                    VariableExpr::Identifier("y".into()),
                 )),
                 annotations: vec![],
             }],
@@ -232,8 +232,8 @@ mod tests {
             ]),
             constraints: vec![Constraint {
                 constraint: test_node(Constraints::IntEq(
-                    VariableArgument::Identifier("x".into()),
-                    VariableArgument::Identifier("y".into()),
+                    VariableExpr::Identifier("x".into()),
+                    VariableExpr::Identifier("y".into()),
                 )),
                 annotations: vec![],
             }],

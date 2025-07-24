@@ -1,6 +1,6 @@
 //! Compile constraints into CP propagators
 
-use fzn_rs::VariableArgument;
+use fzn_rs::VariableExpr;
 use pumpkin_core::variables::Literal;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
@@ -670,7 +670,7 @@ fn compile_bool_lin_le_predicate(
 
 fn compile_all_different(
     context: &mut CompilationContext,
-    array: &[VariableArgument<i32>],
+    array: &[VariableExpr<i32>],
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     let variables = context.resolve_integer_variable_array(array)?;

@@ -20,10 +20,14 @@ pub(crate) fn run(ast: &mut Ast) -> Result<(), FlatZincError> {
 
     // Make sure the objective, which can be unconstrained, is always marked.
     match &ast.solve.method.node {
-        fzn_rs::ast::Method::Satisfy => {}
-        fzn_rs::ast::Method::Optimize { objective, .. } => {
+        fzn_rs::ast::Method::Optimize {
+            objective: fzn_rs::ast::Literal::Identifier(objective),
+            ..
+        } => {
             let _ = marked_identifiers.insert(Rc::clone(objective));
         }
+
+        _ => {}
     }
 
     ast.variables.retain(|name, variable| {

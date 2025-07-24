@@ -1,4 +1,4 @@
-use std::num::TryFromIntError;
+use std::{num::TryFromIntError, rc::Rc};
 
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub(crate) enum FlatZincError {
 
     #[error("the identifier '{identifier}' does not resolve to an '{expected_type}'")]
     InvalidIdentifier {
-        identifier: Box<str>,
+        identifier: Rc<str>,
         expected_type: Box<str>,
     },
 
