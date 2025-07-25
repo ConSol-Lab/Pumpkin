@@ -87,7 +87,7 @@ pub struct Ast {
     /// A mapping from identifiers to variables.
     pub variables: BTreeMap<Rc<str>, Node<Variable<Annotation>>>,
     /// The arrays in this instance.
-    pub arrays: BTreeMap<Rc<str>, Node<Array>>,
+    pub arrays: BTreeMap<Rc<str>, Node<Array<Annotation>>>,
     /// A list of constraints.
     pub constraints: Vec<Node<Constraint>>,
     /// The goal of the model.
@@ -107,11 +107,11 @@ pub struct Variable<Ann> {
 
 /// A named array of literals.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Array {
+pub struct Array<Ann> {
     /// The elements of the array.
     pub contents: Vec<Node<Literal>>,
     /// The annotations associated with this array.
-    pub annotations: Vec<Node<Annotation>>,
+    pub annotations: Vec<Node<Ann>>,
 }
 
 /// The domain of a [`Variable`].
@@ -255,6 +255,12 @@ pub enum Literal {
     Identifier(Rc<str>),
     Bool(bool),
     IntSet(RangeList<i64>),
+}
+
+impl From<i64> for Literal {
+    fn from(value: i64) -> Self {
+        Literal::Int(value)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

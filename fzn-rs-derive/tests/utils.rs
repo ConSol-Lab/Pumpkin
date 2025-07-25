@@ -18,7 +18,10 @@ pub(crate) fn satisfy_solve() -> ast::SolveObjective<ast::Annotation> {
 pub(crate) fn test_node<T>(node: T) -> ast::Node<T> {
     ast::Node {
         node,
-        span: ast::Span { start: 0, end: 0 },
+        span: ast::Span {
+            start: usize::MAX,
+            end: usize::MAX,
+        },
     }
 }
 
