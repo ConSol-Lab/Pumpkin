@@ -47,7 +47,7 @@ fn annotation_without_arguments() {
         OutputVar,
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -83,7 +83,7 @@ fn annotation_with_positional_literal_arguments() {
         OutputArray(RangeList<i64>),
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -137,7 +137,7 @@ fn annotation_with_named_arguments() {
         DefinesVar { variable_id: Rc<str> },
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -186,7 +186,7 @@ fn nested_annotation_as_argument() {
         ArgTwo(Rc<str>),
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -245,7 +245,7 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
         SomeAnnotation(Vec<i64>),
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -293,7 +293,7 @@ fn arrays_as_annotation_arguments_with_annotation_elements() {
         ElementTwo(i64),
     }
 
-    type Instance = TypedInstance<TypedConstraint, (), TypedAnnotation, ()>;
+    type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
 
     let ast = Ast {
         variables: BTreeMap::new(),
@@ -359,7 +359,7 @@ fn annotations_can_be_structs_for_arguments() {
         ElementTwo(i64),
     }
 
-    type Instance = TypedInstance<TypedConstraint, TypedAnnotation>;
+    type Instance = TypedInstance<i64, TypedConstraint, TypedAnnotation>;
 
     let ast = Ast {
         variables: btreemap! {
