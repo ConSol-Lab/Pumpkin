@@ -1,14 +1,14 @@
-use std::{collections::BTreeMap, rc::Rc};
-
-use crate::ast;
-use crate::AnnotatedConstraint;
-use crate::InstanceError;
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use super::ArrayExpr;
 use super::FlatZincAnnotation;
 use super::FlatZincConstraint;
 use super::FromLiteral;
 use super::VariableExpr;
+use crate::ast;
+use crate::AnnotatedConstraint;
+use crate::InstanceError;
 
 /// A fully typed representation of a FlatZinc instance.
 ///
@@ -58,14 +58,14 @@ pub enum Method<Int> {
     },
 }
 
-impl<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
-    TypedInstance<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
+impl<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
+    TypedInstance<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
 {
     /// Get the elements in an [`ArrayExpr`].
     pub fn resolve_array<'a, T>(
         &'a self,
         array_expr: &'a ArrayExpr<T>,
-    ) -> Option<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a>
+    ) -> Result<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a, Rc<str>>
     where
         T: FromLiteral,
     {
@@ -73,11 +73,12 @@ impl<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
     }
 }
 
-impl<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
-    TypedInstance<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
+impl<Int, TConstraint, VAnnotations, AAnotations, CAnnotations, SAnnotations>
+    TypedInstance<Int, TConstraint, VAnnotations, AAnotations, CAnnotations, SAnnotations>
 where
     TConstraint: FlatZincConstraint,
     VAnnotations: FlatZincAnnotation,
+    AAnotations: FlatZincAnnotation,
     CAnnotations: FlatZincAnnotation,
     SAnnotations: FlatZincAnnotation,
     VariableExpr<Int>: FromLiteral,

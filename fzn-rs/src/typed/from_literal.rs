@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
-use crate::{ast, InstanceError, Token};
-
 use super::VariableExpr;
+use crate::ast;
+use crate::InstanceError;
+use crate::Token;
 
 /// Extract a value from an [`ast::Literal`].
 pub trait FromLiteral: Sized {
