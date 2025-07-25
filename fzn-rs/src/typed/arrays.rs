@@ -1,8 +1,13 @@
-use std::{collections::BTreeMap, marker::PhantomData, rc::Rc};
+use std::collections::BTreeMap;
+use std::marker::PhantomData;
+use std::rc::Rc;
 
-use crate::{ast, InstanceError, Token};
-
-use super::{FromArgument, FromLiteral, VariableExpr};
+use super::FromArgument;
+use super::FromLiteral;
+use super::VariableExpr;
+use crate::ast;
+use crate::InstanceError;
+use crate::Token;
 
 /// Models an array in a constraint argument.
 ///
@@ -35,14 +40,17 @@ where
     pub(crate) fn resolve<'a, Ann>(
         &'a self,
         arrays: &'a BTreeMap<Rc<str>, ast::Array<Ann>>,
-    ) -> Option<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a> {
+    ) -> Result<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a, Rc<str>> {
         match &self.expr {
-            ArrayExprImpl::Identifier(ident) => arrays.get(ident).map(|array| {
-                GenericIterator(Box::new(
-                    array.contents.iter().map(<T as FromLiteral>::from_literal),
-                ))
-            }),
-            ArrayExprImpl::Array(array) => Some(GenericIterator(Box::new(
+            ArrayExprImpl::Identifier(ident) => arrays
+                .get(ident)
+                .map(|array| {
+                    GenericIterator(Box::new(
+                        array.contents.iter().map(<T as FromLiteral>::from_literal),
+                    ))
+                })
+                .ok_or_else(|| Rc::clone(ident)),
+            ArrayExprImpl::Array(array) => Ok(GenericIterator(Box::new(
                 array.contents.iter().map(<T as FromLiteral>::from_literal),
             ))),
         }

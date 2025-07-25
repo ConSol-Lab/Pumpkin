@@ -152,6 +152,11 @@ impl<E: PartialOrd> RangeList<E> {
     pub fn is_continuous(&self) -> bool {
         self.intervals.len() == 1
     }
+
+    /// Get the ranges in this list.
+    pub fn ranges(&self) -> impl Iterator<Item = &(E, E)> {
+        self.intervals.iter()
+    }
 }
 
 macro_rules! impl_iter_fn {
