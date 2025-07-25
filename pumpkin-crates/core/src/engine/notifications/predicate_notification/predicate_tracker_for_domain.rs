@@ -66,76 +66,79 @@ impl PredicateTrackerForDomain {
         predicate_type: PredicateType,
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
-        stateful_trail: &mut TrailedValues,
+        trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
         statistics: &mut PredicateNotifierStatistics,
     ) {
         if !self.lower_bound.is_empty()
+            && !self.lower_bound.is_fixed(trailed_values)
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             statistics.num_lower_bound_updates += 1;
             self.lower_bound.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
-                stateful_trail,
+                trailed_values,
                 predicate_id_assignments,
                 None,
             );
         }
 
         if !self.upper_bound.is_empty()
+            && !self.upper_bound.is_fixed(trailed_values)
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             statistics.num_upper_bound_updates += 1;
             self.upper_bound.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
-                stateful_trail,
+                trailed_values,
                 predicate_id_assignments,
                 None,
             );
         }
         if predicate_type.is_disequality()
-            && (!self.disequality.is_empty() || !self.equality.is_empty())
+            && (!self.disequality.is_fixed(trailed_values)
+                || !self.equality.is_fixed(trailed_values))
         {
             let removed_values = assignments.get_holes_on_current_decision_level(domain);
             removed_values.for_each(|value| {
                 let predicate = predicate_type.into_predicate(domain, assignments, Some(value));
-                if !self.disequality.is_empty() {
+                if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
                     statistics.num_equality_bound_updates += 1;
                     self.disequality.on_update(
                         predicate,
-                        stateful_trail,
+                        trailed_values,
                         predicate_id_assignments,
                         Some(predicate_id_generator.get_id(predicate)),
                     );
                 }
 
-                if !self.equality.is_empty() {
+                if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
                     statistics.num_disequality_bound_updates += 1;
                     self.equality.on_update(
                         predicate,
-                        stateful_trail,
+                        trailed_values,
                         predicate_id_assignments,
                         None,
                     );
                 }
             })
         } else if !predicate_type.is_disequality() {
-            if !self.disequality.is_empty() {
+            if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
                 statistics.num_equality_bound_updates += 1;
                 let predicate = predicate_type.into_predicate(domain, assignments, None);
                 self.disequality.on_update(
                     predicate,
-                    stateful_trail,
+                    trailed_values,
                     predicate_id_assignments,
                     Some(predicate_id_generator.get_id(predicate)),
                 );
             }
 
-            if !self.equality.is_empty() {
+            if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
                 statistics.num_disequality_bound_updates += 1;
                 self.equality.on_update(
                     predicate_type.into_predicate(domain, assignments, None),
-                    stateful_trail,
+                    trailed_values,
                     predicate_id_assignments,
                     None,
                 );

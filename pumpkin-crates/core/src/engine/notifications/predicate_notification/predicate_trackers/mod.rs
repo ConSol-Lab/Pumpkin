@@ -197,22 +197,35 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
     }
 
     fn is_empty(&self) -> bool {
-        self.get_tracker().values.is_empty()
+        self.get_tracker().values.len() <= 2
     }
 
     fn is_fixed(&self, trailed_values: &TrailedValues) -> bool {
-        let min_assigned = self.get_tracker().greater
-            [trailed_values.read(self.get_tracker().min_assigned) as usize];
-        let max_assigned = self.get_tracker().smaller
-            [trailed_values.read(self.get_tracker().max_assigned) as usize];
-
-        if min_assigned == i64::MAX && max_assigned == i64::MAX {
+        if self.is_empty() {
             return true;
-        } else if min_assigned == i64::MAX || max_assigned == i64::MAX {
-            return false;
-        } else {
-            min_assigned > max_assigned
         }
+
+        let min_assigned = trailed_values.read(self.get_tracker().min_assigned);
+        let min_unassigned = self.get_tracker().greater[min_assigned as usize];
+
+        let max_assigned = trailed_values.read(self.get_tracker().max_assigned);
+        let max_unassigned = self.get_tracker().smaller[max_assigned as usize];
+
+        // We know that it is fixed if either:
+        // - min_unassigned is larger than or equal to the maximum assigned value
+        // - max_unassigned is lower than or equal to the minimum assigned value
+        //
+        // Let's take a look at an example:
+        //
+        // There is 1 values (and the sentinels): [0, 1, 5]
+        // We know that `min_assigned = 0` and `max_assigned = 2`
+        // Furthermore, `min_unassigned = 1` and `max_unassigned = 1` and we can see that it is not
+        // fixed
+        // Now, if we move `min_assigned = 1` then we also know that `min_unassigned = 2` which is
+        // larger than or equal to `max_assigned`
+        self.get_values()[min_unassigned as usize] >= self.get_values()[max_assigned as usize]
+            || self.get_values()[max_unassigned as usize]
+                <= self.get_values()[min_assigned as usize]
     }
 }
 

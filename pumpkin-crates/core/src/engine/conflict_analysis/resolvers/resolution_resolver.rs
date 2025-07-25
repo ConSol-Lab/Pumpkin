@@ -98,6 +98,10 @@ impl ConflictResolver for ResolutionResolver {
             );
         }
 
+        if self.to_process_heap.num_nonremoved_elements() == 0 {
+            panic!("Not at current decision level")
+        }
+
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
             self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
