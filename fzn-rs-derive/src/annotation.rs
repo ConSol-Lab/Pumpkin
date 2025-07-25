@@ -1,9 +1,12 @@
 use quote::quote;
 
+/// Construct a token stream that initialises a value with name `value_type` and the arguments
+/// described in `fields`.
 pub(crate) fn initialise_value(
     value_type: &syn::Ident,
     fields: &syn::Fields,
 ) -> proc_macro2::TokenStream {
+    // For every field, initialise the value for that field.
     let field_values = fields.iter().enumerate().map(|(idx, field)| {
         let ty = &field.ty;
 
@@ -14,6 +17,9 @@ pub(crate) fn initialise_value(
             quote! {}
         };
 
+        // If there is an `#[annotation]` attribute on the field, then the value is the result of
+        // parsing a nested annotation. Otherwise, we look at the type of the field
+        // and parse the value corresponding to that type.
         if field.attrs.iter().any(|attr| {
             attr.path()
                 .get_ident()
@@ -33,6 +39,7 @@ pub(crate) fn initialise_value(
         }
     });
 
+    // Complete the value initialiser by prepending the type name to the field values.
     let value_initialiser = match fields {
         syn::Fields::Named(_) => quote! { #value_type { #(#field_values),* } },
         syn::Fields::Unnamed(_) => quote! { #value_type ( #(#field_values),* ) },
@@ -41,6 +48,7 @@ pub(crate) fn initialise_value(
 
     let num_arguments = fields.len();
 
+    // Output the final initialisation, with checking of number of arguments.
     quote! {
         if arguments.len() != #num_arguments {
             return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments {
@@ -53,6 +61,7 @@ pub(crate) fn initialise_value(
     }
 }
 
+/// Create the parsing code for one annotation corresponding to the given variant.
 pub(crate) fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::TokenStream {
     // Determine the flatzinc annotation name.
     let name = match crate::common::get_explicit_name(variant) {
@@ -66,6 +75,8 @@ pub(crate) fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::Toke
 
     let variant_name = &variant.ident;
 
+    // If variant argument is a struct, then delegate parsing of the annotation arguments to that
+    // struct.
     if let Some(constraint_type) = crate::common::get_args_type(variant) {
         return quote! {
             ::fzn_rs::ast::Annotation::Call(::fzn_rs::ast::AnnotationCall {
@@ -79,6 +90,8 @@ pub(crate) fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::Toke
         };
     }
 
+    // If the variant has no arguments, parse an atom annotaton. Otherwise, initialise the values
+    // of the variant arguments.
     if matches!(variant.fields, syn::Fields::Unit) {
         quote! {
             ::fzn_rs::ast::Annotation::Atom(ident) if ident.as_ref() == #name => {

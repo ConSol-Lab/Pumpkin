@@ -1,5 +1,7 @@
 use quote::quote;
 
+/// Construct a token stream that initialises a value with name `value_type` and the arguments
+/// described in `fields`.
 pub(crate) fn initialise_value(
     identifier: &syn::Ident,
     fields: &syn::Fields,
@@ -49,6 +51,8 @@ pub(crate) fn flatzinc_constraint_for_enum(
     constraint_enum_name: &syn::Ident,
     data_enum: &syn::DataEnum,
 ) -> proc_macro2::TokenStream {
+    // For every variant in the enum, create a match arm that matches the constraint name and
+    // parses the constraint with the appropriate arguments.
     let constraints = data_enum.variants.iter().map(|variant| {
         // Determine the flatzinc name of the constraint.
         let name = match crate::common::get_explicit_name(variant) {

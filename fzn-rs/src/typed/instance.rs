@@ -17,27 +17,27 @@ use crate::InstanceError;
 #[derive(Clone, Debug)]
 pub struct TypedInstance<
     Int,
-    TConstraint,
-    VAnnotations = (),
-    AAnnotations = (),
-    CAnnotations = (),
-    SAnnotations = (),
+    Constraint,
+    VariableAnnotations = (),
+    ArrayAnnotations = (),
+    ConstraintAnnotations = (),
+    SolveAnnotations = (),
 > {
     /// The variables that are in the instance.
     ///
     /// The key is the identifier of the variable, and the value is the domain of the variable.
-    pub variables: BTreeMap<Rc<str>, ast::Variable<VAnnotations>>,
+    pub variables: BTreeMap<Rc<str>, ast::Variable<VariableAnnotations>>,
 
     /// The arrays in the instance.
     ///
     /// The key is the identifier of the array, and the value is the array itself.
-    pub arrays: BTreeMap<Rc<str>, ast::Array<AAnnotations>>,
+    pub arrays: BTreeMap<Rc<str>, ast::Array<ArrayAnnotations>>,
 
     /// The constraints in the instance.
-    pub constraints: Vec<AnnotatedConstraint<TConstraint, CAnnotations>>,
+    pub constraints: Vec<AnnotatedConstraint<Constraint, ConstraintAnnotations>>,
 
-    /// The solve item indicating the type of model.
-    pub solve: Solve<Int, SAnnotations>,
+    /// The solve item indicating how to solve the model.
+    pub solve: Solve<Int, SolveAnnotations>,
 }
 
 /// Specifies how to solve a [`TypedInstance`].
@@ -49,6 +49,7 @@ pub struct Solve<Int, Ann> {
     pub annotations: Vec<ast::Node<Ann>>,
 }
 
+/// Indicate whether the model is an optimisation or satisfaction model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Method<Int> {
     Satisfy,
