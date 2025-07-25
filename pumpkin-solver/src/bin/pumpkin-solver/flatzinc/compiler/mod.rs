@@ -3,6 +3,7 @@ mod context;
 mod create_objective;
 mod create_search_strategy;
 mod handle_set_in;
+mod identify_output_arrays;
 mod merge_equivalences;
 mod post_constraints;
 mod prepare_variables;
@@ -32,6 +33,7 @@ pub(crate) fn compile(
     merge_equivalences::run(&mut typed_ast, &mut context, &options)?;
     handle_set_in::run(&mut typed_ast, &mut context)?;
     collect_domains::run(&typed_ast, &mut context)?;
+    identify_output_arrays::run(&typed_ast, &mut context)?;
     post_constraints::run(&typed_ast, &mut context, &options)?;
     let objective_function = create_objective::run(&typed_ast, &mut context)?;
     let search = create_search_strategy::run(&typed_ast, &mut context, objective_function)?;
