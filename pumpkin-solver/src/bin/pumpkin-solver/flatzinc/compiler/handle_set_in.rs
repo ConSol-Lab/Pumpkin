@@ -5,7 +5,9 @@ use std::rc::Rc;
 use fzn_rs::VariableExpr;
 
 use super::context::CompilationContext;
-use crate::flatzinc::{ast::Instance, constraints::Constraints, error::FlatZincError};
+use crate::flatzinc::ast::Instance;
+use crate::flatzinc::constraints::Constraints;
+use crate::flatzinc::error::FlatZincError;
 
 pub(crate) fn run(
     instance: &mut Instance,

@@ -82,11 +82,15 @@ pub(crate) fn run(
 
 #[cfg(test)]
 mod tests {
-    use fzn_rs::{Method, Solve};
+    use std::collections::BTreeMap;
+
+    use fzn_rs::Method;
+    use fzn_rs::Solve;
     use pumpkin_solver::Solver;
 
     use super::*;
-    use crate::flatzinc::{ast::VariableAnnotations, compiler::context::Domain};
+    use crate::flatzinc::ast::VariableAnnotations;
+    use crate::flatzinc::compiler::context::Domain;
 
     #[test]
     fn bool_variable_creates_equivalence_class() {
@@ -196,6 +200,7 @@ mod tests {
                 .into_iter()
                 .map(|(name, data)| (Rc::from(name), data))
                 .collect(),
+            arrays: BTreeMap::new(),
             constraints: vec![],
             solve: Solve {
                 method: test_node(Method::Satisfy),

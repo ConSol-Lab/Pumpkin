@@ -1,4 +1,6 @@
-use fzn_rs::{ast::RangeList, VariableExpr};
+use fzn_rs::ast::RangeList;
+use fzn_rs::ArrayExpr;
+use fzn_rs::VariableExpr;
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) enum Constraints {
@@ -77,7 +79,7 @@ pub(crate) enum Constraints {
     IntDiv(TernaryIntArgs),
 
     #[name("pumpkin_all_different")]
-    AllDifferent(Vec<VariableExpr<i32>>),
+    AllDifferent(ArrayExpr<VariableExpr<i32>>),
 
     #[args]
     #[name("pumpkin_table_int")]
@@ -137,9 +139,9 @@ pub(crate) enum Constraints {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct CumulativeArgs {
-    pub(crate) start_times: Vec<VariableExpr<i32>>,
-    pub(crate) durations: Vec<i32>,
-    pub(crate) resource_requirements: Vec<i32>,
+    pub(crate) start_times: ArrayExpr<VariableExpr<i32>>,
+    pub(crate) durations: ArrayExpr<i32>,
+    pub(crate) resource_requirements: ArrayExpr<i32>,
     pub(crate) resource_capacity: i32,
 }
 
@@ -152,21 +154,21 @@ pub(crate) struct SetInReifArgs {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolClauseArgs {
-    pub(crate) clause_1: Vec<VariableExpr<bool>>,
-    pub(crate) clause_2: Vec<VariableExpr<bool>>,
+    pub(crate) clause_1: ArrayExpr<VariableExpr<bool>>,
+    pub(crate) clause_2: ArrayExpr<VariableExpr<bool>>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolLinEqArgs {
-    pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableExpr<bool>>,
+    pub(crate) weights: ArrayExpr<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
     pub(crate) sum: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolLinLeArgs {
-    pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableExpr<bool>>,
+    pub(crate) weights: ArrayExpr<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
     pub(crate) bound: i32,
 }
 
@@ -178,7 +180,7 @@ pub(crate) struct BoolToIntArgs {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ArrayBoolArgs {
-    pub(crate) booleans: Vec<VariableExpr<bool>>,
+    pub(crate) booleans: ArrayExpr<VariableExpr<bool>>,
     pub(crate) reification: VariableExpr<bool>,
 }
 
@@ -197,20 +199,20 @@ pub(crate) struct BinaryBoolReif {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct TableInt {
-    pub(crate) variables: Vec<VariableExpr<i32>>,
-    pub(crate) table: Vec<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
+    pub(crate) table: ArrayExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct TableIntReif {
-    pub(crate) variables: Vec<VariableExpr<i32>>,
-    pub(crate) table: Vec<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
+    pub(crate) table: ArrayExpr<i32>,
     pub(crate) reification: VariableExpr<bool>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ArrayExtremum {
-    pub(crate) array: Vec<VariableExpr<i32>>,
+    pub(crate) array: ArrayExpr<VariableExpr<i32>>,
     pub(crate) extremum: VariableExpr<i32>,
 }
 
@@ -224,14 +226,14 @@ pub(crate) struct TernaryIntArgs {
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct IntElementArgs {
     pub(crate) index: VariableExpr<i32>,
-    pub(crate) array: Vec<VariableExpr<i32>>,
+    pub(crate) array: ArrayExpr<VariableExpr<i32>>,
     pub(crate) rhs: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolElementArgs {
     pub(crate) index: VariableExpr<i32>,
-    pub(crate) array: Vec<VariableExpr<bool>>,
+    pub(crate) array: ArrayExpr<VariableExpr<bool>>,
     pub(crate) rhs: VariableExpr<bool>,
 }
 
@@ -247,15 +249,15 @@ pub(crate) struct ReifiedBinary {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct Linear {
-    pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableExpr<i32>>,
+    pub(crate) weights: ArrayExpr<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
     pub(crate) rhs: i32,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ReifiedLinear {
-    pub(crate) weights: Vec<i32>,
-    pub(crate) variables: Vec<VariableExpr<i32>>,
+    pub(crate) weights: ArrayExpr<i32>,
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
     pub(crate) rhs: i32,
     pub(crate) reification: VariableExpr<bool>,
 }

@@ -8,10 +8,10 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
 use super::context::CompilationContext;
-use crate::flatzinc::ast::BoolSearchStrategy;
+use crate::flatzinc::ast::BoolSearchArgs;
 use crate::flatzinc::ast::Instance;
-use crate::flatzinc::ast::IntSearchStrategy;
-use crate::flatzinc::ast::Search;
+use crate::flatzinc::ast::IntSearchArgs;
+use crate::flatzinc::ast::SearchAnnotation;
 use crate::flatzinc::ast::ValueSelectionStrategy;
 use crate::flatzinc::ast::VariableSelectionStrategy;
 use crate::flatzinc::error::FlatZincError;
@@ -27,25 +27,24 @@ pub(crate) fn run(
         .annotations
         .iter()
         .map(|node| &node.node)
-        .next()
-        .unwrap_or(&Search::Unspecified);
+        .next();
 
     create_from_search_strategy(search, context, true, objective)
 }
 
 fn create_from_search_strategy(
-    strategy: &Search,
+    strategy: Option<&SearchAnnotation>,
     context: &mut CompilationContext,
     append_default_search: bool,
     objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
     let mut brancher = match strategy {
-        Search::BoolSearch(BoolSearchStrategy {
+        Some(SearchAnnotation::BoolSearch(BoolSearchArgs {
             variables,
             variable_selection_strategy,
             value_selection_strategy,
-        }) => {
-            let search_variables = context.resolve_bool_variable_array(variables)?;
+        })) => {
+            let search_variables = context.resolve_bool_variable_array_vec(variables)?;
 
             create_search_over_propositional_variables(
                 &search_variables,
@@ -53,12 +52,12 @@ fn create_from_search_strategy(
                 value_selection_strategy,
             )
         }
-        Search::IntSearch(IntSearchStrategy {
+        Some(SearchAnnotation::IntSearch(IntSearchArgs {
             variables,
             variable_selection_strategy,
             value_selection_strategy,
-        }) => {
-            let search_variables = context.resolve_integer_variable_array(variables)?;
+        })) => {
+            let search_variables = context.resolve_integer_variable_array_vec(variables)?;
 
             create_search_over_domains(
                 &search_variables,
@@ -66,12 +65,12 @@ fn create_from_search_strategy(
                 value_selection_strategy,
             )
         }
-        Search::Seq(search_strategies) => DynamicBrancher::new(
+        Some(SearchAnnotation::Seq(search_strategies)) => DynamicBrancher::new(
             search_strategies
                 .iter()
                 .map(|strategy| {
                     let downcast: Box<dyn Brancher> = Box::new(
-                        create_from_search_strategy(strategy, context, false, objective)
+                        create_from_search_strategy(Some(strategy), context, false, objective)
                             .expect("Expected nested sequential strategy to be able to be created"),
                     );
                     downcast
@@ -79,7 +78,7 @@ fn create_from_search_strategy(
                 .collect::<Vec<_>>(),
         ),
 
-        Search::Unspecified => {
+        None => {
             assert!(
                 append_default_search,
                 "when no search is specified, we must add a default search"

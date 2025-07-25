@@ -1,3 +1,4 @@
+use fzn_rs::ast::RangeList;
 use fzn_rs::FromAnnotationArgument;
 use fzn_rs::VariableExpr;
 use log::warn;
@@ -167,17 +168,16 @@ impl ValueSelectionStrategy {
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
-pub(crate) enum Search {
+pub(crate) enum SearchAnnotation {
     #[args]
-    BoolSearch(BoolSearchStrategy),
+    BoolSearch(BoolSearchArgs),
     #[args]
-    IntSearch(IntSearchStrategy),
-    Seq(#[annotation] Vec<Search>),
-    Unspecified,
+    IntSearch(IntSearchArgs),
+    Seq(#[annotation] Vec<SearchAnnotation>),
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
-pub(crate) struct IntSearchStrategy {
+pub(crate) struct IntSearchArgs {
     pub(crate) variables: Vec<VariableExpr<i32>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
@@ -186,7 +186,7 @@ pub(crate) struct IntSearchStrategy {
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
-pub(crate) struct BoolSearchStrategy {
+pub(crate) struct BoolSearchArgs {
     pub(crate) variables: Vec<VariableExpr<bool>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
@@ -197,6 +197,11 @@ pub(crate) struct BoolSearchStrategy {
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum VariableAnnotations {
     OutputVar,
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum ArrayAnnotations {
+    OutputArray(RangeList<i32>),
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
@@ -231,6 +236,7 @@ pub(crate) type Instance = fzn_rs::TypedInstance<
     i32,
     super::constraints::Constraints,
     VariableAnnotations,
+    ArrayAnnotations,
     ConstraintAnnotations,
-    Search,
+    SearchAnnotation,
 >;

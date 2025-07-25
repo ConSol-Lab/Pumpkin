@@ -115,7 +115,7 @@ fn remove_int_eq_constraints(
 /// Possibly merges some equivalence classes based on the constraint. Returns `true` if the
 /// constraint needs to be retained, and `false` if it can be removed from the AST.
 fn should_keep_constraint<Ann>(
-    constraint: &fzn_rs::Constraint<Constraints, Ann>,
+    constraint: &fzn_rs::AnnotatedConstraint<Constraints, Ann>,
     context: &mut CompilationContext,
 ) -> bool {
     let Constraints::IntEq(Binary(lhs, rhs)) = &constraint.constraint.node else {
@@ -151,7 +151,7 @@ fn should_keep_constraint<Ann>(
 mod tests {
     use std::collections::BTreeMap;
 
-    use fzn_rs::Constraint;
+    use fzn_rs::AnnotatedConstraint;
     use fzn_rs::Method;
     use fzn_rs::Solve;
     use pumpkin_solver::Solver;
@@ -179,7 +179,8 @@ mod tests {
                     },
                 ),
             ]),
-            constraints: vec![Constraint {
+            arrays: BTreeMap::new(),
+            constraints: vec![AnnotatedConstraint {
                 constraint: test_node(Constraints::IntEq(Binary(
                     VariableExpr::Identifier("x".into()),
                     VariableExpr::Identifier("y".into()),
@@ -229,7 +230,8 @@ mod tests {
                     },
                 ),
             ]),
-            constraints: vec![Constraint {
+            arrays: BTreeMap::new(),
+            constraints: vec![AnnotatedConstraint {
                 constraint: test_node(Constraints::IntEq(Binary(
                     VariableExpr::Identifier("x".into()),
                     VariableExpr::Identifier("y".into()),

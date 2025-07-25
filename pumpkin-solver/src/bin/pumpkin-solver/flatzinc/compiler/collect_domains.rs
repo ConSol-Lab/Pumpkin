@@ -3,9 +3,12 @@
 use std::rc::Rc;
 
 use fzn_rs::ast;
+use fzn_rs::FromLiteral;
+use fzn_rs::VariableExpr;
 
 use super::context::CompilationContext;
 use super::context::Domain;
+use crate::flatzinc::ast::ArrayAnnotations;
 use crate::flatzinc::ast::Instance;
 use crate::flatzinc::ast::VariableAnnotations;
 use crate::flatzinc::instance::Output;
@@ -15,6 +18,56 @@ pub(crate) fn run(
     instance: &Instance,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
+    for (name, array) in &instance.arrays {
+        #[allow(
+            clippy::unnecessary_find_map,
+            reason = "it is only unnecessary because ArrayAnnotations has one variant"
+        )]
+        let Some(shape) = array.annotations.iter().find_map(|ann| match &ann.node {
+            ArrayAnnotations::OutputArray(shape) => Some(shape),
+        }) else {
+            continue;
+        };
+
+        // This is a bit hacky. We do not know easily whether the array is an array of
+        // integers or booleans. So we try to resolve both, and then see which one works.
+
+        let bool_array = array
+            .contents
+            .iter()
+            .map(|node| {
+                let variable = <VariableExpr<bool> as FromLiteral>::from_literal(node)?;
+
+                let literal = context.resolve_bool_variable(&variable)?;
+                Ok(literal)
+            })
+            .collect::<Result<Vec<_>, FlatZincError>>();
+
+        let int_array = array
+            .contents
+            .iter()
+            .map(|node| {
+                let variable = <VariableExpr<i32> as FromLiteral>::from_literal(node)?;
+
+                let domain_id = context.resolve_integer_variable(&variable)?;
+                Ok(domain_id)
+            })
+            .collect::<Result<Vec<_>, FlatZincError>>();
+
+        let output = match (bool_array, int_array) {
+            (Ok(_), Ok(_)) => {
+                unreachable!("Array of identifiers that are both integers and booleans")
+            }
+
+            (Ok(bools), Err(_)) => Output::array_of_bool(Rc::clone(name), shape.clone(), bools),
+            (Err(_), Ok(ints)) => Output::array_of_int(Rc::clone(name), shape.clone(), ints),
+
+            (Err(_), Err(_)) => unreachable!("Array is neither of boolean or integer variables."),
+        };
+
+        context.outputs.push(output);
+    }
+
     for (name, variable) in &instance.variables {
         match &variable.domain.node {
             ast::Domain::Bool => {
