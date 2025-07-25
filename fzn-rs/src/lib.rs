@@ -12,6 +12,20 @@
 //! constraints as they are supported by your application. Finally, our aim is to improve the error
 //! messages that are encountered when parsing invalid FlatZinc files.
 //!
+//! ## Typed Instance
+//! The main type exposed by the crate is [`TypedInstance`], which is a fully typed representation
+//! of a FlatZinc model.
+//!
+//! ```
+//! use fzn_rs::TypedInstance;
+//!
+//! enum Constraints {
+//!     // ...
+//! }
+//!
+//! type Instance = TypedInstance<i32, Constraints>;
+//! ```
+//!
 //! ## Derive Macro
 //! When parsing a FlatZinc file, the result is an [`ast::Ast`]. That type describes any valid
 //! FlatZinc file. However, when consuming FlatZinc, typically you need to process that AST
@@ -20,27 +34,28 @@
 //!
 //! When using this crate with the `derive` feature, you can instead do the following:
 //! ```rust
+//! use fzn_rs::ArrayExpr;
 //! use fzn_rs::FlatZincConstraint;
-//! use fzn_rs::VariableArgument;
+//! use fzn_rs::VariableExpr;
 //!
 //! #[derive(FlatZincConstraint)]
 //! pub enum MyConstraints {
 //!     /// The variant name is converted to snake_case to serve as the constraint identifier by
 //!     /// default.
-//!     IntLinLe(Vec<i64>, Vec<VariableArgument<i64>>, i64),
+//!     IntLinLe(ArrayExpr<i64>, ArrayExpr<VariableExpr<i64>>, i64),
 //!
 //!     /// If the snake_case version of the variant name is different from the constraint
 //!     /// identifier, then the `#[name(...)], attribute allows you to set the constraint
 //!     /// identifier explicitly.
 //!     #[name("int_lin_eq")]
-//!     LinearEquality(Vec<i64>, Vec<VariableArgument<i64>>, i64),
+//!     LinearEquality(ArrayExpr<i64>, ArrayExpr<VariableExpr<i64>>, i64),
 //!
 //!     /// Constraint arguments can also be named, but the order determines how they are parsed
 //!     /// from the AST.
 //!     Element {
-//!         index: VariableArgument<i64>,
-//!         array: Vec<VariableArgument<i64>>,
-//!         rhs: VariableArgument<i64>,
+//!         index: VariableExpr<i64>,
+//!         array: ArrayExpr<i64>,
+//!         rhs: VariableExpr<i64>,
 //!     },
 //!
 //!     /// Arguments can also be separate structs, if the enum variant has exactly one argument.
@@ -50,12 +65,12 @@
 //!
 //! #[derive(FlatZincConstraint)]
 //! pub struct Multiplication {
-//!     a: VariableArgument<i64>,
-//!     b: VariableArgument<i64>,
-//!     c: VariableArgument<i64>,
+//!     a: VariableExpr<i64>,
+//!     b: VariableExpr<i64>,
+//!     c: VariableExpr<i64>,
 //! }
 //! ```
-//! The macro automatically implements [`from_ast::FlatZincConstraint`] and will handle the parsing
+//! The macro automatically implements [`FlatZincConstraint`] and will handle the parsing
 //! of arguments for you.
 //!
 //! Similar to typed constraints, the derive macro for [`FlatZincAnnotation`] allows for easy
@@ -87,145 +102,15 @@
 //! simply ignored.
 //!
 //! [1]: https://docs.minizinc.dev/en/stable/lib-flatzinc-int.html#int-lin-le
-#[cfg(feature = "derive")]
-pub use fzn_rs_derive::*;
-
-pub mod ast;
 
 mod error;
-mod from_ast;
+mod typed;
+
+pub mod ast;
 #[cfg(feature = "fzn")]
 pub mod fzn;
 
-use std::collections::BTreeMap;
-use std::rc::Rc;
-
 pub use error::*;
-pub use from_ast::*;
-
-#[derive(Clone, Debug)]
-pub struct TypedInstance<Int, TConstraint, VAnnotations = (), CAnnotations = (), SAnnotations = ()>
-{
-    /// The variables that are in the instance.
-    ///
-    /// The key is the identifier of the variable, and the value is the domain of the variable.
-    pub variables: BTreeMap<Rc<str>, ast::Variable<VAnnotations>>,
-
-    /// The constraints in the instance.
-    pub constraints: Vec<Constraint<TConstraint, CAnnotations>>,
-
-    /// The solve item indicating the type of model.
-    pub solve: Solve<Int, SAnnotations>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Solve<Int, Ann> {
-    pub method: ast::Node<Method<Int>>,
-    pub annotations: Vec<ast::Node<Ann>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Method<Int> {
-    Satisfy,
-    Optimize {
-        direction: ast::OptimizationDirection,
-        objective: VariableExpr<Int>,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub struct Constraint<TConstraint, Annotation> {
-    pub constraint: ast::Node<TConstraint>,
-    pub annotations: Vec<ast::Node<Annotation>>,
-}
-
-impl<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
-    TypedInstance<Int, TConstraint, VAnnotations, CAnnotations, SAnnotations>
-where
-    TConstraint: FlatZincConstraint,
-    VAnnotations: FlatZincAnnotation,
-    CAnnotations: FlatZincAnnotation,
-    SAnnotations: FlatZincAnnotation,
-    VariableExpr<Int>: FromLiteral,
-{
-    pub fn from_ast(ast: ast::Ast) -> Result<Self, InstanceError> {
-        let variables = ast
-            .variables
-            .into_iter()
-            .map(|(id, variable)| {
-                let variable = ast::Variable {
-                    domain: variable.node.domain,
-                    value: variable.node.value,
-                    annotations: map_annotations(&variable.node.annotations)?,
-                };
-
-                Ok((id, variable))
-            })
-            .collect::<Result<_, _>>()?;
-
-        let constraints = ast
-            .constraints
-            .iter()
-            .map(|constraint| {
-                let annotations = map_annotations(&constraint.node.annotations)?;
-
-                let instance_constraint = TConstraint::from_ast(&constraint.node, &ast.arrays)?;
-
-                Ok(Constraint {
-                    constraint: ast::Node {
-                        node: instance_constraint,
-                        span: constraint.span,
-                    },
-                    annotations,
-                })
-            })
-            .collect::<Result<_, _>>()?;
-
-        let solve = Solve {
-            method: match ast.solve.method.node {
-                ast::Method::Satisfy => ast::Node {
-                    node: Method::Satisfy,
-                    span: ast.solve.method.span,
-                },
-                ast::Method::Optimize {
-                    direction,
-                    objective,
-                } => ast::Node {
-                    node: Method::Optimize {
-                        direction,
-                        objective: <VariableExpr<Int> as FromLiteral>::from_literal(&ast::Node {
-                            node: objective,
-                            span: ast.solve.method.span,
-                        })?,
-                    },
-                    span: ast.solve.method.span,
-                },
-            },
-            annotations: map_annotations(&ast.solve.annotations)?,
-        };
-
-        Ok(TypedInstance {
-            variables,
-            constraints,
-            solve,
-        })
-    }
-}
-
-fn map_annotations<Ann: FlatZincAnnotation>(
-    annotations: &[ast::Node<ast::Annotation>],
-) -> Result<Vec<ast::Node<Ann>>, InstanceError> {
-    annotations
-        .iter()
-        .filter_map(|annotation| {
-            Ann::from_ast(&annotation.node)
-                .map(|maybe_node| {
-                    maybe_node.map(|node| ast::Node {
-                        node,
-                        span: annotation.span,
-                    })
-                })
-                .transpose()
-        })
-        .collect()
-}
+#[cfg(feature = "derive")]
+pub use fzn_rs_derive::*;
+pub use typed::*;

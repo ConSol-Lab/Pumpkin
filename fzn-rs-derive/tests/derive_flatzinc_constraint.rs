@@ -8,6 +8,7 @@ use fzn_rs::ast::Argument;
 use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
+use fzn_rs::ArrayExpr;
 use fzn_rs::TypedInstance;
 use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincConstraint;
@@ -17,7 +18,7 @@ use utils::*;
 fn variant_with_unnamed_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        IntLinLe(Vec<i64>, Vec<VariableExpr<i64>>, i64),
+        IntLinLe(ArrayExpr<i64>, ArrayExpr<VariableExpr<i64>>, i64),
     }
 
     let ast = Ast {
@@ -43,20 +44,31 @@ fn variant_with_unnamed_fields() {
         solve: satisfy_solve(),
     };
 
-    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect("valid instance");
+    let TypedConstraint::IntLinLe(weights, variables, bound) =
+        instance.constraints[0].clone().constraint.node;
 
+    let weights = instance
+        .resolve_array(&weights)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let variables = instance
+        .resolve_array(&variables)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(weights, vec![2, 3, 5]);
     assert_eq!(
-        instance.constraints[0].constraint.node,
-        TypedConstraint::IntLinLe(
-            vec![2, 3, 5],
-            vec![
-                VariableExpr::Identifier("x1".into()),
-                VariableExpr::Identifier("x2".into()),
-                VariableExpr::Identifier("x3".into())
-            ],
-            3
-        )
-    )
+        variables,
+        vec![
+            VariableExpr::Identifier("x1".into()),
+            VariableExpr::Identifier("x2".into()),
+            VariableExpr::Identifier("x3".into())
+        ]
+    );
+    assert_eq!(bound, 3);
 }
 
 #[test]
@@ -64,8 +76,8 @@ fn variant_with_named_fields() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
         IntLinLe {
-            weights: Vec<i64>,
-            variables: Vec<VariableExpr<i64>>,
+            weights: ArrayExpr<i64>,
+            variables: ArrayExpr<VariableExpr<i64>>,
             bound: i64,
         },
     }
@@ -93,20 +105,34 @@ fn variant_with_named_fields() {
         solve: satisfy_solve(),
     };
 
-    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect("valid instance");
+    let TypedConstraint::IntLinLe {
+        weights,
+        variables,
+        bound,
+    } = instance.constraints[0].clone().constraint.node;
 
+    let weights = instance
+        .resolve_array(&weights)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let variables = instance
+        .resolve_array(&variables)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(weights, vec![2, 3, 5]);
     assert_eq!(
-        instance.constraints[0].constraint.node,
-        TypedConstraint::IntLinLe {
-            weights: vec![2, 3, 5],
-            variables: vec![
-                VariableExpr::Identifier("x1".into()),
-                VariableExpr::Identifier("x2".into()),
-                VariableExpr::Identifier("x3".into())
-            ],
-            bound: 3
-        }
-    )
+        variables,
+        vec![
+            VariableExpr::Identifier("x1".into()),
+            VariableExpr::Identifier("x2".into()),
+            VariableExpr::Identifier("x3".into())
+        ]
+    );
+    assert_eq!(bound, 3);
 }
 
 #[test]
@@ -115,8 +141,8 @@ fn variant_with_name_attribute() {
     enum TypedConstraint {
         #[name("int_lin_le")]
         LinearInequality {
-            weights: Vec<i64>,
-            variables: Vec<VariableExpr<i64>>,
+            weights: ArrayExpr<i64>,
+            variables: ArrayExpr<VariableExpr<i64>>,
             bound: i64,
         },
     }
@@ -144,27 +170,41 @@ fn variant_with_name_attribute() {
         solve: satisfy_solve(),
     };
 
-    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect("valid instance");
+    let TypedConstraint::LinearInequality {
+        weights,
+        variables,
+        bound,
+    } = instance.constraints[0].clone().constraint.node;
 
+    let weights = instance
+        .resolve_array(&weights)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let variables = instance
+        .resolve_array(&variables)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(weights, vec![2, 3, 5]);
     assert_eq!(
-        instance.constraints[0].constraint.node,
-        TypedConstraint::LinearInequality {
-            weights: vec![2, 3, 5],
-            variables: vec![
-                VariableExpr::Identifier("x1".into()),
-                VariableExpr::Identifier("x2".into()),
-                VariableExpr::Identifier("x3".into())
-            ],
-            bound: 3
-        }
-    )
+        variables,
+        vec![
+            VariableExpr::Identifier("x1".into()),
+            VariableExpr::Identifier("x2".into()),
+            VariableExpr::Identifier("x3".into())
+        ]
+    );
+    assert_eq!(bound, 3);
 }
 
 #[test]
 fn constraint_referencing_arrays() {
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     enum TypedConstraint {
-        IntLinLe(Vec<i64>, Vec<VariableExpr<i64>>, i64),
+        IntLinLe(ArrayExpr<i64>, ArrayExpr<VariableExpr<i64>>, i64),
     }
 
     let ast = Ast {
@@ -211,20 +251,32 @@ fn constraint_referencing_arrays() {
         solve: satisfy_solve(),
     };
 
-    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect("valid instance");
 
+    let TypedConstraint::IntLinLe(weights, variables, bound) =
+        instance.constraints[0].clone().constraint.node;
+
+    let weights = instance
+        .resolve_array(&weights)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let variables = instance
+        .resolve_array(&variables)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(weights, vec![2, 3, 5]);
     assert_eq!(
-        instance.constraints[0].constraint.node,
-        TypedConstraint::IntLinLe(
-            vec![2, 3, 5],
-            vec![
-                VariableExpr::Identifier("x1".into()),
-                VariableExpr::Identifier("x2".into()),
-                VariableExpr::Identifier("x3".into())
-            ],
-            3
-        )
-    )
+        variables,
+        vec![
+            VariableExpr::Identifier("x1".into()),
+            VariableExpr::Identifier("x2".into()),
+            VariableExpr::Identifier("x3".into())
+        ]
+    );
+    assert_eq!(bound, 3);
 }
 
 #[test]
@@ -237,8 +289,8 @@ fn constraint_as_struct_args() {
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
     struct LinearLeq {
-        weights: Vec<i64>,
-        variables: Vec<VariableExpr<i64>>,
+        weights: ArrayExpr<i64>,
+        variables: ArrayExpr<VariableExpr<i64>>,
         bound: i64,
     }
 
@@ -286,18 +338,29 @@ fn constraint_as_struct_args() {
         solve: satisfy_solve(),
     };
 
-    let instance = TypedInstance::<TypedConstraint>::from_ast(ast).expect("valid instance");
+    let instance = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect("valid instance");
 
+    let TypedConstraint::IntLinLe(linear) = instance.constraints[0].clone().constraint.node;
+
+    let weights = instance
+        .resolve_array(&linear.weights)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let variables = instance
+        .resolve_array(&linear.variables)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(weights, vec![2, 3, 5]);
     assert_eq!(
-        instance.constraints[0].constraint.node,
-        TypedConstraint::IntLinLe(LinearLeq {
-            weights: vec![2, 3, 5],
-            variables: vec![
-                VariableExpr::Identifier("x1".into()),
-                VariableExpr::Identifier("x2".into()),
-                VariableExpr::Identifier("x3".into())
-            ],
-            bound: 3,
-        })
-    )
+        variables,
+        vec![
+            VariableExpr::Identifier("x1".into()),
+            VariableExpr::Identifier("x2".into()),
+            VariableExpr::Identifier("x3".into())
+        ]
+    );
+    assert_eq!(linear.bound, 3);
 }

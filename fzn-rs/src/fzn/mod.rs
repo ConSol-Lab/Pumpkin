@@ -200,8 +200,12 @@ where
         })
 }
 
-fn arrays<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, BTreeMap<Rc<str>, ast::Node<ast::Array>>, FznExtra<'tokens, 'src>>
+fn arrays<'tokens, 'src: 'tokens, I>() -> impl Parser<
+    'tokens,
+    I,
+    BTreeMap<Rc<str>, ast::Node<ast::Array<ast::Annotation>>>,
+    FznExtra<'tokens, 'src>,
+>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -212,7 +216,7 @@ where
 }
 
 fn array<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Array>), FznExtra<'tokens, 'src>>
+) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Array<ast::Annotation>>), FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -646,7 +650,7 @@ mod tests {
                         33,
                         ast::Method::Optimize {
                             direction: ast::OptimizationDirection::Minimize,
-                            objective: "objective".into(),
+                            objective: ast::Literal::Identifier("objective".into()),
                         }
                     ),
                     annotations: vec![],
@@ -675,7 +679,7 @@ mod tests {
                         33,
                         ast::Method::Optimize {
                             direction: ast::OptimizationDirection::Maximize,
-                            objective: "objective".into(),
+                            objective: ast::Literal::Identifier("objective".into()),
                         }
                     ),
                     annotations: vec![],

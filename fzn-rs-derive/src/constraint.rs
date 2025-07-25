@@ -17,7 +17,6 @@ pub(crate) fn initialise_value(
                 quote! {
                     #field_name: <#ty as ::fzn_rs::FromArgument>::from_argument(
                         &constraint.arguments[#idx],
-                        arrays,
                     )?,
                 }
             });
@@ -32,7 +31,6 @@ pub(crate) fn initialise_value(
                 quote! {
                     <#ty as ::fzn_rs::FromArgument>::from_argument(
                         &constraint.arguments[#idx],
-                        arrays,
                     )?,
                 }
             });
@@ -65,7 +63,7 @@ pub(crate) fn flatzinc_constraint_for_enum(
         let variant_name = &variant.ident;
         let value = match crate::common::get_args_type(variant) {
             Some(constraint_type) => quote! {
-                #variant_name (<#constraint_type as ::fzn_rs::FlatZincConstraint>::from_ast(constraint, arrays)?)
+                #variant_name (<#constraint_type as ::fzn_rs::FlatZincConstraint>::from_ast(constraint)?)
             },
             None => initialise_value(variant_name, &variant.fields),
         };
