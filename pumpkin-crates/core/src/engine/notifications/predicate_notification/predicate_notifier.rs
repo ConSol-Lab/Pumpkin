@@ -5,11 +5,14 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::create_statistics_struct;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
 
 /// An orchestrating struct which serves as the main contact point for the solver with
@@ -30,9 +33,20 @@ pub(crate) struct PredicateNotifier {
     pub(crate) predicate_id_assignments: PredicateIdAssignments,
     /// Contains the [`PredicateTrackerForDomain`] for each [`DomainId`]
     domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTrackerForDomain>,
+    statistics: PredicateNotifierStatistics,
 }
+create_statistics_struct!(PredicateNotifierStatistics {
+    num_lower_bound_updates: usize,
+    num_upper_bound_updates: usize,
+    num_disequality_bound_updates: usize,
+    num_equality_bound_updates: usize,
+});
 
 impl PredicateNotifier {
+    pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger);
+    }
+
     pub(crate) fn debug_empty_clone(&self) -> Self {
         let predicate_id_assignments = self.predicate_id_assignments.debug_empty_clone();
         Self {
@@ -79,13 +93,7 @@ impl PredicateNotifier {
     ) {
         match event {
             DomainEvent::Assign => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::Equal,
-                    assignments,
-                    trailed_values,
-                    None,
-                );
+                self.on_update_predicate(domain, PredicateType::Equal, assignments, trailed_values);
             }
             DomainEvent::LowerBound => {
                 self.on_update_predicate(
@@ -93,7 +101,6 @@ impl PredicateNotifier {
                     PredicateType::LowerBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
             DomainEvent::UpperBound => {
@@ -102,20 +109,16 @@ impl PredicateNotifier {
                     PredicateType::UpperBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
-            DomainEvent::Removal => assignments
-                .get_holes_on_current_decision_level(domain)
-                .for_each(|value| {
-                    self.on_update_predicate(
-                        domain,
-                        PredicateType::NotEqual,
-                        assignments,
-                        trailed_values,
-                        Some(value),
-                    );
-                }),
+            DomainEvent::Removal => {
+                self.on_update_predicate(
+                    domain,
+                    PredicateType::NotEqual,
+                    assignments,
+                    trailed_values,
+                );
+            }
         }
     }
 
@@ -130,7 +133,6 @@ impl PredicateNotifier {
         predicate_type: PredicateType,
         assignments: &Assignments,
         trailed_values: &mut TrailedValues,
-        removed_value: Option<i32>,
     ) {
         if self.domain_id_to_predicate_tracker.len() <= domain.index() {
             // If no predicate has been registered for this domain id then we do nothing
@@ -145,7 +147,7 @@ impl PredicateNotifier {
             &mut self.predicate_to_id,
             trailed_values,
             &mut self.predicate_id_assignments,
-            removed_value,
+            &mut self.statistics,
         );
     }
 

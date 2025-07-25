@@ -27,6 +27,7 @@ use crate::predicates::Predicate;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
 
 #[derive(Debug)]
@@ -84,6 +85,11 @@ impl Default for NotificationEngine {
 }
 
 impl NotificationEngine {
+    pub(crate) fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.predicate_notifier
+            .log_statistics(statistic_logger.attach_to_prefix("Notifier"));
+    }
+
     pub(crate) fn debug_empty_clone(&self, capacity: usize) -> Self {
         let mut result = Self {
             predicate_notifier: self.predicate_notifier.debug_empty_clone(),

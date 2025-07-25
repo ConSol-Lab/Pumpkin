@@ -82,6 +82,10 @@ impl PredicateType {
             ),
         }
     }
+
+    pub(crate) fn is_disequality(&self) -> bool {
+        matches!(self, PredicateType::NotEqual)
+    }
 }
 
 impl From<Predicate> for PredicateType {

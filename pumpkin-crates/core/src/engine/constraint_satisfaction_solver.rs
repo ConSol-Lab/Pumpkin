@@ -368,6 +368,8 @@ impl ConstraintSatisfactionSolver {
         // We first check whether the statistics will/should be logged to prevent unnecessarily
         // going through all the propagators
         if should_log_statistics() {
+            self.notification_engine
+                .log_statistics(StatisticLogger::default());
             self.solver_statistics.log(StatisticLogger::default());
             for (index, propagator) in self.propagators.iter_propagators().enumerate() {
                 propagator.log_statistics(StatisticLogger::new([

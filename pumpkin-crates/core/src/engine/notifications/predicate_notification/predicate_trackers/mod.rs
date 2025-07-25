@@ -114,6 +114,8 @@ pub(crate) trait DomainTrackerInformation {
 
     /// Returns true if no [`Predicate`]s are currently being tracked.
     fn is_empty(&self) -> bool;
+
+    fn is_fixed(&self, trailed_values: &TrailedValues) -> bool;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -196,6 +198,21 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 
     fn is_empty(&self) -> bool {
         self.get_tracker().values.is_empty()
+    }
+
+    fn is_fixed(&self, trailed_values: &TrailedValues) -> bool {
+        let min_assigned = self.get_tracker().greater
+            [trailed_values.read(self.get_tracker().min_assigned) as usize];
+        let max_assigned = self.get_tracker().smaller
+            [trailed_values.read(self.get_tracker().max_assigned) as usize];
+
+        if min_assigned == i64::MAX && max_assigned == i64::MAX {
+            return true;
+        } else if min_assigned == i64::MAX || max_assigned == i64::MAX {
+            return false;
+        } else {
+            min_assigned > max_assigned
+        }
     }
 }
 
