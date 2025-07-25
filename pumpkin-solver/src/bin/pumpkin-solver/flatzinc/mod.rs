@@ -1,8 +1,8 @@
 mod ast;
 mod compiler;
+mod constraints;
 pub(crate) mod error;
 mod instance;
-mod parser;
 
 use std::fs::File;
 use std::io::Read;
@@ -253,10 +253,14 @@ fn satisfy(
 
 fn parse_and_compile(
     solver: &mut Solver,
-    instance: impl Read,
+    mut instance: impl Read,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
-    let ast = parser::parse(instance)?;
+    let mut source = String::new();
+    let _ = instance.read_to_string(&mut source)?;
+
+    let ast = fzn_rs::fzn::parse(&source).expect("should handle errors here");
+
     compiler::compile(ast, solver, options)
 }
 

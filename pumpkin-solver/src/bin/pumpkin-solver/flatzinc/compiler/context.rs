@@ -3,24 +3,22 @@ use std::cell::RefMut;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use fzn_rs::ast::RangeList;
+use fzn_rs::ArrayExpr;
+use fzn_rs::VariableExpr;
 use log::warn;
 use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::containers::HashSet;
-use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::Solver;
 
+use crate::flatzinc::ast::Instance;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
 pub(crate) struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
     pub(crate) solver: &'a mut Solver,
-
-    /// All identifiers occuring in the model. The identifiers are interned, to support cheap
-    /// cloning.
-    pub(crate) identifiers: Identifiers,
 
     /// Identifiers of variables that are outputs.
     pub(crate) outputs: Vec<Output>,
@@ -29,24 +27,14 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) true_literal: Literal,
     /// Literal which is always false
     pub(crate) false_literal: Literal,
-    /// All boolean parameters.
-    pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
-    /// All boolean array parameters.
-    pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
     /// A mapping from boolean model variables to solver literals.
     pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
-    /// A mapping from boolean variable array identifiers to slices of literals.
-    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub(crate) literal_equivalences: VariableEquivalences,
     // A literal which is always true, can be used when using bool constants in the solver
     // pub(crate) constant_bool_true: BooleanDomainId,
     // A literal which is always false, can be used when using bool constants in the solver
     // pub(crate) constant_bool_false: BooleanDomainId,
-    /// All integer parameters.
-    pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
-    /// All integer array parameters.
-    pub(crate) integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
     /// A mapping from integer model variables to solver literals.
     pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
@@ -54,23 +42,6 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
-    /// A mapping from integer variable array identifiers to slices of domain ids.
-    pub(crate) integer_variable_arrays: HashMap<Rc<str>, Rc<[DomainId]>>,
-
-    /// All set parameters.
-    pub(crate) set_constants: HashMap<Rc<str>, Set>,
-
-    /// All the constraints with their constraint tags.
-    pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
-}
-
-/// A set parameter.
-#[derive(Clone, Debug)]
-pub(crate) enum Set {
-    /// A set defined by the interval `lower_bound..=upper_bound`.
-    Interval { lower_bound: i32, upper_bound: i32 },
-    /// A set defined by some values.
-    Sparse { values: Box<[i32]> },
 }
 
 impl CompilationContext<'_> {
@@ -80,384 +51,119 @@ impl CompilationContext<'_> {
 
         CompilationContext {
             solver,
-            identifiers: Default::default(),
 
             outputs: Default::default(),
 
             true_literal,
             false_literal,
-            boolean_parameters: Default::default(),
-            boolean_array_parameters: Default::default(),
             boolean_variable_map: Default::default(),
-            boolean_variable_arrays: Default::default(),
             literal_equivalences: Default::default(),
-            integer_parameters: Default::default(),
-            integer_array_parameters: Default::default(),
             integer_variable_map: Default::default(),
             integer_equivalences: Default::default(),
             constant_domain_ids: Default::default(),
-            integer_variable_arrays: Default::default(),
-
-            set_constants: Default::default(),
-
-            constraints: Default::default(),
         }
     }
-
-    pub(crate) fn is_identifier_parameter(&mut self, identifier: &str) -> bool {
-        self.integer_parameters.contains_key(identifier)
-    }
-
-    // pub fn resolve_bool_constant(&self, identifier: &str) -> Option<bool> {
-    //     self.boolean_parameters.get(identifier).copied()
-    // }
-
-    // pub fn resolve_int_constant(&self, identifier: &str) -> Option<i32> {
-    //     self.integer_parameters.get(identifier).copied()
-    // }
 
     pub(crate) fn resolve_bool_variable(
-        &mut self,
-        expr: &flatzinc::Expr,
-    ) -> Result<Literal, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
-            flatzinc::Expr::Bool(value) => {
-                if *value {
-                    Ok(self.solver.get_true_literal())
-                } else {
-                    Ok(self.solver.get_false_literal())
-                }
-            }
-            _ => Err(FlatZincError::UnexpectedExpr),
-        }
-    }
-
-    pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
-        identifier: &str,
+        variable: &VariableExpr<bool>,
     ) -> Result<Literal, FlatZincError> {
-        if let Some(literal) = self
-            .boolean_variable_map
-            .get(&self.literal_equivalences.representative(identifier))
-        {
-            Ok(*literal)
-        } else {
-            self.boolean_parameters
-                .get(&self.literal_equivalences.representative(identifier))
-                .map(|value| {
-                    if *value {
-                        self.solver.get_true_literal()
-                    } else {
-                        self.solver.get_false_literal()
-                    }
-                })
+        match variable {
+            VariableExpr::Identifier(ident) => self
+                .boolean_variable_map
+                .get(ident)
+                .copied()
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: identifier.into(),
-                    expected_type: "bool variable".into(),
-                })
+                    identifier: Rc::clone(ident),
+                    expected_type: "bool var".into(),
+                }),
+            VariableExpr::Constant(true) => Ok(self.true_literal),
+            VariableExpr::Constant(false) => Ok(self.false_literal),
         }
     }
 
     pub(crate) fn resolve_bool_variable_array(
         &self,
-        expr: &flatzinc::Expr,
-    ) -> Result<Rc<[Literal]>, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => {
-                if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
-                    Ok(Rc::clone(literal))
-                } else {
-                    self.boolean_array_parameters
-                        .get(id.as_str())
-                        .map(|array| {
-                            array
-                                .iter()
-                                .map(|value| {
-                                    if *value {
-                                        self.solver.get_true_literal()
-                                    } else {
-                                        self.solver.get_false_literal()
-                                    }
-                                })
-                                .collect()
-                        })
-                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                            identifier: id.as_str().into(),
-                            expected_type: "boolean variable array".into(),
-                        })
-                }
-            }
-            flatzinc::Expr::ArrayOfBool(array) => array
-                .iter()
-                .map(|elem| match elem {
-                    flatzinc::BoolExpr::VarParIdentifier(id) => {
-                        self.resolve_bool_variable_from_identifier(id)
-                    }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
-                })
-                .collect(),
-            flatzinc::Expr::ArrayOfInt(array) => array
-                .iter()
-                .map(|elem| match elem {
-                    flatzinc::IntExpr::VarParIdentifier(id) => {
-                        self.resolve_bool_variable_from_identifier(id)
-                    }
-                    _ => panic!("Bool search should not be over integer variable"),
-                })
-                .collect(),
-            _ => Err(FlatZincError::UnexpectedExpr),
-        }
+        instance: &Instance,
+        array: &ArrayExpr<VariableExpr<bool>>,
+    ) -> Result<Vec<Literal>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|expr_result| {
+                let expr = expr_result?;
+                self.resolve_bool_variable(&expr)
+            })
+            .collect()
     }
 
-    pub(crate) fn resolve_array_integer_constants(
+    pub(crate) fn resolve_bool_variable_array_vec(
         &self,
-        expr: &flatzinc::Expr,
-    ) -> Result<Rc<[i32]>, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => self
-                .integer_array_parameters
-                .get(id.as_str())
-                .cloned()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: id.as_str().into(),
-                    expected_type: "constant integer array".into(),
-                }),
-            flatzinc::Expr::ArrayOfInt(exprs) => exprs
-                .iter()
-                .map(|e| self.resolve_int_expr_to_const(e))
-                .collect::<Result<Rc<[i32]>, _>>(),
-            _ => Err(FlatZincError::UnexpectedExpr),
-        }
-    }
-
-    pub(crate) fn resolve_integer_constant_from_id(
-        &mut self,
-        identifier: &str,
-    ) -> Result<DomainId, FlatZincError> {
-        let value = self.resolve_int_expr_to_const(&flatzinc::IntExpr::VarParIdentifier(
-            identifier.to_owned(),
-        ))?;
-        Ok(*self.constant_domain_ids.entry(value).or_insert_with(|| {
-            self.solver
-                .new_named_bounded_integer(value, value, identifier.to_owned())
-        }))
-    }
-
-    pub(crate) fn resolve_integer_constant_from_expr(
-        &self,
-        expr: &flatzinc::Expr,
-    ) -> Result<i32, FlatZincError> {
-        fn try_into_int_expr(expr: flatzinc::Expr) -> Option<flatzinc::IntExpr> {
-            match expr {
-                flatzinc::Expr::VarParIdentifier(id) => {
-                    Some(flatzinc::IntExpr::VarParIdentifier(id))
-                }
-                flatzinc::Expr::Int(value) => Some(flatzinc::IntExpr::Int(value)),
-                _ => None,
-            }
-        }
-        try_into_int_expr(expr.clone())
-            .ok_or(FlatZincError::UnexpectedExpr)
-            .and_then(|e| self.resolve_int_expr_to_const(&e))
-    }
-
-    pub(crate) fn resolve_int_expr_to_const(
-        &self,
-        expr: &flatzinc::IntExpr,
-    ) -> Result<i32, FlatZincError> {
-        match expr {
-            flatzinc::IntExpr::Int(value) => i32::try_from(*value).map_err(Into::into),
-            flatzinc::IntExpr::VarParIdentifier(id) => self
-                .integer_parameters
-                .get(id.as_str())
-                .copied()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: id.as_str().into(),
-                    expected_type: "constant integer".into(),
-                }),
-        }
-    }
-
-    pub(crate) fn resolve_int_expr(
-        &mut self,
-        expr: &flatzinc::IntExpr,
-    ) -> Result<DomainId, FlatZincError> {
-        match expr {
-            flatzinc::IntExpr::Int(value) => Ok(*self
-                .constant_domain_ids
-                .entry(*value as i32)
-                .or_insert_with(|| {
-                    self.solver.new_named_bounded_integer(
-                        *value as i32,
-                        *value as i32,
-                        value.to_string(),
-                    )
-                })),
-            flatzinc::IntExpr::VarParIdentifier(id) => {
-                self.resolve_integer_variable_from_identifier(id)
-            }
-        }
+        array: &[VariableExpr<bool>],
+    ) -> Result<Vec<Literal>, FlatZincError> {
+        array
+            .iter()
+            .map(|expr| self.resolve_bool_variable(expr))
+            .collect()
     }
 
     pub(crate) fn resolve_integer_variable(
         &mut self,
-        expr: &flatzinc::Expr,
+        variable: &VariableExpr<i32>,
     ) -> Result<DomainId, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => {
-                self.resolve_integer_variable_from_identifier(id)
-            }
-            flatzinc::Expr::Int(val) => Ok(*self
-                .constant_domain_ids
-                .entry(*val as i32)
-                .or_insert_with(|| {
+        match variable {
+            VariableExpr::Identifier(ident) => self
+                .integer_variable_map
+                .get(ident)
+                .copied()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: Rc::clone(ident),
+                    expected_type: "int var".into(),
+                }),
+            VariableExpr::Constant(value) => {
+                Ok(*self.constant_domain_ids.entry(*value).or_insert_with(|| {
                     self.solver
-                        .new_named_bounded_integer(*val as i32, *val as i32, val.to_string())
-                })),
-            _ => Err(FlatZincError::UnexpectedExpr),
+                        .new_named_bounded_integer(*value, *value, value.to_string())
+                }))
+            }
         }
     }
 
-    pub(crate) fn resolve_integer_variable_from_identifier(
-        &mut self,
-        identifier: &str,
-    ) -> Result<DomainId, FlatZincError> {
-        if let Some(domain_id) = self
-            .integer_variable_map
-            .get(&self.integer_equivalences.representative(identifier))
-        {
-            Ok(*domain_id)
-        } else {
-            self.integer_parameters
-                .get(&self.integer_equivalences.representative(identifier))
-                .map(|value| {
-                    *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                        self.solver
-                            .new_named_bounded_integer(*value, *value, value.to_string())
-                    })
-                })
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: identifier.into(),
-                    expected_type: "integer variable".into(),
-                })
-        }
+    pub(crate) fn resolve_integer_array(
+        &self,
+        instance: &Instance,
+        array: &ArrayExpr<i32>,
+    ) -> Result<Vec<i32>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|maybe_int| maybe_int.map_err(FlatZincError::from))
+            .collect()
     }
 
     pub(crate) fn resolve_integer_variable_array(
         &mut self,
-        expr: &flatzinc::Expr,
-    ) -> Result<Rc<[DomainId]>, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => {
-                if let Some(domain_id) = self.integer_variable_arrays.get(id.as_str()) {
-                    Ok(Rc::clone(domain_id))
-                } else {
-                    self.integer_array_parameters
-                        .get(id.as_str())
-                        .map(|array| {
-                            array
-                                .iter()
-                                .map(|value| {
-                                    *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                                        self.solver.new_named_bounded_integer(
-                                            *value,
-                                            *value,
-                                            value.to_string(),
-                                        )
-                                    })
-                                })
-                                .collect()
-                        })
-                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                            identifier: id.as_str().into(),
-                            expected_type: "integer variable array".into(),
-                        })
-                }
-            }
-            flatzinc::Expr::ArrayOfInt(array) => array
-                .iter()
-                .map(|elem| self.resolve_int_expr(elem))
-                .collect::<Result<Rc<[DomainId]>, _>>(),
-
-            // The AST is not correct here. Since the type of an in-place array containing only
-            // identifiers cannot be determined, and the parser attempts to parse ArrayOfBool
-            // first, we may also get this variant even when parsing integer arrays.
-            flatzinc::Expr::ArrayOfBool(array) => array
-                .iter()
-                .map(|elem| {
-                    if let flatzinc::BoolExpr::VarParIdentifier(id) = elem {
-                        self.resolve_integer_variable_from_identifier(id)
-                    } else {
-                        Err(FlatZincError::UnexpectedExpr)
-                    }
-                })
-                .collect(),
-            _ => Err(FlatZincError::UnexpectedExpr),
-        }
+        instance: &Instance,
+        array: &ArrayExpr<VariableExpr<i32>>,
+    ) -> Result<Vec<DomainId>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|expr_result| {
+                let expr = expr_result?;
+                self.resolve_integer_variable(&expr)
+            })
+            .collect()
     }
 
-    pub(crate) fn resolve_set_constant(&self, expr: &flatzinc::Expr) -> Result<Set, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => {
-                self.set_constants.get(id.as_str()).cloned().ok_or(
-                    FlatZincError::InvalidIdentifier {
-                        identifier: id.clone().into(),
-                        expected_type: "set of int".into(),
-                    },
-                )
-            }
-
-            flatzinc::Expr::Set(set_literal) => match set_literal {
-                flatzinc::SetLiteralExpr::IntInRange(lower_bound_expr, upper_bound_expr) => {
-                    let lower_bound = self.resolve_int_expr_to_const(lower_bound_expr)?;
-                    let upper_bound = self.resolve_int_expr_to_const(upper_bound_expr)?;
-
-                    Ok(Set::Interval {
-                        lower_bound,
-                        upper_bound,
-                    })
-                }
-                flatzinc::SetLiteralExpr::SetInts(exprs) => {
-                    let values = exprs
-                        .iter()
-                        .map(|expr| self.resolve_int_expr_to_const(expr))
-                        .collect::<Result<_, _>>()?;
-
-                    Ok(Set::Sparse { values })
-                }
-
-                flatzinc::SetLiteralExpr::BoundedFloat(_, _)
-                | flatzinc::SetLiteralExpr::SetFloats(_) => panic!("float values are unsupported"),
-            },
-
-            flatzinc::Expr::Bool(_)
-            | flatzinc::Expr::Int(_)
-            | flatzinc::Expr::Float(_)
-            | flatzinc::Expr::ArrayOfBool(_)
-            | flatzinc::Expr::ArrayOfInt(_)
-            | flatzinc::Expr::ArrayOfFloat(_)
-            | flatzinc::Expr::ArrayOfSet(_) => Err(FlatZincError::UnexpectedExpr),
-        }
-    }
-}
-
-#[derive(Default, Debug)]
-pub(crate) struct Identifiers {
-    interned_identifiers: HashSet<Rc<str>>,
-}
-
-impl Identifiers {
-    pub(crate) fn get_interned(&mut self, identifier: &str) -> Rc<str> {
-        if let Some(interned) = self.interned_identifiers.get(identifier) {
-            Rc::clone(interned)
-        } else {
-            let interned: Rc<str> = identifier.into();
-            let _ = self.interned_identifiers.insert(Rc::clone(&interned));
-
-            interned
-        }
+    pub(crate) fn resolve_integer_variable_array_vec(
+        &mut self,
+        array: &[VariableExpr<i32>],
+    ) -> Result<Vec<DomainId>, FlatZincError> {
+        array
+            .iter()
+            .map(|expr| self.resolve_integer_variable(expr))
+            .collect()
     }
 }
 
@@ -568,19 +274,17 @@ pub(crate) enum Domain {
     SparseDomain { values: Vec<i32> },
 }
 
-impl From<Set> for Domain {
-    fn from(value: Set) -> Self {
-        match value {
-            Set::Interval {
-                lower_bound,
-                upper_bound,
-            } => Domain::IntervalDomain {
-                lb: lower_bound,
-                ub: upper_bound,
-            },
-            Set::Sparse { values } => Domain::SparseDomain {
-                values: values.to_vec(),
-            },
+impl From<&'_ RangeList<i32>> for Domain {
+    fn from(value: &'_ RangeList<i32>) -> Self {
+        if value.is_continuous() {
+            Domain::IntervalDomain {
+                lb: *value.lower_bound(),
+                ub: *value.upper_bound(),
+            }
+        } else {
+            let values = value.into_iter().collect::<_>();
+
+            Domain::SparseDomain { values }
         }
     }
 }
