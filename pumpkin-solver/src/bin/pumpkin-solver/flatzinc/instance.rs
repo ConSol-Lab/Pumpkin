@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::rc::Rc;
 
+use fzn_rs::ast::RangeList;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::variables::DomainId;
@@ -57,8 +58,8 @@ impl Output {
 
     pub(crate) fn array_of_bool(
         id: Rc<str>,
-        shape: Box<[(i32, i32)]>,
-        contents: Rc<[Literal]>,
+        shape: RangeList<i32>,
+        contents: Vec<Literal>,
     ) -> Output {
         Output::ArrayOfBool(ArrayOutput {
             id,
@@ -76,8 +77,8 @@ impl Output {
 
     pub(crate) fn array_of_int(
         id: Rc<str>,
-        shape: Box<[(i32, i32)]>,
-        contents: Rc<[DomainId]>,
+        shape: RangeList<i32>,
+        contents: Vec<DomainId>,
     ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,
@@ -107,8 +108,8 @@ pub(crate) struct ArrayOutput<T> {
     /// denotes the index set used in dimension i.
     /// Example: [(1, 5), (2, 4)] describes a 2d array, where the first dimension in indexed with
     /// an element of 1..5, and the second dimension is indexed with an element from 2..4.
-    shape: Box<[(i32, i32)]>,
-    contents: Rc<[T]>,
+    shape: RangeList<i32>,
+    contents: Vec<T>,
 }
 
 impl<T> ArrayOutput<T> {
@@ -121,7 +122,7 @@ impl<T> ArrayOutput<T> {
         }
 
         let mut shape_buf = String::new();
-        for (min, max) in self.shape.iter() {
+        for (min, max) in self.shape.ranges() {
             write!(shape_buf, "{min}..{max}, ").unwrap();
         }
 
@@ -130,7 +131,7 @@ impl<T> ArrayOutput<T> {
             array_buf.truncate(array_buf.len() - 2);
         }
 
-        let num_dimensions = self.shape.len();
+        let num_dimensions = self.shape.ranges().count();
         println!(
             "{} = array{num_dimensions}d({shape_buf}[{array_buf}]);",
             self.id

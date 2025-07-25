@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use fzn_rs::ast::RangeList;
+use fzn_rs::ArrayExpr;
 use fzn_rs::VariableExpr;
 use log::warn;
 use pumpkin_solver::containers::HashMap;
@@ -11,6 +12,7 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::Solver;
 
+use crate::flatzinc::ast::Instance;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
@@ -40,15 +42,6 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
-}
-
-/// A set parameter.
-#[derive(Clone, Debug)]
-pub(crate) enum Set {
-    /// A set defined by the interval `lower_bound..=upper_bound`.
-    Interval { lower_bound: i32, upper_bound: i32 },
-    /// A set defined by some values.
-    Sparse { values: Box<[i32]> },
 }
 
 impl CompilationContext<'_> {
@@ -91,6 +84,21 @@ impl CompilationContext<'_> {
 
     pub(crate) fn resolve_bool_variable_array(
         &self,
+        instance: &Instance,
+        array: &ArrayExpr<VariableExpr<bool>>,
+    ) -> Result<Vec<Literal>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|expr_result| {
+                let expr = expr_result?;
+                self.resolve_bool_variable(&expr)
+            })
+            .collect()
+    }
+
+    pub(crate) fn resolve_bool_variable_array_vec(
+        &self,
         array: &[VariableExpr<bool>],
     ) -> Result<Vec<Literal>, FlatZincError> {
         array
@@ -121,7 +129,34 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub(crate) fn resolve_integer_array(
+        &self,
+        instance: &Instance,
+        array: &ArrayExpr<i32>,
+    ) -> Result<Vec<i32>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|maybe_int| maybe_int.map_err(FlatZincError::from))
+            .collect()
+    }
+
     pub(crate) fn resolve_integer_variable_array(
+        &mut self,
+        instance: &Instance,
+        array: &ArrayExpr<VariableExpr<i32>>,
+    ) -> Result<Vec<DomainId>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|expr_result| {
+                let expr = expr_result?;
+                self.resolve_integer_variable(&expr)
+            })
+            .collect()
+    }
+
+    pub(crate) fn resolve_integer_variable_array_vec(
         &mut self,
         array: &[VariableExpr<i32>],
     ) -> Result<Vec<DomainId>, FlatZincError> {
@@ -237,23 +272,6 @@ impl VariableEquivalences {
 pub(crate) enum Domain {
     IntervalDomain { lb: i32, ub: i32 },
     SparseDomain { values: Vec<i32> },
-}
-
-impl From<Set> for Domain {
-    fn from(value: Set) -> Self {
-        match value {
-            Set::Interval {
-                lower_bound,
-                upper_bound,
-            } => Domain::IntervalDomain {
-                lb: lower_bound,
-                ub: upper_bound,
-            },
-            Set::Sparse { values } => Domain::SparseDomain {
-                values: values.to_vec(),
-            },
-        }
-    }
 }
 
 impl From<&'_ RangeList<i32>> for Domain {

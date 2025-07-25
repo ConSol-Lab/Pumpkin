@@ -6,10 +6,9 @@
 use fzn_rs::ast;
 
 use super::context::CompilationContext;
-use crate::flatzinc::{
-    ast::{ConstraintAnnotations, Instance},
-    error::FlatZincError,
-};
+use crate::flatzinc::ast::ConstraintAnnotations;
+use crate::flatzinc::ast::Instance;
+use crate::flatzinc::error::FlatZincError;
 
 pub(crate) fn run(
     instance: &mut Instance,

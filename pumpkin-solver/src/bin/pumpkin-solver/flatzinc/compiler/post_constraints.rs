@@ -58,7 +58,7 @@ pub(crate) fn run(
 
         let is_satisfiable: bool = match &constraint.constraint.node {
             ArrayIntMinimum(args) => {
-                let array = context.resolve_integer_variable_array(&args.array)?;
+                let array = context.resolve_integer_variable_array(instance, &args.array)?;
                 let rhs = context.resolve_integer_variable(&args.extremum)?;
 
                 constraints::minimum(array, rhs, constraint_tag)
@@ -67,7 +67,7 @@ pub(crate) fn run(
             }
 
             ArrayIntMaximum(args) => {
-                let array = context.resolve_integer_variable_array(&args.array)?;
+                let array = context.resolve_integer_variable_array(instance, &args.array)?;
                 let rhs = context.resolve_integer_variable(&args.extremum)?;
 
                 constraints::maximum(array, rhs, constraint_tag)
@@ -76,9 +76,11 @@ pub(crate) fn run(
             }
 
             // We rewrite `array_int_element` to `array_var_int_element`.
-            ArrayIntElement(args) => compile_array_var_int_element(context, args, constraint_tag)?,
+            ArrayIntElement(args) => {
+                compile_array_var_int_element(instance, context, args, constraint_tag)?
+            }
             ArrayVarIntElement(args) => {
-                compile_array_var_int_element(context, args, constraint_tag)?
+                compile_array_var_int_element(instance, context, args, constraint_tag)?
             }
 
             IntEqImp(args) => {
@@ -115,32 +117,44 @@ pub(crate) fn run(
                 constraints::binary_not_equals,
             )?,
 
-            IntLinNe(args) => {
-                compile_int_lin_predicate(context, args, constraint_tag, constraints::not_equals)?
-            }
+            IntLinNe(args) => compile_int_lin_predicate(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::not_equals,
+            )?,
             IntLinLe(args) => compile_int_lin_predicate(
+                instance,
                 context,
                 args,
                 constraint_tag,
                 constraints::less_than_or_equals,
             )?,
-            IntLinEq(args) => {
-                compile_int_lin_predicate(context, args, constraint_tag, constraints::equals)?
-            }
+            IntLinEq(args) => compile_int_lin_predicate(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::equals,
+            )?,
 
             IntLinNeReif(args) => compile_reified_int_lin_predicate(
+                instance,
                 context,
                 args,
                 constraint_tag,
                 constraints::not_equals,
             )?,
             IntLinLeReif(args) => compile_reified_int_lin_predicate(
+                instance,
                 context,
                 args,
                 constraint_tag,
                 constraints::less_than_or_equals,
             )?,
             IntLinEqReif(args) => compile_reified_int_lin_predicate(
+                instance,
                 context,
                 args,
                 constraint_tag,
@@ -225,40 +239,50 @@ pub(crate) fn run(
             }
 
             AllDifferent(array) => {
-                let variables = context.resolve_integer_variable_array(array)?;
+                let variables = context.resolve_integer_variable_array(instance, array)?;
                 constraints::all_different(variables, constraint_tag)
                     .post(context.solver)
                     .is_ok()
             }
 
-            Table(table) => compile_table(context, table, constraint_tag)?,
-            TableReif(table_reif) => compile_table_reif(context, table_reif, constraint_tag)?,
-
-            ArrayBoolAnd(args) => {
-                compile_array_bool(context, args, constraint_tag, constraints::conjunction)?
+            Table(table) => compile_table(instance, context, table, constraint_tag)?,
+            TableReif(table_reif) => {
+                compile_table_reif(instance, context, table_reif, constraint_tag)?
             }
 
+            ArrayBoolAnd(args) => compile_array_bool(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::conjunction,
+            )?,
+
             ArrayBoolOr(args) => {
-                compile_array_bool(context, args, constraint_tag, constraints::clause)?
+                compile_array_bool(instance, context, args, constraint_tag, constraints::clause)?
             }
 
             BoolXor(args) => compile_bool_xor(context, args, constraint_tag)?,
             BoolXorReif(args) => compile_bool_xor_reif(context, args, constraint_tag)?,
 
-            BoolLinEq(args) => compile_bool_lin_eq_predicate(context, args, constraint_tag)?,
-            BoolLinLe(args) => compile_bool_lin_le_predicate(context, args, constraint_tag)?,
+            BoolLinEq(args) => {
+                compile_bool_lin_eq_predicate(instance, context, args, constraint_tag)?
+            }
+            BoolLinLe(args) => {
+                compile_bool_lin_le_predicate(instance, context, args, constraint_tag)?
+            }
 
             BoolAnd(args) => compile_bool_and(context, args, constraint_tag)?,
             BoolEq(args) => compile_bool_eq(context, args, constraint_tag)?,
             BoolEqReif(args) => compile_bool_eq_reif(context, args, constraint_tag)?,
             BoolNot(args) => compile_bool_not(context, args, constraint_tag)?,
-            BoolClause(args) => compile_bool_clause(context, args, constraint_tag)?,
+            BoolClause(args) => compile_bool_clause(instance, context, args, constraint_tag)?,
 
             ArrayBoolElement(args) => {
-                compile_array_var_bool_element(context, args, constraint_tag)?
+                compile_array_var_bool_element(instance, context, args, constraint_tag)?
             }
             ArrayVarBoolElement(args) => {
-                compile_array_var_bool_element(context, args, constraint_tag)?
+                compile_array_var_bool_element(instance, context, args, constraint_tag)?
             }
 
             BoolToInt(args) => compile_bool2int(context, args, constraint_tag)?,
@@ -269,7 +293,9 @@ pub(crate) fn run(
 
             SetInReif(args) => compile_set_in_reif(context, args, constraint_tag)?,
 
-            Cumulative(args) => compile_cumulative(context, args, options, constraint_tag)?,
+            Cumulative(args) => {
+                compile_cumulative(instance, context, args, options, constraint_tag)?
+            }
         };
 
         if !is_satisfiable {
@@ -281,17 +307,18 @@ pub(crate) fn run(
 }
 
 fn compile_cumulative(
+    instance: &Instance,
     context: &mut CompilationContext<'_>,
     args: &CumulativeArgs,
     options: &FlatZincOptions,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    let start_times = context.resolve_integer_variable_array(&args.start_times)?;
+    let start_times = context.resolve_integer_variable_array(instance, &args.start_times)?;
 
     let post_result = constraints::cumulative_with_options(
         start_times,
-        args.durations.clone(),
-        args.resource_requirements.clone(),
+        context.resolve_integer_array(instance, &args.durations)?,
+        context.resolve_integer_array(instance, &args.resource_requirements)?,
         args.resource_capacity,
         options.cumulative_options,
         constraint_tag,
@@ -367,12 +394,13 @@ fn compile_set_in_reif(
 }
 
 fn compile_array_var_int_element(
+    instance: &Instance,
     context: &mut CompilationContext<'_>,
     args: &IntElementArgs,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     let index = context.resolve_integer_variable(&args.index)?.offset(-1);
-    let array = context.resolve_integer_variable_array(&args.array)?;
+    let array = context.resolve_integer_variable_array(instance, &args.array)?;
     let rhs = context.resolve_integer_variable(&args.rhs)?;
 
     Ok(constraints::element(index, array, rhs, constraint_tag)
@@ -421,12 +449,13 @@ fn compile_bool_eq(
 }
 
 fn compile_bool_clause(
+    instance: &Instance,
     context: &mut CompilationContext<'_>,
     args: &BoolClauseArgs,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    let clause_1 = context.resolve_bool_variable_array(&args.clause_1)?;
-    let clause_2 = context.resolve_bool_variable_array(&args.clause_2)?;
+    let clause_1 = context.resolve_bool_variable_array(instance, &args.clause_1)?;
+    let clause_2 = context.resolve_bool_variable_array(instance, &args.clause_2)?;
 
     let clause: Vec<Predicate> = clause_1
         .iter()
@@ -507,12 +536,13 @@ fn compile_bool_xor_reif(
 }
 
 fn compile_array_var_bool_element(
+    instance: &Instance,
     context: &mut CompilationContext<'_>,
     args: &BoolElementArgs,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     let index = context.resolve_integer_variable(&args.index)?.offset(-1);
-    let array = context.resolve_bool_variable_array(&args.array)?;
+    let array = context.resolve_bool_variable_array(instance, &args.array)?;
     let rhs = context.resolve_bool_variable(&args.rhs)?;
 
     Ok(
@@ -523,12 +553,13 @@ fn compile_array_var_bool_element(
 }
 
 fn compile_array_bool<C: NegatableConstraint>(
+    instance: &Instance,
     context: &mut CompilationContext<'_>,
     args: &ArrayBoolArgs,
     constraint_tag: ConstraintTag,
     create_constraint: impl FnOnce(Vec<Literal>, ConstraintTag) -> C,
 ) -> Result<bool, FlatZincError> {
-    let conjunction = context.resolve_bool_variable_array(&args.booleans)?;
+    let conjunction = context.resolve_bool_variable_array(instance, &args.booleans)?;
     let r = context.resolve_bool_variable(&args.reification)?;
 
     Ok(create_constraint(conjunction, constraint_tag)
@@ -585,28 +616,32 @@ fn weighted_vars(weights: &[i32], vars: Vec<DomainId>) -> Box<[AffineView<Domain
 }
 
 fn compile_int_lin_predicate<C: Constraint>(
+    instance: &Instance,
     context: &mut CompilationContext,
     args: &Linear,
     constraint_tag: ConstraintTag,
     create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
 ) -> Result<bool, FlatZincError> {
-    let vars = context.resolve_integer_variable_array(&args.variables)?;
-    let terms = weighted_vars(&args.weights, vars);
+    let vars = context.resolve_integer_variable_array(instance, &args.variables)?;
+    let weights = context.resolve_integer_array(instance, &args.weights)?;
+    let terms = weighted_vars(&weights, vars);
 
     let constraint = create_constraint(terms, args.rhs, constraint_tag);
     Ok(constraint.post(context.solver).is_ok())
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
+    instance: &Instance,
     context: &mut CompilationContext,
     args: &ReifiedLinear,
     constraint_tag: ConstraintTag,
     create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
 ) -> Result<bool, FlatZincError> {
-    let vars = context.resolve_integer_variable_array(&args.variables)?;
+    let vars = context.resolve_integer_variable_array(instance, &args.variables)?;
+    let weights = context.resolve_integer_array(instance, &args.weights)?;
     let reif = context.resolve_bool_variable(&args.reification)?;
 
-    let terms = weighted_vars(&args.weights, vars);
+    let terms = weighted_vars(&weights, vars);
 
     let constraint = create_constraint(terms, args.rhs, constraint_tag);
     Ok(constraint.reify(context.solver, reif).is_ok())
@@ -627,44 +662,47 @@ fn compile_binary_int_imp<C: Constraint>(
 }
 
 fn compile_bool_lin_eq_predicate(
+    instance: &Instance,
     context: &mut CompilationContext,
     args: &BoolLinEqArgs,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    let bools = context.resolve_bool_variable_array(&args.variables)?;
+    let bools = context.resolve_bool_variable_array(instance, &args.variables)?;
+    let weights = context.resolve_integer_array(instance, &args.weights)?;
     let rhs = context.resolve_integer_variable(&args.sum)?;
 
     Ok(
-        constraints::boolean_equals(args.weights.clone(), bools, rhs, constraint_tag)
+        constraints::boolean_equals(weights, bools, rhs, constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
 }
 
 fn compile_bool_lin_le_predicate(
+    instance: &Instance,
     context: &mut CompilationContext,
     args: &BoolLinLeArgs,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    let bools = context.resolve_bool_variable_array(&args.variables)?;
+    let bools = context.resolve_bool_variable_array(instance, &args.variables)?;
+    let weights = context.resolve_integer_array(instance, &args.weights)?;
 
-    Ok(constraints::boolean_less_than_or_equals(
-        args.weights.clone(),
-        bools,
-        args.bound,
-        constraint_tag,
+    Ok(
+        constraints::boolean_less_than_or_equals(weights, bools, args.bound, constraint_tag)
+            .post(context.solver)
+            .is_ok(),
     )
-    .post(context.solver)
-    .is_ok())
 }
 
 fn compile_table(
+    instance: &Instance,
     context: &mut CompilationContext,
     table: &TableInt,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    let variables = context.resolve_integer_variable_array(&table.variables)?;
-    let table = create_table(&table.table, variables.len());
+    let variables = context.resolve_integer_variable_array(instance, &table.variables)?;
+    let flat_table = context.resolve_integer_array(instance, &table.table)?;
+    let table = create_table(&flat_table, variables.len());
 
     Ok(constraints::table(variables, table, constraint_tag)
         .post(context.solver)
@@ -672,14 +710,16 @@ fn compile_table(
 }
 
 fn compile_table_reif(
+    instance: &Instance,
     context: &mut CompilationContext,
     table_reif: &TableIntReif,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     let variables = context
-        .resolve_integer_variable_array(&table_reif.variables)?
+        .resolve_integer_variable_array(instance, &table_reif.variables)?
         .to_vec();
-    let table = create_table(&table_reif.table, variables.len());
+    let flat_table = context.resolve_integer_array(instance, &table_reif.table)?;
+    let table = create_table(&flat_table, variables.len());
     let reified = context.resolve_bool_variable(&table_reif.reification)?;
 
     Ok(constraints::table(variables, table, constraint_tag)
