@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::rc::Rc;
 
 use crate::ast;
 
@@ -18,7 +19,7 @@ pub enum InstanceError {
     },
 
     #[error("array {0} is undefined")]
-    UndefinedArray(String),
+    UndefinedArray(Rc<str>),
 
     #[error("expected {expected} arguments, got {actual}")]
     IncorrectNumberOfArguments { expected: usize, actual: usize },
