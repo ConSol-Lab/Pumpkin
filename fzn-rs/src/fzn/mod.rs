@@ -127,6 +127,10 @@ pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
     Ok(ast)
 }
 
+/// The extra data attached to the chumsky parsers.
+///
+/// We specify a rich error type, as well as an instance of [`ParseState`] for string interning and
+/// parameter resolution.
 type FznExtra<'tokens, 'src> =
     extra::Full<Rich<'tokens, Token<'src>, ast::Span>, extra::SimpleState<ParseState>, ()>;
 
@@ -361,7 +365,7 @@ where
 }
 
 fn solve_item<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::SolveObjective<ast::Annotation>, FznExtra<'tokens, 'src>>
+) -> impl Parser<'tokens, I, ast::SolveItem<ast::Annotation>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -369,7 +373,7 @@ where
         .ignore_then(annotations())
         .then(solve_method())
         .then_ignore(just(SemiColon))
-        .map(|(annotations, method)| ast::SolveObjective {
+        .map(|(annotations, method)| ast::SolveItem {
             method,
             annotations,
         })
@@ -599,7 +603,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(15, 22, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -622,7 +626,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(71, 78, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -644,7 +648,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(
                         15,
                         33,
@@ -673,7 +677,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(
                         15,
                         33,
@@ -721,7 +725,7 @@ mod tests {
                 },
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(104, 111, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -750,7 +754,7 @@ mod tests {
                 },
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(41, 48, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -780,7 +784,7 @@ mod tests {
                 },
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(61, 68, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -830,7 +834,7 @@ mod tests {
                     }),
                 },
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(164, 171, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -885,7 +889,7 @@ mod tests {
                         annotations: vec![],
                     }
                 )],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(71, 78, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -914,7 +918,7 @@ mod tests {
                 },
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(55, 62, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -955,7 +959,7 @@ mod tests {
                     }),
                 },
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(83, 90, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -1003,7 +1007,7 @@ mod tests {
                         )],
                     }
                 )],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(66, 73, ast::Method::Satisfy),
                     annotations: vec![],
                 }
@@ -1025,7 +1029,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: BTreeMap::default(),
                 constraints: vec![],
-                solve: ast::SolveObjective {
+                solve: ast::SolveItem {
                     method: node(59, 66, ast::Method::Satisfy),
                     annotations: vec![node(
                         15,

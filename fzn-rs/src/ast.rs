@@ -8,73 +8,6 @@ use std::iter::FusedIterator;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-/// Describes a range `[start, end)` in the source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Span {
-    /// The index in the source that starts the span.
-    pub start: usize,
-    /// The index in the source that ends the span.
-    ///
-    /// Note the end is exclusive.
-    pub end: usize,
-}
-
-impl Display for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.start, self.end)
-    }
-}
-
-#[cfg(feature = "fzn")]
-impl chumsky::span::Span for Span {
-    type Context = ();
-
-    type Offset = usize;
-
-    fn new(_: Self::Context, range: std::ops::Range<Self::Offset>) -> Self {
-        Self {
-            start: range.start,
-            end: range.end,
-        }
-    }
-
-    fn context(&self) -> Self::Context {}
-
-    fn start(&self) -> Self::Offset {
-        self.start
-    }
-
-    fn end(&self) -> Self::Offset {
-        self.end
-    }
-}
-
-#[cfg(feature = "fzn")]
-impl From<chumsky::span::SimpleSpan> for Span {
-    fn from(value: chumsky::span::SimpleSpan) -> Self {
-        Span {
-            start: value.start,
-            end: value.end,
-        }
-    }
-}
-
-#[cfg(feature = "fzn")]
-impl From<Span> for chumsky::span::SimpleSpan {
-    fn from(value: Span) -> Self {
-        chumsky::span::SimpleSpan::from(value.start..value.end)
-    }
-}
-
-/// A node in the [`Ast`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Node<T> {
-    /// The span in the source of this node.
-    pub span: Span,
-    /// The parsed node.
-    pub node: T,
-}
-
 /// Represents a FlatZinc instance.
 ///
 /// In the `.fzn` format, identifiers can point to both constants and variables (either single or
@@ -91,7 +24,7 @@ pub struct Ast {
     /// A list of constraints.
     pub constraints: Vec<Node<Constraint>>,
     /// The goal of the model.
-    pub solve: SolveObjective<Annotation>,
+    pub solve: SolveItem<Annotation>,
 }
 
 /// A decision variable.
@@ -99,7 +32,7 @@ pub struct Ast {
 pub struct Variable<Ann> {
     /// The domain of the variable.
     pub domain: Node<Domain>,
-    /// The value that the variable is equal to.
+    /// Optionally, the value that the variable is equal to.
     pub value: Option<Node<Literal>>,
     /// The annotations on this variable.
     pub annotations: Vec<Node<Ann>>,
@@ -253,7 +186,8 @@ macro_rules! impl_range_list_iter {
 impl_range_list_iter!(i32);
 impl_range_list_iter!(i64);
 
-/// A literal in the instance.
+/// The foundational element from which expressions are built. Literals are the values/identifiers
+/// in the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
@@ -268,12 +202,14 @@ impl From<i64> for Literal {
     }
 }
 
+/// The solve item.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SolveObjective<Ann> {
+pub struct SolveItem<Ann> {
     pub method: Node<Method>,
     pub annotations: Vec<Node<Ann>>,
 }
 
+/// Whether to satisfy or optimise the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Method {
     Satisfy,
@@ -307,6 +243,7 @@ pub enum Argument {
     Literal(Node<Literal>),
 }
 
+/// An annotation on any item in the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Annotation {
     Atom(Rc<str>),
@@ -314,6 +251,7 @@ pub enum Annotation {
 }
 
 impl Annotation {
+    /// Get the name of the annotation.
     pub fn name(&self) -> &str {
         match self {
             Annotation::Atom(name) => name,
@@ -322,6 +260,7 @@ impl Annotation {
     }
 }
 
+/// An annotation with arguments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnotationCall {
     /// The name of the annotation.
@@ -337,13 +276,81 @@ pub enum AnnotationArgument {
     Literal(Node<AnnotationLiteral>),
 }
 
+/// An annotation literal is either a regular [`Literal`] or it is another annotation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AnnotationLiteral {
     BaseLiteral(Literal),
-    /// In the FZN grammar, this is an `Annotation` instead of an `AnnotationCall`. We divirge from
+    /// In the FZN grammar, this is an `Annotation` instead of an `AnnotationCall`. We diverge from
     /// the grammar to avoid the case where the same input can parse to either a
     /// `Annotation::Atom(ident)` or an `Literal::Identifier`.
     Annotation(AnnotationCall),
+}
+
+/// Describes a range `[start, end)` in the model file that contains a [`Node`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    /// The index in the source that starts the span.
+    pub start: usize,
+    /// The index in the source that ends the span.
+    ///
+    /// Note the end is exclusive.
+    pub end: usize,
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.start, self.end)
+    }
+}
+
+#[cfg(feature = "fzn")]
+impl chumsky::span::Span for Span {
+    type Context = ();
+
+    type Offset = usize;
+
+    fn new(_: Self::Context, range: std::ops::Range<Self::Offset>) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+        }
+    }
+
+    fn context(&self) -> Self::Context {}
+
+    fn start(&self) -> Self::Offset {
+        self.start
+    }
+
+    fn end(&self) -> Self::Offset {
+        self.end
+    }
+}
+
+#[cfg(feature = "fzn")]
+impl From<chumsky::span::SimpleSpan> for Span {
+    fn from(value: chumsky::span::SimpleSpan) -> Self {
+        Span {
+            start: value.start,
+            end: value.end,
+        }
+    }
+}
+
+#[cfg(feature = "fzn")]
+impl From<Span> for chumsky::span::SimpleSpan {
+    fn from(value: Span) -> Self {
+        chumsky::span::SimpleSpan::from(value.start..value.end)
+    }
+}
+
+/// A node in the [`Ast`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Node<T> {
+    /// The span in the source of this node.
+    pub span: Span,
+    /// The parsed node.
+    pub node: T,
 }
 
 #[cfg(test)]
