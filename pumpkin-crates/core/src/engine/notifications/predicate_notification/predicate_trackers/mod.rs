@@ -209,19 +209,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     /// `LowerBoundTracker::get_predicate_for_value(5)` will return the [`Predicate`] `[x >= 5].`
     fn get_predicate_for_value(&self, value: i32) -> Predicate;
 
-    /// Allows the [`DomainTracker`] to indicate that a tracked [`PredicateId`] has been satisfied.
-    fn predicate_id_has_been_satisfied(
-        &self,
-        predicate_id: PredicateId,
-        predicate_id_assignments: &mut PredicateIdAssignments,
-    ) {
-        if predicate_id.id == u32::MAX {
-            // If it is a placeholder then we ignore it
-            return;
-        }
-        predicate_id_assignments.store_predicate(predicate_id, PredicateValue::AssignedTrue);
-    }
-
     /// Allows the [`DomainTracker`] to indicate that a tracked [`Predicate`] has been satisfied.
     fn predicate_has_been_satisfied(
         &self,
@@ -345,6 +332,5 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        predicate_id: Option<PredicateId>,
     );
 }

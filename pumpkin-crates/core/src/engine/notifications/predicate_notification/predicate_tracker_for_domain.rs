@@ -6,7 +6,6 @@ use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
 use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PredicateIdGenerator;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
@@ -63,7 +62,6 @@ impl PredicateTrackerForDomain {
         domain: DomainId,
         predicate_type: PredicateType,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
         stateful_trail: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
         removed_value: Option<i32>,
@@ -75,7 +73,6 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
-                None,
             );
         }
 
@@ -86,18 +83,13 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
-                None,
             );
         }
 
         if !self.disequality.is_empty() {
             let predicate = predicate_type.into_predicate(domain, assignments, removed_value);
-            self.disequality.on_update(
-                predicate,
-                stateful_trail,
-                predicate_id_assignments,
-                Some(predicate_id_generator.get_id(predicate)),
-            );
+            self.disequality
+                .on_update(predicate, stateful_trail, predicate_id_assignments);
         }
 
         if !self.equality.is_empty() {
@@ -105,7 +97,6 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, removed_value),
                 stateful_trail,
                 predicate_id_assignments,
-                None,
             );
         }
     }

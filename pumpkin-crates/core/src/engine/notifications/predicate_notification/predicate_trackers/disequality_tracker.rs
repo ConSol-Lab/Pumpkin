@@ -1,9 +1,7 @@
 use super::DomainTracker;
 use super::HasTracker;
-use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
-use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -42,7 +40,6 @@ impl DomainTracker for DisequalityTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        predicate_id: Option<PredicateId>,
     ) {
         // We are interested in all types of predicates
         let value = predicate.get_right_hand_side();
@@ -135,11 +132,13 @@ impl DomainTracker for DisequalityTracker {
             // disequalities
             //
             // TODO: This could be optimised
-            if self.get_values().contains(&value) {
-                self.predicate_id_has_been_satisfied(
-                    predicate_id.unwrap(),
-                    predicate_id_assignments,
-                )
+            if let Some(index) = self
+                .watcher
+                .values
+                .iter()
+                .position(|&stored_value| stored_value == value)
+            {
+                self.predicate_has_been_satisfied(index, predicate_id_assignments)
             }
         } else {
             panic!()

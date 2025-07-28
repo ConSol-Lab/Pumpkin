@@ -142,7 +142,6 @@ impl PredicateNotifier {
             domain,
             predicate_type,
             assignments,
-            &mut self.predicate_to_id,
             trailed_values,
             &mut self.predicate_id_assignments,
             removed_value,

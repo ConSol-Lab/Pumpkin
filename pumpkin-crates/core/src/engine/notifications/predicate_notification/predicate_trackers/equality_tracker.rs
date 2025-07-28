@@ -1,6 +1,5 @@
 use super::DomainTracker;
 use super::HasTracker;
-use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
@@ -41,7 +40,6 @@ impl DomainTracker for EqualityTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        _predicate_id: Option<PredicateId>,
     ) {
         let value = predicate.get_right_hand_side();
         if predicate.is_lower_bound_predicate() {
@@ -93,35 +91,13 @@ impl DomainTracker for EqualityTracker {
                 return;
             }
 
-            // We go through all of the values and simply check whether its value correspond
-            // with the right-hand side of the disequality update.
-            //
-            // If this is the case then it is falsified.
-            //
-            // Note that this might lead to a predicate "becoming falsified" multiple times if
-            // the bounds are afterwards updated.
-            //
-            // TODO: There should be a more efficient way to do this
-
-            // We start at the lower end of the values
-            let mut current_index =
-                self.watcher.greater[trailed_values.read(self.watcher.min_assigned) as usize];
-            while current_index != i64::MAX {
-                // If the right-hand side is now lower than the current value that we are
-                // inspecting then we can break
-                if value < self.watcher.values[current_index as usize] {
-                    break;
-                }
-                // Otherwise, we check whether the current value is equal to the right-hand
-                // side
-                if value == self.watcher.values[current_index as usize] {
-                    // The update has caused the predicate to become falsified
-                    self.predicate_has_been_falsified(
-                        current_index as usize,
-                        predicate_id_assignments,
-                    )
-                }
-                current_index = self.watcher.greater[current_index as usize];
+            if let Some(index) = self
+                .watcher
+                .values
+                .iter()
+                .position(|&stored_value| stored_value == value)
+            {
+                self.predicate_has_been_falsified(index, predicate_id_assignments)
             }
         } else if predicate.is_equality_predicate() {
             // Similar to the lower-bound case, we need to check which equality predicates have
