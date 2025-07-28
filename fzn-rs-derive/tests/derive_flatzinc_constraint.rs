@@ -8,7 +8,9 @@ use fzn_rs::ast::Argument;
 use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
+use fzn_rs::ast::Span;
 use fzn_rs::ArrayExpr;
+use fzn_rs::InstanceError;
 use fzn_rs::TypedInstance;
 use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincConstraint;
@@ -363,4 +365,121 @@ fn constraint_as_struct_args() {
         ]
     );
     assert_eq!(linear.bound, 3);
+}
+
+#[test]
+fn argument_count_on_tuple_variants() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum TypedConstraint {
+        SomeConstraint(i64),
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![node(
+            fzn_rs::ast::Constraint {
+                name: test_node("some_constraint".into()),
+                arguments: vec![
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                ],
+                annotations: vec![],
+            },
+            0,
+            10,
+        )],
+        solve: satisfy_solve(),
+    };
+
+    let error = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect_err("invalid instance");
+
+    assert_eq!(
+        error,
+        InstanceError::IncorrectNumberOfArguments {
+            expected: 1,
+            actual: 2,
+            span: Span { start: 0, end: 10 },
+        }
+    );
+}
+
+#[test]
+fn argument_count_on_named_fields_variant() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum TypedConstraint {
+        SomeConstraint { constant: i64 },
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![node(
+            fzn_rs::ast::Constraint {
+                name: test_node("some_constraint".into()),
+                arguments: vec![
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                ],
+                annotations: vec![],
+            },
+            0,
+            10,
+        )],
+        solve: satisfy_solve(),
+    };
+
+    let error = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect_err("invalid instance");
+
+    assert_eq!(
+        error,
+        InstanceError::IncorrectNumberOfArguments {
+            expected: 1,
+            actual: 2,
+            span: Span { start: 0, end: 10 },
+        }
+    );
+}
+
+#[test]
+fn argument_count_on_args_struct() {
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    enum TypedConstraint {
+        #[args]
+        SomeConstraint(Args),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq, FlatZincConstraint)]
+    struct Args {
+        argument: i64,
+    }
+
+    let ast = Ast {
+        variables: BTreeMap::new(),
+        arrays: BTreeMap::new(),
+        constraints: vec![node(
+            fzn_rs::ast::Constraint {
+                name: test_node("some_constraint".into()),
+                arguments: vec![
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                    test_node(Argument::Literal(test_node(Literal::Int(3)))),
+                ],
+                annotations: vec![],
+            },
+            0,
+            10,
+        )],
+        solve: satisfy_solve(),
+    };
+
+    let error = TypedInstance::<i64, TypedConstraint>::from_ast(ast).expect_err("invalid instance");
+
+    assert_eq!(
+        error,
+        InstanceError::IncorrectNumberOfArguments {
+            expected: 1,
+            actual: 2,
+            span: Span { start: 0, end: 10 },
+        }
+    );
 }
