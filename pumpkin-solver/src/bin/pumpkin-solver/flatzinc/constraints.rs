@@ -212,8 +212,8 @@ pub(crate) struct TableIntReif {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct ArrayExtremum {
-    pub(crate) array: ArrayExpr<VariableExpr<i32>>,
     pub(crate) extremum: VariableExpr<i32>,
+    pub(crate) array: ArrayExpr<VariableExpr<i32>>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]
