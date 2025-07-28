@@ -114,6 +114,9 @@ pub(crate) trait DomainTrackerInformation {
 
     /// Returns true if no [`Predicate`]s are currently being tracked.
     fn is_empty(&self) -> bool;
+
+    /// Returns true if all of the tracked [`Predicate`]s are assigned.
+    fn is_fixed(&self, trailed_values: &TrailedValues) -> bool;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -196,6 +199,31 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 
     fn is_empty(&self) -> bool {
         self.get_tracker().values.is_empty()
+    }
+
+    fn is_fixed(&self, trailed_values: &TrailedValues) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+
+        let min_assigned_index = trailed_values.read(self.get_tracker().min_assigned) as usize;
+        let min_unassigned_index = self.get_tracker().greater[min_assigned_index] as usize;
+        pumpkin_assert_simple!(
+            self.get_tracker().values[min_assigned_index]
+                < self.get_tracker().values[min_unassigned_index]
+        );
+
+        let max_assigned_index = trailed_values.read(self.get_tracker().max_assigned) as usize;
+        let max_unassigned_index = self.get_tracker().smaller[max_assigned_index] as usize;
+        pumpkin_assert_simple!(
+            self.get_tracker().values[max_assigned_index]
+                > self.get_tracker().values[max_unassigned_index]
+        );
+
+        self.get_tracker().values[min_unassigned_index]
+            >= self.get_tracker().values[max_assigned_index]
+            || self.get_tracker().values[max_unassigned_index]
+                <= self.get_tracker().values[min_assigned_index]
     }
 }
 
