@@ -171,7 +171,7 @@ pub(crate) fn run(
                 context,
                 args,
                 constraint_tag,
-                constraints::binary_equals,
+                constraints::binary_not_equals,
             )?,
             IntLe(args) => compile_binary_int_predicate(
                 context,
@@ -199,19 +199,19 @@ pub(crate) fn run(
                 context,
                 args,
                 constraint_tag,
-                constraints::binary_equals,
+                constraints::binary_not_equals,
             )?,
             IntLtReif(args) => compile_reified_binary_int_predicate(
                 context,
                 args,
                 constraint_tag,
-                constraints::binary_equals,
+                constraints::binary_less_than,
             )?,
             IntLeReif(args) => compile_reified_binary_int_predicate(
                 context,
                 args,
                 constraint_tag,
-                constraints::binary_equals,
+                constraints::binary_less_than_or_equals,
             )?,
 
             IntMax(args) => compile_ternary_int_predicate(
@@ -225,7 +225,7 @@ pub(crate) fn run(
                 context,
                 args,
                 constraint_tag,
-                |a, b, c, constraint_tag| constraints::maximum([a, b], c, constraint_tag),
+                |a, b, c, constraint_tag| constraints::minimum([a, b], c, constraint_tag),
             )?,
 
             IntTimes(args) => {
@@ -601,7 +601,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     create_constraint: impl FnOnce(DomainId, DomainId, ConstraintTag) -> C,
 ) -> Result<bool, FlatZincError> {
     let a = context.resolve_integer_variable(&args.a)?;
-    let b = context.resolve_integer_variable(&args.a)?;
+    let b = context.resolve_integer_variable(&args.b)?;
     let reif = context.resolve_bool_variable(&args.reification)?;
 
     let constraint = create_constraint(a, b, constraint_tag);
