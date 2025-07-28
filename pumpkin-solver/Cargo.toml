@@ -17,6 +17,7 @@ pumpkin-core = { version = "0.2.1", path = "../pumpkin-crates/core/", features =
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 fzn-rs = { version = "0.1.0", path = "../fzn-rs/", features = ["derive", "fzn"] }
+ariadne = "0.5.1"
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }

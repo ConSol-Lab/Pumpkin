@@ -87,18 +87,54 @@ fn solution_callback(
 
 pub(crate) fn solve(
     mut solver: Solver,
-    instance: impl AsRef<Path>,
+    instance_path: impl AsRef<Path>,
     time_limit: Option<Duration>,
     options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
-    let instance = File::open(instance)?;
+    let instance = File::open(&instance_path)?;
 
     let mut termination = Combinator::new(
         OsSignal::install(),
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let instance = match parse_and_compile(&mut solver, instance, options) {
+        Ok(instance) => instance,
+        Err(FlatZincError::UnexpectedToken {
+            expected,
+            actual,
+            span_start,
+            span_end,
+        }) => {
+            let instance_path_str = instance_path.as_ref().display().to_string();
+            let source = std::fs::read_to_string(instance_path).unwrap();
+
+            ariadne::Report::build(
+                ariadne::ReportKind::Error,
+                (&instance_path_str, span_start..span_end),
+            )
+            .with_message("Unexpected input")
+            .with_label(
+                ariadne::Label::new((&instance_path_str, span_start..span_end))
+                    .with_message(format!("Expected {expected}")),
+            )
+            .finish()
+            .print((&instance_path_str, ariadne::Source::from(source)))
+            .unwrap();
+
+            return Err(FlatZincError::UnexpectedToken {
+                expected,
+                actual,
+                span_start,
+                span_end,
+            });
+        }
+
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
     let outputs = instance.outputs.clone();
 
     let mut brancher = if options.free_search {
@@ -259,7 +295,7 @@ fn parse_and_compile(
     let mut source = String::new();
     let _ = instance.read_to_string(&mut source)?;
 
-    let ast = fzn_rs::fzn::parse(&source).expect("should handle errors here");
+    let ast = fzn_rs::fzn::parse(&source)?;
 
     compiler::compile(ast, solver, options)
 }
