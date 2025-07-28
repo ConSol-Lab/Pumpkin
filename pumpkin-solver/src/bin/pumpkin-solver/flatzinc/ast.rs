@@ -223,7 +223,7 @@ pub(crate) enum VariableAnnotations {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum ArrayAnnotations {
-    OutputArray(Vec<RangeList<i32>>),
+    OutputArray(ArrayExpr<RangeList<i32>>),
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]

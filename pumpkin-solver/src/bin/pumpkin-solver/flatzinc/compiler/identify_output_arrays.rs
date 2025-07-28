@@ -23,10 +23,20 @@ pub(crate) fn run(
             reason = "it is only unnecessary because ArrayAnnotations has one variant"
         )]
         let Some(shape) = array.annotations.iter().find_map(|ann| match &ann.node {
-            ArrayAnnotations::OutputArray(shape) => Some(parse_array_shape(shape)),
+            ArrayAnnotations::OutputArray(array_expr) => {
+                let shape = instance
+                    .resolve_array(array_expr)
+                    .map_err(FlatZincError::UndefinedArray)
+                    .and_then(|iter| iter.collect::<Result<Vec<_>, _>>().map_err(Into::into))
+                    .map(parse_array_shape);
+
+                Some(shape)
+            }
         }) else {
             continue;
         };
+
+        let shape = shape?;
 
         let output = match determine_output_type(context, array) {
             OutputType::Int(ints) => Output::array_of_int(Rc::clone(name), shape.clone(), ints),
@@ -83,7 +93,7 @@ where
 
 /// Parse an array of ranges, which is the argument to the `output_array` annotation, to a slice of
 /// pairs which is expect by our output system.
-fn parse_array_shape(ranges: &[RangeList<i32>]) -> Box<[(i32, i32)]> {
+fn parse_array_shape(ranges: Vec<RangeList<i32>>) -> Box<[(i32, i32)]> {
     ranges
         .iter()
         .map(|ranges| (*ranges.lower_bound(), *ranges.upper_bound()))
