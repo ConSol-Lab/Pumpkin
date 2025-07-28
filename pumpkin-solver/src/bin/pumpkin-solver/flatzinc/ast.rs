@@ -103,46 +103,46 @@ impl VariableSelectionStrategy {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum ValueSelectionStrategy {
-    InDomain,
-    InDomainInterval,
-    InDomainMax,
-    InDomainMedian,
-    InDomainMiddle,
-    InDomainMin,
-    InDomainRandom,
-    InDomainReverseSplit,
-    InDomainSplit,
-    InDomainSplitRandom,
-    OutDomainMax,
-    OutDomainMedian,
-    OutDomainMin,
-    OutDomainRandom,
+    Indomain,
+    IndomainInterval,
+    IndomainMax,
+    IndomainMedian,
+    IndomainMiddle,
+    IndomainMin,
+    IndomainRandom,
+    IndomainReverseSplit,
+    IndomainSplit,
+    IndomainSplitRandom,
+    OutdomainMax,
+    OutdomainMedian,
+    OutdomainMin,
+    OutdomainRandom,
 }
 
 impl ValueSelectionStrategy {
     pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Literal> {
         DynamicValueSelector::new(match self {
-            ValueSelectionStrategy::InDomain
-            | ValueSelectionStrategy::InDomainInterval
-            | ValueSelectionStrategy::InDomainMin
-            | ValueSelectionStrategy::InDomainSplit
-            | ValueSelectionStrategy::OutDomainMax => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainMax
-            | ValueSelectionStrategy::InDomainReverseSplit
-            | ValueSelectionStrategy::OutDomainMin => Box::new(InDomainMax),
-            ValueSelectionStrategy::InDomainMedian => {
-                warn!("InDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::Indomain
+            | ValueSelectionStrategy::IndomainInterval
+            | ValueSelectionStrategy::IndomainMin
+            | ValueSelectionStrategy::IndomainSplit
+            | ValueSelectionStrategy::OutdomainMax => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainMax
+            | ValueSelectionStrategy::IndomainReverseSplit
+            | ValueSelectionStrategy::OutdomainMin => Box::new(InDomainMax),
+            ValueSelectionStrategy::IndomainMedian => {
+                warn!("indomain_median does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
-            ValueSelectionStrategy::InDomainMiddle => {
-                warn!("InDomainMiddle does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::IndomainMiddle => {
+                warn!("indomain_middle does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
-            ValueSelectionStrategy::InDomainRandom
-            | ValueSelectionStrategy::InDomainSplitRandom
-            | ValueSelectionStrategy::OutDomainRandom => Box::new(InDomainRandom),
-            ValueSelectionStrategy::OutDomainMedian => {
-                warn!("OutDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::IndomainRandom
+            | ValueSelectionStrategy::IndomainSplitRandom
+            | ValueSelectionStrategy::OutdomainRandom => Box::new(InDomainRandom),
+            ValueSelectionStrategy::OutdomainMedian => {
+                warn!("outdomain_median does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
         })
@@ -150,20 +150,20 @@ impl ValueSelectionStrategy {
 
     pub(crate) fn create_for_domains(&self) -> DynamicValueSelector<DomainId> {
         DynamicValueSelector::new(match self {
-            ValueSelectionStrategy::InDomain => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainInterval => Box::new(InDomainInterval),
-            ValueSelectionStrategy::InDomainMax => Box::new(InDomainMax),
-            ValueSelectionStrategy::InDomainMedian => Box::new(InDomainMedian),
-            ValueSelectionStrategy::InDomainMiddle => Box::new(InDomainMiddle),
-            ValueSelectionStrategy::InDomainMin => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainRandom => Box::new(InDomainRandom),
-            ValueSelectionStrategy::InDomainReverseSplit => Box::new(ReverseInDomainSplit),
-            ValueSelectionStrategy::InDomainSplit => Box::new(InDomainSplit),
-            ValueSelectionStrategy::InDomainSplitRandom => Box::new(InDomainSplitRandom),
-            ValueSelectionStrategy::OutDomainMax => Box::new(OutDomainMax),
-            ValueSelectionStrategy::OutDomainMedian => Box::new(OutDomainMedian),
-            ValueSelectionStrategy::OutDomainMin => Box::new(OutDomainMin),
-            ValueSelectionStrategy::OutDomainRandom => Box::new(OutDomainRandom),
+            ValueSelectionStrategy::Indomain => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainInterval => Box::new(InDomainInterval),
+            ValueSelectionStrategy::IndomainMax => Box::new(InDomainMax),
+            ValueSelectionStrategy::IndomainMedian => Box::new(InDomainMedian),
+            ValueSelectionStrategy::IndomainMiddle => Box::new(InDomainMiddle),
+            ValueSelectionStrategy::IndomainMin => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainRandom => Box::new(InDomainRandom),
+            ValueSelectionStrategy::IndomainReverseSplit => Box::new(ReverseInDomainSplit),
+            ValueSelectionStrategy::IndomainSplit => Box::new(InDomainSplit),
+            ValueSelectionStrategy::IndomainSplitRandom => Box::new(InDomainSplitRandom),
+            ValueSelectionStrategy::OutdomainMax => Box::new(OutDomainMax),
+            ValueSelectionStrategy::OutdomainMedian => Box::new(OutDomainMedian),
+            ValueSelectionStrategy::OutdomainMin => Box::new(OutDomainMin),
+            ValueSelectionStrategy::OutdomainRandom => Box::new(OutDomainRandom),
         })
     }
 }
