@@ -4,6 +4,7 @@ use std::rc::Rc;
 use super::ArrayExpr;
 use super::FlatZincAnnotation;
 use super::FlatZincConstraint;
+use super::FromAnnotationLiteral;
 use super::FromLiteral;
 use super::VariableExpr;
 use crate::ast;
@@ -68,7 +69,7 @@ impl<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
         array_expr: &'a ArrayExpr<T>,
     ) -> Result<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a, Rc<str>>
     where
-        T: FromLiteral,
+        T: FromAnnotationLiteral,
     {
         array_expr.resolve(&self.arrays)
     }
