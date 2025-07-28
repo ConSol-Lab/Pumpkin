@@ -43,6 +43,7 @@ fn create_from_search_strategy(
             variables,
             variable_selection_strategy,
             value_selection_strategy,
+            ..
         })) => {
             let search_variables = context.resolve_bool_variable_array_vec(variables)?;
 
@@ -56,6 +57,7 @@ fn create_from_search_strategy(
             variables,
             variable_selection_strategy,
             value_selection_strategy,
+            ..
         })) => {
             let search_variables = context.resolve_integer_variable_array_vec(variables)?;
 

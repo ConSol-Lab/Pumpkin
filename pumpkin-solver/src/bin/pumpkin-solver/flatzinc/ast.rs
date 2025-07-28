@@ -167,6 +167,15 @@ impl ValueSelectionStrategy {
     }
 }
 
+/// The exploration strategies for search annotations.
+///
+/// See
+/// https://docs.minizinc.dev/en/stable/lib-stdlib-annotations.html#exploration-strategy-annotations.
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum Exploration {
+    Complete,
+}
+
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum SearchAnnotation {
     #[args]
@@ -183,6 +192,12 @@ pub(crate) struct IntSearchArgs {
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
     pub(crate) value_selection_strategy: ValueSelectionStrategy,
+    #[allow(
+        dead_code,
+        reason = "the int_search annotation has this argument, so it needs to be present here"
+    )]
+    #[annotation]
+    pub(crate) exploration: Exploration,
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
@@ -192,6 +207,12 @@ pub(crate) struct BoolSearchArgs {
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
     pub(crate) value_selection_strategy: ValueSelectionStrategy,
+    #[allow(
+        dead_code,
+        reason = "the int_search annotation has this argument, so it needs to be present here"
+    )]
+    #[annotation]
+    pub(crate) exploration: Exploration,
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
