@@ -85,26 +85,6 @@ impl<T: FromAnnotationLiteral> FromAnnotationArgument for T {
     }
 }
 
-// impl<T: FromAnnotationLiteral> FromAnnotationArgument for ArrayExpr<T> {
-//     fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError> {
-//         match &argument.node {
-//             ast::AnnotationArgument::Array(array) => {
-//                 let contents =
-//                 array
-//                 .iter()
-//                 .map(|literal| T::from_literal(literal))
-//                 .collect();
-//                 ArrayExpr,
-//
-//             node => Err(InstanceError::UnexpectedToken {
-//                 expected: Token::Array,
-//                 actual: node.into(),
-//                 span: argument.span,
-//             }),
-//         }
-//     }
-// }
-
 /// Parse an [`ast::AnnotationArgument`] as an annotation. This needs to be a separate trait from
 /// [`FromAnnotationArgument`] so it does not collide wiith implementations for literals.
 pub trait FromNestedAnnotation: Sized {
