@@ -31,6 +31,28 @@ pub enum Token<'src> {
     Boolean(bool),
 }
 
+impl Display for Token<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::OpenParen => write!(f, "("),
+            Token::CloseParen => write!(f, ")"),
+            Token::OpenBracket => write!(f, "["),
+            Token::CloseBracket => write!(f, "]"),
+            Token::OpenBrace => write!(f, "{{"),
+            Token::CloseBrace => write!(f, "}}"),
+            Token::Comma => write!(f, ","),
+            Token::Colon => write!(f, ":"),
+            Token::DoubleColon => write!(f, "::"),
+            Token::SemiColon => write!(f, ";"),
+            Token::DoublePeriod => write!(f, ".."),
+            Token::Equal => write!(f, "="),
+            Token::Ident(ident) => write!(f, "{ident}"),
+            Token::Integer(int) => write!(f, "{int}"),
+            Token::Boolean(boolean) => write!(f, "{boolean}"),
+        }
+    }
+}
+
 type LexExtra<'src> = extra::Err<Rich<'src, char>>;
 
 pub(super) fn lex<'src>(
