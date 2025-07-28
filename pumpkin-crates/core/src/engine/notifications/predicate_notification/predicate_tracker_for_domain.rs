@@ -64,13 +64,12 @@ impl PredicateTrackerForDomain {
         assignments: &Assignments,
         stateful_trail: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        removed_value: Option<i32>,
     ) {
         if !self.lower_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.lower_bound.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
+                predicate_type.into_predicate(domain, assignments, None),
                 stateful_trail,
                 predicate_id_assignments,
             );
@@ -80,24 +79,45 @@ impl PredicateTrackerForDomain {
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.upper_bound.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
+                predicate_type.into_predicate(domain, assignments, None),
                 stateful_trail,
                 predicate_id_assignments,
             );
         }
 
-        if !self.disequality.is_empty() {
-            let predicate = predicate_type.into_predicate(domain, assignments, removed_value);
-            self.disequality
-                .on_update(predicate, stateful_trail, predicate_id_assignments);
-        }
+        if predicate_type.is_disequality() {
+            if !self.disequality.is_empty() || !self.equality.is_empty() {
+                for removed_value in assignments.get_holes_on_current_decision_level(domain) {
+                    let predicate =
+                        predicate_type.into_predicate(domain, assignments, Some(removed_value));
+                    if !self.disequality.is_empty() {
+                        self.disequality.on_update(
+                            predicate,
+                            stateful_trail,
+                            predicate_id_assignments,
+                        );
+                    }
 
-        if !self.equality.is_empty() {
-            self.equality.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
-                stateful_trail,
-                predicate_id_assignments,
-            );
+                    if !self.equality.is_empty() {
+                        self.equality.on_update(
+                            predicate,
+                            stateful_trail,
+                            predicate_id_assignments,
+                        );
+                    }
+                }
+            }
+        } else {
+            let predicate = predicate_type.into_predicate(domain, assignments, None);
+            if !self.disequality.is_empty() {
+                self.disequality
+                    .on_update(predicate, stateful_trail, predicate_id_assignments);
+            }
+
+            if !self.equality.is_empty() {
+                self.equality
+                    .on_update(predicate, stateful_trail, predicate_id_assignments);
+            }
         }
     }
 

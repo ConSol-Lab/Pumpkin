@@ -79,13 +79,7 @@ impl PredicateNotifier {
     ) {
         match event {
             DomainEvent::Assign => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::Equal,
-                    assignments,
-                    trailed_values,
-                    None,
-                );
+                self.on_update_predicate(domain, PredicateType::Equal, assignments, trailed_values);
             }
             DomainEvent::LowerBound => {
                 self.on_update_predicate(
@@ -93,7 +87,6 @@ impl PredicateNotifier {
                     PredicateType::LowerBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
             DomainEvent::UpperBound => {
@@ -102,20 +95,16 @@ impl PredicateNotifier {
                     PredicateType::UpperBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
-            DomainEvent::Removal => assignments
-                .get_holes_on_current_decision_level(domain)
-                .for_each(|value| {
-                    self.on_update_predicate(
-                        domain,
-                        PredicateType::NotEqual,
-                        assignments,
-                        trailed_values,
-                        Some(value),
-                    );
-                }),
+            DomainEvent::Removal => {
+                self.on_update_predicate(
+                    domain,
+                    PredicateType::NotEqual,
+                    assignments,
+                    trailed_values,
+                );
+            }
         }
     }
 
@@ -130,7 +119,6 @@ impl PredicateNotifier {
         predicate_type: PredicateType,
         assignments: &Assignments,
         trailed_values: &mut TrailedValues,
-        removed_value: Option<i32>,
     ) {
         if self.domain_id_to_predicate_tracker.len() <= domain.index() {
             // If no predicate has been registered for this domain id then we do nothing
@@ -144,7 +132,6 @@ impl PredicateNotifier {
             assignments,
             trailed_values,
             &mut self.predicate_id_assignments,
-            removed_value,
         );
     }
 
