@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::ast;
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum InstanceError {
     #[error("constraint '{0}' is not supported")]
     UnsupportedConstraint(String),
@@ -22,7 +22,11 @@ pub enum InstanceError {
     UndefinedArray(Rc<str>),
 
     #[error("expected {expected} arguments, got {actual}")]
-    IncorrectNumberOfArguments { expected: usize, actual: usize },
+    IncorrectNumberOfArguments {
+        expected: usize,
+        actual: usize,
+        span: ast::Span,
+    },
 
     #[error("value {0} does not fit in the required integer type")]
     IntegerOverflow(i64),
