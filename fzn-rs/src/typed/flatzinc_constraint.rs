@@ -5,7 +5,7 @@ use crate::Token;
 
 /// Parse a constraint from the given [`ast::Constraint`].
 pub trait FlatZincConstraint: Sized {
-    fn from_ast(constraint: &ast::Constraint) -> Result<Self, InstanceError>;
+    fn from_ast(constraint: &ast::Node<ast::Constraint>) -> Result<Self, InstanceError>;
 }
 
 /// Extract an argument from the [`ast::Argument`] node.
