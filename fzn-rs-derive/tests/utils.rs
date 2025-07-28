@@ -16,12 +16,16 @@ pub(crate) fn satisfy_solve() -> ast::SolveItem<ast::Annotation> {
     }
 }
 
-pub(crate) fn test_node<T>(node: T) -> ast::Node<T> {
+pub(crate) fn test_node<T>(data: T) -> ast::Node<T> {
+    node(data, usize::MAX, usize::MAX)
+}
+
+pub(crate) fn node<T>(data: T, span_start: usize, span_end: usize) -> ast::Node<T> {
     ast::Node {
-        node,
+        node: data,
         span: ast::Span {
-            start: usize::MAX,
-            end: usize::MAX,
+            start: span_start,
+            end: span_end,
         },
     }
 }

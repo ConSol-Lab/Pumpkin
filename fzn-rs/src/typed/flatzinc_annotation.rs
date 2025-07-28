@@ -14,23 +14,23 @@ pub trait FlatZincAnnotation: Sized {
     /// Parse a value of `Self` from the annotation node. Return `None` if the annotation node
     /// clearly is not relevant for `Self`, e.g. when the name is for a completely different
     /// annotation than `Self` models.
-    fn from_ast(annotation: &ast::Annotation) -> Result<Option<Self>, InstanceError>;
+    fn from_ast(annotation: &ast::Node<ast::Annotation>) -> Result<Option<Self>, InstanceError>;
 
     /// Parse an [`ast::Annotation`] into `Self` and produce an error if the annotation cannot be
     /// converted to a value of `Self`.
-    fn from_ast_required(annotation: &ast::Annotation) -> Result<Self, InstanceError> {
+    fn from_ast_required(annotation: &ast::Node<ast::Annotation>) -> Result<Self, InstanceError> {
         let outcome = Self::from_ast(annotation)?;
 
         // By default, failing to parse an annotation node into an annotation type is not
         // necessarily an error since the annotation node can be ignored. In this case, however,
         // we require a value to be present. Hence, if `outcome` is `None`, that is an error.
-        outcome.ok_or_else(|| InstanceError::UnsupportedAnnotation(annotation.name().into()))
+        outcome.ok_or_else(|| InstanceError::UnsupportedAnnotation(annotation.node.name().into()))
     }
 }
 
 /// A default implementation that ignores all annotations.
 impl FlatZincAnnotation for () {
-    fn from_ast(_: &ast::Annotation) -> Result<Option<Self>, InstanceError> {
+    fn from_ast(_: &ast::Node<ast::Annotation>) -> Result<Option<Self>, InstanceError> {
         Ok(None)
     }
 }
@@ -110,14 +110,16 @@ pub trait FromNestedAnnotation: Sized {
 /// is not possible.
 fn annotation_literal_to_annotation(
     literal: &ast::Node<ast::AnnotationLiteral>,
-) -> Result<ast::Annotation, InstanceError> {
+) -> Result<ast::Node<ast::Annotation>, InstanceError> {
     match &literal.node {
-        ast::AnnotationLiteral::BaseLiteral(ast::Literal::Identifier(ident)) => {
-            Ok(ast::Annotation::Atom(Rc::clone(ident)))
-        }
-        ast::AnnotationLiteral::Annotation(annotation_call) => {
-            Ok(ast::Annotation::Call(annotation_call.clone()))
-        }
+        ast::AnnotationLiteral::BaseLiteral(ast::Literal::Identifier(ident)) => Ok(ast::Node {
+            node: ast::Annotation::Atom(Rc::clone(ident)),
+            span: literal.span,
+        }),
+        ast::AnnotationLiteral::Annotation(annotation_call) => Ok(ast::Node {
+            node: ast::Annotation::Call(annotation_call.clone()),
+            span: literal.span,
+        }),
         ast::AnnotationLiteral::BaseLiteral(lit) => Err(InstanceError::UnexpectedToken {
             expected: Token::Annotation,
             actual: lit.into(),

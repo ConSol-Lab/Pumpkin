@@ -54,6 +54,7 @@ pub(crate) fn initialise_value(
             return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments {
                 expected: #num_arguments,
                 actual: arguments.len(),
+                span: annotation.span,
             });
         }
 

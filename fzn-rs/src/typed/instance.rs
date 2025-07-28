@@ -125,7 +125,7 @@ where
             .map(|constraint| {
                 let annotations = map_annotations(&constraint.node.annotations)?;
 
-                let instance_constraint = TConstraint::from_ast(&constraint.node)?;
+                let instance_constraint = TConstraint::from_ast(constraint)?;
 
                 Ok(AnnotatedConstraint {
                     constraint: ast::Node {
@@ -175,7 +175,7 @@ fn map_annotations<Ann: FlatZincAnnotation>(
     annotations
         .iter()
         .filter_map(|annotation| {
-            Ann::from_ast(&annotation.node)
+            Ann::from_ast(annotation)
                 .map(|maybe_node| {
                     maybe_node.map(|node| ast::Node {
                         node,

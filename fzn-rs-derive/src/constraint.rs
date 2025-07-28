@@ -18,7 +18,7 @@ pub(crate) fn initialise_value(
 
                 quote! {
                     #field_name: <#ty as ::fzn_rs::FromArgument>::from_argument(
-                        &constraint.arguments[#idx],
+                        &constraint.node.arguments[#idx],
                     )?,
                 }
             });
@@ -32,7 +32,7 @@ pub(crate) fn initialise_value(
 
                 quote! {
                     <#ty as ::fzn_rs::FromArgument>::from_argument(
-                        &constraint.arguments[#idx],
+                        &constraint.node.arguments[#idx],
                     )?,
                 }
             });
@@ -65,24 +65,39 @@ pub(crate) fn flatzinc_constraint_for_enum(
         };
 
         let variant_name = &variant.ident;
-        let value = match crate::common::get_args_type(variant) {
+        let match_expression = match crate::common::get_args_type(variant) {
             Some(constraint_type) => quote! {
-                #variant_name (<#constraint_type as ::fzn_rs::FlatZincConstraint>::from_ast(constraint)?)
+                Ok(#variant_name (<#constraint_type as ::fzn_rs::FlatZincConstraint>::from_ast(constraint)?))
             },
-            None => initialise_value(variant_name, &variant.fields),
+            None => {
+                let initialised_value = initialise_value(variant_name, &variant.fields);
+                let expected_num_arguments = variant.fields.len();
+
+                quote! {
+                    if constraint.node.arguments.len() != #expected_num_arguments {
+                        return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments {
+                            expected: #expected_num_arguments,
+                            actual: constraint.node.arguments.len(),
+                            span: constraint.span,
+                        });
+                    }
+
+                    Ok(#initialised_value)
+                }
+            }
         };
 
         quote! {
             #name => {
-                Ok(#value)
-            },
+                #match_expression
+            }
         }
     });
 
     quote! {
         use #constraint_enum_name::*;
 
-        match constraint.name.node.as_ref() {
+        match constraint.node.name.node.as_ref() {
             #(#constraints)*
             unknown => Err(::fzn_rs::InstanceError::UnsupportedConstraint(
                 String::from(unknown)

@@ -14,8 +14,20 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
     let type_name = derive_input.ident;
     let implementation = match &derive_input.data {
         syn::Data::Struct(data_struct) => {
+            let expected_num_arguments = data_struct.fields.len();
+
             let struct_initialiser = constraint::initialise_value(&type_name, &data_struct.fields);
-            quote! { Ok(#struct_initialiser) }
+            quote! {
+                if constraint.node.arguments.len() != #expected_num_arguments {
+                    return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments {
+                        expected: #expected_num_arguments,
+                        actual: constraint.node.arguments.len(),
+                        span: constraint.span,
+                    });
+                }
+
+                Ok(#struct_initialiser)
+            }
         }
         syn::Data::Enum(data_enum) => {
             constraint::flatzinc_constraint_for_enum(&type_name, data_enum)
@@ -29,7 +41,7 @@ pub fn derive_flatzinc_constraint(item: TokenStream) -> TokenStream {
         #[automatically_derived]
         impl ::fzn_rs::FlatZincConstraint for #type_name {
             fn from_ast(
-                constraint: &::fzn_rs::ast::Constraint,
+                constraint: &::fzn_rs::ast::Node<::fzn_rs::ast::Constraint>,
             ) -> Result<Self, ::fzn_rs::InstanceError> {
                 #implementation
             }
@@ -52,7 +64,7 @@ pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
             let expected_num_arguments = data_struct.fields.len();
 
             quote! {
-                match annotation {
+                match &annotation.node {
                     ::fzn_rs::ast::Annotation::Call(::fzn_rs::ast::AnnotationCall {
                         name,
                         arguments,
@@ -60,7 +72,11 @@ pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
                         #initialised_values
                     }
 
-                    _ => return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments { expected: #expected_num_arguments, actual: 0 }),
+                    _ => return Err(::fzn_rs::InstanceError::IncorrectNumberOfArguments {
+                        expected: #expected_num_arguments,
+                        actual: 0,
+                        span: annotation.span,
+                    }),
                 }
             }
         }
@@ -73,7 +89,7 @@ pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
             quote! {
                 use #annotatation_enum_name::*;
 
-                match annotation {
+                match &annotation.node {
                     #(#annotations),*
                     _ => Ok(None),
                 }
@@ -88,7 +104,7 @@ pub fn derive_flatzinc_annotation(item: TokenStream) -> TokenStream {
         #[automatically_derived]
         impl ::fzn_rs::FlatZincAnnotation for #annotatation_enum_name {
             fn from_ast(
-                annotation: &::fzn_rs::ast::Annotation
+                annotation: &::fzn_rs::ast::Node<::fzn_rs::ast::Annotation>,
             ) -> Result<Option<Self>, ::fzn_rs::InstanceError> {
                 #implementation
             }
