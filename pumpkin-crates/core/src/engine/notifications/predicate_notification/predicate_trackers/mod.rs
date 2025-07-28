@@ -3,6 +3,7 @@ use crate::containers::StorageKey;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
@@ -291,65 +292,59 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             "Initialise should have been called previously"
         );
 
-        // We get a new index for this value to update the linked list
-        let new_index = self.get_values().len() as i64;
+        // Then we track the information for updating `smaller`; recall that we place a sentinel
+        // node with the smallest possible value at index 0
+        let index_largest_value_smaller_than;
 
-        // Then we track the information for updating `smaller`
-        let mut index_largest_value_smaller_than = i64::MAX;
-        let mut largest_value_smaller_than = i32::MIN;
-
-        // And we track the information for updating `greater`
-        let mut index_smallest_value_larger_than = i64::MAX;
-        let mut smallest_value_larger_than = i32::MAX;
+        // And we track the information for updating `greater`; recall that we place a sentinel
+        // node with the largest possible value at index 1
+        let index_smallest_value_larger_than;
 
         // Then we go over each value to determine where to place the element in the linked list.
-        for index in 0..self.get_values().len() {
+        //
+        // Note that the element at the 1st index has the largest value
+        let mut index = 1;
+        loop {
             let index_value = self.get_values()[index];
             if index_value == value {
                 // This value is already being tracked
                 return false;
             }
 
-            // We first check whether we have found a value which is smaller than the provided
-            // `value` but larger than the one we already found
-            if index_value < value && index_value > largest_value_smaller_than {
-                largest_value_smaller_than = index_value;
+            // As soon as we have found a value smaller than the to track value, we can stop
+            if index_value < value {
                 index_largest_value_smaller_than = index as i64;
+
+                index_smallest_value_larger_than = self.get_greater()[index];
+                break;
             }
 
-            // We then check whether we have found a value which is larger than the provided
-            // `value` but smaller than the one we already found
-            if index_value > value && index_value < smallest_value_larger_than {
-                smallest_value_larger_than = index_value;
-                index_smallest_value_larger_than = index as i64;
-            }
-
-            // Now we check whether any _existing_ elements require their `smaller` to be updated
-            // due to the addition of this new element
-
-            // This is the case if the provided `value` is smaller than the one stored by this
-            // element And it either had no smaller element previously Or the current
-            // `value` is larger than the stored value
-            if value < self.get_values()[index]
-                && (self.get_smaller()[index] == i64::MAX
-                    || value > self.get_values()[self.get_smaller()[index] as usize])
-            {
-                self.get_smaller_mut()[index] = new_index;
-            }
-
-            // Now we check whether any _existing_ elements require their `smaller` to be updated
-            // due to the addition of this new element
-
-            // This is the case if the provided `value` is larger than the one stored by this
-            // element And it either had no greater element previously Or the current
-            // `value` is smaller than the stored value
-            if value > self.get_values()[index]
-                && (self.get_greater()[index] == i64::MAX
-                    || value < self.get_values()[self.get_greater()[index] as usize])
-            {
-                self.get_greater_mut()[index] = new_index;
-            }
+            index = self.get_smaller()[index] as usize;
         }
+
+        pumpkin_assert_eq_simple!(
+            self.get_values()[index_largest_value_smaller_than as usize],
+            *self
+                .get_values()
+                .iter()
+                .filter(|&&stored_value| stored_value < value)
+                .max()
+                .unwrap(),
+        );
+        pumpkin_assert_eq_simple!(
+            self.get_values()[index_smallest_value_larger_than as usize],
+            *self
+                .get_values()
+                .iter()
+                .filter(|&&stored_value| stored_value > value)
+                .min()
+                .unwrap()
+        );
+
+        let new_index = self.get_values().len();
+
+        self.get_greater_mut()[index_largest_value_smaller_than as usize] = new_index as i64;
+        self.get_smaller_mut()[index_smallest_value_larger_than as usize] = new_index as i64;
 
         // Then we update the other structures
         self.get_values_mut().push(value);

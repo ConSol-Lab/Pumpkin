@@ -1,6 +1,5 @@
 use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use super::PredicateIdAssignments;
-use super::PredicateValue;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -165,28 +164,7 @@ impl PredicateNotifier {
         // Now we add it to the scope of the tracker
         //
         // We check whether it was already tracked or not
-        let was_not_already_tracked = self.domain_id_to_predicate_tracker[predicate.get_domain()]
+        let _ = self.domain_id_to_predicate_tracker[predicate.get_domain()]
             .watch_predicate(predicate, id);
-
-        // If it was not already tracked then we store the update; otherwise we assume that the
-        // cache has already been informed of its value
-        if was_not_already_tracked {
-            // Then we cache the known value of the predicate; note that this method also ensures
-            // that it is added to the list of PredicateIds which the propagators should
-            // be notified about if it has not done so already
-            self.predicate_id_assignments.store_predicate(
-                id,
-                match assignments.evaluate_predicate(predicate) {
-                    Some(satisfied) => {
-                        if satisfied {
-                            PredicateValue::AssignedTrue
-                        } else {
-                            PredicateValue::AssignedFalse
-                        }
-                    }
-                    None => PredicateValue::Unknown,
-                },
-            );
-        }
     }
 }

@@ -14,6 +14,7 @@ use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -40,6 +41,8 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -74,7 +77,13 @@ pub(crate) struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
     /// Used to return lazy reasons
     temp_nogood_reason: Vec<Predicate>,
+
+    statistics: NogoodPropagatorStatistics,
 }
+
+create_statistics_struct!(NogoodPropagatorStatistics {
+    num_watchers_added: usize,
+});
 
 /// Watcher for a single nogood.
 ///
@@ -176,6 +185,10 @@ impl Propagator for NogoodPropagator {
         self.updated_predicate_ids.push(predicate_id);
     }
 
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger);
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
@@ -256,6 +269,7 @@ impl Propagator for NogoodPropagator {
                             context.trailed_values,
                             &mut self.watch_lists,
                             context.assignments,
+                            &mut self.statistics,
                         );
 
                         // No propagation is taking place, go to the next nogood.
@@ -452,6 +466,7 @@ impl NogoodPropagator {
             context.trailed_values,
             &mut self.watch_lists,
             context.assignments,
+            &mut self.statistics,
         );
         NogoodPropagator::add_watcher(
             self.nogood_predicates[nogood_id][1],
@@ -460,6 +475,7 @@ impl NogoodPropagator {
             context.trailed_values,
             &mut self.watch_lists,
             context.assignments,
+            &mut self.statistics,
         );
 
         // Then we propagate the asserting predicate and as the reason we give the index to the
@@ -624,6 +640,7 @@ impl NogoodPropagator {
                 context.trailed_values,
                 &mut self.watch_lists,
                 context.assignments,
+                &mut self.statistics,
             );
             NogoodPropagator::add_watcher(
                 self.nogood_predicates[nogood_id][1],
@@ -632,6 +649,7 @@ impl NogoodPropagator {
                 context.trailed_values,
                 &mut self.watch_lists,
                 context.assignments,
+                &mut self.statistics,
             );
 
             Ok(())
@@ -649,13 +667,17 @@ impl NogoodPropagator {
         trailed_values: &mut TrailedValues,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
         assignments: &Assignments,
+        statistics: &mut NogoodPropagatorStatistics,
     ) {
+        statistics.num_watchers_added += 1;
         // First we resize the watch list to accomodate the new nogood
         if predicate.id as usize >= watch_lists.len() {
             watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
 
-        notification_engine.track_predicate(predicate, trailed_values, assignments);
+        if watch_lists[predicate].is_empty() {
+            notification_engine.track_predicate(predicate, trailed_values, assignments);
+        }
 
         watch_lists[predicate].push(watcher);
     }
