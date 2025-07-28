@@ -100,6 +100,35 @@ pub(crate) fn solve(
 
     let instance = match parse_and_compile(&mut solver, instance, options) {
         Ok(instance) => instance,
+        Err(FlatZincError::IncorrectNumberOfArguments {
+            expected,
+            actual,
+            span_start,
+            span_end,
+        }) => {
+            let instance_path_str = instance_path.as_ref().display().to_string();
+            let source = std::fs::read_to_string(instance_path).unwrap();
+
+            ariadne::Report::build(
+                ariadne::ReportKind::Error,
+                (&instance_path_str, span_start..span_end),
+            )
+            .with_message("Incorrect number of arguments")
+            .with_label(
+                ariadne::Label::new((&instance_path_str, span_start..span_end))
+                    .with_message(format!("Expected {expected} arguments, got {actual}.")),
+            )
+            .finish()
+            .print((&instance_path_str, ariadne::Source::from(source)))
+            .unwrap();
+
+            return Err(FlatZincError::IncorrectNumberOfArguments {
+                expected,
+                actual,
+                span_start,
+                span_end,
+            });
+        }
         Err(FlatZincError::UnexpectedToken {
             expected,
             actual,

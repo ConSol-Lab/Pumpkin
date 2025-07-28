@@ -489,8 +489,13 @@ fn configure_logging_sat(
 fn main() {
     match run() {
         Ok(()) => {}
-        // This error is printed in the flatzinc code.
-        Err(PumpkinError::FlatZinc(FlatZincError::UnexpectedToken { .. })) => std::process::exit(1),
+
+        // These errors are printed in the flatzinc code.
+        Err(PumpkinError::FlatZinc(FlatZincError::UnexpectedToken { .. }))
+        | Err(PumpkinError::FlatZinc(FlatZincError::IncorrectNumberOfArguments { .. })) => {
+            std::process::exit(1)
+        }
+
         Err(e) => {
             error!("Execution failed, error: {e}");
             std::process::exit(1);

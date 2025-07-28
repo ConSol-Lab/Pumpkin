@@ -26,7 +26,7 @@ pub(crate) fn compile(
 
     remove_unused_variables::run(&mut ast)?;
 
-    let mut typed_ast = super::ast::Instance::from_ast(ast).expect("handle errors");
+    let mut typed_ast = super::ast::Instance::from_ast(ast)?;
     reserve_constraint_tags::run(&mut typed_ast, &mut context)?;
 
     prepare_variables::run(&typed_ast, &mut context)?;
