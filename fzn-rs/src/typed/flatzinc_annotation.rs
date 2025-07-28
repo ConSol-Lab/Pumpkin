@@ -43,7 +43,7 @@ pub trait FromAnnotationArgument: Sized {
 }
 
 /// Parse a value from an [`ast::AnnotationLiteral`].
-pub trait FromAnnotationLiteral: Sized {
+pub trait FromAnnotationLiteral: FromLiteral + Sized {
     fn expected() -> Token;
 
     fn from_literal(literal: &ast::Node<ast::AnnotationLiteral>) -> Result<Self, InstanceError>;
@@ -72,10 +72,12 @@ impl<T: FromLiteral> FromAnnotationLiteral for T {
 impl<T: FromAnnotationLiteral> FromAnnotationArgument for T {
     fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError> {
         match &argument.node {
-            ast::AnnotationArgument::Literal(literal) => T::from_literal(literal),
+            ast::AnnotationArgument::Literal(literal) => {
+                <T as FromAnnotationLiteral>::from_literal(literal)
+            }
 
             node => Err(InstanceError::UnexpectedToken {
-                expected: T::expected(),
+                expected: <T as FromAnnotationLiteral>::expected(),
                 actual: node.into(),
                 span: argument.span,
             }),
@@ -83,22 +85,25 @@ impl<T: FromAnnotationLiteral> FromAnnotationArgument for T {
     }
 }
 
-impl<T: FromAnnotationLiteral> FromAnnotationArgument for Vec<T> {
-    fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError> {
-        match &argument.node {
-            ast::AnnotationArgument::Array(array) => array
-                .iter()
-                .map(|literal| T::from_literal(literal))
-                .collect(),
-
-            node => Err(InstanceError::UnexpectedToken {
-                expected: Token::Array,
-                actual: node.into(),
-                span: argument.span,
-            }),
-        }
-    }
-}
+// impl<T: FromAnnotationLiteral> FromAnnotationArgument for ArrayExpr<T> {
+//     fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError> {
+//         match &argument.node {
+//             ast::AnnotationArgument::Array(array) => {
+//                 let contents =
+//                 array
+//                 .iter()
+//                 .map(|literal| T::from_literal(literal))
+//                 .collect();
+//                 ArrayExpr,
+//
+//             node => Err(InstanceError::UnexpectedToken {
+//                 expected: Token::Array,
+//                 actual: node.into(),
+//                 span: argument.span,
+//             }),
+//         }
+//     }
+// }
 
 /// Parse an [`ast::AnnotationArgument`] as an annotation. This needs to be a separate trait from
 /// [`FromAnnotationArgument`] so it does not collide wiith implementations for literals.

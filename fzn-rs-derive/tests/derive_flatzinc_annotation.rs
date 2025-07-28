@@ -15,6 +15,7 @@ use fzn_rs::ast::Domain;
 use fzn_rs::ast::Literal;
 use fzn_rs::ast::RangeList;
 use fzn_rs::ast::Variable;
+use fzn_rs::ArrayExpr;
 use fzn_rs::TypedInstance;
 use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincAnnotation;
@@ -242,7 +243,7 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
 
     #[derive(Clone, Debug, PartialEq, Eq, FlatZincAnnotation)]
     enum TypedAnnotation {
-        SomeAnnotation(Vec<i64>),
+        SomeAnnotation(ArrayExpr<i64>),
     }
 
     type Instance = TypedInstance<i64, TypedConstraint, (), (), TypedAnnotation, ()>;
@@ -268,11 +269,15 @@ fn arrays_as_annotation_arguments_with_literal_elements() {
     };
 
     let instance = Instance::from_ast(ast).expect("valid instance");
+    let TypedAnnotation::SomeAnnotation(args) = instance.constraints[0].annotations[0].node.clone();
 
-    assert_eq!(
-        instance.constraints[0].annotations[0].node,
-        TypedAnnotation::SomeAnnotation(vec![1, 2]),
-    );
+    let resolved_args = instance
+        .resolve_array(&args)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(resolved_args, vec![1, 2]);
 }
 
 #[test]
