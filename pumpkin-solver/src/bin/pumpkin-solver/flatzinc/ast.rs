@@ -1,4 +1,5 @@
 use fzn_rs::ast::RangeList;
+use fzn_rs::ArrayExpr;
 use fzn_rs::FromAnnotationArgument;
 use fzn_rs::VariableExpr;
 use log::warn;
@@ -187,7 +188,7 @@ pub(crate) enum SearchAnnotation {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) struct IntSearchArgs {
-    pub(crate) variables: Vec<VariableExpr<i32>>,
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]
@@ -202,7 +203,7 @@ pub(crate) struct IntSearchArgs {
 
 #[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) struct BoolSearchArgs {
-    pub(crate) variables: Vec<VariableExpr<bool>>,
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
     #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     #[annotation]

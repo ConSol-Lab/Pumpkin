@@ -29,10 +29,11 @@ pub(crate) fn run(
         .map(|node| &node.node)
         .next();
 
-    create_from_search_strategy(search, context, true, objective)
+    create_from_search_strategy(typed_ast, search, context, true, objective)
 }
 
 fn create_from_search_strategy(
+    typed_ast: &Instance,
     strategy: Option<&SearchAnnotation>,
     context: &mut CompilationContext,
     append_default_search: bool,
@@ -45,7 +46,7 @@ fn create_from_search_strategy(
             value_selection_strategy,
             ..
         })) => {
-            let search_variables = context.resolve_bool_variable_array_vec(variables)?;
+            let search_variables = context.resolve_bool_variable_array(typed_ast, variables)?;
 
             create_search_over_propositional_variables(
                 &search_variables,
@@ -59,7 +60,7 @@ fn create_from_search_strategy(
             value_selection_strategy,
             ..
         })) => {
-            let search_variables = context.resolve_integer_variable_array_vec(variables)?;
+            let search_variables = context.resolve_integer_variable_array(typed_ast, variables)?;
 
             create_search_over_domains(
                 &search_variables,
@@ -72,8 +73,14 @@ fn create_from_search_strategy(
                 .iter()
                 .map(|strategy| {
                     let downcast: Box<dyn Brancher> = Box::new(
-                        create_from_search_strategy(Some(strategy), context, false, objective)
-                            .expect("Expected nested sequential strategy to be able to be created"),
+                        create_from_search_strategy(
+                            typed_ast,
+                            Some(strategy),
+                            context,
+                            false,
+                            objective,
+                        )
+                        .expect("Expected nested sequential strategy to be able to be created"),
                     );
                     downcast
                 })

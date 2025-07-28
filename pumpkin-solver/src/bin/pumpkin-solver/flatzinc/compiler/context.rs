@@ -97,16 +97,6 @@ impl CompilationContext<'_> {
             .collect()
     }
 
-    pub(crate) fn resolve_bool_variable_array_vec(
-        &self,
-        array: &[VariableExpr<bool>],
-    ) -> Result<Vec<Literal>, FlatZincError> {
-        array
-            .iter()
-            .map(|expr| self.resolve_bool_variable(expr))
-            .collect()
-    }
-
     pub(crate) fn resolve_integer_variable(
         &mut self,
         variable: &VariableExpr<i32>,
@@ -153,16 +143,6 @@ impl CompilationContext<'_> {
                 let expr = expr_result?;
                 self.resolve_integer_variable(&expr)
             })
-            .collect()
-    }
-
-    pub(crate) fn resolve_integer_variable_array_vec(
-        &mut self,
-        array: &[VariableExpr<i32>],
-    ) -> Result<Vec<DomainId>, FlatZincError> {
-        array
-            .iter()
-            .map(|expr| self.resolve_integer_variable(expr))
             .collect()
     }
 }
