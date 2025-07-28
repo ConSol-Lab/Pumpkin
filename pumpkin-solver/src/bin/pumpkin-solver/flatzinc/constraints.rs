@@ -174,8 +174,8 @@ pub(crate) struct BoolLinLeArgs {
 
 #[derive(fzn_rs::FlatZincConstraint)]
 pub(crate) struct BoolToIntArgs {
-    pub(crate) integer: VariableExpr<i32>,
     pub(crate) boolean: VariableExpr<bool>,
+    pub(crate) integer: VariableExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincConstraint)]

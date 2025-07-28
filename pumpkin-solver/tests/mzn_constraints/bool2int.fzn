@@ -1,0 +1,6 @@
+var 0..1: int_var;
+var bool: bool_var;
+
+constraint bool2int(bool_var, int_var);
+
+solve satisfy;
