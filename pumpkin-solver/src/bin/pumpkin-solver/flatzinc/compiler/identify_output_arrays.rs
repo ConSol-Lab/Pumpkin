@@ -4,6 +4,8 @@ use fzn_rs::ast::RangeList;
 use fzn_rs::ast::{self};
 use fzn_rs::FromLiteral;
 use fzn_rs::VariableExpr;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::Literal;
 
 use super::CompilationContext;
 use crate::flatzinc::ast::ArrayAnnotations;
@@ -26,23 +28,38 @@ pub(crate) fn run(
             continue;
         };
 
-        // This is a bit hacky. We do not know easily whether the array is an array of
-        // integers or booleans. So we try to resolve both, and then see which one works.
-        let bool_array = resolve_array(array, |variable| context.resolve_bool_variable(variable));
-        let int_array = resolve_array(array, |variable| context.resolve_integer_variable(variable));
-
-        let output = match (bool_array, int_array) {
-            (Ok(bools), Err(_)) => Output::array_of_bool(Rc::clone(name), shape.clone(), bools),
-            (Err(_), Ok(ints)) => Output::array_of_int(Rc::clone(name), shape.clone(), ints),
-
-            (Ok(_), Ok(_)) => unreachable!("Array of identifiers that are both integers and booleans"),
-            (Err(e1), Err(e2)) => unreachable!("Array is neither of boolean or integer variables.\n\tBool error: {e1}\n\tInt error: {e2}"),
+        let output = match determine_output_type(context, array) {
+            OutputType::Int(ints) => Output::array_of_int(Rc::clone(name), shape.clone(), ints),
+            OutputType::Bool(bools) => Output::array_of_bool(Rc::clone(name), shape.clone(), bools),
         };
 
         context.outputs.push(output);
     }
 
     Ok(())
+}
+
+enum OutputType {
+    Int(Vec<DomainId>),
+    Bool(Vec<Literal>),
+}
+
+fn determine_output_type(
+    context: &mut CompilationContext,
+    array: &ast::Array<ArrayAnnotations>,
+) -> OutputType {
+    // This is a bit hacky. We do not know easily whether the array is an array of
+    // integers or booleans. So we try to resolve both, and then see which one works.
+    let bool_array = resolve_array(array, |variable| context.resolve_bool_variable(variable));
+    let int_array = resolve_array(array, |variable| context.resolve_integer_variable(variable));
+
+    match (bool_array, int_array) {
+        (Ok(bools), Err(_)) => OutputType::Bool(bools),
+        (Err(_), Ok(ints)) => OutputType::Int(ints),
+
+        (Ok(_), Ok(_)) => unreachable!("Array of identifiers that are both integers and booleans"),
+        (Err(e1), Err(e2)) => unreachable!("Array is neither of boolean or integer variables.\n\tBool error: {e1}\n\tInt error: {e2}"),
+    }
 }
 
 fn resolve_array<Output, T, Ann>(

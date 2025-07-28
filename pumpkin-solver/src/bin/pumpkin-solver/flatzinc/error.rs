@@ -29,6 +29,10 @@ pub(crate) enum FlatZincError {
     #[error("constraint '{0}' is not supported")]
     UnsupportedConstraint(String),
 
+    /// Occurs when parsing a nested annotation.
+    ///
+    /// In this case, all possible arguments must be parsable into an annotation. If there is a
+    /// value that cannot be parsed, this error variant is returned.
     #[error("annotation '{0}' is not supported")]
     UnsupportedAnnotation(String),
 
@@ -40,8 +44,13 @@ pub(crate) enum FlatZincError {
         span_end: usize,
     },
 
-    #[error("expected {expected} arguments, got {actual}")]
-    IncorrectNumberOfArguments { expected: usize, actual: usize },
+    #[error("expected {expected} arguments, got {actual} at ({span_start}, {span_end})")]
+    IncorrectNumberOfArguments {
+        expected: usize,
+        actual: usize,
+        span_start: usize,
+        span_end: usize,
+    },
 
     #[error("value {0} does not fit in the required integer type")]
     IntegerOverflow(i64),
@@ -116,9 +125,16 @@ impl From<fzn_rs::InstanceError> for FlatZincError {
                 span_end: span.end,
             },
             fzn_rs::InstanceError::UndefinedArray(a) => FlatZincError::UndefinedArray(a),
-            fzn_rs::InstanceError::IncorrectNumberOfArguments { expected, actual } => {
-                FlatZincError::IncorrectNumberOfArguments { expected, actual }
-            }
+            fzn_rs::InstanceError::IncorrectNumberOfArguments {
+                expected,
+                actual,
+                span,
+            } => FlatZincError::IncorrectNumberOfArguments {
+                expected,
+                actual,
+                span_start: span.start,
+                span_end: span.end,
+            },
             fzn_rs::InstanceError::IntegerOverflow(num) => FlatZincError::IntegerOverflow(num),
         }
     }
