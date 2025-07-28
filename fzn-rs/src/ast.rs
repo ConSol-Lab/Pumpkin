@@ -12,7 +12,7 @@ use std::rc::Rc;
 ///
 /// In the `.fzn` format, identifiers can point to both constants and variables (either single or
 /// arrays). In this AST, the constants are immediately resolved and are not kept in their original
-/// form. Therefore, any [`Literal::Identifier`] points to a variable.
+/// form. Therefore, any [`Literal::Identifier`] points to a variable or an array.
 ///
 /// All identifiers are [`Rc`]s to allow parsers to re-use the allocation of the variable name.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,7 +241,9 @@ pub enum Argument {
 /// An annotation on any item in the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Annotation {
+    /// An annotation without arguments.
     Atom(Rc<str>),
+    /// An annotation with arguments.
     Call(AnnotationCall),
 }
 
