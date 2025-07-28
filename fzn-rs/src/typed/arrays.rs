@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use super::FromAnnotationArgument;
+use super::FromAnnotationLiteral;
 use super::FromArgument;
 use super::FromLiteral;
 use super::VariableExpr;
@@ -35,7 +37,7 @@ pub struct ArrayExpr<T> {
 
 impl<T> ArrayExpr<T>
 where
-    T: FromLiteral,
+    T: FromAnnotationLiteral,
 {
     pub(crate) fn resolve<'a, Ann>(
         &'a self,
@@ -51,7 +53,7 @@ where
                 })
                 .ok_or_else(|| Rc::clone(ident)),
             ArrayExprImpl::Array(array) => Ok(GenericIterator(Box::new(
-                array.contents.iter().map(<T as FromLiteral>::from_literal),
+                array.iter().map(<T as FromAnnotationLiteral>::from_literal),
             ))),
         }
     }
@@ -60,13 +62,21 @@ where
 impl<T> FromArgument for ArrayExpr<T> {
     fn from_argument(argument: &ast::Node<ast::Argument>) -> Result<Self, InstanceError> {
         match &argument.node {
-            ast::Argument::Array(contents) => Ok(ArrayExpr {
-                expr: ArrayExprImpl::Array(ast::Array {
-                    contents: contents.clone(),
-                    annotations: vec![],
-                }),
-                ty: PhantomData,
-            }),
+            ast::Argument::Array(contents) => {
+                let contents = contents
+                    .iter()
+                    .cloned()
+                    .map(|node| ast::Node {
+                        node: ast::AnnotationLiteral::BaseLiteral(node.node),
+                        span: node.span,
+                    })
+                    .collect();
+
+                Ok(ArrayExpr {
+                    expr: ArrayExprImpl::Array(contents),
+                    ty: PhantomData,
+                })
+            }
             ast::Argument::Literal(ast::Node {
                 node: ast::Literal::Identifier(ident),
                 ..
@@ -83,19 +93,46 @@ impl<T> FromArgument for ArrayExpr<T> {
     }
 }
 
+impl<T> FromAnnotationArgument for ArrayExpr<T> {
+    fn from_argument(argument: &ast::Node<ast::AnnotationArgument>) -> Result<Self, InstanceError> {
+        match &argument.node {
+            ast::AnnotationArgument::Array(contents) => Ok(ArrayExpr {
+                expr: ArrayExprImpl::Array(contents.clone()),
+                ty: PhantomData,
+            }),
+            ast::AnnotationArgument::Literal(ast::Node {
+                node: ast::AnnotationLiteral::BaseLiteral(ast::Literal::Identifier(ident)),
+                ..
+            }) => Ok(ArrayExpr {
+                expr: ArrayExprImpl::Identifier(Rc::clone(ident)),
+                ty: PhantomData,
+            }),
+            ast::AnnotationArgument::Literal(literal) => Err(InstanceError::UnexpectedToken {
+                expected: Token::Array,
+                actual: Token::from(&literal.node),
+                span: literal.span,
+            }),
+        }
+    }
+}
+
 impl<T> From<Vec<VariableExpr<T>>> for ArrayExpr<T>
 where
     ast::Literal: From<T>,
 {
     fn from(value: Vec<VariableExpr<T>>) -> Self {
         ArrayExpr {
-            expr: ArrayExprImpl::Array(ast::Array {
-                contents: value
+            expr: ArrayExprImpl::Array(
+                value
                     .into_iter()
                     .map(|value| ast::Node {
                         node: match value {
-                            VariableExpr::Identifier(ident) => ast::Literal::Identifier(ident),
-                            VariableExpr::Constant(value) => ast::Literal::from(value),
+                            VariableExpr::Identifier(ident) => {
+                                ast::AnnotationLiteral::BaseLiteral(ast::Literal::Identifier(ident))
+                            }
+                            VariableExpr::Constant(value) => {
+                                ast::AnnotationLiteral::BaseLiteral(ast::Literal::from(value))
+                            }
                         },
                         span: ast::Span {
                             start: usize::MAX,
@@ -103,8 +140,7 @@ where
                         },
                     })
                     .collect(),
-                annotations: vec![],
-            }),
+            ),
             ty: PhantomData,
         }
     }
@@ -116,19 +152,18 @@ where
 {
     fn from(value: Vec<T>) -> Self {
         ArrayExpr {
-            expr: ArrayExprImpl::Array(ast::Array {
-                contents: value
+            expr: ArrayExprImpl::Array(
+                value
                     .into_iter()
                     .map(|value| ast::Node {
-                        node: ast::Literal::from(value),
+                        node: ast::AnnotationLiteral::BaseLiteral(ast::Literal::from(value)),
                         span: ast::Span {
                             start: usize::MAX,
                             end: usize::MAX,
                         },
                     })
                     .collect(),
-                annotations: vec![],
-            }),
+            ),
             ty: PhantomData,
         }
     }
@@ -140,7 +175,9 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ArrayExprImpl {
     Identifier(Rc<str>),
-    Array(ast::Array<()>),
+    /// Regardless of the contents of the array, the elements will always be of type
+    /// [`ast::AnnotationLiteral`] to support the parsing of annotations from arrays.
+    Array(Vec<ast::Node<ast::AnnotationLiteral>>),
 }
 
 /// A boxed dyn [`ExactSizeIterator`] which is returned from [`ArrayExpr::resolve`].
