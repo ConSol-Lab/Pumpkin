@@ -67,6 +67,10 @@ impl PredicateTrackerForDomain {
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
+        // We check three things:
+        // 1. Is the lower-bound tracker tracking anything?
+        // 2. Is the update a lower-bound or upper-bound update?
+        // 3. Can updates still take place?
         if !self.lower_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
             && !self.lower_bound.is_fixed(trailed_values)
@@ -79,6 +83,10 @@ impl PredicateTrackerForDomain {
             );
         }
 
+        // We check three things:
+        // 1. Is the upper-bound tracker tracking anything?
+        // 2. Is the update a lower-bound or upper-bound update?
+        // 3. Can updates still take place?
         if !self.upper_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
             && !self.upper_bound.is_fixed(trailed_values)
@@ -91,8 +99,14 @@ impl PredicateTrackerForDomain {
             );
         }
 
+        // The case for disequalities is more involved since we need to find the actual holes in
+        // the domain which were created.
+        //
+        // Note that only the trackers of equalities and disequalities care about removal events
         if predicate_type.is_disequality() {
+            // We first check whether anything is being tracked
             if !self.disequality.is_empty() || !self.equality.is_empty() {
+                // After that we check whether one of them is unfixed, and we cache the result
                 let disequality_is_fixed = self.disequality.is_fixed(trailed_values);
                 let equality_is_fixed = self.equality.is_fixed(trailed_values);
 
@@ -100,19 +114,27 @@ impl PredicateTrackerForDomain {
                     return;
                 }
 
+                // Then we go over all of the removed values which have not been processed yet
                 for removed_value in
                     assignments.get_holes_on_current_decision_level_above_index(domain, {
+                        // We need to find the index above which we need to search, there are three
+                        // cases:
                         match (equality_is_fixed, disequality_is_fixed) {
                             (true, false) => {
+                                // Equality tracker is fixed, only look at disequality
                                 self.disequality.get_last_seen_trail_index(trailed_values)
                             }
                             (false, true) => {
+                                // Disequality tracker is fixed, only look at equalities
                                 self.equality.get_last_seen_trail_index(trailed_values)
                             }
-                            (false, false) => min(
-                                self.equality.get_last_seen_trail_index(trailed_values),
-                                self.disequality.get_last_seen_trail_index(trailed_values),
-                            ),
+                            (false, false) => {
+                                // Both are not fixed, we take the minimum
+                                min(
+                                    self.equality.get_last_seen_trail_index(trailed_values),
+                                    self.disequality.get_last_seen_trail_index(trailed_values),
+                                )
+                            }
 
                             _ => unreachable!(),
                         }
@@ -141,6 +163,9 @@ impl PredicateTrackerForDomain {
             }
         } else {
             let predicate = predicate_type.into_predicate(domain, assignments, None);
+            // We check two things:
+            // 1. Is the disequality tracker tracking anything?
+            // 2. Can updates still take place?
             if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
                 self.disequality.on_update(
                     predicate,
@@ -150,6 +175,9 @@ impl PredicateTrackerForDomain {
                 );
             }
 
+            // We check two things:
+            // 1. Is the equality tracker tracking anything?
+            // 2. Can updates still take place?
             if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
                 self.equality.on_update(
                     predicate,

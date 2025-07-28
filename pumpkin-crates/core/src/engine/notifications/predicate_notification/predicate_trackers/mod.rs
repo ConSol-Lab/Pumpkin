@@ -203,9 +203,27 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 
     fn is_fixed(&self, trailed_values: &TrailedValues) -> bool {
         if self.is_empty() {
+            // If it is empty, then it is trivially fixed
             return true;
         }
 
+        // The idea is to use the `min_assigned` and `max_assigned` fields to infer whether any
+        // updates can take place.
+        //
+        // Let's first look at an example for a variable `x`, imagine we have the following values
+        // [0, 10, 5, 2, 3, 1] where `x \in [0, 10]` (i.e. the first two values are fixed);
+        // we know that `min_assigned = 0` and `max_assigned = 1`; now we update the domain
+        // of `x` to be `[4, 4]`. We know that `min_assigned = 4` (pointing to value 3), and
+        // `max_assigned = 2` (pointing to value 5).
+        //
+        // If we now look at the successor of `min_assigned` (with index 2 and value 5) and the
+        // predecessor of `max_assigned` (with index 5 and value 3), then we can see that
+        // these are already assigned (according to `min_assigned` and `max_assigned`
+        // respectively).
+        //
+        // Thus, we simply need to check whether either:
+        // - The successor of `min_assigned` is equal to `max_assigned`
+        // - The predecessor of `max_assigned` is equal to `min_assigned`
         let min_assigned_index = trailed_values.read(self.get_tracker().min_assigned) as usize;
         let min_unassigned_index = self.get_tracker().greater[min_assigned_index] as usize;
         pumpkin_assert_simple!(
@@ -362,4 +380,92 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         predicate_id_assignments: &mut PredicateIdAssignments,
         trail_entry: usize,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::basic_types::PredicateIdGenerator;
+    use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTracker;
+    use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
+    use crate::engine::notifications::predicate_notification::predicate_trackers::HasTracker;
+    use crate::engine::notifications::predicate_notification::predicate_trackers::LowerBoundTracker;
+    use crate::engine::notifications::predicate_notification::predicate_trackers::PredicateTracker;
+    use crate::engine::notifications::NotificationEngine;
+    use crate::engine::notifications::PredicateIdAssignments;
+    use crate::engine::Assignments;
+    use crate::engine::TrailedValues;
+    use crate::predicate;
+    use crate::predicates::Predicate;
+    use crate::variables::DomainId;
+
+    #[test]
+    fn is_fixed() {
+        let mut tracker = LowerBoundTracker::new();
+        let mut trailed_values = TrailedValues::default();
+        let mut assignments = Assignments::default();
+        let mut predicate_id_generator = PredicateIdGenerator::default();
+        let mut notification_engine = NotificationEngine::default();
+
+        let initial_lower_bound = 0;
+        let initial_upper_bound = 10;
+        let domain = assignments.grow(initial_lower_bound, initial_upper_bound);
+        notification_engine.grow();
+
+        tracker.initialise(
+            domain,
+            initial_lower_bound,
+            initial_upper_bound,
+            &mut trailed_values,
+        );
+        assert!(tracker.is_fixed(&trailed_values));
+        let _ = tracker.track(
+            5,
+            predicate_id_generator.get_id(tracker.get_predicate_for_value(5)),
+        );
+        assert!(!tracker.is_fixed(&trailed_values));
+
+        let _ = tracker.track(
+            2,
+            predicate_id_generator.get_id(tracker.get_predicate_for_value(5)),
+        );
+        assert!(!tracker.is_fixed(&trailed_values));
+
+        let _ = tracker.track(
+            3,
+            predicate_id_generator.get_id(tracker.get_predicate_for_value(5)),
+        );
+        assert!(!tracker.is_fixed(&trailed_values));
+
+        let _ = tracker.track(
+            1,
+            predicate_id_generator.get_id(tracker.get_predicate_for_value(5)),
+        );
+        assert!(!tracker.is_fixed(&trailed_values));
+
+        let _ = assignments.post_predicate(predicate!(domain >= 4), None, &mut notification_engine);
+        let _ = assignments.post_predicate(predicate!(domain <= 6), None, &mut notification_engine);
+
+        tracker.on_update(
+            predicate!(domain >= 4),
+            &mut trailed_values,
+            &mut PredicateIdAssignments::default(),
+            1,
+        );
+        tracker.on_update(
+            predicate!(domain <= 6),
+            &mut trailed_values,
+            &mut PredicateIdAssignments::default(),
+            2,
+        );
+        assert!(!tracker.is_fixed(&trailed_values));
+
+        let _ = assignments.post_predicate(predicate!(domain <= 4), None, &mut notification_engine);
+        tracker.on_update(
+            predicate!(domain <= 4),
+            &mut trailed_values,
+            &mut PredicateIdAssignments::default(),
+            3,
+        );
+        assert!(tracker.is_fixed(&trailed_values));
+    }
 }

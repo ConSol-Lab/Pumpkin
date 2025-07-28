@@ -23,6 +23,9 @@ impl EqualityTracker {
         }
     }
 
+    /// Returns the trail index which was last seen when processing a `!=` predicate.
+    ///
+    /// This is used to prevent updating multiple times for the same removals.
     pub(crate) fn get_last_seen_trail_index(&self, trailed_values: &TrailedValues) -> usize {
         trailed_values.read(self.last_seen_trail_index) as usize
     }
