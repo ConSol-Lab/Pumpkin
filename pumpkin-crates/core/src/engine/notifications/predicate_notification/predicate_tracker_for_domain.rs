@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use super::predicate_trackers::DisequalityTracker;
 use super::predicate_trackers::DomainTracker;
 use super::predicate_trackers::DomainTrackerInformation;
@@ -26,12 +28,12 @@ pub(crate) struct PredicateTrackerForDomain {
 }
 
 impl PredicateTrackerForDomain {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
         Self {
             lower_bound: LowerBoundTracker::new(),
             upper_bound: UpperBoundTracker::new(),
-            disequality: DisequalityTracker::new(),
-            equality: EqualityTracker::new(),
+            disequality: DisequalityTracker::new(trailed_values),
+            equality: EqualityTracker::new(trailed_values),
         }
     }
 }
@@ -73,6 +75,7 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
                 predicate_id_assignments,
+                assignments.num_trail_entries(),
             );
         }
 
@@ -84,6 +87,7 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
                 predicate_id_assignments,
+                assignments.num_trail_entries(),
             );
         }
 
@@ -96,7 +100,24 @@ impl PredicateTrackerForDomain {
                     return;
                 }
 
-                for removed_value in assignments.get_holes_on_current_decision_level(domain) {
+                for removed_value in
+                    assignments.get_holes_on_current_decision_level_above_index(domain, {
+                        match (equality_is_fixed, disequality_is_fixed) {
+                            (true, false) => {
+                                self.disequality.get_last_seen_trail_index(trailed_values)
+                            }
+                            (false, true) => {
+                                self.equality.get_last_seen_trail_index(trailed_values)
+                            }
+                            (false, false) => min(
+                                self.equality.get_last_seen_trail_index(trailed_values),
+                                self.disequality.get_last_seen_trail_index(trailed_values),
+                            ),
+
+                            _ => unreachable!(),
+                        }
+                    })
+                {
                     let predicate =
                         predicate_type.into_predicate(domain, assignments, Some(removed_value));
                     if !self.disequality.is_empty() && !disequality_is_fixed {
@@ -104,6 +125,7 @@ impl PredicateTrackerForDomain {
                             predicate,
                             trailed_values,
                             predicate_id_assignments,
+                            assignments.num_trail_entries(),
                         );
                     }
 
@@ -112,6 +134,7 @@ impl PredicateTrackerForDomain {
                             predicate,
                             trailed_values,
                             predicate_id_assignments,
+                            assignments.num_trail_entries(),
                         );
                     }
                 }
@@ -119,13 +142,21 @@ impl PredicateTrackerForDomain {
         } else {
             let predicate = predicate_type.into_predicate(domain, assignments, None);
             if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
-                self.disequality
-                    .on_update(predicate, trailed_values, predicate_id_assignments);
+                self.disequality.on_update(
+                    predicate,
+                    trailed_values,
+                    predicate_id_assignments,
+                    assignments.num_trail_entries(),
+                );
             }
 
             if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
-                self.equality
-                    .on_update(predicate, trailed_values, predicate_id_assignments);
+                self.equality.on_update(
+                    predicate,
+                    trailed_values,
+                    predicate_id_assignments,
+                    assignments.num_trail_entries(),
+                );
             }
         }
     }

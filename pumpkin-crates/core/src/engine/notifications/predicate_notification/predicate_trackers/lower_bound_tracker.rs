@@ -40,6 +40,7 @@ impl DomainTracker for LowerBoundTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
+        _trail_entry: usize,
     ) {
         // We only consider lower-bound and upper-bound updates
         let value = predicate.get_right_hand_side();
