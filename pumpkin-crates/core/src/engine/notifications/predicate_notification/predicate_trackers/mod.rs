@@ -378,7 +378,6 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        trail_entry: usize,
     );
 }
 

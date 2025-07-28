@@ -66,19 +66,6 @@ impl Assignments {
         self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
     }
 
-    /// Returns all of the holes in the domain which were created at the current decision level
-    /// above the provided index
-    pub(crate) fn get_holes_on_current_decision_level_above_index(
-        &self,
-        domain_id: DomainId,
-        trail_index: usize,
-    ) -> impl Iterator<Item = i32> + '_ {
-        self.domains[domain_id].get_holes_from_current_decision_level_above_index(
-            self.get_decision_level(),
-            trail_index,
-        )
-    }
-
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were
     /// created at previous decision levels).
     pub(crate) fn get_holes(&self, domain_id: DomainId) -> impl Iterator<Item = i32> + '_ {
@@ -826,8 +813,8 @@ struct BoundUpdateInfo {
 #[derive(Clone, Debug)]
 struct HoleUpdateInfo {
     removed_value: i32,
+
     decision_level: usize,
-    trail_position: usize,
 
     triggered_lower_bound_update: bool,
     triggered_upper_bound_update: bool,
@@ -1021,7 +1008,6 @@ impl IntegerDomain {
         self.hole_updates.push(HoleUpdateInfo {
             removed_value,
             decision_level,
-            trail_position,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
@@ -1337,21 +1323,6 @@ impl IntegerDomain {
             .iter()
             .rev()
             .take_while(move |entry| entry.decision_level == current_decision_level)
-            .map(|entry| entry.removed_value)
-    }
-
-    /// Returns the holes which were created on the current decision level above the provided index.
-    pub(crate) fn get_holes_from_current_decision_level_above_index(
-        &self,
-        current_decision_level: usize,
-        trail_index: usize,
-    ) -> impl Iterator<Item = i32> + '_ {
-        self.hole_updates
-            .iter()
-            .rev()
-            .take_while(move |entry| {
-                entry.decision_level == current_decision_level && entry.trail_position > trail_index
-            })
             .map(|entry| entry.removed_value)
     }
 

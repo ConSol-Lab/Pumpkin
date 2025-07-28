@@ -3,7 +3,6 @@ use super::HasTracker;
 use super::PredicateTracker;
 use super::TrailedValues;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
-use crate::engine::TrailedInteger;
 use crate::predicate;
 use crate::predicates::Predicate;
 
@@ -11,23 +10,13 @@ use crate::predicates::Predicate;
 #[derive(Debug, Clone)]
 pub(crate) struct EqualityTracker {
     watcher: PredicateTracker,
-
-    last_seen_trail_index: TrailedInteger,
 }
 
 impl EqualityTracker {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             watcher: PredicateTracker::new(),
-            last_seen_trail_index: trailed_values.grow(0),
         }
-    }
-
-    /// Returns the trail index which was last seen when processing a `!=` predicate.
-    ///
-    /// This is used to prevent updating multiple times for the same removals.
-    pub(crate) fn get_last_seen_trail_index(&self, trailed_values: &TrailedValues) -> usize {
-        trailed_values.read(self.last_seen_trail_index) as usize
     }
 }
 
@@ -51,7 +40,6 @@ impl DomainTracker for EqualityTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        trail_entry: usize,
     ) {
         let value = predicate.get_right_hand_side();
         if predicate.is_lower_bound_predicate() {
@@ -89,8 +77,6 @@ impl DomainTracker for EqualityTracker {
                 smaller = self.watcher.smaller[smaller as usize];
             }
         } else if predicate.is_not_equal_predicate() {
-            trailed_values.assign(self.last_seen_trail_index, trail_entry as i64);
-
             // If the right-hand side of the disequality predicate is smaller than the value
             // pointed to by `min_assigned` then no updates can take place
             if value <= self.watcher.values[trailed_values.read(self.watcher.min_assigned) as usize]

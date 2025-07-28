@@ -149,7 +149,7 @@ impl PredicateNotifier {
         if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
             self.domain_id_to_predicate_tracker.resize(
                 predicate.get_domain().index() + 1,
-                PredicateTrackerForDomain::new(trailed_values),
+                PredicateTrackerForDomain::new(),
             );
         }
 

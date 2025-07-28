@@ -1,5 +1,3 @@
-use std::cmp::min;
-
 use super::predicate_trackers::DisequalityTracker;
 use super::predicate_trackers::DomainTracker;
 use super::predicate_trackers::DomainTrackerInformation;
@@ -28,12 +26,12 @@ pub(crate) struct PredicateTrackerForDomain {
 }
 
 impl PredicateTrackerForDomain {
-    pub(crate) fn new(trailed_values: &mut TrailedValues) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             lower_bound: LowerBoundTracker::new(),
             upper_bound: UpperBoundTracker::new(),
-            disequality: DisequalityTracker::new(trailed_values),
-            equality: EqualityTracker::new(trailed_values),
+            disequality: DisequalityTracker::new(),
+            equality: EqualityTracker::new(),
         }
     }
 }
@@ -79,7 +77,6 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
                 predicate_id_assignments,
-                assignments.num_trail_entries(),
             );
         }
 
@@ -95,7 +92,6 @@ impl PredicateTrackerForDomain {
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
                 predicate_id_assignments,
-                assignments.num_trail_entries(),
             );
         }
 
@@ -114,32 +110,7 @@ impl PredicateTrackerForDomain {
                     return;
                 }
 
-                // Then we go over all of the removed values which have not been processed yet
-                for removed_value in
-                    assignments.get_holes_on_current_decision_level_above_index(domain, {
-                        // We need to find the index above which we need to search, there are three
-                        // cases:
-                        match (equality_is_fixed, disequality_is_fixed) {
-                            (true, false) => {
-                                // Equality tracker is fixed, only look at disequality
-                                self.disequality.get_last_seen_trail_index(trailed_values)
-                            }
-                            (false, true) => {
-                                // Disequality tracker is fixed, only look at equalities
-                                self.equality.get_last_seen_trail_index(trailed_values)
-                            }
-                            (false, false) => {
-                                // Both are not fixed, we take the minimum
-                                min(
-                                    self.equality.get_last_seen_trail_index(trailed_values),
-                                    self.disequality.get_last_seen_trail_index(trailed_values),
-                                )
-                            }
-
-                            _ => unreachable!(),
-                        }
-                    })
-                {
+                for removed_value in assignments.get_holes_on_current_decision_level(domain) {
                     let predicate =
                         predicate_type.into_predicate(domain, assignments, Some(removed_value));
                     if !self.disequality.is_empty() && !disequality_is_fixed {
@@ -147,7 +118,6 @@ impl PredicateTrackerForDomain {
                             predicate,
                             trailed_values,
                             predicate_id_assignments,
-                            assignments.num_trail_entries(),
                         );
                     }
 
@@ -156,7 +126,6 @@ impl PredicateTrackerForDomain {
                             predicate,
                             trailed_values,
                             predicate_id_assignments,
-                            assignments.num_trail_entries(),
                         );
                     }
                 }
@@ -167,24 +136,16 @@ impl PredicateTrackerForDomain {
             // 1. Is the disequality tracker tracking anything?
             // 2. Can updates still take place?
             if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
-                self.disequality.on_update(
-                    predicate,
-                    trailed_values,
-                    predicate_id_assignments,
-                    assignments.num_trail_entries(),
-                );
+                self.disequality
+                    .on_update(predicate, trailed_values, predicate_id_assignments);
             }
 
             // We check two things:
             // 1. Is the equality tracker tracking anything?
             // 2. Can updates still take place?
             if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
-                self.equality.on_update(
-                    predicate,
-                    trailed_values,
-                    predicate_id_assignments,
-                    assignments.num_trail_entries(),
-                );
+                self.equality
+                    .on_update(predicate, trailed_values, predicate_id_assignments);
             }
         }
     }
