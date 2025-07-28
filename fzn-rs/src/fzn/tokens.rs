@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use chumsky::error::Rich;
 use chumsky::extra::{self};
 use chumsky::prelude::any;
@@ -34,7 +36,7 @@ type LexExtra<'src> = extra::Err<Rich<'src, char>>;
 pub(super) fn lex<'src>(
 ) -> impl Parser<'src, &'src str, Vec<ast::Node<Token<'src>>>, LexExtra<'src>> {
     token()
-        .padded_by(comment().or_not())
+        .padded_by(comment().repeated())
         .padded()
         .repeated()
         .collect()
