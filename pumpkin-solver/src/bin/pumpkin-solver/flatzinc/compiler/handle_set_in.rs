@@ -13,15 +13,15 @@ pub(crate) fn run(
     instance: &mut Instance,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
-    for constraint in &instance.constraints {
+    instance.constraints.retain(|constraint| {
         let (variable, set) = match &constraint.constraint.node {
             Constraints::SetIn(variable, set) => (variable, set),
-            _ => continue,
+            _ => return true,
         };
 
         let id = match variable {
             VariableExpr::Identifier(id) => Rc::clone(id),
-            _ => return Err(FlatZincError::UnexpectedExpr),
+            _ => unreachable!("This constraint makes no sense with a constant."),
         };
 
         let mut domain = context.integer_equivalences.get_mut_domain(&id);
@@ -29,7 +29,9 @@ pub(crate) fn run(
         // We take the intersection between the two domains
         let new_domain = domain.merge(&set.into());
         *domain = new_domain;
-    }
+
+        false
+    });
 
     Ok(())
 }

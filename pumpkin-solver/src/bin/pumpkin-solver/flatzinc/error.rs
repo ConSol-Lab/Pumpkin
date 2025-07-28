@@ -14,9 +14,6 @@ pub(crate) enum FlatZincError {
     #[error("integer too big")]
     IntegerTooBig(#[from] TryFromIntError),
 
-    #[error("unexpected expression")]
-    UnexpectedExpr,
-
     #[error("the identifier '{identifier}' does not resolve to an '{expected_type}'")]
     InvalidIdentifier {
         identifier: Rc<str>,
