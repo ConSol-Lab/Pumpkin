@@ -75,7 +75,7 @@ fn solution_callback(
     solution: SolutionReference,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
-        brancher.log_statistics(StatisticLogger::default());
+        brancher.log_statistics(StatisticLogger::new(["brancher"]));
         if let Some(objective) = instance_objective_function {
             solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
         } else {
