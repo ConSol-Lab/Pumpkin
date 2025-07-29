@@ -1,5 +1,6 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::time::Instant;
@@ -69,7 +70,6 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
-use crate::statistics::Statistic;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -364,17 +364,24 @@ impl ConstraintSatisfactionSolver {
         &mut self.internal_parameters.random_generator
     }
 
-    pub fn log_statistics(&self) {
+    pub fn log_statistics(&self, verbose: bool) {
         // We first check whether the statistics will/should be logged to prevent unnecessarily
         // going through all the propagators
         if should_log_statistics() {
-            self.solver_statistics.log(StatisticLogger::default());
-            for (index, propagator) in self.propagators.iter_propagators().enumerate() {
-                propagator.log_statistics(StatisticLogger::new([
-                    propagator.name(),
-                    "number",
-                    index.to_string().as_str(),
-                ]));
+            self.solver_statistics.log(
+                &self.assignments,
+                &self.propagators,
+                StatisticLogger::default(),
+                verbose,
+            );
+            if verbose {
+                for (index, propagator) in self.propagators.iter_propagators().enumerate() {
+                    propagator.log_statistics(StatisticLogger::new([
+                        propagator.name(),
+                        "number",
+                        index.to_string().as_str(),
+                    ]));
+                }
             }
         }
     }
@@ -670,6 +677,11 @@ impl ConstraintSatisfactionSolver {
 
                 let branching_result = self.make_next_decision(brancher);
 
+                self.solver_statistics.engine_statistics.peak_depth = max(
+                    self.solver_statistics.engine_statistics.peak_depth,
+                    self.assignments.get_decision_level() as u64,
+                );
+
                 match branching_result {
                     Err(CSPSolverExecutionFlag::Infeasible) => {
                         // Can happen when the branching decision was an assumption
@@ -825,6 +837,13 @@ impl ConstraintSatisfactionSolver {
                 .average_backtrack_amount
                 .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
 
+            if current_decision_level - learned_nogood.backjump_level > 1 {
+                conflict_analysis_context
+                    .counters
+                    .engine_statistics
+                    .num_backjumps += 1;
+            }
+
             self.restart_strategy.notify_conflict(
                 self.lbd_helper.compute_lbd(
                     &learned_nogood.predicates,
@@ -866,11 +885,11 @@ impl ConstraintSatisfactionSolver {
 
             self.solver_statistics
                 .learned_clause_statistics
-                .num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
+                .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
 
             self.solver_statistics
                 .learned_clause_statistics
-                .average_learned_clause_length
+                .average_learned_nogood_length
                 .add_term(learned_nogood.predicates.len() as u64);
 
             self.add_learned_nogood(learned_nogood, inference_code);

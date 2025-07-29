@@ -68,7 +68,7 @@ impl RecursiveMinimiser {
         context
             .counters
             .learned_clause_statistics
-            .average_number_of_removed_literals_recursive
+            .average_number_of_removed_atomic_constraints_recursive
             .add_term(num_predicates_removed as u64);
     }
 
