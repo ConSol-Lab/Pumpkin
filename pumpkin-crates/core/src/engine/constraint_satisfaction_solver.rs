@@ -839,6 +839,11 @@ impl ConstraintSatisfactionSolver {
                 .average_backtrack_amount
                 .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
 
+            conflict_analysis_context
+                .counters
+                .engine_statistics
+                .sum_of_backjumps +=
+                current_decision_level as u64 - 1 - learned_nogood.backjump_level as u64;
             if current_decision_level - learned_nogood.backjump_level > 1 {
                 conflict_analysis_context
                     .counters
@@ -1086,6 +1091,10 @@ impl ConstraintSatisfactionSolver {
             );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
+            self.solver_statistics
+                .engine_statistics
+                .num_propagators_called += 1;
+
             let num_trail_entries_before = self.assignments.num_trail_entries();
 
             let propagation_status = {
