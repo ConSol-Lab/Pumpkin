@@ -101,14 +101,14 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                SatisfactionResult::Unsatisfiable(solver) => {
+                SatisfactionResult::Unsatisfiable(solver, _) => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
 
                     return MaxSatOptimisationResult::Optimal {
                         solution: best_solution,
                     };
                 }
-                SatisfactionResult::Unknown(solver) => {
+                SatisfactionResult::Unknown(solver, _) => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
                     return MaxSatOptimisationResult::Satisfiable { best_solution };
                 }

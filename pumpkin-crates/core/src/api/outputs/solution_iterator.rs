@@ -64,14 +64,14 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
                 self.next_blocking_clause = Some(get_blocking_clause(solution.as_reference()));
                 IterationResult::Solution(solution)
             }
-            Unsatisfiable(_) => {
+            Unsatisfiable(_, _) => {
                 if self.has_solution {
                     IterationResult::Finished
                 } else {
                     IterationResult::Unsatisfiable
                 }
             }
-            Unknown(_) => IterationResult::Unknown,
+            Unknown(_, _) => IterationResult::Unknown,
         };
 
         match result {

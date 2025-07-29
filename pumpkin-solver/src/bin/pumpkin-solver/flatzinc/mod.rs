@@ -9,8 +9,9 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingBrancher;
-use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrategy;
+use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
+use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
+use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
@@ -60,6 +61,11 @@ pub(crate) struct FlatZincOptions {
     pub(crate) proof_type: Option<ProofType>,
 }
 
+fn log_statistics(solver: &Solver, brancher: &impl Brancher) {
+    brancher.log_statistics(StatisticLogger::default());
+    solver.log_statistics();
+}
+
 fn solution_callback(
     brancher: &impl Brancher,
     instance_objective_function: Option<DomainId>,
@@ -69,7 +75,7 @@ fn solution_callback(
     solution: SolutionReference,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
-        brancher.log_statistics(StatisticLogger::default());
+        brancher.log_statistics(StatisticLogger::new(["brancher"]));
         if let Some(objective) = instance_objective_function {
             solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
         } else {
@@ -96,12 +102,24 @@ pub(crate) fn solve(
     let outputs = instance.outputs.clone();
 
     let mut brancher = if options.free_search {
-        // The free search flag is active, we just use the default brancher
-        DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-            &solver,
-            instance.search.expect("Expected a search to be defined"),
-            AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
-        ))])
+        // The free search flag is active
+        if instance.objective_function.is_some() {
+            // If there is an objective, then we use the provided search until the first solution,
+            // and then we switch to default search
+            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
+                &solver,
+                instance.search.expect("Expected a search to be defined"),
+                UntilSolution::new(EveryXRestarts::new(1)),
+            ))])
+        } else {
+            // If there is no objective, then we alternate between the provided strategy and the
+            // default search every restart
+            DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
+                &solver,
+                instance.search.expect("Expected a search to be defined"),
+                EveryXRestarts::new(1),
+            ))])
+        }
     } else {
         instance.search.expect("Expected a search to be defined")
     };
@@ -148,19 +166,19 @@ pub(crate) fn solve(
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
             }
             println!("==========");
-            solver.log_statistics();
+            log_statistics(&solver, &brancher);
         }
         OptimisationResult::Satisfiable(_) => {
             // Solutions are printed in the callback.
-            solver.log_statistics();
+            log_statistics(&solver, &brancher);
         }
         OptimisationResult::Unsatisfiable => {
             println!("{MSG_UNSATISFIABLE}");
-            solver.log_statistics();
+            log_statistics(&solver, &brancher);
         }
         OptimisationResult::Unknown => {
             println!("{MSG_UNKNOWN}");
-            solver.log_statistics();
+            log_statistics(&solver, &brancher);
         }
     };
 
@@ -176,9 +194,11 @@ fn satisfy(
 ) {
     if options.all_solutions {
         let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
+        let mut has_found_solution = false;
         loop {
             match solution_iterator.next_solution() {
                 IteratedSolution::Solution(solution, solver, brancher) => {
+                    has_found_solution = true;
                     solution_callback(
                         brancher,
                         None,
@@ -189,17 +209,22 @@ fn satisfy(
                     );
                 }
                 IteratedSolution::Finished => {
+                    assert!(has_found_solution);
                     println!("==========");
-                    solver.log_statistics();
+                    log_statistics(solver, &brancher);
                     break;
                 }
                 IteratedSolution::Unknown => {
-                    solver.log_statistics();
+                    if !has_found_solution {
+                        println!("{MSG_UNKNOWN}");
+                    }
+                    log_statistics(solver, &brancher);
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
+                    assert!(!has_found_solution);
                     println!("{MSG_UNSATISFIABLE}");
-                    solver.log_statistics();
+                    log_statistics(solver, &brancher);
                     break;
                 }
             }
@@ -214,13 +239,13 @@ fn satisfy(
                 satisfiable.solver(),
                 satisfiable.solution(),
             ),
-            SatisfactionResult::Unsatisfiable(solver) => {
+            SatisfactionResult::Unsatisfiable(solver, brancher) => {
                 println!("{MSG_UNSATISFIABLE}");
-                solver.log_statistics();
+                log_statistics(solver, brancher);
             }
-            SatisfactionResult::Unknown(solver) => {
+            SatisfactionResult::Unknown(solver, brancher) => {
                 println!("{MSG_UNKNOWN}");
-                solver.log_statistics();
+                log_statistics(solver, brancher);
             }
         }
     }

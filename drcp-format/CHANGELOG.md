@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/ConSol-Lab/Pumpkin/compare/drcp-format-v0.2.1...drcp-format-v0.3.0) (2025-07-10)
+
+
+### Features
+
+* Update to the new format, which inlines atomic constraint definitions into the proof steps ([#204](https://github.com/ConSol-Lab/Pumpkin/issues/204)) ([5cdc747](https://github.com/ConSol-Lab/Pumpkin/commit/5cdc747d8f241859dfea806297595f7feb12fa7e))
+* Do mapping from codes to atomic constraints inside the crate ([#204](https://github.com/ConSol-Lab/Pumpkin/issues/204)) ([5cdc747](https://github.com/ConSol-Lab/Pumpkin/commit/5cdc747d8f241859dfea806297595f7feb12fa7e))
+
 ## [0.2.1](https://github.com/consol-lab/pumpkin/compare/drcp-format-v0.2.0...drcp-format-v0.2.1) (2025-04-11)
 
 

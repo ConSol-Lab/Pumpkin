@@ -132,6 +132,10 @@ impl Solver {
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.satisfaction_solver.get_solution_reference()
     }
+
+    pub(crate) fn is_logging_full_proof(&self) -> bool {
+        self.satisfaction_solver.is_logging_full_proof()
+    }
 }
 
 /// Methods to retrieve information about variables
@@ -320,12 +324,12 @@ impl Solver {
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 let _ = self.satisfaction_solver.conclude_proof_unsat();
 
-                SatisfactionResult::Unsatisfiable(self)
+                SatisfactionResult::Unsatisfiable(self, brancher)
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResult::Unknown(self)
+                SatisfactionResult::Unknown(self, brancher)
             }
         }
     }
