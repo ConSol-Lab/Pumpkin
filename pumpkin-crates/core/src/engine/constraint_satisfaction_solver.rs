@@ -371,21 +371,23 @@ impl ConstraintSatisfactionSolver {
     pub fn log_statistics(&self, verbose: bool) {
         // We first check whether the statistics will/should be logged to prevent unnecessarily
         // going through all the propagators
-        if should_log_statistics() {
-            self.solver_statistics.log(
-                &self.assignments,
-                &self.propagators,
-                StatisticLogger::default(),
-                verbose,
-            );
-            if verbose {
-                for (index, propagator) in self.propagators.iter_propagators().enumerate() {
-                    propagator.log_statistics(StatisticLogger::new([
-                        propagator.name(),
-                        "number",
-                        index.to_string().as_str(),
-                    ]));
-                }
+        if !should_log_statistics() {
+            return;
+        }
+
+        self.solver_statistics.log(
+            &self.assignments,
+            &self.propagators,
+            StatisticLogger::default(),
+            verbose,
+        );
+        if verbose {
+            for (index, propagator) in self.propagators.iter_propagators().enumerate() {
+                propagator.log_statistics(StatisticLogger::new([
+                    propagator.name(),
+                    "number",
+                    index.to_string().as_str(),
+                ]));
             }
         }
     }
