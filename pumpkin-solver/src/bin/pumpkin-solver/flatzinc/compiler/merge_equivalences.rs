@@ -202,8 +202,8 @@ mod tests {
         run(&mut instance, &mut context, &options).expect("step should not fail");
 
         assert_eq!(
-            context.integer_equivalences.representative("x"),
-            context.integer_equivalences.representative("y")
+            context.integer_equivalences.representative("x").unwrap(),
+            context.integer_equivalences.representative("y").unwrap(),
         );
 
         assert!(instance.constraints.is_empty());
@@ -256,8 +256,8 @@ mod tests {
         run(&mut instance, &mut context, &options).expect("step should not fail");
 
         assert_ne!(
-            context.integer_equivalences.representative("x"),
-            context.integer_equivalences.representative("y")
+            context.integer_equivalences.representative("x").unwrap(),
+            context.integer_equivalences.representative("y").unwrap(),
         );
 
         assert_eq!(instance.constraints.len(), 1);

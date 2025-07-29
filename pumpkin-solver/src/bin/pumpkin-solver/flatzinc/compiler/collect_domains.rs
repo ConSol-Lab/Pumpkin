@@ -18,7 +18,7 @@ pub(crate) fn run(
     for (name, variable) in &instance.variables {
         match &variable.domain.node {
             ast::Domain::Bool => {
-                let representative = context.literal_equivalences.representative(name);
+                let representative = context.literal_equivalences.representative(name)?;
                 let domain = context.literal_equivalences.domain(name);
 
                 let literal = *context
@@ -32,7 +32,7 @@ pub(crate) fn run(
             }
 
             ast::Domain::Int(_) => {
-                let representative = context.integer_equivalences.representative(name);
+                let representative = context.integer_equivalences.representative(name)?;
                 let domain = context.integer_equivalences.domain(name);
 
                 let domain_id = *context

@@ -69,14 +69,17 @@ impl CompilationContext<'_> {
         variable: &VariableExpr<bool>,
     ) -> Result<Literal, FlatZincError> {
         match variable {
-            VariableExpr::Identifier(ident) => self
-                .boolean_variable_map
-                .get(ident)
-                .copied()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: Rc::clone(ident),
-                    expected_type: "bool var".into(),
-                }),
+            VariableExpr::Identifier(ident) => {
+                let representative = self.literal_equivalences.representative(ident)?;
+
+                self.boolean_variable_map
+                    .get(&representative)
+                    .copied()
+                    .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                        identifier: Rc::clone(ident),
+                        expected_type: "bool var".into(),
+                    })
+            }
             VariableExpr::Constant(true) => Ok(self.true_literal),
             VariableExpr::Constant(false) => Ok(self.false_literal),
         }
@@ -102,14 +105,17 @@ impl CompilationContext<'_> {
         variable: &VariableExpr<i32>,
     ) -> Result<DomainId, FlatZincError> {
         match variable {
-            VariableExpr::Identifier(ident) => self
-                .integer_variable_map
-                .get(ident)
-                .copied()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: Rc::clone(ident),
-                    expected_type: "int var".into(),
-                }),
+            VariableExpr::Identifier(ident) => {
+                let representative = self.integer_equivalences.representative(ident)?;
+
+                self.integer_variable_map
+                    .get(&representative)
+                    .copied()
+                    .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                        identifier: Rc::clone(ident),
+                        expected_type: "int var".into(),
+                    })
+            }
             VariableExpr::Constant(value) => {
                 Ok(*self.constant_domain_ids.entry(*value).or_insert_with(|| {
                     self.solver
@@ -222,13 +228,26 @@ impl VariableEquivalences {
     /// Get the name of the representative variable of the equivalence class the given variable
     /// belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
-    pub(crate) fn representative(&self, variable: &str) -> Rc<str> {
-        self.classes[variable]
+    pub(crate) fn representative(&self, variable: &str) -> Result<Rc<str>, FlatZincError> {
+        let equiv_class =
+            self.classes
+                .get(variable)
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: variable.into(),
+                    // Since you should never see this error message, we give a dummy value. We
+                    // cannot panic, due to the `identify_output_arrays` implementation that will
+                    // try to resolve non-existent variable names.
+                    expected_type: "?".into(),
+                })?;
+
+        let ident = equiv_class
             .borrow()
             .variables
             .first()
             .cloned()
-            .expect("all classes have at least one representative")
+            .expect("all classes have at least one representative");
+
+        Ok(ident)
     }
 
     /// Get the domain for the given variable, based on the equivalence class it belongs to.
@@ -370,7 +389,7 @@ mod tests {
         let c = Rc::from("c");
         equivs.create_equivalence_class(Rc::clone(&a), 0, 1);
         assert!(equivs.is_defined(&a));
-        assert_eq!(equivs.representative(&a), a);
+        assert_eq!(equivs.representative(&a).unwrap(), a);
         assert_eq!(
             equivs.domain(&a),
             Domain::from_lower_bound_and_upper_bound(0, 1)
@@ -378,7 +397,7 @@ mod tests {
 
         equivs.create_equivalence_class(Rc::clone(&b), 1, 3);
         assert!(equivs.is_defined(&b));
-        assert_eq!(equivs.representative(&b), b);
+        assert_eq!(equivs.representative(&b).unwrap(), b);
         assert_eq!(
             equivs.domain(&b),
             Domain::from_lower_bound_and_upper_bound(1, 3)
@@ -386,7 +405,7 @@ mod tests {
 
         equivs.create_equivalence_class(Rc::clone(&c), 5, 10);
         assert!(equivs.is_defined(&c));
-        assert_eq!(equivs.representative(&c), c);
+        assert_eq!(equivs.representative(&c).unwrap(), c);
         assert_eq!(
             equivs.domain(&c),
             Domain::from_lower_bound_and_upper_bound(5, 10)
@@ -394,21 +413,21 @@ mod tests {
 
         equivs.merge(Rc::clone(&a), Rc::clone(&b));
         assert!(equivs.is_defined(&a));
-        assert_eq!(equivs.representative(&a), a);
+        assert_eq!(equivs.representative(&a).unwrap(), a);
         assert_eq!(
             equivs.domain(&a),
             Domain::from_lower_bound_and_upper_bound(1, 1)
         );
 
         assert!(equivs.is_defined(&b));
-        assert_eq!(equivs.representative(&b), a);
+        assert_eq!(equivs.representative(&b).unwrap(), a);
         assert_eq!(
             equivs.domain(&b),
             Domain::from_lower_bound_and_upper_bound(1, 1)
         );
 
         assert!(equivs.is_defined(&c));
-        assert_eq!(equivs.representative(&c), c);
+        assert_eq!(equivs.representative(&c).unwrap(), c);
         assert_eq!(
             equivs.domain(&c),
             Domain::from_lower_bound_and_upper_bound(5, 10)
