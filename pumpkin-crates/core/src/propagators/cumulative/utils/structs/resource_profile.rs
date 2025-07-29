@@ -20,6 +20,12 @@ pub(crate) struct ResourceProfile<Var> {
     pub(crate) height: i32,
 }
 
+impl<Var> AsRef<ResourceProfile<Var>> for ResourceProfile<Var> {
+    fn as_ref(&self) -> &ResourceProfile<Var> {
+        self
+    }
+}
+
 impl<Var> Debug for ResourceProfile<Var> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceProfile")

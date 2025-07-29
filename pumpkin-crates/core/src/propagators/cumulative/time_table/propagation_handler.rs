@@ -69,7 +69,7 @@ impl CumulativePropagationHandler {
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
+        profiles: &[ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -102,7 +102,7 @@ impl CumulativePropagationHandler {
                     self.explanation_type,
                     context.as_readonly(),
                     propagating_task,
-                    profiles[0],
+                    &profiles[0],
                     None,
                 );
 
@@ -134,7 +134,7 @@ impl CumulativePropagationHandler {
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
+        profiles: &[ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -168,7 +168,7 @@ impl CumulativePropagationHandler {
                     self.explanation_type,
                     context.as_readonly(),
                     propagating_task,
-                    profiles[profiles.len() - 1],
+                    &profiles[profiles.len() - 1],
                     None,
                 );
                 pumpkin_assert_extreme!(check_explanation(

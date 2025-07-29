@@ -6,6 +6,7 @@ use super::UpdatedTaskInfo;
 use crate::containers::SparseSet;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
+use crate::propagators::ResourceProfile;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 
@@ -24,7 +25,9 @@ pub(crate) struct UpdatableStructures<Var> {
     /// The tasks which have been updated since the last iteration
     updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// The tasks which are unfixed
-    unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    pub(crate) unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    /// A temporary buffer for profiles; used when minimal explanations are created
+    pub(crate) temp_profiles: Vec<ResourceProfile<Var>>,
 }
 
 impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
@@ -38,6 +41,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
             updates: vec![],
             updated_tasks,
             unfixed_tasks,
+            temp_profiles: vec![],
         }
     }
 

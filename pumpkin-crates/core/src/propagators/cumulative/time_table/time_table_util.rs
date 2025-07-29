@@ -20,6 +20,7 @@ use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::propagators::UpdatableStructures;
 use crate::propagators::UpdatedTaskInfo;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 
@@ -307,26 +308,75 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
             // update or a hole in the domain)
             let possible_updates = find_possible_updates(context, &task, profile, parameters);
-            for possible_update in possible_updates {
-                // For every possible update we let the propagation handler propagate
-                let result = match possible_update {
-                    CanUpdate::LowerBound => propagation_handler
-                        .propagate_lower_bound_with_explanations(context, profile, &task),
-                    CanUpdate::UpperBound => propagation_handler
-                        .propagate_upper_bound_with_explanations(context, profile, &task),
-                    CanUpdate::Holes => {
-                        propagation_handler.propagate_holes_in_domain(context, profile, &task)
+            if !possible_updates.is_empty() {
+                create_minimal_profiles(
+                    &task,
+                    &[profile],
+                    parameters.capacity,
+                    &mut updatable_structures.temp_profiles,
+                );
+                pumpkin_assert_eq_simple!(updatable_structures.temp_profiles.len(), 1);
+
+                for possible_update in possible_updates {
+                    // For every possible update we let the propagation handler propagate
+                    let result = match possible_update {
+                        CanUpdate::LowerBound => propagation_handler
+                            .propagate_lower_bound_with_explanations(
+                                context,
+                                &updatable_structures.temp_profiles[0],
+                                &task,
+                            ),
+                        CanUpdate::UpperBound => propagation_handler
+                            .propagate_upper_bound_with_explanations(
+                                context,
+                                &updatable_structures.temp_profiles[0],
+                                &task,
+                            ),
+                        CanUpdate::Holes => propagation_handler.propagate_holes_in_domain(
+                            context,
+                            &updatable_structures.temp_profiles[0],
+                            &task,
+                        ),
+                    };
+                    if result.is_err() {
+                        updatable_structures.restore_temporarily_removed();
+                        result?;
                     }
-                };
-                if result.is_err() {
-                    updatable_structures.restore_temporarily_removed();
-                    result?;
                 }
             }
         }
     }
     updatable_structures.restore_temporarily_removed();
     Ok(())
+}
+
+fn create_minimal_profiles<Var: IntegerVariable + 'static>(
+    propagated_task: &Rc<Task<Var>>,
+    profiles: &[&ResourceProfile<Var>],
+    capacity: i32,
+    buffer: &mut Vec<ResourceProfile<Var>>,
+) {
+    buffer.clear();
+
+    for profile in profiles {
+        let mut minimal_profile_tasks = vec![];
+        let mut minimal_profile_height = 0;
+        let mut index = 0;
+
+        while minimal_profile_height + propagated_task.resource_usage <= capacity {
+            minimal_profile_height += profile.profile_tasks[index].resource_usage;
+            minimal_profile_tasks.push(Rc::clone(&profile.profile_tasks[index]));
+            index += 1;
+        }
+
+        let result = ResourceProfile {
+            start: profile.start,
+            end: profile.end,
+            profile_tasks: minimal_profile_tasks,
+            height: minimal_profile_height,
+        };
+        buffer.push(result)
+    }
 }
 
 /// For each task this method goes through the profiles in chronological order to find one which can
@@ -342,7 +392,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -353,7 +403,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     let time_table = time_table.collect::<Vec<_>>();
 
     // Then we go over all the possible tasks
-    for task in updatable_structures.get_unfixed_tasks() {
+    for task in updatable_structures.unfixed_tasks.iter() {
         if context.is_fixed(&task.start_variable) {
             // If the task is fixed then we are not able to propagate it further
             continue;
@@ -402,10 +452,16 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 );
 
                 // Then we provide the propagation handler with the chain of profiles and propagate
-                // all of them
+                // all of them (after ensuring that they are as small as possible).
+                create_minimal_profiles(
+                    task,
+                    &time_table[profile_index..last_index],
+                    parameters.capacity,
+                    &mut updatable_structures.temp_profiles,
+                );
                 propagation_handler.propagate_chain_of_lower_bounds_with_explanations(
                     context,
-                    &time_table[profile_index..last_index],
+                    &updatable_structures.temp_profiles,
                     task,
                 )?;
 
@@ -431,10 +487,16 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                     parameters.capacity,
                 );
                 // Then we provide the propagation handler with the chain of profiles and propagate
-                // all of them
+                // all of them (after ensuring that they are as small as possible)
+                create_minimal_profiles(
+                    task,
+                    &time_table[first_index..=profile_index],
+                    parameters.capacity,
+                    &mut updatable_structures.temp_profiles,
+                );
                 propagation_handler.propagate_chain_of_upper_bounds_with_explanations(
                     context,
-                    &time_table[first_index..=profile_index],
+                    &updatable_structures.temp_profiles,
                     task,
                 )?;
 
@@ -444,9 +506,19 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             }
 
             if parameters.options.allow_holes_in_domain {
+                create_minimal_profiles(
+                    task,
+                    &[profile],
+                    parameters.capacity,
+                    &mut updatable_structures.temp_profiles,
+                );
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
-                propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                propagation_handler.propagate_holes_in_domain(
+                    context,
+                    &updatable_structures.temp_profiles[0],
+                    task,
+                )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index
