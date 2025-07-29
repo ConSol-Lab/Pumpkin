@@ -275,10 +275,6 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn is_logging_full_proof(&self) -> bool {
         self.internal_parameters.proof_log.is_logging_inferences()
     }
-
-    pub(crate) fn set_init_time(&mut self, start_time: Instant) {
-        self.solver_statistics.engine_statistics.init_time = start_time.elapsed();
-    }
 }
 
 // methods that offer basic functionality

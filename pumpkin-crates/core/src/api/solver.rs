@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use super::outputs::Satisfiable;
 use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
@@ -148,10 +146,6 @@ impl Solver {
 
     pub(crate) fn is_logging_full_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_full_proof()
-    }
-
-    pub fn set_init_time(&mut self, start_time: Instant) {
-        self.satisfaction_solver.set_init_time(start_time)
     }
 }
 

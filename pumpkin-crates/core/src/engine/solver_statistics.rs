@@ -35,7 +35,6 @@ impl SolverStatistics {
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
         log_statistic("nogoods", self.engine_statistics.num_conflicts);
         log_statistic("backjumps", self.engine_statistics.num_backjumps);
-        log_statistic("initTime", self.engine_statistics.init_time.as_secs_f64());
         log_statistic(
             "solveTime",
             self.engine_statistics.time_spent_in_solver.as_secs_f64(),
@@ -64,8 +63,6 @@ pub(crate) struct EngineStatistics {
     /// The number of backjumps (i.e. when a learned nogood resulted in backtracking more than a
     /// single level)
     pub(crate) num_backjumps: u64,
-    /// The time spent in initialisation.
-    pub(crate) init_time: Duration,
 }
 
 create_statistics_struct!(
