@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
+use std::time::Instant;
 
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
@@ -96,6 +97,8 @@ pub(crate) fn solve(
     time_limit: Option<Duration>,
     options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
+    let init_time = Instant::now();
+
     let instance = File::open(instance)?;
 
     let mut termination = Combinator::new(
@@ -105,6 +108,8 @@ pub(crate) fn solve(
 
     let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
+
+    solver.set_init_time(init_time);
 
     let mut brancher = if options.free_search {
         // The free search flag is active
