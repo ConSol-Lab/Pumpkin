@@ -391,6 +391,13 @@ impl Propagator for NogoodPropagator {
 
 /// Functions for adding nogoods
 impl NogoodPropagator {
+    /// Returns the number of nogoods which are currently being tracked by the nogood propagator
+    pub(crate) fn number_of_nogoods(&self) -> usize {
+        self.learned_nogood_ids.low_lbd.len()
+            + self.learned_nogood_ids.mid_lbd.len()
+            + self.learned_nogood_ids.high_lbd.len()
+    }
+
     /// Adds a nogood which has been learned during search.
     ///
     /// The first predicate should be asserting and the second predicate should contain the

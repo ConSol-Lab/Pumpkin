@@ -4,6 +4,8 @@ use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::create_statistics_struct;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::Assignments;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::statistics::log_statistic;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -36,7 +38,15 @@ impl SolverStatistics {
             self.engine_statistics.num_propagators_called,
         );
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
-        log_statistic("nogoods", self.engine_statistics.num_conflicts);
+        log_statistic(
+            "nogoods",
+            match propagators[ConstraintSatisfactionSolver::get_nogood_propagator_id()]
+                .downcast_ref::<NogoodPropagator>()
+            {
+                Some(nogood_propagator) => nogood_propagator.number_of_nogoods(),
+                None => panic!("Provided propagator should be the nogood propagator"),
+            },
+        );
         log_statistic("backjumps", self.engine_statistics.sum_of_backjumps);
         log_statistic(
             "solveTime",
