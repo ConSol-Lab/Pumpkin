@@ -29,7 +29,7 @@ clap = { version = "4.5.40", optional = true }
 flate2 = { version = "1.1.2", optional = true }
 
 [features]
-default = ["gzipped_proofs"]
+default = ["gzipped-proofs"]
 debug-checks = []
 clap = ["dep:clap"]
-gzipped_proofs = ["dep:flate2"]
+gzipped-proofs = ["dep:flate2"]
