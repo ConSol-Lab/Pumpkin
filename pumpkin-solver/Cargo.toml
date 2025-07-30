@@ -30,7 +30,9 @@ pumpkin-macros = { version = "0.1.0", path = "../pumpkin-macros"}
 workspace = true
 
 [features]
+default = ["gzipped_proofs"]
 debug-checks = []
+gzipped_proofs = ["pumpkin-core/gzipped_proofs"]
 
 [build-dependencies]
 cc = "1.1.30"
