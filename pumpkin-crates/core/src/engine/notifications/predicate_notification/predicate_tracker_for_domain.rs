@@ -71,7 +71,6 @@ impl PredicateTrackerForDomain {
         // 3. Can updates still take place?
         if !self.lower_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
-            && !self.lower_bound.is_fixed(trailed_values)
         {
             self.lower_bound.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
@@ -86,7 +85,6 @@ impl PredicateTrackerForDomain {
         // 3. Can updates still take place?
         if !self.upper_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
-            && !self.upper_bound.is_fixed(trailed_values)
         {
             self.upper_bound.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
@@ -135,7 +133,7 @@ impl PredicateTrackerForDomain {
             // We check two things:
             // 1. Is the disequality tracker tracking anything?
             // 2. Can updates still take place?
-            if !self.disequality.is_empty() && !self.disequality.is_fixed(trailed_values) {
+            if !self.disequality.is_empty() {
                 self.disequality
                     .on_update(predicate, trailed_values, predicate_id_assignments);
             }
@@ -143,7 +141,7 @@ impl PredicateTrackerForDomain {
             // We check two things:
             // 1. Is the equality tracker tracking anything?
             // 2. Can updates still take place?
-            if !self.equality.is_empty() && !self.equality.is_fixed(trailed_values) {
+            if !self.equality.is_empty() {
                 self.equality
                     .on_update(predicate, trailed_values, predicate_id_assignments);
             }
