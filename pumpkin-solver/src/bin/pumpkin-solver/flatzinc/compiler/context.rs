@@ -215,6 +215,27 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub(crate) fn resolve_bool_constants(
+        &self,
+        expr: &flatzinc::Expr,
+    ) -> Result<Rc<[bool]>, FlatZincError> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => self
+                .boolean_array_parameters
+                .get(id.as_str())
+                .cloned()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: id.as_str().into(),
+                    expected_type: "constant boolean array".into(),
+                }),
+            flatzinc::Expr::ArrayOfBool(exprs) => exprs
+                .iter()
+                .map(|e| self.resolve_bool_expr_to_const(e))
+                .collect::<Result<Rc<[bool]>, _>>(),
+            _ => Err(FlatZincError::UnexpectedExpr),
+        }
+    }
+
     pub(crate) fn resolve_array_integer_constants(
         &self,
         expr: &flatzinc::Expr,
@@ -236,7 +257,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub(crate) fn resolve_integer_constant_from_id(
+    pub(crate) fn resolve_integer_constant_from_identifier(
         &mut self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
@@ -265,6 +286,23 @@ impl CompilationContext<'_> {
         try_into_int_expr(expr.clone())
             .ok_or(FlatZincError::UnexpectedExpr)
             .and_then(|e| self.resolve_int_expr_to_const(&e))
+    }
+
+    pub(crate) fn resolve_bool_expr_to_const(
+        &self,
+        expr: &flatzinc::BoolExpr,
+    ) -> Result<bool, FlatZincError> {
+        match expr {
+            flatzinc::BoolExpr::Bool(value) => Ok(*value),
+            flatzinc::BoolExpr::VarParIdentifier(id) => self
+                .boolean_parameters
+                .get(id.as_str())
+                .copied()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: id.as_str().into(),
+                    expected_type: "constant boolean".into(),
+                }),
+        }
     }
 
     pub(crate) fn resolve_int_expr_to_const(
@@ -328,6 +366,12 @@ impl CompilationContext<'_> {
         &mut self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
+        if !self.integer_equivalences.classes.contains_key(identifier) {
+            return Err(FlatZincError::InvalidIdentifier {
+                identifier: identifier.into(),
+                expected_type: "integer".into(),
+            });
+        }
         if let Some(domain_id) = self
             .integer_variable_map
             .get(&self.integer_equivalences.representative(identifier))
@@ -468,11 +512,11 @@ impl Identifiers {
 #[derive(Debug, Default)]
 pub(crate) struct VariableEquivalences {
     /// For each variable, the equivalence class it belongs to.
-    classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
+    pub(super) classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
 }
 
 #[derive(Debug)]
-struct EquivalenceClass {
+pub(super) struct EquivalenceClass {
     /// The variables that are part of the equivalence class. We use a BTreeSet so that we can
     /// consistently get a representative, which will be the first element in the set.
     variables: BTreeSet<Rc<str>>,

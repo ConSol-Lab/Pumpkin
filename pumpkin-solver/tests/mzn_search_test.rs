@@ -37,3 +37,9 @@ mzn_search_ordered!(search_over_bools_no_propagators);
 mzn_search_ordered!(seq_search_1);
 mzn_search_unordered!(search_with_constants_in_search);
 mzn_search_unordered!(search_annotation_does_not_fix_all_variables);
+
+mzn_search_ordered!(bool_warm_start);
+mzn_search_ordered!(int_warm_start);
+
+mzn_search_ordered!(bool_warm_start_array);
+mzn_search_ordered!(int_warm_start_array);

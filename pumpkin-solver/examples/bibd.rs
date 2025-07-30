@@ -169,10 +169,10 @@ fn main() {
 
             println!("{row_separator}");
         }
-        SatisfactionResult::Unsatisfiable(_) => {
+        SatisfactionResult::Unsatisfiable(_, _) => {
             println!("UNSATISFIABLE")
         }
-        SatisfactionResult::Unknown(_) => {
+        SatisfactionResult::Unknown(_, _) => {
             println!("UNKNOWN")
         }
     };
