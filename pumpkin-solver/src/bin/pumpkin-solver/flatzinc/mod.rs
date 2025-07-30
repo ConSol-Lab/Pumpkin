@@ -8,10 +8,12 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
+use std::time::Instant;
 
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
+use pumpkin_core::statistics::log_statistic;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
@@ -26,7 +28,6 @@ use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
@@ -59,13 +60,27 @@ pub(crate) struct FlatZincOptions {
 
     /// The type of proof that is logged. This influences which preprocessing steps we can do.
     pub(crate) proof_type: Option<ProofType>,
+
+    /// Indicates that the solver should perform verbose logging
+    pub(crate) verbose: bool,
 }
 
-fn log_statistics(solver: &Solver, brancher: &impl Brancher) {
-    brancher.log_statistics(StatisticLogger::default());
-    solver.log_statistics();
+fn log_statistics(
+    solver: &Solver,
+    brancher: &impl Brancher,
+    verbose: bool,
+    init_time: Duration,
+    objective_value: Option<i64>,
+) {
+    log_statistic("initTime", init_time.as_secs_f64());
+    if let Some(objective) = objective_value {
+        solver.log_statistics_with_objective(Some(brancher), objective, verbose);
+    } else {
+        solver.log_statistics(Some(brancher), verbose);
+    }
 }
 
+#[allow(clippy::too_many_arguments, reason = "Should be refactored")]
 fn solution_callback(
     brancher: &impl Brancher,
     instance_objective_function: Option<DomainId>,
@@ -73,13 +88,19 @@ fn solution_callback(
     outputs: &[Output],
     solver: &Solver,
     solution: SolutionReference,
+    verbose: bool,
+    init_time: Duration,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
-        brancher.log_statistics(StatisticLogger::default());
         if let Some(objective) = instance_objective_function {
-            solver.log_statistics_with_objective(solution.get_integer_value(objective) as i64);
+            log_statistic("initTime", init_time.as_secs_f64());
+            solver.log_statistics_with_objective(
+                Some(brancher),
+                solution.get_integer_value(objective) as i64,
+                verbose,
+            );
         } else {
-            solver.log_statistics()
+            solver.log_statistics(Some(brancher), verbose)
         }
         print_solution_from_solver(solution, outputs);
     }
@@ -91,6 +112,8 @@ pub(crate) fn solve(
     time_limit: Option<Duration>,
     options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
+    let init_start_time = Instant::now();
+
     let instance = File::open(instance)?;
 
     let mut termination = Combinator::new(
@@ -100,6 +123,8 @@ pub(crate) fn solve(
 
     let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
+
+    let init_time = init_start_time.elapsed();
 
     let mut brancher = if options.free_search {
         // The free search flag is active
@@ -128,7 +153,14 @@ pub(crate) fn solve(
         match instance.objective_function {
             Some(objective) => objective.into(),
             None => {
-                satisfy(options, &mut solver, brancher, termination, outputs);
+                satisfy(
+                    options,
+                    &mut solver,
+                    brancher,
+                    termination,
+                    outputs,
+                    init_time,
+                );
                 return Ok(());
             }
         };
@@ -142,6 +174,8 @@ pub(crate) fn solve(
                 &outputs,
                 solver,
                 solution,
+                options.verbose,
+                init_time,
             );
         };
 
@@ -160,25 +194,44 @@ pub(crate) fn solve(
 
     match result {
         OptimisationResult::Optimal(optimal_solution) => {
+            let objective_value = optimal_solution.get_integer_value(objective) as i64;
             if !options.all_solutions {
-                brancher.log_statistics(StatisticLogger::default());
-                solver.log_statistics();
+                log_statistics(
+                    &solver,
+                    &brancher,
+                    options.verbose,
+                    init_time,
+                    Some(objective_value),
+                );
                 print_solution_from_solver(optimal_solution.as_reference(), &instance.outputs)
             }
             println!("==========");
-            log_statistics(&solver, &brancher);
+            log_statistics(
+                &solver,
+                &brancher,
+                options.verbose,
+                init_time,
+                Some(objective_value),
+            );
         }
-        OptimisationResult::Satisfiable(_) => {
+        OptimisationResult::Satisfiable(solution) => {
             // Solutions are printed in the callback.
-            log_statistics(&solver, &brancher);
+            let objective_value = solution.get_integer_value(objective) as i64;
+            log_statistics(
+                &solver,
+                &brancher,
+                options.verbose,
+                init_time,
+                Some(objective_value),
+            );
         }
         OptimisationResult::Unsatisfiable => {
             println!("{MSG_UNSATISFIABLE}");
-            log_statistics(&solver, &brancher);
+            log_statistics(&solver, &brancher, options.verbose, init_time, None);
         }
         OptimisationResult::Unknown => {
             println!("{MSG_UNKNOWN}");
-            log_statistics(&solver, &brancher);
+            log_statistics(&solver, &brancher, options.verbose, init_time, None);
         }
     };
 
@@ -191,6 +244,7 @@ fn satisfy(
     mut brancher: impl Brancher,
     mut termination: impl TerminationCondition,
     outputs: Vec<Output>,
+    init_time: Duration,
 ) {
     if options.all_solutions {
         let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
@@ -206,25 +260,27 @@ fn satisfy(
                         &outputs,
                         solver,
                         solution.as_reference(),
+                        options.verbose,
+                        init_time,
                     );
                 }
                 IteratedSolution::Finished => {
                     assert!(has_found_solution);
                     println!("==========");
-                    log_statistics(solver, &brancher);
+                    log_statistics(solver, &brancher, options.verbose, init_time, None);
                     break;
                 }
                 IteratedSolution::Unknown => {
                     if !has_found_solution {
                         println!("{MSG_UNKNOWN}");
                     }
-                    log_statistics(solver, &brancher);
+                    log_statistics(solver, &brancher, options.verbose, init_time, None);
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
                     assert!(!has_found_solution);
                     println!("{MSG_UNSATISFIABLE}");
-                    log_statistics(solver, &brancher);
+                    log_statistics(solver, &brancher, options.verbose, init_time, None);
                     break;
                 }
             }
@@ -238,14 +294,16 @@ fn satisfy(
                 &outputs,
                 satisfiable.solver(),
                 satisfiable.solution(),
+                options.verbose,
+                init_time,
             ),
             SatisfactionResult::Unsatisfiable(solver, brancher) => {
                 println!("{MSG_UNSATISFIABLE}");
-                log_statistics(solver, brancher);
+                log_statistics(solver, brancher, options.verbose, init_time, None);
             }
             SatisfactionResult::Unknown(solver, brancher) => {
                 println!("{MSG_UNKNOWN}");
-                log_statistics(solver, brancher);
+                log_statistics(solver, brancher, options.verbose, init_time, None);
             }
         }
     }
