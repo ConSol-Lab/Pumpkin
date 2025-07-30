@@ -119,6 +119,7 @@ pub(crate) trait DomainTrackerInformation {
     fn get_value_at_index(&self, index: usize) -> i32;
     fn get_all_values(&self) -> impl Iterator<Item = i32>;
     fn get_index_of_value(&self, value: i32) -> Option<usize>;
+    fn contains_value(&self, value: i32) -> bool;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -261,6 +262,10 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
     fn get_index_of_value(&self, value: i32) -> Option<usize> {
         self.get_tracker().values.get_index_of(&value)
     }
+
+    fn contains_value(&self, value: i32) -> bool {
+        self.get_tracker().values.contains(&value)
+    }
 }
 
 /// A trait which defines the common behaviours for structures which track [`Predicate`]s for a
@@ -309,6 +314,10 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
             "Initialise should have been called previously"
         );
 
+        if self.contains_value(value) {
+            return false;
+        }
+
         // Then we track the information for updating `smaller`; recall that we place a sentinel
         // node with the smallest possible value at index 0
         let index_largest_value_smaller_than;
@@ -323,10 +332,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         let mut index = 1;
         loop {
             let index_value = self.get_value_at_index(index);
-            if index_value == value {
-                // This value is already being tracked
-                return false;
-            }
+            pumpkin_assert_simple!(index_value != value);
 
             // As soon as we have found a value smaller than the to track value, we can stop
             if index_value < value {
