@@ -47,13 +47,13 @@ impl ProofLog {
     pub fn cp(file_path: &Path, log_hints: bool) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
-        #[cfg(feature = "gzipped_proofs")]
+        #[cfg(feature = "gzipped-proofs")]
         let writer = {
             let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
             ProofWriter::new(encoder)
         };
 
-        #[cfg(not(feature = "gzipped_proofs"))]
+        #[cfg(not(feature = "gzipped-proofs"))]
         let writer = ProofWriter::new(file);
 
         Ok(ProofLog {
@@ -325,9 +325,9 @@ impl ProofLog {
 )]
 enum ProofImpl {
     CpProof {
-        #[cfg(feature = "gzipped_proofs")]
+        #[cfg(feature = "gzipped-proofs")]
         writer: ProofWriter<flate2::write::GzEncoder<File>, i32>,
-        #[cfg(not(feature = "gzipped_proofs"))]
+        #[cfg(not(feature = "gzipped-proofs"))]
         writer: ProofWriter<File, i32>,
         inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         /// The [`ConstraintTag`]s generated for this proof.
