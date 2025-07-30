@@ -133,13 +133,7 @@ impl DomainTracker for DisequalityTracker {
             // disequalities
             //
             // TODO: This could be optimised
-            if self.is_value_tracked(value) {
-                let index = self
-                    .watcher
-                    .values
-                    .iter()
-                    .position(|&stored_value| stored_value == value)
-                    .unwrap();
+            if let Some(index) = self.get_index_of_value(value) {
                 self.predicate_has_been_satisfied(index, predicate_id_assignments)
             }
         } else {

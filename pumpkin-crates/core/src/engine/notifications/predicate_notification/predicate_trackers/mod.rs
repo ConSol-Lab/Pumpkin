@@ -115,10 +115,10 @@ pub(crate) trait DomainTrackerInformation {
     /// Returns true if all of the tracked [`Predicate`]s are assigned.
     fn is_fixed(&self, trailed_values: &TrailedValues) -> bool;
 
-    fn is_value_tracked(&self, value: i32) -> bool;
     fn insert_value(&mut self, value: i32) -> usize;
     fn get_value_at_index(&self, index: usize) -> i32;
     fn get_all_values(&self) -> impl Iterator<Item = i32>;
+    fn get_index_of_value(&self, value: i32) -> Option<usize>;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -238,10 +238,6 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
                 <= self.get_tracker().values[min_assigned_index]
     }
 
-    fn is_value_tracked(&self, value: i32) -> bool {
-        self.get_tracker().values.contains(&value)
-    }
-
     fn insert_value(&mut self, value: i32) -> usize {
         let index = self.get_tracker().values.len();
         let result = self.get_tracker_mut().values.insert(value);
@@ -260,6 +256,10 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 
     fn get_all_values(&self) -> impl Iterator<Item = i32> {
         self.get_tracker().values.iter().copied()
+    }
+
+    fn get_index_of_value(&self, value: i32) -> Option<usize> {
+        self.get_tracker().values.get_index_of(&value)
     }
 }
 
