@@ -2,6 +2,7 @@ use super::DomainTracker;
 use super::HasTracker;
 use super::PredicateTracker;
 use super::TrailedValues;
+use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -91,12 +92,13 @@ impl DomainTracker for EqualityTracker {
                 return;
             }
 
-            if let Some(index) = self
-                .watcher
-                .values
-                .iter()
-                .position(|&stored_value| stored_value == value)
-            {
+            if self.is_value_tracked(value) {
+                let index = self
+                    .watcher
+                    .values
+                    .iter()
+                    .position(|&stored_value| stored_value == value)
+                    .unwrap();
                 self.predicate_has_been_falsified(index, predicate_id_assignments)
             }
         } else if predicate.is_equality_predicate() {

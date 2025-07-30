@@ -13,6 +13,7 @@ mod lower_bound_tracker;
 mod upper_bound_tracker;
 pub(crate) use disequality_tracker::DisequalityTracker;
 pub(crate) use equality_tracker::EqualityTracker;
+use indexmap::IndexSet;
 pub(crate) use lower_bound_tracker::LowerBoundTracker;
 pub(crate) use upper_bound_tracker::UpperBoundTracker;
 
@@ -46,7 +47,7 @@ pub(crate) struct PredicateTracker {
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
     /// Note that there is no specific order in which these values are stored.
-    values: Vec<i32>,
+    values: IndexSet<i32>,
     /// The [`PredicateId`] corresponding to the predicate for each value in
     /// [`PredicateTracker::values`].
     ids: Vec<PredicateId>,
@@ -61,7 +62,7 @@ impl PredicateTracker {
             max_assigned: TrailedInteger::create_from_index(0),
             smaller: Vec::default(),
             greater: Vec::default(),
-            values: Vec::default(),
+            values: Default::default(),
             ids: Vec::default(),
         }
     }
@@ -94,11 +95,6 @@ pub(crate) trait DomainTrackerInformation {
     /// Returns a mutable reference to the stored [`PredicateId`]s.
     fn get_ids_mut(&mut self) -> &mut Vec<PredicateId>;
 
-    /// Returns a reference to the stored values.
-    fn get_values(&self) -> &Vec<i32>;
-    /// Returns a mutable reference to the stored values.
-    fn get_values_mut(&mut self) -> &mut Vec<i32>;
-
     /// Returns a reference to `smaller` where `smaller[i]` is the index of the element with the
     /// largest value such that it is smaller than `values[i]`
     fn get_smaller(&self) -> &Vec<i64>;
@@ -118,6 +114,11 @@ pub(crate) trait DomainTrackerInformation {
 
     /// Returns true if all of the tracked [`Predicate`]s are assigned.
     fn is_fixed(&self, trailed_values: &TrailedValues) -> bool;
+
+    fn is_value_tracked(&self, value: i32) -> bool;
+    fn insert_value(&mut self, value: i32) -> usize;
+    fn get_value_at_index(&self, index: usize) -> i32;
+    fn get_all_values(&self) -> impl Iterator<Item = i32>;
 }
 
 impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
@@ -128,7 +129,7 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
         initial_upper_bound: i32,
         trailed_values: &mut TrailedValues,
     ) {
-        if !self.get_values().is_empty() {
+        if !self.is_empty() {
             // The structures has been initialised previously
             return;
         }
@@ -142,8 +143,8 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
         // Then we place some sentinels for simplicity's sake which are always true
         //
         // It is _probably_ okay to note use the `-1` and `+1`
-        self.get_values_mut().push(initial_lower_bound - 1);
-        self.get_values_mut().push(initial_upper_bound + 1);
+        let _ = self.insert_value(initial_lower_bound - 1);
+        let _ = self.insert_value(initial_upper_bound + 1);
 
         // These should never be queried so we provide a placeholder
         self.get_ids_mut().push(PredicateId { id: u32::MAX });
@@ -172,14 +173,6 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
 
     fn get_ids_mut(&mut self) -> &mut Vec<PredicateId> {
         &mut self.get_tracker_mut().ids
-    }
-
-    fn get_values(&self) -> &Vec<i32> {
-        &self.get_tracker().values
-    }
-
-    fn get_values_mut(&mut self) -> &mut Vec<i32> {
-        &mut self.get_tracker_mut().values
     }
 
     fn get_smaller(&self) -> &Vec<i64> {
@@ -244,6 +237,30 @@ impl<Watcher: HasTracker> DomainTrackerInformation for Watcher {
             || self.get_tracker().values[max_unassigned_index]
                 <= self.get_tracker().values[min_assigned_index]
     }
+
+    fn is_value_tracked(&self, value: i32) -> bool {
+        self.get_tracker().values.contains(&value)
+    }
+
+    fn insert_value(&mut self, value: i32) -> usize {
+        let index = self.get_tracker().values.len();
+        let result = self.get_tracker_mut().values.insert(value);
+        assert!(result);
+
+        index
+    }
+
+    fn get_value_at_index(&self, index: usize) -> i32 {
+        *self
+            .get_tracker()
+            .values
+            .get_index(index)
+            .expect("Expected provided index to exist")
+    }
+
+    fn get_all_values(&self) -> impl Iterator<Item = i32> {
+        self.get_tracker().values.iter().copied()
+    }
 }
 
 /// A trait which defines the common behaviours for structures which track [`Predicate`]s for a
@@ -288,7 +305,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
     /// Returns true if it was not already tracked and false otherwise.
     fn track(&mut self, value: i32, predicate_id: PredicateId) -> bool {
         pumpkin_assert_simple!(
-            self.get_values().len() >= 2,
+            !self.is_empty(),
             "Initialise should have been called previously"
         );
 
@@ -305,7 +322,7 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         // Note that the element at the 1st index has the largest value
         let mut index = 1;
         loop {
-            let index_value = self.get_values()[index];
+            let index_value = self.get_value_at_index(index);
             if index_value == value {
                 // This value is already being tracked
                 return false;
@@ -323,42 +340,31 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
         }
 
         pumpkin_assert_eq_simple!(
-            self.get_values()[index_largest_value_smaller_than as usize],
-            *self
-                .get_values()
-                .iter()
-                .filter(|&&stored_value| stored_value < value)
+            self.get_value_at_index(index_largest_value_smaller_than as usize),
+            self.get_all_values()
+                .filter(|&stored_value| stored_value < value)
                 .max()
                 .unwrap(),
         );
         pumpkin_assert_eq_simple!(
-            self.get_values()[index_smallest_value_larger_than as usize],
-            *self
-                .get_values()
-                .iter()
-                .filter(|&&stored_value| stored_value > value)
+            self.get_value_at_index(index_smallest_value_larger_than as usize),
+            self.get_all_values()
+                .filter(|&stored_value| stored_value > value)
                 .min()
                 .unwrap()
         );
 
-        let new_index = self.get_values().len();
+        let new_index = self.insert_value(value);
 
         self.get_greater_mut()[index_largest_value_smaller_than as usize] = new_index as i64;
         self.get_smaller_mut()[index_smallest_value_larger_than as usize] = new_index as i64;
 
         // Then we update the other structures
-        self.get_values_mut().push(value);
         self.get_ids_mut().push(predicate_id);
         self.get_smaller_mut()
             .push(index_largest_value_smaller_than);
         self.get_greater_mut()
             .push(index_smallest_value_larger_than);
-
-        pumpkin_assert_simple!(
-            self.get_smaller().len() == self.get_greater().len()
-                && self.get_greater().len() == self.get_values().len()
-                && self.get_values().len() == self.get_ids().len()
-        );
 
         true
     }

@@ -26,6 +26,7 @@ bitfield-struct = "0.9.2"
 num = "0.4.3"
 enum-map = "2.7.3"
 clap = { version = "4.5.40", optional = true }
+indexmap = "2.10.0"
 
 [features]
 debug-checks = []
