@@ -13,6 +13,7 @@ mod lower_bound_tracker;
 mod upper_bound_tracker;
 pub(crate) use disequality_tracker::DisequalityTracker;
 pub(crate) use equality_tracker::EqualityTracker;
+use fnv::FnvBuildHasher;
 use indexmap::IndexSet;
 pub(crate) use lower_bound_tracker::LowerBoundTracker;
 pub(crate) use upper_bound_tracker::UpperBoundTracker;
@@ -47,7 +48,7 @@ pub(crate) struct PredicateTracker {
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
     /// Note that there is no specific order in which these values are stored.
-    values: IndexSet<i32>,
+    values: IndexSet<i32, FnvBuildHasher>,
     /// The [`PredicateId`] corresponding to the predicate for each value in
     /// [`PredicateTracker::values`].
     ids: Vec<PredicateId>,
