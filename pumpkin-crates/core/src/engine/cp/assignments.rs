@@ -380,7 +380,7 @@ impl Assignments {
         }
 
         let domain = &self.domains[domain_id];
-        domain.contains(value)
+        domain.contains_no_check_bounds(value)
     }
 
     pub(crate) fn is_value_in_domain_at_trail_position(
@@ -540,7 +540,11 @@ impl Assignments {
         reason: Option<AssignmentReason>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the value is not present anyway.
-        if !self.domains[domain_id].contains(removed_value_from_domain) {
+        let (lower_bound, upper_bound) = self.bounds[domain_id];
+        if removed_value_from_domain < lower_bound
+            || removed_value_from_domain > upper_bound
+            || !self.domains[domain_id].contains_no_check_bounds(removed_value_from_domain)
+        {
             return self.domains[domain_id].verify_consistency();
         }
 
@@ -965,10 +969,17 @@ impl IntegerDomain {
         IntegerDomainIterator::new(self)
     }
 
+    /// Checks whether the provided `value` is in the domain.
     fn contains(&self, value: i32) -> bool {
         self.lower_bound() <= value
             && value <= self.upper_bound()
             && !self.holes.contains_key(&value)
+    }
+
+    /// Checks whether the provided `value` is in the domain without checking the lower-bound and
+    /// upper-bound.
+    fn contains_no_check_bounds(&self, value: i32) -> bool {
+        self.holes.contains_key(&value)
     }
 
     fn contains_at_trail_position(&self, value: i32, trail_position: usize) -> bool {
