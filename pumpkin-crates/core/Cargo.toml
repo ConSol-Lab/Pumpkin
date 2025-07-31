@@ -27,7 +27,10 @@ num = "0.4.3"
 enum-map = "2.7.3"
 clap = { version = "4.5.40", optional = true }
 indexmap = "2.10.0"
+flate2 = { version = "1.1.2", optional = true }
 
 [features]
+default = ["gzipped-proofs"]
 debug-checks = []
 clap = ["dep:clap"]
+gzipped-proofs = ["dep:flate2"]
