@@ -601,6 +601,7 @@ fn run() -> PumpkinResult<()> {
                 ),
                 optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),
+                verbose: args.verbose,
             },
         )?,
     }
@@ -622,7 +623,9 @@ fn cnf_problem(
     let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(satisfiable) => {
-            satisfiable.solver().log_statistics();
+            satisfiable
+                .solver()
+                .log_statistics(Some(satisfiable.brancher()), true);
             println!("s SATISFIABLE");
             println!(
                 "v {}",
@@ -633,13 +636,13 @@ fn cnf_problem(
                 )
             );
         }
-        SatisfactionResult::Unsatisfiable(solver) => {
-            solver.log_statistics();
+        SatisfactionResult::Unsatisfiable(solver, brancher) => {
+            solver.log_statistics(Some(brancher), true);
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown(solver) => {
-            solver.log_statistics();
+        SatisfactionResult::Unknown(solver, brancher) => {
+            solver.log_statistics(Some(brancher), true);
             println!("s UNKNOWN");
         }
     }

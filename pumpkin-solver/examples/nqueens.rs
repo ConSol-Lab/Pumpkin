@@ -107,10 +107,10 @@ fn main() {
 
             println!("{row_separator}");
         }
-        SatisfactionResult::Unsatisfiable(_) => {
+        SatisfactionResult::Unsatisfiable(_, _) => {
             println!("{n}-queens is unsatisfiable.");
         }
-        SatisfactionResult::Unknown(_) => {
+        SatisfactionResult::Unknown(_, _) => {
             println!("Timeout.");
         }
     };

@@ -19,10 +19,10 @@ pub enum SatisfactionResult<'solver, 'brancher, B: Brancher> {
     /// result is dropped, the solver will be reset to the root, ready for further use.
     Satisfiable(Satisfiable<'solver, 'brancher, B>),
     /// Indicates that there is no solution to the satisfaction problem.
-    Unsatisfiable(&'solver Solver),
+    Unsatisfiable(&'solver Solver, &'brancher B),
     /// Indicates that it is not known whether a solution exists. This is likely due to a
     /// [`TerminationCondition`] triggering.
-    Unknown(&'solver Solver),
+    Unknown(&'solver Solver, &'brancher B),
 }
 
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
