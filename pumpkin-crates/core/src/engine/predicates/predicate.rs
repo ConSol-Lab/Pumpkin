@@ -43,11 +43,12 @@ impl Predicate {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
+#[repr(u8)]
 pub enum PredicateType {
-    LowerBound,
-    UpperBound,
-    NotEqual,
-    Equal,
+    LowerBound = LOWER_BOUND_CODE,
+    UpperBound = UPPER_BOUND_CODE,
+    NotEqual = NOT_EQUAL_CODE,
+    Equal = EQUAL_CODE,
 }
 impl PredicateType {
     pub(crate) fn is_lower_bound(&self) -> bool {
@@ -92,6 +93,24 @@ impl From<Predicate> for PredicateType {
             EQUAL_CODE => Self::Equal,
             NOT_EQUAL_CODE => Self::NotEqual,
             code => panic!("Unknown type code {code}"),
+        }
+    }
+}
+
+impl PredicateType {
+    pub const fn into_bits(self) -> u8 {
+        self as _
+    }
+
+    pub const fn from_bits(value: u8) -> PredicateType {
+        match value {
+            LOWER_BOUND_CODE => PredicateType::LowerBound,
+            UPPER_BOUND_CODE => PredicateType::UpperBound,
+            EQUAL_CODE => PredicateType::Equal,
+            _ => {
+                assert!(value == NOT_EQUAL_CODE);
+                PredicateType::NotEqual
+            }
         }
     }
 }
