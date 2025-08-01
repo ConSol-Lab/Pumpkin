@@ -40,7 +40,7 @@ pub(crate) fn run(
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
                                     let representative =
-                                        context.literal_equivalences.representative(&other_id);
+                                        context.equivalences.representative(&other_id);
 
                                     context
                                         .boolean_variable_map
@@ -73,36 +73,36 @@ pub(crate) fn run(
                 array_expr,
             } => {
                 let id = context.identifiers.get_interned(id);
-                let contents =
-                    match array_expr.as_ref().expect("array did not have expression") {
-                        ArrayOfIntExpr::Array(array) => array
-                            .iter()
-                            .map(|expr| match expr {
-                                IntExpr::Int(int) => {
-                                    let value = i32::try_from(*int)?;
+                let contents = match array_expr.as_ref().expect("array did not have expression") {
+                    ArrayOfIntExpr::Array(array) => array
+                        .iter()
+                        .map(|expr| match expr {
+                            IntExpr::Int(int) => {
+                                let value = i32::try_from(*int)?;
 
-                                    Ok(*context.constant_domain_ids.entry(value).or_insert_with(
+                                Ok(
+                                    *context.constant_domain_ids.entry(value).or_insert_with(
                                         || context.solver.new_bounded_integer(value, value),
-                                    ))
-                                }
-                                IntExpr::VarParIdentifier(identifier) => {
-                                    let other_id = context.identifiers.get_interned(identifier);
-                                    let representative =
-                                        context.integer_equivalences.representative(&other_id);
+                                    ),
+                                )
+                            }
+                            IntExpr::VarParIdentifier(identifier) => {
+                                let other_id = context.identifiers.get_interned(identifier);
+                                let representative = context.equivalences.representative(&other_id);
 
-                                    Ok(context
-                                        .integer_variable_map
-                                        .get(&representative)
-                                        .copied()
-                                        .expect("referencing undefined boolean variable"))
-                                }
-                            })
-                            .collect::<Result<Rc<[_]>, FlatZincError>>()?,
+                                Ok(context
+                                    .integer_variable_map
+                                    .get(&representative)
+                                    .copied()
+                                    .expect("referencing undefined boolean variable"))
+                            }
+                        })
+                        .collect::<Result<Rc<[_]>, FlatZincError>>()?,
 
-                        ArrayOfIntExpr::VarParIdentifier(_) => {
-                            todo!("array of integer variable expression is identifier")
-                        }
-                    };
+                    ArrayOfIntExpr::VarParIdentifier(_) => {
+                        todo!("array of integer variable expression is identifier")
+                    }
+                };
 
                 if let Some(shape) = is_output_array(annos) {
                     context.outputs.push(Output::array_of_int(
