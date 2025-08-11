@@ -107,10 +107,8 @@ impl PredicateType {
             LOWER_BOUND_CODE => PredicateType::LowerBound,
             UPPER_BOUND_CODE => PredicateType::UpperBound,
             EQUAL_CODE => PredicateType::Equal,
-            _ => {
-                assert!(value == NOT_EQUAL_CODE);
-                PredicateType::NotEqual
-            }
+            NOT_EQUAL_CODE => PredicateType::NotEqual,
+            _ => panic!("Unknown code"),
         }
     }
 }

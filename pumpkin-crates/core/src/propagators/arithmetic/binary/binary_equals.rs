@@ -1,3 +1,5 @@
+use std::slice;
+
 use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
@@ -66,7 +68,7 @@ where
 
             has_backtracked: false,
             first_propagation_loop: true,
-            reason_buffer: vec![Predicate::trivially_false()],
+            reason_buffer: Predicate::trivially_false(),
         }
     }
 }
@@ -97,9 +99,9 @@ pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
 
     inference_code: InferenceCode,
 
-    /// A re-usable buffer to store the explanations of propagations. This will always have
-    /// length 1.
-    reason_buffer: Vec<Predicate>,
+    /// A re-usable buffer to store the explanations of propagations. This will always be a single
+    /// [`Predicate`].
+    reason_buffer: Predicate,
 }
 
 impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
@@ -264,6 +266,7 @@ where
                 removed_value_a,
             )?;
         }
+        self.a_removed_values = a_removed_values;
 
         // Then we remove all of the values which have been removed from `b` from `a`
         let mut b_removed_values = std::mem::take(&mut self.b_removed_values);
@@ -279,7 +282,6 @@ where
             )?;
         }
 
-        self.a_removed_values = a_removed_values;
         self.b_removed_values = b_removed_values;
 
         Ok(())
@@ -302,9 +304,9 @@ where
             (B, Equal) => predicate![self.a == propagated.value()],
         };
 
-        self.reason_buffer[0] = explanation;
+        self.reason_buffer = explanation;
 
-        &self.reason_buffer
+        slice::from_ref(&self.reason_buffer)
     }
 
     fn debug_propagate_from_scratch(
@@ -359,17 +361,22 @@ impl Variable {
     const fn from_bits(value: u8) -> Variable {
         match value {
             0 => Variable::A,
-            _ => Variable::B,
+            1 => Variable::B,
+            _ => panic!("Unknown bit sequence"),
         }
     }
 }
 
+/// Represents the data required for a binary equals propagation.
 #[bitfield(u64)]
 struct BinaryEqualsPropagation {
+    /// The variable for which the propagation takes place.
     #[bits(8)]
     variable: Variable,
+    /// The type of propagation (e.g. it could be a [`PredicateType::LowerBound`] propagation).
     #[bits(8)]
     predicate_type: PredicateType,
+    /// The value of the propagation
     value: i32,
     /// Padding
     #[bits(16)]
