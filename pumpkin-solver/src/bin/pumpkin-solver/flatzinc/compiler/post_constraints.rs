@@ -672,6 +672,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
     vars.iter()
         .zip(weights.iter())
+        .filter(|(_, &w)| w != 0)
         .map(|(x_i, &w_i)| x_i.scaled(w_i))
         .collect::<Box<[_]>>()
 }
