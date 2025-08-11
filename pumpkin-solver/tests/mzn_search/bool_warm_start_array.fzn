@@ -6,5 +6,5 @@ var 0..1: X_INTRODUCED_3_ ::var_is_introduced :: is_defined_var;
 constraint int_lin_eq([1,1,-1],[X_INTRODUCED_3_,X_INTRODUCED_2_,X_INTRODUCED_0_],0):: defines_var(X_INTRODUCED_0_):: ctx_pos;
 constraint bool2int(y,X_INTRODUCED_2_):: defines_var(X_INTRODUCED_2_);
 constraint bool2int(x,X_INTRODUCED_3_):: defines_var(X_INTRODUCED_3_);
-solve :: warm_start_array([warm_start([x],[true]),warm_start([y],[false])]) maximize X_INTRODUCED_0_;
+solve :: warm_start_array([warm_start_bool([x],[true]),warm_start_bool([y],[false])]) maximize X_INTRODUCED_0_;
 
