@@ -68,7 +68,7 @@ where
 
             has_backtracked: false,
             first_propagation_loop: true,
-            reason_buffer: Predicate::trivially_false(),
+            reason: Predicate::trivially_false(),
         }
     }
 }
@@ -101,7 +101,7 @@ pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
 
     /// A re-usable buffer to store the explanations of propagations. This will always be a single
     /// [`Predicate`].
-    reason_buffer: Predicate,
+    reason: Predicate,
 }
 
 impl<AVar, BVar> BinaryEqualsPropagator<AVar, BVar>
@@ -304,9 +304,9 @@ where
             (B, Equal) => predicate![self.a == propagated.value()],
         };
 
-        self.reason_buffer = explanation;
+        self.reason = explanation;
 
-        slice::from_ref(&self.reason_buffer)
+        slice::from_ref(&self.reason)
     }
 
     fn debug_propagate_from_scratch(
