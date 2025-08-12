@@ -101,6 +101,9 @@ pub(crate) struct BinaryEqualsPropagator<AVar, BVar> {
 
     /// A re-usable buffer to store the explanations of propagations. This will always be a single
     /// [`Predicate`].
+    ///
+    /// This field is only written to in the `lazy_explanation` function, as that returns a slice
+    /// which needs to be owned somewhere. Hence we put that ownership here.
     reason: Predicate,
 }
 
