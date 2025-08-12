@@ -11,6 +11,7 @@ use flatzinc::Expr;
 use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
+use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -42,11 +43,13 @@ pub(crate) fn run(
                                     let representative =
                                         context.equivalences.representative(&other_id);
 
-                                    context
-                                        .boolean_variable_map
+                                    let domain_id = context
+                                        .variable_map
                                         .get(&representative)
                                         .copied()
-                                        .expect("referencing undefined boolean variable")
+                                        .expect("referencing undefined boolean variable");
+
+                                    Literal::new(domain_id)
                                 }
                             })
                             .collect(),
@@ -91,7 +94,7 @@ pub(crate) fn run(
                                 let representative = context.equivalences.representative(&other_id);
 
                                 Ok(context
-                                    .integer_variable_map
+                                    .variable_map
                                     .get(&representative)
                                     .copied()
                                     .expect("referencing undefined boolean variable"))

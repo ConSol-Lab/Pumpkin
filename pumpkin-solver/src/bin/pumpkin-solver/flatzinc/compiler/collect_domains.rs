@@ -27,20 +27,19 @@ pub(crate) fn run(
                 let representative = context.equivalences.representative(&id);
                 let domain = context.equivalences.domain(&id);
 
-                let literal = *context
-                    .boolean_variable_map
+                let domain_id = *context
+                    .variable_map
                     .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
-                        let domain_id = create_integer_domain(
+                        create_integer_domain(
                             context.solver,
-                            &mut context.integer_variable_map,
                             &mut context.constant_domain_ids,
                             representative,
                             domain,
-                        );
-
-                        Literal::new(domain_id)
+                        )
                     });
+
+                let literal = Literal::new(domain_id);
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
@@ -56,13 +55,17 @@ pub(crate) fn run(
                 let representative = context.equivalences.representative(&id);
                 let domain = context.equivalences.domain(&id);
 
-                let domain_id = create_integer_domain(
-                    context.solver,
-                    &mut context.integer_variable_map,
-                    &mut context.constant_domain_ids,
-                    representative,
-                    domain,
-                );
+                let domain_id = *context
+                    .variable_map
+                    .entry(Rc::clone(&representative))
+                    .or_insert_with(|| {
+                        create_integer_domain(
+                            context.solver,
+                            &mut context.constant_domain_ids,
+                            representative,
+                            domain,
+                        )
+                    });
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::int(id, domain_id));
@@ -76,27 +79,22 @@ pub(crate) fn run(
 
 fn create_integer_domain(
     solver: &mut Solver,
-    integer_variable_map: &mut HashMap<Rc<str>, DomainId>,
     constant_domains: &mut HashMap<i32, DomainId>,
     identifier: Rc<str>,
     domain: Domain,
 ) -> DomainId {
-    *integer_variable_map
-        .entry(Rc::clone(&identifier))
-        .or_insert_with(|| {
-            if domain.is_constant() {
-                let value = match &domain {
-                    Domain::IntervalDomain { lb, ub: _ } => *lb,
-                    Domain::SparseDomain { values } => values[0],
-                };
+    if domain.is_constant() {
+        let value = match &domain {
+            Domain::IntervalDomain { lb, ub: _ } => *lb,
+            Domain::SparseDomain { values } => values[0],
+        };
 
-                *constant_domains
-                    .entry(value)
-                    .or_insert_with(|| domain.into_variable(solver, value.to_string()))
-            } else {
-                domain.into_variable(solver, identifier.to_string())
-            }
-        })
+        *constant_domains
+            .entry(value)
+            .or_insert_with(|| domain.into_variable(solver, value.to_string()))
+    } else {
+        domain.into_variable(solver, identifier.to_string())
+    }
 }
 
 fn is_output_variable(annos: &[Annotation]) -> bool {

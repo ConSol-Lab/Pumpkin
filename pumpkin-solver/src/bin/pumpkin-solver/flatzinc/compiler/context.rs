@@ -30,6 +30,13 @@ pub(crate) struct CompilationContext<'a> {
     /// This combines boolean and integer variables.
     pub(crate) equivalences: VariableEquivalences,
 
+    /// A mapping from model variables to solver domains.
+    ///
+    /// Both boolean and integer variables are represented here. If a variable is a boolean,
+    /// then it should be converted to a [`Literal`] as late as possible (e.g. when the constraint
+    /// is posted or an array is created).
+    pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
+
     /// Literal which is always true
     pub(crate) true_literal: Literal,
     /// Literal which is always false
@@ -38,16 +45,12 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
-    /// A mapping from boolean model variables to solver literals.
-    pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
     /// A mapping from boolean variable array identifiers to slices of literals.
     pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
     pub(crate) integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
-    /// A mapping from integer model variables to solver literals.
-    pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
@@ -86,11 +89,10 @@ impl CompilationContext<'_> {
             false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
-            boolean_variable_map: Default::default(),
             boolean_variable_arrays: Default::default(),
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
-            integer_variable_map: Default::default(),
+            variable_map: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
 
@@ -133,11 +135,11 @@ impl CompilationContext<'_> {
         &self,
         identifier: &str,
     ) -> Result<Literal, FlatZincError> {
-        if let Some(literal) = self
-            .boolean_variable_map
+        if let Some(domain_id) = self
+            .variable_map
             .get(&self.equivalences.representative(identifier))
         {
-            Ok(*literal)
+            Ok(Literal::new(*domain_id))
         } else {
             self.boolean_parameters
                 .get(&self.equivalences.representative(identifier))
@@ -365,7 +367,7 @@ impl CompilationContext<'_> {
             });
         }
         if let Some(domain_id) = self
-            .integer_variable_map
+            .variable_map
             .get(&self.equivalences.representative(identifier))
         {
             Ok(*domain_id)
