@@ -108,7 +108,7 @@ mod tests {
 
         run(&ast, &mut context).expect("no errors");
 
-        let domain = context.literal_equivalences.domain("SomeVar");
+        let domain = context.equivalences.domain("SomeVar");
         assert_eq!(Domain::from_lower_bound_and_upper_bound(0, 1), domain);
     }
 
@@ -140,11 +140,11 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(0, 0),
-            context.literal_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(1, 1),
-            context.literal_equivalences.domain("OtherVar")
+            context.equivalences.domain("OtherVar")
         );
     }
 
@@ -166,7 +166,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(0, 1),
-            context.literal_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 

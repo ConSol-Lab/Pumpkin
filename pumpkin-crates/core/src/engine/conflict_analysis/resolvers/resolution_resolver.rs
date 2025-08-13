@@ -489,7 +489,7 @@ impl ResolutionResolver {
             context
                 .counters
                 .learned_clause_statistics
-                .average_number_of_removed_literals_semantic
+                .average_number_of_removed_atomic_constraints_semantic
                 .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
         }
 

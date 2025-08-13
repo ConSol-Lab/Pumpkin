@@ -142,9 +142,67 @@ fn should_keep_constraint<Ann>(
         }
     };
 
-    context.integer_equivalences.merge(v1, v2);
+    equivalences.merge(v1, v2);
 
     false
+}
+
+fn should_keep_bool2int_constraint(
+    constraint: &ConstraintItem,
+    identifiers: &mut Identifiers,
+    equivalences: &mut VariableEquivalences,
+) -> bool {
+    let v1 = match &constraint.exprs[0] {
+        flatzinc::Expr::VarParIdentifier(id) => identifiers.get_interned(id),
+        flatzinc::Expr::Bool(_) => {
+            // I don't expect this to be called, but I am not sure. To make it obvious when it does
+            // happen, the warning is logged.
+            warn!("'bool2int' with constant argument, ignoring it for merging equivalences");
+            return true;
+        }
+        flatzinc::Expr::Float(_)
+        | flatzinc::Expr::Int(_)
+        | flatzinc::Expr::Set(_)
+        | flatzinc::Expr::ArrayOfBool(_)
+        | flatzinc::Expr::ArrayOfInt(_)
+        | flatzinc::Expr::ArrayOfFloat(_)
+        | flatzinc::Expr::ArrayOfSet(_) => unreachable!(),
+    };
+
+    let v2 = match &constraint.exprs[1] {
+        flatzinc::Expr::VarParIdentifier(id) => identifiers.get_interned(id),
+        flatzinc::Expr::Bool(_) => {
+            // I don't expect this to be called, but I am not sure. To make it obvious when it does
+            // happen, the warning is logged.
+            warn!("'bool2int' with constant argument, ignoring it for merging equivalences");
+            return true;
+        }
+        flatzinc::Expr::Float(_)
+        | flatzinc::Expr::Int(_)
+        | flatzinc::Expr::Set(_)
+        | flatzinc::Expr::ArrayOfBool(_)
+        | flatzinc::Expr::ArrayOfInt(_)
+        | flatzinc::Expr::ArrayOfFloat(_)
+        | flatzinc::Expr::ArrayOfSet(_) => unreachable!(),
+    };
+
+    equivalences.merge(v1, v2);
+
+    false
+}
+
+/// Possibly merges some equivalence classes based on the constraint. Returns `true` if the
+/// constraint needs to be retained, and `false` if it can be removed from the AST.
+fn should_keep_constraint(
+    constraint: &ConstraintItem,
+    equivalences: &mut VariableEquivalences,
+    identifiers: &mut Identifiers,
+) -> bool {
+    match constraint.id.as_str() {
+        "int_eq" => should_keep_int_eq_constraint(constraint, identifiers, equivalences),
+        "bool2int" => should_keep_bool2int_constraint(constraint, identifiers, equivalences),
+        _ => true,
+    }
 }
 
 #[cfg(test)]

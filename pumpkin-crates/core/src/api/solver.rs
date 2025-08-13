@@ -38,6 +38,7 @@ use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
+use crate::statistics::StatisticLogger;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
@@ -118,14 +119,24 @@ impl Solver {
     }
 
     /// Logs the statistics currently present in the solver with the provided objective value.
-    pub fn log_statistics_with_objective(&self, objective_value: i64) {
+    pub fn log_statistics_with_objective(
+        &self,
+        brancher: Option<&impl Brancher>,
+        objective_value: i64,
+        verbose: bool,
+    ) {
         log_statistic("objective", objective_value);
-        self.log_statistics();
+        self.log_statistics(brancher, verbose);
     }
 
     /// Logs the statistics currently present in the solver.
-    pub fn log_statistics(&self) {
-        self.satisfaction_solver.log_statistics();
+    pub fn log_statistics(&self, brancher: Option<&impl Brancher>, verbose: bool) {
+        self.satisfaction_solver.log_statistics(verbose);
+        if verbose {
+            if let Some(brancher) = brancher {
+                brancher.log_statistics(StatisticLogger::new(["brancher"]));
+            }
+        }
         log_statistic_postfix();
     }
 

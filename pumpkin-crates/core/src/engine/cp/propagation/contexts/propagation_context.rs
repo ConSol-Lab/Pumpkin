@@ -368,12 +368,6 @@ fn build_reason(reason: impl Into<Reason>, reification_literal: Option<Literal>)
             );
             StoredReason::Eager(conjunction)
         }
-        Reason::DynamicLazy(code) => {
-            if let Some(reification_literal) = reification_literal {
-                StoredReason::ReifiedLazy(reification_literal, code)
-            } else {
-                StoredReason::DynamicLazy(code)
-            }
-        }
+        Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
     }
 }

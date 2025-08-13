@@ -36,8 +36,8 @@ pub(crate) fn run(
                 let domain = context.integer_equivalences.domain(name);
 
                 let domain_id = *context
-                    .integer_variable_map
-                    .entry(representative)
+                    .variable_map
+                    .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
                         if domain.is_constant() {
                             *context

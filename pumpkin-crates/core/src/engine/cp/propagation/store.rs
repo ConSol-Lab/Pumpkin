@@ -15,6 +15,10 @@ pub(crate) struct PropagatorStore {
 }
 
 impl PropagatorStore {
+    pub(crate) fn num_propagators(&self) -> usize {
+        self.propagators.len()
+    }
+
     pub(crate) fn iter_propagators(&self) -> impl Iterator<Item = &dyn Propagator> + '_ {
         self.propagators.iter().map(|b| b.as_ref())
     }
