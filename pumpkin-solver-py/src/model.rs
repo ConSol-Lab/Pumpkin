@@ -2,12 +2,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_solver::containers::KeyGenerator;
 use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::containers::StorageKey;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
+use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
@@ -40,6 +43,21 @@ pub struct Model {
     integer_variables: KeyedVec<IntVariable, ModelIntVar>,
     boolean_variables: KeyedVec<BoolVariable, ModelBoolVar>,
     constraints: Vec<ModelConstraint>,
+    tags: KeyGenerator<Tag>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct Tag(pub ConstraintTag);
+
+impl StorageKey for Tag {
+    fn index(&self) -> usize {
+        self.0.index()
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        Tag(ConstraintTag::create_from_index(index))
+    }
 }
 
 #[pymethods]
@@ -76,6 +94,11 @@ impl Model {
                 predicate: None,
             })
             .into()
+    }
+
+    /// Create a new constraint tag.
+    fn new_constraint_tag(&mut self) -> Tag {
+        self.tags.next_key()
     }
 
     /// Get an integer variable for the given boolean.
