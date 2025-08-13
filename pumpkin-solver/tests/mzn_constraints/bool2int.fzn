@@ -1,6 +1,6 @@
-var bool: l :: output_var;
-var 0..3: x1 :: output_var;
+var 0..1: int_var;
+var bool: bool_var;
 
-constraint bool2int(l, x1);
+constraint bool2int(bool_var, int_var);
 
 solve satisfy;
