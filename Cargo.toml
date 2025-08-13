@@ -15,6 +15,9 @@ authors = [
     "Jeff Smits"
 ] # Ordered alphabetically based on last name!
 
+[patch.crates-io]
+fnv = { git = "https://github.com/servo/rust-fnv", branch = "main" }
+
 [profile.release]
 lto = true
 panic = 'abort'
