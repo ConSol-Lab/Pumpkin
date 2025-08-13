@@ -45,7 +45,9 @@ predicate int_mod(var int: x, var int: y, var int: z) =
 
 %%% NOTE: because of a mistake in the MiniZinc standard library, the
 % `warm_start` annotation is overloaded on the FlatZinc level, the following
-% definitions disambiguate these annotations within Chuffed.
+% definitions disambiguate these annotations within Pumpkin.
+% 
+% Taken from https://github.com/chuffed/chuffed/blob/develop/chuffed/flatzinc/mznlib/redefinitions.mzn
 
 annotation warm_start_bool(array[int] of var bool: x, array[int] of bool: v);
 annotation warm_start(array[int] of var bool: x, array[int] of bool: v) = warm_start_bool(x, v);
