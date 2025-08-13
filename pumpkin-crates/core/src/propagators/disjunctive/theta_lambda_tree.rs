@@ -77,8 +77,7 @@ pub(super) struct ThetaLambdaTree<Var> {
     /// the index in the tree
     number_of_internal_nodes: usize,
 
-    #[allow(unused, reason = "Testing")]
-    pub(crate) sorted_tasks: Vec<DisjunctiveTask<Var>>,
+    sorted_tasks: Vec<DisjunctiveTask<Var>>,
 }
 
 impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
@@ -279,37 +278,49 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(super) fn upheap(&mut self, mut index: usize) {
         while index != 0 {
             let parent = Self::get_parent(index);
-            let left_child_parent = Self::get_left_child_index(parent);
-            let right_child_parent = Self::get_right_child_index(parent);
-            pumpkin_assert_simple!(left_child_parent == index || right_child_parent == index);
+            let left_child_of_parent = Self::get_left_child_index(parent);
+            let right_child_of_parent = Self::get_right_child_index(parent);
+            pumpkin_assert_simple!(left_child_of_parent == index || right_child_of_parent == index);
 
-            self.nodes[parent].sum_of_processing_times = self.nodes[left_child_parent]
+            self.nodes[parent].sum_of_processing_times = self.nodes[left_child_of_parent]
                 .sum_of_processing_times
-                + self.nodes[right_child_parent].sum_of_processing_times;
+                + self.nodes[right_child_of_parent].sum_of_processing_times;
+
             self.nodes[parent].ect = max(
-                self.nodes[right_child_parent].ect,
-                self.nodes[left_child_parent].ect
-                    + self.nodes[right_child_parent].sum_of_processing_times,
+                self.nodes[right_child_of_parent].ect,
+                self.nodes[left_child_of_parent].ect
+                    + self.nodes[right_child_of_parent].sum_of_processing_times,
             );
 
             self.nodes[parent].sum_of_processing_times_bar = max(
-                self.nodes[left_child_parent].sum_of_processing_times_bar
-                    + self.nodes[right_child_parent].sum_of_processing_times,
-                self.nodes[left_child_parent].sum_of_processing_times
-                    + self.nodes[right_child_parent].sum_of_processing_times_bar,
+                self.nodes[left_child_of_parent].sum_of_processing_times_bar
+                    + self.nodes[right_child_of_parent].sum_of_processing_times,
+                self.nodes[left_child_of_parent].sum_of_processing_times
+                    + self.nodes[right_child_of_parent].sum_of_processing_times_bar,
             );
             self.nodes[parent].ect_bar = max(
-                self.nodes[right_child_parent].ect_bar,
+                self.nodes[right_child_of_parent].ect_bar,
                 max(
-                    self.nodes[left_child_parent].ect
-                        + self.nodes[right_child_parent].sum_of_processing_times_bar,
-                    self.nodes[left_child_parent].ect_bar
-                        + self.nodes[right_child_parent].sum_of_processing_times,
+                    self.nodes[left_child_of_parent].ect
+                        + self.nodes[right_child_of_parent].sum_of_processing_times_bar,
+                    self.nodes[left_child_of_parent].ect_bar
+                        + self.nodes[right_child_of_parent].sum_of_processing_times,
                 ),
             );
 
             index = parent;
         }
+    }
+
+    pub(crate) fn sum_of_processing_times(&self) -> i32 {
+        self.nodes[0].sum_of_processing_times
+    }
+
+    pub(crate) fn get_theta(&self) -> Vec<DisjunctiveTask<Var>> {
+        (self.number_of_internal_nodes..self.nodes.len())
+            .filter(|&position| self.nodes[position].sum_of_processing_times != 0)
+            .map(|position| self.sorted_tasks[self.get_leaf_node_index(position)].clone())
+            .collect()
     }
 }
 

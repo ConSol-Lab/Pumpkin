@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::cmp::Reverse;
 
 use fixedbitset::FixedBitSet;
@@ -21,6 +22,8 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
@@ -118,23 +121,47 @@ impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
 /// \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
 /// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
 /// Techniques in Constraint Programming, 2005, pp. 396–409.
-fn create_conflict_explanation<'a, Var: IntegerVariable>(
-    tasks: &'a [DisjunctiveTask<Var>],
-    _theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &'a PropagationContextMut,
+fn create_conflict_explanation<Var: IntegerVariable>(
+    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    context: &PropagationContextMut,
     elements_in_theta: &FixedBitSet,
+    lct: i32,
 ) -> PropositionalConjunction {
+    let theta = theta_lambda_tree.get_theta();
+
+    pumpkin_assert_moderate!(elements_in_theta.ones().count() == theta.len());
+    pumpkin_assert_simple!(!theta.is_empty());
+
+    let mut est = context.lower_bound(&theta[0].start_time);
+    let mut p_theta = theta_lambda_tree.sum_of_processing_times();
+
+    let mut delta = p_theta - (lct - est) - 1;
+
+    let mut i = 0;
+
+    while i < theta.len() - 1 {
+        if delta >= 0 {
+            break;
+        }
+        let task = &theta[i];
+
+        p_theta -= task.processing_time;
+        est = context.lower_bound(&theta[i + 1].start_time);
+        delta = p_theta - (lct - est) - 1;
+
+        i += 1;
+    }
+
+    let offset_left = (delta as f64 / 2.0).floor() as i32;
+    let offset_right = (delta as f64 / 2.0).ceil() as i32;
+
     let mut explanation = Vec::new();
 
-    for task_index in elements_in_theta.ones() {
-        let task = &tasks[task_index];
-
+    for task in theta.iter().skip(i) {
+        explanation.push(predicate!(task.start_time >= est - offset_left));
         explanation.push(predicate!(
-            task.start_time >= context.lower_bound(&task.start_time)
-        ));
-        explanation.push(predicate!(
-            task.start_time <= context.upper_bound(&task.start_time)
-        ));
+            task.start_time <= lct + offset_right - task.processing_time
+        ))
     }
 
     explanation.into()
@@ -148,32 +175,76 @@ fn create_conflict_explanation<'a, Var: IntegerVariable>(
 /// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
 /// Techniques in Constraint Programming, 2005, pp. 396–409.
 fn create_propagation_explanation<'a, Var: IntegerVariable>(
-    tasks: &'a [DisjunctiveTask<Var>],
+    original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
-    _theta_lambda_tree: &mut ThetaLambdaTree<Var>,
+    theta_lambda_tree: &mut ThetaLambdaTree<Var>,
     context: &'a PropagationContextMut,
-    elements_in_theta: &mut FixedBitSet,
+    _elements_in_theta: &mut FixedBitSet,
+    new_bound: i32,
+    lct_j: i32,
 ) -> PropositionalConjunction {
-    let mut explanation = Vec::new();
+    let theta = theta_lambda_tree.get_theta();
 
-    for task_index in elements_in_theta.ones() {
-        let task = &tasks[task_index];
+    pumpkin_assert_moderate!(_elements_in_theta.ones().count() == theta.len());
+    pumpkin_assert_simple!(!theta.is_empty());
 
-        explanation.push(predicate!(
-            task.start_time >= context.lower_bound(&task.start_time)
-        ));
-        explanation.push(predicate!(
-            task.start_time <= context.upper_bound(&task.start_time)
-        ));
+    let propagated_task = &original_tasks[propagated_task_id.index()];
+    let est_propagated = context.lower_bound(&propagated_task.start_time);
+
+    let mut p_theta = theta_lambda_tree.sum_of_processing_times();
+    assert_eq!(p_theta, theta.iter().map(|task| task.processing_time).sum());
+    let mut i = 0;
+    let mut delta = min(est_propagated, context.lower_bound(&theta[i].start_time))
+        + propagated_task.processing_time
+        + p_theta;
+
+    // We first find the set of tasks omega such that `min(est_omega, est_j) + p_omega + p_j >
+    // lct_j` (where j is the propagated task)
+    while i < theta.len() && delta <= lct_j {
+        p_theta -= theta[i].processing_time;
+        i += 1;
+        if i == theta.len() {
+            break;
+        }
+        delta = min(est_propagated, context.lower_bound(&theta[i].start_time))
+            + p_theta
+            + propagated_task.processing_time;
     }
 
-    let propagated_task = &tasks[propagated_task_id.index()];
-    explanation.push(predicate!(
-        propagated_task.start_time >= context.lower_bound(&propagated_task.start_time)
-    ));
-    explanation.push(predicate!(
-        propagated_task.start_time <= context.upper_bound(&propagated_task.start_time)
-    ));
+    pumpkin_assert_simple!(i < theta.len());
+
+    // Now we need to find the set theta_prime
+    let mut j = i;
+    let mut p_theta_prime = p_theta;
+    while j < theta.len() {
+        if theta_lambda_tree.ect() == context.lower_bound(&theta[j].start_time) + p_theta_prime {
+            break;
+        }
+        p_theta_prime -= theta[j].processing_time;
+        j += 1;
+    }
+
+    pumpkin_assert_simple!(j < theta.len());
+
+    let mut explanation = Vec::new();
+
+    // Now we calculate the explanation
+    let r = min(est_propagated, context.lower_bound(&theta[i].start_time));
+    for (task_index, task) in theta.iter().enumerate().skip(i) {
+        if task_index < j {
+            // Element is part of omega
+            explanation.push(predicate!(task.start_time >= r));
+        } else {
+            // Element is part of omega_prime
+            explanation.push(predicate!(task.start_time >= new_bound - p_theta_prime));
+        }
+
+        explanation.push(predicate!(
+            task.start_time
+                <= r + p_theta + propagated_task.processing_time - 1 - task.processing_time
+        ))
+    }
+    explanation.push(predicate!(propagated_task.start_time >= r));
 
     explanation.into()
 }
@@ -212,10 +283,10 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         if theta_lambda_tree.ect() > lct_j {
             return Err(Inconsistency::Conflict(PropagatorConflict {
                 conjunction: create_conflict_explanation(
-                    tasks,
                     &mut theta_lambda_tree,
                     context,
                     elements_in_theta,
+                    lct_j,
                 ),
                 inference_code,
             }));
@@ -260,6 +331,8 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                             &mut theta_lambda_tree,
                             context,
                             elements_in_theta,
+                            new_bound,
+                            lct_j,
                         ),
                         inference_code,
                     )?;
