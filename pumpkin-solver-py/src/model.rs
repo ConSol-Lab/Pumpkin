@@ -104,6 +104,8 @@ impl Model {
     /// Get an integer variable for the given boolean.
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
+    ///
+    /// A tag should be provided for this link to be identifiable in the proof.
     fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
         let bool_variable = boolean.get_variable();
 
@@ -141,6 +143,9 @@ impl Model {
         }
     }
 
+    /// Reify a predicate as an explicit boolean expression.
+    ///
+    /// A tag should be provided for this link to be identifiable in the proof.
     #[pyo3(signature = (predicate, tag, name=None))]
     fn predicate_as_boolean(
         &mut self,
@@ -436,9 +441,12 @@ impl ModelIntVar {
 struct ModelBoolVar {
     name: Option<String>,
     /// If present, this is the 0-1 integer variable which is 1 if this boolean is `true`, and
-    /// 0 if this boolean is `false`.
+    /// 0 if this boolean is `false`. The `Tag` is the [`ConstraintTag`] which is used in the proof
+    /// log to maintain the consistency.
     integer_equivalent: Option<(IntVariable, Tag)>,
-    /// If present, this boolean is true iff the predicate holds.
+    /// If present, this boolean is true iff the predicate holds. The `Tag` is the
+    /// [`ConstraintTag`] which is used in the proof log to maintain the consistency between
+    /// the boolean and the predicate.
     predicate: Option<(Predicate, Tag)>,
 }
 
