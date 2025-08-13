@@ -1,6 +1,12 @@
 //! Compilation phase that builds a map from flatzinc variables to solver domains.
 
+use std::rc::Rc;
+
 use flatzinc::Annotation;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::Solver;
+use pumpkin_solver::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -18,13 +24,22 @@ pub(crate) fn run(
             SingleVarDecl::Bool { id, annos, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.literal_equivalences.representative(&id);
-                let domain = context.literal_equivalences.domain(&id);
+                let representative = context.equivalences.representative(&id);
+                let domain = context.equivalences.domain(&id);
 
-                let literal = *context
-                    .boolean_variable_map
-                    .entry(representative)
-                    .or_insert_with(|| domain.into_boolean(context.solver, id.to_string()));
+                let domain_id = *context
+                    .variable_map
+                    .entry(Rc::clone(&representative))
+                    .or_insert_with(|| {
+                        create_integer_domain(
+                            context.solver,
+                            &mut context.constant_domain_ids,
+                            representative,
+                            domain,
+                        )
+                    });
+
+                let literal = Literal::new(domain_id);
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
@@ -37,26 +52,19 @@ pub(crate) fn run(
             } => {
                 let id = context.identifiers.get_interned(id);
 
-                let representative = context.integer_equivalences.representative(&id);
-                let domain = context.integer_equivalences.domain(&id);
+                let representative = context.equivalences.representative(&id);
+                let domain = context.equivalences.domain(&id);
 
                 let domain_id = *context
-                    .integer_variable_map
-                    .entry(representative)
+                    .variable_map
+                    .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
-                        if domain.is_constant() {
-                            *context
-                                .constant_domain_ids
-                                .entry(match &domain {
-                                    Domain::IntervalDomain { lb, ub: _ } => *lb,
-                                    Domain::SparseDomain { values } => values[0],
-                                })
-                                .or_insert_with(|| {
-                                    domain.into_variable(context.solver, id.to_string())
-                                })
-                        } else {
-                            domain.into_variable(context.solver, id.to_string())
-                        }
+                        create_integer_domain(
+                            context.solver,
+                            &mut context.constant_domain_ids,
+                            representative,
+                            domain,
+                        )
                     });
 
                 if is_output_variable(annos) {
@@ -67,6 +75,26 @@ pub(crate) fn run(
     }
 
     Ok(())
+}
+
+fn create_integer_domain(
+    solver: &mut Solver,
+    constant_domains: &mut HashMap<i32, DomainId>,
+    identifier: Rc<str>,
+    domain: Domain,
+) -> DomainId {
+    if domain.is_constant() {
+        let value = match &domain {
+            Domain::IntervalDomain { lb, ub: _ } => *lb,
+            Domain::SparseDomain { values } => values[0],
+        };
+
+        *constant_domains
+            .entry(value)
+            .or_insert_with(|| domain.into_variable(solver, value.to_string()))
+    } else {
+        domain.into_variable(solver, identifier.to_string())
+    }
 }
 
 fn is_output_variable(annos: &[Annotation]) -> bool {

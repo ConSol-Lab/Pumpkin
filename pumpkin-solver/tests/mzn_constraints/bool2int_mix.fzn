@@ -1,0 +1,8 @@
+var bool: l :: output_var;
+var {1, 3}: x1 :: output_var;
+var -10..10: x2 :: output_var;
+
+constraint bool2int(l, x1);
+constraint bool2int(l, x2);
+
+solve satisfy;

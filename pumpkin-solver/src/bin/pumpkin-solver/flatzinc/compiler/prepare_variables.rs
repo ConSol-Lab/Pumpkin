@@ -34,9 +34,7 @@ pub(crate) fn run(
                     }
                 };
 
-                context
-                    .literal_equivalences
-                    .create_equivalence_class(id, lb, ub);
+                context.equivalences.create_equivalence_class(id, lb, ub);
             }
 
             SingleVarDecl::IntInRange {
@@ -69,22 +67,18 @@ pub(crate) fn run(
                     }
                 };
 
-                context
-                    .integer_equivalences
-                    .create_equivalence_class(id, lb, ub);
+                context.equivalences.create_equivalence_class(id, lb, ub);
             }
 
             SingleVarDecl::IntInSet { id, set, .. } => {
                 let id = context.identifiers.get_interned(id);
 
-                context
-                    .integer_equivalences
-                    .create_equivalence_class_sparse(
-                        id,
-                        set.iter()
-                            .map(|&value| i32::try_from(value))
-                            .collect::<Result<Vec<i32>, _>>()?,
-                    )
+                context.equivalences.create_equivalence_class_sparse(
+                    id,
+                    set.iter()
+                        .map(|&value| i32::try_from(value))
+                        .collect::<Result<Vec<i32>, _>>()?,
+                )
             }
         }
     }
@@ -115,7 +109,7 @@ mod tests {
 
         run(&ast, &mut context).expect("no errors");
 
-        let domain = context.literal_equivalences.domain("SomeVar");
+        let domain = context.equivalences.domain("SomeVar");
         assert_eq!(Domain::from_lower_bound_and_upper_bound(0, 1), domain);
     }
 
@@ -141,11 +135,11 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(0, 0),
-            context.literal_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(1, 1),
-            context.literal_equivalences.domain("OtherVar")
+            context.equivalences.domain("OtherVar")
         );
     }
 
@@ -165,7 +159,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(0, 0),
-            context.literal_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 
@@ -184,7 +178,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(0, 1),
-            context.literal_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 
@@ -205,7 +199,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(3, 3),
-            context.integer_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 
@@ -227,7 +221,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(3, 3),
-            context.integer_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 

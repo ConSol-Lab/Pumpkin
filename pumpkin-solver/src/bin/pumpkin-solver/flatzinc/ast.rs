@@ -26,6 +26,7 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
 use super::error::FlatZincError;
+#[derive(Debug)]
 pub(crate) enum VariableSelectionStrategy {
     AntiFirstFail,
     DomWDeg,
@@ -98,6 +99,7 @@ impl VariableSelectionStrategy {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum ValueSelectionStrategy {
     InDomain,
     InDomainInterval,
@@ -164,18 +166,24 @@ impl ValueSelectionStrategy {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Search {
     Bool(SearchStrategy),
     Int(SearchStrategy),
     Seq(Vec<Search>),
     Unspecified,
-    WarmStart {
+    WarmStartInt {
+        variables: flatzinc::AnnExpr,
+        values: flatzinc::AnnExpr,
+    },
+    WarmStartBool {
         variables: flatzinc::AnnExpr,
         values: flatzinc::AnnExpr,
     },
     WarmStartArray(Vec<Search>),
 }
 
+#[derive(Debug)]
 pub(crate) struct SearchStrategy {
     pub(crate) variables: flatzinc::AnnExpr,
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
@@ -266,7 +274,11 @@ impl FlatZincAstBuilder {
                 }))
             }
             "set_search" => panic!("Search over sets is currently not supported"),
-            "warm_start" => Some(Search::WarmStart {
+            "warm_start_int" => Some(Search::WarmStartInt {
+                variables: annotation.expressions[0].clone(),
+                values: annotation.expressions[1].clone(),
+            }),
+            "warm_start_bool" => Some(Search::WarmStartBool {
                 variables: annotation.expressions[0].clone(),
                 values: annotation.expressions[1].clone(),
             }),
