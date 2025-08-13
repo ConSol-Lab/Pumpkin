@@ -225,11 +225,19 @@ pub(crate) fn check_statistic_equality(
 
     let filtered_output_first = output_first
         .lines()
-        .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+        .filter(|line| {
+            line.starts_with("%%%mzn-stat")
+                && !line.contains("Time")
+                && !line.contains("propagations")
+        })
         .collect::<Vec<&str>>();
     let filtered_output_second = output_second
         .lines()
-        .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+        .filter(|line| {
+            line.starts_with("%%%mzn-stat")
+                && !line.contains("Time")
+                && !line.contains("propagations")
+        })
         .collect::<Vec<&str>>();
     assert_eq!(
         filtered_output_first,

@@ -37,7 +37,7 @@ impl LinearSearch {
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
 
-        solver.log_statistics_with_objective(best_objective_value as i64);
+        solver.log_statistics_with_objective(Some(&brancher), best_objective_value as i64, true);
         println!("o {best_objective_value}");
         info!(
             "Current objective is {} after {} seconds ({} ms)",
@@ -53,7 +53,11 @@ impl LinearSearch {
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
-                solver.log_statistics_with_objective(best_objective_value as i64);
+                solver.log_statistics_with_objective(
+                    Some(&brancher),
+                    best_objective_value as i64,
+                    true,
+                );
                 return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
                 };
@@ -65,7 +69,11 @@ impl LinearSearch {
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
-                solver.log_statistics_with_objective(best_objective_value as i64);
+                solver.log_statistics_with_objective(
+                    Some(&brancher),
+                    best_objective_value as i64,
+                    true,
+                );
                 return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
                 };
@@ -89,9 +97,11 @@ impl LinearSearch {
                     best_objective_value = new_objective_value;
                     best_solution = satisfiable.solution().into();
 
-                    satisfiable
-                        .solver()
-                        .log_statistics_with_objective(best_objective_value as i64);
+                    satisfiable.solver().log_statistics_with_objective(
+                        Some(satisfiable.brancher()),
+                        best_objective_value as i64,
+                        true,
+                    );
 
                     println!("o {best_objective_value}");
                     info!(
@@ -101,15 +111,23 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                SatisfactionResult::Unsatisfiable(solver, _) => {
-                    solver.log_statistics_with_objective(best_objective_value as i64);
+                SatisfactionResult::Unsatisfiable(solver, brancher) => {
+                    solver.log_statistics_with_objective(
+                        Some(brancher),
+                        best_objective_value as i64,
+                        true,
+                    );
 
                     return MaxSatOptimisationResult::Optimal {
                         solution: best_solution,
                     };
                 }
-                SatisfactionResult::Unknown(solver, _) => {
-                    solver.log_statistics_with_objective(best_objective_value as i64);
+                SatisfactionResult::Unknown(solver, brancher) => {
+                    solver.log_statistics_with_objective(
+                        Some(brancher),
+                        best_objective_value as i64,
+                        true,
+                    );
                     return MaxSatOptimisationResult::Satisfiable { best_solution };
                 }
             }

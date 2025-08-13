@@ -88,3 +88,7 @@ cumulative_synchronised!(
 mzn_test!(all_different);
 mzn_test!(table);
 mzn_test!(table_reif);
+
+mzn_test!(bool2int);
+mzn_test!(bool2int_set);
+mzn_test!(bool2int_mix);

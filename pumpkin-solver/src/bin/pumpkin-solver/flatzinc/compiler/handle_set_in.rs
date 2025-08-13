@@ -24,7 +24,7 @@ pub(crate) fn run(
             _ => unreachable!("This constraint makes no sense with a constant."),
         };
 
-        let mut domain = context.integer_equivalences.get_mut_domain(&id);
+        let mut domain = context.equivalences.get_mut_domain(&id);
 
         // We take the intersection between the two domains
         let new_domain = domain.merge(&set.into());

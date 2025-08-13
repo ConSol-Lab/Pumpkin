@@ -23,6 +23,18 @@ pub(crate) struct CompilationContext<'a> {
     /// Identifiers of variables that are outputs.
     pub(crate) outputs: Vec<Output>,
 
+    /// The equivalence classes for variables.
+    ///
+    /// This combines boolean and integer variables.
+    pub(crate) equivalences: VariableEquivalences,
+
+    /// A mapping from model variables to solver domains.
+    ///
+    /// Both boolean and integer variables are represented here. If a variable is a boolean,
+    /// then it should be converted to a [`Literal`] as late as possible (e.g. when the constraint
+    /// is posted or an array is created).
+    pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
+
     /// Literal which is always true
     pub(crate) true_literal: Literal,
     /// Literal which is always false
@@ -38,8 +50,6 @@ pub(crate) struct CompilationContext<'a> {
     /// A mapping from integer model variables to solver literals.
     pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
-    /// domain of the representative of the equivalence class..
-    pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
 }
@@ -53,6 +63,7 @@ impl CompilationContext<'_> {
             solver,
 
             outputs: Default::default(),
+            equivalences: Default::default(),
 
             true_literal,
             false_literal,
@@ -156,11 +167,11 @@ impl CompilationContext<'_> {
 #[derive(Debug, Default)]
 pub(crate) struct VariableEquivalences {
     /// For each variable, the equivalence class it belongs to.
-    classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
+    pub(super) classes: HashMap<Rc<str>, Rc<RefCell<EquivalenceClass>>>,
 }
 
 #[derive(Debug)]
-struct EquivalenceClass {
+pub(super) struct EquivalenceClass {
     /// The variables that are part of the equivalence class. We use a BTreeSet so that we can
     /// consistently get a representative, which will be the first element in the set.
     variables: BTreeSet<Rc<str>>,
@@ -344,29 +355,6 @@ impl Domain {
 
     pub(crate) fn from_lower_bound_and_upper_bound(lb: i32, ub: i32) -> Self {
         Domain::IntervalDomain { lb, ub }
-    }
-
-    pub(crate) fn into_boolean(self, solver: &mut Solver, name: String) -> Literal {
-        match self {
-            Domain::IntervalDomain { lb, ub } => {
-                if lb == ub && lb == 1 {
-                    solver.get_true_literal()
-                } else if lb == ub && lb == 0 {
-                    solver.get_false_literal()
-                } else {
-                    solver.new_named_literal(name)
-                }
-            }
-            Domain::SparseDomain { values } => {
-                if values.len() == 1 && values[0] == 1 {
-                    solver.get_true_literal()
-                } else if values.len() == 1 && values[0] == 0 {
-                    solver.get_false_literal()
-                } else {
-                    solver.new_named_literal(name)
-                }
-            }
-        }
     }
 
     pub(crate) fn into_variable(self, solver: &mut Solver, name: String) -> DomainId {

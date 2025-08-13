@@ -1,0 +1,9 @@
+x = true;
+y = false;
+X_INTRODUCED_0_ = 1;
+----------
+x = true;
+y = true;
+X_INTRODUCED_0_ = 2;
+----------
+==========
