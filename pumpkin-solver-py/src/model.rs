@@ -413,7 +413,12 @@ impl Model {
 
         // Reserve the constraint tags that have been allocated in the model.
         let max_tag = self.new_constraint_tag();
-        while NonZero::from(max_tag.0) > NonZero::from(solver.new_constraint_tag()) {}
+        loop {
+            let next_solver_tag = solver.new_constraint_tag();
+            if NonZero::from(next_solver_tag) >= NonZero::from(max_tag.0) {
+                break;
+            }
+        }
 
         Ok((solver, variable_map))
     }
