@@ -184,6 +184,11 @@ pub(crate) enum SearchAnnotation {
     #[args]
     IntSearch(IntSearchArgs),
     Seq(#[annotation] Vec<SearchAnnotation>),
+    #[args]
+    WarmStartBool(WarmStartBoolArgs),
+    #[args]
+    WarmStartInt(WarmStartIntArgs),
+    WarmStartArray(#[annotation] Vec<SearchAnnotation>),
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]
@@ -214,6 +219,18 @@ pub(crate) struct BoolSearchArgs {
     )]
     #[annotation]
     pub(crate) exploration: Exploration,
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct WarmStartBoolArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
+    pub(crate) values: ArrayExpr<bool>,
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct WarmStartIntArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
+    pub(crate) values: ArrayExpr<i32>,
 }
 
 #[derive(fzn_rs::FlatZincAnnotation)]

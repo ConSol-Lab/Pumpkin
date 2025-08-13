@@ -39,16 +39,10 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) true_literal: Literal,
     /// Literal which is always false
     pub(crate) false_literal: Literal,
-    /// A mapping from boolean model variables to solver literals.
-    pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
-    /// The equivalence classes for literals.
-    pub(crate) literal_equivalences: VariableEquivalences,
     // A literal which is always true, can be used when using bool constants in the solver
     // pub(crate) constant_bool_true: BooleanDomainId,
     // A literal which is always false, can be used when using bool constants in the solver
     // pub(crate) constant_bool_false: BooleanDomainId,
-    /// A mapping from integer model variables to solver literals.
-    pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
@@ -64,13 +58,10 @@ impl CompilationContext<'_> {
 
             outputs: Default::default(),
             equivalences: Default::default(),
+            variable_map: Default::default(),
 
             true_literal,
             false_literal,
-            boolean_variable_map: Default::default(),
-            literal_equivalences: Default::default(),
-            integer_variable_map: Default::default(),
-            integer_equivalences: Default::default(),
             constant_domain_ids: Default::default(),
         }
     }
@@ -81,19 +72,34 @@ impl CompilationContext<'_> {
     ) -> Result<Literal, FlatZincError> {
         match variable {
             VariableExpr::Identifier(ident) => {
-                let representative = self.literal_equivalences.representative(ident)?;
+                let representative = self.equivalences.representative(ident)?;
 
-                self.boolean_variable_map
-                    .get(&representative)
-                    .copied()
-                    .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                        identifier: Rc::clone(ident),
-                        expected_type: "bool var".into(),
-                    })
+                let domain_id =
+                    self.variable_map
+                        .get(&representative)
+                        .copied()
+                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                            identifier: Rc::clone(ident),
+                            expected_type: "bool var".into(),
+                        })?;
+
+                Ok(Literal::new(domain_id))
             }
             VariableExpr::Constant(true) => Ok(self.true_literal),
             VariableExpr::Constant(false) => Ok(self.false_literal),
         }
+    }
+
+    pub(crate) fn resolve_bool_array(
+        &self,
+        instance: &Instance,
+        array: &ArrayExpr<bool>,
+    ) -> Result<Vec<bool>, FlatZincError> {
+        instance
+            .resolve_array(array)
+            .map_err(FlatZincError::UndefinedArray)?
+            .map(|maybe_int| maybe_int.map_err(FlatZincError::from))
+            .collect()
     }
 
     pub(crate) fn resolve_bool_variable_array(
@@ -117,9 +123,9 @@ impl CompilationContext<'_> {
     ) -> Result<DomainId, FlatZincError> {
         match variable {
             VariableExpr::Identifier(ident) => {
-                let representative = self.integer_equivalences.representative(ident)?;
+                let representative = self.equivalences.representative(ident)?;
 
-                self.integer_variable_map
+                self.variable_map
                     .get(&representative)
                     .copied()
                     .ok_or_else(|| FlatZincError::InvalidIdentifier {

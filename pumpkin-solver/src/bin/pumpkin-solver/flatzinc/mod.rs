@@ -119,6 +119,8 @@ pub(crate) fn solve(
         time_limit.map(TimeBudget::starting_now),
     );
 
+    let init_start_time = Instant::now();
+
     let instance = match parse_and_compile(&mut solver, instance, options) {
         Ok(instance) => instance,
         Err(FlatZincError::IncorrectNumberOfArguments {
