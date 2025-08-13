@@ -1,3 +1,4 @@
+use std::num::NonZero;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
@@ -181,7 +182,7 @@ impl Model {
     }
 
     #[pyo3(signature = (timeout=None,proof=None))]
-    fn satisfy(&self, timeout: Option<f32>, proof: Option<PathBuf>) -> SatisfactionResult {
+    fn satisfy(&mut self, timeout: Option<f32>, proof: Option<PathBuf>) -> SatisfactionResult {
         let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
 
         let solver_setup = self.create_solver(proof);
@@ -213,7 +214,7 @@ impl Model {
 
     #[pyo3(signature = (assumptions,timeout=None))]
     fn satisfy_under_assumptions(
-        &self,
+        &mut self,
         assumptions: Vec<Predicate>,
         timeout: Option<f32>,
     ) -> SatisfactionUnderAssumptionsResult {
@@ -274,7 +275,7 @@ impl Model {
 
     #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None, timeout=None))]
     fn optimise(
-        &self,
+        &mut self,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
@@ -387,7 +388,7 @@ impl Model {
     }
 
     fn create_solver(
-        &self,
+        &mut self,
         proof: Option<PathBuf>,
     ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
         let proof_log = proof
@@ -409,6 +410,10 @@ impl Model {
                 self.post_constraints(&mut solver, &variable_map)?;
                 Ok(variable_map)
             })?;
+
+        // Reserve the constraint tags that have been allocated in the model.
+        let max_tag = self.new_constraint_tag();
+        while NonZero::from(max_tag.0) > NonZero::from(solver.new_constraint_tag()) {}
 
         Ok((solver, variable_map))
     }
