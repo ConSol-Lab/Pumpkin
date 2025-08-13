@@ -31,7 +31,7 @@ pub(crate) fn run(
                 };
 
                 context
-                    .literal_equivalences
+                    .equivalences
                     .create_equivalence_class(Rc::clone(name), lb, ub);
             }
 
@@ -54,21 +54,19 @@ pub(crate) fn run(
                 let ub = i32::try_from(ub)?;
 
                 context
-                    .integer_equivalences
+                    .equivalences
                     .create_equivalence_class(Rc::clone(name), lb, ub);
             }
 
             ast::Domain::Int(set) => {
                 assert!(!set.is_continuous());
 
-                context
-                    .integer_equivalences
-                    .create_equivalence_class_sparse(
-                        Rc::clone(name),
-                        set.into_iter()
-                            .map(i32::try_from)
-                            .collect::<Result<Vec<i32>, _>>()?,
-                    )
+                context.equivalences.create_equivalence_class_sparse(
+                    Rc::clone(name),
+                    set.into_iter()
+                        .map(i32::try_from)
+                        .collect::<Result<Vec<i32>, _>>()?,
+                )
             }
 
             ast::Domain::UnboundedInt => {
@@ -188,7 +186,7 @@ mod tests {
 
         assert_eq!(
             Domain::from_lower_bound_and_upper_bound(3, 3),
-            context.integer_equivalences.domain("SomeVar")
+            context.equivalences.domain("SomeVar")
         );
     }
 

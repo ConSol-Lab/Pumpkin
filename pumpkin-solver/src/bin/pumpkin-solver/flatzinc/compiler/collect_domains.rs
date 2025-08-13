@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use fzn_rs::ast;
+use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -18,13 +19,15 @@ pub(crate) fn run(
     for (name, variable) in &instance.variables {
         match &variable.domain.node {
             ast::Domain::Bool => {
-                let representative = context.literal_equivalences.representative(name)?;
-                let domain = context.literal_equivalences.domain(name);
+                let representative = context.equivalences.representative(name)?;
+                let domain = context.equivalences.domain(name);
 
-                let literal = *context
-                    .boolean_variable_map
+                let domain_id = *context
+                    .variable_map
                     .entry(representative)
-                    .or_insert_with(|| domain.into_boolean(context.solver, name.to_string()));
+                    .or_insert_with(|| domain.into_variable(context.solver, name.to_string()));
+
+                let literal = Literal::new(domain_id);
 
                 if is_output_variable(variable) {
                     context.outputs.push(Output::bool(Rc::clone(name), literal));
@@ -32,8 +35,8 @@ pub(crate) fn run(
             }
 
             ast::Domain::Int(_) => {
-                let representative = context.integer_equivalences.representative(name)?;
-                let domain = context.integer_equivalences.domain(name);
+                let representative = context.equivalences.representative(name)?;
+                let domain = context.equivalences.domain(name);
 
                 let domain_id = *context
                     .variable_map

@@ -9,6 +9,7 @@ use log::warn;
 use crate::flatzinc::ast::Instance;
 use crate::flatzinc::compiler::context::CompilationContext;
 use crate::flatzinc::constraints::Binary;
+use crate::flatzinc::constraints::BoolToIntArgs;
 use crate::flatzinc::constraints::Constraints;
 use crate::flatzinc::FlatZincError;
 use crate::FlatZincOptions;
@@ -20,7 +21,7 @@ pub(crate) fn run(
     options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     handle_variable_equality_expressions(typed_ast, context, options)?;
-    remove_int_eq_constraints(typed_ast, context, options)?;
+    remove_equality_constraints(typed_ast, context, options)?;
 
     Ok(())
 }
@@ -58,7 +59,7 @@ fn handle_variable_equality_expressions(
 
         match variable.domain.node {
             ast::Domain::Bool => {
-                if !context.literal_equivalences.is_defined(&other_variable) {
+                if !context.equivalences.is_defined(&other_variable) {
                     return Err(FlatZincError::InvalidIdentifier {
                         identifier: other_variable.as_ref().into(),
                         expected_type: "var bool".into(),
@@ -67,13 +68,11 @@ fn handle_variable_equality_expressions(
 
                 panic_if_logging_proof(options);
 
-                context
-                    .literal_equivalences
-                    .merge(other_variable, Rc::clone(name));
+                context.equivalences.merge(other_variable, Rc::clone(name));
             }
 
             ast::Domain::Int(_) => {
-                if !context.integer_equivalences.is_defined(&other_variable) {
+                if !context.equivalences.is_defined(&other_variable) {
                     return Err(FlatZincError::InvalidIdentifier {
                         identifier: other_variable.as_ref().into(),
                         expected_type: "var bool".into(),
@@ -82,9 +81,7 @@ fn handle_variable_equality_expressions(
 
                 panic_if_logging_proof(options);
 
-                context
-                    .integer_equivalences
-                    .merge(other_variable, Rc::clone(name));
+                context.equivalences.merge(other_variable, Rc::clone(name));
             }
 
             ast::Domain::UnboundedInt => {
@@ -96,7 +93,7 @@ fn handle_variable_equality_expressions(
     Ok(())
 }
 
-fn remove_int_eq_constraints(
+fn remove_equality_constraints(
     typed_ast: &mut Instance,
     context: &mut CompilationContext,
     options: &FlatZincOptions,
@@ -118,91 +115,61 @@ fn should_keep_constraint<Ann>(
     constraint: &fzn_rs::AnnotatedConstraint<Constraints, Ann>,
     context: &mut CompilationContext,
 ) -> bool {
-    let Constraints::IntEq(Binary(lhs, rhs)) = &constraint.constraint.node else {
-        return true;
-    };
+    let (v1, v2) = match &constraint.constraint.node {
+        Constraints::IntEq(Binary(lhs, rhs)) => {
+            let v1 = match lhs {
+                VariableExpr::Identifier(id) => Rc::clone(id),
+                VariableExpr::Constant(_) => {
+                    // I don't expect this to be called, but I am not sure. To make it obvious when
+                    // it does happen, the warning is logged.
+                    warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
+                    return true;
+                }
+            };
 
-    let v1 = match lhs {
-        VariableExpr::Identifier(id) => Rc::clone(id),
-        VariableExpr::Constant(_) => {
-            // I don't expect this to be called, but I am not sure. To make it obvious when it does
-            // happen, the warning is logged.
-            warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
-            return true;
+            let v2 = match rhs {
+                VariableExpr::Identifier(id) => Rc::clone(id),
+                VariableExpr::Constant(_) => {
+                    // I don't expect this to be called, but I am not sure. To make it obvious when
+                    // it does happen, the warning is logged.
+                    warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
+                    return true;
+                }
+            };
+
+            (v1, v2)
         }
-    };
 
-    let v2 = match rhs {
-        VariableExpr::Identifier(id) => Rc::clone(id),
-        VariableExpr::Constant(_) => {
-            // I don't expect this to be called, but I am not sure. To make it obvious when it does
-            // happen, the warning is logged.
-            warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
-            return true;
+        Constraints::BoolToInt(BoolToIntArgs { boolean, integer }) => {
+            let v1 = match boolean {
+                VariableExpr::Identifier(id) => Rc::clone(id),
+                VariableExpr::Constant(_) => {
+                    // I don't expect this to be called, but I am not sure. To make it obvious when
+                    // it does happen, the warning is logged.
+                    warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
+                    return true;
+                }
+            };
+
+            let v2 = match integer {
+                VariableExpr::Identifier(id) => Rc::clone(id),
+                VariableExpr::Constant(_) => {
+                    // I don't expect this to be called, but I am not sure. To make it obvious when
+                    // it does happen, the warning is logged.
+                    warn!("'int_eq' with constant argument, ignoring it for merging equivalences");
+                    return true;
+                }
+            };
+
+            (v1, v2)
         }
+
+        _ => return true,
     };
 
-    equivalences.merge(v1, v2);
+    context.equivalences.merge(v1, v2);
 
     false
-}
-
-fn should_keep_bool2int_constraint(
-    constraint: &ConstraintItem,
-    identifiers: &mut Identifiers,
-    equivalences: &mut VariableEquivalences,
-) -> bool {
-    let v1 = match &constraint.exprs[0] {
-        flatzinc::Expr::VarParIdentifier(id) => identifiers.get_interned(id),
-        flatzinc::Expr::Bool(_) => {
-            // I don't expect this to be called, but I am not sure. To make it obvious when it does
-            // happen, the warning is logged.
-            warn!("'bool2int' with constant argument, ignoring it for merging equivalences");
-            return true;
-        }
-        flatzinc::Expr::Float(_)
-        | flatzinc::Expr::Int(_)
-        | flatzinc::Expr::Set(_)
-        | flatzinc::Expr::ArrayOfBool(_)
-        | flatzinc::Expr::ArrayOfInt(_)
-        | flatzinc::Expr::ArrayOfFloat(_)
-        | flatzinc::Expr::ArrayOfSet(_) => unreachable!(),
-    };
-
-    let v2 = match &constraint.exprs[1] {
-        flatzinc::Expr::VarParIdentifier(id) => identifiers.get_interned(id),
-        flatzinc::Expr::Bool(_) => {
-            // I don't expect this to be called, but I am not sure. To make it obvious when it does
-            // happen, the warning is logged.
-            warn!("'bool2int' with constant argument, ignoring it for merging equivalences");
-            return true;
-        }
-        flatzinc::Expr::Float(_)
-        | flatzinc::Expr::Int(_)
-        | flatzinc::Expr::Set(_)
-        | flatzinc::Expr::ArrayOfBool(_)
-        | flatzinc::Expr::ArrayOfInt(_)
-        | flatzinc::Expr::ArrayOfFloat(_)
-        | flatzinc::Expr::ArrayOfSet(_) => unreachable!(),
-    };
-
-    equivalences.merge(v1, v2);
-
-    false
-}
-
-/// Possibly merges some equivalence classes based on the constraint. Returns `true` if the
-/// constraint needs to be retained, and `false` if it can be removed from the AST.
-fn should_keep_constraint(
-    constraint: &ConstraintItem,
-    equivalences: &mut VariableEquivalences,
-    identifiers: &mut Identifiers,
-) -> bool {
-    match constraint.id.as_str() {
-        "int_eq" => should_keep_int_eq_constraint(constraint, identifiers, equivalences),
-        "bool2int" => should_keep_bool2int_constraint(constraint, identifiers, equivalences),
-        _ => true,
-    }
 }
 
 #[cfg(test)]
@@ -260,8 +227,8 @@ mod tests {
         run(&mut instance, &mut context, &options).expect("step should not fail");
 
         assert_eq!(
-            context.integer_equivalences.representative("x").unwrap(),
-            context.integer_equivalences.representative("y").unwrap(),
+            context.equivalences.representative("x").unwrap(),
+            context.equivalences.representative("y").unwrap(),
         );
 
         assert!(instance.constraints.is_empty());
@@ -314,8 +281,8 @@ mod tests {
         run(&mut instance, &mut context, &options).expect("step should not fail");
 
         assert_ne!(
-            context.integer_equivalences.representative("x").unwrap(),
-            context.integer_equivalences.representative("y").unwrap(),
+            context.equivalences.representative("x").unwrap(),
+            context.equivalences.representative("y").unwrap(),
         );
 
         assert_eq!(instance.constraints.len(), 1);
