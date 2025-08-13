@@ -31,7 +31,8 @@ def test_core_extraction():
     x_ge_3 = Predicate(x, Comparator.GreaterThanOrEqual, 3)
     y_ge_3 = Predicate(y, Comparator.GreaterThanOrEqual, 3)
 
-    model.add_constraint(LessThanOrEquals([x, y], 5))
+    le_tag = model.new_constraint_tag()
+    model.add_constraint(LessThanOrEquals([x, y], 5, le_tag))
 
     result = model.satisfy_under_assumptions([x_ge_3, y_ge_3])
     assert isinstance(

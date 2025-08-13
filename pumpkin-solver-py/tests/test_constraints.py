@@ -22,7 +22,8 @@ def generate_linear():
                 if bool:
                     args = [
                         model.boolean_as_integer(
-                            model.new_boolean_variable(name=f"x[{i}]")
+                            model.new_boolean_variable(name=f"x[{i}]"),
+                            model.new_constraint_tag(),
                         )
                         for i in range(3)
                     ]
@@ -38,11 +39,13 @@ def generate_linear():
 
                 rhs = 1
                 if comp == "==":
-                    cons = constraints.Equals(args, rhs)
+                    cons = constraints.Equals(args, rhs, model.new_constraint_tag())
                 if comp == "!=":
-                    cons = constraints.NotEquals(args, rhs)
+                    cons = constraints.NotEquals(args, rhs, model.new_constraint_tag())
                 if comp == "<=":
-                    cons = constraints.LessThanOrEquals(args, rhs)
+                    cons = constraints.LessThanOrEquals(
+                        args, rhs, model.new_constraint_tag()
+                    )
 
                 yield model, cons, comp, scaled, bool
 
@@ -57,7 +60,8 @@ def generate_operators():
                 if bool:
                     args = [
                         model.boolean_as_integer(
-                            model.new_boolean_variable(name=f"x[{i}]")
+                            model.new_boolean_variable(name=f"x[{i}]"),
+                            model.new_constraint_tag(),
                         )
                         for i in range(3)
                     ]
@@ -74,20 +78,26 @@ def generate_operators():
                 rhs = model.new_integer_variable(-3, 5, name="rhs")
                 if name == "div":
                     denom = model.new_integer_variable(1, 3, name="denom")
-                    cons = constraints.Division(args[0], denom, rhs)
+                    cons = constraints.Division(
+                        args[0], denom, rhs, model.new_constraint_tag()
+                    )
                 if name == "mul":
-                    cons = constraints.Times(*args[:2], rhs)
+                    cons = constraints.Times(*args[:2], rhs, model.new_constraint_tag())
                 if name == "abs":
-                    cons = constraints.Absolute(args[0], rhs)
+                    cons = constraints.Absolute(
+                        args[0], rhs, model.new_constraint_tag()
+                    )
                 if name == "min":
-                    cons = constraints.Minimum(args, rhs)
+                    cons = constraints.Minimum(args, rhs, model.new_constraint_tag())
                 if name == "max":
-                    cons = constraints.Maximum(args, rhs)
+                    cons = constraints.Maximum(args, rhs, model.new_constraint_tag())
                 if name == "element":
                     idx = model.new_integer_variable(
                         -1, 5, name="idx"
                     )  # sneaky, idx can be out of bounds
-                    cons = constraints.Element(idx, args, rhs)
+                    cons = constraints.Element(
+                        idx, args, rhs, model.new_constraint_tag()
+                    )
 
                 yield model, cons, name, scaled, bool
 
@@ -99,7 +109,10 @@ def generate_alldiff():
             model = pumpkin_solver_py.Model()
             if bool:
                 args = [
-                    model.boolean_as_integer(model.new_boolean_variable(name=f"x[{i}]"))
+                    model.boolean_as_integer(
+                        model.new_boolean_variable(name=f"x[{i}]"),
+                        model.new_constraint_tag(),
+                    )
                     for i in range(3)
                 ]
             else:
@@ -111,7 +124,7 @@ def generate_alldiff():
                     a.scaled(-2 * i + 1) for i, a in enumerate(args)
                 ]  # TODO: div by zero when scale = 0, fixed with +1
 
-            cons = constraints.AllDifferent(args)
+            cons = constraints.AllDifferent(args, model.new_constraint_tag())
             yield model, cons, "alldifferent", scaled or bool, bool
 
 
@@ -121,7 +134,7 @@ def generate_table():
 
     table = [[randint(1, 5) for _ in range(3)] for _ in range(3)]
 
-    cons = constraints.Table(variables, table)
+    cons = constraints.Table(variables, table, model.new_constraint_tag())
     yield model, cons, "table", bool, bool
 
 
@@ -131,7 +144,7 @@ def generate_negative_table():
 
     table = [[randint(1, 5) for _ in range(3)] for _ in range(3)]
 
-    cons = constraints.NegativeTable(variables, table)
+    cons = constraints.NegativeTable(variables, table, model.new_constraint_tag())
     yield model, cons, "negative_table", bool, bool
 
 
@@ -142,13 +155,17 @@ def generate_cumulative():
 
     model = pumpkin_solver_py.Model()
     start = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
-    cons = constraints.Cumulative(start, duration, demand, capacity)
+    cons = constraints.Cumulative(
+        start, duration, demand, capacity, model.new_constraint_tag()
+    )
     yield model, cons, "cumulative", False, False
 
     model = pumpkin_solver_py.Model()
     start = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
     start = [a.scaled(-2 * i) for i, a in enumerate(start)]
-    cons = constraints.Cumulative(start, duration, demand, capacity)
+    cons = constraints.Cumulative(
+        start, duration, demand, capacity, model.new_constraint_tag()
+    )
     yield model, cons, "cumulative", True, False
 
 
