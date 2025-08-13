@@ -48,7 +48,7 @@ pub struct Model {
 }
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tag(pub ConstraintTag);
 
 impl StorageKey for Tag {
@@ -391,6 +391,8 @@ impl Model {
         &mut self,
         proof: Option<PathBuf>,
     ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
+        let is_logging_proof = proof.is_some();
+
         let proof_log = proof
             .map(|path| ProofLog::cp(&path, true))
             .transpose()
@@ -411,12 +413,14 @@ impl Model {
                 Ok(variable_map)
             })?;
 
-        // Reserve the constraint tags that have been allocated in the model.
-        let max_tag = self.new_constraint_tag();
-        loop {
-            let next_solver_tag = solver.new_constraint_tag();
-            if NonZero::from(next_solver_tag) >= NonZero::from(max_tag.0) {
-                break;
+        if is_logging_proof {
+            // Reserve the constraint tags that have been allocated in the model.
+            let max_tag = self.new_constraint_tag();
+            loop {
+                let next_solver_tag = solver.new_constraint_tag();
+                if NonZero::from(next_solver_tag) >= NonZero::from(max_tag.0) {
+                    break;
+                }
             }
         }
 
