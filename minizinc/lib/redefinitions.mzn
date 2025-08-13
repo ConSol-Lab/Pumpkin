@@ -36,6 +36,58 @@ predicate bool_xor(var bool: a, var bool: b, var bool: r) = pumpkin_bool_xor_rei
 predicate pumpkin_bool_xor(var bool: a, var bool: b);
 predicate pumpkin_bool_xor_reif(var bool: a, var bool: b, var bool: r);
 
+% Big-M reformulation of reified constraints
+predicate int_lin_le_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) =
+    let {
+        set of int: I = index_set(as),
+        int: Mtrue = sum(i in I)(
+            if as[i] > 0 then as[i] * ub(bs[i])
+            else as[i] * lb(bs[i])
+            endif
+        ) - c,
+        int: Mfalse = c + 1 - sum(i in I)(
+            if as[i] > 0 then as[i] * lb(bs[i])
+            else as[i] * ub(bs[i])
+            endif
+        )
+    } in
+    (if Mtrue > 0 then int_lin_le([-Mtrue] ++ as, [bool2int(not r)] ++ bs, c) else r endif) /\
+    (if Mfalse > 0 then int_lin_le([-Mfalse] ++ [-a | a in as], [bool2int(r)] ++ bs, -c - 1) else not r endif);
+
+predicate int_lin_ne_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) = int_lin_eq_reif(as, bs, c, not r);
+
+predicate int_lin_eq_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) =
+    let {
+        set of int: I = index_set(as),
+        int: Mtrue = sum(i in I)(
+            if as[i] > 0 then as[i] * ub(bs[i])
+            else as[i] * lb(bs[i])
+            endif
+        ) - c,
+        int: Mfalse = c - sum(i in I)(
+            if as[i] > 0 then as[i] * lb(bs[i])
+            else as[i] * ub(bs[i])
+            endif
+        )
+    } in
+    if Mtrue >= 0 /\ Mfalse >= 0
+    then
+      (-Mfalse * bool2int(not r) <= sum(i in I)(as[i] * bs[i]) - c) /\
+      (sum(i in I)(as[i] * bs[i]) - c <= Mtrue * bool2int(not r)) /\
+      (not r -> sum(i in I)(as[i] * bs[i]) != c)
+    else not r
+    endif;
+
+
 % Redefinition taken from chuffed:
 % https://github.com/chuffed/chuffed/blob/7b3cd017f17f7a4091a5b2569dc4f1a18f07c121/chuffed/flatzinc/mznlib/redefinitions.mzn#L89C1-L90C19
 predicate int_mod(var int: x, var int: y, var int: z) =
