@@ -21,8 +21,6 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
-use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
@@ -122,51 +120,21 @@ impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
 /// Techniques in Constraint Programming, 2005, pp. 396–409.
 fn create_conflict_explanation<'a, Var: IntegerVariable>(
     tasks: &'a [DisjunctiveTask<Var>],
-    theta_lambda_tree: &mut ThetaLambdaTree,
+    _theta_lambda_tree: &mut ThetaLambdaTree<Var>,
     context: &'a PropagationContextMut,
+    elements_in_theta: &FixedBitSet,
 ) -> PropositionalConjunction {
-    // First we calculate some data about the set of tasks that caused the overflow
-    let mut est_theta = i32::MAX;
-    let mut lct_theta = i32::MIN;
-    let mut p_theta = 0;
-
-    let reponsible_tasks = theta_lambda_tree
-        .all_responsible_ect()
-        .inspect(|element| {
-            let task = &tasks[element.index()];
-            est_theta = est_theta.min(context.lower_bound(&task.start_time));
-            lct_theta = lct_theta.max(context.upper_bound(&task.start_time) + task.processing_time);
-            p_theta += task.processing_time;
-        })
-        .collect::<Vec<_>>();
-
-    // We check whether we indeed overflow the interval
-    pumpkin_assert_simple!(p_theta > lct_theta - est_theta);
-
-    // Then we calculate the amount by which we can lift the interval; i.e. how much does the
-    // processing time of theta overflow the interval
-    let delta = p_theta - (lct_theta - est_theta) - 1;
-
     let mut explanation = Vec::new();
 
-    // Then for each element in the responsible tasks, we add that they need to be in this interval
-    // together
-    for element in reponsible_tasks.iter() {
-        let task = &tasks[element.index()];
+    for task_index in elements_in_theta.ones() {
+        let task = &tasks[task_index];
 
-        pumpkin_assert_moderate!(
-            context.is_predicate_satisfied(predicate!(task.start_time >= est_theta - delta / 2))
-        );
-        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
-            task.start_time
-                <= lct_theta + (delta as f64 / 2.0).ceil() as i32 - task.processing_time
-        )),);
-
-        explanation.push(predicate!(task.start_time >= est_theta - delta / 2));
         explanation.push(predicate!(
-            task.start_time
-                <= lct_theta + (delta as f64 / 2.0).ceil() as i32 - task.processing_time
-        ))
+            task.start_time >= context.lower_bound(&task.start_time)
+        ));
+        explanation.push(predicate!(
+            task.start_time <= context.upper_bound(&task.start_time)
+        ));
     }
 
     explanation.into()
@@ -182,96 +150,29 @@ fn create_conflict_explanation<'a, Var: IntegerVariable>(
 fn create_propagation_explanation<'a, Var: IntegerVariable>(
     tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
-    new_bound: i32,
-    theta_lambda_tree: &mut ThetaLambdaTree,
+    _theta_lambda_tree: &mut ThetaLambdaTree<Var>,
     context: &'a PropagationContextMut,
+    elements_in_theta: &mut FixedBitSet,
 ) -> PropositionalConjunction {
-    let propagated_task = &tasks[propagated_task_id.index()];
-
-    // First we calculate the required information for the explanations of all tasks in theta
-    let mut earliest_release_time = context.lower_bound(&propagated_task.start_time);
-    let mut p_theta = 0;
-
-    // First we get the tasks which caused the relation to be detected
-    let theta = theta_lambda_tree
-        .all_responsible_ect_bar()
-        .filter(|index| *index != propagated_task_id)
-        .inspect(|theta_element| {
-            let task = &tasks[theta_element.index()];
-            p_theta += task.processing_time;
-            earliest_release_time =
-                earliest_release_time.min(context.lower_bound(&task.start_time));
-        })
-        .collect::<Vec<_>>();
-    pumpkin_assert_simple!(!theta.is_empty());
-
-    // Then we look at the tasks which propagated the bound
-    let mut p_theta_prime = 0;
-    let theta_prime = theta_lambda_tree
-        .all_responsible_ect()
-        .inspect(|theta_prime_element| {
-            let task = &tasks[theta_prime_element.index()];
-            p_theta_prime += task.processing_time;
-        })
-        .collect::<Vec<_>>();
-
-    pumpkin_assert_simple!(!theta.is_empty());
-
     let mut explanation = Vec::new();
 
-    // Now we go over each element in theta prime and explain it using lifted intervals
-    for j in theta_prime.iter() {
-        let task = &tasks[j.index()];
+    for task_index in elements_in_theta.ones() {
+        let task = &tasks[task_index];
 
-        pumpkin_assert_moderate!(context
-            .is_predicate_satisfied(predicate!(task.start_time >= new_bound - p_theta_prime)),);
-        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
-            task.start_time
-                <= earliest_release_time + p_theta + propagated_task.processing_time
-                    - task.processing_time
-                    - 1
-        )),);
-
-        explanation.push(predicate!(task.start_time >= new_bound - p_theta_prime));
         explanation.push(predicate!(
-            task.start_time
-                <= earliest_release_time + p_theta + propagated_task.processing_time
-                    - 1
-                    - task.processing_time
+            task.start_time >= context.lower_bound(&task.start_time)
+        ));
+        explanation.push(predicate!(
+            task.start_time <= context.upper_bound(&task.start_time)
         ));
     }
 
-    // Then we go over element in theta and explain it using lifted intervals
-    for j in theta.iter() {
-        // We skip it if it was already explained in theta prime
-        if theta_prime.contains(j) {
-            continue;
-        }
-        let task = &tasks[j.index()];
-
-        pumpkin_assert_moderate!(
-            context.is_predicate_satisfied(predicate!(task.start_time >= earliest_release_time)),
-        );
-        pumpkin_assert_moderate!(context.is_predicate_satisfied(predicate!(
-            task.start_time
-                <= earliest_release_time + p_theta + propagated_task.processing_time
-                    - task.processing_time
-                    - 1
-        )),);
-
-        explanation.push(predicate!(task.start_time >= earliest_release_time));
-        explanation.push(predicate!(
-            task.start_time
-                <= earliest_release_time + p_theta + propagated_task.processing_time
-                    - 1
-                    - task.processing_time
-        ));
-    }
-
-    // Finally, we add the bound on the propagated task since this is required to entail the
-    // propagation
+    let propagated_task = &tasks[propagated_task_id.index()];
     explanation.push(predicate!(
-        propagated_task.start_time >= earliest_release_time
+        propagated_task.start_time >= context.lower_bound(&propagated_task.start_time)
+    ));
+    explanation.push(predicate!(
+        propagated_task.start_time <= context.upper_bound(&propagated_task.start_time)
     ));
 
     explanation.into()
@@ -310,7 +211,12 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // overflow
         if theta_lambda_tree.ect() > lct_j {
             return Err(Inconsistency::Conflict(PropagatorConflict {
-                conjunction: create_conflict_explanation(tasks, &mut theta_lambda_tree, context),
+                conjunction: create_conflict_explanation(
+                    tasks,
+                    &mut theta_lambda_tree,
+                    context,
+                    elements_in_theta,
+                ),
                 inference_code,
             }));
         }
@@ -345,14 +251,15 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                 if new_bound > context.lower_bound(&tasks[i.index()].start_time) {
                     // Propagate
                     let propagated_variable = &tasks[i.index()].start_time;
+                    let propagated_predicate = predicate!(propagated_variable >= new_bound);
                     context.post(
-                        predicate!(propagated_variable >= new_bound),
+                        propagated_predicate,
                         create_propagation_explanation(
                             tasks,
                             i,
-                            new_bound,
                             &mut theta_lambda_tree,
                             context,
+                            elements_in_theta,
                         ),
                         inference_code,
                     )?;

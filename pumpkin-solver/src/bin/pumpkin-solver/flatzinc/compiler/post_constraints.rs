@@ -263,7 +263,7 @@ fn compile_disjunctive_strict(
     exprs: &[flatzinc::Expr],
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "pumpkin_cumulative");
+    check_parameters!(exprs, 2, "pumpkin_cumulative");
 
     let start_times = context.resolve_integer_variable_array(&exprs[0])?;
     let durations = context.resolve_array_integer_constants(&exprs[1])?;

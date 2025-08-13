@@ -65,7 +65,7 @@ impl Node {
 /// \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
 /// Sciences, vol. 18, no. 2, pp. 159–202, 2008.
 #[derive(Debug)]
-pub(super) struct ThetaLambdaTree {
+pub(super) struct ThetaLambdaTree<Var> {
     pub(super) nodes: Vec<Node>,
     /// Then we keep track of a mapping from the [`LocalId`] to its position in the tree since the
     /// methods take as input tasks with [`LocalId`]s.
@@ -77,15 +77,12 @@ pub(super) struct ThetaLambdaTree {
     /// the index in the tree
     number_of_internal_nodes: usize,
 
-    /// Used to calculate the reason for the ECT
-    indices: Vec<usize>,
+    #[allow(unused, reason = "Testing")]
+    pub(crate) sorted_tasks: Vec<DisjunctiveTask<Var>>,
 }
 
-impl ThetaLambdaTree {
-    pub(super) fn new<Var: IntegerVariable>(
-        tasks: &[DisjunctiveTask<Var>],
-        context: PropagationContext,
-    ) -> Self {
+impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
+    pub(super) fn new(tasks: &[DisjunctiveTask<Var>], context: PropagationContext) -> Self {
         // First we sort the tasks by lower-bound
         let mut sorted_tasks = tasks.to_vec();
         sorted_tasks.sort_by_key(|task| context.lower_bound(&task.start_time));
@@ -115,7 +112,7 @@ impl ThetaLambdaTree {
             mapping,
             reverse_mapping,
             number_of_internal_nodes: number_of_internal_nodes - 1,
-            indices: Default::default(),
+            sorted_tasks,
         }
     }
 
@@ -137,148 +134,6 @@ impl ThetaLambdaTree {
             "Provided index was not a leaf node"
         );
         index - self.number_of_internal_nodes
-    }
-
-    /// Returns all [`LocalId`]s of the tasks responsible for the value of `ect`
-    pub(super) fn all_responsible_ect(&mut self) -> impl Iterator<Item = LocalId> + '_ {
-        self.indices.clear();
-        self.responsible_index_ect_internal(0);
-        self.indices
-            .iter()
-            .copied()
-            .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
-    }
-
-    /// Returns all [`LocalId`]s of the tasks responsible for the value of `ect_bar`
-    pub(super) fn all_responsible_ect_bar(&mut self) -> impl Iterator<Item = LocalId> + '_ {
-        self.indices.clear();
-        self.all_responsible_index_ect_bar_internal(0);
-        self.indices
-            .iter()
-            .copied()
-            .map(|index| self.reverse_mapping[self.get_leaf_node_index(index)])
-    }
-
-    fn all_responsible_index_ect_bar_internal(&mut self, position: usize) {
-        if self.is_leaf(position) {
-            // Assuming that all tasks have non-zero processing time
-            if self.nodes[position] != Node::empty()
-                && self.nodes[position].sum_of_processing_times > 0
-            {
-                // If we have reached a leaf then we add it
-                self.indices.push(position)
-            }
-        } else {
-            let left_child = Self::get_left_child_index(position);
-            let right_child = Self::get_right_child_index(position);
-
-            if self.nodes[right_child] != Node::empty()
-                && self.nodes[position].ect_bar == self.nodes[right_child].ect_bar
-            {
-                self.all_responsible_index_ect_bar_internal(right_child)
-            } else if self.nodes[right_child] != Node::empty()
-                && self.nodes[position].ect_bar
-                    == self.nodes[left_child].ect
-                        + self.nodes[right_child].sum_of_processing_times_bar
-            {
-                self.responsible_index_ect_internal(left_child);
-                self.all_responsible_index_p_internal(right_child)
-            } else if self.nodes[left_child] != Node::empty()
-                && self.nodes[position].ect_bar
-                    == self.nodes[left_child].ect_bar
-                        + self.nodes[right_child].sum_of_processing_times
-            {
-                self.all_responsible_index_ect_bar_internal(left_child);
-                self.get_all_leaf_nodes_rooted_at_index(right_child);
-            }
-        }
-    }
-
-    fn all_responsible_index_p_internal(&mut self, position: usize) {
-        if self.is_leaf(position) {
-            // Assuming that all tasks have non-zero processing time
-            if self.nodes[position] != Node::empty()
-                && self.nodes[position].sum_of_processing_times > 0
-            {
-                // If we have reached a leaf then we add it
-                self.indices.push(position)
-            }
-        } else {
-            let left_child = Self::get_left_child_index(position);
-            let right_child = Self::get_right_child_index(position);
-
-            if self.nodes[left_child] != Node::empty()
-                && self.nodes[position].sum_of_processing_times_bar
-                    == self.nodes[left_child].sum_of_processing_times_bar
-                        + self.nodes[right_child].sum_of_processing_times
-            {
-                self.all_responsible_index_p_internal(left_child)
-            } else if self.nodes[right_child] != Node::empty()
-                && self.nodes[position].sum_of_processing_times_bar
-                    == self.nodes[left_child].sum_of_processing_times
-                        + self.nodes[right_child].sum_of_processing_times_bar
-            {
-                self.all_responsible_index_p_internal(right_child)
-            }
-        }
-    }
-
-    fn responsible_index_ect_internal(&mut self, position: usize) {
-        if self.is_leaf(position) {
-            if self.nodes[position] != Node::empty()
-                && self.nodes[position].sum_of_processing_times > 0
-            {
-                // If we have reached a leaf then we add it
-                self.indices.push(position)
-            }
-        } else {
-            let left_child = Self::get_left_child_index(position);
-            let right_child = Self::get_right_child_index(position);
-
-            // We know that the ECT in the current node is fully due to the right child
-            if self.nodes[right_child] != Node::empty()
-                && self.nodes[position].ect == self.nodes[right_child].ect
-            {
-                self.responsible_index_ect_internal(right_child)
-            } else {
-                // Otherwise, it is due to a combination of the left child and the right child
-                pumpkin_assert_simple!(
-                    self.nodes[left_child] != Node::empty()
-                        && self.nodes[position].ect
-                            == self.nodes[left_child].ect
-                                + self.nodes[right_child].sum_of_processing_times
-                );
-                // We get the leaves reponsible for the left child
-                self.responsible_index_ect_internal(left_child);
-
-                if self.nodes[right_child].sum_of_processing_times != 0 {
-                    // And the leaves of the right side
-                    self.get_all_leaf_nodes_rooted_at_index(right_child);
-                }
-            }
-        }
-    }
-
-    fn get_all_leaf_nodes_rooted_at_index(&mut self, position: usize) {
-        if self.is_leaf(position) {
-            if self.nodes[position] != Node::empty()
-                && self.nodes[position].sum_of_processing_times > 0
-            {
-                self.indices.push(position);
-            }
-        } else {
-            let left_child = Self::get_left_child_index(position);
-            let right_child = Self::get_right_child_index(position);
-
-            if self.nodes[left_child] != Node::empty() && self.nodes[right_child] != Node::empty() {
-                self.get_all_leaf_nodes_rooted_at_index(left_child);
-                self.get_all_leaf_nodes_rooted_at_index(right_child);
-            } else if self.nodes[left_child] != Node::empty() {
-                self.get_all_leaf_nodes_rooted_at_index(left_child)
-            } else if self.nodes[right_child] != Node::empty() {
-                self.get_all_leaf_nodes_rooted_at_index(right_child)
-            }
-        }
     }
 
     /// Returns the [`LocalId`] for the task corresponding with the task in Lambda which was
@@ -352,9 +207,9 @@ impl ThetaLambdaTree {
     }
 
     /// Add the provided task to Lambda
-    pub(super) fn add_to_lambda<Var: IntegerVariable>(
+    pub(super) fn add_to_lambda<OtherVar: IntegerVariable>(
         &mut self,
-        task: &DisjunctiveTask<Var>,
+        task: &DisjunctiveTask<OtherVar>,
         context: PropagationContext,
     ) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
@@ -367,7 +222,7 @@ impl ThetaLambdaTree {
 
     /// Remove the provided task from Lambda (this method assumes that the element is already not a
     /// part of Theta at this point)
-    pub(super) fn remove_from_lambda<Var: IntegerVariable>(&mut self, task: &DisjunctiveTask<Var>) {
+    pub(super) fn remove_from_lambda(&mut self, task: &DisjunctiveTask<Var>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
         pumpkin_assert_simple!(self.nodes[position].sum_of_processing_times == 0);
@@ -376,7 +231,7 @@ impl ThetaLambdaTree {
     }
 
     /// Add the provided task to Theta
-    pub(super) fn add_to_theta<Var: IntegerVariable>(
+    pub(super) fn add_to_theta(
         &mut self,
         task: &DisjunctiveTask<Var>,
         context: PropagationContext,
@@ -390,7 +245,7 @@ impl ThetaLambdaTree {
     }
 
     /// Remove the provided task from Theta
-    pub(super) fn remove_from_theta<Var: IntegerVariable>(&mut self, task: &DisjunctiveTask<Var>) {
+    pub(super) fn remove_from_theta<OtherVar>(&mut self, task: &DisjunctiveTask<OtherVar>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
         self.nodes[position] = Node::empty();
