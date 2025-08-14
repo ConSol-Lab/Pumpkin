@@ -31,7 +31,7 @@ workspace = true
 
 [features]
 default = ["gzipped-proofs"]
-debug-checks = []
+debug-checks = ["pumpkin-core/debug-checks"]
 gzipped-proofs = ["pumpkin-core/gzipped-proofs"]
 
 [build-dependencies]
