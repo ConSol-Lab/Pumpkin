@@ -1,8 +1,6 @@
 use std::cmp::min;
 use std::cmp::Reverse;
 
-use fixedbitset::FixedBitSet;
-
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
@@ -22,7 +20,6 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
-use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
@@ -54,9 +51,6 @@ pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// to keep track of the right indices).
     sorted_reverse_tasks:
         Vec<DisjunctiveTask<<<Var as IntegerVariable>::AffineView as IntegerVariable>::AffineView>>,
-
-    /// The elements which are currently present in the set Theta used for edge-finding.
-    elements_in_theta: FixedBitSet,
 
     constraint_tag: ConstraintTag,
     inference_code: Option<InferenceCode>,
@@ -100,14 +94,11 @@ impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
             })
             .collect::<Vec<_>>();
 
-        let num_tasks = tasks.len();
-
         Self {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
             reverse_tasks: reverse_tasks.clone().into_boxed_slice(),
             sorted_reverse_tasks: reverse_tasks,
-            elements_in_theta: FixedBitSet::with_capacity(num_tasks),
             constraint_tag,
             inference_code: None,
         }
@@ -115,43 +106,53 @@ impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
 }
 
 /// Creates an explanation consisting of the tasks in the theta-lambda tree which were responsible
-/// for the conflict based on \[1\].
+/// for the conflict based on \[1\] and \[2\].
 ///
 /// # Bibliography
-/// \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
-/// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
-/// Techniques in Constraint Programming, 2005, pp. 396–409.
+/// - \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
+///   Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
+///   Techniques in Constraint Programming, 2005, pp. 396–409.
+/// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
+///   Edge-Finding Propagator’.
 fn create_conflict_explanation<Var: IntegerVariable>(
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
     context: &PropagationContextMut,
-    elements_in_theta: &FixedBitSet,
     lct: i32,
 ) -> PropositionalConjunction {
+    // We get the set of tasks currently in theta
     let theta = theta_lambda_tree.get_theta();
 
-    pumpkin_assert_moderate!(elements_in_theta.ones().count() == theta.len());
     pumpkin_assert_simple!(!theta.is_empty());
 
+    // Recall that we want to find the set omega such that:
+    // `p_omega > lct_omega - est_omega`
+    //
+    // We first assume that theta = omega
     let mut est = context.lower_bound(&theta[0].start_time);
-    let mut p_theta = theta_lambda_tree.sum_of_processing_times();
+    let mut p_omega = theta_lambda_tree.sum_of_processing_times();
 
-    let mut delta = p_theta - (lct - est) - 1;
+    // And we track whether we still satisfy this value
+    let mut delta = p_omega - (lct - est) - 1;
 
     let mut i = 0;
 
     while i < theta.len() - 1 {
+        // If this holds then we have found our set omega
         if delta >= 0 {
             break;
         }
         let task = &theta[i];
 
-        p_theta -= task.processing_time;
+        // Otherwise we remove the task i and continue
+        p_omega -= task.processing_time;
+        // Note the `i + 1` here!
         est = context.lower_bound(&theta[i + 1].start_time);
-        delta = p_theta - (lct - est) - 1;
+        delta = p_omega - (lct - est) - 1;
 
         i += 1;
     }
 
+    // We use an overflow in the explanation to generalise it
     let offset_left = (delta as f64 / 2.0).floor() as i32;
     let offset_right = (delta as f64 / 2.0).ceil() as i32;
 
@@ -168,59 +169,83 @@ fn create_conflict_explanation<Var: IntegerVariable>(
 }
 
 /// Creates an explanation consisting of the tasks in the theta-lambda tree which were responsible
-/// for the propagation of `propagated_task` based on \[1\].
+/// for the propagation of `propagated_task` based on \[1\] and \[2\].
 ///
 /// # Bibliography
-/// \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
-/// Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
-/// Techniques in Constraint Programming, 2005, pp. 396–409.
+/// - \[1\] P. Vilím, ‘Computing explanations for the unary resource constraint’, in International
+///   Conference on Integration of Artificial Intelligence (AI) and Operations Research (OR)
+///   Techniques in Constraint Programming, 2005, pp. 396–409.
+/// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
+///   Edge-Finding Propagator’.
 fn create_propagation_explanation<'a, Var: IntegerVariable>(
     original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
     context: &'a PropagationContextMut,
-    _elements_in_theta: &mut FixedBitSet,
     new_bound: i32,
     lct_j: i32,
 ) -> PropositionalConjunction {
+    // We get the set of tasks currently in theta
     let theta = theta_lambda_tree.get_theta();
 
-    pumpkin_assert_moderate!(_elements_in_theta.ones().count() == theta.len());
     pumpkin_assert_simple!(!theta.is_empty());
 
+    // Recall that i has to be scheduled after a set omega if the following holds:
+    // `min(est_i, est_omega) + p_omega + p_i > lct_omega`
+    //
+    // First we retrieve some information about i
     let propagated_task = &original_tasks[propagated_task_id.index()];
     let est_propagated = context.lower_bound(&propagated_task.start_time);
 
-    let mut p_theta = theta_lambda_tree.sum_of_processing_times();
-    assert_eq!(p_theta, theta.iter().map(|task| task.processing_time).sum());
+    // Then we get some information about omega
+    let mut p_omega = theta_lambda_tree.sum_of_processing_times();
+
+    // Recall that the value for the precedence is only based on the earliest start time (and
+    // lct_omega is fixed at the time of the propagation).
+    //
+    // This means that we can remove tasks while the precedence relation is still implied by omega.
     let mut i = 0;
+    // We keep track of the value of the current set.
     let mut delta = min(est_propagated, context.lower_bound(&theta[i].start_time))
         + propagated_task.processing_time
-        + p_theta;
+        + p_omega;
 
-    // We first find the set of tasks omega such that `min(est_omega, est_j) + p_omega + p_j >
-    // lct_j` (where j is the propagated task)
+    // Thus, we keep increasing i until we know that the precedence relation does not hold.
     while i < theta.len() && delta <= lct_j {
-        p_theta -= theta[i].processing_time;
+        // We remove i from omega and continue
+        p_omega -= theta[i].processing_time;
         i += 1;
         if i == theta.len() {
             break;
         }
+        // Now we update the value of the left-hand side of the equation such that omega is bounded
+        // by i on the lower side
         delta = min(est_propagated, context.lower_bound(&theta[i].start_time))
-            + p_theta
+            + p_omega
             + propagated_task.processing_time;
     }
 
     pumpkin_assert_simple!(i < theta.len());
 
-    // Now we need to find the set theta_prime
+    // Now we want to find the set omega prime which caused the actual bound update to happen.
+    //
+    // We thus search for the set omega_prime such that `theta-lambda-tree.ect() ==
+    // est_{omega_prime} + p_{omega_prime}`.
+    //
+    // Since this is only dependent on the est of omega_prime, we will iterate over the tasks
+    // sorted in non-decreasing est.
+
+    // We start with omega_prime = omega
     let mut j = i;
-    let mut p_theta_prime = p_theta;
+    let mut p_omega_prime = p_omega;
     while j < theta.len() {
-        if theta_lambda_tree.ect() == context.lower_bound(&theta[j].start_time) + p_theta_prime {
+        if theta_lambda_tree.ect() == context.lower_bound(&theta[j].start_time) + p_omega_prime {
+            // If we have found the correct set then we can break
             break;
         }
-        p_theta_prime -= theta[j].processing_time;
+
+        // Otherwise we remove j from omega_prime
+        p_omega_prime -= theta[j].processing_time;
         j += 1;
     }
 
@@ -236,12 +261,13 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
             explanation.push(predicate!(task.start_time >= r));
         } else {
             // Element is part of omega_prime
-            explanation.push(predicate!(task.start_time >= new_bound - p_theta_prime));
+            explanation.push(predicate!(task.start_time >= new_bound - p_omega_prime));
         }
 
+        // We also constrain the upper-bound
         explanation.push(predicate!(
             task.start_time
-                <= r + p_theta + propagated_task.processing_time - 1 - task.processing_time
+                <= r + p_omega + propagated_task.processing_time - 1 - task.processing_time
         ))
     }
     explanation.push(predicate!(propagated_task.start_time >= r));
@@ -255,14 +281,12 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
     context: &mut PropagationContextMut,
     tasks: &[DisjunctiveTask<Var>],
     sorted_tasks: &mut [DisjunctiveTask<SortedTaskVar>],
-    elements_in_theta: &mut FixedBitSet,
     inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // First we create our Theta-Lambda tree and add all of the tasks to Theta (Lambda is empty at
     // this point)
     let mut theta_lambda_tree = ThetaLambdaTree::new(tasks, context.as_readonly());
     for task in tasks.iter() {
-        elements_in_theta.insert(task.id.index());
         theta_lambda_tree.add_to_theta(task, context.as_readonly());
     }
 
@@ -282,12 +306,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // overflow
         if theta_lambda_tree.ect() > lct_j {
             return Err(Inconsistency::Conflict(PropagatorConflict {
-                conjunction: create_conflict_explanation(
-                    &mut theta_lambda_tree,
-                    context,
-                    elements_in_theta,
-                    lct_j,
-                ),
+                conjunction: create_conflict_explanation(&mut theta_lambda_tree, context, lct_j),
                 inference_code,
             }));
         }
@@ -297,7 +316,6 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 
         // To do this, we first remove the task from Theta
         theta_lambda_tree.remove_from_theta(j);
-        elements_in_theta.remove(j.id.index());
         // And then add it to Lambda (i.e. we are checking whether we can find a task i in Lambda
         // such that the element in Theta would cause an overflow)
         theta_lambda_tree.add_to_lambda(j, context.as_readonly());
@@ -330,7 +348,6 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                             i,
                             &mut theta_lambda_tree,
                             context,
-                            elements_in_theta,
                             new_bound,
                             lct_j,
                         ),
@@ -362,7 +379,6 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.tasks,
             &mut self.sorted_tasks,
-            &mut self.elements_in_theta,
             self.inference_code.unwrap(),
         )?;
 
@@ -373,7 +389,6 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.reverse_tasks,
             &mut self.sorted_reverse_tasks,
-            &mut self.elements_in_theta,
             self.inference_code.unwrap(),
         )
     }
@@ -383,12 +398,10 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         let mut sorted_tasks = self.sorted_tasks.clone();
-        let mut elements_in_theta = self.elements_in_theta.clone();
         edge_finding(
             &mut context,
             &self.tasks,
             &mut sorted_tasks,
-            &mut elements_in_theta,
             self.inference_code.unwrap(),
         )?;
 
@@ -397,7 +410,6 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.reverse_tasks,
             &mut sorted_reverse_tasks,
-            &mut elements_in_theta,
             self.inference_code.unwrap(),
         )
     }

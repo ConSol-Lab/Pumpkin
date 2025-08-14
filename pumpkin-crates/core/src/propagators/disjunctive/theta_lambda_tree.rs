@@ -6,6 +6,7 @@ use crate::containers::StorageKey;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
+use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -312,11 +313,27 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
         }
     }
 
+    /// Returns the total sum of processing times of the elements in the set theta.
     pub(crate) fn sum_of_processing_times(&self) -> i32 {
-        self.nodes[0].sum_of_processing_times
+        let result = self.nodes[0].sum_of_processing_times;
+
+        pumpkin_assert_moderate!(
+            self.get_theta()
+                .iter()
+                .map(|task| task.processing_time)
+                .sum::<i32>()
+                == result
+        );
+
+        result
     }
 
+    /// Returns the tasks which are currently in the set theta.
+    ///
+    /// This method returns the tasks in order of earliest start time at the time of creating the
+    /// theta-lambda-tree.
     pub(crate) fn get_theta(&self) -> Vec<DisjunctiveTask<Var>> {
+        // We go over all the leaf nodes
         (self.number_of_internal_nodes..self.nodes.len())
             .filter(|&position| self.nodes[position].sum_of_processing_times != 0)
             .map(|position| self.sorted_tasks[self.get_leaf_node_index(position)].clone())

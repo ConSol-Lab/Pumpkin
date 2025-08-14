@@ -27,7 +27,6 @@ num = "0.4.3"
 enum-map = "2.7.3"
 clap = { version = "4.5.40", optional = true }
 flate2 = { version = "1.1.2", optional = true }
-fixedbitset = "0.5.7"
 
 [features]
 default = ["gzipped-proofs"]
