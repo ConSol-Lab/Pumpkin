@@ -112,6 +112,7 @@ where
             .into_iter()
             .map(|(id, array)| {
                 let array = ast::Array {
+                    domain: array.node.domain,
                     contents: array.node.contents,
                     annotations: map_annotations(&array.node.annotations)?,
                 };

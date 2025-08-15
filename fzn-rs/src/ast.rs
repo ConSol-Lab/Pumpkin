@@ -41,6 +41,8 @@ pub struct Variable<Ann> {
 /// A named array of literals.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Array<Ann> {
+    /// The domain of the elements of the array.
+    pub domain: Node<Domain>,
     /// The elements of the array.
     pub contents: Vec<Node<Literal>>,
     /// The annotations associated with this array.
