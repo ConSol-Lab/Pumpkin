@@ -1,5 +1,5 @@
-from pumpkin_solver_py import Model
-from pumpkin_solver_py.optimisation import Direction, OptimisationResult
+from pumpkin_solver import Model
+from pumpkin_solver.optimisation import Direction, OptimisationResult
 
 
 def test_linear_sat_unsat_minimisation():
