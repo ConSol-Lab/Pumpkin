@@ -229,8 +229,8 @@ where
         .ignore_then(just(Ident("of")))
         .ignore_then(just(Ident("var")).or_not())
         .ignore_then(domain())
-        .ignore_then(just(Colon))
-        .ignore_then(identifier())
+        .then_ignore(just(Colon))
+        .then(identifier())
         .then(annotations())
         .then_ignore(just(Equal))
         .then(
@@ -240,11 +240,12 @@ where
                 .delimited_by(just(OpenBracket), just(CloseBracket)),
         )
         .then_ignore(just(SemiColon))
-        .map_with(|((name, annotations), contents), extra| {
+        .map_with(|(((domain, name), annotations), contents), extra| {
             (
                 name,
                 ast::Node {
                     node: ast::Array {
+                        domain,
                         contents,
                         annotations,
                     },
@@ -842,6 +843,7 @@ mod tests {
                 },
                 arrays: btreemap! {
                     "ys".into() => node(29, 65, ast::Array {
+                        domain: node(45, 48, ast::Domain::UnboundedInt),
                         contents: vec![
                             node(56, 57, ast::Literal::Int(1)),
                             node(59, 60, ast::Literal::Int(3)),
@@ -850,6 +852,7 @@ mod tests {
                         annotations: vec![],
                     }),
                     "vars".into() => node(102, 148, ast::Array {
+                        domain: node(122, 125, ast::Domain::UnboundedInt),
                         contents: vec![
                             node(135, 136, ast::Literal::Int(1)),
                             node(138, 146, ast::Literal::Identifier("some_var".into())),
@@ -965,6 +968,7 @@ mod tests {
                 variables: BTreeMap::default(),
                 arrays: btreemap! {
                     "xs".into() => node(9, 68, ast::Array {
+                        domain: node(29, 34, ast::Domain::Int(ast::RangeList::from(1..=10))),
                         contents: vec![],
                         annotations: vec![
                             node(39, 62, ast::Annotation::Call(ast::AnnotationCall {
