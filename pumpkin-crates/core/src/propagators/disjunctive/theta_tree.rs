@@ -81,7 +81,7 @@ impl ThetaTree {
         ThetaTree { nodes, mapping }
     }
 
-    /// Returns the ECT of Theta
+    /// Returns the earliest completion time of Theta
     pub(super) fn ect(&self) -> i32 {
         pumpkin_assert_simple!(!self.nodes.is_empty());
         self.nodes[0].ect

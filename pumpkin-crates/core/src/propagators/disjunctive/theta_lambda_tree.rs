@@ -17,9 +17,15 @@ use crate::variables::IntegerVariable;
 // ECT and sum of processing times if a single element from the Lambda set can be added
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Node {
+    /// The earliest completion time of the set of tasks represented by this node.
     ect: i32,
+    /// The sum of the processing times of the set of tasks represented by this node.
     sum_of_processing_times: i32,
+    /// The earliest completion time of the set of tasks represented by this node if a single grey
+    /// task can be added to the set of tasks.
     ect_bar: i32,
+    /// The sum of processing times of the set of tasks represented by this node if a single grey
+    /// task can be added to the set of tasks.
     sum_of_processing_times_bar: i32,
 }
 
@@ -116,13 +122,14 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
         }
     }
 
-    /// Returns the ECT of Theta
+    /// Returns the earliest completion time of Theta
     pub(super) fn ect(&self) -> i32 {
         pumpkin_assert_simple!(!self.nodes.is_empty());
         self.nodes[0].ect
     }
 
-    /// Returns the ECT of Theta while allowing 1 element of Lambda to be added
+    /// Returns the earliest completion time of Theta while allowing one element of Lambda to be
+    /// added
     pub(super) fn ect_bar(&self) -> i32 {
         self.nodes[0].ect_bar
     }

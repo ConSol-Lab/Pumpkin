@@ -26,14 +26,17 @@ use crate::variables::TransformableVariable;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
 ///
-/// Currently, this propagator only implements edge-finding as specified in \[1\]. The reasoning of
-/// this approach is based on finding a task i and a subset of tasks for which it holds that if we
-/// were to schedule i at its earliest start time then it would overflow the resource capacity and
-/// thus i should be scheduled after all activities from this set.
+/// Currently, this propagator only implements edge-finding as specified in \[1\] with explanations
+/// based on \[2\]. The reasoning of this approach is based on finding a task i and a subset of
+/// tasks for which it holds that if we were to schedule i at its earliest start time then it would
+/// overflow the resource capacity and thus i should be scheduled after all activities from this
+/// set.
 ///
 /// # Bibliography
-/// \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
-/// Sciences, vol. 18, no. 2, pp. 159–202, 2008.
+/// - \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
+///   Sciences, vol. 18, no. 2, pp. 159–202, 2008.
+/// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
+///   Edge-Finding Propagator’.
 pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,
