@@ -161,6 +161,28 @@ pub(crate) fn run(
                 constraints::equals,
             )?,
 
+            IntLinNeImp(args) => compile_implied_int_lin_predicate(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::not_equals,
+            )?,
+            IntLinLeImp(args) => compile_implied_int_lin_predicate(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::less_than_or_equals,
+            )?,
+            IntLinEqImp(args) => compile_implied_int_lin_predicate(
+                instance,
+                context,
+                args,
+                constraint_tag,
+                constraints::equals,
+            )?,
+
             IntEq(args) => compile_binary_int_predicate(
                 context,
                 args,
@@ -646,6 +668,23 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
 
     let constraint = create_constraint(terms, args.rhs, constraint_tag);
     Ok(constraint.reify(context.solver, reif).is_ok())
+}
+
+fn compile_implied_int_lin_predicate<C: NegatableConstraint>(
+    instance: &Instance,
+    context: &mut CompilationContext,
+    args: &ReifiedLinear,
+    constraint_tag: ConstraintTag,
+    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32, ConstraintTag) -> C,
+) -> Result<bool, FlatZincError> {
+    let vars = context.resolve_integer_variable_array(instance, &args.variables)?;
+    let weights = context.resolve_integer_array(instance, &args.weights)?;
+    let reif = context.resolve_bool_variable(&args.reification)?;
+
+    let terms = weighted_vars(&weights, vars);
+
+    let constraint = create_constraint(terms, args.rhs, constraint_tag);
+    Ok(constraint.implied_by(context.solver, reif).is_ok())
 }
 
 fn compile_binary_int_imp<C: Constraint>(

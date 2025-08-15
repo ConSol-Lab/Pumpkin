@@ -52,6 +52,13 @@ pub(crate) enum Constraints {
     IntLinNeReif(ReifiedLinear),
 
     #[args]
+    IntLinLeImp(ReifiedLinear),
+    #[args]
+    IntLinEqImp(ReifiedLinear),
+    #[args]
+    IntLinNeImp(ReifiedLinear),
+
+    #[args]
     IntEq(Binary),
     #[args]
     IntNe(Binary),
