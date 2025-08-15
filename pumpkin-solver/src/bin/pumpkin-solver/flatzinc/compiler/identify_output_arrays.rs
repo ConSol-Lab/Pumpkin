@@ -4,8 +4,6 @@ use fzn_rs::ast::RangeList;
 use fzn_rs::ast::{self};
 use fzn_rs::FromLiteral;
 use fzn_rs::VariableExpr;
-use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::Literal;
 
 use super::CompilationContext;
 use crate::flatzinc::ast::ArrayAnnotations;
@@ -38,57 +36,42 @@ pub(crate) fn run(
 
         let shape = shape?;
 
-        let output = match determine_output_type(context, array) {
-            OutputType::Int(ints) => Output::array_of_int(Rc::clone(name), shape.clone(), ints),
-            OutputType::Bool(bools) => Output::array_of_bool(Rc::clone(name), shape.clone(), bools),
+        let output = match array.domain.node {
+            ast::Domain::UnboundedInt | ast::Domain::Int(_) => {
+                let variables = array
+                    .contents
+                    .iter()
+                    .map(|node| {
+                        let variable = <VariableExpr<i32> as FromLiteral>::from_literal(node)?;
+
+                        let solver_variable = context.resolve_integer_variable(&variable)?;
+                        Ok(solver_variable)
+                    })
+                    .collect::<Result<Vec<_>, FlatZincError>>()?;
+
+                Output::array_of_int(Rc::clone(name), shape.clone(), variables)
+            }
+
+            ast::Domain::Bool => {
+                let variables = array
+                    .contents
+                    .iter()
+                    .map(|node| {
+                        let variable = <VariableExpr<bool> as FromLiteral>::from_literal(node)?;
+
+                        let solver_variable = context.resolve_bool_variable(&variable)?;
+                        Ok(solver_variable)
+                    })
+                    .collect::<Result<Vec<_>, FlatZincError>>()?;
+
+                Output::array_of_bool(Rc::clone(name), shape.clone(), variables)
+            }
         };
 
         context.outputs.push(output);
     }
 
     Ok(())
-}
-
-enum OutputType {
-    Int(Vec<DomainId>),
-    Bool(Vec<Literal>),
-}
-
-fn determine_output_type(
-    context: &mut CompilationContext,
-    array: &ast::Array<ArrayAnnotations>,
-) -> OutputType {
-    // This is a bit hacky. We do not know easily whether the array is an array of
-    // integers or booleans. So we try to resolve both, and then see which one works.
-    let bool_array = resolve_array(array, |variable| context.resolve_bool_variable(variable));
-    let int_array = resolve_array(array, |variable| context.resolve_integer_variable(variable));
-
-    match (bool_array, int_array) {
-        (Ok(bools), Err(_)) => OutputType::Bool(bools),
-        (Err(_), Ok(ints)) => OutputType::Int(ints),
-
-        (Ok(_), Ok(_)) => unreachable!("Array of identifiers that are both integers and booleans"),
-        (Err(e1), Err(e2)) => unreachable!("Array is neither of boolean or integer variables.\n\tBool error: {e1}\n\tInt error: {e2}"),
-    }
-}
-
-fn resolve_array<Output, T, Ann>(
-    array: &ast::Array<Ann>,
-    mut resolve_single_variable: impl FnMut(&VariableExpr<T>) -> Result<Output, FlatZincError>,
-) -> Result<Vec<Output>, FlatZincError>
-where
-    VariableExpr<T>: FromLiteral,
-{
-    array
-        .contents
-        .iter()
-        .map(|node| {
-            let variable = <VariableExpr<T> as FromLiteral>::from_literal(node)?;
-
-            let solver_variable = resolve_single_variable(&variable)?;
-            Ok(solver_variable)
-        })
-        .collect()
 }
 
 /// Parse an array of ranges, which is the argument to the `output_array` annotation, to a slice of
