@@ -19,6 +19,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Do not build the solution checkers, we don't need them in this workflow
+  NO_CHECKERS: true
+
 jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}

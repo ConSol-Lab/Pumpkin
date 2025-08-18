@@ -10,26 +10,25 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    if std::env::var("CARGO_TARGET_TMPDIR").unwrap_or_default() == "" {
-        // If this is true, we are not building the integration tests. In that case, we do not need
-        // to compile the checkers.
-        return Ok(());
-    }
+    println!("cargo:rerun-if-changed=build.rs");
 
-    compile_c_binary(&["tests/cnf/checkers/drat-trim.c"], "drat-trim")?;
-    compile_c_binary(&["tests/cnf/checkers/precochk.c"], "precochk")?;
-    compile_c_binary(
-        &[
-            "tests/wcnf/checkers/maxsat-checker.cc",
-            "tests/wcnf/checkers/Wcnf.cc",
-        ],
-        "maxsat-checker",
-    )?;
+    if std::env::var("NO_CHECKERS") == Ok("true".to_owned()) {
+        // If this is true, we are building the integration tests. In that case, we need
+        // to compile the checkers.
+
+        compile_c_binary(&["tests/cnf/checkers/drat-trim.c"], "drat-trim")?;
+        compile_c_binary(&["tests/cnf/checkers/precochk.c"], "precochk")?;
+        compile_c_binary(
+            &[
+                "tests/wcnf/checkers/maxsat-checker.cc",
+                "tests/wcnf/checkers/Wcnf.cc",
+            ],
+            "maxsat-checker",
+        )?;
+    }
 
     println!("cargo:rerun-if-changed=tests/cnf/checkers/");
     println!("cargo:rerun-if-changed=tests/wcnf/checkers/");
-
-    println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
 }
