@@ -10,6 +10,12 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    if std::env::var("CARGO_TARGET_TMPDIR").unwrap_or_default() == "" {
+        // If this is true, we are not building the integration tests. In that case, we do not need
+        // to compile the checkers.
+        return Ok(());
+    }
+
     compile_c_binary(&["tests/cnf/checkers/drat-trim.c"], "drat-trim")?;
     compile_c_binary(&["tests/cnf/checkers/precochk.c"], "precochk")?;
     compile_c_binary(
