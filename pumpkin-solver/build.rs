@@ -10,9 +10,10 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo::rerun-if-changed=build.rs");
+    println!("cargo::rerun-if-env-changed=NO_CHECKERS");
 
-    if std::env::var("NO_CHECKERS") == Ok("true".to_owned()) {
+    if std::env::var("NO_CHECKERS") != Ok("true".to_owned()) {
         // If this is true, we are building the integration tests. In that case, we need
         // to compile the checkers.
 
@@ -27,8 +28,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    println!("cargo:rerun-if-changed=tests/cnf/checkers/");
-    println!("cargo:rerun-if-changed=tests/wcnf/checkers/");
+    println!("cargo::rerun-if-changed=tests/cnf/checkers/");
+    println!("cargo::rerun-if-changed=tests/wcnf/checkers/");
 
     Ok(())
 }
