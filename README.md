@@ -15,6 +15,8 @@ Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU
 Our goal is to keep the solver efficient, easy-to-use, and well-documented. The solver is written in pure Rust and follows Rust best practices. As a result, downloading and compiling Pumpkin is straight-forward!
 
 A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
+
+Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
 </p>
 
 <br clear="left"/>
@@ -22,8 +24,8 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 The solver currently supports integer variables and a number of (global) constraints:
 
 - [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/cumulative).
-- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/element.rs).
-- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
+- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/element.rs).
+- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/element.rs): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
@@ -92,6 +94,11 @@ cargo doc --no-deps
 ## Examples
 There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples) which contains examples such as bibd, nqueens, and disjunctive scheduling.
 
+# Publications Using Pumpkin
+- [1] M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, ‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’, in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
+- [2] R. Baauw, M. Flippo, and E. Demirović, ‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
+- [3] K. Sidorov, I. Marijnissen, and E. Demirović, ‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
+
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
 
@@ -113,5 +120,3 @@ The formatting can then be run using:
 ```sh
 cargo +nightly fmt
 ```
-
-
