@@ -29,7 +29,7 @@ The solver currently supports integer variables and a number of (global) constra
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
-<font size=6> 🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)! </font>
+### :3rd_place_medal: Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
 
 # Citing
 Please cite pumpkin using the following citation:
