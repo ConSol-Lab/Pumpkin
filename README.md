@@ -19,7 +19,6 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 </p>
 
 <br clear="left"/>
-🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/) !
 
 The solver currently supports integer variables and a number of (global) constraints:
 
@@ -29,6 +28,8 @@ The solver currently supports integer variables and a number of (global) constra
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
+
+<font size=6> 🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)! </font>
 
 # Citing
 Please cite pumpkin using the following citation:
@@ -95,9 +96,9 @@ cargo doc --no-deps
 There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples) which contains examples such as bibd, nqueens, and disjunctive scheduling.
 
 # Publications Using Pumpkin
-- [1] M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, ‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’, in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
-- [2] R. Baauw, M. Flippo, and E. Demirović, ‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
-- [3] K. Sidorov, I. Marijnissen, and E. Demirović, ‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
+- M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, ‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’, in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
+- R. Baauw, M. Flippo, and E. Demirović, ‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
+- K. Sidorov, I. Marijnissen, and E. Demirović, ‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
 
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
