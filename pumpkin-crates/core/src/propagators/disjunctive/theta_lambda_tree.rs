@@ -83,13 +83,15 @@ pub(super) struct ThetaLambdaTree<Var> {
     /// The number of internal nodes in the tree; used to calculate the leaf node index based on
     /// the index in the tree
     number_of_internal_nodes: usize,
-
+    /// The tasks which are stored in the leaves of the tree.
+    ///
+    /// These tasks are sorted based on non-decreasing start time.
     sorted_tasks: Vec<DisjunctiveTask<Var>>,
 }
 
 impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(super) fn new(tasks: &[DisjunctiveTask<Var>], context: PropagationContext) -> Self {
-        // First we sort the tasks by lower-bound
+        // First we sort the tasks by lower-bound/earliest start time.
         let mut sorted_tasks = tasks.to_vec();
         sorted_tasks.sort_by_key(|task| context.lower_bound(&task.start_time));
 
