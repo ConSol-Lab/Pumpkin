@@ -16,10 +16,10 @@ Our goal is to keep the solver efficient, easy-to-use, and well-documented. The 
 
 A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
 
-Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
 </p>
 
 <br clear="left"/>
+🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
 
 The solver currently supports integer variables and a number of (global) constraints:
 
