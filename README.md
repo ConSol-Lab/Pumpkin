@@ -19,7 +19,7 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 </p>
 
 <br clear="left"/>
-🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
+🥉 Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/) !
 
 The solver currently supports integer variables and a number of (global) constraints:
 
