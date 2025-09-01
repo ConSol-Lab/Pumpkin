@@ -35,14 +35,24 @@ We are actively developing Pumpkin and would be happy to hear from you should yo
 # Citing
 Please cite pumpkin using the following citation:
 ```
-@misc{
-    Pumpkin,
-    title={Pumpkin: A Lazy Clause Generation constraint solver in Rust},
-    url={https://github.com/ConSol-Lab/Pumpkin},
-    author={Demirović, Emir and Flippo, Maarten and Marijnissen, Imko and Sidorov, Konstantin and Smits, Jeff},
-    year={2024},
-    organization={ConSol Lab - Delft University of Technology}
-} 
+@InProceedings{flippo_et_al:LIPIcs.CP.2024.11,
+  author =	{Flippo, Maarten and Sidorov, Konstantin and Marijnissen, Imko and Smits, Jeff and Demirovi\'{c}, Emir},
+  title =	{{A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers}},
+  booktitle =	{30th International Conference on Principles and Practice of Constraint Programming (CP 2024)},
+  pages =	{11:1--11:20},
+  series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
+  ISBN =	{978-3-95977-336-2},
+  ISSN =	{1868-8969},
+  year =	{2024},
+  volume =	{307},
+  editor =	{Shaw, Paul},
+  publisher =	{Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  address =	{Dagstuhl, Germany},
+  URL =		{https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11},
+  URN =		{urn:nbn:de:0030-drops-206969},
+  doi =		{10.4230/LIPIcs.CP.2024.11},
+  annote =	{Keywords: proof logging, formal verification, constraint programming}
+}
 ```
 
 # Usage
