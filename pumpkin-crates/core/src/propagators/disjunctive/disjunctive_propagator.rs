@@ -42,6 +42,9 @@ pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// An additional list of tasks which allows us to sort them (we require [`Disjunctive::tasks`]
     /// to keep track of the right indices).
     sorted_tasks: Vec<DisjunctiveTask<Var>>,
+    /// The theta-lambda tree used to calculate the earliest completion time of a set of tasks.
+    ///
+    /// For an explanation of how it is used, see the documentation and \[1\].
     theta_lambda_tree: ThetaLambdaTree<Var>,
 
     constraint_tag: ConstraintTag,
