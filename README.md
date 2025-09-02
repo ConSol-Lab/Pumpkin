@@ -15,6 +15,7 @@ Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU
 Our goal is to keep the solver efficient, easy-to-use, and well-documented. The solver is written in pure Rust and follows Rust best practices. As a result, downloading and compiling Pumpkin is straight-forward!
 
 A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
+
 </p>
 
 <br clear="left"/>
@@ -29,17 +30,30 @@ The solver currently supports integer variables and a number of (global) constra
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
+### :3rd_place_medal: Pumpkin won the bronze medal in the fixed search track of the [2025 MiniZinc Challenge](https://www.minizinc.org/challenge/2025/results/)!
+
+
 # Citing
-Please cite pumpkin using the following citation:
+Please cite Pumpkin using the following citation:
 ```
-@misc{
-    Pumpkin,
-    title={Pumpkin: A Lazy Clause Generation constraint solver in Rust},
-    url={https://github.com/ConSol-Lab/Pumpkin},
-    author={Demirović, Emir and Flippo, Maarten and Marijnissen, Imko and Sidorov, Konstantin and Smits, Jeff},
-    year={2024},
-    organization={ConSol Lab - Delft University of Technology}
-} 
+@InProceedings{flippo_et_al:LIPIcs.CP.2024.11,
+  author =	{Flippo, Maarten and Sidorov, Konstantin and Marijnissen, Imko and Smits, Jeff and Demirovi\'{c}, Emir},
+  title =	{{A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers}},
+  booktitle =	{30th International Conference on Principles and Practice of Constraint Programming (CP 2024)},
+  pages =	{11:1--11:20},
+  series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
+  ISBN =	{978-3-95977-336-2},
+  ISSN =	{1868-8969},
+  year =	{2024},
+  volume =	{307},
+  editor =	{Shaw, Paul},
+  publisher =	{Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  address =	{Dagstuhl, Germany},
+  URL =		{https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11},
+  URN =		{urn:nbn:de:0030-drops-206969},
+  doi =		{10.4230/LIPIcs.CP.2024.11},
+  annote =	{Keywords: proof logging, formal verification, constraint programming}
+}
 ```
 
 # Usage
@@ -74,7 +88,7 @@ To use it as such a backend, follow the following steps:
 
 - Step 1: Clone the repository and build it using `cargo build --release`.
 - Step 2: Install MiniZinc using the [appropriate executable](https://www.minizinc.org/resources/) or [binary archive](https://www.minizinc.org/downloads/).
-- Step 3: Add the following to the `MZN_SOLVER_PATH` environment variable: `<path_to_pumpkin>/pumpkin-cli/minizinc` (see [this thread](https://askubuntu.com/questions/58814/how-do-i-add-environment-variables) on how to do this using a shell).
+- Step 3: Add the following to the `MZN_SOLVER_PATH` environment variable: `<path_to_pumpkin>/minizinc` (see [this thread](https://askubuntu.com/questions/58814/how-do-i-add-environment-variables) on how to do this using a shell).
 - Step 4: Check whether the installation worked using the command `minizinc --help pumpkin`.
 
 ## Components
@@ -92,6 +106,11 @@ cargo doc --no-deps
 
 ## Examples
 There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples) which contains examples such as bibd, nqueens, and disjunctive scheduling.
+
+# Publications Using Pumpkin
+- M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, ‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’, in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
+- R. Baauw, M. Flippo, and E. Demirović, ‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
+- K. Sidorov, I. Marijnissen, and E. Demirović, ‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
 
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
@@ -114,5 +133,3 @@ The formatting can then be run using:
 ```sh
 cargo +nightly fmt
 ```
-
-
