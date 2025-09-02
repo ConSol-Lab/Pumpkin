@@ -33,6 +33,7 @@ mod boolean;
 mod clause;
 mod constraint_poster;
 mod cumulative;
+mod disjunctive_strict;
 mod element;
 mod table;
 
@@ -42,6 +43,7 @@ pub use boolean::*;
 pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
+pub use disjunctive_strict::*;
 pub use element::*;
 pub use table::*;
 
