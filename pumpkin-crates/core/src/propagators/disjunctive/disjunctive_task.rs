@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::engine::propagation::LocalId;
 
+#[derive(Debug, Clone)]
 pub(crate) struct ArgDisjunctiveTask<Var> {
     pub(crate) start_time: Var,
     pub(crate) processing_time: i32,

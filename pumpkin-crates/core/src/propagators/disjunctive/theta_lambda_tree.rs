@@ -71,7 +71,7 @@ impl Node {
 /// # Bibliography
 /// \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
 /// Sciences, vol. 18, no. 2, pp. 159–202, 2008.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct ThetaLambdaTree<Var> {
     pub(super) nodes: Vec<Node>,
     /// Then we keep track of a mapping from the [`LocalId`] to its position in the tree since the
@@ -90,37 +90,49 @@ pub(super) struct ThetaLambdaTree<Var> {
 }
 
 impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
-    pub(super) fn new(tasks: &[DisjunctiveTask<Var>], context: PropagationContext) -> Self {
-        // First we sort the tasks by lower-bound/earliest start time.
-        let mut sorted_tasks = tasks.to_vec();
-        sorted_tasks.sort_by_key(|task| context.lower_bound(&task.start_time));
-
-        // Then we keep track of a mapping from the [`LocalId`] to its position in the tree and a
-        // reverse mapping
-        let mut mapping = KeyedVec::default();
-        let mut reverse_mapping = KeyedVec::default();
-        for (index, task) in sorted_tasks.iter().enumerate() {
-            while mapping.len() <= task.id.index() {
-                let _ = mapping.push(usize::MAX);
-            }
-            mapping[task.id] = index;
-            let _ = reverse_mapping.push(task.id);
-        }
-
+    /// Initialises the theta-lambda tree.
+    ///
+    /// Note that [`Self::update`] should be called to actually create the tree itself.
+    pub(super) fn new(tasks: &[DisjunctiveTask<Var>]) -> Self {
         // Calculate the number of internal nodes which are required to create the binary tree
         let mut number_of_internal_nodes = 1;
         while number_of_internal_nodes < tasks.len() {
             number_of_internal_nodes <<= 1;
         }
 
-        let nodes = vec![Node::empty(); 2 * number_of_internal_nodes - 1];
-
         ThetaLambdaTree {
-            nodes,
-            mapping,
-            reverse_mapping,
+            nodes: Default::default(),
+            mapping: KeyedVec::default(),
+            reverse_mapping: KeyedVec::default(),
             number_of_internal_nodes: number_of_internal_nodes - 1,
-            sorted_tasks,
+            sorted_tasks: tasks.to_vec(),
+        }
+    }
+
+    /// Update the theta-lambda tree based on the provided `context`.
+    ///
+    /// It resets theta and lambda to be the empty set.
+    pub(super) fn update(&mut self, context: PropagationContext) {
+        // First we sort the tasks by lower-bound/earliest start time.
+        self.sorted_tasks
+            .sort_by_key(|task| context.lower_bound(&task.start_time));
+
+        // Then we keep track of a mapping from the [`LocalId`] to its position in the tree and a
+        // reverse mapping
+        self.mapping.clear();
+        self.reverse_mapping.clear();
+        for (index, task) in self.sorted_tasks.iter().enumerate() {
+            while self.mapping.len() <= task.id.index() {
+                let _ = self.mapping.push(usize::MAX);
+            }
+            self.mapping[task.id] = index;
+            let _ = self.reverse_mapping.push(task.id);
+        }
+
+        // Finally, we reset the entire tree to be empty
+        self.nodes.clear();
+        for _ in 0..=2 * self.number_of_internal_nodes {
+            self.nodes.push(Node::empty())
         }
     }
 
