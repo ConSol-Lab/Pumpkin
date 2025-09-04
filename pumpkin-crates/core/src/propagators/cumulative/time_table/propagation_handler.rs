@@ -21,6 +21,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
@@ -42,14 +43,31 @@ pub(crate) struct CumulativePropagationHandler {
     inference_code: InferenceCode,
 }
 
-fn check_explanation(explanation: &PropositionalConjunction, context: PropagationContext) -> bool {
-    explanation.iter().all(|&predicate| {
-        let integer_predicate = predicate;
-
+fn check_explanation(
+    predicate: Predicate,
+    explanation: &PropositionalConjunction,
+    context: PropagationContext,
+) -> bool {
+    let all_predicates_hold = explanation
+        .iter()
+        .all(|&predicate| context.assignments().is_predicate_satisfied(predicate));
+    if !all_predicates_hold {
+        eprintln!("Not all predicates hold in the explanation for {predicate:?}")
+    }
+    let at_least_one_element_from_current_level = explanation.iter().any(|&predicate| {
         context
             .assignments()
-            .is_predicate_satisfied(integer_predicate)
-    })
+            .get_decision_level_for_predicate(&predicate)
+            .unwrap()
+            == context.assignments().get_decision_level()
+    });
+    if !at_least_one_element_from_current_level {
+        eprintln!(
+            "At least one predicate in the explanation for {predicate:?} should be from the current decision level"
+        )
+    }
+
+    all_predicates_hold && at_least_one_element_from_current_level
 }
 
 impl CumulativePropagationHandler {
@@ -106,17 +124,15 @@ impl CumulativePropagationHandler {
                     None,
                 );
 
+                let predicate = predicate![
+                    propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
+                ];
                 pumpkin_assert_extreme!(check_explanation(
+                    predicate,
                     &full_explanation,
                     context.as_readonly()
                 ));
-                context.post(
-                    predicate![
-                        propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
-                    ],
-                    full_explanation,
-                    self.inference_code,
-                )
+                context.post(predicate, full_explanation, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -171,18 +187,16 @@ impl CumulativePropagationHandler {
                     profiles[profiles.len() - 1],
                     None,
                 );
+                let predicate = predicate![
+                    propagating_task.start_variable
+                        <= profiles[0].start - propagating_task.processing_time
+                ];
                 pumpkin_assert_extreme!(check_explanation(
+                    predicate,
                     &full_explanation,
                     context.as_readonly()
                 ));
-                context.post(
-                    predicate![
-                        propagating_task.start_variable
-                            <= profiles[0].start - propagating_task.processing_time
-                    ],
-                    full_explanation,
-                    self.inference_code,
-                )
+                context.post(predicate, full_explanation, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
@@ -224,15 +238,16 @@ impl CumulativePropagationHandler {
                         profile,
                         None,
                     );
-                pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
+                let predicate = predicate![propagating_task.start_variable >= profile.end + 1];
+                pumpkin_assert_extreme!(check_explanation(
+                    predicate,
+                    &explanation,
+                    context.as_readonly()
+                ));
 
                 let mut reason = (*explanation).clone();
                 reason.add(lower_bound_predicate_propagating_task);
-                context.post(
-                    predicate![propagating_task.start_variable >= profile.end + 1],
-                    reason,
-                    self.inference_code,
-                )
+                context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -275,18 +290,19 @@ impl CumulativePropagationHandler {
                         profile,
                         None,
                     );
-                pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
+                let predicate = predicate![
+                    propagating_task.start_variable
+                        <= profile.start - propagating_task.processing_time
+                ];
+                pumpkin_assert_extreme!(check_explanation(
+                    predicate,
+                    &explanation,
+                    context.as_readonly()
+                ));
 
                 let mut reason = (*explanation).clone();
                 reason.add(upper_bound_predicate_propagating_task);
-                context.post(
-                    predicate![
-                        propagating_task.start_variable
-                            <= profile.start - propagating_task.processing_time
-                    ],
-                    reason,
-                    self.inference_code,
-                )
+                context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
@@ -346,12 +362,13 @@ impl CumulativePropagationHandler {
                     // that `get_stored_profile_explanation_or_init` uses the
                     // explanation type to create the explanations.
                     let explanation = self.get_stored_profile_explanation_or_init(context, profile);
-                    pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                    context.post(
-                        predicate![propagating_task.start_variable != time_point],
-                        (*explanation).clone(),
-                        self.inference_code,
-                    )?;
+                    let predicate = predicate![propagating_task.start_variable != time_point];
+                    pumpkin_assert_extreme!(check_explanation(
+                        predicate,
+                        &explanation,
+                        context.as_readonly()
+                    ));
+                    context.post(predicate, (*explanation).clone(), self.inference_code)?;
                 }
                 CumulativeExplanationType::Pointwise => {
                     // We split into two cases when determining the explanation of the profile
@@ -378,12 +395,13 @@ impl CumulativePropagationHandler {
                         corresponding_profile_explanation_point,
                         profile,
                     );
-                    pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                    context.post(
-                        predicate![propagating_task.start_variable != time_point],
-                        explanation,
-                        self.inference_code,
-                    )?;
+                    let predicate = predicate![propagating_task.start_variable != time_point];
+                    pumpkin_assert_extreme!(check_explanation(
+                        predicate,
+                        &explanation,
+                        context.as_readonly()
+                    ));
+                    context.post(predicate, explanation, self.inference_code)?;
                 }
             }
         }
