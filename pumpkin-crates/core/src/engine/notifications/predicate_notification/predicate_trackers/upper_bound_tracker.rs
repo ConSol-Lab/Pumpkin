@@ -1,6 +1,5 @@
 use super::DomainTracker;
 use super::HasTracker;
-use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
@@ -41,7 +40,6 @@ impl DomainTracker for UpperBoundTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        _predicate_id: Option<PredicateId>,
     ) {
         // We only consider lower-bound and upper-bound updates
         let value = predicate.get_right_hand_side();
