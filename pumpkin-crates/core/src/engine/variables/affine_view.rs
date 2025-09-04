@@ -24,6 +24,7 @@ pub struct AffineView<Inner> {
 
 impl<Inner> AffineView<Inner> {
     pub fn new(inner: Inner, scale: i32, offset: i32) -> Self {
+        assert_ne!(scale, 0, "Multiplication by zero is not invertable");
         AffineView {
             inner,
             scale,

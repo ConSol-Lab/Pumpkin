@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-solver-py"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "pumpkin-solver",
  "pyo3",

@@ -25,6 +25,18 @@ pub(crate) struct CompilationContext<'a> {
     /// Identifiers of variables that are outputs.
     pub(crate) outputs: Vec<Output>,
 
+    /// The equivalence classes for variables.
+    ///
+    /// This combines boolean and integer variables.
+    pub(crate) equivalences: VariableEquivalences,
+
+    /// A mapping from model variables to solver domains.
+    ///
+    /// Both boolean and integer variables are represented here. If a variable is a boolean,
+    /// then it should be converted to a [`Literal`] as late as possible (e.g. when the constraint
+    /// is posted or an array is created).
+    pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
+
     /// Literal which is always true
     pub(crate) true_literal: Literal,
     /// Literal which is always false
@@ -33,25 +45,13 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
-    /// A mapping from boolean model variables to solver literals.
-    pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
     /// A mapping from boolean variable array identifiers to slices of literals.
     pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
-    /// The equivalence classes for literals.
-    pub(crate) literal_equivalences: VariableEquivalences,
-    // A literal which is always true, can be used when using bool constants in the solver
-    // pub(crate) constant_bool_true: BooleanDomainId,
-    // A literal which is always false, can be used when using bool constants in the solver
-    // pub(crate) constant_bool_false: BooleanDomainId,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
     pub(crate) integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
-    /// A mapping from integer model variables to solver literals.
-    pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
-    /// domain of the representative of the equivalence class..
-    pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
     pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
     /// A mapping from integer variable array identifiers to slices of domain ids.
@@ -83,18 +83,16 @@ impl CompilationContext<'_> {
             identifiers: Default::default(),
 
             outputs: Default::default(),
+            equivalences: Default::default(),
 
             true_literal,
             false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
-            boolean_variable_map: Default::default(),
             boolean_variable_arrays: Default::default(),
-            literal_equivalences: Default::default(),
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
-            integer_variable_map: Default::default(),
-            integer_equivalences: Default::default(),
+            variable_map: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
 
@@ -137,14 +135,14 @@ impl CompilationContext<'_> {
         &self,
         identifier: &str,
     ) -> Result<Literal, FlatZincError> {
-        if let Some(literal) = self
-            .boolean_variable_map
-            .get(&self.literal_equivalences.representative(identifier))
+        if let Some(domain_id) = self
+            .variable_map
+            .get(&self.equivalences.representative(identifier))
         {
-            Ok(*literal)
+            Ok(Literal::new(*domain_id))
         } else {
             self.boolean_parameters
-                .get(&self.literal_equivalences.representative(identifier))
+                .get(&self.equivalences.representative(identifier))
                 .map(|value| {
                     if *value {
                         self.solver.get_true_literal()
@@ -362,20 +360,20 @@ impl CompilationContext<'_> {
         &mut self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
-        if !self.integer_equivalences.classes.contains_key(identifier) {
+        if !self.equivalences.classes.contains_key(identifier) {
             return Err(FlatZincError::InvalidIdentifier {
                 identifier: identifier.into(),
                 expected_type: "integer".into(),
             });
         }
         if let Some(domain_id) = self
-            .integer_variable_map
-            .get(&self.integer_equivalences.representative(identifier))
+            .variable_map
+            .get(&self.equivalences.representative(identifier))
         {
             Ok(*domain_id)
         } else {
             self.integer_parameters
-                .get(&self.integer_equivalences.representative(identifier))
+                .get(&self.equivalences.representative(identifier))
                 .map(|value| {
                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
                         self.solver
@@ -685,29 +683,6 @@ impl Domain {
 
     pub(crate) fn from_lower_bound_and_upper_bound(lb: i32, ub: i32) -> Self {
         Domain::IntervalDomain { lb, ub }
-    }
-
-    pub(crate) fn into_boolean(self, solver: &mut Solver, name: String) -> Literal {
-        match self {
-            Domain::IntervalDomain { lb, ub } => {
-                if lb == ub && lb == 1 {
-                    solver.get_true_literal()
-                } else if lb == ub && lb == 0 {
-                    solver.get_false_literal()
-                } else {
-                    solver.new_named_literal(name)
-                }
-            }
-            Domain::SparseDomain { values } => {
-                if values.len() == 1 && values[0] == 1 {
-                    solver.get_true_literal()
-                } else if values.len() == 1 && values[0] == 0 {
-                    solver.get_false_literal()
-                } else {
-                    solver.new_named_literal(name)
-                }
-            }
-        }
     }
 
     pub(crate) fn into_variable(self, solver: &mut Solver, name: String) -> DomainId {
