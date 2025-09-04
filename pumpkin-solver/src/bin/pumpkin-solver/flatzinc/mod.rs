@@ -123,6 +123,34 @@ pub(crate) fn solve(
 
     let instance = match parse_and_compile(&mut solver, instance, options) {
         Ok(instance) => instance,
+        Err(FlatZincError::IntegerTooBig {
+            integer,
+            span_start,
+            span_end,
+        }) => {
+            let instance_path_str = instance_path.as_ref().display().to_string();
+            let source = std::fs::read_to_string(instance_path).unwrap();
+
+            ariadne::Report::build(
+                ariadne::ReportKind::Error,
+                (&instance_path_str, span_start..span_end),
+            )
+            .with_message("Integer value too big")
+            .with_label(
+                ariadne::Label::new((&instance_path_str, span_start..span_end)).with_message(
+                    format!("value {integer} does not fit into our integer representation"),
+                ),
+            )
+            .finish()
+            .print((&instance_path_str, ariadne::Source::from(source)))
+            .unwrap();
+
+            return Err(FlatZincError::IntegerTooBig {
+                integer,
+                span_start,
+                span_end,
+            });
+        }
         Err(FlatZincError::IncorrectNumberOfArguments {
             expected,
             actual,

@@ -1,4 +1,3 @@
-use std::num::TryFromIntError;
 use std::rc::Rc;
 
 use thiserror::Error;
@@ -11,8 +10,12 @@ pub(crate) enum FlatZincError {
     #[error("{0} variables are not supported")]
     UnsupportedVariable(Box<str>),
 
-    #[error("integer too big")]
-    IntegerTooBig(#[from] TryFromIntError),
+    #[error("integer {integer} is too big for our integer representation")]
+    IntegerTooBig {
+        integer: String,
+        span_start: usize,
+        span_end: usize,
+    },
 
     #[error("the identifier '{identifier}' does not resolve to an '{expected_type}'")]
     InvalidIdentifier {

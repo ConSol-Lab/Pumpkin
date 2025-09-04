@@ -348,15 +348,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flatzinc"
-version = "0.3.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cb354e9148694c9d928bdeca0436943cb024e666bda31cf4d1bbbffc7bebf14"
-dependencies = [
- "winnow",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

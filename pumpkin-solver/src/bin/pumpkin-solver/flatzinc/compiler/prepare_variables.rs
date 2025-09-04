@@ -50,8 +50,18 @@ pub(crate) fn run(
                     },
                 };
 
-                let lb = i32::try_from(lb)?;
-                let ub = i32::try_from(ub)?;
+                let domain_span = variable.domain.span;
+
+                let lb = i32::try_from(lb).map_err(|_| FlatZincError::IntegerTooBig {
+                    integer: lb.to_string(),
+                    span_start: domain_span.start,
+                    span_end: domain_span.end,
+                })?;
+                let ub = i32::try_from(ub).map_err(|_| FlatZincError::IntegerTooBig {
+                    integer: ub.to_string(),
+                    span_start: domain_span.start,
+                    span_end: domain_span.end,
+                })?;
 
                 context
                     .equivalences
@@ -64,7 +74,13 @@ pub(crate) fn run(
                 context.equivalences.create_equivalence_class_sparse(
                     Rc::clone(name),
                     set.into_iter()
-                        .map(i32::try_from)
+                        .map(|value| {
+                            i32::try_from(value).map_err(|_| FlatZincError::IntegerTooBig {
+                                integer: value.to_string(),
+                                span_start: variable.domain.span.start,
+                                span_end: variable.domain.span.end,
+                            })
+                        })
                         .collect::<Result<Vec<i32>, _>>()?,
                 )
             }

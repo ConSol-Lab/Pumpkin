@@ -492,6 +492,7 @@ fn main() {
 
         // These errors are printed in the flatzinc code.
         Err(PumpkinError::FlatZinc(FlatZincError::UnexpectedToken { .. }))
+        | Err(PumpkinError::FlatZinc(FlatZincError::IntegerTooBig { .. }))
         | Err(PumpkinError::FlatZinc(FlatZincError::IncorrectNumberOfArguments { .. })) => {
             std::process::exit(1)
         }
