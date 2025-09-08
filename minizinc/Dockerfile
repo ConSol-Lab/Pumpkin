@@ -13,19 +13,19 @@ COPY . /pumpkin-src
 WORKDIR /pumpkin-src
 
 # Compile the solver with optimizations turned on.
-RUN cargo build -p pumpkin-cli --release
+RUN cargo build -p pumpkin-solver --release
 
 # Create the MiniZinc image
-FROM minizinc/mznc2024:latest
+FROM minizinc/mznc2025:latest
 
 # Copy the solver executable 
-COPY --from=builder /pumpkin-src/target/release/pumpkin-cli /pumpkin/pumpkin-cli
+COPY --from=builder /pumpkin-src/target/release/pumpkin-solver /pumpkin/pumpkin-solver
 
 # Copy the MiniZinc library
 COPY --from=builder /pumpkin-src/minizinc/ /pumpkin/
 
 # Change the path to the solver executable to be the correct one.
-RUN sed -i 's/..\/target\/release\/pumpkin-cli/pumpkin-cli/' /pumpkin/pumpkin.msc
+RUN sed -i 's/..\/target\/release\/pumpkin-solver/pumpkin-solver/' /pumpkin/pumpkin.msc
 
 # Add Pumpkin to the MiniZinc search path and set it as the default solver.
 #

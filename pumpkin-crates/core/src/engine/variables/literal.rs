@@ -19,14 +19,10 @@ pub struct Literal {
 }
 
 impl Literal {
-    pub(crate) fn new(domain_id: DomainId) -> Literal {
-        Literal {
-            integer_variable: domain_id.scaled(1),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn test_new(domain_id: DomainId) -> Literal {
+    /// Creates a new literal wrapping the provided [`DomainId`].
+    ///
+    /// Note: the provided `domain_id` should have a domain between 0 and 1.
+    pub fn new(domain_id: DomainId) -> Literal {
         Literal {
             integer_variable: domain_id.scaled(1),
         }

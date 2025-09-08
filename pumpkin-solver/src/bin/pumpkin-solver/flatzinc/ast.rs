@@ -26,6 +26,7 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
 use super::error::FlatZincError;
+#[derive(Debug)]
 pub(crate) enum VariableSelectionStrategy {
     AntiFirstFail,
     DomWDeg,
@@ -98,6 +99,7 @@ impl VariableSelectionStrategy {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum ValueSelectionStrategy {
     InDomain,
     InDomainInterval,
@@ -164,13 +166,24 @@ impl ValueSelectionStrategy {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Search {
     Bool(SearchStrategy),
     Int(SearchStrategy),
     Seq(Vec<Search>),
     Unspecified,
+    WarmStartInt {
+        variables: flatzinc::AnnExpr,
+        values: flatzinc::AnnExpr,
+    },
+    WarmStartBool {
+        variables: flatzinc::AnnExpr,
+        values: flatzinc::AnnExpr,
+    },
+    WarmStartArray(Vec<Search>),
 }
 
+#[derive(Debug)]
 pub(crate) struct SearchStrategy {
     pub(crate) variables: flatzinc::AnnExpr,
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
@@ -228,35 +241,62 @@ impl FlatZincAstBuilder {
 
     pub(crate) fn set_solve_item(&mut self, solve_item: flatzinc::SolveItem) {
         if let Some(annotation) = solve_item.annotations.first() {
-            self.search = Some(FlatZincAstBuilder::find_search(annotation));
+            self.search = FlatZincAstBuilder::find_search(annotation);
         } else {
             self.search = Some(Search::Unspecified)
         }
         let _ = self.solve_item.insert(solve_item);
     }
 
-    fn find_search(annotation: &flatzinc::Annotation) -> Search {
+    fn find_search(annotation: &flatzinc::Annotation) -> Option<Search> {
         match &annotation.id[..] {
-            "bool_search" => Search::Bool(FlatZincAstBuilder::find_direct_search(annotation)),
+            "bool_search" => Some(Search::Bool(FlatZincAstBuilder::find_direct_search(
+                annotation,
+            ))),
             "float_search" => panic!("Search over floats is currently not supported"),
-            "int_search" => Search::Int(FlatZincAstBuilder::find_direct_search(annotation)),
+            "int_search" => Some(Search::Int(FlatZincAstBuilder::find_direct_search(
+                annotation,
+            ))),
             "seq_search" => {
                 pumpkin_assert_eq_simple!(
                     annotation.expressions.len(),
                     1,
                     "Expected a single expression for sequential search"
                 );
-                Search::Seq(match &annotation.expressions[0] {
+                Some(Search::Seq(match &annotation.expressions[0] {
                     flatzinc::AnnExpr::Annotations(annotations) => annotations
                         .iter()
-                        .map(FlatZincAstBuilder::find_search)
+                        .filter_map(FlatZincAstBuilder::find_search)
                         .collect::<Vec<_>>(),
                     other => {
                         panic!("Expected a list of annotations for `seq_search` but was {other:?}")
                     }
-                })
+                }))
             }
             "set_search" => panic!("Search over sets is currently not supported"),
+            "warm_start_int" => Some(Search::WarmStartInt {
+                variables: annotation.expressions[0].clone(),
+                values: annotation.expressions[1].clone(),
+            }),
+            "warm_start_bool" => Some(Search::WarmStartBool {
+                variables: annotation.expressions[0].clone(),
+                values: annotation.expressions[1].clone(),
+            }),
+            "warm_start_array" => {
+                Some(Search::WarmStartArray(match &annotation.expressions[0] {
+                    flatzinc::AnnExpr::Annotations(annotations) => annotations
+                        .iter()
+                        .filter_map(FlatZincAstBuilder::find_search)
+                        .collect::<Vec<_>>(),
+                    other => {
+                        panic!("Expected a list of annotations for `warm_start_array` but was {other:?}")
+                    }
+                }))
+            }
+            "constraint_name" => {
+                warn!("`constraint_name` is currently not supported; ignoring search annotation");
+                None
+            }
             other => panic!("Did not recognise search strategy {other}"),
         }
     }

@@ -55,8 +55,8 @@ where
         // First we will solve the satisfaction problem without constraining the objective.
         let mut best_solution: Solution = match solver.satisfy(brancher, termination) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_) => return OptimisationResult::Unknown,
+            SatisfactionResult::Unsatisfiable(_, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
         };
 
         loop {
@@ -86,7 +86,7 @@ where
                         Some(OptimisationResult::Optimal(best_solution.clone()))
                     }
                     SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
-                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Unknown),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Satisfiable(best_solution.clone())),
                 }
             };
 

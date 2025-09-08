@@ -66,7 +66,6 @@ pub mod options {
     pub use crate::engine::ConflictResolver;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
-    pub use crate::propagators::nogoods::LearnedNogoodSortingStrategy;
     pub use crate::propagators::nogoods::LearningOptions;
     pub use crate::propagators::CumulativeExplanationType;
     pub use crate::propagators::CumulativeOptions;

@@ -1,5 +1,6 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::time::Instant;
@@ -28,6 +29,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
@@ -68,7 +70,6 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
-use crate::statistics::Statistic;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -195,6 +196,8 @@ pub struct SatisfactionSolverOptions {
     pub conflict_resolver: ConflictResolver,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
+    /// The number of MBs which are preallocated by the nogood propagator.
+    pub memory_preallocated: usize,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -206,6 +209,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             conflict_resolver: ConflictResolver::default(),
             learning_options: LearningOptions::default(),
+            memory_preallocated: 1000,
         }
     }
 }
@@ -267,6 +271,10 @@ impl ConstraintSatisfactionSolver {
 
         finalize_proof(context);
     }
+
+    pub(crate) fn is_logging_full_proof(&self) -> bool {
+        self.internal_parameters.proof_log.is_logging_inferences()
+    }
 }
 
 // methods that offer basic functionality
@@ -304,6 +312,9 @@ impl ConstraintSatisfactionSolver {
             .add_integer(dummy_id, "Dummy".to_owned());
 
         let _ = csp_solver.add_propagator(NogoodPropagator::with_options(
+            // 1_000_000 bytes in 1 MB
+            (csp_solver.internal_parameters.memory_preallocated * 1_000_000)
+                / size_of::<PredicateId>(),
             csp_solver.internal_parameters.learning_options,
         ));
 
@@ -340,7 +351,7 @@ impl ConstraintSatisfactionSolver {
 
         self.solver_statistics
             .engine_statistics
-            .time_spent_in_solver += start_time.elapsed().as_millis() as u64;
+            .time_spent_in_solver += start_time.elapsed();
 
         result
     }
@@ -353,11 +364,20 @@ impl ConstraintSatisfactionSolver {
         &mut self.internal_parameters.random_generator
     }
 
-    pub fn log_statistics(&self) {
+    pub fn log_statistics(&self, verbose: bool) {
         // We first check whether the statistics will/should be logged to prevent unnecessarily
         // going through all the propagators
-        if should_log_statistics() {
-            self.solver_statistics.log(StatisticLogger::default());
+        if !should_log_statistics() {
+            return;
+        }
+
+        self.solver_statistics.log(
+            &self.assignments,
+            &self.propagators,
+            StatisticLogger::default(),
+            verbose,
+        );
+        if verbose {
             for (index, propagator) in self.propagators.iter_propagators().enumerate() {
                 propagator.log_statistics(StatisticLogger::new([
                     propagator.name(),
@@ -659,6 +679,11 @@ impl ConstraintSatisfactionSolver {
 
                 let branching_result = self.make_next_decision(brancher);
 
+                self.solver_statistics.engine_statistics.peak_depth = max(
+                    self.solver_statistics.engine_statistics.peak_depth,
+                    self.assignments.get_decision_level() as u64,
+                );
+
                 match branching_result {
                     Err(CSPSolverExecutionFlag::Infeasible) => {
                         // Can happen when the branching decision was an assumption
@@ -814,6 +839,18 @@ impl ConstraintSatisfactionSolver {
                 .average_backtrack_amount
                 .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
 
+            conflict_analysis_context
+                .counters
+                .engine_statistics
+                .sum_of_backjumps +=
+                current_decision_level as u64 - 1 - learned_nogood.backjump_level as u64;
+            if current_decision_level - learned_nogood.backjump_level > 1 {
+                conflict_analysis_context
+                    .counters
+                    .engine_statistics
+                    .num_backjumps += 1;
+            }
+
             self.restart_strategy.notify_conflict(
                 self.lbd_helper.compute_lbd(
                     &learned_nogood.predicates,
@@ -855,11 +892,11 @@ impl ConstraintSatisfactionSolver {
 
             self.solver_statistics
                 .learned_clause_statistics
-                .num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
+                .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
 
             self.solver_statistics
                 .learned_clause_statistics
-                .average_learned_clause_length
+                .average_learned_nogood_length
                 .add_term(learned_nogood.predicates.len() as u64);
 
             self.add_learned_nogood(learned_nogood, inference_code);
@@ -1054,6 +1091,10 @@ impl ConstraintSatisfactionSolver {
             );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
+            self.solver_statistics
+                .engine_statistics
+                .num_propagators_called += 1;
+
             let num_trail_entries_before = self.assignments.num_trail_entries();
 
             let propagation_status = {

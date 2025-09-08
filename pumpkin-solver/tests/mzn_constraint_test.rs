@@ -33,6 +33,7 @@ mzn_test!(int_lin_le);
 mzn_test!(int_lin_le_reif);
 mzn_test!(int_lin_eq);
 mzn_test!(int_lin_eq_reif);
+mzn_test!(binary_int_lin_eq);
 
 mzn_test!(int_eq);
 mzn_test!(int_eq_reif);
@@ -55,6 +56,7 @@ mzn_test!(int_min);
 mzn_test!(int_max);
 
 mzn_test!(set_in);
+mzn_test!(set_in_set);
 mzn_test!(set_in_reif_interval);
 mzn_test!(set_in_reif_sparse);
 
@@ -85,3 +87,7 @@ cumulative_synchronised!(
 mzn_test!(all_different);
 mzn_test!(table);
 mzn_test!(table_reif);
+
+mzn_test!(bool2int);
+mzn_test!(bool2int_set);
+mzn_test!(bool2int_mix);

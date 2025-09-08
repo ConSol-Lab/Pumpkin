@@ -25,7 +25,7 @@ pub(crate) fn run(
                 ),
                 BoolExpr::VarParIdentifier(x) => {
                     if context.is_identifier_parameter(x) {
-                        context.resolve_integer_constant_from_id(x)?
+                        context.resolve_integer_constant_from_identifier(x)?
                     } else {
                         context.resolve_integer_variable_from_identifier(x)?
                     }

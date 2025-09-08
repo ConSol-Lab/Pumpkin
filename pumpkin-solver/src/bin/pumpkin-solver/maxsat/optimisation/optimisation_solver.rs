@@ -54,8 +54,8 @@ impl OptimisationSolver {
 
                     InitialSolveResult::Solution(satisfiable.solution().into())
                 }
-                SatisfactionResult::Unsatisfiable(_) => InitialSolveResult::Unsatisfiable,
-                SatisfactionResult::Unknown(_) => InitialSolveResult::Unknown,
+                SatisfactionResult::Unsatisfiable(_, _) => InitialSolveResult::Unsatisfiable,
+                SatisfactionResult::Unknown(_, _) => InitialSolveResult::Unknown,
             }
         };
 

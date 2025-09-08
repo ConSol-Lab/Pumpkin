@@ -1,16 +1,22 @@
 [package]
 name = "pumpkin-solver-py"
-version = "0.1.0"
+version = "0.2.1"
 description = "The Python interface for the Pumpkin solver library."
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 repository.workspace = true
 
+
 [lib]
-name = "pumpkin_solver_py"
+name = "pumpkin_solver"
 crate-type = ["cdylib"]
+# Don't build cargo documentation for this crate.
+doc = false
 
 [dependencies]
 pyo3 = { version = "0.24.1", features= ["extension-module"] }
 pumpkin-solver = { path = "../pumpkin-solver" }
+
+[build-dependencies]
+pyo3-build-config = "0.25.1"
