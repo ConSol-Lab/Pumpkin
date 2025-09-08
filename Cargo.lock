@@ -614,6 +614,10 @@ dependencies = [
 [[package]]
 name = "pumpkin-checker"
 version = "0.1.0"
+dependencies = [
+ "drcp-format",
+ "fzn-rs",
+]
 
 [[package]]
 name = "pumpkin-core"

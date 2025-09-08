@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+drcp-format = { version = "0.3.0", path = "../drcp-format" }
+fzn-rs = { version = "0.1.0", path = "../fzn-rs", features = ["derive", "fzn"] }
 
 [lints]
 workspace = true
