@@ -26,7 +26,7 @@ pub(crate) fn run(
                         // case here.
                         ast::Literal::Identifier(_) => (0, 1),
 
-                        _ => panic!("expected boolean value, got {node:?}"),
+                        _ => panic!("expected boolean value or identifier, got {node:?}"),
                     },
                 };
 
@@ -44,9 +44,9 @@ pub(crate) fn run(
 
                         // The variable is assigned to another variable, but we don't handle that
                         // case here.
-                        ast::Literal::Identifier(_) => (0, 1),
+                        ast::Literal::Identifier(_) => (*set.lower_bound(), *set.upper_bound()),
 
-                        _ => panic!("expected boolean value, got {node:?}"),
+                        _ => panic!("expected integer value or identifier, got {node:?}"),
                     },
                 };
 
