@@ -62,7 +62,7 @@ pub enum Method<Int> {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("array '{0}' is undefined")]
-pub struct UndefinedArrayError(String);
+pub struct UndefinedArrayError(pub String);
 
 impl<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
     TypedInstance<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
