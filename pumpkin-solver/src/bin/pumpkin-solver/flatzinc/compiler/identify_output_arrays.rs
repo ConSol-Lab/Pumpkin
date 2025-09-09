@@ -24,7 +24,7 @@ pub(crate) fn run(
             ArrayAnnotations::OutputArray(array_expr) => {
                 let shape = instance
                     .resolve_array(array_expr)
-                    .map_err(FlatZincError::UndefinedArray)
+                    .map_err(|err| FlatZincError::UndefinedArray(err.0))
                     .and_then(|iter| iter.collect::<Result<Vec<_>, _>>().map_err(Into::into))
                     .map(parse_array_shape);
 

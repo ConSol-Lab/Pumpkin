@@ -24,7 +24,7 @@ pub(crate) enum FlatZincError {
     },
 
     #[error("use of undefined array '{0}'")]
-    UndefinedArray(Rc<str>),
+    UndefinedArray(String),
 
     #[error("constraint '{0}' is not supported")]
     UnsupportedConstraint(String),

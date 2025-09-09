@@ -97,7 +97,7 @@ impl CompilationContext<'_> {
     ) -> Result<Vec<bool>, FlatZincError> {
         instance
             .resolve_array(array)
-            .map_err(FlatZincError::UndefinedArray)?
+            .map_err(|err| FlatZincError::UndefinedArray(err.0))?
             .map(|maybe_int| maybe_int.map_err(FlatZincError::from))
             .collect()
     }
@@ -109,7 +109,7 @@ impl CompilationContext<'_> {
     ) -> Result<Vec<Literal>, FlatZincError> {
         instance
             .resolve_array(array)
-            .map_err(FlatZincError::UndefinedArray)?
+            .map_err(|err| FlatZincError::UndefinedArray(err.0))?
             .map(|expr_result| {
                 let expr = expr_result?;
                 self.resolve_bool_variable(&expr)
@@ -149,7 +149,7 @@ impl CompilationContext<'_> {
     ) -> Result<Vec<i32>, FlatZincError> {
         instance
             .resolve_array(array)
-            .map_err(FlatZincError::UndefinedArray)?
+            .map_err(|err| FlatZincError::UndefinedArray(err.0))?
             .map(|maybe_int| maybe_int.map_err(FlatZincError::from))
             .collect()
     }
@@ -161,7 +161,7 @@ impl CompilationContext<'_> {
     ) -> Result<Vec<DomainId>, FlatZincError> {
         instance
             .resolve_array(array)
-            .map_err(FlatZincError::UndefinedArray)?
+            .map_err(|err| FlatZincError::UndefinedArray(err.0))?
             .map(|expr_result| {
                 let expr = expr_result?;
                 self.resolve_integer_variable(&expr)
