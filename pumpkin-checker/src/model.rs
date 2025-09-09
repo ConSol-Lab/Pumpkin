@@ -11,6 +11,7 @@ pub enum Constraint {
     Nogood(Nogood),
     LinearLeq(Linear),
     LinearEq(Linear),
+    Cumulative(Cumulative),
 }
 
 pub type Atomic = IntAtomic<Rc<str>, i32>;
@@ -37,6 +38,19 @@ impl AsRef<[Atomic]> for Nogood {
 pub struct Linear {
     pub terms: Vec<(i32, VariableExpr<i32>)>,
     pub bound: i32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Task {
+    pub start_time: VariableExpr<i32>,
+    pub duration: i32,
+    pub resource_usage: i32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Cumulative {
+    pub tasks: Vec<Task>,
+    pub capacity: i32,
 }
 
 #[derive(Clone, Debug)]

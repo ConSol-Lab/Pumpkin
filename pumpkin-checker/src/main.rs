@@ -10,6 +10,7 @@ use clap::Parser;
 use drcp_format::reader::ProofReader;
 use pumpkin_checker::model::Model;
 use pumpkin_checker::model::Objective;
+use pumpkin_checker::model::Task;
 use pumpkin_checker::CheckError;
 use pumpkin_checker::InvalidDeduction;
 
@@ -81,6 +82,13 @@ enum FlatZincConstraints {
         variables: fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>,
         bound: i32,
     },
+    #[name("pumpkin_cumulative")]
+    Cumulative {
+        start_times: fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>,
+        durations: fzn_rs::ArrayExpr<i32>,
+        resource_usages: fzn_rs::ArrayExpr<i32>,
+        capacity: i32,
+    },
 }
 
 type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
@@ -126,9 +134,9 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                 let weights = fzn_model.resolve_array(weights)?;
                 let variables = fzn_model.resolve_array(variables)?;
 
-                let mut terms = Vec::with_capacity(weights.len());
+                let mut terms = vec![];
 
-                for (weight, variable) in weights.into_iter().zip(variables.into_iter()) {
+                for (weight, variable) in weights.zip(variables) {
                     let weight = weight?;
                     let variable = variable?;
 
@@ -151,7 +159,7 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
 
                 let mut terms = vec![];
 
-                for (weight, variable) in weights.into_iter().zip(variables.into_iter()) {
+                for (weight, variable) in weights.zip(variables) {
                     let weight = weight?;
                     let variable = variable?;
 
@@ -161,6 +169,40 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                 pumpkin_checker::model::Constraint::LinearEq(pumpkin_checker::model::Linear {
                     terms,
                     bound: *bound,
+                })
+            }
+
+            FlatZincConstraints::Cumulative {
+                start_times,
+                durations,
+                resource_usages,
+                capacity,
+            } => {
+                let start_times = fzn_model.resolve_array(start_times)?;
+                let durations = fzn_model.resolve_array(durations)?;
+                let resource_usages = fzn_model.resolve_array(resource_usages)?;
+
+                let tasks = start_times
+                    .zip(durations)
+                    .zip(resource_usages)
+                    .map(
+                        |((maybe_start_time, maybe_duration), maybe_resource_usage)| {
+                            let start_time = maybe_start_time?;
+                            let duration = maybe_duration?;
+                            let resource_usage = maybe_resource_usage?;
+
+                            Ok(Task {
+                                start_time,
+                                duration,
+                                resource_usage,
+                            })
+                        },
+                    )
+                    .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
+
+                pumpkin_checker::model::Constraint::Cumulative(pumpkin_checker::model::Cumulative {
+                    tasks,
+                    capacity: *capacity,
                 })
             }
         };

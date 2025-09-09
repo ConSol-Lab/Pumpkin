@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::ops::Add;
 use std::rc::Rc;
 
 use crate::model::Atomic;
@@ -57,7 +58,17 @@ impl VariableState {
             }
 
             drcp_format::IntComparison::NotEqual => {
-                todo!()
+                if domain.lower_bound == atomic.value {
+                    domain.tighten_lower_bound(atomic.value + 1);
+                }
+
+                if domain.upper_bound == atomic.value {
+                    domain.tighten_upper_bound(atomic.value - 1);
+                }
+
+                if domain.lower_bound < atomic.value && domain.upper_bound > atomic.value {
+                    let _ = domain.holes.insert(atomic.value);
+                }
             }
         }
 
@@ -146,7 +157,8 @@ impl Domain {
     }
 
     fn is_consistent(&self) -> bool {
-        // TODO: Update with holes
+        // No need to check holes, as the invariant of `Domain` specifies the bounds are as tight
+        // as possible, taking holes into account.
 
         self.lower_bound <= self.upper_bound
     }
@@ -170,21 +182,27 @@ impl PartialEq<i32> for I32Ext {
 
 impl PartialOrd<I32Ext> for I32Ext {
     fn partial_cmp(&self, other: &I32Ext) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for I32Ext {
+    fn cmp(&self, other: &Self) -> Ordering {
         match self {
             I32Ext::I32(v1) => match other {
-                I32Ext::I32(v2) => v1.partial_cmp(v2),
-                I32Ext::NegativeInf => Some(Ordering::Greater),
-                I32Ext::PositiveInf => Some(Ordering::Less),
+                I32Ext::I32(v2) => v1.cmp(v2),
+                I32Ext::NegativeInf => Ordering::Greater,
+                I32Ext::PositiveInf => Ordering::Less,
             },
             I32Ext::NegativeInf => match other {
-                I32Ext::I32(_) => Some(Ordering::Less),
-                I32Ext::PositiveInf => Some(Ordering::Less),
-                I32Ext::NegativeInf => None,
+                I32Ext::I32(_) => Ordering::Less,
+                I32Ext::PositiveInf => Ordering::Less,
+                I32Ext::NegativeInf => Ordering::Equal,
             },
             I32Ext::PositiveInf => match other {
-                I32Ext::I32(_) => Some(Ordering::Greater),
-                I32Ext::NegativeInf => Some(Ordering::Greater),
-                I32Ext::PositiveInf => None,
+                I32Ext::I32(_) => Ordering::Greater,
+                I32Ext::NegativeInf => Ordering::Greater,
+                I32Ext::PositiveInf => Ordering::Greater,
             },
         }
     }
@@ -196,6 +214,18 @@ impl PartialOrd<i32> for I32Ext {
             I32Ext::I32(v1) => v1.partial_cmp(other),
             I32Ext::NegativeInf => Some(Ordering::Less),
             I32Ext::PositiveInf => Some(Ordering::Greater),
+        }
+    }
+}
+
+impl Add<i32> for I32Ext {
+    type Output = I32Ext;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        match self {
+            I32Ext::I32(lhs) => I32Ext::I32(lhs + rhs),
+            I32Ext::NegativeInf => I32Ext::NegativeInf,
+            I32Ext::PositiveInf => I32Ext::PositiveInf,
         }
     }
 }

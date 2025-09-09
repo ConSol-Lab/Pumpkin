@@ -1,5 +1,6 @@
 mod linear;
 mod nogood;
+mod time_table;
 
 use crate::model::Atomic;
 use crate::model::Model;
@@ -78,6 +79,19 @@ pub(crate) fn verify_inference(
             } else {
                 Err(InvalidInference::Unsound)
             }
+        }
+
+        Some("time_table") => {
+            let generated_by = inference
+                .generated_by
+                .ok_or(InvalidInference::MissingConstraint)?;
+
+            time_table::verify_time_table(
+                model,
+                &inference.premises,
+                inference.consequent.clone(),
+                generated_by,
+            )
         }
 
         None => Err(InvalidInference::MissingLabel),

@@ -62,7 +62,7 @@ fn verify_linear_inference(
     }
 
     if let Some(consequent) = consequent.clone() {
-        if !variable_state.apply(consequent.clone()) {
+        if !variable_state.apply(!consequent) {
             return Err(InvalidInference::InconsistentPremises);
         }
     }
@@ -98,5 +98,36 @@ fn verify_linear_inference(
         })
     } else {
         Err(InvalidInference::Unsound)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use drcp_format::IntComparison::*;
+    use fzn_rs::VariableExpr::*;
+
+    use super::*;
+
+    #[test]
+    fn linear_1() {
+        // x1 - x2 <= -7
+        let linear = Linear {
+            terms: vec![(1, Identifier("x1".into())), (-1, Identifier("x2".into()))],
+            bound: -7,
+        };
+
+        let premises = vec![Atomic {
+            name: "x2".into(),
+            comparison: LessEqual,
+            value: 37,
+        }];
+
+        let consequent = Some(Atomic {
+            name: "x1".into(),
+            comparison: LessEqual,
+            value: 30,
+        });
+
+        let _ = verify_linear_inference(&linear, &premises, consequent).expect("valid inference");
     }
 }
