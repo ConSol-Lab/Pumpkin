@@ -60,6 +60,10 @@ pub enum Method<Int> {
     },
 }
 
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("array '{0}' is undefined")]
+pub struct UndefinedArrayError(String);
+
 impl<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
     TypedInstance<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
 {
@@ -67,11 +71,13 @@ impl<Int, TConstraint, VAnnotations, AAnnotations, CAnnotations, SAnnotations>
     pub fn resolve_array<'a, T>(
         &'a self,
         array_expr: &'a ArrayExpr<T>,
-    ) -> Result<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a, Rc<str>>
+    ) -> Result<impl ExactSizeIterator<Item = Result<T, InstanceError>> + 'a, UndefinedArrayError>
     where
         T: FromAnnotationLiteral,
     {
-        array_expr.resolve(&self.arrays)
+        array_expr
+            .resolve(&self.arrays)
+            .map_err(|identifier| UndefinedArrayError(identifier.as_ref().into()))
     }
 }
 
