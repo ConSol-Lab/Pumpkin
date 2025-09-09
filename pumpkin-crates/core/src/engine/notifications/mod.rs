@@ -256,7 +256,8 @@ impl NotificationEngine {
             self.predicate_notifier
                 .on_update(trailed_values, assignments, event, domain);
             // Special case: the nogood propagator is notified about each event.
-            self.notify_nogood_propagator(
+            Self::notify_nogood_propagator(
+                &mut self.predicate_notifier.predicate_id_assignments,
                 event,
                 domain,
                 propagators,
@@ -269,11 +270,11 @@ impl NotificationEngine {
             for propagator_var in self
                 .watch_list_domain_events
                 .get_affected_propagators(event, domain)
-                .to_vec()
             {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
-                self.notify_propagator(
+                Self::notify_propagator(
+                    &mut self.predicate_notifier.predicate_id_assignments,
                     propagator_id,
                     local_id,
                     event,
@@ -345,7 +346,7 @@ impl NotificationEngine {
     }
 
     fn notify_nogood_propagator(
-        &mut self,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         event: DomainEvent,
         domain: DomainId,
         propagators: &mut PropagatorStore,
@@ -362,7 +363,8 @@ impl NotificationEngine {
         // For this reason, its local id matches the domain id.
         // This is special only for the nogood propagator.
         let local_id = LocalId::from(domain.id());
-        self.notify_propagator(
+        Self::notify_propagator(
+            predicate_id_assignments,
             nogood_propagator_id,
             local_id,
             event,
@@ -375,7 +377,7 @@ impl NotificationEngine {
 
     #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     fn notify_propagator(
-        &mut self,
+        predicate_id_assignments: &mut PredicateIdAssignments,
         propagator_id: PropagatorId,
         local_id: LocalId,
         event: DomainEvent,
@@ -387,7 +389,7 @@ impl NotificationEngine {
         let context = PropagationContextWithTrailedValues::new(
             trailed_values,
             assignments,
-            self.predicate_id_assignments(),
+            predicate_id_assignments,
         );
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
