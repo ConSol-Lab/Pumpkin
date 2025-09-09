@@ -111,7 +111,21 @@ impl Model {
                     *dom.lower_bound() >= atomic.value as i64
                         && *dom.upper_bound() <= atomic.value as i64
                 }
-                drcp_format::IntComparison::NotEqual => todo!(),
+                drcp_format::IntComparison::NotEqual => {
+                    if *dom.lower_bound() >= atomic.value as i64 {
+                        return true;
+                    }
+
+                    if *dom.upper_bound() <= atomic.value as i64 {
+                        return true;
+                    }
+
+                    if dom.is_continuous() {
+                        return false;
+                    }
+
+                    dom.into_iter().all(|value| value != atomic.value as i64)
+                }
             },
             Domain::Bool => todo!("boolean variables are not yet supported"),
         }
