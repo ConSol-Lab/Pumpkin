@@ -1,10 +1,13 @@
 use drcp_format::ConstraintId;
 
-use crate::{
-    inferences::{Fact, InvalidInference},
-    model::{Atomic, Constraint, Linear, Model},
-    state::{I32Ext, VariableState},
-};
+use crate::inferences::Fact;
+use crate::inferences::InvalidInference;
+use crate::model::Atomic;
+use crate::model::Constraint;
+use crate::model::Linear;
+use crate::model::Model;
+use crate::state::I32Ext;
+use crate::state::VariableState;
 
 pub(super) fn verify_linear_bounds(
     model: &Model,

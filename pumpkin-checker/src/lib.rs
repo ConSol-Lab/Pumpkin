@@ -1,6 +1,10 @@
-use std::{collections::BTreeMap, io::BufRead, rc::Rc};
+use std::collections::BTreeMap;
+use std::io::BufRead;
+use std::rc::Rc;
 
-use drcp_format::{reader::ProofReader, ConstraintId, IntAtomic};
+use drcp_format::reader::ProofReader;
+use drcp_format::ConstraintId;
+use drcp_format::IntAtomic;
 
 mod inferences;
 mod state;
@@ -9,7 +13,8 @@ pub mod model;
 
 use model::*;
 
-use crate::{inferences::Fact, state::VariableState};
+use crate::inferences::Fact;
+use crate::state::VariableState;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CheckError {

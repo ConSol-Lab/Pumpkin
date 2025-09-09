@@ -1,7 +1,10 @@
-use std::{collections::BTreeMap, rc::Rc};
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
-use drcp_format::{ConstraintId, IntAtomic};
-use fzn_rs::{ast::Domain, VariableExpr};
+use drcp_format::ConstraintId;
+use drcp_format::IntAtomic;
+use fzn_rs::ast::Domain;
+use fzn_rs::VariableExpr;
 
 #[derive(Clone, Debug)]
 pub enum Constraint {
@@ -53,7 +56,6 @@ impl Model {
     /// If a constraint with the given ID already exists, this returns false. Otherwise, the
     /// function returns true.
     pub fn add_constraint(&mut self, constraint_id: ConstraintId, constraint: Constraint) -> bool {
-        println!("adding constraint {constraint_id}");
         self.constraints.insert(constraint_id, constraint).is_none()
     }
 

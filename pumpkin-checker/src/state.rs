@@ -1,8 +1,7 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use crate::model::Atomic;
 

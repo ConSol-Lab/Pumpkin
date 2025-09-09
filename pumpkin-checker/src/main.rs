@@ -1,14 +1,16 @@
-use std::{
-    fs::File,
-    io::BufReader,
-    num::NonZero,
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::fs::File;
+use std::io::BufReader;
+use std::num::NonZero;
+use std::path::Path;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::time::Instant;
 
 use clap::Parser;
 use drcp_format::reader::ProofReader;
-use pumpkin_checker::{model::Model, CheckError, InvalidDeduction};
+use pumpkin_checker::model::Model;
+use pumpkin_checker::CheckError;
+use pumpkin_checker::InvalidDeduction;
 
 #[derive(Parser)]
 struct Cli {
@@ -22,10 +24,16 @@ struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    let parse_start = Instant::now();
     let model = parse_model(&cli.model_path)?;
-    let proof_reader = create_proof_reader(&cli.proof_path)?;
+    println!("parse-flatzinc: {}s", parse_start.elapsed().as_secs_f32());
 
+    let proof_reader = create_proof_reader(&cli.proof_path)?;
+    println!("parse-proof: 0s");
+
+    let verify_start = Instant::now();
     let verification_result = pumpkin_checker::verify_proof(model, proof_reader);
+    println!("validate: {}s", verify_start.elapsed().as_secs_f32());
 
     if let Err(CheckError::InvalidDeduction(
         constraint_id,
@@ -52,6 +60,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     verification_result?;
+
+    println!("Proof is valid!");
 
     Ok(())
 }

@@ -1,6 +1,8 @@
 mod linear;
+mod nogood;
 
-use crate::model::{Atomic, Model};
+use crate::model::Atomic;
+use crate::model::Model;
 
 pub(crate) struct Fact {
     pub(crate) premises: Vec<Atomic>,
@@ -43,6 +45,19 @@ pub(crate) fn verify_inference(
                 .ok_or(InvalidInference::MissingConstraint)?;
 
             linear::verify_linear_bounds(
+                model,
+                &inference.premises,
+                inference.consequent.clone(),
+                generated_by,
+            )
+        }
+
+        Some("nogood") => {
+            let generated_by = inference
+                .generated_by
+                .ok_or(InvalidInference::MissingConstraint)?;
+
+            nogood::verify_nogood(
                 model,
                 &inference.premises,
                 inference.consequent.clone(),
