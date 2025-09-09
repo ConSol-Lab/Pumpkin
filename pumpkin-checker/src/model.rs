@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Display, rc::Rc};
+use std::{collections::BTreeMap, rc::Rc};
 
 use drcp_format::{ConstraintId, IntAtomic};
 use fzn_rs::{ast::Domain, VariableExpr};
@@ -10,37 +10,19 @@ pub enum Constraint {
     LinearEq(Linear),
 }
 
-impl Constraint {
-    pub fn constraint_type(&self) -> ConstraintType {
-        match self {
-            Constraint::Nogood(_) => ConstraintType::Nogood,
-            Constraint::LinearLeq(_) => ConstraintType::LinearLeq,
-            Constraint::LinearEq(_) => ConstraintType::LinearEq,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ConstraintType {
-    Nogood,
-    LinearLeq,
-    LinearEq,
-}
-
-impl Display for ConstraintType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConstraintType::Nogood => write!(f, "nogood"),
-            ConstraintType::LinearLeq => write!(f, "linear_leq"),
-            ConstraintType::LinearEq => write!(f, "linear_eq"),
-        }
-    }
-}
-
 pub type Atomic = IntAtomic<Rc<str>, i32>;
 
 #[derive(Clone, Debug)]
 pub struct Nogood(Vec<Atomic>);
+
+impl<T> From<T> for Nogood
+where
+    T: IntoIterator<Item = Atomic>,
+{
+    fn from(value: T) -> Self {
+        Nogood(value.into_iter().collect())
+    }
+}
 
 impl AsRef<[Atomic]> for Nogood {
     fn as_ref(&self) -> &[Atomic] {
@@ -63,7 +45,7 @@ pub struct Model {
 impl Model {
     /// Add a new variable to the model.
     pub fn add_variable(&mut self, name: Rc<str>, domain: Domain) {
-        self.variables.insert(name, domain);
+        let _ = self.variables.insert(name, domain);
     }
 
     /// Add a new constraint to the model.
@@ -71,6 +53,7 @@ impl Model {
     /// If a constraint with the given ID already exists, this returns false. Otherwise, the
     /// function returns true.
     pub fn add_constraint(&mut self, constraint_id: ConstraintId, constraint: Constraint) -> bool {
+        println!("adding constraint {constraint_id}");
         self.constraints.insert(constraint_id, constraint).is_none()
     }
 

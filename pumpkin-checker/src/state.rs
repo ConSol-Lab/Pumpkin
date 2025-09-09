@@ -41,8 +41,6 @@ impl VariableState {
     /// Returns true if the state remains consistent, or false if the atomic cannot be true in
     /// conjunction with previously applied atomics.
     pub(crate) fn apply(&mut self, atomic: Atomic) -> bool {
-        println!("applying {atomic}");
-
         let domain = self.domains.entry(atomic.name).or_insert(Domain::new());
 
         match atomic.comparison {
@@ -65,6 +63,39 @@ impl VariableState {
         }
 
         domain.is_consistent()
+    }
+
+    /// Is the given atomic true in the current state.
+    pub(crate) fn is_true(&self, atomic: Atomic) -> bool {
+        let Some(domain) = self.domains.get(&atomic.name) else {
+            return false;
+        };
+
+        match atomic.comparison {
+            drcp_format::IntComparison::GreaterEqual => domain.lower_bound >= atomic.value,
+
+            drcp_format::IntComparison::LessEqual => domain.upper_bound <= atomic.value,
+
+            drcp_format::IntComparison::Equal => {
+                domain.lower_bound >= atomic.value && domain.upper_bound <= atomic.value
+            }
+
+            drcp_format::IntComparison::NotEqual => {
+                if domain.lower_bound >= atomic.value {
+                    return true;
+                }
+
+                if domain.upper_bound <= atomic.value {
+                    return true;
+                }
+
+                if domain.holes.contains(&atomic.value) {
+                    return true;
+                }
+
+                false
+            }
+        }
     }
 }
 

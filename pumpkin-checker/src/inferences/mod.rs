@@ -7,7 +7,7 @@ pub(crate) struct Fact {
     pub(crate) consequent: Option<Atomic>,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Clone, Copy, thiserror::Error, Debug)]
 #[error("invalid inference")]
 pub enum InvalidInference {
     #[error("inference does not have a label")]

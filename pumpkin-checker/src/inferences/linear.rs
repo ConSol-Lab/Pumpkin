@@ -64,8 +64,6 @@ fn verify_linear_inference(
         }
     }
 
-    dbg!(&variable_state);
-
     // Next, we evaluate the linear inequality. The lower bound of the
     // left-hand side must exceed the bound in the constraint.
     let left_hand_side = linear.terms.iter().fold(None, |acc, (weight, variable)| {
@@ -89,9 +87,6 @@ fn verify_linear_inference(
             },
         }
     });
-
-    dbg!(left_hand_side);
-    dbg!(linear.bound);
 
     if left_hand_side.is_some_and(|value| value > linear.bound) {
         Ok(Fact {

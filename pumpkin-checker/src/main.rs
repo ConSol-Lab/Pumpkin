@@ -8,7 +8,7 @@ use std::{
 
 use clap::Parser;
 use drcp_format::reader::ProofReader;
-use pumpkin_checker::model::Model;
+use pumpkin_checker::{model::Model, CheckError, InvalidDeduction};
 
 #[derive(Parser)]
 struct Cli {
@@ -25,7 +25,33 @@ fn main() -> anyhow::Result<()> {
     let model = parse_model(&cli.model_path)?;
     let proof_reader = create_proof_reader(&cli.proof_path)?;
 
-    pumpkin_checker::verify_proof(model, proof_reader)?;
+    let verification_result = pumpkin_checker::verify_proof(model, proof_reader);
+
+    if let Err(CheckError::InvalidDeduction(
+        constraint_id,
+        InvalidDeduction::NoConflict(ref unused_inferences),
+    )) = verification_result
+    {
+        eprintln!("Deduction {constraint_id} is invalid.");
+
+        if unused_inferences.is_empty() {
+            eprintln!("  Failed to derive conflict after applying all inferences.");
+        } else {
+            eprintln!("  Could not apply the following inferences:");
+
+            for (inference_id, premises) in unused_inferences {
+                eprint!("  - {inference_id}:");
+
+                for premise in premises {
+                    eprint!(" {premise}");
+                }
+
+                eprintln!();
+            }
+        }
+    }
+
+    verification_result?;
 
     Ok(())
 }
