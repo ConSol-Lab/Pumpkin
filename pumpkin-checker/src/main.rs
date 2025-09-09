@@ -9,6 +9,7 @@ use std::time::Instant;
 use clap::Parser;
 use drcp_format::reader::ProofReader;
 use pumpkin_checker::model::Model;
+use pumpkin_checker::model::Objective;
 use pumpkin_checker::CheckError;
 use pumpkin_checker::InvalidDeduction;
 
@@ -95,6 +96,17 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
     let fzn_model = FlatZincModel::from_ast(fzn_ast)?;
 
     let mut model = Model::default();
+    model.objective = match &fzn_model.solve.method.node {
+        fzn_rs::Method::Satisfy => None,
+        fzn_rs::Method::Optimize {
+            direction: fzn_rs::ast::OptimizationDirection::Minimize,
+            objective,
+        } => Some(Objective::Minimize(objective.clone())),
+        fzn_rs::Method::Optimize {
+            direction: fzn_rs::ast::OptimizationDirection::Maximize,
+            objective,
+        } => Some(Objective::Maximize(objective.clone())),
+    };
 
     for (name, variable) in fzn_model.variables.iter() {
         model.add_variable(Rc::clone(name), variable.domain.node.clone());

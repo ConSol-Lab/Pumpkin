@@ -39,10 +39,17 @@ pub struct Linear {
     pub bound: i32,
 }
 
+#[derive(Clone, Debug)]
+pub enum Objective {
+    Maximize(VariableExpr<i32>),
+    Minimize(VariableExpr<i32>),
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Model {
     variables: BTreeMap<Rc<str>, Domain>,
     constraints: BTreeMap<ConstraintId, Constraint>,
+    pub objective: Option<Objective>,
 }
 
 impl Model {

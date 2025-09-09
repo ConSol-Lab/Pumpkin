@@ -107,6 +107,16 @@ pub fn verify_proof<Source: BufRead>(
 }
 
 fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>, i32>) -> bool {
+    // First we ensure the conclusion type matches the solve item in the model.
+    match (&model.objective, conclusion) {
+        (Some(_), drcp_format::Conclusion::Unsat)
+        | (None, drcp_format::Conclusion::DualBound(_)) => return false,
+
+        _ => {}
+    }
+
+    // We iterate in reverse order, since it is likely that the conclusion is based on a constraint
+    // towards the end of the proof.
     model.iter_constraints().rev().any(|(_, constraint)| {
         let Constraint::Nogood(nogood) = constraint else {
             return false;
