@@ -59,7 +59,7 @@ enum ParameterValue {
 #[derive(Debug, thiserror::Error)]
 #[error("failed to parse flatzinc")]
 pub struct FznError<'src> {
-    reasons: Vec<Rich<'src, char>>,
+    pub reasons: Vec<Rich<'src, char>>,
 }
 
 pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {

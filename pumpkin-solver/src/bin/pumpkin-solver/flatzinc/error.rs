@@ -56,51 +56,26 @@ pub(crate) enum FlatZincError {
     IntegerOverflow(i64),
 }
 
-impl From<fzn_rs::fzn::FznError<'_>> for FlatZincError {
-    fn from(value: fzn_rs::fzn::FznError<'_>) -> Self {
-        match value {
-            fzn_rs::fzn::FznError::LexError { reasons } => {
-                // For now we only look at the first error. In the future, fzn-rs may produce
-                // multiple errors.
-                let reason = reasons[0].clone();
+impl From<fzn_rs::parsers::fzn::FznError<'_>> for FlatZincError {
+    fn from(value: fzn_rs::parsers::fzn::FznError<'_>) -> Self {
+        // For now we only look at the first error. In the future, fzn-rs may produce
+        // multiple errors.
+        let reason = value.reasons[0].clone();
 
-                let span = reason.span();
-                let expected = reason
-                    .expected()
-                    .map(|pattern| format!("{pattern}, "))
-                    .collect::<String>();
+        let span = reason.span();
+        let expected = reason
+            .expected()
+            .map(|pattern| format!("{pattern}, "))
+            .collect::<String>();
 
-                FlatZincError::UnexpectedToken {
-                    expected,
-                    actual: reason
-                        .found()
-                        .map(|c| format!("{c}"))
-                        .unwrap_or("".to_owned()),
-                    span_start: span.start,
-                    span_end: span.end,
-                }
-            }
-            fzn_rs::fzn::FznError::ParseError { reasons } => {
-                // For now we only look at the first error. In the future, fzn-rs may produce
-                // multiple errors.
-                let reason = reasons[0].clone();
-
-                let span = reason.span();
-                let expected = reason
-                    .expected()
-                    .map(|pattern| format!("{pattern}, "))
-                    .collect::<String>();
-
-                FlatZincError::UnexpectedToken {
-                    expected,
-                    actual: reason
-                        .found()
-                        .map(|token| format!("{token}"))
-                        .unwrap_or("".to_owned()),
-                    span_start: span.start,
-                    span_end: span.end,
-                }
-            }
+        FlatZincError::UnexpectedToken {
+            expected,
+            actual: reason
+                .found()
+                .map(|c| format!("{c}"))
+                .unwrap_or("".to_owned()),
+            span_start: span.start,
+            span_end: span.end,
         }
     }
 }
