@@ -1078,9 +1078,9 @@ impl ConstraintSatisfactionSolver {
                 //
                 // We lift so that it is the most general upper-bound possible while still causing
                 // the empty domain
-                empty_domain_reason.extend(std::iter::once(predicate!(
+                empty_domain_reason.push(predicate!(
                     conflict_domain <= entry.predicate.get_right_hand_side() - 1
-                )))
+                ));
             }
             PredicateType::UpperBound => {
                 // The last trail entry was an upper-bound propagation meaning that the empty domain
@@ -1088,18 +1088,16 @@ impl ConstraintSatisfactionSolver {
                 //
                 // We lift so that it is the most general lower-bound possible while still causing
                 // the empty domain
-                empty_domain_reason.extend(std::iter::once(predicate!(
+                empty_domain_reason.push(predicate!(
                     conflict_domain >= entry.predicate.get_right_hand_side() + 1
-                )));
+                ));
             }
             PredicateType::NotEqual => {
                 // The last trail entry was a not equals propagation meaning that the empty domain
                 // was due to the domain being assigned to the removed value
                 pumpkin_assert_eq_simple!(entry.old_upper_bound, entry.old_lower_bound);
 
-                empty_domain_reason.extend(std::iter::once(predicate!(
-                    conflict_domain == entry.old_lower_bound
-                )));
+                empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
             }
             PredicateType::Equal => {
                 // The last trail entry was an equality propagation; we split into two cases.
@@ -1108,9 +1106,9 @@ impl ConstraintSatisfactionSolver {
                     //
                     // We lift so that it is the most general lower-bound possible while still
                     // causing the empty domain
-                    empty_domain_reason.extend(std::iter::once(predicate!(
+                    empty_domain_reason.push(predicate!(
                         conflict_domain >= entry.predicate.get_right_hand_side() + 1
-                    )));
+                    ));
                 } else {
                     // 2) The assigned value was larger than the upper-bound
                     //
@@ -1119,9 +1117,9 @@ impl ConstraintSatisfactionSolver {
                     pumpkin_assert_simple!(
                         entry.predicate.get_right_hand_side() > entry.old_upper_bound
                     );
-                    empty_domain_reason.extend(std::iter::once(predicate!(
+                    empty_domain_reason.push(predicate!(
                         conflict_domain <= entry.predicate.get_right_hand_side() - 1
-                    )));
+                    ));
                 }
             }
         }
