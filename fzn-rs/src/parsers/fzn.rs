@@ -4,24 +4,16 @@ use std::rc::Rc;
 
 use chumsky::error::Rich;
 use chumsky::extra;
-use chumsky::input::Input;
 use chumsky::input::MapExtra;
-use chumsky::input::ValueInput;
 use chumsky::prelude::any;
 use chumsky::prelude::choice;
 use chumsky::prelude::just;
 use chumsky::prelude::recursive;
-use chumsky::select;
-use chumsky::span::SimpleSpan;
+use chumsky::text::int;
 use chumsky::IterParser;
 use chumsky::Parser;
 
 use crate::ast;
-
-mod tokens;
-
-pub use tokens::Token;
-use tokens::Token::*;
 
 #[derive(Clone, Debug, Default)]
 struct ParseState {
@@ -65,33 +57,13 @@ enum ParameterValue {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum FznError<'src> {
-    #[error("failed to lex fzn")]
-    LexError {
-        reasons: Vec<Rich<'src, char, SimpleSpan>>,
-    },
-
-    #[error("failed to parse fzn")]
-    ParseError {
-        reasons: Vec<Rich<'src, Token<'src>, ast::Span>>,
-    },
+#[error("failed to parse flatzinc")]
+pub struct FznError<'src> {
+    reasons: Vec<Rich<'src, char>>,
 }
 
 pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
     let mut state = extra::SimpleState(ParseState::default());
-
-    let tokens = tokens::lex()
-        .parse(source)
-        .into_result()
-        .map_err(|reasons| FznError::LexError { reasons })?;
-
-    let parser_input = tokens.map(
-        ast::Span {
-            start: source.len(),
-            end: source.len(),
-        },
-        |node| (&node.node, &node.span),
-    );
 
     let ast = predicates()
         .ignore_then(parameters())
@@ -113,16 +85,15 @@ pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
                 }
             },
         )
-        .parse_with_state(parser_input, &mut state)
+        .padded()
+        .parse_with_state(source, &mut state)
         .into_result()
-        .map_err(
-            |reasons: Vec<Rich<'_, Token<'_>, _>>| FznError::ParseError {
-                reasons: reasons
-                    .into_iter()
-                    .map(|error| error.into_owned())
-                    .collect(),
-            },
-        )?;
+        .map_err(|reasons: Vec<Rich<'_, char, _>>| FznError {
+            reasons: reasons
+                .into_iter()
+                .map(|error| error.into_owned())
+                .collect(),
+        })?;
 
     Ok(ast)
 }
@@ -131,58 +102,61 @@ pub fn parse(source: &str) -> Result<ast::Ast, FznError<'_>> {
 ///
 /// We specify a rich error type, as well as an instance of [`ParseState`] for string interning and
 /// parameter resolution.
-type FznExtra<'tokens, 'src> =
-    extra::Full<Rich<'tokens, Token<'src>, ast::Span>, extra::SimpleState<ParseState>, ()>;
+type FznExtra<'src> = extra::Full<Rich<'src, char>, extra::SimpleState<ParseState>, ()>;
 
-fn predicates<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
-where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
-{
+fn predicates<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>> {
     predicate().repeated().collect::<Vec<_>>().ignored()
 }
 
-fn predicate<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
-where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
-{
-    just(Ident("predicate"))
-        .ignore_then(any().and_is(just(SemiColon).not()).repeated())
-        .then(just(SemiColon))
+fn token<'src>(token: &'static str) -> impl Parser<'src, &'src str, (), FznExtra<'src>> + Clone {
+    just(token)
+        .padded_by(comment().repeated())
+        .padded()
         .ignored()
 }
 
-fn parameters<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+fn comment<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>> + Clone {
+    just("%")
+        .then(any().and_is(just('\n').not()).repeated())
+        .padded()
+        .ignored()
+}
+
+fn predicate<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>> {
+    token("predicate")
+        .ignore_then(any().and_is(token(";").not()).repeated())
+        .then(token(";"))
+        .ignored()
+}
+
+fn parameters<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     parameter().repeated().collect::<Vec<_>>().ignored()
 }
 
-fn parameter_type<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+fn parameter_type<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
-        just(Ident("int")),
-        just(Ident("bool")),
-        just(Ident("set"))
-            .then_ignore(just(Ident("of")))
-            .then_ignore(just(Ident("int"))),
+        token("int"),
+        token("bool"),
+        token("set")
+            .then_ignore(token("of"))
+            .then_ignore(token("int")),
     ))
     .ignored()
 }
 
-fn parameter<'tokens, 'src: 'tokens, I>() -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+fn parameter<'src>() -> impl Parser<'src, &'src str, (), FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     parameter_type()
-        .ignore_then(just(Colon))
+        .ignore_then(token(":"))
         .ignore_then(identifier())
-        .then_ignore(just(Equal))
+        .then_ignore(token("="))
         .then(literal())
-        .then_ignore(just(SemiColon))
+        .then_ignore(token(";"))
         .try_map_with(|(name, value), extra| {
             let state = extra.state();
 
@@ -192,7 +166,7 @@ where
                 ast::Literal::IntSet(set) => ParameterValue::IntSet(set),
                 ast::Literal::Identifier(identifier) => {
                     return Err(Rich::custom(
-                        value.span,
+                        value.span.into(),
                         format!("parameter '{identifier}' is undefined"),
                     ))
                 }
@@ -204,14 +178,13 @@ where
         })
 }
 
-fn arrays<'tokens, 'src: 'tokens, I>() -> impl Parser<
-    'tokens,
-    I,
+fn arrays<'src>() -> impl Parser<
+    'src,
+    &'src str,
     BTreeMap<Rc<str>, ast::Node<ast::Array<ast::Annotation>>>,
-    FznExtra<'tokens, 'src>,
+    FznExtra<'src>,
 >
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     array()
         .repeated()
@@ -219,27 +192,26 @@ where
         .map(|arrays| arrays.into_iter().collect())
 }
 
-fn array<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Array<ast::Annotation>>), FznExtra<'tokens, 'src>>
+fn array<'src>(
+) -> impl Parser<'src, &'src str, (Rc<str>, ast::Node<ast::Array<ast::Annotation>>), FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    just(Ident("array"))
-        .ignore_then(interval_set(integer()).delimited_by(just(OpenBracket), just(CloseBracket)))
-        .ignore_then(just(Ident("of")))
-        .ignore_then(just(Ident("var")).or_not())
+    token("array")
+        .ignore_then(interval_set(integer()).delimited_by(token("["), token("]")))
+        .ignore_then(token("of"))
+        .ignore_then(token("var").or_not())
         .ignore_then(domain())
-        .then_ignore(just(Colon))
+        .then_ignore(token(":"))
         .then(identifier())
         .then(annotations())
-        .then_ignore(just(Equal))
+        .then_ignore(token("="))
         .then(
             literal()
-                .separated_by(just(Comma))
+                .separated_by(token(","))
                 .collect::<Vec<_>>()
-                .delimited_by(just(OpenBracket), just(CloseBracket)),
+                .delimited_by(token("["), token("]")),
         )
-        .then_ignore(just(SemiColon))
+        .then_ignore(token(";"))
         .map_with(|(((domain, name), annotations), contents), extra| {
             (
                 name,
@@ -249,20 +221,19 @@ where
                         contents,
                         annotations,
                     },
-                    span: extra.span(),
+                    span: extra.span().into(),
                 },
             )
         })
 }
 
-fn variables<'tokens, 'src: 'tokens, I>() -> impl Parser<
-    'tokens,
-    I,
+fn variables<'src>() -> impl Parser<
+    'src,
+    &'src str,
     BTreeMap<Rc<str>, ast::Node<ast::Variable<ast::Annotation>>>,
-    FznExtra<'tokens, 'src>,
+    FznExtra<'src>,
 >
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     variable()
         .repeated()
@@ -270,18 +241,17 @@ where
         .map(|variables| variables.into_iter().collect())
 }
 
-fn variable<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Variable<ast::Annotation>>), FznExtra<'tokens, 'src>>
+fn variable<'src>(
+) -> impl Parser<'src, &'src str, (Rc<str>, ast::Node<ast::Variable<ast::Annotation>>), FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    just(Ident("var"))
+    token("var")
         .ignore_then(domain())
-        .then_ignore(just(Colon))
+        .then_ignore(token(":"))
         .then(identifier())
         .then(annotations())
-        .then(just(Equal).ignore_then(literal()).or_not())
-        .then_ignore(just(SemiColon))
+        .then(token("=").ignore_then(literal()).or_not())
+        .then_ignore(token(";"))
         .map_with(to_node)
         .map(|node| {
             let ast::Node {
@@ -305,42 +275,37 @@ where
         })
 }
 
-fn domain<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Domain>, FznExtra<'tokens, 'src>>
+fn domain<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Domain>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
-        just(Ident("int")).to(ast::Domain::UnboundedInt),
-        just(Ident("bool")).to(ast::Domain::Bool),
+        token("int").to(ast::Domain::UnboundedInt),
+        token("bool").to(ast::Domain::Bool),
         set_of(integer()).map(ast::Domain::Int),
     ))
     .map_with(to_node)
 }
 
-fn constraints<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<ast::Node<ast::Constraint>>, FznExtra<'tokens, 'src>>
+fn constraints<'src>(
+) -> impl Parser<'src, &'src str, Vec<ast::Node<ast::Constraint>>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     constraint().repeated().collect::<Vec<_>>()
 }
 
-fn constraint<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Constraint>, FznExtra<'tokens, 'src>>
+fn constraint<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Constraint>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    just(Ident("constraint"))
+    token("constraint")
         .ignore_then(identifier().map_with(to_node))
         .then(
             argument()
-                .separated_by(just(Comma))
+                .separated_by(token(","))
                 .collect::<Vec<_>>()
-                .delimited_by(just(OpenParen), just(CloseParen)),
+                .delimited_by(token("("), token(")")),
         )
         .then(annotations())
-        .then_ignore(just(SemiColon))
+        .then_ignore(token(";"))
         .map(|((name, arguments), annotations)| ast::Constraint {
             name,
             arguments,
@@ -349,51 +314,46 @@ where
         .map_with(to_node)
 }
 
-fn argument<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Argument>, FznExtra<'tokens, 'src>>
+fn argument<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Argument>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
         literal().map(ast::Argument::Literal),
         literal()
-            .separated_by(just(Comma))
+            .separated_by(token(","))
             .collect::<Vec<_>>()
-            .delimited_by(just(OpenBracket), just(CloseBracket))
+            .delimited_by(token("["), token("]"))
             .map(ast::Argument::Array),
     ))
     .map_with(to_node)
 }
 
-fn solve_item<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::SolveItem<ast::Annotation>, FznExtra<'tokens, 'src>>
+fn solve_item<'src>(
+) -> impl Parser<'src, &'src str, ast::SolveItem<ast::Annotation>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    just(Ident("solve"))
+    token("solve")
         .ignore_then(annotations())
         .then(solve_method())
-        .then_ignore(just(SemiColon))
+        .then_ignore(token(";"))
         .map(|(annotations, method)| ast::SolveItem {
             method,
             annotations,
         })
 }
 
-fn solve_method<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Method>, FznExtra<'tokens, 'src>>
+fn solve_method<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Method>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
-        just(Ident("satisfy")).to(ast::Method::Satisfy),
-        just(Ident("minimize"))
+        token("satisfy").to(ast::Method::Satisfy),
+        token("minimize")
             .ignore_then(identifier())
             .map(|ident| ast::Method::Optimize {
                 direction: ast::OptimizationDirection::Minimize,
                 objective: ast::Literal::Identifier(ident),
             }),
-        just(Ident("maximize"))
+        token("maximize")
             .ignore_then(identifier())
             .map(|ident| ast::Method::Optimize {
                 direction: ast::OptimizationDirection::Maximize,
@@ -403,20 +363,17 @@ where
     .map_with(to_node)
 }
 
-fn annotations<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<ast::Node<ast::Annotation>>, FznExtra<'tokens, 'src>>
+fn annotations<'src>(
+) -> impl Parser<'src, &'src str, Vec<ast::Node<ast::Annotation>>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     annotation().repeated().collect()
 }
 
-fn annotation<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Annotation>, FznExtra<'tokens, 'src>>
+fn annotation<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Annotation>, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    just(DoubleColon)
+    token("::")
         .ignore_then(choice((
             annotation_call().map(ast::Annotation::Call),
             identifier().map(ast::Annotation::Atom),
@@ -424,45 +381,41 @@ where
         .map_with(to_node)
 }
 
-fn annotation_call<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>>
+fn annotation_call<'src>() -> impl Parser<'src, &'src str, ast::AnnotationCall, FznExtra<'src>>
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     recursive(|call| {
         identifier()
             .then(
                 annotation_argument(call)
-                    .separated_by(just(Comma))
+                    .separated_by(token(","))
                     .collect::<Vec<_>>()
-                    .delimited_by(just(OpenParen), just(CloseParen)),
+                    .delimited_by(token("("), token(")")),
             )
             .map(|(name, arguments)| ast::AnnotationCall { name, arguments })
     })
 }
 
-fn annotation_argument<'tokens, 'src: 'tokens, I>(
-    call_parser: impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, ast::Node<ast::AnnotationArgument>, FznExtra<'tokens, 'src>> + Clone
+fn annotation_argument<'src>(
+    call_parser: impl Parser<'src, &'src str, ast::AnnotationCall, FznExtra<'src>> + Clone,
+) -> impl Parser<'src, &'src str, ast::Node<ast::AnnotationArgument>, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
         annotation_literal(call_parser.clone()).map(ast::AnnotationArgument::Literal),
         annotation_literal(call_parser)
-            .separated_by(just(Comma))
+            .separated_by(token(","))
             .collect::<Vec<_>>()
-            .delimited_by(just(OpenBracket), just(CloseBracket))
+            .delimited_by(token("["), token("]"))
             .map(ast::AnnotationArgument::Array),
     ))
     .map_with(to_node)
 }
 
-fn annotation_literal<'tokens, 'src: 'tokens, I>(
-    call_parser: impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, ast::Node<ast::AnnotationLiteral>, FznExtra<'tokens, 'src>> + Clone
+fn annotation_literal<'src>(
+    call_parser: impl Parser<'src, &'src str, ast::AnnotationCall, FznExtra<'src>> + Clone,
+) -> impl Parser<'src, &'src str, ast::Node<ast::AnnotationLiteral>, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
         call_parser
@@ -475,23 +428,20 @@ where
     ))
 }
 
-fn to_node<'tokens, 'src: 'tokens, I, T>(
+fn to_node<'src, T>(
     node: T,
-    extra: &mut MapExtra<'tokens, '_, I, FznExtra<'tokens, 'src>>,
+    extra: &mut MapExtra<'src, '_, &'src str, FznExtra<'src>>,
 ) -> ast::Node<T>
 where
-    I: Input<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     ast::Node {
         node,
-        span: extra.span(),
+        span: extra.span().into(),
     }
 }
 
-fn literal<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Literal>, FznExtra<'tokens, 'src>> + Clone
+fn literal<'src>() -> impl Parser<'src, &'src str, ast::Node<ast::Literal>, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     choice((
         set_of(integer()).map(ast::Literal::IntSet),
@@ -506,18 +456,17 @@ where
     .map_with(to_node)
 }
 
-fn set_of<'tokens, 'src: 'tokens, I, T: Copy + Ord>(
-    value_parser: impl Parser<'tokens, I, T, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, ast::RangeList<T>, FznExtra<'tokens, 'src>> + Clone
+fn set_of<'src, T: Copy + Ord>(
+    value_parser: impl Parser<'src, &'src str, T, FznExtra<'src>> + Clone,
+) -> impl Parser<'src, &'src str, ast::RangeList<T>, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
     ast::RangeList<T>: FromIterator<T>,
 {
     let sparse_set = value_parser
         .clone()
-        .separated_by(just(Comma))
+        .separated_by(token(","))
         .collect::<Vec<_>>()
-        .delimited_by(just(OpenBrace), just(CloseBrace))
+        .delimited_by(token("{"), token("}"))
         .map(ast::RangeList::from_iter);
 
     choice((
@@ -526,47 +475,37 @@ where
     ))
 }
 
-fn interval_set<'tokens, 'src: 'tokens, I, T: Copy + Ord>(
-    value_parser: impl Parser<'tokens, I, T, FznExtra<'tokens, 'src>> + Clone,
-) -> impl Parser<'tokens, I, (T, T), FznExtra<'tokens, 'src>> + Clone
+fn interval_set<'src, T: Copy + Ord>(
+    value_parser: impl Parser<'src, &'src str, T, FznExtra<'src>> + Clone,
+) -> impl Parser<'src, &'src str, (T, T), FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     value_parser
         .clone()
-        .then_ignore(just(DoublePeriod))
+        .then_ignore(token(".."))
         .then(value_parser)
 }
 
-fn integer<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, i64, FznExtra<'tokens, 'src>> + Clone
+fn integer<'src>() -> impl Parser<'src, &'src str, i64, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    select! {
-        Integer(int) => int,
-    }
+    just("-")
+        .or_not()
+        .ignore_then(int(10))
+        .to_slice()
+        .map(|slice: &str| slice.parse().unwrap())
 }
 
-fn boolean<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, bool, FznExtra<'tokens, 'src>> + Clone
+fn boolean<'src>() -> impl Parser<'src, &'src str, bool, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    select! {
-        Boolean(boolean) => boolean,
-    }
+    choice((token("true").to(true), token("false").to(false)))
 }
 
-fn identifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Rc<str>, FznExtra<'tokens, 'src>> + Clone
+fn identifier<'src>() -> impl Parser<'src, &'src str, Rc<str>, FznExtra<'src>> + Clone
 where
-    I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
-    select! {
-        Ident(ident) => ident,
-    }
-    .map_with(|ident, extra| {
+    chumsky::text::ident().map_with(|ident, extra| {
         let state: &mut extra::SimpleState<ParseState> = extra.state();
         state.get_interned(ident)
     })
