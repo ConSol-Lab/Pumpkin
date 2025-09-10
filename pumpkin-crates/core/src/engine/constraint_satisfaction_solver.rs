@@ -1116,7 +1116,9 @@ impl ConstraintSatisfactionSolver {
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
-                    assert!(entry.predicate.get_right_hand_side() > entry.old_upper_bound);
+                    pumpkin_assert_simple!(
+                        entry.predicate.get_right_hand_side() > entry.old_upper_bound
+                    );
                     empty_domain_reason.extend(std::iter::once(predicate!(
                         conflict_domain <= entry.predicate.get_right_hand_side() - 1
                     )));
