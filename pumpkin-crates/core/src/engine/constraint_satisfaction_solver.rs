@@ -1093,8 +1093,8 @@ impl ConstraintSatisfactionSolver {
                 )));
             }
             PredicateType::NotEqual => {
-                // The last trail entry was an not equals propagation meaning that the empty domain
-                // was due to the domain being a singleton at this removed value
+                // The last trail entry was a not equals propagation meaning that the empty domain
+                // was due to the domain being assigned to the removed value
                 pumpkin_assert_eq_simple!(entry.old_upper_bound, entry.old_lower_bound);
 
                 empty_domain_reason.extend(std::iter::once(predicate!(
@@ -1112,7 +1112,7 @@ impl ConstraintSatisfactionSolver {
                         conflict_domain >= entry.predicate.get_right_hand_side() + 1
                     )));
                 } else {
-                    // 1) The assigned value was larger than the upper-bound
+                    // 2) The assigned value was larger than the upper-bound
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
