@@ -107,7 +107,8 @@ mod error;
 mod typed;
 
 pub mod ast;
-pub mod parsers;
+#[cfg(feature = "fzn")]
+pub mod fzn;
 
 pub use error::*;
 #[cfg(feature = "derive")]
