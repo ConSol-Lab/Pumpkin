@@ -1,4 +1,9 @@
+use fzn_rs::ast::RangeList;
+use fzn_rs::ArrayExpr;
+use fzn_rs::FromAnnotationArgument;
+use fzn_rs::VariableExpr;
 use log::warn;
+use pumpkin_core::proof::ConstraintTag;
 use pumpkin_solver::branching::value_selection::DynamicValueSelector;
 use pumpkin_solver::branching::value_selection::InDomainInterval;
 use pumpkin_solver::branching::value_selection::InDomainMax;
@@ -20,13 +25,10 @@ use pumpkin_solver::branching::variable_selection::InputOrder;
 use pumpkin_solver::branching::variable_selection::Largest;
 use pumpkin_solver::branching::variable_selection::MaxRegret;
 use pumpkin_solver::branching::variable_selection::Smallest;
-use pumpkin_solver::pumpkin_assert_eq_simple;
-use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
-use super::error::FlatZincError;
-#[derive(Debug)]
+#[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum VariableSelectionStrategy {
     AntiFirstFail,
     DomWDeg,
@@ -99,48 +101,48 @@ impl VariableSelectionStrategy {
     }
 }
 
-#[derive(Debug)]
+#[derive(fzn_rs::FlatZincAnnotation)]
 pub(crate) enum ValueSelectionStrategy {
-    InDomain,
-    InDomainInterval,
-    InDomainMax,
-    InDomainMedian,
-    InDomainMiddle,
-    InDomainMin,
-    InDomainRandom,
-    InDomainReverseSplit,
-    InDomainSplit,
-    InDomainSplitRandom,
-    OutDomainMax,
-    OutDomainMedian,
-    OutDomainMin,
-    OutDomainRandom,
+    Indomain,
+    IndomainInterval,
+    IndomainMax,
+    IndomainMedian,
+    IndomainMiddle,
+    IndomainMin,
+    IndomainRandom,
+    IndomainReverseSplit,
+    IndomainSplit,
+    IndomainSplitRandom,
+    OutdomainMax,
+    OutdomainMedian,
+    OutdomainMin,
+    OutdomainRandom,
 }
 
 impl ValueSelectionStrategy {
     pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Literal> {
         DynamicValueSelector::new(match self {
-            ValueSelectionStrategy::InDomain
-            | ValueSelectionStrategy::InDomainInterval
-            | ValueSelectionStrategy::InDomainMin
-            | ValueSelectionStrategy::InDomainSplit
-            | ValueSelectionStrategy::OutDomainMax => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainMax
-            | ValueSelectionStrategy::InDomainReverseSplit
-            | ValueSelectionStrategy::OutDomainMin => Box::new(InDomainMax),
-            ValueSelectionStrategy::InDomainMedian => {
-                warn!("InDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::Indomain
+            | ValueSelectionStrategy::IndomainInterval
+            | ValueSelectionStrategy::IndomainMin
+            | ValueSelectionStrategy::IndomainSplit
+            | ValueSelectionStrategy::OutdomainMax => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainMax
+            | ValueSelectionStrategy::IndomainReverseSplit
+            | ValueSelectionStrategy::OutdomainMin => Box::new(InDomainMax),
+            ValueSelectionStrategy::IndomainMedian => {
+                warn!("indomain_median does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
-            ValueSelectionStrategy::InDomainMiddle => {
-                warn!("InDomainMiddle does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::IndomainMiddle => {
+                warn!("indomain_middle does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
-            ValueSelectionStrategy::InDomainRandom
-            | ValueSelectionStrategy::InDomainSplitRandom
-            | ValueSelectionStrategy::OutDomainRandom => Box::new(InDomainRandom),
-            ValueSelectionStrategy::OutDomainMedian => {
-                warn!("OutDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+            ValueSelectionStrategy::IndomainRandom
+            | ValueSelectionStrategy::IndomainSplitRandom
+            | ValueSelectionStrategy::OutdomainRandom => Box::new(InDomainRandom),
+            ValueSelectionStrategy::OutdomainMedian => {
+                warn!("outdomain_median does not make sense for propositional variables, defaulting to indomain_min...");
                 Box::new(InDomainMin)
             }
         })
@@ -148,282 +150,132 @@ impl ValueSelectionStrategy {
 
     pub(crate) fn create_for_domains(&self) -> DynamicValueSelector<DomainId> {
         DynamicValueSelector::new(match self {
-            ValueSelectionStrategy::InDomain => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainInterval => Box::new(InDomainInterval),
-            ValueSelectionStrategy::InDomainMax => Box::new(InDomainMax),
-            ValueSelectionStrategy::InDomainMedian => Box::new(InDomainMedian),
-            ValueSelectionStrategy::InDomainMiddle => Box::new(InDomainMiddle),
-            ValueSelectionStrategy::InDomainMin => Box::new(InDomainMin),
-            ValueSelectionStrategy::InDomainRandom => Box::new(InDomainRandom),
-            ValueSelectionStrategy::InDomainReverseSplit => Box::new(ReverseInDomainSplit),
-            ValueSelectionStrategy::InDomainSplit => Box::new(InDomainSplit),
-            ValueSelectionStrategy::InDomainSplitRandom => Box::new(InDomainSplitRandom),
-            ValueSelectionStrategy::OutDomainMax => Box::new(OutDomainMax),
-            ValueSelectionStrategy::OutDomainMedian => Box::new(OutDomainMedian),
-            ValueSelectionStrategy::OutDomainMin => Box::new(OutDomainMin),
-            ValueSelectionStrategy::OutDomainRandom => Box::new(OutDomainRandom),
+            ValueSelectionStrategy::Indomain => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainInterval => Box::new(InDomainInterval),
+            ValueSelectionStrategy::IndomainMax => Box::new(InDomainMax),
+            ValueSelectionStrategy::IndomainMedian => Box::new(InDomainMedian),
+            ValueSelectionStrategy::IndomainMiddle => Box::new(InDomainMiddle),
+            ValueSelectionStrategy::IndomainMin => Box::new(InDomainMin),
+            ValueSelectionStrategy::IndomainRandom => Box::new(InDomainRandom),
+            ValueSelectionStrategy::IndomainReverseSplit => Box::new(ReverseInDomainSplit),
+            ValueSelectionStrategy::IndomainSplit => Box::new(InDomainSplit),
+            ValueSelectionStrategy::IndomainSplitRandom => Box::new(InDomainSplitRandom),
+            ValueSelectionStrategy::OutdomainMax => Box::new(OutDomainMax),
+            ValueSelectionStrategy::OutdomainMedian => Box::new(OutDomainMedian),
+            ValueSelectionStrategy::OutdomainMin => Box::new(OutDomainMin),
+            ValueSelectionStrategy::OutdomainRandom => Box::new(OutDomainRandom),
         })
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum Search {
-    Bool(SearchStrategy),
-    Int(SearchStrategy),
-    Seq(Vec<Search>),
-    Unspecified,
-    WarmStartInt {
-        variables: flatzinc::AnnExpr,
-        values: flatzinc::AnnExpr,
-    },
-    WarmStartBool {
-        variables: flatzinc::AnnExpr,
-        values: flatzinc::AnnExpr,
-    },
-    WarmStartArray(Vec<Search>),
+/// The exploration strategies for search annotations.
+///
+/// See
+/// https://docs.minizinc.dev/en/stable/lib-stdlib-annotations.html#exploration-strategy-annotations.
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum Exploration {
+    Complete,
 }
 
-#[derive(Debug)]
-pub(crate) struct SearchStrategy {
-    pub(crate) variables: flatzinc::AnnExpr,
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum SearchAnnotation {
+    #[args]
+    BoolSearch(BoolSearchArgs),
+    #[args]
+    IntSearch(IntSearchArgs),
+    Seq(#[annotation] Vec<SearchAnnotation>),
+    #[args]
+    WarmStartBool(WarmStartBoolArgs),
+    #[args]
+    WarmStartInt(WarmStartIntArgs),
+    WarmStartArray(#[annotation] Vec<SearchAnnotation>),
+}
+
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct IntSearchArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
+    #[annotation]
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
+    #[annotation]
     pub(crate) value_selection_strategy: ValueSelectionStrategy,
+    #[allow(
+        dead_code,
+        reason = "the int_search annotation has this argument, so it needs to be present here"
+    )]
+    #[annotation]
+    pub(crate) exploration: Exploration,
 }
 
-pub(crate) struct FlatZincAst {
-    pub(crate) parameter_decls: Vec<flatzinc::ParDeclItem>,
-    pub(crate) single_variables: Vec<SingleVarDecl>,
-    pub(crate) variable_arrays: Vec<VarArrayDecl>,
-    pub(crate) constraint_decls: Vec<flatzinc::ConstraintItem>,
-    pub(crate) solve_item: flatzinc::SolveItem,
-    pub(crate) search: Search,
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct BoolSearchArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
+    #[annotation]
+    pub(crate) variable_selection_strategy: VariableSelectionStrategy,
+    #[annotation]
+    pub(crate) value_selection_strategy: ValueSelectionStrategy,
+    #[allow(
+        dead_code,
+        reason = "the int_search annotation has this argument, so it needs to be present here"
+    )]
+    #[annotation]
+    pub(crate) exploration: Exploration,
 }
 
-impl FlatZincAst {
-    pub(crate) fn builder() -> FlatZincAstBuilder {
-        FlatZincAstBuilder {
-            parameter_decls: vec![],
-            single_variables: vec![],
-            variable_arrays: vec![],
-            constraint_decls: vec![],
-            solve_item: None,
-            search: None,
-        }
-    }
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct WarmStartBoolArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<bool>>,
+    pub(crate) values: ArrayExpr<bool>,
 }
 
-pub(crate) struct FlatZincAstBuilder {
-    parameter_decls: Vec<flatzinc::ParDeclItem>,
-    single_variables: Vec<SingleVarDecl>,
-    variable_arrays: Vec<VarArrayDecl>,
-    constraint_decls: Vec<flatzinc::ConstraintItem>,
-    solve_item: Option<flatzinc::SolveItem>,
-
-    search: Option<Search>,
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) struct WarmStartIntArgs {
+    pub(crate) variables: ArrayExpr<VariableExpr<i32>>,
+    pub(crate) values: ArrayExpr<i32>,
 }
 
-impl FlatZincAstBuilder {
-    pub(crate) fn add_parameter_decl(&mut self, parameter_decl: flatzinc::ParDeclItem) {
-        self.parameter_decls.push(parameter_decl);
-    }
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum VariableAnnotations {
+    OutputVar,
+}
 
-    pub(crate) fn add_variable_decl(&mut self, variable_decl: SingleVarDecl) {
-        self.single_variables.push(variable_decl);
-    }
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum ArrayAnnotations {
+    OutputArray(ArrayExpr<RangeList<i32>>),
+}
 
-    pub(crate) fn add_variable_array(&mut self, array_decl: VarArrayDecl) {
-        self.variable_arrays.push(array_decl);
-    }
+#[derive(fzn_rs::FlatZincAnnotation)]
+pub(crate) enum ConstraintAnnotations {
+    ConstraintTag(TagAnnotation),
+}
 
-    pub(crate) fn add_constraint(&mut self, constraint: flatzinc::ConstraintItem) {
-        self.constraint_decls.push(constraint);
-    }
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TagAnnotation(ConstraintTag);
 
-    pub(crate) fn set_solve_item(&mut self, solve_item: flatzinc::SolveItem) {
-        if let Some(annotation) = solve_item.annotations.first() {
-            self.search = FlatZincAstBuilder::find_search(annotation);
-        } else {
-            self.search = Some(Search::Unspecified)
-        }
-        let _ = self.solve_item.insert(solve_item);
-    }
-
-    fn find_search(annotation: &flatzinc::Annotation) -> Option<Search> {
-        match &annotation.id[..] {
-            "bool_search" => Some(Search::Bool(FlatZincAstBuilder::find_direct_search(
-                annotation,
-            ))),
-            "float_search" => panic!("Search over floats is currently not supported"),
-            "int_search" => Some(Search::Int(FlatZincAstBuilder::find_direct_search(
-                annotation,
-            ))),
-            "seq_search" => {
-                pumpkin_assert_eq_simple!(
-                    annotation.expressions.len(),
-                    1,
-                    "Expected a single expression for sequential search"
-                );
-                Some(Search::Seq(match &annotation.expressions[0] {
-                    flatzinc::AnnExpr::Annotations(annotations) => annotations
-                        .iter()
-                        .filter_map(FlatZincAstBuilder::find_search)
-                        .collect::<Vec<_>>(),
-                    other => {
-                        panic!("Expected a list of annotations for `seq_search` but was {other:?}")
-                    }
-                }))
-            }
-            "set_search" => panic!("Search over sets is currently not supported"),
-            "warm_start_int" => Some(Search::WarmStartInt {
-                variables: annotation.expressions[0].clone(),
-                values: annotation.expressions[1].clone(),
-            }),
-            "warm_start_bool" => Some(Search::WarmStartBool {
-                variables: annotation.expressions[0].clone(),
-                values: annotation.expressions[1].clone(),
-            }),
-            "warm_start_array" => {
-                Some(Search::WarmStartArray(match &annotation.expressions[0] {
-                    flatzinc::AnnExpr::Annotations(annotations) => annotations
-                        .iter()
-                        .filter_map(FlatZincAstBuilder::find_search)
-                        .collect::<Vec<_>>(),
-                    other => {
-                        panic!("Expected a list of annotations for `warm_start_array` but was {other:?}")
-                    }
-                }))
-            }
-            "constraint_name" => {
-                warn!("`constraint_name` is currently not supported; ignoring search annotation");
-                None
-            }
-            other => panic!("Did not recognise search strategy {other}"),
-        }
-    }
-
-    fn find_direct_search(annotation: &flatzinc::Annotation) -> SearchStrategy {
-        // First element is the optimization variable
-        // Second element is the variable selection strategy
-        // Third element is the value selection strategy
-        // (Optional) Fourth element is the exploration strategy (e.g. complete search)
-        pumpkin_assert_simple!(
-            annotation.expressions.len() >= 3,
-            "Expected the search annotation to have 3 or 4 elements but it has {} elements",
-            annotation.expressions.len()
-        );
-
-        SearchStrategy {
-            variables: annotation.expressions[0].clone(),
-            variable_selection_strategy: FlatZincAstBuilder::find_variable_selection_strategy(
-                &annotation.expressions[1],
-            ),
-            value_selection_strategy: FlatZincAstBuilder::find_value_selection_strategy(
-                &annotation.expressions[2],
-            ),
-        }
-    }
-
-    fn find_variable_selection_strategy(input: &flatzinc::AnnExpr) -> VariableSelectionStrategy {
-        match input {
-            flatzinc::AnnExpr::Expr(inner) => match inner {
-                flatzinc::Expr::VarParIdentifier(identifier) => match &identifier[..] {
-                    "anti_first_fail" => VariableSelectionStrategy::AntiFirstFail,
-                    "dom_w_deg" => VariableSelectionStrategy::DomWDeg,
-                    "first_fail" => VariableSelectionStrategy::FirstFail,
-                    "impact" => VariableSelectionStrategy::Impact,
-                    "input_order" => VariableSelectionStrategy::InputOrder,
-                    "largest" => VariableSelectionStrategy::Largest,
-                    "max_regret" => VariableSelectionStrategy::MaxRegret,
-                    "most_constrained" => VariableSelectionStrategy::MostConstrained,
-                    "occurrence" => VariableSelectionStrategy::Occurrence,
-                    "smallest" => VariableSelectionStrategy::Smallest,
-                    other => panic!("Did not recognise variable selection strategy {other}"),
-                },
-                other => panic!("Expected VarParIdentifier but got {other:?}"),
-            },
-            other => panic!("Expected an expression but got {other:?}"),
-        }
-    }
-
-    fn find_value_selection_strategy(input: &flatzinc::AnnExpr) -> ValueSelectionStrategy {
-        match input {
-            flatzinc::AnnExpr::Expr(inner) => match inner {
-                flatzinc::Expr::VarParIdentifier(identifier) => match &identifier[..] {
-                    "indomain" => ValueSelectionStrategy::InDomain,
-                    "indomain_interval" => ValueSelectionStrategy::InDomainInterval,
-                    "indomain_max" => ValueSelectionStrategy::InDomainMax,
-                    "indomain_median" => ValueSelectionStrategy::InDomainMedian,
-                    "indomain_middle" => ValueSelectionStrategy::InDomainMiddle,
-                    "indomain_min" => ValueSelectionStrategy::InDomainMin,
-                    "indomain_random" => ValueSelectionStrategy::InDomainRandom,
-                    "indomain_reverse_split" => ValueSelectionStrategy::InDomainReverseSplit,
-                    "indomain_split" => ValueSelectionStrategy::InDomainSplit,
-                    "indomain_split_random" => ValueSelectionStrategy::InDomainSplitRandom,
-                    "outdomain_max" => ValueSelectionStrategy::OutDomainMax,
-                    "outdomain_median" => ValueSelectionStrategy::OutDomainMedian,
-                    "outdomain_min" => ValueSelectionStrategy::OutDomainMin,
-                    "outdomain_random" => ValueSelectionStrategy::OutDomainRandom,
-                    other => panic!("Did not recognise value selection strategy {other}"),
-                },
-                other => panic!("Expected VarParIdentifier but got {other:?}"),
-            },
-            other => panic!("Expected an expression but got {other:?}"),
-        }
-    }
-
-    pub(crate) fn build(self) -> Result<FlatZincAst, FlatZincError> {
-        let FlatZincAstBuilder {
-            parameter_decls,
-            single_variables,
-            variable_arrays,
-            constraint_decls,
-            solve_item,
-            search,
-        } = self;
-
-        Ok(FlatZincAst {
-            parameter_decls,
-            single_variables,
-            variable_arrays,
-            constraint_decls,
-            solve_item: solve_item.ok_or(FlatZincError::MissingSolveItem)?,
-            search: search.ok_or(FlatZincError::MissingSolveItem)?,
-        })
+impl From<ConstraintTag> for TagAnnotation {
+    fn from(value: ConstraintTag) -> Self {
+        TagAnnotation(value)
     }
 }
 
-pub(crate) enum SingleVarDecl {
-    Bool {
-        id: String,
-        expr: Option<flatzinc::BoolExpr>,
-        annos: flatzinc::expressions::Annotations,
-    },
-
-    IntInRange {
-        id: String,
-        lb: i128,
-        ub: i128,
-        expr: Option<flatzinc::IntExpr>,
-        annos: flatzinc::expressions::Annotations,
-    },
-
-    IntInSet {
-        id: String,
-        set: Vec<i128>,
-
-        annos: flatzinc::expressions::Annotations,
-    },
+impl From<TagAnnotation> for ConstraintTag {
+    fn from(value: TagAnnotation) -> Self {
+        value.0
+    }
 }
 
-pub(crate) enum VarArrayDecl {
-    Bool {
-        id: String,
-        annos: Vec<flatzinc::Annotation>,
-        array_expr: Option<flatzinc::ArrayOfBoolExpr>,
-    },
-    Int {
-        id: String,
-        annos: Vec<flatzinc::Annotation>,
-        array_expr: Option<flatzinc::ArrayOfIntExpr>,
-    },
+impl FromAnnotationArgument for TagAnnotation {
+    fn from_argument(
+        _: &fzn_rs::ast::Node<fzn_rs::ast::AnnotationArgument>,
+    ) -> Result<Self, fzn_rs::InstanceError> {
+        unreachable!("This never gets parsed from source")
+    }
 }
+
+pub(crate) type Instance = fzn_rs::TypedInstance<
+    i32,
+    super::constraints::Constraints,
+    VariableAnnotations,
+    ArrayAnnotations,
+    ConstraintAnnotations,
+    SearchAnnotation,
+>;

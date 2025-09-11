@@ -3,18 +3,35 @@
 //! However, we assume that the first n constraint tags are the flatzinc constraints. Therefore,
 //! the root-level inferences would throw off that mapping.
 
+use fzn_rs::ast;
+
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::ast::ConstraintAnnotations;
+use crate::flatzinc::ast::Instance;
 use crate::flatzinc::error::FlatZincError;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
+    instance: &mut Instance,
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
-    for decl in &ast.constraint_decls {
+    for constraint in instance.constraints.iter_mut() {
         let tag = context.solver.new_constraint_tag();
-        context.constraints.push((tag, decl.clone()));
+        constraint
+            .annotations
+            .push(generated_node(ConstraintAnnotations::ConstraintTag(
+                tag.into(),
+            )));
     }
 
     Ok(())
+}
+
+fn generated_node<T>(data: T) -> ast::Node<T> {
+    ast::Node {
+        span: ast::Span {
+            start: usize::MAX,
+            end: usize::MAX,
+        },
+        node: data,
+    }
 }

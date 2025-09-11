@@ -15,6 +15,7 @@ use std::time::Duration;
 use clap::Parser;
 use clap::ValueEnum;
 use file_format::FileFormat;
+use flatzinc::error::FlatZincError;
 use log::error;
 use log::info;
 use log::warn;
@@ -488,6 +489,14 @@ fn configure_logging_sat(
 fn main() {
     match run() {
         Ok(()) => {}
+
+        // These errors are printed in the flatzinc code.
+        Err(PumpkinError::FlatZinc(FlatZincError::UnexpectedToken { .. }))
+        | Err(PumpkinError::FlatZinc(FlatZincError::IntegerTooBig { .. }))
+        | Err(PumpkinError::FlatZinc(FlatZincError::IncorrectNumberOfArguments { .. })) => {
+            std::process::exit(1)
+        }
+
         Err(e) => {
             error!("Execution failed, error: {e}");
             std::process::exit(1);

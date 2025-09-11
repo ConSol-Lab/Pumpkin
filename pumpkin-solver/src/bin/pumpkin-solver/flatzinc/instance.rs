@@ -58,7 +58,7 @@ impl Output {
     pub(crate) fn array_of_bool(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[Literal]>,
+        contents: Vec<Literal>,
     ) -> Output {
         Output::ArrayOfBool(ArrayOutput {
             id,
@@ -77,7 +77,7 @@ impl Output {
     pub(crate) fn array_of_int(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[DomainId]>,
+        contents: Vec<DomainId>,
     ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,
@@ -108,7 +108,7 @@ pub(crate) struct ArrayOutput<T> {
     /// Example: [(1, 5), (2, 4)] describes a 2d array, where the first dimension in indexed with
     /// an element of 1..5, and the second dimension is indexed with an element from 2..4.
     shape: Box<[(i32, i32)]>,
-    contents: Rc<[T]>,
+    contents: Vec<T>,
 }
 
 impl<T> ArrayOutput<T> {

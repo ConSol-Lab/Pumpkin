@@ -1,44 +1,30 @@
 //! Add objective function to solver
 
-use flatzinc::BoolExpr;
-use flatzinc::Goal;
-
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::ast::Instance;
 use crate::flatzinc::instance::FlatzincObjective;
 use crate::flatzinc::FlatZincError;
 
 pub(crate) fn run(
-    ast: &FlatZincAst,
+    typed_ast: &Instance,
     context: &mut CompilationContext,
 ) -> Result<Option<FlatzincObjective>, FlatZincError> {
-    match &ast.solve_item.goal {
-        Goal::Satisfy => Ok(None),
-        Goal::OptimizeBool(optimization_type, bool_expr) => {
-            // The objective function will be parsed as a bool because that is the first identifier
-            // it will find For now we assume that the objective function is a single
-            // integer
+    match &typed_ast.solve.method.node {
+        fzn_rs::Method::Satisfy => Ok(None),
+        fzn_rs::Method::Optimize {
+            direction,
+            objective,
+        } => {
+            let variable = context.resolve_integer_variable(objective)?;
 
-            let domain = match bool_expr {
-                BoolExpr::Bool(_) => unreachable!(
-                    "We do not expect a constant to be present in the objective function!"
-                ),
-                BoolExpr::VarParIdentifier(x) => {
-                    if context.is_identifier_parameter(x) {
-                        context.resolve_integer_constant_from_identifier(x)?
-                    } else {
-                        context.resolve_integer_variable_from_identifier(x)?
-                    }
+            match direction {
+                fzn_rs::ast::OptimizationDirection::Minimize => {
+                    Ok(Some(FlatzincObjective::Minimize(variable)))
                 }
-            };
-
-            Ok(Some(match optimization_type {
-                flatzinc::OptimizationType::Minimize => FlatzincObjective::Minimize(domain),
-                flatzinc::OptimizationType::Maximize => FlatzincObjective::Maximize(domain),
-            }))
+                fzn_rs::ast::OptimizationDirection::Maximize => {
+                    Ok(Some(FlatzincObjective::Maximize(variable)))
+                }
+            }
         }
-        _ => todo!(
-            "For now we assume that the optimisation function is a single integer to optimise"
-        ),
     }
 }
