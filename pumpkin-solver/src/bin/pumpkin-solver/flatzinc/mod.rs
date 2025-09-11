@@ -410,7 +410,7 @@ fn parse_and_compile(
     let mut source = String::new();
     let _ = instance.read_to_string(&mut source)?;
 
-    let ast = fzn_rs::parsers::fzn::parse(&source)?;
+    let ast = fzn_rs::fzn::parse(&source)?;
 
     compiler::compile(ast, solver, options)
 }
