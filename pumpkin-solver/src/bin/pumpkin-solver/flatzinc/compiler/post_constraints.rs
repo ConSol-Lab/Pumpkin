@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
@@ -268,9 +269,16 @@ fn compile_disjunctive_strict(
     let start_times = context.resolve_integer_variable_array(&exprs[0])?;
     let durations = context.resolve_array_integer_constants(&exprs[1])?;
 
+    assert_eq!(start_times.len(), durations.len());
+
     let post_result = constraints::disjunctive_strict(
-        start_times.iter().copied(),
-        durations.iter().copied(),
+        start_times
+            .iter()
+            .zip(durations.iter())
+            .map(|(&start_time, &duration)| ArgDisjunctiveTask {
+                start_time,
+                processing_time: duration,
+            }),
         constraint_tag,
     )
     .post(context.solver);

@@ -3,23 +3,14 @@ use std::fmt::Debug;
 use crate::engine::propagation::LocalId;
 
 #[derive(Debug, Clone)]
-pub(crate) struct ArgDisjunctiveTask<Var> {
-    pub(crate) start_time: Var,
-    pub(crate) processing_time: i32,
+pub struct ArgDisjunctiveTask<Var> {
+    pub start_time: Var,
+    pub processing_time: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct DisjunctiveTask<Var> {
     pub(crate) start_time: Var,
     pub(crate) processing_time: i32,
     pub(crate) id: LocalId,
-}
-
-impl<Var> Debug for DisjunctiveTask<Var> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DisjunctiveTask")
-            .field("d", &self.processing_time)
-            .field("id", &self.id)
-            .finish()
-    }
 }

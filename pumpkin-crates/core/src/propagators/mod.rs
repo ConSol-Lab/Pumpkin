@@ -13,5 +13,6 @@ pub use cumulative::CumulativeExplanationType;
 pub use cumulative::CumulativeOptions;
 pub use cumulative::CumulativePropagationMethod;
 pub(crate) use cumulative::*;
+pub use disjunctive::disjunctive_task::ArgDisjunctiveTask;
 pub(crate) use disjunctive::*;
 pub(crate) use reified_propagator::*;

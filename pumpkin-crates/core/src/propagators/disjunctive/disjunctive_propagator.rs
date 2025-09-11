@@ -31,6 +31,8 @@ use crate::variables::IntegerVariable;
 /// overflow the resource capacity and thus i should be scheduled after all activities from this
 /// set.
 ///
+/// It follows the [MiniZinc specifications](https://docs.minizinc.dev/en/stable/lib-globals-scheduling.html#mzn-ref-globals-scheduling-disjunctive-strict) which means that tasks with duration 0 can only be scheduled when no other tasks are running.
+///
 /// Note: This propagator only performs lower-bound propagation (though an analogous propagator for
 /// upper-bounds can be achieved using views).
 ///
@@ -107,7 +109,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 
 impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
     fn name(&self) -> &str {
-        "Disjunctive"
+        "DisjunctiveStrict"
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {

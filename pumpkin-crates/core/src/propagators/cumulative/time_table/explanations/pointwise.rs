@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
+use crate::constraint_arguments::CumulativeExplanationType;
 use crate::engine::propagation::contexts::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
-use crate::options::CumulativeExplanationType;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;

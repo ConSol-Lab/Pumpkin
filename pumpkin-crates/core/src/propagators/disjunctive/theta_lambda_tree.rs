@@ -304,30 +304,48 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
             let right_child_of_parent = Self::get_right_child_index(parent);
             pumpkin_assert_simple!(left_child_of_parent == index || right_child_of_parent == index);
 
+            // The sum of processing times is the sum of processing times in the left child + the
+            // sum of processing times in right child
             self.nodes[parent].sum_of_processing_times = self.nodes[left_child_of_parent]
                 .sum_of_processing_times
                 + self.nodes[right_child_of_parent].sum_of_processing_times;
 
-            self.nodes[parent].ect = max(
-                self.nodes[right_child_of_parent].ect,
-                self.nodes[left_child_of_parent].ect
-                    + self.nodes[right_child_of_parent].sum_of_processing_times,
+            // The ECT is either the ECT of the left child node + the processing times of the right
+            // child or it is the ECT of the right child (we do not know whether the processing
+            // times of the left child influence the processing times of the right child)
+            let ect_left = self.nodes[left_child_of_parent].ect
+                + self.nodes[right_child_of_parent].sum_of_processing_times;
+            self.nodes[parent].ect = max(self.nodes[right_child_of_parent].ect, ect_left);
+
+            // The sum of processing times (including one element of lambda) is either:
+            // 1) The sum of processing times of the right child + the sum of processing times of
+            //    the left child including one element of lambda
+            // 2) The sum of processing times of the left child + the sum of processing times of the
+            //    right child include one element of lambda
+            let sum_of_processing_times_left_child_lambda = self.nodes[left_child_of_parent]
+                .sum_of_processing_times_bar
+                + self.nodes[right_child_of_parent].sum_of_processing_times;
+            let sum_of_processing_times_right_child_lambda = self.nodes[left_child_of_parent]
+                .sum_of_processing_times
+                + self.nodes[right_child_of_parent].sum_of_processing_times_bar;
+            self.nodes[parent].sum_of_processing_times_bar = max(
+                sum_of_processing_times_left_child_lambda,
+                sum_of_processing_times_right_child_lambda,
             );
 
-            self.nodes[parent].sum_of_processing_times_bar = max(
-                self.nodes[left_child_of_parent].sum_of_processing_times_bar
-                    + self.nodes[right_child_of_parent].sum_of_processing_times,
-                self.nodes[left_child_of_parent].sum_of_processing_times
-                    + self.nodes[right_child_of_parent].sum_of_processing_times_bar,
-            );
+            // The earliest completion time (including one element of lambda) is either:
+            // 1) The earliest completion time including one element of lambda from the right child
+            // 2) The earliest completion time of the right child + the sum of processing times
+            //    including one element of lambda of the right child
+            // 2) The earliest completion time of the left child + the sum of processing times
+            //    including one element of lambda of the left child
+            let ect_right_child_lambda = self.nodes[left_child_of_parent].ect
+                + self.nodes[right_child_of_parent].sum_of_processing_times_bar;
+            let ect_left_child_lambda = self.nodes[left_child_of_parent].ect_bar
+                + self.nodes[right_child_of_parent].sum_of_processing_times;
             self.nodes[parent].ect_bar = max(
                 self.nodes[right_child_of_parent].ect_bar,
-                max(
-                    self.nodes[left_child_of_parent].ect
-                        + self.nodes[right_child_of_parent].sum_of_processing_times_bar,
-                    self.nodes[left_child_of_parent].ect_bar
-                        + self.nodes[right_child_of_parent].sum_of_processing_times,
-                ),
+                max(ect_right_child_lambda, ect_left_child_lambda),
             );
 
             index = parent;
