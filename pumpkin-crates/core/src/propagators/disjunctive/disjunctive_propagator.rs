@@ -31,6 +31,9 @@ use crate::variables::IntegerVariable;
 /// overflow the resource capacity and thus i should be scheduled after all activities from this
 /// set.
 ///
+/// Note: This propagator only performs lower-bound propagation (though an analogous propagator for
+/// upper-bounds can be achieved using views).
+///
 /// # Bibliography
 /// - \[1\] P. Vilím, ‘Filtering algorithms for the unary resource constraint’, Archives of Control
 ///   Sciences, vol. 18, no. 2, pp. 159–202, 2008.
@@ -47,31 +50,34 @@ pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// For an explanation of how it is used, see the documentation and \[1\].
     theta_lambda_tree: ThetaLambdaTree<Var>,
 
+    inference_code: InferenceCode,
+}
+
+pub(crate) struct DisjunctivePropagatorConstructor<Var> {
     constraint_tag: ConstraintTag,
-    inference_code: Option<InferenceCode>,
+    tasks: Vec<ArgDisjunctiveTask<Var>>,
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctivePropagator<Var> {
-    type PropagatorImpl = Self;
-
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        self.inference_code =
-            Some(context.create_inference_code(self.constraint_tag, DisjunctiveEdgeFinding));
-
-        self.tasks.iter().for_each(|task| {
-            context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
-        });
-
-        self
-    }
-}
-
-impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
+impl<Var> DisjunctivePropagatorConstructor<Var> {
     pub(crate) fn new(
         tasks: impl IntoIterator<Item = ArgDisjunctiveTask<Var>>,
         constraint_tag: ConstraintTag,
     ) -> Self {
-        let tasks = tasks
+        Self {
+            constraint_tag,
+            tasks: tasks.into_iter().collect(),
+        }
+    }
+}
+
+impl<Var: IntegerVariable + 'static> PropagatorConstructor
+    for DisjunctivePropagatorConstructor<Var>
+{
+    type PropagatorImpl = DisjunctivePropagator<Var>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let tasks = self
+            .tasks
             .into_iter()
             .enumerate()
             .map(|(index, task)| DisjunctiveTask {
@@ -82,13 +88,19 @@ impl<Var: IntegerVariable + 'static> DisjunctivePropagator<Var> {
             .collect::<Vec<_>>();
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
-        Self {
+        let inference_code =
+            context.create_inference_code(self.constraint_tag, DisjunctiveEdgeFinding);
+
+        tasks.iter().for_each(|task| {
+            context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
+        });
+
+        DisjunctivePropagator {
             tasks: tasks.clone().into_boxed_slice(),
             sorted_tasks: tasks,
             theta_lambda_tree,
 
-            constraint_tag,
-            inference_code: None,
+            inference_code,
         }
     }
 }
@@ -104,7 +116,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.tasks,
             &mut self.sorted_tasks,
-            self.inference_code.unwrap(),
+            self.inference_code,
         )
     }
 
@@ -119,7 +131,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.tasks,
             &mut sorted_tasks,
-            self.inference_code.unwrap(),
+            self.inference_code,
         )
     }
 }
