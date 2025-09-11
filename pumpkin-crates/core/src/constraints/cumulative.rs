@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use super::Constraint;
-use crate::options::CumulativePropagationMethod;
+use crate::constraint_arguments::CumulativePropagationMethod;
 use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;

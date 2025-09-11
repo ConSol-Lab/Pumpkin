@@ -1,0 +1,7 @@
+var 0..8: x :: output_var;
+var 0..8: y :: output_var;
+var 0..8: z :: output_var;
+
+constraint pumpkin_disjunctive_strict([x, y, z], [2, 3, 5]);
+
+solve satisfy;
