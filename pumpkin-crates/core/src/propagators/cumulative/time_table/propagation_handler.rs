@@ -44,7 +44,7 @@ pub(crate) struct CumulativePropagationHandler {
 }
 
 fn check_explanation(
-    predicate: Predicate,
+    explained_predicate: Predicate,
     explanation: &PropositionalConjunction,
     context: PropagationContext,
 ) -> bool {
@@ -52,7 +52,7 @@ fn check_explanation(
         .iter()
         .all(|&predicate| context.assignments().is_predicate_satisfied(predicate));
     if !all_predicates_hold {
-        eprintln!("Not all predicates hold in the explanation for {predicate:?}")
+        eprintln!("Not all predicates hold in the explanation for {explained_predicate:?}")
     }
     let at_least_one_element_from_current_level = explanation.iter().any(|&predicate| {
         context
@@ -63,7 +63,7 @@ fn check_explanation(
     });
     if !at_least_one_element_from_current_level {
         eprintln!(
-            "At least one predicate in the explanation for {predicate:?} should be from the current decision level"
+            "At least one predicate in the explanation for {explained_predicate:?} should be from the current decision level"
         )
     }
 
