@@ -47,7 +47,7 @@ pub(crate) struct PredicateTracker {
     max_assigned: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
-    /// Note that there is no specific order in which these values are stored.
+    /// Note that these values are not sorted in any way.
     values: IndexSet<i32, FnvBuildHasher>,
     /// The [`PredicateId`] corresponding to the predicate for each value in
     /// [`PredicateTracker::values`].
