@@ -50,6 +50,9 @@ mzn_test!(int_abs);
 mzn_test!(int_div);
 mzn_test!(int_mod);
 
+mzn_test!(array_int_element);
+mzn_test!(array_var_int_element);
+
 mzn_test!(array_int_maximum);
 mzn_test!(array_int_minimum);
 mzn_test!(int_min);
