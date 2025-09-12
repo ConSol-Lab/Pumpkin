@@ -1,3 +1,5 @@
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::AlternatingStrategy;
 use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::Brancher;
@@ -5,8 +7,8 @@ use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::results::SolutionReference;
 
-/// Specifies that the [`AlternatingBrancher`] should use the provided [`Strategy`] until a solution
-/// is found, after which it will use [`DefaultBrancher`].
+/// Specifies that the [`AlternatingBrancher`] should use the provided [`AlternatingStrategy`] until
+/// a solution is found, after which it will use [`BrancherToUse::Default`].
 #[derive(Debug)]
 pub struct UntilSolution<Strategy> {
     strategy_before_solution: Strategy,
