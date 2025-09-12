@@ -3,20 +3,14 @@ use std::io::BufReader;
 use std::io::Read;
 use std::str::FromStr;
 
+use pumpkin_core::variables::MAX_INTEGER_VALUE;
+use pumpkin_core::variables::MIN_INTEGER_VALUE;
+
 use super::ast::FlatZincAst;
 use super::ast::FlatZincAstBuilder;
 use super::ast::SingleVarDecl;
 use super::ast::VarArrayDecl;
 use super::FlatZincError;
-
-/// The minimum value which an integer variable can take on.
-///
-/// It is divided by 2 to avoid underflows.
-const MIN_VALUE: i32 = i32::MIN / 2;
-/// The maximum value which an integer variable can take on.
-///
-/// It is divided by 2 to avoid overflows.
-const MAX_VALUE: i32 = i32::MAX / 2;
 
 pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
     let reader = BufReader::new(source);
@@ -144,8 +138,8 @@ fn parse_var_decl(
             // For unbounded integers, we take the minimum and maximum possible values
             ast.add_variable_decl(SingleVarDecl::IntInRange {
                 id,
-                lb: MIN_VALUE as i128,
-                ub: MAX_VALUE as i128,
+                lb: MIN_INTEGER_VALUE as i128,
+                ub: MAX_INTEGER_VALUE as i128,
                 expr,
                 annos,
             });
