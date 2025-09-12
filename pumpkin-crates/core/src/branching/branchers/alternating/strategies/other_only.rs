@@ -1,3 +1,5 @@
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::AlternatingStrategy;
 use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::Brancher;
