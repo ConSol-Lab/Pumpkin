@@ -3,6 +3,9 @@ use std::io::BufReader;
 use std::io::Read;
 use std::str::FromStr;
 
+use pumpkin_core::variables::MAX_INTEGER_VALUE;
+use pumpkin_core::variables::MIN_INTEGER_VALUE;
+
 use super::ast::FlatZincAst;
 use super::ast::FlatZincAstBuilder;
 use super::ast::SingleVarDecl;
@@ -131,8 +134,16 @@ fn parse_var_decl(
             Ok(())
         }
 
-        flatzinc::VarDeclItem::Int { .. } => {
-            Err(FlatZincError::UnsupportedVariable("unbounded int".into()))
+        flatzinc::VarDeclItem::Int { id, expr, annos } => {
+            // For unbounded integers, we take the minimum and maximum possible values
+            ast.add_variable_decl(SingleVarDecl::IntInRange {
+                id,
+                lb: MIN_INTEGER_VALUE as i128,
+                ub: MAX_INTEGER_VALUE as i128,
+                expr,
+                annos,
+            });
+            Ok(())
         }
 
         flatzinc::VarDeclItem::Float { .. }
