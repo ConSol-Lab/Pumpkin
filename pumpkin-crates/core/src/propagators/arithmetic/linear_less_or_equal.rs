@@ -1,6 +1,9 @@
+use itertools::Itertools;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
+use crate::conjunction;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -87,15 +90,80 @@ impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
-        PropagatorConflict {
-            conjunction: self
+    /// Find an irreducible set of atomics such that it is inconsistent w.r.t. the linear constraint
+    /// and all atomics of the form [var >= lb] for (var, lb) in the `lower_bounds` list.
+    fn extend_reason(
+        &self,
+        context: PropagationContext,
+        lower_bounds: &[(usize, i32)],
+    ) -> PropositionalConjunction {
+        let mut conjunction = conjunction![];
+        // Rewrite the constraint x1 + ... + xn >= c with arbitrary lower bounds
+        // as (y1 + l1) + ... + (yn + ln) >= c with lk as the global lower bound of xk,
+        // and all "variables" y1, ..., yn having lower bounds of 0.
+        //
+        // Rewrite further as y1 + ... + yn >= c - (l1 + ... + ln) and store the new RHS.
+        let mut rem = self.c
+            - self
                 .x
                 .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .collect(),
+                .enumerate()
+                .map(|(ix, var)| {
+                    // Take the lower bound from the input if exists or from context otherwise
+                    lower_bounds
+                        .iter()
+                        .filter_map(|(lb_ix, lb)| if *lb_ix == ix { Some(*lb) } else { None })
+                        .next()
+                        .unwrap_or(context.lower_bound_at_trail_position(var, 0))
+                })
+                .sum::<i32>();
+
+        // Find the smallest subset of variable bounds from {y1, ..., yn} with the total
+        // lower bound exceeding the RHS from the previous step; use the fact that
+        // [yk >= t] is equivalent to [xk >= t - lk]
+        for var in self
+            .x
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, var)| {
+                if lower_bounds.iter().any(|(lb_ix, _)| *lb_ix == ix) {
+                    None
+                } else {
+                    Some(var)
+                }
+            })
+            .sorted_by_cached_key(|&var| {
+                context.lower_bound_at_trail_position(var, 0) - context.lower_bound(var)
+            })
+        {
+            // If the condition on the selected set is satisfied, break
+            if rem < 0 {
+                break;
+            }
+            // Add the variable accounting for the largest lower bound (in the shifted sense)
+            rem -= context.lower_bound(var) - context.lower_bound_at_trail_position(var, 0);
+            conjunction.push(predicate![var >= context.lower_bound(var)]);
+        }
+        conjunction
+    }
+
+    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
+        // Find a irreducible set of atomics S such that S -> FALSE
+        PropagatorConflict {
+            conjunction: self.extend_reason(context, &[]),
             inference_code: self.inference_code,
         }
+    }
+
+    fn explain_propagation(
+        &self,
+        context: PropagationContext,
+        var_index: usize,
+        ub: i32,
+    ) -> PropositionalConjunction {
+        // Find a irreducible set of atomics S such that S -> [self.x[i] <= ub] <=> S /\ [self.x[i]
+        // >= ub + 1] -> FALSE
+        self.extend_reason(context, &[(var_index, ub + 1)])
     }
 }
 
@@ -176,20 +244,11 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                let reason: PropositionalConjunction = self
-                    .x
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(j, x_j)| {
-                        if j != i {
-                            Some(predicate![x_j >= context.lower_bound(x_j)])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
+                context.post(
+                    predicate![x_i <= bound],
+                    self.explain_propagation(context.as_readonly(), i, bound),
+                    self.inference_code,
+                )?;
             }
         }
 
