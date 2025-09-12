@@ -121,6 +121,12 @@ impl PredicateIdAssignments {
         assignments: &Assignments,
         predicate_id_generator: &mut PredicateIdGenerator,
     ) {
+        // First we make space for it if we have not seen the predicate yet
+        if predicate_id.index() >= self.predicate_values.len() {
+            self.predicate_values
+                .resize(predicate_id.index() + 1, PredicateValue::Unknown);
+        }
+
         if self.predicate_values[predicate_id].is_unknown() {
             // First we calculate the current value of the predicate in the assignments structure
             let predicate = predicate_id_generator.get_predicate(predicate_id);
