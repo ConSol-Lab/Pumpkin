@@ -40,13 +40,15 @@ use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::statistics::StatisticLogger;
 
-/// The minimum value which an integer variable can take on.
+/// The minimum value of an unbounded integer.
 ///
-/// It is divided by 2 to avoid underflows.
+/// This can be overridden by setting specific bounds under this threshold but this should be done
+/// with care since it might lead to overflow/underflow!
 pub const MIN_INTEGER_VALUE: i32 = -500_000_000;
-/// The maximum value which an integer variable can take on.
+/// The maximum value of an unbounded integer.
 ///
-/// It is divided by 2 to avoid overflows.
+/// This can be overridden by setting specific bounds over this threshold but this should be done
+/// with care since it might lead to overflow/underflow!
 pub const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
