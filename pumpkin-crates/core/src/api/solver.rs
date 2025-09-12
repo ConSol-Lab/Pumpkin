@@ -43,11 +43,11 @@ use crate::statistics::StatisticLogger;
 /// The minimum value which an integer variable can take on.
 ///
 /// It is divided by 2 to avoid underflows.
-pub const MIN_INTEGER_VALUE: i32 = i32::MIN / 2;
+pub const MIN_INTEGER_VALUE: i32 = -500_000_000;
 /// The maximum value which an integer variable can take on.
 ///
 /// It is divided by 2 to avoid overflows.
-pub const MAX_INTEGER_VALUE: i32 = i32::MAX / 2;
+pub const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
