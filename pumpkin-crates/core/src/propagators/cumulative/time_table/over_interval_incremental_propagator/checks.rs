@@ -12,13 +12,17 @@ use crate::variables::IntegerVariable;
 
 /// Determines whether the added mandatory part causes a new profile before the first overapping
 /// profile.
-pub(crate) fn new_profile_before_first_profile<Var: IntegerVariable + 'static>(
+pub(crate) fn new_profile_before_first_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     current_index: usize,
     start_index: usize,
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
-    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     if current_index == start_index && update_range.start < profile.start {
         // We are considering the first overlapping profile and there is
@@ -37,14 +41,18 @@ pub(crate) fn new_profile_before_first_profile<Var: IntegerVariable + 'static>(
 
 /// Determines whether a new profile should be inserted between the current profile (pointed to
 /// by `current_index`) and the previous profile.
-pub(crate) fn new_profile_between_profiles<Var: IntegerVariable + 'static>(
-    time_table: &OverIntervalTimeTableType<Var>,
+pub(crate) fn new_profile_between_profiles<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    time_table: &OverIntervalTimeTableType<Var, PVar, RVar>,
     current_index: usize,
     start_index: usize,
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
-    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     if current_index != start_index && current_index != 0 {
         // We are not considering the first profile and there could be a
@@ -80,10 +88,12 @@ pub(crate) fn new_profile_between_profiles<Var: IntegerVariable + 'static>(
 /// is added in [`overlap_updated_profile`].
 pub(crate) fn split_profile_added_part_starts_after_profile_start<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 >(
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
 ) {
     if update_range.start > profile.start {
         // We are splitting the current profile into one or more parts
@@ -106,13 +116,17 @@ pub(crate) fn split_profile_added_part_starts_after_profile_start<
 
 /// Determines whether a new profile which contains the overlap between `profile` and the added
 /// mandatory part should be added.
-pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
+pub(crate) fn overlap_updated_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
-    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
     capacity: i32,
-) -> Result<(), ResourceProfile<Var>> {
+) -> Result<(), ResourceProfile<Var, PVar, RVar>> {
     // Now we create a new profile which consists of the part of the
     // profile covered by the update range
     // This means that we are adding the contribution of the updated
@@ -168,10 +182,14 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
 /// Note that this function adds the unchanged part only (i.e. the part of the profile with
 /// which the added mandatory part does **not** overlap), the updated part of this profile
 /// is added in [`overlap_updated_profile`].
-pub(crate) fn split_profile_added_part_ends_before_profile_end<Var: IntegerVariable + 'static>(
+pub(crate) fn split_profile_added_part_ends_before_profile_end<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
 ) {
     if profile.end >= update_range.end {
         // We are splitting the current profile into one or more parts
@@ -190,13 +208,17 @@ pub(crate) fn split_profile_added_part_ends_before_profile_end<Var: IntegerVaria
 
 /// Determines whether the added mandatory part causes a new profile after the last overapping
 /// profile.
-pub(crate) fn new_part_after_last_profile<Var: IntegerVariable + 'static>(
+pub(crate) fn new_part_after_last_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     current_index: usize,
     end_index: usize,
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
-    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     if current_index == end_index && update_range.end > profile.end + 1 {
         // We are considering the last overlapping profile and there is

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
@@ -18,11 +19,14 @@ use crate::variables::IntegerVariable;
 /// [`TimeTablePerPointPropagator`].
 pub(crate) fn check_synchronisation_conflict_explanation_per_point<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: PropagationContext,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> bool {
     let error_from_scratch =
         create_time_table_per_point_from_scratch(context, inference_code, parameters);
@@ -42,9 +46,14 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 /// Finds the conflicting profile which would have been found by the
 /// [`TimeTablePerPointPropagator`]; this is the conflicting profile which has the minimum maximum
 /// ID in set of the first `n` profile tasks (when sorted on ID) which overflow the capacity
-pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
-    time_table: &mut PerPointTimeTableType<Var>,
-    parameters: &CumulativeParameters<Var>,
+pub(crate) fn find_synchronised_conflict<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    time_table: &mut PerPointTimeTableType<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Option<u32> {
     let mut profile_time_point = None;
     let mut minimum_maximum_id = u32::MAX;
@@ -79,11 +88,18 @@ pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
 ///
 /// The sum of the heights of the tasks is stored in the provided `output_height`; note that this
 /// means that the iterator should be consumed before reading the `output_height`
-fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + 'static>(
-    profile: &'a mut ResourceProfile<Var>,
-    parameters: &'a CumulativeParameters<Var>,
+fn get_minimum_set_of_tasks_which_overflow_capacity<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    context: PropagationContext<'a>,
+    profile: &'a mut ResourceProfile<Var, PVar, RVar>,
+    parameters: &'a CumulativeParameters<Var, PVar, RVar, CVar>,
     output_height: &'a mut i32,
-) -> impl Iterator<Item = Rc<Task<Var>>> + 'a {
+) -> impl Iterator<Item = Rc<Task<Var, PVar, RVar>>> + 'a {
     // First we sort the profile based on the ID
     sort_profile_based_on_id(profile);
 
@@ -94,10 +110,10 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
             .profile_tasks
             .iter()
             .take_while(move |task| {
-                if *resource_usage > parameters.capacity {
+                if *resource_usage > context.upper_bound(&parameters.capacity) {
                     return false;
                 }
-                *resource_usage += task.resource_usage;
+                *resource_usage += context.lower_bound(&task.resource_usage);
                 true
             })
             .cloned()
@@ -109,11 +125,16 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
 /// by [`TimeTablePerPointPropagator`]), this function calculates the error which would have been
 /// reported by [`TimeTablePerPointPropagator`] by finding the tasks which should be included in the
 /// profile and sorting them in the same order.
-pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_synchronised_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
     inference_code: InferenceCode,
-    conflicting_profile: &mut ResourceProfile<Var>,
-    parameters: &CumulativeParameters<Var>,
+    conflicting_profile: &mut ResourceProfile<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> PropagationStatusCP {
     // Store because we are mutably borrowing the conflicting profile
     let new_profile_start = conflicting_profile.start;
@@ -147,14 +168,25 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 /// Synchronises the time-table; one action is performed:
 /// 1. Each profile is sorted such that it corresponds to the order in which
 ///    [`TimeTableOverIntervalPropagator`] would have found them
-pub(crate) fn synchronise_time_table<'a, Var: IntegerVariable + 'static>(
-    time_table: impl Iterator<Item = &'a mut ResourceProfile<Var>>,
+pub(crate) fn synchronise_time_table<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    time_table: impl Iterator<Item = &'a mut ResourceProfile<Var, PVar, RVar>>,
 ) {
     time_table.for_each(|profile| sort_profile_based_on_id(profile))
 }
 
 /// Sorts the provided `profile` on non-decreasing order of ID
-fn sort_profile_based_on_id<Var: IntegerVariable + 'static>(profile: &mut ResourceProfile<Var>) {
+fn sort_profile_based_on_id<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    profile: &mut ResourceProfile<Var, PVar, RVar>,
+) {
     profile
         .profile_tasks
         .sort_by(|a, b| a.id.unpack().cmp(&b.id.unpack()));

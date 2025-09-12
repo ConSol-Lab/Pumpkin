@@ -66,14 +66,16 @@ impl CumulativePropagationHandler {
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
+    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
-        propagating_task: &Rc<Task<Var>>,
+        profiles: &[&ResourceProfile<Var, PVar, RVar>],
+        propagating_task: &Rc<Task<Var, PVar, RVar>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         pumpkin_assert_simple!(!profiles.is_empty());
         match self.explanation_type {
@@ -131,14 +133,16 @@ impl CumulativePropagationHandler {
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
+    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
-        propagating_task: &Rc<Task<Var>>,
+        profiles: &[&ResourceProfile<Var, PVar, RVar>],
+        propagating_task: &Rc<Task<Var, PVar, RVar>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         pumpkin_assert_simple!(!profiles.is_empty());
 
@@ -196,14 +200,16 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_lower_bound_with_explanations<Var>(
+    pub(crate) fn propagate_lower_bound_with_explanations<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
-        propagating_task: &Rc<Task<Var>>,
+        profile: &ResourceProfile<Var, PVar, RVar>,
+        propagating_task: &Rc<Task<Var, PVar, RVar>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         pumpkin_assert_advanced!(
             context.lower_bound(&propagating_task.start_variable) < profile.end + 1
@@ -246,11 +252,11 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_upper_bound_with_explanations<Var>(
+    pub(crate) fn propagate_upper_bound_with_explanations<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
-        propagating_task: &Rc<Task<Var>>,
+        profile: &ResourceProfile<Var, PVar, RVar>,
+        propagating_task: &Rc<Task<Var, PVar, RVar>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
@@ -301,14 +307,16 @@ impl CumulativePropagationHandler {
 
     /// Propagates a hole in the domain; note that this explanation does not contain any of the
     /// bounds of `propagating_task`.
-    pub(crate) fn propagate_holes_in_domain<Var>(
+    pub(crate) fn propagate_holes_in_domain<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
-        propagating_task: &Rc<Task<Var>>,
+        profile: &ResourceProfile<Var, PVar, RVar>,
+        propagating_task: &Rc<Task<Var, PVar, RVar>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         // We go through all of the time-points which cause `task` to overlap
         // with the resource profile
@@ -398,13 +406,15 @@ impl CumulativePropagationHandler {
     }
 
     /// Either we get the stored stored profile explanation or we initialize it.
-    fn get_stored_profile_explanation_or_init<Var>(
+    fn get_stored_profile_explanation_or_init<Var, PVar, RVar>(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
+        profile: &ResourceProfile<Var, PVar, RVar>,
     ) -> Rc<PropositionalConjunction>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         Rc::clone(self.stored_profile_explanation.get_or_init(|| {
             Rc::new(
@@ -426,14 +436,16 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+pub(crate) fn create_conflict_explanation<Var, PVar, RVar, Context: ReadDomains + Copy>(
     context: Context,
     inference_code: InferenceCode,
-    conflict_profile: &ResourceProfile<Var>,
+    conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     explanation_type: CumulativeExplanationType,
 ) -> PropagatorConflict
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
     let conjunction = match explanation_type {
         CumulativeExplanationType::Naive => {

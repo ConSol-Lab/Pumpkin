@@ -51,13 +51,13 @@ use crate::pumpkin_assert_extreme;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 
-pub(crate) struct TimeTablePerPointPropagator<Var> {
+pub(crate) struct TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
-    parameters: CumulativeParameters<Var>,
+    parameters: CumulativeParameters<Var, PVar, RVar, CVar>,
     /// Stores structures which change during the search; used to store the bounds
-    updatable_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var, PVar, RVar>,
 
     // TODO: Update with proapgator constructor.
     constraint_tag: ConstraintTag,
@@ -71,15 +71,22 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
 /// The key t (representing a time-point) holds the mandatory resource consumption of tasks at
 /// that time (stored in a [`ResourceProfile`]); the [ResourceProfile]s are sorted based on
 /// start time and they are non-overlapping
-pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
+pub(crate) type PerPointTimeTableType<Var, PVar, RVar> =
+    BTreeMap<u32, ResourceProfile<Var, PVar, RVar>>;
 
-impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+{
     pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var>],
-        capacity: i32,
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        capacity: CVar,
         cumulative_options: CumulativePropagatorOptions,
         constraint_tag: ConstraintTag,
-    ) -> TimeTablePerPointPropagator<Var> {
+    ) -> TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
         let updatable_structures = UpdatableStructures::new(&parameters);
@@ -94,7 +101,13 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     }
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > PropagatorConstructor for TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+{
     type PropagatorImpl = Self;
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -108,7 +121,13 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
     }
 }
 
-impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > Propagator for TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+{
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
             return Err(Inconsistency::Conflict(PropagatorConflict {
@@ -208,13 +227,16 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_per_point_from_scratch<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
     Context: ReadDomains + Copy,
 >(
     context: Context,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
-) -> Result<PerPointTimeTableType<Var>, PropagatorConflict> {
-    let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+) -> Result<PerPointTimeTableType<Var, PVar, RVar>, PropagatorConflict> {
+    let mut time_table: PerPointTimeTableType<Var, PVar, RVar> = PerPointTimeTableType::new();
     // First we go over all tasks and determine their mandatory parts
     for task in parameters.tasks.iter() {
         let upper_bound = context.upper_bound(&task.start_variable);
@@ -226,7 +248,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                 // For every time-point of the mandatory part,
                 //  add the resource usage of the current task to the ResourceProfile and add it
                 // to the profile tasks of the resource
-                let current_profile: &mut ResourceProfile<Var> = time_table
+                let current_profile: &mut ResourceProfile<Var, PVar, RVar> = time_table
                     .entry(i as u32)
                     .or_insert(ResourceProfile::default(i));
                 current_profile.height += task.resource_usage;
@@ -254,11 +276,16 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     Ok(time_table)
 }
 
-pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
+pub(crate) fn debug_propagate_from_scratch_time_table_point<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+    updatable_structures: &UpdatableStructures<Var, PVar, RVar>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table

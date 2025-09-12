@@ -19,9 +19,13 @@ use crate::propagators::Task;
 /// registered for [`DomainEvents`].
 ///
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
-pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
-    arg_tasks: &[ArgTask<Var>],
-) -> Vec<Task<Var>> {
+pub(crate) fn create_tasks<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    arg_tasks: &[ArgTask<Var, PVar, RVar>],
+) -> Vec<Task<Var, PVar, RVar>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
     ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
@@ -45,11 +49,15 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                 None
             }
         })
-        .collect::<Vec<Task<Var>>>()
+        .collect::<Vec<Task<Var, PVar, RVar>>>()
 }
 
-pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
-    tasks: &[Rc<Task<Var>>],
+pub(crate) fn register_tasks<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    tasks: &[Rc<Task<Var, PVar, RVar>>],
     mut context: PropagatorConstructorContext<'_>,
     register_backtrack: bool,
 ) {
@@ -75,10 +83,14 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
 
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
-pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
+pub(crate) fn update_bounds_task<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
     bounds: &mut [(i32, i32)],
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     bounds[task.id.unpack() as usize] = (
         context.lower_bound(&task.start_variable),
@@ -87,9 +99,13 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
 }
 
 /// Determines whether the stored bounds are equal when propagation occurs
-pub(crate) fn check_bounds_equal_at_propagation<Var: IntegerVariable + 'static>(
+pub(crate) fn check_bounds_equal_at_propagation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    tasks: &[Rc<Task<Var>>],
+    tasks: &[Rc<Task<Var, PVar, RVar>>],
     bounds: &[(i32, i32)],
 ) -> bool {
     tasks.iter().all(|current| {

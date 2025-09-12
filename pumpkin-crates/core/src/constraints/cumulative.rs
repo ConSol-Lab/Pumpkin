@@ -123,26 +123,18 @@ use crate::Solver;
 /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
 /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
 /// 21, 2015, pp. 149–157.
-pub fn cumulative<StartTimes, Durations, ResourceRequirements>(
-    start_times: StartTimes,
-    durations: Durations,
-    resource_requirements: ResourceRequirements,
-    resource_capacity: i32,
+pub fn cumulative<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    tasks: impl IntoIterator<Item = ArgTask<Var, PVar, RVar>>,
+    resource_capacity: CVar,
     constraint_tag: ConstraintTag,
-) -> impl Constraint
-where
-    StartTimes: IntoIterator,
-    StartTimes::Item: IntegerVariable + Debug + 'static,
-    StartTimes::IntoIter: ExactSizeIterator,
-    Durations: IntoIterator<Item = i32>,
-    Durations::IntoIter: ExactSizeIterator,
-    ResourceRequirements: IntoIterator<Item = i32>,
-    ResourceRequirements::IntoIter: ExactSizeIterator,
-{
+) -> impl Constraint {
     cumulative_with_options(
-        start_times,
-        durations,
-        resource_requirements,
+        tasks,
         resource_capacity,
         CumulativeOptions::default(),
         constraint_tag,
@@ -153,59 +145,42 @@ where
 /// with the provided [`CumulativeOptions`].
 ///
 /// See the documentation of [`cumulative`] for more information about the constraint.
-pub fn cumulative_with_options<StartTimes, Durations, ResourceRequirements>(
-    start_times: StartTimes,
-    durations: Durations,
-    resource_requirements: ResourceRequirements,
-    resource_capacity: i32,
+pub fn cumulative_with_options<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    tasks: impl IntoIterator<Item = ArgTask<Var, PVar, RVar>>,
+    resource_capacity: CVar,
     options: CumulativeOptions,
     constraint_tag: ConstraintTag,
-) -> impl Constraint
-where
-    StartTimes: IntoIterator,
-    StartTimes::Item: IntegerVariable + Debug + 'static,
-    StartTimes::IntoIter: ExactSizeIterator,
-    Durations: IntoIterator<Item = i32>,
-    Durations::IntoIter: ExactSizeIterator,
-    ResourceRequirements: IntoIterator<Item = i32>,
-    ResourceRequirements::IntoIter: ExactSizeIterator,
-{
-    let start_times = start_times.into_iter();
-    let durations = durations.into_iter();
-    let resource_requirements = resource_requirements.into_iter();
-
-    pumpkin_assert_simple!(
-        start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
-        "The number of start variables, durations and resource requirements should be the same!"
-    );
-
-    CumulativeConstraint::new(
-        &start_times
-            .zip(durations)
-            .zip(resource_requirements)
-            .map(|((start_time, duration), resource_requirement)| ArgTask {
-                start_time,
-                processing_time: duration,
-                resource_usage: resource_requirement,
-            })
-            .collect::<Vec<_>>(),
+) -> impl Constraint {
+    CumulativeConstraint::<Var, PVar, RVar, CVar>::new(
+        &tasks.into_iter().collect::<Vec<_>>(),
         resource_capacity,
         options,
         constraint_tag,
     )
 }
 
-struct CumulativeConstraint<Var> {
-    tasks: Vec<ArgTask<Var>>,
-    resource_capacity: i32,
+struct CumulativeConstraint<Var, PVar, RVar, CVar> {
+    tasks: Vec<ArgTask<Var, PVar, RVar>>,
+    resource_capacity: CVar,
     options: CumulativeOptions,
     constraint_tag: ConstraintTag,
 }
 
-impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > CumulativeConstraint<Var, PVar, RVar, CVar>
+{
     fn new(
-        tasks: &[ArgTask<Var>],
-        resource_capacity: i32,
+        tasks: &[ArgTask<Var, PVar, RVar>],
+        resource_capacity: CVar,
         options: CumulativeOptions,
         constraint_tag: ConstraintTag,
     ) -> Self {
@@ -219,7 +194,13 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > Constraint for CumulativeConstraint<Var, PVar, RVar, CVar>
+{
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(

@@ -5,10 +5,10 @@ use super::Task;
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task whose mandatory part has changed.
 #[derive(Debug, Clone)]
-pub(crate) struct UpdatedTaskInfo<Var> {
+pub(crate) struct UpdatedTaskInfo<Var, PVar, RVar> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
-    pub(crate) task: Rc<Task<Var>>,
+    pub(crate) task: Rc<Task<Var, PVar, RVar>>,
     /// The lower-bound of the [`Task`] before the update
     pub(crate) old_lower_bound: i32,
     /// The upper-bound of the [`Task`] before the update

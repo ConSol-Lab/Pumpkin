@@ -17,10 +17,14 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
-pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
-    profiles: &[&ResourceProfile<Var>],
-    propagating_task: &Rc<Task<Var>>,
+    profiles: &[&ResourceProfile<Var, PVar, RVar>],
+    propagating_task: &Rc<Task<Var, PVar, RVar>>,
     inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
@@ -126,10 +130,14 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     }
     Ok(())
 }
-pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
-    profiles: &[&ResourceProfile<Var>],
-    propagating_task: &Rc<Task<Var>>,
+    profiles: &[&ResourceProfile<Var, PVar, RVar>],
+    propagating_task: &Rc<Task<Var, PVar, RVar>>,
     inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
@@ -235,9 +243,13 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
 
 /// Creates the propagation explanation using the point-wise approach (see
 /// [`CumulativeExplanationType::PointWise`])
-pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_pointwise_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     time_point: i32,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -255,8 +267,12 @@ pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 's
 
 /// Creates the conflict explanation using the point-wise approach (see
 /// [`CumulativeExplanationType::PointWise`])
-pub(crate) fn create_pointwise_conflict_explanation<Var: IntegerVariable + 'static>(
-    conflict_profile: &ResourceProfile<Var>,
+pub(crate) fn create_pointwise_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    conflict_profile: &ResourceProfile<Var, PVar, RVar>,
 ) -> PropositionalConjunction {
     // As stated in improving scheduling by learning, we choose the middle point; this
     // could potentially be improved
@@ -279,8 +295,8 @@ pub(crate) fn create_pointwise_conflict_explanation<Var: IntegerVariable + 'stat
         .collect()
 }
 
-pub(crate) fn create_pointwise_predicate_propagating_task_lower_bound_propagation<Var>(
-    task: &Rc<Task<Var>>,
+pub(crate) fn create_pointwise_predicate_propagating_task_lower_bound_propagation<Var, PVar, RVar>(
+    task: &Rc<Task<Var, PVar, RVar>>,
     time_point: Option<i32>,
 ) -> Predicate
 where
@@ -295,8 +311,8 @@ where
     )
 }
 
-pub(crate) fn create_pointwise_predicate_propagating_task_upper_bound_propagation<Var>(
-    task: &Rc<Task<Var>>,
+pub(crate) fn create_pointwise_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
+    task: &Rc<Task<Var, PVar, RVar>>,
     time_point: Option<i32>,
 ) -> Predicate
 where

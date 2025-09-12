@@ -16,14 +16,17 @@ use crate::variables::IntegerVariable;
 /// profiles and adds them to the `time-table` at the correct position.
 pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+    time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     start_index: usize,
     end_index: usize,
     update_range: &Range<i32>,
-    updated_task: &Rc<Task<Var>>,
+    updated_task: &Rc<Task<Var, PVar, RVar>>,
     capacity: i32,
-) -> Result<(), ResourceProfile<Var>> {
+) -> Result<(), ResourceProfile<Var, PVar, RVar>> {
     let mut to_add = Vec::new();
 
     // We keep track of whether a conflict has been found
@@ -115,11 +118,16 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
 /// The new mandatory part added by `updated_task` (spanning `update_range`) does not overlap
 /// with any existing profile. This method inserts it at the position of `index_to_insert`
 /// in the `time-table`.
-pub(crate) fn insert_profile_new_mandatory_part<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn insert_profile_new_mandatory_part<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     index_to_insert: usize,
     update_range: &Range<i32>,
-    updated_task: &Rc<Task<Var>>,
+    updated_task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     pumpkin_assert_moderate!(
         index_to_insert <= time_table.len()

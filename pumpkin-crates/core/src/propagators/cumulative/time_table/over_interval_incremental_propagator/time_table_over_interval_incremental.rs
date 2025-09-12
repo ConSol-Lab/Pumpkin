@@ -74,16 +74,22 @@ use crate::pumpkin_assert_simple;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Clone, Debug)]
-pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTableOverIntervalIncrementalPropagator<
+    Var,
+    PVar,
+    RVar,
+    CVar,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: OverIntervalTimeTableType<Var>,
+    time_table: OverIntervalTimeTableType<Var, PVar, RVar>,
     /// Stores the input parameters to the cumulative constraint
-    parameters: CumulativeParameters<Var>,
+    parameters: CumulativeParameters<Var, PVar, RVar, CVar>,
     /// Stores structures which change during the search; either to store bounds or when applying
     /// incrementality
-    updatable_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var, PVar, RVar>,
     /// Stores whether the propagator found a conflict in the previous call
     ///
     /// This is stored to deal with the case where the same conflict can be created via two
@@ -101,8 +107,14 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRON
     inference_code: Option<InferenceCode>,
 }
 
-impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstructor
-    for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > PropagatorConstructor
+    for TimeTableOverIntervalIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     type PropagatorImpl = Self;
 
@@ -127,15 +139,20 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
     }
 }
 
-impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
-    TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > TimeTableOverIntervalIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var>],
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
         constraint_tag: ConstraintTag,
-    ) -> TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE> {
+    ) -> TimeTableOverIntervalIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
         let updatable_structures = UpdatableStructures::new(&parameters);
@@ -157,7 +174,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         &mut self,
         context: PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) -> PropagationStatusCP {
         let mut conflict = None;
         // We consider both of the possible update ranges
@@ -206,7 +223,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     fn remove_from_time_table(
         &mut self,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) {
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
@@ -371,8 +388,14 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     }
 }
 
-impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
-    for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > Propagator
+    for TimeTableOverIntervalIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
@@ -533,8 +556,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 /// if there are no overlapping profiles
 ///
 /// Note that the lower-bound of the range is inclusive and the upper-bound is exclusive
-fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
-    time_table: &OverIntervalTimeTableType<Var>,
+fn determine_profiles_to_update<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    time_table: &OverIntervalTimeTableType<Var, PVar, RVar>,
     update_range: &Range<i32>,
 ) -> Result<(usize, usize), usize> {
     let overlapping_profile = find_overlapping_profile(time_table, update_range);
@@ -602,8 +630,13 @@ fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
 /// [Ok] containing the index of the overlapping profile. If no such element could be found,
 /// it returns [Err] containing the index at which the element should be inserted to
 /// preserve the ordering
-fn find_overlapping_profile<Var: IntegerVariable + 'static>(
-    time_table: &OverIntervalTimeTableType<Var>,
+fn find_overlapping_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    time_table: &OverIntervalTimeTableType<Var, PVar, RVar>,
     update_range: &Range<i32>,
 ) -> Result<usize, usize> {
     time_table.binary_search_by(|profile| {

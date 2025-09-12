@@ -11,8 +11,12 @@ use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_naive_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    profile: &ResourceProfile<Var, PVar, RVar>,
     context: PropagationContext,
 ) -> PropositionalConjunction {
     profile
@@ -35,8 +39,13 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
 
 /// Creates the conflict explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_conflict_explanation<Var, Context: ReadDomains + Copy>(
-    conflict_profile: &ResourceProfile<Var>,
+pub(crate) fn create_naive_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    Context: ReadDomains + Copy,
+>(
+    conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     context: Context,
 ) -> PropositionalConjunction
 where
@@ -60,9 +69,9 @@ where
         .collect()
 }
 
-pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var>(
+pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) -> Predicate
 where
     Var: IntegerVariable + 'static,
@@ -70,9 +79,9 @@ where
     predicate!(task.start_variable >= context.lower_bound(&task.start_variable))
 }
 
-pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var>(
+pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) -> Predicate
 where
     Var: IntegerVariable + 'static,

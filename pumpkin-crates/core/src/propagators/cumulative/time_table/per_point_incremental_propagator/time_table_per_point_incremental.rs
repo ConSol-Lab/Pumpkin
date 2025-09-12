@@ -70,16 +70,22 @@ use crate::pumpkin_assert_extreme;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 
-pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTablePerPointIncrementalPropagator<
+    Var,
+    PVar,
+    RVar,
+    CVar,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: PerPointTimeTableType<Var>,
+    time_table: PerPointTimeTableType<Var, PVar, RVar>,
     /// Stores the input parameters to the cumulative constraint
-    parameters: CumulativeParameters<Var>,
+    parameters: CumulativeParameters<Var, PVar, RVar, CVar>,
     /// Stores structures which change during the search; either to store bounds or when applying
     /// incrementality
-    updatable_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var, PVar, RVar>,
     /// Stores whether the propagator found a conflict in the previous call
     ///
     /// This is stored to deal with the case where the same conflict can be created via two
@@ -98,8 +104,14 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE:
     inference_code: Option<InferenceCode>,
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> PropagatorConstructor
-    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > PropagatorConstructor
+    for TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     type PropagatorImpl = Self;
 
@@ -117,15 +129,20 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
-    TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var>],
-        capacity: i32,
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        capacity: CVar,
         cumulative_options: CumulativePropagatorOptions,
         constraint_tag: ConstraintTag,
-    ) -> TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE> {
+    ) -> TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
         let updatable_structures = UpdatableStructures::new(&parameters);
@@ -146,7 +163,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         &mut self,
         context: PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) -> PropagationStatusCP {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
         // that for each of these tasks, a mandatory part exists, otherwise it would not
@@ -160,7 +177,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
 
             // Add the updated profile to the ResourceProfile at time t
-            let current_profile: &mut ResourceProfile<Var> = self
+            let current_profile: &mut ResourceProfile<Var, PVar, RVar> = self
                 .time_table
                 .entry(time_point as u32)
                 .or_insert(ResourceProfile::default(time_point));
@@ -192,7 +209,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     fn remove_from_time_table(
         &mut self,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) {
         for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
             pumpkin_assert_extreme!(
@@ -381,8 +398,13 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
-    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+        const SYNCHRONISE: bool,
+    > Propagator for TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
@@ -551,12 +573,15 @@ mod debug {
     ///        the same!
     pub(crate) fn time_tables_are_the_same_point<
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
         const SYNCHRONISE: bool,
     >(
         context: PropagationContext,
         inference_code: InferenceCode,
-        time_table: &PerPointTimeTableType<Var>,
-        parameters: &CumulativeParameters<Var>,
+        time_table: &PerPointTimeTableType<Var, PVar, RVar>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) -> bool {
         let time_table_scratch =
             create_time_table_per_point_from_scratch(context, inference_code, parameters)
