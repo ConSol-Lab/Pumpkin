@@ -1,3 +1,4 @@
+mod arithmetic;
 mod linear;
 mod nogood;
 mod time_table;
@@ -87,6 +88,32 @@ pub(crate) fn verify_inference(
                 .ok_or(InvalidInference::MissingConstraint)?;
 
             time_table::verify_time_table(
+                model,
+                &inference.premises,
+                inference.consequent.clone(),
+                generated_by,
+            )
+        }
+
+        Some("binary_equals") => {
+            let generated_by = inference
+                .generated_by
+                .ok_or(InvalidInference::MissingConstraint)?;
+
+            arithmetic::verify_binary_equals(
+                model,
+                &inference.premises,
+                inference.consequent.clone(),
+                generated_by,
+            )
+        }
+
+        Some("binary_not_equals") => {
+            let generated_by = inference
+                .generated_by
+                .ok_or(InvalidInference::MissingConstraint)?;
+
+            arithmetic::verify_binary_not_equals(
                 model,
                 &inference.premises,
                 inference.consequent.clone(),

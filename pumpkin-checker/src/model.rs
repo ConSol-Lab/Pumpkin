@@ -12,6 +12,7 @@ pub enum Constraint {
     LinearLeq(Linear),
     LinearEq(Linear),
     Cumulative(Cumulative),
+    AllDifferent(AllDifferent),
 }
 
 pub type Atomic = IntAtomic<Rc<str>, i32>;
@@ -51,6 +52,11 @@ pub struct Task {
 pub struct Cumulative {
     pub tasks: Vec<Task>,
     pub capacity: i32,
+}
+
+#[derive(Clone, Debug)]
+pub struct AllDifferent {
+    pub variables: Vec<VariableExpr<i32>>,
 }
 
 #[derive(Clone, Debug)]

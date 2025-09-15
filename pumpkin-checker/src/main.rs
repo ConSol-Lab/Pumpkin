@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::BufRead;
 use std::io::BufReader;
 use std::num::NonZero;
 use std::path::Path;
@@ -20,6 +21,9 @@ struct Cli {
     model_path: PathBuf,
 
     /// Path to the proof file.
+    ///
+    /// If the path ends in `.gz`, we assume it is GZipped and the checker will unzip the file
+    /// on-the-fly.
     proof_path: PathBuf,
 }
 
@@ -89,6 +93,8 @@ enum FlatZincConstraints {
         resource_usages: fzn_rs::ArrayExpr<i32>,
         capacity: i32,
     },
+    #[name("pumpkin_all_different")]
+    AllDifferent(fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>),
 }
 
 type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
@@ -205,6 +211,16 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                     capacity: *capacity,
                 })
             }
+
+            FlatZincConstraints::AllDifferent(variables) => {
+                let variables = fzn_model
+                    .resolve_array(variables)?
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                pumpkin_checker::model::Constraint::AllDifferent(
+                    pumpkin_checker::model::AllDifferent { variables },
+                )
+            }
         };
 
         let _ = model.add_constraint(constraint_id, constraint);
@@ -215,9 +231,17 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
 
 fn create_proof_reader(
     path: impl AsRef<Path>,
-) -> anyhow::Result<ProofReader<BufReader<File>, i32>> {
-    let file = File::open(path)?;
-    let buf_reader = BufReader::new(file);
+) -> anyhow::Result<ProofReader<Box<dyn BufRead>, i32>> {
+    let file = File::open(path.as_ref())?;
 
-    Ok(ProofReader::new(buf_reader))
+    if path.as_ref().extension().is_some_and(|ext| ext == "gz") {
+        let decoder = flate2::read::GzDecoder::new(file);
+        let buf_reader = BufReader::new(decoder);
+
+        Ok(ProofReader::new(Box::new(buf_reader)))
+    } else {
+        let buf_reader = BufReader::new(file);
+
+        Ok(ProofReader::new(Box::new(buf_reader)))
+    }
 }

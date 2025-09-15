@@ -36,6 +36,46 @@ impl VariableState {
             .unwrap_or(I32Ext::PositiveInf)
     }
 
+    /// Get the holes within the lower and upper bound of the variable expression.
+    pub(crate) fn holes(
+        &self,
+        variable: &fzn_rs::VariableExpr<i32>,
+    ) -> impl Iterator<Item = i32> + '_ {
+        #[allow(trivial_casts, reason = "without it we get a type error")]
+        let name = match variable {
+            fzn_rs::VariableExpr::Identifier(name) => name,
+            fzn_rs::VariableExpr::Constant(_) => {
+                return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = i32>>
+            }
+        };
+
+        #[allow(trivial_casts, reason = "without it we get a type error")]
+        self.domains
+            .get(name)
+            .map(|domain| Box::new(domain.holes.iter().copied()) as Box<dyn Iterator<Item = i32>>)
+            .unwrap_or_else(|| Box::new(std::iter::empty()))
+    }
+
+    /// Get the fixed value of this variable, if it is fixed.
+    pub(crate) fn fixed_value(&self, variable: &fzn_rs::VariableExpr<i32>) -> Option<i32> {
+        let name = match variable {
+            fzn_rs::VariableExpr::Identifier(name) => name,
+            fzn_rs::VariableExpr::Constant(value) => return Some(*value),
+        };
+
+        let domain = self.domains.get(name)?;
+
+        if domain.lower_bound == domain.upper_bound {
+            let I32Ext::I32(value) = domain.lower_bound else {
+                panic!("lower can only equal upper if they are integers, otherwise the sign of infinity makes them different");
+            };
+
+            Some(value)
+        } else {
+            None
+        }
+    }
+
     /// Apply the given [`Atomic`] to the state.
     ///
     /// Returns true if the state remains consistent, or false if the atomic cannot be true in
