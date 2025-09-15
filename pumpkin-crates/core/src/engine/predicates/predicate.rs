@@ -1,5 +1,8 @@
+use std::fmt::Display;
+
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::VariableNames;
 use crate::predicate;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple
@@ -39,6 +42,42 @@ impl Predicate {
 
     pub fn get_predicate_type(&self) -> PredicateType {
         (*self).into()
+    }
+
+    pub(crate) fn display<'names>(&self, names: &'names VariableNames) -> impl Display + 'names {
+        PredicateDisplay {
+            predicate: *self,
+            names,
+        }
+    }
+}
+
+struct PredicateDisplay<'names> {
+    predicate: Predicate,
+    names: &'names VariableNames,
+}
+
+impl Display for PredicateDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+
+        let domain = self.predicate.get_domain();
+
+        match self.names.get_int_name(domain) {
+            Some(name) => write!(f, "{name}")?,
+            None => write!(f, "{domain:?}")?,
+        }
+
+        write!(f, " ")?;
+
+        match self.predicate.get_predicate_type() {
+            PredicateType::LowerBound => write!(f, ">=")?,
+            PredicateType::UpperBound => write!(f, "<=")?,
+            PredicateType::NotEqual => write!(f, "!=")?,
+            PredicateType::Equal => write!(f, "==")?,
+        }
+
+        write!(f, " {}]", self.predicate.value)
     }
 }
 
@@ -201,7 +240,7 @@ impl std::ops::Not for Predicate {
     }
 }
 
-impl std::fmt::Display for Predicate {
+impl Display for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if *self == Predicate::trivially_true() {
             write!(f, "[True]")

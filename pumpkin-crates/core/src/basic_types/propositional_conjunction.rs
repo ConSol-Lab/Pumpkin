@@ -1,9 +1,11 @@
+use std::fmt::Display;
 use std::ops::Index;
 use std::ops::IndexMut;
 
 use itertools::Itertools;
 
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::VariableNames;
 
 /// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
 /// <= 10]`).
@@ -75,6 +77,16 @@ impl PropositionalConjunction {
             .collect();
         self
     }
+
+    pub fn display<'this: 'names, 'names>(
+        &'this self,
+        variable_names: &'names VariableNames,
+    ) -> impl Display + 'names {
+        PropositionalConjunctionDisplay {
+            conjunction: self,
+            names: variable_names,
+        }
+    }
 }
 
 impl Extend<Predicate> for PropositionalConjunction {
@@ -139,7 +151,7 @@ impl From<Predicate> for PropositionalConjunction {
     }
 }
 
-impl std::fmt::Display for PropositionalConjunction {
+impl Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.predicates_in_conjunction.is_empty() {
             write!(f, "{{empty}}")
@@ -172,6 +184,30 @@ impl PartialEq for PropositionalConjunction {
         self.predicates_in_conjunction
             .iter()
             .all(|predicate| other.predicates_in_conjunction.contains(predicate))
+    }
+}
+
+struct PropositionalConjunctionDisplay<'nogood, 'names> {
+    conjunction: &'nogood PropositionalConjunction,
+    names: &'names VariableNames,
+}
+
+impl Display for PropositionalConjunctionDisplay<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (idx, predicate) in self
+            .conjunction
+            .predicates_in_conjunction
+            .iter()
+            .enumerate()
+        {
+            if idx > 0 {
+                write!(f, " ")?;
+            }
+
+            write!(f, "{}", predicate.display(self.names))?;
+        }
+
+        write!(f, " => false")
     }
 }
 

@@ -42,6 +42,14 @@ impl<Key, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
+    /// Pop the last element from the vec.
+    pub(crate) fn pop(&mut self) -> Option<(Key, Value)> {
+        self.elements.pop().map(|value| {
+            let key = Key::create_from_index(self.elements.len());
+            (key, value)
+        })
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }
@@ -119,6 +127,10 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
     pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
+    }
+
+    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
+        self.elements.resize(key.index() + 1, default_value);
     }
 
     pub(crate) fn clear(&mut self) {

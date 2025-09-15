@@ -113,7 +113,9 @@ impl ConflictAnalysisContext<'_> {
 
                 conflict.conjunction
             }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood,
+            StoredConflictInfo::EmptyDomain {
+                conflict_nogood, ..
+            } => conflict_nogood,
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
@@ -156,6 +158,9 @@ impl ConflictAnalysisContext<'_> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    ///
+    /// Optionally returns the inference code for the reason, but that may not always be there,
+    /// e.g. if the predicate is implied.
     #[allow(
         clippy::too_many_arguments,
         reason = "borrow checker complains either here or elsewhere"
@@ -171,7 +176,7 @@ impl ConflictAnalysisContext<'_> {
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         notification_engine: &mut NotificationEngine,
         variable_names: &VariableNames,
-    ) {
+    ) -> Option<InferenceCode> {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
@@ -188,7 +193,7 @@ impl ConflictAnalysisContext<'_> {
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
         if assignments.is_initial_bound(predicate) {
-            return;
+            return None;
         }
 
         let trail_position = assignments
@@ -200,9 +205,7 @@ impl ConflictAnalysisContext<'_> {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let (reason_ref, inference_code) = trail_entry
-                .reason
-                .expect("Cannot be a null reason for propagation.");
+            let (reason_ref, inference_code) = trail_entry.reason?;
 
             let propagator_id = reason_store.get_propagator(reason_ref);
 
@@ -245,6 +248,8 @@ impl ConflictAnalysisContext<'_> {
 
                 let _ =
                     proof_log.log_inference(*inference_code, [], Some(predicate), variable_names);
+
+                Some(*inference_code)
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
@@ -253,6 +258,8 @@ impl ConflictAnalysisContext<'_> {
                     Some(predicate),
                     variable_names,
                 );
+
+                Some(inference_code)
             }
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.
@@ -474,6 +481,8 @@ impl ConflictAnalysisContext<'_> {
                     trail_entry.predicate, predicate
                 ),
             };
+
+            None
         }
     }
 }

@@ -3,6 +3,7 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Instant;
 
 use rand::rngs::SmallRng;
@@ -30,8 +31,6 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
@@ -62,6 +61,7 @@ use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::propagators::nogoods::LearningOptions;
+use crate::propagators::nogoods::NogoodHandle;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -109,7 +109,7 @@ pub struct ConstraintSatisfactionSolver {
     pub(crate) state: CSPSolverState,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
-    propagators: PropagatorStore,
+    pub(crate) propagators: PropagatorStore,
 
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
@@ -130,18 +130,18 @@ pub struct ConstraintSatisfactionSolver {
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
-    variable_names: VariableNames,
+    pub(crate) variable_names: VariableNames,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
-    unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
+    pub(crate) unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
     /// Keep track of trailed values (i.e. values which automatically backtrack)
     pub(crate) trailed_values: TrailedValues,
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
-    notification_engine: NotificationEngine,
+    pub(crate) notification_engine: NotificationEngine,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -252,7 +252,9 @@ impl ConstraintSatisfactionSolver {
 
                 conflict.conjunction.clone()
             }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
+            StoredConflictInfo::EmptyDomain {
+                conflict_nogood, ..
+            } => conflict_nogood.clone(),
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("There should always be a specified conflicting constraint.")
             }
@@ -274,6 +276,18 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn is_logging_full_proof(&self) -> bool {
         self.internal_parameters.proof_log.is_logging_inferences()
+    }
+
+    pub(crate) fn get_constraint_tag_for(&self, inference_code: InferenceCode) -> ConstraintTag {
+        self.internal_parameters
+            .proof_log
+            .get_constraint_tag_for(inference_code)
+    }
+
+    pub(crate) fn get_inference_label_for(&self, inference_code: InferenceCode) -> Arc<str> {
+        self.internal_parameters
+            .proof_log
+            .get_inference_label_for(inference_code)
     }
 }
 
@@ -1029,7 +1043,8 @@ impl ConstraintSatisfactionSolver {
         notification_engine.synchronise(backtrack_level, assignments, trailed_values);
     }
 
-    pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
+    /// Get the conflict info if a domain was propagated empty.
+    pub(crate) fn get_stored_conflict_info(&mut self) -> StoredConflictInfo {
         // The empty domain happened after posting the last predicate on the trail.
         // The reason for this empty domain is computed as the reason for the bounds before the last
         // trail predicate was posted, plus the reason for the last trail predicate.
@@ -1074,7 +1089,10 @@ impl ConstraintSatisfactionSolver {
             predicate!(conflict_domain <= entry.old_upper_bound),
         ]);
 
-        empty_domain_reason.into()
+        StoredConflictInfo::EmptyDomain {
+            inference_code: Some(entry_inference_code),
+            conflict_nogood: empty_domain_reason.into(),
+        }
     }
 
     /// Main propagation loop.
@@ -1352,6 +1370,105 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    /// Should only be used in the proof processor. BEWARE: Only use if you know what you are
+    /// doing.
+    pub(crate) fn add_removable_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        constraint_tag: ConstraintTag,
+    ) -> Result<NogoodHandle, NogoodHandle> {
+        self.declare_new_decision_level();
+
+        let nogood_propagator_id = Self::get_nogood_propagator_id();
+
+        let mut propagation_context = PropagationContextMut::new(
+            &mut self.trailed_values,
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.semantic_minimiser,
+            &mut self.notification_engine,
+            Self::get_nogood_propagator_id(),
+        );
+
+        let inference_code = self
+            .internal_parameters
+            .proof_log
+            .create_inference_code(constraint_tag, NogoodLabel);
+
+        let addition_result = ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
+            &mut self.propagators[nogood_propagator_id],
+            nogood,
+            inference_code,
+            &mut propagation_context,
+        );
+
+        let nogood_handle = match addition_result {
+            Ok(handle) => handle,
+            Err((inconsistency, handle)) => {
+                assert_eq!(inconsistency, Inconsistency::EmptyDomain);
+                self.prepare_for_conflict_resolution();
+
+                return Err(handle);
+            }
+        };
+
+        if let NogoodHandle::Unit(ref predicate) = nogood_handle {
+            let _ = self
+                .unit_nogood_inference_codes
+                .insert(!*predicate, inference_code);
+        }
+
+        // temporary hack for the nogood propagator that does propagation from scratch
+        self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
+        self.propagate();
+
+        if self.state.is_inconsistent() {
+            Err(nogood_handle)
+        } else {
+            Ok(nogood_handle)
+        }
+    }
+
+    /// Remove a nogood added with [`Self::add_removable_nogood`].
+    pub(crate) fn remove_nogood(&mut self, handle: NogoodHandle) -> Vec<Predicate> {
+        let predicates = match handle {
+            NogoodHandle::Empty => vec![],
+            NogoodHandle::Unit(predicate) => {
+                let _ = self
+                    .unit_nogood_inference_codes
+                    .remove(&!predicate)
+                    .expect("a unit nogood has to be linked to its inference code");
+
+                vec![predicate]
+            }
+            NogoodHandle::Id(nogood_id) => {
+                let nogood_propagator = self.propagators[Self::get_nogood_propagator_id()]
+                    .downcast_mut::<NogoodPropagator>()
+                    .expect("getting the nogood propagator by its id");
+
+                nogood_propagator.remove_nogood(
+                    nogood_id,
+                    &self.assignments,
+                    &mut self.notification_engine,
+                )
+            }
+        };
+
+        let backtrack_level = self.get_decision_level() - 1;
+        ConstraintSatisfactionSolver::backtrack(
+            &mut self.notification_engine,
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.propagator_queue,
+            &mut self.propagators,
+            backtrack_level,
+            &mut DummyBrancher,
+            &mut self.trailed_values,
+        );
+
+        predicates
+    }
+
     fn add_nogood(
         &mut self,
         nogood: Vec<Predicate>,
@@ -1406,7 +1523,7 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        let empty_domain_reason = self.compute_reason_for_empty_domain();
+        let conflict_info = self.get_stored_conflict_info();
 
         // TODO: As a temporary solution, we remove the last trail element.
         // This way we guarantee that the assignment is consistent, which is needed
@@ -1414,10 +1531,7 @@ impl ConstraintSatisfactionSolver {
         // be to forbid the assignments from getting into an inconsistent state.
         self.assignments.remove_last_trail_element();
 
-        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
-            conflict_nogood: empty_domain_reason,
-        };
-        self.state.declare_conflict(stored_conflict_info);
+        self.state.declare_conflict(conflict_info);
     }
 
     fn add_nogood_to_nogood_propagator(
@@ -1425,7 +1539,7 @@ impl ConstraintSatisfactionSolver {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<NogoodHandle, (Inconsistency, NogoodHandle)> {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
             Some(nogood_propagator) => {
                 nogood_propagator.add_nogood(nogood, inference_code, context)
@@ -1594,6 +1708,7 @@ impl CSPSolverState {
                 violated_assumption,
             } => StoredConflictInfo::EmptyDomain {
                 conflict_nogood: vec![*violated_assumption, !(*violated_assumption)].into(),
+                inference_code: None,
             },
             _ => {
                 panic!("Cannot extract conflict clause if solver is not in a conflict.");
@@ -1648,6 +1763,18 @@ impl CSPSolverState {
 }
 
 declare_inference_label!(NogoodLabel, "nogood");
+
+struct DummyBrancher;
+
+impl Brancher for DummyBrancher {
+    fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+        panic!("Should never be called")
+    }
+
+    fn subscribe_to_events(&self) -> Vec<crate::branching::BrancherEvent> {
+        panic!("Should never be called")
+    }
+}
 
 #[cfg(test)]
 mod tests {

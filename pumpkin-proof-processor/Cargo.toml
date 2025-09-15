@@ -1,0 +1,24 @@
+[package]
+name = "pumpkin-proof-processor"
+version = "0.1.0"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = "1.0.99"
+clap = { version = "4.5.47", features = ["derive"] }
+drcp-format = { version = "0.3.0", path = "../drcp-format" }
+fzn-rs = { version = "0.1.0", path = "../fzn-rs", features = ["derive", "fzn"] }
+pumpkin-core = { version = "0.2.1", path = "../pumpkin-crates/core" }
+flate2 = { version = "1.1.2", optional = true }
+env_logger = "0.11.8"
+
+[lints]
+workspace = true
+
+[features]
+default = ["gzipped-proofs"]
+debug-checks = ["pumpkin-core/debug-checks"]
+gzipped-proofs = ["dep:flate2"]

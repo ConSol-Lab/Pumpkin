@@ -16,6 +16,7 @@ pub mod branching;
 pub mod constraints;
 pub mod optimisation;
 pub mod proof;
+pub mod proof_processor;
 pub mod statistics;
 
 pub use convert_case;

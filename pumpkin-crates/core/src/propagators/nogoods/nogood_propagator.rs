@@ -9,7 +9,6 @@ use super::NogoodInfo;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
@@ -39,7 +38,6 @@ use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -158,6 +156,24 @@ impl NogoodPropagator {
             }
         }
         false
+    }
+
+    pub(crate) fn remove_nogood(
+        &mut self,
+        nogood_id: NogoodId,
+        assignments: &Assignments,
+        notification_engine: &mut NotificationEngine,
+    ) -> Vec<Predicate> {
+        let index = self.nogood_predicates.get_nogood_index(&nogood_id);
+        let predicates = self.nogood_predicates[nogood_id]
+            .iter()
+            .map(|predicate_id| notification_engine.get_predicate(*predicate_id))
+            .collect::<Vec<_>>();
+
+        self.nogood_info[index].is_deleted = true;
+        self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+
+        predicates
     }
 }
 
@@ -409,7 +425,8 @@ impl NogoodPropagator {
                 context.get_decision_level() == 0,
                 "A unit nogood should have backtracked to the root-level"
             );
-            self.add_permanent_nogood(nogood, inference_code, context)
+            let _ = self
+                .add_permanent_nogood(nogood, inference_code, context)
                 .expect("Unit learned nogoods cannot fail.");
             return;
         }
@@ -492,26 +509,23 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<NogoodHandle, (Inconsistency, NogoodHandle)> {
         self.add_permanent_nogood(nogood, inference_code, context)
     }
 
     /// Adds a nogood which cannot be deleted by clause management.
+    ///
+    /// Returns the nogood that is added after preprocessing.
     fn add_permanent_nogood(
         &mut self,
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
-        pumpkin_assert_simple!(
-            context.get_decision_level() == 0,
-            "Only allowed to add nogoods permanently at the root for now."
-        );
-
+    ) -> Result<NogoodHandle, (Inconsistency, NogoodHandle)> {
         // If the nogood is empty then it is automatically satisfied (though it is unusual!)
         if nogood.is_empty() {
             warn!("Adding empty nogood, unusual!");
-            return Ok(());
+            return Ok(NogoodHandle::Empty);
         }
 
         // After preprocessing the nogood may propagate. If that happens, there is no reason for
@@ -584,19 +598,25 @@ impl NogoodPropagator {
                 !nogood[0]
             );
 
+            let handle = NogoodHandle::Unit(nogood[0]);
+
             // Post the negated predicate at the root to respect the nogood.
-            context.post(
-                !nogood[0],
-                PropositionalConjunction::from(input_nogood),
-                inference_code,
-            )?;
-            Ok(())
+            context
+                .post(
+                    !nogood[0],
+                    PropositionalConjunction::from(input_nogood),
+                    inference_code,
+                )
+                .map_err(|inconsistency| (inconsistency.into(), handle))?;
+
+            Ok(handle)
         }
         // Standard case, nogood is of size at least two.
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
-            let nogood = nogood
+            let nogood_of_predicates = nogood;
+            let nogood = nogood_of_predicates
                 .iter()
                 .map(|predicate| context.get_id(*predicate))
                 .collect::<Vec<_>>();
@@ -634,9 +654,27 @@ impl NogoodPropagator {
                 context.assignments,
             );
 
-            Ok(())
+            Ok(NogoodHandle::Id(nogood_id))
         }
     }
+}
+
+/// A handle to a nogood in the nogood propagator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NogoodHandle {
+    /// An empty nogood was added.
+    ///
+    /// This should probably never happen, but since this checked in the code, this variant makes
+    /// the most sense for clarity.
+    Empty,
+
+    /// A unit-nogood of the given predicate.
+    ///
+    /// This means !predicate is assigned to true through unit propagation.
+    Unit(Predicate),
+
+    /// The id of the nogood.
+    Id(NogoodId),
 }
 
 /// Methods concerning the watchers and watch lists
@@ -1085,7 +1123,6 @@ impl NogoodPropagator {
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
     fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContextMut) {
-        pumpkin_assert_simple!(context.get_decision_level() == 0);
         // The code below is broken down into several parts
 
         // We opt for semantic minimisation upfront. This way we avoid the possibility of having

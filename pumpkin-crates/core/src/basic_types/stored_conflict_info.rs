@@ -4,6 +4,7 @@ use super::PropositionalConjunction;
 use crate::engine::propagation::Propagator;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::proof::InferenceCode;
 use crate::ConstraintOperationError;
 
 /// A conflict info which can be stored in the solver.
@@ -14,6 +15,7 @@ use crate::ConstraintOperationError;
 pub(crate) enum StoredConflictInfo {
     Propagator(PropagatorConflict),
     EmptyDomain {
+        inference_code: Option<InferenceCode>,
         conflict_nogood: PropositionalConjunction,
     },
     RootLevelConflict(ConstraintOperationError),

@@ -157,7 +157,7 @@ impl ConflictResolver for ResolutionResolver {
                         // y], meaning that these implied predicates should be replaced with their
                         // reason
                         self.reason_buffer.clear();
-                        ConflictAnalysisContext::get_propagation_reason(
+                        let _ = ConflictAnalysisContext::get_propagation_reason(
                             predicate,
                             context.assignments,
                             CurrentNogood::new(
@@ -219,7 +219,7 @@ impl ConflictResolver for ResolutionResolver {
                     let predicate = self.peek_predicate_from_conflict_nogood();
 
                     self.reason_buffer.clear();
-                    ConflictAnalysisContext::get_propagation_reason(
+                    let _ = ConflictAnalysisContext::get_propagation_reason(
                         predicate,
                         context.assignments,
                         CurrentNogood::new(
@@ -250,7 +250,7 @@ impl ConflictResolver for ResolutionResolver {
 
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
-            ConflictAnalysisContext::get_propagation_reason(
+            let _ = ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
                 context.assignments,
                 CurrentNogood::new(

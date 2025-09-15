@@ -59,6 +59,11 @@ where
     Key: StorageKey + Copy,
     Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
 {
+    /// Determine whether the heap is empty.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.end_position == 0
+    }
+
     /// Get the keys in the heap.
     ///
     /// The order in which the keys are yielded is unspecified.
