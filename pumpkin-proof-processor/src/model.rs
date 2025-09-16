@@ -1,7 +1,8 @@
-use pumpkin_core::{variables::DomainId, Solver};
+use pumpkin_core::variables::DomainId;
+use pumpkin_core::Solver;
 
 #[derive(Debug, fzn_rs::FlatZincConstraint)]
-pub enum FlatZincConstraints {
+pub(crate) enum FlatZincConstraints {
     #[name("int_lin_le")]
     LinearLeq {
         weights: fzn_rs::ArrayExpr<i32>,
@@ -25,10 +26,10 @@ pub enum FlatZincConstraints {
     AllDifferent(fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>),
 }
 
-pub type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
+pub(crate) type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
 
 /// Create a domain for a flatzinc variable.
-pub fn create_domain_for_variable(
+pub(crate) fn create_domain_for_variable(
     solver: &mut Solver,
     name: &str,
     variable: &fzn_rs::ast::Variable<()>,

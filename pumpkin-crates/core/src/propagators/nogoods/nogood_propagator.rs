@@ -1145,7 +1145,6 @@ impl NogoodPropagator {
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
-            *nogood = vec![Predicate::trivially_false()];
             return;
         }
 

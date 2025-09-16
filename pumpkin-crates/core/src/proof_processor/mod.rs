@@ -83,6 +83,15 @@ pub enum ProofProcessError {
 
     #[error("the deduction {0} does not lead to a contradiction")]
     DeductionDoesNotConflict(ConstraintId),
+
+    #[error("all deductions together do not propagate to conflict")]
+    DeductionsDoNotConflict,
+
+    #[error("conclusion is not supported by any deduction")]
+    InvalidConclusion,
+
+    #[error("deduction {0} contains inconsistent premises")]
+    InconsistentDeduction(ConstraintId),
 }
 
 impl From<Solver> for ProofProcessor {
@@ -97,7 +106,15 @@ impl From<Solver> for ProofProcessor {
     }
 }
 
-type DeductionStack = KeyedVec<ConstraintTag, Option<(NogoodHandle, bool)>>;
+/// A deduction that was posted to the solver.
+#[derive(Clone, Debug)]
+struct PostedDeduction {
+    handle: NogoodHandle,
+    marked: bool,
+    deduction: Deduction<Rc<str>, i32>,
+}
+
+type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
 
 impl ProofProcessor {
     pub fn process<R: BufRead, W: Write>(
@@ -121,20 +138,20 @@ impl ProofProcessor {
         // propagation. If so, a new proof-stage is created with the appropriate
         // inferences.
 
-        while let Some((tag, deduction)) = nogood_stack.pop() {
+        while let Some((tag, maybe_deduction)) = nogood_stack.pop() {
             // Extract the nogood handle and whether the deduction is marked.
-            let Some((handle, marked)) = deduction else {
+            let Some(posted_deduction) = maybe_deduction else {
                 continue;
             };
 
             debug!("Processing deduction {}", NonZero::from(tag));
 
             // Remove the nogood from the solver as it is no-longer needed.
-            let predicates = self.solver.remove_nogood(handle);
+            let predicates = self.solver.remove_nogood(posted_deduction.handle);
 
             // If the deduction was never used, then we don't have to consider it
             // further.
-            if !marked {
+            if !posted_deduction.marked {
                 trace!("Deduction {} is not marked", NonZero::from(tag));
                 continue;
             }
@@ -142,20 +159,19 @@ impl ProofProcessor {
             // Now we add the predicates in the nogood as assumptions to kick-start the
             // propagation.
             for predicate in predicates.iter() {
-                let assumption_result = self.solver.assignments.post_predicate(
-                    *predicate,
-                    None,
-                    &mut self.solver.notification_engine,
-                );
+                let assumption_result = self.solver.post_predicate(*predicate);
 
                 if assumption_result.is_err() {
-                    todo!("handle case where the assumption is already false")
+                    self.declare_assumption_conflict(*predicate)?;
+                    break;
                 }
             }
 
-            self.solver.propagate();
+            if !self.solver.state.is_inconsistent() {
+                self.solver.propagate();
+            }
 
-            if !self.solver.state.is_conflicting() {
+            if !self.solver.state.is_inconsistent() {
                 return Err(ProofProcessError::DeductionDoesNotConflict(tag.into()));
             }
 
@@ -248,12 +264,32 @@ impl ProofProcessor {
             let deduction = match step {
                 Step::Deduction(deduction) => deduction,
 
-                // We have reached the end of the proof, so we continue with backwards trimming and
-                // inference introduction.
-                Step::Conclusion(conclusion) => {
-                    todo!("mark the appropriate deduction that supports this conclusion");
+                // A dual bound conclusion is encountered. This is of the form `true -> bound`.
+                // This means we have to find a nogood `!bound -> false` and mark it.
+                Step::Conclusion(Conclusion::DualBound(bound)) => {
+                    let premises_to_mark = &[!bound.clone()];
 
-                    return Ok((conclusion, nogood_stack));
+                    let tag_to_mark = nogood_stack.keys().rev().find(|tag| {
+                        let Some(posted_deduction) = &nogood_stack[tag] else {
+                            return false;
+                        };
+
+                        posted_deduction.deduction.premises == premises_to_mark
+                    });
+
+                    match tag_to_mark {
+                        Some(tag) => {
+                            // Mark the step in the proof.
+                            nogood_stack[tag].as_mut().unwrap().marked = true;
+                        }
+                        None => return Err(ProofProcessError::InvalidConclusion),
+                    }
+
+                    return Ok((Conclusion::DualBound(bound), nogood_stack));
+                }
+
+                Step::Conclusion(Conclusion::Unsat) => {
+                    return Err(ProofProcessError::DeductionsDoNotConflict);
                 }
 
                 // We ignore inferences when doing proof processing. We will introduce our own
@@ -287,7 +323,11 @@ impl ProofProcessor {
                 // output proof.
                 Ok(handle) => {
                     nogood_stack.accomodate(constraint_tag, None);
-                    nogood_stack[constraint_tag] = Some((handle, false));
+                    nogood_stack[constraint_tag] = Some(PostedDeduction {
+                        handle,
+                        marked: false,
+                        deduction,
+                    });
                 }
 
                 // If we reach inconsistency through propagation alone, then it must mean that the
@@ -311,7 +351,11 @@ impl ProofProcessor {
         // Add the nogood that triggered the conflict to the nogood stack. Also mark it,
         // because obviously it is used.
         nogood_stack.accomodate(tag, None);
-        nogood_stack[tag] = Some((unsat_triggering_nogood, true));
+        nogood_stack[tag] = Some(PostedDeduction {
+            handle: unsat_triggering_nogood,
+            marked: true,
+            deduction,
+        });
 
         let inferences = self.explain_current_conflict(&mut nogood_stack);
 
@@ -568,6 +612,54 @@ impl ProofProcessor {
             )
         }
     }
+
+    /// Setup the solver such that it is ready for conflict analysis. The given predicate should
+    /// conflict with the current state, which means the negation was already true.
+    fn declare_assumption_conflict(
+        &mut self,
+        predicate: Predicate,
+    ) -> Result<(), ProofProcessError> {
+        dbg!(predicate);
+        let opposite = !predicate;
+        assert_eq!(
+            self.solver.assignments.evaluate_predicate(opposite),
+            Some(true)
+        );
+
+        assert!(self.reason_buffer.is_empty());
+        let inference_code = ConflictAnalysisContext::get_propagation_reason(
+            opposite,
+            &self.solver.assignments,
+            CurrentNogood::new(&self.to_process_heap, &[], &self.predicate_ids),
+            &mut self.solver.reason_store,
+            &mut self.solver.propagators,
+            &mut ProofLog::default(),
+            &self.solver.unit_nogood_inference_codes,
+            &mut self.reason_buffer,
+            &mut self.solver.notification_engine,
+            &self.solver.variable_names,
+        );
+
+        // The inference code can be `None` if the reason is constructed to explain an implied
+        // predicate. Those inferences do not need to be in the proof, so we only create an
+        // inference for propagations by constraints.
+        if let Some(inference_code) = inference_code {
+            let mut conflict_nogood = self.reason_buffer.clone();
+            conflict_nogood.push(predicate);
+
+            self.solver
+                .state
+                .declare_conflict(StoredConflictInfo::EmptyDomain {
+                    inference_code: Some(inference_code),
+                    conflict_nogood: conflict_nogood.into(),
+                    last_inference: (self.reason_buffer.clone().into(), opposite),
+                });
+        }
+
+        self.reason_buffer.clear();
+
+        Ok(())
+    }
 }
 
 /// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
@@ -579,8 +671,8 @@ fn mark_stack_entry(
     let used_constraint_tag = solver.get_constraint_tag_for(inference_code);
     let stack_entry = stack[used_constraint_tag].as_mut();
 
-    if let Some((_, ref mut marked)) = stack_entry {
-        *marked = true;
+    if let Some(posted_deduction) = stack_entry {
+        posted_deduction.marked = true;
     }
 }
 

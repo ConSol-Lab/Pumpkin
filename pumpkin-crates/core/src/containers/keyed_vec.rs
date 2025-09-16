@@ -111,7 +111,7 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.iter()
     }
 
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Key> {
+    pub(crate) fn keys(&self) -> impl DoubleEndedIterator<Item = Key> {
         (0..self.elements.len()).map(Key::create_from_index)
     }
 

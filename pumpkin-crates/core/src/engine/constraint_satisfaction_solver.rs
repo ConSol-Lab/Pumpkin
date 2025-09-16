@@ -53,6 +53,7 @@ use crate::engine::DebugHelper;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::predicates::PropositionalConjunction;
 use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::proof::ConstraintTag;
@@ -1357,12 +1358,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {
-        assert!(
-            self.get_decision_level() == 0,
-            "Can only post predicates at the root level."
-        );
-
-        if self.state.is_infeasible() {
+        if self.state.is_inconsistent() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
             match self
@@ -1708,9 +1704,13 @@ impl CSPSolverState {
     pub(crate) fn get_conflict_info(&self) -> StoredConflictInfo {
         match &self.internal_state {
             CSPSolverStateInternal::Conflict { conflict_info } => conflict_info.clone(),
-            CSPSolverStateInternal::InfeasibleUnderAssumptions { .. } => {
-                todo!("what is the conflict info when infeasible under assumptions?")
-            }
+            CSPSolverStateInternal::InfeasibleUnderAssumptions {
+                violated_assumption,
+            } => StoredConflictInfo::EmptyDomain {
+                inference_code: None,
+                conflict_nogood: vec![*violated_assumption, !*violated_assumption].into(),
+                last_inference: (PropositionalConjunction::default(), *violated_assumption),
+            },
             _ => {
                 panic!("Cannot extract conflict clause if solver is not in a conflict.");
             }
@@ -1741,7 +1741,7 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::Infeasible;
     }
 
-    fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
+    pub(crate) fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
 
