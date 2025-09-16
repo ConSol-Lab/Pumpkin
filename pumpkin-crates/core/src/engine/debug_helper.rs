@@ -300,7 +300,7 @@ impl DebugHelper {
                                     .iter()
                                     .all(|predicate| reason.contains(predicate))
                                     || reason.iter().all(|predicate| {
-                                        found_inconsistency.conjunction.contains(*predicate)
+                                        found_inconsistency.conjunction.contains(predicate)
                                     })
                             } else {
                                 false

@@ -171,7 +171,13 @@ impl NogoodPropagator {
             .collect::<Vec<_>>();
 
         self.nogood_info[index].is_deleted = true;
-        self.remove_deleted_nogoods_from_watchers(assignments, notification_engine);
+
+        // TODO: Go over the predicates and remove this nogood from there.
+        for predicate in predicates.iter() {
+            let predicate_id = notification_engine.get_id(*predicate);
+
+            self.watch_lists[predicate_id].retain(|watcher| watcher.nogood_id != nogood_id);
+        }
 
         predicates
     }

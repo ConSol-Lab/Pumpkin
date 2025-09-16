@@ -37,6 +37,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::VariableNames;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
@@ -232,7 +233,11 @@ impl ProofProcessor {
 
                 // We have reached the end of the proof, so we continue with backwards trimming and
                 // inference introduction.
-                Step::Conclusion(conclusion) => return Ok((conclusion, nogood_stack)),
+                Step::Conclusion(conclusion) => {
+                    todo!("mark the appropriate deduction that supports this conclusion");
+
+                    return Ok((conclusion, nogood_stack));
+                }
 
                 // We ignore inferences when doing proof processing. We will introduce our own
                 // inferences regardless of what is in the input.
@@ -277,7 +282,7 @@ impl ProofProcessor {
 
     /// Takes a solver that is in an inconsistent state because we have a proof of
     /// unsatisfiability, and removes the last added constraint. We mark all the deductions in the
-    /// deduction stack that contributed to the conflict.
+    /// deduction stack that contributed to the conflict, and log the empty nogood step.
     fn repair_solver(
         &mut self,
         unsat_triggering_nogood: NogoodHandle,
@@ -303,29 +308,11 @@ impl ProofProcessor {
         Ok((Conclusion::Unsat, nogood_stack))
     }
 
-    /// Explain the current conflict and write to the output proof.
-    fn explain_current_conflict(
-        &mut self,
-        nogood_stack: &mut DeductionStack,
-    ) -> Vec<Inference<String, i32, Arc<str>>> {
-        assert!(self.to_process_heap.is_empty());
-
-        // The implementation of key-value heap is buggy, but this `clear` seems to reset
-        // the internals properly.
-        self.to_process_heap.clear();
-
+    /// Return the [`PropositionalConjunction`] and [`InferenceCode`] that triggered the conflict.
+    fn extract_conflict_info(&self) -> (PropositionalConjunction, InferenceCode) {
         let conflict_info = self.solver.state.get_conflict_info();
 
-        // The inferences in the current conflict ordered by closeness to the conflict.
-        // Every element is an option, where `None`serves as a tombstone value.
-        //
-        // We need tombstones because initial bounds can be used multiple times within the
-        // same conflict. This means when we encounter an initial bound, it may already be
-        // present in the inference sequence. If that is the case, we move it to the back.
-        let mut inferences: Vec<Option<Inference<String, i32, Arc<str>>>> = vec![];
-        let mut initial_bound_indices = HashMap::new();
-
-        let (conflict_nogood, conflict_inference_code) = match conflict_info {
+        match conflict_info {
             StoredConflictInfo::Propagator(PropagatorConflict {
                 conjunction,
                 inference_code,
@@ -342,7 +329,30 @@ impl ProofProcessor {
             StoredConflictInfo::RootLevelConflict(_) => {
                 panic!("This should not happen.")
             }
-        };
+        }
+    }
+
+    /// Explain the current conflict and write to the output proof.
+    fn explain_current_conflict(
+        &mut self,
+        nogood_stack: &mut DeductionStack,
+    ) -> Vec<Inference<String, i32, Arc<str>>> {
+        assert!(self.to_process_heap.is_empty());
+
+        // The implementation of key-value heap is buggy, but this `clear` seems to reset
+        // the internals properly.
+        self.to_process_heap.clear();
+
+        // The inferences in the current conflict ordered by closeness to the conflict.
+        // Every element is an option, where `None` serves as a tombstone value.
+        //
+        // We need tombstones because initial bounds can be used multiple times within the
+        // same conflict. This means when we encounter an initial bound, it may already be
+        // present in the inference sequence. If that is the case, we move it to the back.
+        let mut inferences: Vec<Option<Inference<String, i32, Arc<str>>>> = vec![];
+        let mut initial_bound_indices = HashMap::new();
+
+        let (conflict_nogood, conflict_inference_code) = self.extract_conflict_info();
 
         // We mark and write the very last propagation that led to the conflict.
         mark_stack_entry(&self.solver, nogood_stack, conflict_inference_code);
@@ -352,10 +362,7 @@ impl ProofProcessor {
 
         inferences.push(Some(Inference {
             constraint_id: self.solver.new_constraint_tag().into(),
-            premises: conflict_nogood
-                .iter()
-                .map(|premise| convert_predicate_to_proof_atomic(&self.solver, *premise))
-                .collect(),
+            premises: convert_predicates_to_proof_atomic(&self.solver, &conflict_nogood),
             consequent: None,
             generated_by: Some(generated_by.into()),
             label: Some(label),
@@ -375,11 +382,6 @@ impl ProofProcessor {
         // the proof.
         while let Some(predicate_id) = self.to_process_heap.pop_max() {
             let predicate = self.predicate_ids.get_predicate(predicate_id);
-
-            assert_eq!(
-                self.solver.assignments.evaluate_predicate(predicate),
-                Some(true)
-            );
 
             // The predicate is either propagated or an initial bound. If it is an
             // initial bound, we dispatch that here.
@@ -417,6 +419,8 @@ impl ProofProcessor {
                 continue;
             }
 
+            // In this case, the predicate was propagated by a constraint. We compute the reason
+            // and log the appropriate inference step.
             assert!(reason_buffer.is_empty());
             let inference_code = ConflictAnalysisContext::get_propagation_reason(
                 predicate,
@@ -431,16 +435,16 @@ impl ProofProcessor {
                 &self.solver.variable_names,
             );
 
+            // The inference code can be `None` if the reason is constructed to explain an implied
+            // predicate. Those inferences do not need to be in the proof, so we only create an
+            // inference for propagations by constraints.
             if let Some(inference_code) = inference_code {
                 mark_stack_entry(&self.solver, nogood_stack, inference_code);
 
                 let label = self.solver.get_inference_label_for(inference_code);
                 inferences.push(Some(Inference {
                     constraint_id: self.solver.new_constraint_tag().into(),
-                    premises: reason_buffer
-                        .iter()
-                        .map(|premise| convert_predicate_to_proof_atomic(&self.solver, *premise))
-                        .collect(),
+                    premises: convert_predicates_to_proof_atomic(&self.solver, &reason_buffer),
                     consequent: Some(convert_predicate_to_proof_atomic(&self.solver, predicate)),
                     generated_by: Some(self.solver.get_constraint_tag_for(inference_code).into()),
                     label: Some(label),
@@ -463,14 +467,19 @@ impl ProofProcessor {
 
     /// Add a predicate that still has to be explained.
     fn add_predicate_to_explain(&mut self, predicate: Predicate) {
+        assert_eq!(
+            self.solver.assignments.evaluate_predicate(predicate),
+            Some(true),
+            "predicate {} ({predicate:?}) does not evaluate to true",
+            predicate.display(&self.solver.variable_names),
+        );
+
         // The first time we encounter the predicate, we initialise its value in the
         // heap.
         //
         // Note that if the predicate is already in the heap, no action needs to be
         // taken. It can happen that a predicate is returned
         // multiple times as a reason for other predicates.
-
-        // TODO: could improve the heap structure to be more user-friendly.
 
         // Here we manually adjust the size of the heap to accommodate new elements.
         let predicate_id = self.predicate_ids.get_id(predicate);
@@ -543,6 +552,17 @@ fn mark_stack_entry(
     if let Some((_, ref mut marked)) = stack_entry {
         *marked = true;
     }
+}
+
+/// Converts a slice of predicates to atomic constraints for the proof log.
+fn convert_predicates_to_proof_atomic(
+    solver: &ConstraintSatisfactionSolver,
+    predicates: &[Predicate],
+) -> Vec<IntAtomic<String, i32>> {
+    predicates
+        .iter()
+        .map(|predicate| convert_predicate_to_proof_atomic(solver, *predicate))
+        .collect()
 }
 
 /// Converts an atomic from the proofs representation to a solver [`Predicate`].

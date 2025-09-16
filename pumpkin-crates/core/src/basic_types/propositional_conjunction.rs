@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::ops::Deref;
 use std::ops::Index;
 use std::ops::IndexMut;
 
@@ -14,6 +15,14 @@ pub struct PropositionalConjunction {
     predicates_in_conjunction: Vec<Predicate>,
 }
 
+impl Deref for PropositionalConjunction {
+    type Target = [Predicate];
+
+    fn deref(&self) -> &Self::Target {
+        &self.predicates_in_conjunction
+    }
+}
+
 impl PropositionalConjunction {
     pub fn new(predicates_in_conjunction: Vec<Predicate>) -> Self {
         PropositionalConjunction {
@@ -21,48 +30,12 @@ impl PropositionalConjunction {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.predicates_in_conjunction.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.predicates_in_conjunction.is_empty()
-    }
-
-    pub fn contains(&self, predicate: Predicate) -> bool {
-        self.predicates_in_conjunction.contains(&predicate)
-    }
-
-    pub fn num_predicates(&self) -> u32 {
-        self.predicates_in_conjunction.len() as u32
-    }
-
     pub fn add(&mut self, predicate: Predicate) {
         self.predicates_in_conjunction.push(predicate);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Predicate> + '_ {
-        self.predicates_in_conjunction.iter()
-    }
-
-    pub fn as_slice(&self) -> &[Predicate] {
-        self.predicates_in_conjunction.as_slice()
-    }
-
     pub fn clear(&mut self) {
         self.predicates_in_conjunction.clear();
-    }
-
-    pub fn push(&mut self, predicate: Predicate) {
-        self.predicates_in_conjunction.push(predicate);
-    }
-
-    pub fn swap(&mut self, a: usize, b: usize) {
-        self.predicates_in_conjunction.swap(a, b)
-    }
-
-    pub fn pop(&mut self) -> Option<Predicate> {
-        self.predicates_in_conjunction.pop()
     }
 
     pub fn extend_and_remove_duplicates(

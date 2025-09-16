@@ -1,6 +1,8 @@
 use std::fs::File;
+use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -8,10 +10,6 @@ use std::rc::Rc;
 use clap::Parser;
 use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
-#[cfg(feature = "gzipped-proofs")]
-use flate2::read::GzDecoder;
-#[cfg(feature = "gzipped-proofs")]
-use flate2::write::GzEncoder;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::proof_processor::ProofProcessor;
 use pumpkin_core::variables::TransformableVariable;
@@ -245,44 +243,32 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
     Ok(ProofProcessor::from(solver))
 }
 
-#[cfg(feature = "gzipped-proofs")]
 fn create_proof_reader(
     path: impl AsRef<Path>,
-) -> anyhow::Result<ProofReader<BufReader<GzDecoder<File>>, i32>> {
-    let file = File::open(path)?;
-    let decoder = GzDecoder::new(file);
-    let buf_reader = BufReader::new(decoder);
+) -> anyhow::Result<ProofReader<Box<dyn BufRead>, i32>> {
+    let file = File::open(path.as_ref())?;
 
-    Ok(ProofReader::new(buf_reader))
+    if path.as_ref().extension().is_some_and(|ext| ext == "gz") {
+        let decoder = flate2::read::GzDecoder::new(file);
+        let buf_reader = BufReader::new(decoder);
+
+        Ok(ProofReader::new(Box::new(buf_reader)))
+    } else {
+        let buf_reader = BufReader::new(file);
+
+        Ok(ProofReader::new(Box::new(buf_reader)))
+    }
 }
 
-#[cfg(not(feature = "gzipped-proofs"))]
-fn create_proof_reader(
-    path: impl AsRef<Path>,
-) -> anyhow::Result<ProofReader<BufReader<File>, i32>> {
-    let file = File::open(path)?;
-    let buf_reader = BufReader::new(file);
+fn create_proof_writer(path: impl AsRef<Path>) -> anyhow::Result<ProofWriter<Box<dyn Write>, i32>> {
+    let file = File::create(path.as_ref())?;
 
-    Ok(ProofReader::new(buf_reader))
-}
-
-#[cfg(feature = "gzipped-proofs")]
-fn create_proof_writer(
-    path: impl AsRef<Path>,
-) -> anyhow::Result<ProofWriter<BufWriter<GzEncoder<File>>, i32>> {
-    let file = File::create(path)?;
-    let decoder = GzEncoder::new(file, flate2::Compression::fast());
-    let buf_writer = BufWriter::new(decoder);
-
-    Ok(ProofWriter::new(buf_writer))
-}
-
-#[cfg(not(feature = "gzipped-proofs"))]
-fn create_proof_writer(
-    path: impl AsRef<Path>,
-) -> anyhow::Result<ProofWriter<BufWriter<File>, i32>> {
-    let file = File::create(path)?;
-    let buf_writer = BufWriter::new(file);
-
-    Ok(ProofReader::new(buf_writer))
+    if path.as_ref().extension().is_some_and(|ext| ext == "gz") {
+        let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
+        let buf_writer = BufWriter::new(encoder);
+        Ok(ProofWriter::new(Box::new(buf_writer)))
+    } else {
+        let buf_writer = BufWriter::new(file);
+        Ok(ProofWriter::new(Box::new(buf_writer)))
+    }
 }

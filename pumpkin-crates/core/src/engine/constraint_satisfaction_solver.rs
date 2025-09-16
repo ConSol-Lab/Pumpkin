@@ -1419,7 +1419,8 @@ impl ConstraintSatisfactionSolver {
         }
 
         // temporary hack for the nogood propagator that does propagation from scratch
-        self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
+        self.propagator_queue
+            .enqueue_propagator(nogood_propagator_id, 0);
         self.propagate();
 
         if self.state.is_inconsistent() {
@@ -1432,7 +1433,7 @@ impl ConstraintSatisfactionSolver {
     /// Remove a nogood added with [`Self::add_removable_nogood`].
     pub(crate) fn remove_nogood(&mut self, handle: NogoodHandle) -> Vec<Predicate> {
         let predicates = match handle {
-            NogoodHandle::Empty => vec![],
+            NogoodHandle::Empty => panic!("This should never be called"),
             NogoodHandle::Unit(predicate) => {
                 let _ = self
                     .unit_nogood_inference_codes
@@ -1465,6 +1466,8 @@ impl ConstraintSatisfactionSolver {
             &mut DummyBrancher,
             &mut self.trailed_values,
         );
+
+        self.state.declare_ready();
 
         predicates
     }
