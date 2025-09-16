@@ -457,7 +457,8 @@ impl NotificationEngine {
             {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
-                self.notify_propagator(
+                Self::notify_propagator(
+                    &mut self.predicate_notifier.predicate_id_assignments,
                     propagator_id,
                     local_id,
                     event,

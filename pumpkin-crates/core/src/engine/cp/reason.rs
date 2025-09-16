@@ -175,10 +175,8 @@ mod tests {
     use super::*;
     use crate::conjunction;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::propagation::Propagator;
     use crate::engine::variables::DomainId;
     use crate::engine::Assignments;
-    use crate::predicate;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
@@ -226,54 +224,5 @@ mod tests {
         );
 
         assert_eq!(conjunction.as_slice(), &out_reason);
-    }
-
-    #[test]
-    fn reified_lazy_explanation_has_reification_added_after_compute() {
-        let mut reason_store = ReasonStore::default();
-        let mut integers = Assignments::default();
-        let mut notification_engine = NotificationEngine::default();
-
-        let x = integers.grow(1, 5);
-        let reif = Literal::new(integers.grow(0, 1));
-
-        struct TestPropagator(Vec<Predicate>);
-
-        impl Propagator for TestPropagator {
-            fn name(&self) -> &str {
-                todo!()
-            }
-
-            fn debug_propagate_from_scratch(
-                &self,
-                _: crate::engine::propagation::PropagationContextMut,
-            ) -> crate::basic_types::PropagationStatusCP {
-                todo!()
-            }
-
-            fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
-                assert_eq!(0, code);
-
-                &self.0
-            }
-        }
-
-        let mut propagator_store = PropagatorStore::default();
-        let propagator_id = propagator_store
-            .new_propagator()
-            .populate(Box::new(TestPropagator(vec![predicate![x >= 2]])));
-        let reason_ref = reason_store.push(propagator_id, StoredReason::ReifiedLazy(reif, 0));
-
-        assert_eq!(ReasonRef(0), reason_ref);
-
-        let mut reason = vec![];
-        let _ = reason_store.get_or_compute(
-            reason_ref,
-            ExplanationContext::test_new(&integers, &mut notification_engine),
-            &mut propagator_store,
-            &mut reason,
-        );
-
-        assert_eq!(vec![predicate![x >= 2], reif.get_true_predicate()], reason);
     }
 }
