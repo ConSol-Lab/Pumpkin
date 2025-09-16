@@ -261,6 +261,7 @@ dependencies = [
  "anyhow",
  "clap",
  "drcp-format",
+ "flate2",
 ]
 
 [[package]]
