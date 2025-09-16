@@ -4,6 +4,7 @@ use super::PropositionalConjunction;
 use crate::engine::propagation::Propagator;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::ConstraintOperationError;
 
@@ -17,6 +18,9 @@ pub(crate) enum StoredConflictInfo {
     EmptyDomain {
         inference_code: Option<InferenceCode>,
         conflict_nogood: PropositionalConjunction,
+        /// The last inference that cause the empty domain. This is encoded in `conflict_nogood`
+        /// but is needed more explicitly in the proof processor.
+        last_inference: (PropositionalConjunction, Predicate),
     },
     RootLevelConflict(ConstraintOperationError),
 }

@@ -37,7 +37,6 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::VariableNames;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
@@ -308,30 +307,6 @@ impl ProofProcessor {
         Ok((Conclusion::Unsat, nogood_stack))
     }
 
-    /// Return the [`PropositionalConjunction`] and [`InferenceCode`] that triggered the conflict.
-    fn extract_conflict_info(&self) -> (PropositionalConjunction, InferenceCode) {
-        let conflict_info = self.solver.state.get_conflict_info();
-
-        match conflict_info {
-            StoredConflictInfo::Propagator(PropagatorConflict {
-                conjunction,
-                inference_code,
-            }) => (conjunction, inference_code),
-            StoredConflictInfo::EmptyDomain {
-                conflict_nogood,
-                inference_code,
-            } => {
-                let inference_code =
-                    inference_code.expect("is only none in the case of inconsistent assumptions");
-
-                (conflict_nogood, inference_code)
-            }
-            StoredConflictInfo::RootLevelConflict(_) => {
-                panic!("This should not happen.")
-            }
-        }
-    }
-
     /// Explain the current conflict and write to the output proof.
     fn explain_current_conflict(
         &mut self,
@@ -352,25 +327,62 @@ impl ProofProcessor {
         let mut inferences: Vec<Option<Inference<String, i32, Arc<str>>>> = vec![];
         let mut initial_bound_indices = HashMap::new();
 
-        let (conflict_nogood, conflict_inference_code) = self.extract_conflict_info();
+        let conflict_info = self.solver.state.get_conflict_info();
+
+        let (predicates_to_explain, conflict_inference_code) = match conflict_info {
+            StoredConflictInfo::Propagator(PropagatorConflict {
+                conjunction,
+                inference_code,
+            }) => {
+                let generated_by = self.solver.get_constraint_tag_for(inference_code);
+                let label = self.solver.get_inference_label_for(inference_code);
+                inferences.push(Some(Inference {
+                    constraint_id: self.solver.new_constraint_tag().into(),
+                    premises: convert_predicates_to_proof_atomic(&self.solver, &conjunction),
+                    consequent: None,
+                    generated_by: Some(generated_by.into()),
+                    label: Some(label),
+                }));
+
+                (conjunction, inference_code)
+            }
+            StoredConflictInfo::EmptyDomain {
+                conflict_nogood,
+                inference_code,
+                last_inference: (last_inference_explanation, last_propagated_predicate),
+            } => {
+                let inference_code =
+                    inference_code.expect("is only none in the case of inconsistent assumptions");
+
+                let generated_by = self.solver.get_constraint_tag_for(inference_code);
+                let label = self.solver.get_inference_label_for(inference_code);
+                inferences.push(Some(Inference {
+                    constraint_id: self.solver.new_constraint_tag().into(),
+                    premises: convert_predicates_to_proof_atomic(
+                        &self.solver,
+                        &last_inference_explanation,
+                    ),
+                    consequent: Some(convert_predicate_to_proof_atomic(
+                        &self.solver,
+                        last_propagated_predicate,
+                    )),
+                    generated_by: Some(generated_by.into()),
+                    label: Some(label),
+                }));
+
+                (conflict_nogood, inference_code)
+            }
+            StoredConflictInfo::RootLevelConflict(_) => {
+                panic!("This should not happen.")
+            }
+        };
 
         // We mark and write the very last propagation that led to the conflict.
         mark_stack_entry(&self.solver, nogood_stack, conflict_inference_code);
 
-        let generated_by = self.solver.get_constraint_tag_for(conflict_inference_code);
-        let label = self.solver.get_inference_label_for(conflict_inference_code);
-
-        inferences.push(Some(Inference {
-            constraint_id: self.solver.new_constraint_tag().into(),
-            premises: convert_predicates_to_proof_atomic(&self.solver, &conflict_nogood),
-            consequent: None,
-            generated_by: Some(generated_by.into()),
-            label: Some(label),
-        }));
-
         // Then we add the conflict to the queue of predicates that need to be explained
         // through inferences.
-        for predicate in conflict_nogood {
+        for predicate in predicates_to_explain {
             self.add_predicate_to_explain(predicate);
         }
 

@@ -1084,6 +1084,8 @@ impl ConstraintSatisfactionSolver {
             &self.variable_names,
         );
 
+        let last_inference_explanation = empty_domain_reason.iter().copied().collect();
+
         empty_domain_reason.extend([
             predicate!(conflict_domain >= entry.old_lower_bound),
             predicate!(conflict_domain <= entry.old_upper_bound),
@@ -1092,6 +1094,7 @@ impl ConstraintSatisfactionSolver {
         StoredConflictInfo::EmptyDomain {
             inference_code: Some(entry_inference_code),
             conflict_nogood: empty_domain_reason.into(),
+            last_inference: (last_inference_explanation, entry.predicate),
         }
     }
 
@@ -1447,11 +1450,7 @@ impl ConstraintSatisfactionSolver {
                     .downcast_mut::<NogoodPropagator>()
                     .expect("getting the nogood propagator by its id");
 
-                nogood_propagator.remove_nogood(
-                    nogood_id,
-                    &self.assignments,
-                    &mut self.notification_engine,
-                )
+                nogood_propagator.remove_nogood(nogood_id, &mut self.notification_engine)
             }
         };
 
@@ -1707,12 +1706,9 @@ impl CSPSolverState {
     pub(crate) fn get_conflict_info(&self) -> StoredConflictInfo {
         match &self.internal_state {
             CSPSolverStateInternal::Conflict { conflict_info } => conflict_info.clone(),
-            CSPSolverStateInternal::InfeasibleUnderAssumptions {
-                violated_assumption,
-            } => StoredConflictInfo::EmptyDomain {
-                conflict_nogood: vec![*violated_assumption, !(*violated_assumption)].into(),
-                inference_code: None,
-            },
+            CSPSolverStateInternal::InfeasibleUnderAssumptions { .. } => {
+                todo!("what is the conflict info when infeasible under assumptions?")
+            }
             _ => {
                 panic!("Cannot extract conflict clause if solver is not in a conflict.");
             }

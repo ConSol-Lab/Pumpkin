@@ -161,7 +161,6 @@ impl NogoodPropagator {
     pub(crate) fn remove_nogood(
         &mut self,
         nogood_id: NogoodId,
-        assignments: &Assignments,
         notification_engine: &mut NotificationEngine,
     ) -> Vec<Predicate> {
         let index = self.nogood_predicates.get_nogood_index(&nogood_id);
