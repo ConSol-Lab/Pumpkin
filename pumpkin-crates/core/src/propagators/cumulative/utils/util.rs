@@ -57,11 +57,19 @@ pub(crate) fn register_tasks<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     tasks: &[Rc<Task<Var, PVar, RVar>>],
+    capacity: &CVar,
     mut context: PropagatorConstructorContext<'_>,
     register_backtrack: bool,
 ) {
+    context.register(
+        capacity.clone(),
+        DomainEvents::create_with_int_events(enum_set!(DomainEvent::UpperBound)),
+        LocalId::from(tasks.len() as u32),
+    );
+
     tasks.iter().for_each(|task| {
         context.register(
             task.start_variable.clone(),
@@ -70,6 +78,17 @@ pub(crate) fn register_tasks<
             )),
             task.id,
         );
+        context.register(
+            task.processing_time.clone(),
+            DomainEvents::create_with_int_events(enum_set!(DomainEvent::LowerBound)),
+            task.id,
+        );
+        context.register(
+            task.resource_usage.clone(),
+            DomainEvents::create_with_int_events(enum_set!(DomainEvent::LowerBound)),
+            task.id,
+        );
+
         if register_backtrack {
             context.register_for_backtrack_events(
                 task.start_variable.clone(),

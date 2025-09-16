@@ -26,7 +26,7 @@ use crate::propagators::cumulative::time_table::per_point_incremental_propagator
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::find_synchronised_conflict;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::synchronise_time_table;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
@@ -179,6 +179,7 @@ impl<
             CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
         register_tasks(
             &parameters.tasks,
+            &parameters.capacity,
             context.reborrow(),
             cumulative_options.incremental_backtracking,
         );
@@ -228,7 +229,7 @@ impl<
                 && conflict.is_none()
             {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
-                conflict = Some(Err(create_conflict_explanation(
+                conflict = Some(Err(create_explanation_profile_height(
                     context,
                     self.inference_code,
                     current_profile,
@@ -297,7 +298,7 @@ impl<
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_per_point_from_scratch(
-                context.as_readonly(),
+                context,
                 self.inference_code,
                 &self.parameters,
             )?;
@@ -382,7 +383,7 @@ impl<
                     pumpkin_assert_extreme!(
                         check_synchronisation_conflict_explanation_per_point(
                             &synchronised_conflict_explanation,
-                            context.as_readonly(),
+                            context,
                             self.inference_code,
                             &self.parameters,
                         ),
@@ -407,7 +408,7 @@ impl<
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
                         create_time_table_per_point_from_scratch(
-                            context.as_readonly(),
+                            context,
                             self.inference_code,
                             &self.parameters
                         )
@@ -417,7 +418,7 @@ impl<
                     // We have found the previous conflict
                     self.found_previous_conflict = true;
 
-                    return Err(create_conflict_explanation(
+                    return Err(create_explanation_profile_height(
                         context.as_readonly(),
                         self.inference_code,
                         conflicting_profile,
@@ -482,7 +483,7 @@ impl<
             CVar,
             SYNCHRONISE,
         >(
-            context.as_readonly(),
+            &mut context,
             self.inference_code,
             &self.time_table,
             &self.parameters
@@ -610,7 +611,7 @@ impl<
 /// Contains functions related to debugging
 mod debug {
 
-    use crate::engine::propagation::PropagationContext;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::proof::InferenceCode;
     use crate::propagators::create_time_table_per_point_from_scratch;
     use crate::propagators::CumulativeParameters;
@@ -633,7 +634,7 @@ mod debug {
         CVar: IntegerVariable + 'static,
         const SYNCHRONISE: bool,
     >(
-        context: PropagationContext,
+        context: &mut PropagationContextMut,
         inference_code: InferenceCode,
         time_table: &PerPointTimeTableType<Var, PVar, RVar>,
         parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,

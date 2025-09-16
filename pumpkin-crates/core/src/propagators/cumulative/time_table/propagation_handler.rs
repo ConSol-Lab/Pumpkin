@@ -441,7 +441,7 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, PVar, RVar>(
+pub(crate) fn create_explanation_profile_height<Var, PVar, RVar>(
     context: PropagationContext,
     inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
@@ -474,7 +474,7 @@ where
 pub(crate) mod test_propagation_handler {
     use std::rc::Rc;
 
-    use super::create_conflict_explanation;
+    use super::create_explanation_profile_height;
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use crate::containers::StorageKey;
@@ -543,7 +543,7 @@ pub(crate) mod test_propagation_handler {
                 height: 1,
             };
 
-            let reason = create_conflict_explanation(
+            let reason = create_explanation_profile_height(
                 PropagationContext::new(&self.assignments),
                 self.propagation_handler.inference_code,
                 &profile,

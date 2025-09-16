@@ -2,7 +2,7 @@
 use std::ops::Range;
 
 use crate::containers::HashSet;
-use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::CumulativeParameters;
@@ -12,7 +12,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
-/// Determines whether the provided `time_table` is the same as the one creatd from scratch
+/// Determines whether the provided `time_table` is the same as the one created from scratch
 /// using the following checks:
 /// - The time-tables should contain the same number of profiles
 /// - For each profile it should hold that
@@ -28,7 +28,7 @@ pub(crate) fn time_tables_are_the_same_interval<
     CVar: IntegerVariable + 'static,
     const SYNCHRONISE: bool,
 >(
-    context: PropagationContext,
+    context: &mut PropagationContextMut,
     inference_code: InferenceCode,
     time_table: &OverIntervalTimeTableType<Var, PVar, RVar>,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,

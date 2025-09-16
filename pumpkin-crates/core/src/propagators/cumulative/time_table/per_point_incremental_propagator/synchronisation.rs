@@ -4,9 +4,10 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -24,13 +25,13 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
     CVar: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
-    context: PropagationContext,
+    context: &mut PropagationContextMut,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> bool {
     let error_from_scratch =
         create_time_table_per_point_from_scratch(context, inference_code, parameters);
-    if let Err(explanation_scratch) = error_from_scratch {
+    if let Err(Inconsistency::Conflict(explanation_scratch)) = error_from_scratch {
         if let Err(Inconsistency::Conflict(conflict)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
@@ -157,7 +158,7 @@ pub(crate) fn create_synchronised_conflict_explanation<
     )
     .collect();
 
-    Err(create_conflict_explanation(
+    Err(create_explanation_profile_height(
         context,
         inference_code,
         &ResourceProfile {

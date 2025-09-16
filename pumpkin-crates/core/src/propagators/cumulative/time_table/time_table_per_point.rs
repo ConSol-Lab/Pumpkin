@@ -24,9 +24,10 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
 use crate::propagators::util::update_bounds_task;
@@ -134,7 +135,12 @@ impl<
 
         let parameters =
             CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
-        register_tasks(&parameters.tasks, context.reborrow(), false);
+        register_tasks(
+            &parameters.tasks,
+            &parameters.capacity,
+            context.reborrow(),
+            false,
+        );
 
         let mut updatable_structures = UpdatableStructures::new(&parameters);
         updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);
@@ -164,7 +170,7 @@ impl<
         }
 
         let time_table = create_time_table_per_point_from_scratch(
-            context.as_readonly(),
+            &mut context,
             self.inference_code,
             &self.parameters,
         )?;
@@ -191,6 +197,11 @@ impl<
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id.unpack() as usize >= self.parameters.tasks.len() {
+            // The upper-bound of the capacity has been updated; we should enqueue
+            return EnqueueDecision::Enqueue;
+        }
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
         // wasn't updated in `synchronise`; however, `synchronise` will only remove profiles
@@ -205,7 +216,7 @@ impl<
             self.is_time_table_empty,
         );
 
-        // Note that the non-incremental proapgator does not make use of `result.updated` since it
+        // Note that the non-incremental propagator does not make use of `result.updated` since it
         // propagates from scratch anyways
         update_bounds_task(
             context.as_readonly(),
@@ -258,10 +269,10 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     RVar: IntegerVariable + 'static,
     CVar: IntegerVariable + 'static,
 >(
-    context: PropagationContext,
+    context: &mut PropagationContextMut,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
-) -> Result<PerPointTimeTableType<Var, PVar, RVar>, PropagatorConflict> {
+) -> Result<PerPointTimeTableType<Var, PVar, RVar>, Inconsistency> {
     let mut time_table: PerPointTimeTableType<Var, PVar, RVar> = PerPointTimeTableType::new();
     // First we go over all tasks and determine their mandatory parts
     for task in parameters.tasks.iter() {
@@ -280,15 +291,18 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                 current_profile.height += context.lower_bound(&task.resource_usage);
                 current_profile.profile_tasks.push(Rc::clone(task));
 
-                if current_profile.height > context.upper_bound(&parameters.capacity) {
-                    // The addition of the current task to the resource profile has caused an
-                    // overflow
-                    return Err(create_conflict_explanation(
-                        context,
+                if current_profile.height > context.lower_bound(&parameters.capacity) {
+                    context.post(
+                        predicate!(parameters.capacity >= current_profile.height),
+                        create_explanation_profile_height(
+                            context.as_readonly(),
+                            inference_code,
+                            current_profile,
+                            parameters.options.explanation_type,
+                        )
+                        .conjunction,
                         inference_code,
-                        current_profile,
-                        parameters.options.explanation_type,
-                    ));
+                    )?;
                 }
             }
         }
@@ -315,11 +329,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(
-        context.as_readonly(),
-        inference_code,
-        parameters,
-    )?;
+    let time_table = create_time_table_per_point_from_scratch(context, inference_code, parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,

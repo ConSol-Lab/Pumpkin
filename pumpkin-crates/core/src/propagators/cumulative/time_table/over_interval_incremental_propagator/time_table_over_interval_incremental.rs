@@ -28,7 +28,7 @@ use crate::propagators::cumulative::time_table::over_interval_incremental_propag
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::find_synchronised_conflict;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::synchronise_time_table;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
 use crate::propagators::cumulative::time_table::time_table_util::has_overlap_with_interval;
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
@@ -183,6 +183,7 @@ impl<
             CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
         register_tasks(
             &parameters.tasks,
+            &parameters.capacity,
             context.reborrow(),
             cumulative_options.incremental_backtracking,
         );
@@ -227,7 +228,7 @@ impl<
                     );
                     if let Err(conflict_tasks) = result {
                         if conflict.is_none() {
-                            conflict = Some(Err(create_conflict_explanation(
+                            conflict = Some(Err(create_explanation_profile_height(
                                 context,
                                 self.inference_code,
                                 &conflict_tasks,
@@ -292,7 +293,7 @@ impl<
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_over_interval_from_scratch(
-                context.as_readonly(),
+                context,
                 &self.parameters,
                 self.inference_code,
             )?;
@@ -370,7 +371,7 @@ impl<
                     pumpkin_assert_extreme!(
                         check_synchronisation_conflict_explanation_over_interval(
                             &synchronised_conflict_explanation,
-                            context.as_readonly(),
+                            context,
                             &self.parameters,
                             self.inference_code,
                         ),
@@ -391,7 +392,7 @@ impl<
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
                         create_time_table_over_interval_from_scratch(
-                            context.as_readonly(),
+                            context,
                             &self.parameters,
                             self.inference_code,
                         )
@@ -401,7 +402,7 @@ impl<
                     // We have found the previous conflict
                     self.found_previous_conflict = true;
 
-                    return Err(create_conflict_explanation(
+                    return Err(create_explanation_profile_height(
                         context.as_readonly(),
                         self.inference_code,
                         conflicting_profile,
@@ -461,7 +462,7 @@ impl<
 
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, PVar, RVar, CVar, SYNCHRONISE>(
-                context.as_readonly(),
+                &mut context,
                 self.inference_code,
                 &self.time_table,
                 &self.parameters,
