@@ -50,7 +50,6 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-
 pub(crate) struct TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -59,9 +58,7 @@ pub(crate) struct TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
     /// Stores structures which change during the search; used to store the bounds
     updatable_structures: UpdatableStructures<Var, PVar, RVar>,
 
-    // TODO: Update with proapgator constructor.
-    constraint_tag: ConstraintTag,
-    inference_code: Option<InferenceCode>,
+    inference_code: InferenceCode,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -74,29 +71,25 @@ pub(crate) struct TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
 pub(crate) type PerPointTimeTableType<Var, PVar, RVar> =
     BTreeMap<u32, ResourceProfile<Var, PVar, RVar>>;
 
-impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
-{
+pub(crate) struct TimeTablePerPointConstructor<Var, PVar, RVar, CVar> {
+    tasks: Vec<ArgTask<Var, PVar, RVar>>,
+    capacity: CVar,
+    cumulative_options: CumulativePropagatorOptions,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var, PVar, RVar, CVar> TimeTablePerPointConstructor<Var, PVar, RVar, CVar> {
     pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        arg_tasks: Vec<ArgTask<Var, PVar, RVar>>,
         capacity: CVar,
         cumulative_options: CumulativePropagatorOptions,
         constraint_tag: ConstraintTag,
-    ) -> TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let updatable_structures = UpdatableStructures::new(&parameters);
-
-        TimeTablePerPointPropagator {
-            is_time_table_empty: true,
-            parameters,
-            updatable_structures,
+    ) -> Self {
+        Self {
+            tasks: arg_tasks,
+            capacity,
+            cumulative_options,
             constraint_tag,
-            inference_code: None,
         }
     }
 }
@@ -106,18 +99,52 @@ impl<
         PVar: IntegerVariable + 'static,
         RVar: IntegerVariable + 'static,
         CVar: IntegerVariable + 'static,
-    > PropagatorConstructor for TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+    > PropagatorConstructor for TimeTablePerPointConstructor<Var, PVar, RVar, CVar>
 {
-    type PropagatorImpl = Self;
+    type PropagatorImpl = TimeTablePerPointPropagator<Var, PVar, RVar, CVar>;
 
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context.reborrow(), false);
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let inference_code = context.create_inference_code(self.constraint_tag, TimeTable);
 
-        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+        TimeTablePerPointPropagator::new(
+            context,
+            &self.tasks,
+            self.capacity,
+            self.cumulative_options,
+            inference_code,
+        )
+    }
+}
 
-        self
+impl<
+        Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
+    > TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+{
+    fn new(
+        mut context: PropagatorConstructorContext,
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        capacity: CVar,
+        cumulative_options: CumulativePropagatorOptions,
+        inference_code: InferenceCode,
+    ) -> TimeTablePerPointPropagator<Var, PVar, RVar, CVar> {
+        let tasks = create_tasks(context.as_readonly(), arg_tasks);
+
+        let parameters =
+            CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
+        register_tasks(&parameters.tasks, context.reborrow(), false);
+
+        let mut updatable_structures = UpdatableStructures::new(&parameters);
+        updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);
+
+        TimeTablePerPointPropagator {
+            is_time_table_empty: true,
+            parameters,
+            updatable_structures,
+            inference_code,
+        }
     }
 }
 
@@ -132,13 +159,13 @@ impl<
         if self.parameters.is_infeasible {
             return Err(Inconsistency::Conflict(PropagatorConflict {
                 conjunction: conjunction!(),
-                inference_code: self.inference_code.unwrap(),
+                inference_code: self.inference_code,
             }));
         }
 
         let time_table = create_time_table_per_point_from_scratch(
             context.as_readonly(),
-            self.inference_code.unwrap(),
+            self.inference_code,
             &self.parameters,
         )?;
         self.is_time_table_empty = time_table.is_empty();
@@ -146,7 +173,7 @@ impl<
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code,
             time_table.values(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -210,7 +237,7 @@ impl<
     ) -> PropagationStatusCP {
         debug_propagate_from_scratch_time_table_point(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code,
             &self.parameters,
             &self.updatable_structures,
         )
@@ -230,9 +257,8 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
     CVar: IntegerVariable + 'static,
-    Context: ReadDomains + Copy,
 >(
-    context: Context,
+    context: PropagationContext,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Result<PerPointTimeTableType<Var, PVar, RVar>, PropagatorConflict> {
@@ -242,19 +268,19 @@ pub(crate) fn create_time_table_per_point_from_scratch<
         let upper_bound = context.upper_bound(&task.start_variable);
         let lower_bound = context.lower_bound(&task.start_variable);
 
-        if upper_bound < lower_bound + task.processing_time {
+        if upper_bound < lower_bound + context.lower_bound(&task.processing_time) {
             // There is a mandatory part
-            for i in upper_bound..(lower_bound + task.processing_time) {
+            for i in upper_bound..(lower_bound + context.lower_bound(&task.processing_time)) {
                 // For every time-point of the mandatory part,
                 //  add the resource usage of the current task to the ResourceProfile and add it
                 // to the profile tasks of the resource
                 let current_profile: &mut ResourceProfile<Var, PVar, RVar> = time_table
                     .entry(i as u32)
                     .or_insert(ResourceProfile::default(i));
-                current_profile.height += task.resource_usage;
+                current_profile.height += context.lower_bound(&task.resource_usage);
                 current_profile.profile_tasks.push(Rc::clone(task));
 
-                if current_profile.height > parameters.capacity {
+                if current_profile.height > context.upper_bound(&parameters.capacity) {
                     // The addition of the current task to the resource profile has caused an
                     // overflow
                     return Err(create_conflict_explanation(
@@ -308,14 +334,14 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<
 mod tests {
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
-    use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTablePerPointPropagator;
+    use crate::propagators::TimeTablePerPointConstructor;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -325,8 +351,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -358,8 +384,8 @@ mod tests {
         let s2 = solver.new_variable(1, 1);
         let constraint_tag = solver.new_constraint_tag();
 
-        let result = solver.new_propagator(TimeTablePerPointPropagator::new(
-            &[
+        let result = solver.new_propagator(TimeTablePerPointConstructor::new(
+            [
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -411,8 +437,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -449,8 +475,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -500,8 +526,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -546,8 +572,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -592,8 +618,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -668,8 +694,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -742,8 +768,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -793,8 +819,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -847,8 +873,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,

@@ -47,10 +47,7 @@ pub(crate) fn create_naive_conflict_explanation<
 >(
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     context: Context,
-) -> PropositionalConjunction
-where
-    Var: IntegerVariable + 'static,
-{
+) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
         .iter()
@@ -91,7 +88,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::options::CumulativeExplanationType;
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;

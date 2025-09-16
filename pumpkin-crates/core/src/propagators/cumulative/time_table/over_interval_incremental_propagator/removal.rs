@@ -1,10 +1,12 @@
 //! Contains the functions necessary for removing the appropriate profiles into the time-table
 //! based on the reduced mandatory part.
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::cmp::max;
 use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::engine::propagation::PropagationContext;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -17,8 +19,8 @@ pub(crate) fn reduce_profiles_overlapping_with_added_mandatory_part<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     start_index: usize,
     end_index: usize,
@@ -40,7 +42,7 @@ pub(crate) fn reduce_profiles_overlapping_with_added_mandatory_part<
 
         // Then we need to add the updated profile due to the overlap between `profile` and
         // `updated_task`
-        overlap_updated_profile(update_range, profile, &mut to_add, updated_task);
+        overlap_updated_profile(context, update_range, profile, &mut to_add, updated_task);
 
         // We need to check whether the last overlapping profile was split
         if index == end_index {
@@ -59,6 +61,7 @@ fn remove_task_from_profile<
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     updated_task: &Rc<Task<Var, PVar, RVar>>,
     start: i32,
     end: i32,
@@ -76,7 +79,7 @@ fn remove_task_from_profile<
         start,
         end,
         profile_tasks: updated_profile_tasks,
-        height: profile.height - updated_task.resource_usage,
+        height: profile.height - context.lower_bound(&updated_task.resource_usage),
     }
 }
 
@@ -131,12 +134,13 @@ pub(crate) fn overlap_updated_profile<
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     update_range: &Range<i32>,
     profile: &ResourceProfile<Var, PVar, RVar>,
     to_add: &mut Vec<ResourceProfile<Var, PVar, RVar>>,
     updated_task: &Rc<Task<Var, PVar, RVar>>,
 ) {
-    if profile.height - updated_task.resource_usage == 0 {
+    if profile.height - context.lower_bound(&updated_task.resource_usage) == 0 {
         // If the removal of this task results in an empty profile then we simply do not add it
         return;
     }
@@ -166,6 +170,7 @@ pub(crate) fn overlap_updated_profile<
         // We thus create a new profile consisting of the combination of
         // the previous profile and the updated task under consideration
         to_add.push(remove_task_from_profile(
+            context,
             updated_task,
             new_profile_lower_bound,
             new_profile_upper_bound,

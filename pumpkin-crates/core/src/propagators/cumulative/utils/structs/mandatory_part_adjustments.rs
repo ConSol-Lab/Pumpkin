@@ -1,5 +1,9 @@
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
+use crate::variables::IntegerVariable;
 use std::cmp::Ordering;
 use std::ops::Range;
+
+use crate::engine::propagation::PropagationContext;
 
 use super::UpdatedTaskInfo;
 
@@ -76,16 +80,19 @@ impl MandatoryPartAdjustments {
     }
 }
 
-impl<Var, PVar, RVar> UpdatedTaskInfo<Var, PVar, RVar> {
+impl<Var, PVar: IntegerVariable + 'static, RVar> UpdatedTaskInfo<Var, PVar, RVar> {
     /// Returns the adjustments which need to be made to the time-table in the form of a
     /// [`MandatoryPartAdjustments`].
-    pub(crate) fn get_mandatory_part_adjustments(&self) -> MandatoryPartAdjustments {
+    pub(crate) fn get_mandatory_part_adjustments(
+        &self,
+        context: PropagationContext,
+    ) -> MandatoryPartAdjustments {
         // We get the previous mandatory part
-        let previous_mandatory_part =
-            self.old_upper_bound..self.old_lower_bound + self.task.processing_time;
+        let previous_mandatory_part = self.old_upper_bound
+            ..self.old_lower_bound + context.lower_bound(&self.task.processing_time);
         // We also get the new mandatory part
-        let new_mandatory_part =
-            self.new_upper_bound..self.new_lower_bound + self.task.processing_time;
+        let new_mandatory_part = self.new_upper_bound
+            ..self.new_lower_bound + context.lower_bound(&self.task.processing_time);
 
         if previous_mandatory_part.is_empty() && new_mandatory_part.is_empty() {
             // If both are empty then no adjustments should be made

@@ -85,10 +85,14 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
             create_naive_predicate_propagating_task_lower_bound_propagation(context, task)
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_predicate_propagating_task_lower_bound_propagation(task, profile)
+            create_big_step_predicate_propagating_task_lower_bound_propagation(
+                context, task, profile,
+            )
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_predicate_propagating_task_lower_bound_propagation(task, time_point)
+            create_pointwise_predicate_propagating_task_lower_bound_propagation(
+                context, task, time_point,
+            )
         }
     }
 }

@@ -8,6 +8,7 @@ mod updated_task_info;
 pub(crate) use mandatory_part_adjustments::*;
 pub(crate) use parameters::*;
 pub(crate) use resource_profile::*;
+pub use task::ArgTask;
 pub(crate) use task::*;
 pub(crate) use updatable_structures::*;
 pub(crate) use updated_task_info::*;

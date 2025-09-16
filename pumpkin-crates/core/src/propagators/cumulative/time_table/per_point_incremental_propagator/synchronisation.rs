@@ -52,6 +52,7 @@ pub(crate) fn find_synchronised_conflict<
     RVar: IntegerVariable + 'static,
     CVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     time_table: &mut PerPointTimeTableType<Var, PVar, RVar>,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Option<u32> {
@@ -60,7 +61,7 @@ pub(crate) fn find_synchronised_conflict<
 
     // We go over every profile
     for (time_point, profile) in time_table.iter_mut() {
-        if profile.height <= parameters.capacity {
+        if profile.height <= context.upper_bound(&parameters.capacity) {
             // If the profile cannot overflow the resource capacity then we move onto the next
             // profile
             continue;
@@ -70,10 +71,14 @@ pub(crate) fn find_synchronised_conflict<
         // is overflown and we get the last element in this set (which has the one with the maximum
         // ID since the profile is sorted in the method based on ID)
         let mut new_height = 0;
-        let conflicting_tasks =
-            get_minimum_set_of_tasks_which_overflow_capacity(profile, parameters, &mut new_height);
+        let conflicting_tasks = get_minimum_set_of_tasks_which_overflow_capacity(
+            context,
+            profile,
+            parameters,
+            &mut new_height,
+        );
         if let Some(task_with_maximum_id) = conflicting_tasks.last() {
-            pumpkin_assert_moderate!(new_height > parameters.capacity);
+            pumpkin_assert_moderate!(new_height > context.upper_bound(&parameters.capacity));
             if task_with_maximum_id.id.unpack() < minimum_maximum_id {
                 minimum_maximum_id = task_with_maximum_id.id.unpack();
                 profile_time_point = Some(*time_point);
@@ -145,6 +150,7 @@ pub(crate) fn create_synchronised_conflict_explanation<
     // would have been found by the non-incremental propagator;
     // we thus sort on the IDs and take the first `n` tasks which lead to an overflow
     let new_profile = get_minimum_set_of_tasks_which_overflow_capacity(
+        context,
         conflicting_profile,
         parameters,
         &mut new_height,
@@ -198,6 +204,7 @@ mod tests {
 
     use super::find_synchronised_conflict;
     use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContext;
     use crate::engine::test_solver::TestSolver;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
@@ -234,8 +241,14 @@ mod tests {
             },
         ];
 
-        let parameters =
-            CumulativeParameters::new(tasks, 1, CumulativePropagatorOptions::default());
+        let parameters = CumulativeParameters::new(
+            PropagationContext {
+                assignments: &solver.assignments,
+            },
+            tasks,
+            1,
+            CumulativePropagatorOptions::default(),
+        );
 
         let mut time_table = PerPointTimeTableType::default();
         let _ = time_table.insert(
@@ -260,7 +273,13 @@ mod tests {
             },
         );
 
-        let result = find_synchronised_conflict(&mut time_table, &parameters);
+        let result = find_synchronised_conflict(
+            PropagationContext {
+                assignments: &solver.assignments,
+            },
+            &mut time_table,
+            &parameters,
+        );
         assert!(matches!(result, Some(4)));
     }
 }

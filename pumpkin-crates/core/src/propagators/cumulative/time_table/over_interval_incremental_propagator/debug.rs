@@ -87,7 +87,6 @@ pub(crate) fn merge_profiles<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     start_index: usize,

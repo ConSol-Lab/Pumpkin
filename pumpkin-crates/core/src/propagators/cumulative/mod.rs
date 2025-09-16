@@ -122,4 +122,5 @@ mod options;
 pub use options::*;
 
 mod utils;
+pub use utils::ArgTask;
 pub(crate) use utils::*;

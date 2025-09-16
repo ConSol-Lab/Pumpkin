@@ -1,15 +1,14 @@
-use std::fmt::Debug;
+use log::info;
 
 use super::Constraint;
-use crate::options::CumulativePropagationMethod;
+use crate::constraint_arguments::CumulativePropagationMethod;
 use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
-use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
-use crate::propagators::TimeTableOverIntervalPropagator;
-use crate::propagators::TimeTablePerPointIncrementalPropagator;
-use crate::propagators::TimeTablePerPointPropagator;
-use crate::pumpkin_assert_simple;
+use crate::propagators::TimeTableOverIntervalConstructor;
+use crate::propagators::TimeTableOverIntervalIncrementalConstructor;
+use crate::propagators::TimeTablePerPointConstructor;
+use crate::propagators::TimeTablePerPointIncrementalConstructor;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -192,6 +191,43 @@ impl<
             constraint_tag,
         }
     }
+
+    fn swap_if_variable(&mut self, solver: &Solver) {
+        let mut resource_usage_constant = true;
+        let mut duration_constant = true;
+        for task in self.tasks.iter() {
+            if !solver.is_fixed(&task.resource_usage) {
+                resource_usage_constant = false;
+            }
+
+            if !solver.is_fixed(&task.processing_time) {
+                duration_constant = false;
+            }
+        }
+
+        let is_variable = !resource_usage_constant || !duration_constant;
+        let result = match self.options.propagation_method {
+            CumulativePropagationMethod::TimeTablePerPointIncremental if is_variable => {
+                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                CumulativePropagationMethod::TimeTablePerPoint
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
+                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                CumulativePropagationMethod::TimeTablePerPoint
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                CumulativePropagationMethod::TimeTableOverInterval
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
+                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                CumulativePropagationMethod::TimeTableOverInterval
+            }
+            other => other,
+        };
+
+        self.options.propagation_method = result;
+    }
 }
 
 impl<
@@ -201,10 +237,11 @@ impl<
         CVar: IntegerVariable + 'static,
     > Constraint for CumulativeConstraint<Var, PVar, RVar, CVar>
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(mut self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        self.swap_if_variable(solver);
         match self.options.propagation_method {
-            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
-                &self.tasks,
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointConstructor::new(
+                self.tasks,
                 self.resource_capacity,
                 self.options.propagator_options,
                 self.constraint_tag,
@@ -212,8 +249,8 @@ impl<
             .post(solver),
 
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::<Var, false>::new(
-                    &self.tasks,
+                TimeTablePerPointIncrementalConstructor::<Var, PVar, RVar, CVar, false>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -221,8 +258,8 @@ impl<
                 .post(solver)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
-                TimeTablePerPointIncrementalPropagator::<Var, true>::new(
-                    &self.tasks,
+                TimeTablePerPointIncrementalConstructor::<Var, PVar, RVar, CVar, true>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -230,8 +267,8 @@ impl<
                 .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverIntervalPropagator::new(
-                    &self.tasks,
+                TimeTableOverIntervalConstructor::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -239,8 +276,8 @@ impl<
                 .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
-                    &self.tasks,
+                TimeTableOverIntervalIncrementalConstructor::<Var, PVar, RVar, CVar, false>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -248,8 +285,8 @@ impl<
                 .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
-                TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
-                    &self.tasks,
+                TimeTableOverIntervalIncrementalConstructor::<Var, PVar, RVar, CVar, true>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -260,21 +297,22 @@ impl<
     }
 
     fn implied_by(
-        self,
+        mut self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
+        self.swap_if_variable(solver);
         match self.options.propagation_method {
-            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
-                &self.tasks,
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointConstructor::new(
+                self.tasks,
                 self.resource_capacity,
                 self.options.propagator_options,
                 self.constraint_tag,
             )
             .implied_by(solver, reification_literal),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::<Var, false>::new(
-                    &self.tasks,
+                TimeTablePerPointIncrementalConstructor::<Var, PVar, RVar, CVar, false>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -282,8 +320,8 @@ impl<
                 .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
-                TimeTablePerPointIncrementalPropagator::<Var, true>::new(
-                    &self.tasks,
+                TimeTablePerPointIncrementalConstructor::<Var, PVar, RVar, CVar, true>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -291,8 +329,8 @@ impl<
                 .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverIntervalPropagator::new(
-                    &self.tasks,
+                TimeTableOverIntervalConstructor::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -300,8 +338,8 @@ impl<
                 .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
-                    &self.tasks,
+                TimeTableOverIntervalIncrementalConstructor::<Var, PVar, RVar, CVar, false>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,
@@ -309,8 +347,8 @@ impl<
                 .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
-                TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
-                    &self.tasks,
+                TimeTableOverIntervalIncrementalConstructor::<Var, PVar, RVar, CVar, true>::new(
+                    self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
                     self.constraint_tag,

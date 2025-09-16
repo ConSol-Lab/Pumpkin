@@ -62,12 +62,12 @@ impl<
 
 /// The task which is passed as argument
 #[derive(Clone, Debug)]
-pub(crate) struct ArgTask<Var, PVar, RVar> {
+pub struct ArgTask<Var, PVar, RVar> {
     /// The [`IntegerVariable`] representing the start time of a task
-    pub(crate) start_time: Var,
+    pub start_time: Var,
     /// The processing time of the [`start_time`][ArgTask::start_time] (also referred to as
     /// duration of a task)
-    pub(crate) processing_time: PVar,
+    pub processing_time: PVar,
     /// How much of the resource the given task uses during its non-preemptive execution
-    pub(crate) resource_usage: RVar,
+    pub resource_usage: RVar,
 }

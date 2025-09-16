@@ -1,6 +1,8 @@
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::rc::Rc;
 
 use super::Task;
+use crate::engine::propagation::PropagationContext;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::variables::IntegerVariable;
 
@@ -33,15 +35,17 @@ impl<
     > CumulativeParameters<Var, PVar, RVar, CVar>
 {
     pub(crate) fn new(
+        context: PropagationContext,
         tasks: Vec<Task<Var, PVar, RVar>>,
         capacity: CVar,
         options: CumulativePropagatorOptions,
-    ) -> CumulativeParameters<Var, PVar, RVar, Var> {
+    ) -> CumulativeParameters<Var, PVar, RVar, CVar> {
         let mut is_infeasible = false;
         let tasks = tasks
             .into_iter()
             .map(|task| {
-                is_infeasible |= task.resource_usage > capacity;
+                is_infeasible |=
+                    context.lower_bound(&task.resource_usage) > context.upper_bound(&capacity);
                 Rc::new(task)
             })
             .collect::<Vec<_>>()

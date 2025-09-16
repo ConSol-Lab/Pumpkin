@@ -57,7 +57,11 @@ pub(crate) fn should_enqueue<
         context.lower_bound(&updated_task.start_variable) > updatable_structures.get_stored_lower_bound(updated_task)
             || updatable_structures.get_stored_upper_bound(updated_task)
                 >= context.upper_bound(&updated_task.start_variable)
-        , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
+        , "Either the stored lower-bound ({}) was larger than or equal to the actual lower bound ({}) or the stored upper-bound ({}) was smaller than or equal to the actual upper-bound ({})\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly",
+        updatable_structures.get_stored_lower_bound(updated_task),
+        context.lower_bound(&updated_task.start_variable),
+        updatable_structures.get_stored_upper_bound(updated_task),
+        context.upper_bound(&updated_task.start_variable),
     );
 
     let mut result = ShouldEnqueueResult {
@@ -119,7 +123,7 @@ pub(crate) fn has_mandatory_part<
     task: &Rc<Task<Var, PVar, RVar>>,
 ) -> bool {
     context.upper_bound(&task.start_variable)
-        < context.lower_bound(&task.start_variable) + task.processing_time
+        < context.lower_bound(&task.start_variable) + context.lower_bound(&task.processing_time)
 }
 
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
@@ -139,8 +143,13 @@ pub(crate) fn has_mandatory_part_in_interval<
         context.upper_bound(&task.start_variable),
     );
     // There exists a mandatory part
-    (upper_bound < (lower_bound + task.processing_time))
-        && has_overlap_with_interval(upper_bound, lower_bound + task.processing_time, start, end)
+    (upper_bound < (lower_bound + context.lower_bound(&task.processing_time)))
+        && has_overlap_with_interval(
+            upper_bound,
+            lower_bound + context.lower_bound(&task.processing_time),
+            start,
+            end,
+        )
     // Determine whether the mandatory part overlaps with the provided bounds
 }
 
@@ -157,7 +166,7 @@ pub(crate) fn task_has_overlap_with_interval<
 ) -> bool {
     let (lower_bound, upper_bound) = (
         context.lower_bound(&task.start_variable),
-        context.upper_bound(&task.start_variable) + task.processing_time,
+        context.upper_bound(&task.start_variable) + context.lower_bound(&task.processing_time),
     ); // The release time of the task and the deadline
     has_overlap_with_interval(lower_bound, upper_bound, start, end)
 }
@@ -323,7 +332,10 @@ fn propagate_single_profiles<
                 }
                 continue;
             }
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.start
+                > context.upper_bound(&task.start_variable)
+                    + context.lower_bound(&task.processing_time)
+            {
                 // The start of the current profile is necessarily after the latest
                 // completion time of the task under consideration The profiles are
                 // sorted by start time (and non-overlapping) so we can remove the task from
@@ -404,7 +416,10 @@ fn propagate_sequence_of_profiles<
         'profile_loop: while profile_index < time_table.len() {
             let profile = time_table[profile_index];
 
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.start
+                > context.upper_bound(&task.start_variable)
+                    + context.lower_bound(&task.processing_time)
+            {
                 // The profiles are sorted, if we cannot update using this one then we cannot update
                 // using the subsequent profiles, we can break from the loop
                 break 'profile_loop;
@@ -429,7 +444,7 @@ fn propagate_sequence_of_profiles<
                 context.as_readonly(),
                 task,
                 profile,
-                parameters.capacity,
+                context.upper_bound(&parameters.capacity),
             ) {
                 // We find the index (non-inclusive) of the last profile in the chain of lower-bound
                 // propagations
@@ -438,7 +453,7 @@ fn propagate_sequence_of_profiles<
                     &time_table,
                     context.as_readonly(),
                     task,
-                    parameters.capacity,
+                    context.upper_bound(&parameters.capacity),
                 );
 
                 // Then we provide the propagation handler with the chain of profiles and propagate
@@ -458,7 +473,7 @@ fn propagate_sequence_of_profiles<
                 context.as_readonly(),
                 task,
                 profile,
-                parameters.capacity,
+                context.upper_bound(&parameters.capacity),
             ) {
                 // We find the index (inclusive) of the last profile in the chain of upper-bound
                 // propagations (note that the index of this last profile in the chain is `<=
@@ -468,7 +483,7 @@ fn propagate_sequence_of_profiles<
                     &time_table,
                     context.as_readonly(),
                     task,
-                    parameters.capacity,
+                    context.upper_bound(&parameters.capacity),
                 );
                 // Then we provide the propagation handler with the chain of profiles and propagate
                 // all of them
@@ -516,7 +531,8 @@ fn find_index_last_profile_which_propagates_lower_bound<
     let mut last_index = profile_index + 1;
     while last_index < time_table.len() {
         let next_profile = time_table[last_index];
-        if next_profile.start - time_table[last_index - 1].end >= task.processing_time
+        if next_profile.start - time_table[last_index - 1].end
+            >= context.lower_bound(&task.processing_time)
             || !overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity)
         {
             break;
@@ -545,7 +561,8 @@ fn find_index_last_profile_which_propagates_upper_bound<
     let mut first_index = profile_index - 1;
     loop {
         let previous_profile = time_table[first_index];
-        if time_table[first_index + 1].start - previous_profile.end >= task.processing_time
+        if time_table[first_index + 1].start - previous_profile.end
+            >= context.lower_bound(&task.processing_time)
             || !overflows_capacity_and_is_not_part_of_profile(
                 context,
                 task,
@@ -585,10 +602,11 @@ fn lower_bound_can_be_propagated_by_profile<
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
+        profile.height + context.lower_bound(&task.resource_usage) > capacity
             && task_has_overlap_with_interval(context, task, profile.start, profile.end)
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
+    (context.lower_bound(&task.start_variable) + context.lower_bound(&task.processing_time))
+        > profile.start
         && context.lower_bound(&task.start_variable) <= profile.end
 }
 
@@ -609,9 +627,10 @@ fn upper_bound_can_be_propagated_by_profile<
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
+        profile.height + context.lower_bound(&task.resource_usage) > capacity
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
+    (context.upper_bound(&task.start_variable) + context.lower_bound(&task.processing_time))
+        > profile.start
         && context.upper_bound(&task.start_variable) <= profile.end
 }
 
@@ -652,7 +671,7 @@ fn overflows_capacity_and_is_not_part_of_profile<
     profile: &ResourceProfile<Var, PVar, RVar>,
     capacity: i32,
 ) -> bool {
-    profile.height + task.resource_usage > capacity
+    profile.height + context.lower_bound(&task.resource_usage) > capacity
         && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
 }
 
@@ -680,7 +699,12 @@ fn find_possible_updates<
     profile: &ResourceProfile<Var, PVar, RVar>,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Vec<CanUpdate> {
-    if !can_be_updated_by_profile(context.as_readonly(), task, profile, parameters.capacity) {
+    if !can_be_updated_by_profile(
+        context.as_readonly(),
+        task,
+        profile,
+        context.upper_bound(&parameters.capacity),
+    ) {
         // If the task cannot be updated by the profile then we simply return the empty list
         vec![]
     } else {
@@ -691,7 +715,7 @@ fn find_possible_updates<
             context.as_readonly(),
             task,
             profile,
-            parameters.capacity,
+            context.upper_bound(&parameters.capacity),
         ) {
             // The lower-bound of the task can be updated by the profile
             result.push(CanUpdate::LowerBound)
@@ -700,7 +724,7 @@ fn find_possible_updates<
             context.as_readonly(),
             task,
             profile,
-            parameters.capacity,
+            context.upper_bound(&parameters.capacity),
         ) {
             // The upper-bound of the task can be updated by the profile
             result.push(CanUpdate::UpperBound)
@@ -748,7 +772,8 @@ pub(crate) fn backtrack_update<
     // Stores whether the stored bounds did not include a mandatory part
     let previously_did_not_have_mandatory_part = updatable_structures
         .get_stored_upper_bound(updated_task)
-        >= updatable_structures.get_stored_lower_bound(updated_task) + updated_task.processing_time;
+        >= updatable_structures.get_stored_lower_bound(updated_task)
+            + context.lower_bound(&updated_task.processing_time);
 
     // If the stored bounds are already the same or the previous stored bounds did not include a
     // mandatory part (which means that this task will also not have mandatory part after

@@ -8,6 +8,7 @@ pub(crate) mod element;
 pub(crate) mod nogoods;
 mod reified_propagator;
 pub(crate) use arithmetic::*;
+pub use cumulative::ArgTask;
 pub use cumulative::CumulativeExplanationType;
 pub use cumulative::CumulativeOptions;
 pub use cumulative::CumulativePropagationMethod;

@@ -183,6 +183,13 @@ impl<
         parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) {
         for task in parameters.tasks.iter() {
+            self.updates.push(UpdatedTaskInfo {
+                task: Rc::clone(task),
+                old_lower_bound: context.lower_bound(&task.start_variable),
+                old_upper_bound: context.upper_bound(&task.start_variable),
+                new_lower_bound: context.lower_bound(&task.start_variable),
+                new_upper_bound: context.upper_bound(&task.start_variable),
+            });
             self.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),

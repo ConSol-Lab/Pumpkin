@@ -1,8 +1,10 @@
 //! Contains the functions necessary for inserting the appropriate profiles into the time-table
 //! based on the added mandatory part.
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::engine::propagation::PropagationContext;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -20,12 +22,13 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     RVar: IntegerVariable + 'static,
     CVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     start_index: usize,
     end_index: usize,
     update_range: &Range<i32>,
     updated_task: &Rc<Task<Var, PVar, RVar>>,
-    capacity: i32,
+    capacity: CVar,
 ) -> Result<(), ResourceProfile<Var, PVar, RVar>> {
     let mut to_add = Vec::new();
 
@@ -42,6 +45,7 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
         // Check whether there is a new profile before the first overlapping
         // profile
         checks::new_profile_before_first_profile(
+            context,
             current_index,
             start_index,
             update_range,
@@ -53,6 +57,7 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
         // Check whether there is a new profile between the current profile
         // and the previous profile (beginning of profile remains unchanged)
         checks::new_profile_between_profiles(
+            context,
             time_table,
             current_index,
             start_index,
@@ -75,11 +80,12 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
         //
         // The addition of the mandatory part can lead to an overflow
         let result = checks::overlap_updated_profile(
+            context,
             update_range,
             profile,
             &mut to_add,
             updated_task,
-            capacity,
+            capacity.clone(),
         );
         if result.is_err() && conflict.is_none() {
             conflict = Some(result)
@@ -96,6 +102,7 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
         // Check whether there is a new profile before the last overlapping
         // profile
         checks::new_part_after_last_profile(
+            context,
             current_index,
             end_index,
             update_range,
@@ -122,8 +129,8 @@ pub(crate) fn insert_profile_new_mandatory_part<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     index_to_insert: usize,
     update_range: &Range<i32>,
@@ -143,7 +150,7 @@ pub(crate) fn insert_profile_new_mandatory_part<
             start: update_range.start,
             end: update_range.end - 1,
             profile_tasks: vec![Rc::clone(updated_task)],
-            height: updated_task.resource_usage,
+            height: context.lower_bound(&updated_task.resource_usage),
         },
     );
 }

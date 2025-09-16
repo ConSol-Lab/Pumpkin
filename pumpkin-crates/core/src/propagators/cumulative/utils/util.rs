@@ -24,22 +24,23 @@ pub(crate) fn create_tasks<
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     arg_tasks: &[ArgTask<Var, PVar, RVar>],
 ) -> Vec<Task<Var, PVar, RVar>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
-    ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
+    ordered_tasks.sort_by_key(|a| context.lower_bound(&a.resource_usage));
 
     let mut id = 0;
     ordered_tasks
         .iter()
         .filter_map(|x| {
             // We only add tasks which have a non-zero resource usage
-            if x.resource_usage > 0 {
+            if context.lower_bound(&x.resource_usage) > 0 {
                 let return_value = Some(Task {
                     start_variable: x.start_time.clone(),
-                    processing_time: x.processing_time,
-                    resource_usage: x.resource_usage,
+                    processing_time: x.processing_time.clone(),
+                    resource_usage: x.resource_usage.clone(),
                     id: LocalId::from(id),
                 });
 

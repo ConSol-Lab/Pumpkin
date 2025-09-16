@@ -26,6 +26,7 @@ pub(crate) fn find_synchronised_conflict<
     RVar: IntegerVariable + 'static,
     CVar: IntegerVariable + 'static,
 >(
+    context: PropagationContext,
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Option<ResourceProfile<Var, PVar, RVar>> {
@@ -35,7 +36,7 @@ pub(crate) fn find_synchronised_conflict<
 
     let first_conflict_profile_index = time_table
         .iter()
-        .position(|profile| profile.height > parameters.capacity);
+        .position(|profile| profile.height > context.upper_bound(&parameters.capacity));
     if let Some(mut first_conflict_profile_index) = first_conflict_profile_index {
         let mut new_profile = time_table[first_conflict_profile_index].clone();
 
@@ -113,9 +114,9 @@ pub(crate) fn create_synchronised_conflict_explanation<
     let mut new_profile = Vec::new();
 
     // Now we find the tasks in the profile which together overflow the resource
-    while resource_usage <= parameters.capacity {
+    while resource_usage <= context.upper_bound(&parameters.capacity) {
         let task = &conflicting_profile.profile_tasks[index];
-        resource_usage += task.resource_usage;
+        resource_usage += context.lower_bound(&task.resource_usage);
         new_profile.push(Rc::clone(task));
         index += 1;
     }
@@ -142,7 +143,6 @@ pub(crate) fn synchronise_time_table<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
     time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     context: PropagationContext,

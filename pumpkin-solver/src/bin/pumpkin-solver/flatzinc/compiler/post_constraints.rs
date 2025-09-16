@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_core::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
@@ -271,9 +272,18 @@ fn compile_cumulative(
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
     let post_result = constraints::cumulative_with_options(
-        start_times.iter().copied(),
-        durations.iter().copied(),
-        resource_requirements.iter().copied(),
+        start_times
+            .iter()
+            .zip(durations.iter())
+            .zip(resource_requirements.iter())
+            .map(
+                |((&start_time, &processing_time), &resource_usage)| ArgTask {
+                    start_time,
+                    processing_time,
+                    resource_usage,
+                },
+            )
+            .collect::<Vec<_>>(),
         resource_capacity,
         options.cumulative_options,
         constraint_tag,

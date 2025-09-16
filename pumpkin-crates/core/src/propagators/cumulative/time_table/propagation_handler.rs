@@ -88,7 +88,7 @@ impl CumulativePropagationHandler {
                             create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            create_big_step_propagation_explanation(context.as_readonly(), profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -156,7 +156,7 @@ impl CumulativePropagationHandler {
                             create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            create_big_step_propagation_explanation(context.as_readonly(), profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -182,7 +182,8 @@ impl CumulativePropagationHandler {
                 context.post(
                     predicate![
                         propagating_task.start_variable
-                            <= profiles[0].start - propagating_task.processing_time
+                            <= profiles[0].start
+                                - context.lower_bound(&propagating_task.processing_time)
                     ],
                     full_explanation,
                     self.inference_code,
@@ -260,10 +261,12 @@ impl CumulativePropagationHandler {
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
     {
         pumpkin_assert_advanced!(
             context.upper_bound(&propagating_task.start_variable)
-                > profile.start - propagating_task.processing_time
+                > profile.start - context.lower_bound(&propagating_task.processing_time)
         );
 
         match self.explanation_type {
@@ -288,7 +291,8 @@ impl CumulativePropagationHandler {
                 context.post(
                     predicate![
                         propagating_task.start_variable
-                            <= profile.start - propagating_task.processing_time
+                            <= profile.start
+                                - context.lower_bound(&propagating_task.processing_time)
                     ],
                     reason,
                     self.inference_code,
@@ -329,7 +333,7 @@ impl CumulativePropagationHandler {
         //   time-point in which case we simply start from the lower-bound of the task.
         let lower_bound_removed_time_points = max(
             context.lower_bound(&propagating_task.start_variable),
-            profile.start - propagating_task.processing_time + 1,
+            profile.start - context.lower_bound(&propagating_task.processing_time) + 1,
         );
 
         // There are also two options for determine the highest value to remove
@@ -375,7 +379,7 @@ impl CumulativePropagationHandler {
                     //   together with the propagating task would overflow the capacity)
                     let corresponding_profile_explanation_point = if time_point < profile.start {
                         min(
-                            time_point + propagating_task.processing_time - 1,
+                            time_point + context.lower_bound(&propagating_task.processing_time) - 1,
                             (profile.end - profile.start) / 2 + profile.start,
                         )
                     } else {
@@ -383,6 +387,7 @@ impl CumulativePropagationHandler {
                     };
 
                     let explanation = create_pointwise_propagation_explanation(
+                        context.as_readonly(),
                         corresponding_profile_explanation_point,
                         profile,
                     );
@@ -423,7 +428,7 @@ impl CumulativePropagationHandler {
                         create_naive_propagation_explanation(profile, context.as_readonly())
                     },
                     CumulativeExplanationType::BigStep => {
-                        create_big_step_propagation_explanation(profile)
+                        create_big_step_propagation_explanation(context.as_readonly(), profile)
                     },
                     CumulativeExplanationType::Pointwise => {
                         unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -436,8 +441,8 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, PVar, RVar, Context: ReadDomains + Copy>(
-    context: Context,
+pub(crate) fn create_conflict_explanation<Var, PVar, RVar>(
+    context: PropagationContext,
     inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     explanation_type: CumulativeExplanationType,
@@ -452,10 +457,10 @@ where
             create_naive_conflict_explanation(conflict_profile, context)
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_conflict_explanation(conflict_profile)
+            create_big_step_conflict_explanation(context, conflict_profile)
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_conflict_explanation(conflict_profile)
+            create_pointwise_conflict_explanation(context, conflict_profile)
         }
     };
 
