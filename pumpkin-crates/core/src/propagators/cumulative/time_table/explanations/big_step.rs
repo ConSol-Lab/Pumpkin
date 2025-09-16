@@ -16,9 +16,11 @@ pub(crate) fn create_big_step_propagation_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     profile: &ResourceProfile<Var, PVar, RVar>,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -38,8 +40,10 @@ pub(crate) fn create_big_step_propagation_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
+                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
@@ -49,9 +53,11 @@ pub(crate) fn create_big_step_conflict_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
@@ -73,8 +79,10 @@ pub(crate) fn create_big_step_conflict_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
+                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 

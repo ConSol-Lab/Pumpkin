@@ -340,12 +340,25 @@ fn propagate_single_profiles<
                 // For every possible update we let the propagation handler propagate
                 let result = match possible_update {
                     CanUpdate::LowerBound => propagation_handler
-                        .propagate_lower_bound_with_explanations(context, profile, &task),
+                        .propagate_lower_bound_with_explanations(
+                            context,
+                            profile,
+                            &task,
+                            parameters.capacity.clone(),
+                        ),
                     CanUpdate::UpperBound => propagation_handler
-                        .propagate_upper_bound_with_explanations(context, profile, &task),
-                    CanUpdate::Holes => {
-                        propagation_handler.propagate_holes_in_domain(context, profile, &task)
-                    }
+                        .propagate_upper_bound_with_explanations(
+                            context,
+                            profile,
+                            &task,
+                            parameters.capacity.clone(),
+                        ),
+                    CanUpdate::Holes => propagation_handler.propagate_holes_in_domain(
+                        context,
+                        profile,
+                        &task,
+                        parameters.capacity.clone(),
+                    ),
                 };
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
@@ -445,6 +458,7 @@ fn propagate_sequence_of_profiles<
                     context,
                     &time_table[profile_index..last_index],
                     task,
+                    parameters.capacity.clone(),
                 )?;
 
                 // Then we set the new profile index to the last index, note that this index (since
@@ -474,6 +488,7 @@ fn propagate_sequence_of_profiles<
                     context,
                     &time_table[first_index..=profile_index],
                     task,
+                    parameters.capacity.clone(),
                 )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
@@ -484,7 +499,12 @@ fn propagate_sequence_of_profiles<
             if parameters.options.allow_holes_in_domain {
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
-                propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                propagation_handler.propagate_holes_in_domain(
+                    context,
+                    profile,
+                    task,
+                    parameters.capacity.clone(),
+                )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index

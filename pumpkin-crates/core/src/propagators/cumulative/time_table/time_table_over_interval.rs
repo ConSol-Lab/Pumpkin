@@ -393,8 +393,6 @@ fn create_time_table_from_events<
     let mut current_resource_usage: i32 = 0;
     // The beginning of the current interval under consideration
     let mut start_of_interval: i32 = -1;
-    // Determines whether a conflict has occurred
-    let mut is_conflicting = false;
 
     // We go over all the events and create the time-table
     for event in events {
@@ -417,12 +415,6 @@ fn create_time_table_from_events<
         } else {
             // A profile is currently being created
 
-            // We have first traversed all of the ends of mandatory parts, meaning that any
-            // overflow will persist after processing all events at this time-point
-            if current_resource_usage > context.upper_bound(&parameters.capacity) {
-                is_conflicting = true;
-            }
-
             // Potentially we need to end the current profile and start a new one due to the
             // addition/removal of the current task
             if start_of_interval != event.time_stamp {
@@ -432,6 +424,8 @@ fn create_time_table_from_events<
                     profile_tasks: current_profile_tasks.clone(),
                     height: current_resource_usage,
                 };
+
+                // Now we propagate the lower-bound of the capacity
                 if new_profile.height > context.lower_bound(&parameters.capacity) {
                     context.post(
                         predicate!(parameters.capacity >= new_profile.height),
@@ -440,6 +434,7 @@ fn create_time_table_from_events<
                             inference_code,
                             &new_profile,
                             parameters.options.explanation_type,
+                            parameters.capacity.clone(),
                         )
                         .conjunction,
                         inference_code,
@@ -466,7 +461,6 @@ fn create_time_table_from_events<
                 // We thus need to start a new profile
                 start_of_interval = event.time_stamp;
                 if event.change_in_resource_usage < 0 {
-                    pumpkin_assert_simple!(!is_conflicting);
                     // The mandatory part of a task has ended, we should thus remove it from the
                     // contributing tasks
                     let _ = current_profile_tasks.remove(
@@ -484,17 +478,14 @@ fn create_time_table_from_events<
                             !current_profile_tasks.contains(&event.task),
                             "Task is being added to the profile while it is already part of the contributing tasks"
                         );
-                    if !is_conflicting {
-                        // If the profile is already conflicting then we shouldn't add more tasks.
-                        // This could be changed in the future so that we can pick the tasks which
-                        // are used for the conflict explanation
-                        current_profile_tasks.push(event.task);
-                    }
+                    // If the profile is already conflicting then we shouldn't add more tasks.
+                    // This could be changed in the future so that we can pick the tasks which
+                    // are used for the conflict explanation
+                    current_profile_tasks.push(event.task);
                 }
             }
         }
     }
-    pumpkin_assert_simple!(!is_conflicting);
     Ok(time_table)
 }
 
@@ -548,7 +539,6 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
@@ -623,28 +613,20 @@ mod tests {
             constraint_tag,
         ));
 
-        assert!(match result {
-            Err(e) => {
-                match e {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Conflict(x) => {
-                        let expected = [
-                            predicate!(s1 <= 1),
-                            predicate!(s1 >= 1),
-                            predicate!(s2 >= 1),
-                            predicate!(s2 <= 1),
-                        ];
-                        expected.iter().all(|y| {
-                            x.conjunction
-                                .iter()
-                                .collect::<Vec<&Predicate>>()
-                                .contains(&y)
-                        }) && x.conjunction.iter().all(|y| expected.contains(y))
-                    }
-                }
-            }
-            _ => false,
-        });
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
+        );
     }
 
     #[test]

@@ -299,6 +299,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                             inference_code,
                             current_profile,
                             parameters.options.explanation_type,
+                            parameters.capacity.clone(),
                         )
                         .conjunction,
                         inference_code,
@@ -342,7 +343,6 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
@@ -416,27 +416,21 @@ mod tests {
             },
             constraint_tag,
         ));
-        assert!(match result {
-            Err(e) => match e {
-                Inconsistency::EmptyDomain => false,
-                Inconsistency::Conflict(x) => {
-                    let expected = [
-                        predicate!(s1 <= 1),
-                        predicate!(s1 >= 1),
-                        predicate!(s2 <= 1),
-                        predicate!(s2 >= 1),
-                    ];
-                    expected.iter().all(|y| {
-                        x.conjunction
-                            .iter()
-                            .collect::<Vec<&Predicate>>()
-                            .contains(&y)
-                    }) && x.conjunction.iter().all(|y| expected.contains(y))
-                }
-            },
 
-            Ok(_) => false,
-        });
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
+        );
     }
 
     #[test]

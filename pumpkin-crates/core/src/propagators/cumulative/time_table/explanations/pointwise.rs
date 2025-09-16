@@ -22,10 +22,12 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: &mut PropagationContextMut,
     profiles: &[&ResourceProfile<Var, PVar, RVar>],
     propagating_task: &Rc<Task<Var, PVar, RVar>>,
+    capacity: CVar,
     inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
@@ -69,6 +71,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
                     context.as_readonly(),
                     time_point,
                     profiles[current_profile_index],
+                    capacity.clone(),
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.as_readonly(),
@@ -137,10 +140,12 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: &mut PropagationContextMut,
     profiles: &[&ResourceProfile<Var, PVar, RVar>],
     propagating_task: &Rc<Task<Var, PVar, RVar>>,
+    capacity: CVar,
     inference_code: InferenceCode,
 ) -> Result<(), EmptyDomain> {
     // The time points should follow the following properties (based on `Improving
@@ -183,6 +188,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
                     context.as_readonly(),
                     time_point,
                     profiles[current_profile_index],
+                    capacity.clone(),
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.as_readonly(),
@@ -251,10 +257,12 @@ pub(crate) fn create_pointwise_propagation_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     time_point: i32,
     profile: &ResourceProfile<Var, PVar, RVar>,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -274,8 +282,10 @@ pub(crate) fn create_pointwise_propagation_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
+                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
@@ -285,9 +295,11 @@ pub(crate) fn create_pointwise_conflict_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     // As stated in improving scheduling by learning, we choose the middle point; this
     // could potentially be improved
@@ -314,8 +326,10 @@ pub(crate) fn create_pointwise_conflict_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
+                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 

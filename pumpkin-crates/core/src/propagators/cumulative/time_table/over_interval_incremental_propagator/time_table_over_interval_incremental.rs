@@ -233,6 +233,7 @@ impl<
                                 self.inference_code,
                                 &conflict_tasks,
                                 self.parameters.options.explanation_type,
+                                self.parameters.capacity.clone(),
                             )
                             .into()));
                         }
@@ -407,6 +408,7 @@ impl<
                         self.inference_code,
                         conflicting_profile,
                         self.parameters.options.explanation_type,
+                        self.parameters.capacity.clone(),
                     )
                     .into());
                 }
@@ -698,7 +700,6 @@ fn find_overlapping_profile<
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
@@ -786,25 +787,20 @@ mod tests {
             constraint_tag,
         ));
 
-        assert!(matches!(result, Err(Inconsistency::Conflict(_))));
-        assert!(match result {
-            Err(Inconsistency::Conflict(conflict)) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 >= 1),
-                    predicate!(s2 <= 1),
-                ];
-                expected.iter().all(|y| {
-                    conflict
-                        .conjunction
-                        .iter()
-                        .collect::<Vec<&Predicate>>()
-                        .contains(&y)
-                }) && conflict.conjunction.iter().all(|y| expected.contains(y))
-            }
-            _ => false,
-        });
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
+        );
     }
 
     #[test]

@@ -1,12 +1,9 @@
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
 use crate::proof::InferenceCode;
-use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
@@ -14,35 +11,6 @@ use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
-
-/// Returns whether the synchronised conflict explanation created by
-/// [`TimeTablePerPointIncrementalPropgator`] is the same as that created by
-/// [`TimeTablePerPointPropagator`].
-pub(crate) fn check_synchronisation_conflict_explanation_per_point<
-    Var: IntegerVariable + 'static,
-    PVar: IntegerVariable + 'static,
-    RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
->(
-    synchronised_conflict_explanation: &PropagationStatusCP,
-    context: &mut PropagationContextMut,
-    inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
-) -> bool {
-    let error_from_scratch =
-        create_time_table_per_point_from_scratch(context, inference_code, parameters);
-    if let Err(Inconsistency::Conflict(explanation_scratch)) = error_from_scratch {
-        if let Err(Inconsistency::Conflict(conflict)) = &synchronised_conflict_explanation {
-            // We check whether both inconsistencies are of the same type and then we check their
-            // corresponding explanations
-            conflict.conjunction == explanation_scratch.conjunction
-        } else {
-            false
-        }
-    } else {
-        false
-    }
-}
 
 /// Finds the conflicting profile which would have been found by the
 /// [`TimeTablePerPointPropagator`]; this is the conflicting profile which has the minimum maximum
@@ -168,6 +136,7 @@ pub(crate) fn create_synchronised_conflict_explanation<
             height: new_height,
         },
         parameters.options.explanation_type,
+        parameters.capacity.clone(),
     )
     .into())
 }

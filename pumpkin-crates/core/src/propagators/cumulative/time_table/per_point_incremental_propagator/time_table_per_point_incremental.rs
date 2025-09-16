@@ -22,7 +22,6 @@ use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_per_point_from_scratch;
-use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_per_point;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::find_synchronised_conflict;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::synchronise_time_table;
@@ -234,6 +233,7 @@ impl<
                     self.inference_code,
                     current_profile,
                     self.parameters.options.explanation_type,
+                    self.parameters.capacity.clone(),
                 )
                 .into()));
             }
@@ -380,16 +380,6 @@ impl<
                             &self.parameters,
                         );
 
-                    pumpkin_assert_extreme!(
-                        check_synchronisation_conflict_explanation_per_point(
-                            &synchronised_conflict_explanation,
-                            context,
-                            self.inference_code,
-                            &self.parameters,
-                        ),
-                        "The conflict explanation was not the same as the conflict explanation from scratch!"
-                    );
-
                     // We have found the previous conflict
                     self.found_previous_conflict = true;
 
@@ -423,6 +413,7 @@ impl<
                         self.inference_code,
                         conflicting_profile,
                         self.parameters.options.explanation_type,
+                        self.parameters.capacity.clone(),
                     )
                     .into());
                 }
@@ -683,6 +674,7 @@ mod debug {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::Inconsistency;
+    use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
     use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
@@ -771,23 +763,21 @@ mod tests {
             },
             constraint_tag,
         ));
-        assert!(match result {
-            Err(Inconsistency::Conflict(x)) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 <= 1),
-                    predicate!(s2 >= 1),
-                ];
-                expected.iter().all(|y| {
-                    x.conjunction
-                        .iter()
-                        .collect::<Vec<&Predicate>>()
-                        .contains(&y)
-                }) && x.conjunction.iter().all(|y| expected.contains(y))
-            }
-            _ => false,
-        });
+
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
+        );
     }
 
     #[test]
@@ -1409,24 +1399,16 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        assert!({
-            let same = if let Err(Inconsistency::Conflict (conflict
-            )) =
-                &result
-            {
-                if let Err(Inconsistency::Conflict (explanation_scratch)) =
-                    &result_scratch
-                {
-                    conflict.conjunction.iter().collect::<Vec<_>>()
-                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-            same
-        }, "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}");
+
+        assert!(result.is_err());
+        assert!(result_scratch.is_err());
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+        if let Err(Inconsistency::Conflict(conflict)) = &result {
+            assert_eq!(conflict.conjunction, reason_scratch)
+        } else {
+            panic!()
+        }
     }
 
     #[test]
@@ -1517,12 +1499,10 @@ mod tests {
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
 
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
         if let Err(Inconsistency::Conflict(explanation)) = &result {
-            if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                assert_eq!(explanation.conjunction, explanation_scratch.conjunction)
-            } else {
-                panic!("Synchronised version found a conflict while the non-synchronised version did not");
-            }
+            assert_eq!(explanation.conjunction, reason_scratch)
         } else {
             panic!("Synchronised version did not find a conflict");
         }
@@ -1613,19 +1593,20 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
         let result_scratch = solver_scratch.propagate(propagator_scratch);
-        assert!({
-            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.conjunction.iter().collect::<Vec<_>>()
-                        != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-            same
-        });
+
+        assert!(result.is_err());
+        assert!(result_scratch.is_err());
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
+        if let Err(Inconsistency::Conflict(conflict)) = result {
+            assert_ne!(
+                conflict.conjunction.iter().collect::<Vec<_>>(),
+                reason_scratch.iter().collect::<Vec<_>>()
+            );
+        } else {
+            panic!()
+        }
     }
 
     #[test]
@@ -1923,26 +1904,20 @@ mod tests {
         assert!(result_scratch.is_err());
         let result = solver.propagate(propagator);
         assert!(result.is_err());
-        if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
-        ) = (result, result_scratch)
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
+        if let Err(Inconsistency::Conflict(PropagatorConflict {
+            conjunction,
+            inference_code: _,
+        })) = result
         {
-            assert_ne!(explanation, explanation_scratch);
-            let explanation_vec = explanation.conjunction.iter().cloned().collect::<Vec<_>>();
-            let explanation_scratch_vec = explanation_scratch
-                .conjunction
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
+            assert_ne!(conjunction, reason_scratch);
 
-            println!("{explanation_vec:?}");
-            println!("{explanation_scratch_vec:?}");
-
-            assert!(explanation_vec.contains(&s2.lower_bound_predicate(5)));
-            assert!(!explanation_scratch_vec.contains(&s2.lower_bound_predicate(5)));
+            assert!(conjunction.contains(s2.lower_bound_predicate(5)));
+            assert!(!reason_scratch.contains(s2.lower_bound_predicate(5)));
         } else {
-            panic!("Incorrect result")
+            panic!()
         }
     }
 
@@ -2041,15 +2016,11 @@ mod tests {
         assert!(result_scratch.is_err());
         let result = solver.propagate(propagator);
         assert!(result.is_err());
-        if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
-        ) = (result, result_scratch)
-        {
-            assert_eq!(
-                explanation.conjunction.iter().collect::<Vec<_>>(),
-                explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-            );
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
+        if let Err(Inconsistency::Conflict(explanation)) = result {
+            assert_eq!(explanation.conjunction, reason_scratch);
         } else {
             panic!("Incorrect result")
         }

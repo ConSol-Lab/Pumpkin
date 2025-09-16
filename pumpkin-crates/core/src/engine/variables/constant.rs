@@ -84,7 +84,7 @@ impl PredicateConstructor for i32 {
     type Value = i32;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        if bound >= *self {
+        if bound <= *self {
             Predicate::trivially_true()
         } else {
             Predicate::trivially_false()
@@ -92,7 +92,7 @@ impl PredicateConstructor for i32 {
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        if bound <= *self {
+        if bound >= *self {
             Predicate::trivially_true()
         } else {
             Predicate::trivially_false()
