@@ -228,16 +228,18 @@ impl ConstraintSatisfactionSolver {
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-        proof.unsat(&self.variable_names)
+        self.internal_parameters
+            .proof_log
+            .unsat(&self.variable_names)
     }
 
     /// Conclude the proof with the optimality claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_optimal(&mut self, bound: Predicate) -> std::io::Result<()> {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-        proof.optimal(bound, &self.variable_names)
+        self.internal_parameters
+            .proof_log
+            .optimal(bound, &self.variable_names)
     }
 
     fn complete_proof(&mut self) {

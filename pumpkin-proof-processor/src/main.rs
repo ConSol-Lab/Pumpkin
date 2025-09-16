@@ -1,3 +1,5 @@
+mod model;
+
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -11,9 +13,14 @@ use clap::Parser;
 use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof_processor::ProofProcessor;
+use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::TransformableVariable;
 use pumpkin_core::Solver;
+
+use crate::model::FlatZincConstraints;
+use crate::model::FlatZincModel;
 
 #[derive(Parser)]
 struct Cli {
@@ -41,33 +48,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, fzn_rs::FlatZincConstraint)]
-enum FlatZincConstraints {
-    #[name("int_lin_le")]
-    LinearLeq {
-        weights: fzn_rs::ArrayExpr<i32>,
-        variables: fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>,
-        bound: i32,
-    },
-    #[name("int_lin_eq")]
-    LinearEq {
-        weights: fzn_rs::ArrayExpr<i32>,
-        variables: fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>,
-        bound: i32,
-    },
-    #[name("pumpkin_cumulative")]
-    Cumulative {
-        start_times: fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>,
-        durations: fzn_rs::ArrayExpr<i32>,
-        resource_usages: fzn_rs::ArrayExpr<i32>,
-        capacity: i32,
-    },
-    #[name("pumpkin_all_different")]
-    AllDifferent(fzn_rs::ArrayExpr<fzn_rs::VariableExpr<i32>>),
-}
-
-type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
-
 fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
     let model_source = std::fs::read_to_string(path)?;
 
@@ -79,168 +59,192 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
     let fzn_model = FlatZincModel::from_ast(fzn_ast)?;
 
     let mut solver = Solver::default();
-    let mut variable_map = HashMap::new();
-    let mut constant_map = HashMap::new();
+    let mut variable_map = HashMap::default();
+    let mut constant_map = HashMap::default();
 
+    // Create all the flatzinc variables in the solver.
     for (name, variable) in fzn_model.variables.iter() {
-        match &variable.domain.node {
-            fzn_rs::ast::Domain::UnboundedInt => todo!("unbounded integers are not supported yet"),
-            fzn_rs::ast::Domain::Bool => todo!("boolean variables are not supported yet"),
-
-            fzn_rs::ast::Domain::Int(domain) => {
-                assert!(
-                    domain.is_continuous(),
-                    "sparse domains are not yet supported"
-                );
-
-                let domain_id = solver.new_named_bounded_integer(
-                    *domain.lower_bound() as i32,
-                    *domain.upper_bound() as i32,
-                    name.as_ref(),
-                );
-
-                let _ = variable_map.insert(Rc::clone(name), domain_id);
-            }
-        }
+        let domain_id = model::create_domain_for_variable(&mut solver, name, variable);
+        let _ = variable_map.insert(Rc::clone(name), domain_id);
     }
+
+    // Post all the constraints to the solver.
+    let mut is_consistent = true;
 
     for annotated_constraint in fzn_model.constraints.iter() {
         let constraint_tag = solver.new_constraint_tag();
 
-        match &annotated_constraint.constraint.node {
-            FlatZincConstraints::LinearLeq {
-                weights,
-                variables,
-                bound,
-            } => {
-                let weights = fzn_model.resolve_array(weights)?;
-                let variables = fzn_model.resolve_array(variables)?;
+        // If the solver is no-longer consistent, we still want to reserve constraint tags for the
+        // remaining flatzinc constraints. The processor expects the empty nogood to have a
+        // constraint tag that follows after _all_ the flatzinc constraints have one.
 
-                let mut terms = vec![];
-
-                for (weight, variable) in weights.zip(variables) {
-                    let weight = weight?;
-                    let variable = match variable? {
-                        fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
-                        fzn_rs::VariableExpr::Constant(value) => *constant_map
-                            .entry(value)
-                            .or_insert_with(|| solver.new_bounded_integer(value, value)),
-                    };
-
-                    terms.push(variable.scaled(weight));
-                }
-
-                solver
-                    .add_constraint(pumpkin_core::constraints::less_than_or_equals(
-                        terms,
-                        *bound,
-                        constraint_tag,
-                    ))
-                    .post()
-                    .unwrap();
-            }
-
-            FlatZincConstraints::LinearEq {
-                weights,
-                variables,
-                bound,
-            } => {
-                let weights = fzn_model.resolve_array(weights)?;
-                let variables = fzn_model.resolve_array(variables)?;
-
-                let mut terms = vec![];
-
-                for (weight, variable) in weights.zip(variables) {
-                    let weight = weight?;
-                    let variable = match variable? {
-                        fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
-                        fzn_rs::VariableExpr::Constant(value) => *constant_map
-                            .entry(value)
-                            .or_insert_with(|| solver.new_bounded_integer(value, value)),
-                    };
-
-                    terms.push(variable.scaled(weight));
-                }
-
-                solver
-                    .add_constraint(pumpkin_core::constraints::equals(
-                        terms,
-                        *bound,
-                        constraint_tag,
-                    ))
-                    .post()
-                    .unwrap();
-            }
-
-            FlatZincConstraints::Cumulative {
-                start_times,
-                durations,
-                resource_usages,
-                capacity,
-            } => {
-                let start_times = fzn_model
-                    .resolve_array(start_times)?
-                    .map(|variable| {
-                        let domain_id = match variable? {
-                            fzn_rs::VariableExpr::Identifier(name) => {
-                                *variable_map.get(&name).unwrap()
-                            }
-                            fzn_rs::VariableExpr::Constant(value) => *constant_map
-                                .entry(value)
-                                .or_insert_with(|| solver.new_bounded_integer(value, value)),
-                        };
-
-                        Ok(domain_id)
-                    })
-                    .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
-                let durations = fzn_model
-                    .resolve_array(durations)?
-                    .collect::<Result<Vec<_>, _>>()?;
-                let resource_usages = fzn_model
-                    .resolve_array(resource_usages)?
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                solver
-                    .add_constraint(pumpkin_core::constraints::cumulative(
-                        start_times,
-                        durations,
-                        resource_usages,
-                        *capacity,
-                        constraint_tag,
-                    ))
-                    .post()
-                    .unwrap();
-            }
-
-            FlatZincConstraints::AllDifferent(variables) => {
-                let variables = fzn_model
-                    .resolve_array(variables)?
-                    .map(|variable| {
-                        let domain_id = match variable? {
-                            fzn_rs::VariableExpr::Identifier(name) => {
-                                *variable_map.get(&name).unwrap()
-                            }
-                            fzn_rs::VariableExpr::Constant(value) => *constant_map
-                                .entry(value)
-                                .or_insert_with(|| solver.new_bounded_integer(value, value)),
-                        };
-
-                        Ok(domain_id)
-                    })
-                    .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
-
-                solver
-                    .add_constraint(pumpkin_core::constraints::all_different(
-                        variables,
-                        constraint_tag,
-                    ))
-                    .post()
-                    .unwrap();
-            }
-        };
+        if is_consistent {
+            is_consistent &= post_constraint(
+                &fzn_model,
+                &mut solver,
+                &mut constant_map,
+                &mut variable_map,
+                constraint_tag,
+                &annotated_constraint.constraint.node,
+            )?;
+        }
     }
 
     Ok(ProofProcessor::from(solver))
+}
+
+/// Post the constraint to the solver.
+///
+/// If the solver is in an inconsistent state after adding this constraint, return `Ok(false)`.
+fn post_constraint(
+    fzn_model: &FlatZincModel,
+    solver: &mut Solver,
+    constant_map: &mut HashMap<i32, DomainId>,
+    variable_map: &mut HashMap<Rc<str>, DomainId>,
+    constraint_tag: ConstraintTag,
+    constraint: &FlatZincConstraints,
+) -> anyhow::Result<bool> {
+    match constraint {
+        FlatZincConstraints::LinearLeq {
+            weights,
+            variables,
+            bound,
+        } => {
+            let weights = fzn_model.resolve_array(weights)?;
+            let variables = fzn_model.resolve_array(variables)?;
+
+            let mut terms = vec![];
+
+            for (weight, variable) in weights.zip(variables) {
+                let weight = weight?;
+                let variable = match variable? {
+                    fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
+                    fzn_rs::VariableExpr::Constant(value) => *constant_map
+                        .entry(value)
+                        .or_insert_with(|| solver.new_bounded_integer(value, value)),
+                };
+
+                terms.push(variable.scaled(weight));
+            }
+
+            if solver
+                .add_constraint(pumpkin_core::constraints::less_than_or_equals(
+                    terms,
+                    *bound,
+                    constraint_tag,
+                ))
+                .post()
+                .is_err()
+            {
+                return Ok(false);
+            }
+        }
+
+        FlatZincConstraints::LinearEq {
+            weights,
+            variables,
+            bound,
+        } => {
+            let weights = fzn_model.resolve_array(weights)?;
+            let variables = fzn_model.resolve_array(variables)?;
+
+            let mut terms = vec![];
+
+            for (weight, variable) in weights.zip(variables) {
+                let weight = weight?;
+                let variable = match variable? {
+                    fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
+                    fzn_rs::VariableExpr::Constant(value) => *constant_map
+                        .entry(value)
+                        .or_insert_with(|| solver.new_bounded_integer(value, value)),
+                };
+
+                terms.push(variable.scaled(weight));
+            }
+
+            if solver
+                .add_constraint(pumpkin_core::constraints::equals(
+                    terms,
+                    *bound,
+                    constraint_tag,
+                ))
+                .post()
+                .is_err()
+            {
+                return Ok(false);
+            }
+        }
+
+        FlatZincConstraints::Cumulative {
+            start_times,
+            durations,
+            resource_usages,
+            capacity,
+        } => {
+            let start_times = fzn_model
+                .resolve_array(start_times)?
+                .map(|variable| {
+                    let domain_id = match variable? {
+                        fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
+                        fzn_rs::VariableExpr::Constant(value) => *constant_map
+                            .entry(value)
+                            .or_insert_with(|| solver.new_bounded_integer(value, value)),
+                    };
+
+                    Ok(domain_id)
+                })
+                .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
+            let durations = fzn_model
+                .resolve_array(durations)?
+                .collect::<Result<Vec<_>, _>>()?;
+            let resource_usages = fzn_model
+                .resolve_array(resource_usages)?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if solver
+                .add_constraint(pumpkin_core::constraints::cumulative(
+                    start_times,
+                    durations,
+                    resource_usages,
+                    *capacity,
+                    constraint_tag,
+                ))
+                .post()
+                .is_err()
+            {
+                return Ok(false);
+            }
+        }
+
+        FlatZincConstraints::AllDifferent(variables) => {
+            let variables = fzn_model
+                .resolve_array(variables)?
+                .map(|variable| {
+                    let domain_id = match variable? {
+                        fzn_rs::VariableExpr::Identifier(name) => *variable_map.get(&name).unwrap(),
+                        fzn_rs::VariableExpr::Constant(value) => *constant_map
+                            .entry(value)
+                            .or_insert_with(|| solver.new_bounded_integer(value, value)),
+                    };
+
+                    Ok(domain_id)
+                })
+                .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
+
+            if solver
+                .add_constraint(pumpkin_core::constraints::all_different(
+                    variables,
+                    constraint_tag,
+                ))
+                .post()
+                .is_err()
+            {
+                return Ok(false);
+            }
+        }
+    }
+
+    Ok(true)
 }
 
 fn create_proof_reader(

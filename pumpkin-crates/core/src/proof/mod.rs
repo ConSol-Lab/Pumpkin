@@ -231,12 +231,12 @@ impl ProofLog {
         }
     }
 
-    pub(crate) fn unsat(self, variable_names: &VariableNames) -> std::io::Result<()> {
+    pub(crate) fn unsat(&mut self, variable_names: &VariableNames) -> std::io::Result<()> {
         match self.internal_proof {
-            Some(ProofImpl::CpProof { mut writer, .. }) => {
+            Some(ProofImpl::CpProof { ref mut writer, .. }) => {
                 writer.log_conclusion::<&str>(drcp_format::Conclusion::Unsat)
             }
-            Some(ProofImpl::DimacsProof(mut writer)) => writer
+            Some(ProofImpl::DimacsProof(ref mut writer)) => writer
                 .learned_clause(std::iter::empty(), variable_names)
                 .map(|_| ()),
             None => Ok(()),
@@ -244,14 +244,14 @@ impl ProofLog {
     }
 
     pub(crate) fn optimal(
-        self,
+        &mut self,
         objective_bound: Predicate,
         variable_names: &VariableNames,
     ) -> std::io::Result<()> {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
-                mut writer,
-                mut proof_atomics,
+                ref mut writer,
+                ref mut proof_atomics,
                 ..
             }) => {
                 let atomic =

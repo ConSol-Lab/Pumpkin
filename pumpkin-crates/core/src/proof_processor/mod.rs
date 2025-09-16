@@ -217,6 +217,24 @@ impl ProofProcessor {
 
         let mut nogood_stack = KeyedVec::new();
 
+        if self.solver.state.is_inconsistent() {
+            let empty_nogood_tag = self.solver.new_constraint_tag();
+            nogood_stack.accomodate(empty_nogood_tag, None);
+
+            // If the solver is alrady in an inconsistent state, then we explain that conflict,
+            // write the empty nogood, and return.
+            let inferences = self.explain_current_conflict(&mut nogood_stack);
+
+            // Log the empty clause to the proof.
+            self.output_proof.push(ProofStage {
+                inferences,
+                constraint_id: empty_nogood_tag.into(),
+                premises: vec![],
+            });
+
+            return Ok((Conclusion::Unsat, nogood_stack));
+        }
+
         loop {
             // Try to read the next step from the proof.
             let next_step = proof_reader.next_step()?;
