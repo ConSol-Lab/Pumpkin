@@ -181,7 +181,11 @@ impl<
 
         let parameters =
             CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
-        register_tasks(&parameters.tasks, context.reborrow(), false);
+        register_tasks(
+            &parameters.tasks,
+            context.reborrow(),
+            cumulative_options.incremental_backtracking,
+        );
 
         let mut updatable_structures = UpdatableStructures::new(&parameters);
         updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);

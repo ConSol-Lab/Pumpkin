@@ -1,4 +1,3 @@
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -8,6 +7,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -177,7 +177,11 @@ impl<
 
         let parameters =
             CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
-        register_tasks(&parameters.tasks, context.reborrow(), false);
+        register_tasks(
+            &parameters.tasks,
+            context.reborrow(),
+            cumulative_options.incremental_backtracking,
+        );
 
         let mut updatable_structures = UpdatableStructures::new(&parameters);
         updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);

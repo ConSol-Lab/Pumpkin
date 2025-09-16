@@ -1,11 +1,10 @@
-use crate::{
-    engine::{
-        notifications::{DomainEvent, OpaqueDomainEvent},
-        Assignments,
-    },
-    predicates::{Predicate, PredicateConstructor},
-    variables::{IntegerVariable, TransformableVariable},
-};
+use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::OpaqueDomainEvent;
+use crate::engine::Assignments;
+use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
+use crate::variables::IntegerVariable;
+use crate::variables::TransformableVariable;
 
 impl IntegerVariable for i32 {
     type AffineView = i32;

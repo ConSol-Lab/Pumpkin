@@ -1,11 +1,11 @@
 //! Contains the checks which are done when a new mandatory part is added in the propagate method to
 //! determine which profiles should be added and how existing profiles should be adjusted.
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::cmp::max;
 use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;

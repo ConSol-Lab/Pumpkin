@@ -1,11 +1,11 @@
 //! Contains the functions necessary for removing the appropriate profiles into the time-table
 //! based on the reduced mandatory part.
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::cmp::max;
 use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;

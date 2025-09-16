@@ -1,7 +1,7 @@
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::rc::Rc;
 
 use super::Task;
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::variables::IntegerVariable;

@@ -1,9 +1,9 @@
 //! Contains the functions necessary for inserting the appropriate profiles into the time-table
 //! based on the added mandatory part.
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::propagators::OverIntervalTimeTableType;

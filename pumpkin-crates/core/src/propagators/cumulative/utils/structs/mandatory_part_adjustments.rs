@@ -1,11 +1,10 @@
-use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
-use crate::variables::IntegerVariable;
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use crate::engine::propagation::PropagationContext;
-
 use super::UpdatedTaskInfo;
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
+use crate::engine::propagation::PropagationContext;
+use crate::variables::IntegerVariable;
 
 /// Represents adjustments to a mandatory part due to bound changes.
 ///
