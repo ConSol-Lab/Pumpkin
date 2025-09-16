@@ -32,6 +32,14 @@ pub(crate) fn create_naive_propagation_explanation<
                     profile_task.start_variable
                         <= context.upper_bound(&profile_task.start_variable)
                 ),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
         .collect()
@@ -60,6 +68,14 @@ pub(crate) fn create_naive_conflict_explanation<
                 predicate!(
                     profile_task.start_variable
                         <= context.upper_bound(&profile_task.start_variable)
+                ),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
                 ),
             ]
         })

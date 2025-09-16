@@ -53,17 +53,6 @@ pub(crate) fn should_enqueue<
     context: PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var, PVar, RVar> {
-    pumpkin_assert_extreme!(
-        context.lower_bound(&updated_task.start_variable) > updatable_structures.get_stored_lower_bound(updated_task)
-            || updatable_structures.get_stored_upper_bound(updated_task)
-                >= context.upper_bound(&updated_task.start_variable)
-        , "Either the stored lower-bound ({}) was larger than or equal to the actual lower bound ({}) or the stored upper-bound ({}) was smaller than or equal to the actual upper-bound ({})\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly",
-        updatable_structures.get_stored_lower_bound(updated_task),
-        context.lower_bound(&updated_task.start_variable),
-        updatable_structures.get_stored_upper_bound(updated_task),
-        context.upper_bound(&updated_task.start_variable),
-    );
-
     let mut result = ShouldEnqueueResult {
         decision: EnqueueDecision::Skip,
         update: None,
@@ -71,12 +60,6 @@ pub(crate) fn should_enqueue<
 
     let old_lower_bound = updatable_structures.get_stored_lower_bound(updated_task);
     let old_upper_bound = updatable_structures.get_stored_upper_bound(updated_task);
-
-    if old_lower_bound == context.lower_bound(&updated_task.start_variable)
-        && old_upper_bound == context.upper_bound(&updated_task.start_variable)
-    {
-        return result;
-    }
 
     // We check whether a mandatory part was extended/introduced
     if has_mandatory_part(context, updated_task) {

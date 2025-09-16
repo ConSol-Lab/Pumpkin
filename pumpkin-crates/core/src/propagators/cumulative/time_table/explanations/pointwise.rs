@@ -266,6 +266,14 @@ pub(crate) fn create_pointwise_propagation_explanation<
                         >= time_point + 1 - context.lower_bound(&profile_task.processing_time)
                 ),
                 predicate!(profile_task.start_variable <= time_point),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
         .collect()
@@ -298,6 +306,14 @@ pub(crate) fn create_pointwise_conflict_explanation<
                         >= middle_point + 1 - context.lower_bound(&profile_task.processing_time)
                 ),
                 predicate!(profile_task.start_variable <= middle_point),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
         .collect()

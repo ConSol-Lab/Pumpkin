@@ -30,6 +30,14 @@ pub(crate) fn create_big_step_propagation_explanation<
                         >= profile.end - context.lower_bound(&profile_task.processing_time) + 1
                 ),
                 predicate!(profile_task.start_variable <= profile.start),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
         .collect()
@@ -57,6 +65,14 @@ pub(crate) fn create_big_step_conflict_explanation<
                             + 1
                 ),
                 predicate!(profile_task.start_variable <= conflict_profile.start),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
         .collect()
