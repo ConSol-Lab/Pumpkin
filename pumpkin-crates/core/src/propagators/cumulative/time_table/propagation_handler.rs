@@ -251,7 +251,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
 
                 let mut reason = (*explanation).clone();
-                reason.add(lower_bound_predicate_propagating_task);
+                reason.extend(lower_bound_predicate_propagating_task);
                 context.post(
                     predicate![propagating_task.start_variable >= profile.end + 1],
                     reason,
@@ -308,7 +308,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
 
                 let mut reason = (*explanation).clone();
-                reason.add(upper_bound_predicate_propagating_task);
+                reason.extend(upper_bound_predicate_propagating_task);
                 context.post(
                     predicate![
                         propagating_task.start_variable

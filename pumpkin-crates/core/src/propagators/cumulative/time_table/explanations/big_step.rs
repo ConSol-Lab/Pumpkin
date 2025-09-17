@@ -89,25 +89,44 @@ pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation
     context: PropagationContext,
     task: &Rc<Task<Var, PVar, RVar>>,
     profile: &ResourceProfile<Var, PVar, RVar>,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(
-        task.start_variable >= profile.start + 1 - context.lower_bound(&task.processing_time)
-    )
+    [
+        predicate!(
+            task.start_variable >= profile.start + 1 - context.lower_bound(&task.processing_time)
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
     task: &Rc<Task<Var, PVar, RVar>>,
     profile: &ResourceProfile<Var, PVar, RVar>,
     context: PropagationContext,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end))
+    [
+        predicate!(
+            task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end)
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 #[cfg(test)]

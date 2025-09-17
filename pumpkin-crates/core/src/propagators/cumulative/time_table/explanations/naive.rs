@@ -92,21 +92,39 @@ pub(crate) fn create_naive_conflict_explanation<
 pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
     task: &Rc<Task<Var, PVar, RVar>>,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable >= context.lower_bound(&task.start_variable))
+    [
+        predicate!(task.start_variable >= context.lower_bound(&task.start_variable)),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
     task: &Rc<Task<Var, PVar, RVar>>,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable <= context.upper_bound(&task.start_variable))
+    [
+        predicate!(task.start_variable <= context.upper_bound(&task.start_variable)),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 #[cfg(test)]

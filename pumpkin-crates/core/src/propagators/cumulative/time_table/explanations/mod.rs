@@ -12,7 +12,6 @@ use pointwise::create_pointwise_predicate_propagating_task_lower_bound_propagati
 use pointwise::create_pointwise_predicate_propagating_task_upper_bound_propagation;
 
 use crate::engine::propagation::PropagationContext;
-use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -79,7 +78,7 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     task: &Rc<Task<Var, PVar, RVar>>,
     profile: &ResourceProfile<Var, PVar, RVar>,
     time_point: Option<i32>,
-) -> Predicate {
+) -> PropositionalConjunction {
     match explanation_type {
         CumulativeExplanationType::Naive => {
             create_naive_predicate_propagating_task_lower_bound_propagation(context, task)
@@ -110,7 +109,7 @@ pub(crate) fn add_propagating_task_predicate_lower_bound<
     profile: &ResourceProfile<Var, PVar, RVar>,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
-    explanation.add(create_predicate_propagating_task_lower_bound_propagation(
+    explanation.extend(create_predicate_propagating_task_lower_bound_propagation(
         explanation_type,
         context,
         task,
@@ -131,7 +130,7 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
     task: &Rc<Task<Var, PVar, RVar>>,
     profile: &ResourceProfile<Var, PVar, RVar>,
     time_point: Option<i32>,
-) -> Predicate {
+) -> PropositionalConjunction {
     match explanation_type {
         CumulativeExplanationType::Naive => {
             create_naive_predicate_propagating_task_upper_bound_propagation(context, task)
@@ -142,7 +141,9 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
             )
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_predicate_propagating_task_upper_bound_propagation(task, time_point)
+            create_pointwise_predicate_propagating_task_upper_bound_propagation(
+                context, task, time_point,
+            )
         }
     }
 }
@@ -160,7 +161,7 @@ pub(crate) fn add_propagating_task_predicate_upper_bound<
     profile: &ResourceProfile<Var, PVar, RVar>,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
-    explanation.add(create_predicate_propagating_task_upper_bound_propagation(
+    explanation.extend(create_predicate_propagating_task_upper_bound_propagation(
         explanation_type,
         context,
         task,

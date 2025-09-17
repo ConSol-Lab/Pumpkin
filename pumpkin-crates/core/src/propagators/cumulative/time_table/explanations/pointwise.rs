@@ -336,32 +336,50 @@ pub(crate) fn create_pointwise_predicate_propagating_task_lower_bound_propagatio
     context: PropagationContext,
     task: &Rc<Task<Var, PVar, RVar>>,
     time_point: Option<i32>,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(
-        task.start_variable
-            >= time_point
-                .expect("Expected time-point to be provided to pointwise explanation creation")
-                + 1
-                - context.lower_bound(&task.processing_time)
-    )
+    [
+        predicate!(
+            task.start_variable
+                >= time_point
+                    .expect("Expected time-point to be provided to pointwise explanation creation")
+                    + 1
+                    - context.lower_bound(&task.processing_time)
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 pub(crate) fn create_pointwise_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
+    context: PropagationContext,
     task: &Rc<Task<Var, PVar, RVar>>,
     time_point: Option<i32>,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(
-        task.start_variable
-            <= time_point
-                .expect("Expected time-point to be provided to pointwise explanation creation")
-    )
+    [
+        predicate!(
+            task.start_variable
+                <= time_point
+                    .expect("Expected time-point to be provided to pointwise explanation creation")
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 #[cfg(test)]
