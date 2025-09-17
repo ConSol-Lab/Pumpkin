@@ -80,12 +80,16 @@ pub(crate) fn register_tasks<
         );
         context.register(
             task.processing_time.clone(),
-            DomainEvents::create_with_int_events(enum_set!(DomainEvent::LowerBound)),
+            DomainEvents::create_with_int_events(enum_set!(
+                DomainEvent::LowerBound | DomainEvent::Assign
+            )),
             task.id,
         );
         context.register(
             task.resource_usage.clone(),
-            DomainEvents::create_with_int_events(enum_set!(DomainEvent::LowerBound)),
+            DomainEvents::create_with_int_events(enum_set!(
+                DomainEvent::LowerBound | DomainEvent::Assign
+            )),
             task.id,
         );
 
