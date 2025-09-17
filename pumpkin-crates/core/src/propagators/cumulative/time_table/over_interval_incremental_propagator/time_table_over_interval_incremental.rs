@@ -233,7 +233,6 @@ impl<
                                 self.inference_code,
                                 &conflict_tasks,
                                 self.parameters.options.explanation_type,
-                                self.parameters.capacity.clone(),
                             )
                             .into()));
                         }
@@ -408,7 +407,6 @@ impl<
                         self.inference_code,
                         conflicting_profile,
                         self.parameters.options.explanation_type,
-                        self.parameters.capacity.clone(),
                     )
                     .into());
                 }

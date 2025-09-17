@@ -57,12 +57,10 @@ pub(crate) fn create_naive_conflict_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
     Context: ReadDomains + Copy,
 >(
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     context: Context,
-    capacity: CVar,
 ) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
@@ -87,9 +85,6 @@ pub(crate) fn create_naive_conflict_explanation<
                 ),
             ]
         })
-        .chain(std::iter::once(predicate!(
-            capacity <= context.upper_bound(&capacity)
-        )))
         .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }

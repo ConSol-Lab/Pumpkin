@@ -132,7 +132,6 @@ pub(crate) fn create_synchronised_conflict_explanation<
             height: resource_usage,
         },
         parameters.options.explanation_type,
-        parameters.capacity.clone(),
     )
     .into())
 }

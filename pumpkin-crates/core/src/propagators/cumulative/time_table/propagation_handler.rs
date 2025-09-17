@@ -472,28 +472,26 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_explanation_profile_height<Var, PVar, RVar, CVar>(
+pub(crate) fn create_explanation_profile_height<Var, PVar, RVar>(
     context: PropagationContext,
     inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
     explanation_type: CumulativeExplanationType,
-    capacity: CVar,
 ) -> PropagatorConflict
 where
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 {
     let conjunction = match explanation_type {
         CumulativeExplanationType::Naive => {
-            create_naive_conflict_explanation(conflict_profile, context, capacity)
+            create_naive_conflict_explanation(conflict_profile, context)
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_conflict_explanation(context, conflict_profile, capacity)
+            create_big_step_conflict_explanation(context, conflict_profile)
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_conflict_explanation(context, conflict_profile, capacity)
+            create_pointwise_conflict_explanation(context, conflict_profile)
         }
     };
 
@@ -581,7 +579,6 @@ pub(crate) mod test_propagation_handler {
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
-                0,
             );
 
             (reason.conjunction, y)

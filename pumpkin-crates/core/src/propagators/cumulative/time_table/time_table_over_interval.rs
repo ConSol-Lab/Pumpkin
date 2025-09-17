@@ -434,7 +434,6 @@ fn create_time_table_from_events<
                             inference_code,
                             &new_profile,
                             parameters.options.explanation_type,
-                            parameters.capacity.clone(),
                         )
                         .conjunction,
                         inference_code,

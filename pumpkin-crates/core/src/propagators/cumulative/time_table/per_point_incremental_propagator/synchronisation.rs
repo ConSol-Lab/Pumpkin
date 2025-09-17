@@ -136,7 +136,6 @@ pub(crate) fn create_synchronised_conflict_explanation<
             height: new_height,
         },
         parameters.options.explanation_type,
-        parameters.capacity.clone(),
     )
     .into())
 }

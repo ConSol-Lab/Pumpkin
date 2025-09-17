@@ -55,11 +55,9 @@ pub(crate) fn create_big_step_conflict_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
-    capacity: CVar,
 ) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
@@ -83,9 +81,6 @@ pub(crate) fn create_big_step_conflict_explanation<
                 ),
             ]
         })
-        .chain(std::iter::once(predicate!(
-            capacity <= context.upper_bound(&capacity)
-        )))
         .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }

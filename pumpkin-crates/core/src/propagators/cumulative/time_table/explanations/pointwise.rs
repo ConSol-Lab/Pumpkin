@@ -297,11 +297,9 @@ pub(crate) fn create_pointwise_conflict_explanation<
     Var: IntegerVariable + 'static,
     PVar: IntegerVariable + 'static,
     RVar: IntegerVariable + 'static,
-    CVar: IntegerVariable + 'static,
 >(
     context: PropagationContext,
     conflict_profile: &ResourceProfile<Var, PVar, RVar>,
-    capacity: CVar,
 ) -> PropositionalConjunction {
     // As stated in improving scheduling by learning, we choose the middle point; this
     // could potentially be improved
@@ -330,9 +328,6 @@ pub(crate) fn create_pointwise_conflict_explanation<
                 ),
             ]
         })
-        .chain(std::iter::once(predicate!(
-            capacity <= context.upper_bound(&capacity)
-        )))
         .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
