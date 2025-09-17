@@ -194,7 +194,10 @@ impl<
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
             ));
-            if context.is_fixed(&task.start_variable) {
+            if context.is_fixed(&task.start_variable)
+                && context.is_fixed(&task.processing_time)
+                && context.is_fixed(&task.resource_usage)
+            {
                 self.fix_task(task);
             }
         }

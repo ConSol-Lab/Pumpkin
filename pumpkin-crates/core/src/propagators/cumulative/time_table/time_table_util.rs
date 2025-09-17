@@ -234,13 +234,19 @@ pub(crate) fn propagate_based_on_timetable<
     pumpkin_assert_extreme!(
         updatable_structures
             .get_unfixed_tasks()
-            .all(|unfixed_task| !context.is_fixed(&unfixed_task.start_variable)),
+            .all(
+                |unfixed_task| !context.is_fixed(&unfixed_task.start_variable)
+                    || !context.is_fixed(&unfixed_task.processing_time)
+                    || !context.is_fixed(&unfixed_task.resource_usage)
+            ),
         "All of the unfixed tasks should not be fixed at this point"
     );
     pumpkin_assert_extreme!(
         updatable_structures
             .get_fixed_tasks()
-            .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
+            .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)
+                && context.is_fixed(&fixed_task.processing_time)
+                && context.is_fixed(&fixed_task.resource_usage)),
         "All of the fixed tasks should be fixed at this point"
     );
 
@@ -301,7 +307,10 @@ fn propagate_single_profiles<
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
             let task = updatable_structures.get_unfixed_task_at_index(task_index);
-            if context.is_fixed(&task.start_variable) {
+            if context.is_fixed(&task.start_variable)
+                && context.is_fixed(&task.resource_usage)
+                && context.is_fixed(&task.processing_time)
+            {
                 // The task is currently fixed after propagating
                 //
                 // Note that we fix this task temporarily and then wait for the notification to
@@ -402,7 +411,10 @@ fn propagate_sequence_of_profiles<
 
     // Then we go over all the possible tasks
     for task in updatable_structures.get_unfixed_tasks() {
-        if context.is_fixed(&task.start_variable) {
+        if context.is_fixed(&task.start_variable)
+            && context.is_fixed(&task.resource_usage)
+            && context.is_fixed(&task.processing_time)
+        {
             // If the task is fixed then we are not able to propagate it further
             continue;
         }

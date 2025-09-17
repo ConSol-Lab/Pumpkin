@@ -7,7 +7,6 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
-use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -201,7 +200,7 @@ impl<
         &mut self,
         context: PropagationContextWithTrailedValues,
         local_id: LocalId,
-        event: OpaqueDomainEvent,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         if local_id.unpack() as usize >= self.parameters.tasks.len() {
             // The upper-bound of the capacity has been updated; we should enqueue
@@ -228,10 +227,10 @@ impl<
             &updated_task,
         );
 
-        if matches!(
-            updated_task.start_variable.unpack_event(event),
-            DomainEvent::Assign
-        ) {
+        if context.is_fixed(&updated_task.start_variable)
+            && context.is_fixed(&updated_task.processing_time)
+            && context.is_fixed(&updated_task.resource_usage)
+        {
             self.updatable_structures.fix_task(&updated_task)
         }
 

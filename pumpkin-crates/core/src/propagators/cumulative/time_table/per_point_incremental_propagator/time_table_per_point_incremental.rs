@@ -495,7 +495,7 @@ impl<
         &mut self,
         context: PropagationContextWithTrailedValues,
         local_id: LocalId,
-        event: OpaqueDomainEvent,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that we do not take into account the fact that the time-table could be outdated
@@ -523,11 +523,11 @@ impl<
             &updated_task,
         );
 
-        if matches!(
-            updated_task.start_variable.unpack_event(event),
-            DomainEvent::Assign
-        ) {
-            self.updatable_structures.fix_task(&updated_task);
+        if context.is_fixed(&updated_task.start_variable)
+            && context.is_fixed(&updated_task.processing_time)
+            && context.is_fixed(&updated_task.resource_usage)
+        {
+            self.updatable_structures.fix_task(&updated_task)
         }
 
         result.decision
