@@ -42,9 +42,11 @@ pub(crate) fn create_naive_propagation_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
-                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .chain(std::iter::once(predicate!(
+            capacity <= context.upper_bound(&capacity)
+        )))
         .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
@@ -83,9 +85,11 @@ pub(crate) fn create_naive_conflict_explanation<
                     profile_task.resource_usage
                         >= context.lower_bound(&profile_task.resource_usage)
                 ),
-                predicate!(capacity <= context.upper_bound(&capacity)),
             ]
         })
+        .chain(std::iter::once(predicate!(
+            capacity <= context.upper_bound(&capacity)
+        )))
         .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
