@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-09-18)
+
+
+### Features
+
+* Adding logging of brancher statistics on completion ([#257](https://github.com/ConSol-Lab/Pumpkin/issues/257)) ([9d26842](https://github.com/ConSol-Lab/Pumpkin/commit/9d268429bc29fecb4070d6680d4f83a74c7c895f))
+* **pumpkin-solver:** Write proofs with gzip encoding ([#264](https://github.com/ConSol-Lab/Pumpkin/issues/264)) ([83f76da](https://github.com/ConSol-Lab/Pumpkin/commit/83f76da17efc4a5ba1904dd144b89f0ff41cf326))
+* Remove unnecessary variables introduced by bool2int ([#232](https://github.com/ConSol-Lab/Pumpkin/issues/232)) ([cf0b2fe](https://github.com/ConSol-Lab/Pumpkin/commit/cf0b2fe3831db904345e96266ae41b6836b8057f))
+
+
+### Bug Fixes
+
+* Correctly reporting unknown solution in optimisation and solution enumeration ([#247](https://github.com/ConSol-Lab/Pumpkin/issues/247)) ([8c0f27c](https://github.com/ConSol-Lab/Pumpkin/commit/8c0f27c7cb298329ac637294c2e0cd9f680f82f4))
+* **pumpkin-solver:** Only compile solution checkers for integration tests ([#278](https://github.com/ConSol-Lab/Pumpkin/issues/278)) ([a5e4c2c](https://github.com/ConSol-Lab/Pumpkin/commit/a5e4c2c95fcce96463f3e684267bd458092d2cfc))
+* **pumpkin-solver:** Pass  between pumpkin-solver and pumpkin-core ([#276](https://github.com/ConSol-Lab/Pumpkin/issues/276)) ([270c179](https://github.com/ConSol-Lab/Pumpkin/commit/270c1790908fb6b1beed6d590e94f6de7e557213))
+* **pumpkin-solver:** Remove the terms with zero coefficients from linear constraints ([#269](https://github.com/ConSol-Lab/Pumpkin/issues/269)) ([576887e](https://github.com/ConSol-Lab/Pumpkin/commit/576887e10116787372d293afb618c02e3a7df03c))
+* Removing leading number from statistics ([#261](https://github.com/ConSol-Lab/Pumpkin/issues/261)) ([f9b996b](https://github.com/ConSol-Lab/Pumpkin/commit/f9b996b7725d200228f31f5eb1c0a54f569cdea9))
+* Support warm_start and ignore constraint_name search annotations ([#235](https://github.com/ConSol-Lab/Pumpkin/issues/235)) ([d7e8bb0](https://github.com/ConSol-Lab/Pumpkin/commit/d7e8bb028c04fc7cbf21400ef422c4c82673806e))
+
 ## [0.2.1](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.0...pumpkin-solver-v0.2.1) (2025-07-10)
 
 
