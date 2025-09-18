@@ -169,9 +169,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     fn responsible_index_ect_bar_internal(&self, position: usize) -> Option<usize> {
         // See \[1\] for the implementation
         if self.is_leaf(position) {
-            // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0
-                && self.nodes[position].sum_of_processing_times == 0)
+            (self.nodes[position].ect_bar != i32::MIN && self.nodes[position].ect == i32::MIN)
                 .then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
@@ -202,8 +200,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     fn responsible_index_p_internal(&self, position: usize) -> Option<usize> {
         if self.is_leaf(position) {
             // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0
-                && self.nodes[position].sum_of_processing_times == 0)
+            (self.nodes[position].ect_bar > i32::MIN && self.nodes[position].ect == i32::MIN)
                 .then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
@@ -374,7 +371,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(crate) fn get_theta(&self) -> Vec<DisjunctiveTask<Var>> {
         // We go over all the leaf nodes
         (self.number_of_internal_nodes..self.nodes.len())
-            .filter(|&position| self.nodes[position].sum_of_processing_times != 0)
+            .filter(|&position| self.nodes[position].ect != i32::MIN)
             .map(|position| self.sorted_tasks[self.get_leaf_node_index(position)].clone())
             .collect()
     }
