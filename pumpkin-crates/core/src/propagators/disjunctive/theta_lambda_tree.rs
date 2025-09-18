@@ -27,9 +27,27 @@ pub(super) struct Node {
     /// The sum of processing times of the set of tasks represented by this node if a single grey
     /// task can be added to the set of tasks.
     sum_of_processing_times_bar: i32,
+    /// The type of node.
+    node_type: NodeType,
+}
+
+/// The type of node in a [`ThetaLambdaTree`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NodeType {
+    Empty,
+    White,
+    Gray,
 }
 
 impl Node {
+    fn is_gray(&self) -> bool {
+        matches!(self.node_type, NodeType::Gray)
+    }
+
+    fn is_empty(&self) -> bool {
+        matches!(self.node_type, NodeType::Empty)
+    }
+
     // Constructs an empty node
     fn empty() -> Self {
         Self {
@@ -37,6 +55,7 @@ impl Node {
             sum_of_processing_times: 0,
             ect_bar: i32::MIN,
             sum_of_processing_times_bar: 0,
+            node_type: NodeType::Empty,
         }
     }
 
@@ -47,6 +66,7 @@ impl Node {
             sum_of_processing_times,
             ect_bar: ect,
             sum_of_processing_times_bar: sum_of_processing_times,
+            node_type: NodeType::White,
         }
     }
 
@@ -57,6 +77,7 @@ impl Node {
             sum_of_processing_times: 0,
             ect_bar: ect,
             sum_of_processing_times_bar: sum_of_processing_times,
+            node_type: NodeType::Gray,
         }
     }
 }
@@ -169,10 +190,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     fn responsible_index_ect_bar_internal(&self, position: usize) -> Option<usize> {
         // See \[1\] for the implementation
         if self.is_leaf(position) {
-            // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0
-                && self.nodes[position].sum_of_processing_times == 0)
-                .then_some(position)
+            (self.nodes[position].is_gray()).then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -201,10 +219,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
 
     fn responsible_index_p_internal(&self, position: usize) -> Option<usize> {
         if self.is_leaf(position) {
-            // Assuming that all tasks have non-zero processing time
-            (self.nodes[position].sum_of_processing_times_bar > 0
-                && self.nodes[position].sum_of_processing_times == 0)
-                .then_some(position)
+            (self.nodes[position].is_gray()).then_some(position)
         } else {
             let left_child = Self::get_left_child_index(position);
             let right_child = Self::get_right_child_index(position);
@@ -246,7 +261,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(super) fn remove_from_lambda(&mut self, task: &DisjunctiveTask<Var>) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
-        pumpkin_assert_simple!(self.nodes[position].sum_of_processing_times == 0);
+        pumpkin_assert_simple!(self.nodes[position].is_empty());
         self.nodes[position] = Node::empty();
         self.upheap(position)
     }
@@ -374,7 +389,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(crate) fn get_theta(&self) -> Vec<DisjunctiveTask<Var>> {
         // We go over all the leaf nodes
         (self.number_of_internal_nodes..self.nodes.len())
-            .filter(|&position| self.nodes[position].sum_of_processing_times != 0)
+            .filter(|&position| !self.nodes[position].is_empty())
             .map(|position| self.sorted_tasks[self.get_leaf_node_index(position)].clone())
             .collect()
     }
