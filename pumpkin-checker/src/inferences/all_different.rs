@@ -48,9 +48,6 @@ pub(crate) fn verify_all_different(
         })
         .collect::<(Vec<_>, HashSet<_>)>();
 
-    dbg!(&variables);
-    dbg!(&values);
-
     if values.len() < variables.len() {
         Ok(Fact {
             premises: premises.to_vec(),
