@@ -50,7 +50,7 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
-          docker-options: -e NO_CHECKERS=true
+          docker-options: -e NO_CHECKERS
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
