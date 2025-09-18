@@ -38,17 +38,20 @@ pub(crate) fn verify_all_different(
         }
     }
 
-    let (variables, values) = all_different
+    let union_of_domains = all_different
         .variables
         .iter()
-        .filter_map(|variable| {
-            variable_state
-                .fixed_value(variable)
-                .map(|value| (variable, value))
-        })
-        .collect::<(Vec<_>, HashSet<_>)>();
+        .filter_map(|variable| variable_state.iter_domain(variable))
+        .flatten()
+        .collect::<HashSet<_>>();
 
-    if values.len() < variables.len() {
+    let variables = all_different
+        .variables
+        .iter()
+        .filter(|variable| variable_state.iter_domain(variable).is_some())
+        .collect::<Vec<_>>();
+
+    if union_of_domains.len() < variables.len() {
         Ok(Fact {
             premises: premises.to_vec(),
             consequent,
