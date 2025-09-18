@@ -10,7 +10,7 @@ pub fn all_different<Var: IntegerVariable + 'static>(
     constraint_tag: ConstraintTag,
 ) -> impl Constraint {
     let variables: Box<[Var]> = variables.into();
-    AllDifferentPropagatorArgs{
+    AllDifferentPropagatorArgs {
         vars: variables,
         constraint_tag: constraint_tag,
     }

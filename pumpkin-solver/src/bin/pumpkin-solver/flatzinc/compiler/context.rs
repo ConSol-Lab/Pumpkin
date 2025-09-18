@@ -136,7 +136,7 @@ impl CompilationContext<'_> {
             VariableExpr::Constant(value) => {
                 Ok(*self.constant_domain_ids.entry(*value).or_insert_with(|| {
                     self.solver
-                        .new_named_bounded_integer(*value, *value, value.to_string())
+                        .new_named_bounded_integer(*value, *value, format!("const.{value}"))
                 }))
             }
         }

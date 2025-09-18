@@ -108,6 +108,7 @@ impl ProofLog {
             premises: premises
                 .into_iter()
                 .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
+                .filter(|premise| !premise.name.starts_with("const."))
                 .collect(),
             consequent: propagated.map(|predicate| {
                 proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
@@ -115,6 +116,13 @@ impl ProofLog {
             generated_by: Some(tag.into()),
             label: Some(label),
         };
+
+        if inference
+            .consequent
+            .is_some_and(|atomic| atomic.name.starts_with("const."))
+        {
+            return Ok(inference_tag);
+        }
 
         writer.log_inference(inference)?;
 
@@ -162,6 +170,13 @@ impl ProofLog {
             generated_by: None,
             label: Some("initial_domain"),
         };
+
+        if inference
+            .consequent
+            .is_some_and(|atomic| atomic.name.starts_with("const."))
+        {
+            return Ok(inference_tag);
+        }
 
         writer.log_inference(inference)?;
 
