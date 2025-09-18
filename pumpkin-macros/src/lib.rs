@@ -9,7 +9,7 @@ use syn::Token;
 
 const EXPLANATION_TYPES: [&str; 3] = ["naive", "big-step", "pointwise"];
 const OTHER_OPTIONS: [&str; 3] = [
-    "--cumulative-generate-sequence",
+    "--cumulative-single-profiles",
     "--cumulative-incremental-backtracking",
     "--cumulative-allow-holes",
 ];
