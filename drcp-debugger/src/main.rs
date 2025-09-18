@@ -123,7 +123,37 @@ struct Statistics {
     num_deductions: usize,
     inference_types: HashMap<InferenceLabel, usize>,
     conclusion: Option<Conclusion<Rc<str>, i32>>,
-    sum_of_tasks_in_time_table: usize,
+    tasks_in_time_table_inference: OnlineStatistic,
+    stage_size: OnlineStatistic,
+}
+
+/// Allows for online computation of mean and variance.
+///
+/// See http://datagenetics.com/blog/november22017/index.html
+#[derive(Default)]
+struct OnlineStatistic {
+    num_samples: usize,
+    mean: f64,
+    variance_times_n: f64,
+}
+
+impl OnlineStatistic {
+    fn add_sample(&mut self, sample: f64) {
+        self.num_samples += 1;
+
+        let previous_mean = self.mean;
+        self.mean += (sample - previous_mean) / self.num_samples as f64;
+
+        self.variance_times_n += (sample - previous_mean) * (sample - self.mean);
+    }
+
+    fn variance(&self) -> f64 {
+        self.variance_times_n / self.num_samples as f64
+    }
+
+    fn stddev(&self) -> f64 {
+        self.variance().sqrt()
+    }
 }
 
 impl Statistics {
@@ -134,26 +164,18 @@ impl Statistics {
     fn num_steps(&self) -> usize {
         self.num_deductions + self.num_inferences()
     }
-
-    fn mean_tasks_in_time_table_inference(&self) -> f32 {
-        let Some(count) = self
-            .inference_types
-            .get(&InferenceLabel::Label(Rc::from(TIME_TABLE_LABEL)))
-            .copied()
-        else {
-            return 0.0;
-        };
-
-        self.sum_of_tasks_in_time_table as f32 / count as f32
-    }
 }
 
 fn gather_statistics<Source: BufRead>(mut reader: ProofReader<Source, i32>) -> anyhow::Result<()> {
     let mut statistics = Statistics::default();
 
+    let mut stage_size = 0;
+
     while let Some(step) = reader.next_step()? {
         match step {
             Step::Inference(inference) => {
+                stage_size += 1;
+
                 let label = inference
                     .label
                     .map(InferenceLabel::Label)
@@ -170,10 +192,15 @@ fn gather_statistics<Source: BufRead>(mut reader: ProofReader<Source, i32>) -> a
                         .map(|atomic| &atomic.name)
                         .collect::<HashSet<_>>();
 
-                    statistics.sum_of_tasks_in_time_table += names.len();
+                    statistics
+                        .tasks_in_time_table_inference
+                        .add_sample(names.len() as f64);
                 }
             }
             Step::Deduction(_) => {
+                statistics.stage_size.add_sample(stage_size as f64);
+                stage_size = 0;
+
                 statistics.num_deductions += 1;
             }
             Step::Conclusion(conclusion) => {
@@ -190,10 +217,18 @@ fn gather_statistics<Source: BufRead>(mut reader: ProofReader<Source, i32>) -> a
         println!("num-inferences-{}: {}", label, count);
     }
 
-    println!(
-        "mean-tasks-in-time-table-inferences: {}",
-        statistics.mean_tasks_in_time_table_inference()
-    );
+    let online_statistics = [
+        ("stage-size", &statistics.stage_size),
+        (
+            "tasks-in-time-table-inferences",
+            &statistics.tasks_in_time_table_inference,
+        ),
+    ];
+
+    for (name, statistic) in online_statistics {
+        println!("mean-{name}: {}", statistic.mean);
+        println!("stddev-{name}: {}", statistic.stddev());
+    }
 
     match statistics.conclusion {
         Some(Conclusion::Unsat) => println!("conclusion: unsat"),
