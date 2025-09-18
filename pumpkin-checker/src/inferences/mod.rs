@@ -1,3 +1,4 @@
+mod all_different;
 mod arithmetic;
 mod linear;
 mod nogood;
@@ -88,6 +89,19 @@ pub(crate) fn verify_inference(
                 .ok_or(InvalidInference::MissingConstraint)?;
 
             time_table::verify_time_table(
+                model,
+                &inference.premises,
+                inference.consequent.clone(),
+                generated_by,
+            )
+        }
+
+        Some("all_different") => {
+            let generated_by = inference
+                .generated_by
+                .ok_or(InvalidInference::MissingConstraint)?;
+
+            all_different::verify_all_different(
                 model,
                 &inference.premises,
                 inference.consequent.clone(),
