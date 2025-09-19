@@ -1,11 +1,13 @@
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 
-/// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
-/// the provided brancher every `x`th considered restart.
+/// Specifies that the [`AlternatingBrancher`] should switch between
+/// [`BrancherToUse::Default`] and the provided brancher every `x`th considered restart.
 #[derive(Debug, Clone, Copy)]
 pub struct EveryXRestarts {
     use_default_brancher: bool,

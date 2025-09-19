@@ -38,12 +38,12 @@
 //! // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
 //! // We can infer that Task 0 and Task 1 execute at the same time
 //! // while Task 2 will start after them
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::SatisfactionResult;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
-//! # use crate::pumpkin_solver::results::ProblemSolution;
+//! # use pumpkin_core::termination::Indefinite;
+//! # use pumpkin_core::Solver;
+//! # use pumpkin_core::results::SatisfactionResult;
+//! # use pumpkin_core::constraints;
+//! # use pumpkin_core::constraints::Constraint;
+//! # use crate::pumpkin_core::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
