@@ -43,6 +43,7 @@ use crate::Solver;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;
 /// # use crate::pumpkin_core::results::ProblemSolution;
+/// # use pumpkin_core::constraint_arguments::ArgTask;
 /// let solver = Solver::default();
 ///
 /// let mut solver = Solver::default();
@@ -60,9 +61,23 @@ use crate::Solver;
 ///
 /// solver
 ///     .add_constraint(constraints::cumulative(
-///         start_times.clone(),
-///         durations.clone(),
-///         resource_requirements.clone(),
+///         [
+///             ArgTask {
+///                 start_time: start_0,
+///                 processing_time: 5,
+///                 resource_usage: 1,
+///             },
+///             ArgTask {
+///                 start_time: start_1,
+///                 processing_time: 2,
+///                 resource_usage: 1,
+///             },
+///             ArgTask {
+///                 start_time: start_2,
+///                 processing_time: 5,
+///                 resource_usage: 2,
+///             },
+///         ],
 ///         resource_capacity,
 ///         constraint_tag,
 ///     ))
