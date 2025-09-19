@@ -418,6 +418,9 @@ mod tests {
 
         let mut tree = ThetaLambdaTree::new(&tasks);
 
+        tree.update(PropagationContext {
+            assignments: &solver.assignments,
+        });
         for task in tasks.iter() {
             tree.add_to_theta(task, PropagationContext::new(&solver.assignments));
         }
