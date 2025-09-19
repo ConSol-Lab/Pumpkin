@@ -82,10 +82,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
+    use crate::propagators::CumulativeExplanationType;
 
     #[test]
     fn test_naive_explanation_lower_bound() {

@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
+use crate::constraint_arguments::CumulativeExplanationType;
 use crate::engine::propagation::contexts::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::EmptyDomain;
-use crate::options::CumulativeExplanationType;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
@@ -311,10 +311,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
+    use crate::propagators::CumulativeExplanationType;
 
     #[test]
     fn test_pointwise_explanation_lower_bound() {
