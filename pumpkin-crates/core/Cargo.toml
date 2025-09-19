@@ -15,7 +15,7 @@ thiserror = "2.0.12"
 log = "0.4.17"
 bitfield = "0.14.0"
 enumset = "1.1.2"
-fnv = {git = "https://github.com/servo/rust-fnv", branch="main"} # We require features which are on the `main` branch of the repository but are not on crates.io
+fnv = "1.0.7" # We require features which are on the `main` branch of the repository but are not on crates.io
 rand = { version = "0.8.5", features = [ "small_rng", "alloc" ] }
 once_cell = "1.19.0"
 downcast-rs = "1.2.1"

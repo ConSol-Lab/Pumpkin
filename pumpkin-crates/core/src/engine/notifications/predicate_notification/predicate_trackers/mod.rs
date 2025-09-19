@@ -47,6 +47,11 @@ pub(crate) struct PredicateTracker {
     max_assigned: TrailedInteger,
     /// The values which are currently being tracked by this [`PredicateTracker`].
     ///
+    /// We want quick membership queries but a hash-based set cannot be used since we require the
+    /// indices to remain consistent (since they are, for example, stored in [`Self::smaller`] and
+    /// [`Self::greater`]). Thus, we use an [`IndexSet`] which allows us to perform efficient
+    /// membership queries while also allowing us to index into the set.
+    ///
     /// Note that these values are not sorted in any way.
     values: IndexSet<i32, FnvBuildHasher>,
     /// The [`PredicateId`] corresponding to the predicate for each value in
@@ -394,16 +399,12 @@ mod tests {
     use crate::basic_types::PredicateIdGenerator;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTracker;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
-    use crate::engine::notifications::predicate_notification::predicate_trackers::HasTracker;
     use crate::engine::notifications::predicate_notification::predicate_trackers::LowerBoundTracker;
-    use crate::engine::notifications::predicate_notification::predicate_trackers::PredicateTracker;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::notifications::PredicateIdAssignments;
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::predicate;
-    use crate::predicates::Predicate;
-    use crate::variables::DomainId;
 
     #[test]
     fn is_fixed() {
@@ -456,13 +457,11 @@ mod tests {
             predicate!(domain >= 4),
             &mut trailed_values,
             &mut PredicateIdAssignments::default(),
-            1,
         );
         tracker.on_update(
             predicate!(domain <= 6),
             &mut trailed_values,
             &mut PredicateIdAssignments::default(),
-            2,
         );
         assert!(!tracker.is_fixed(&trailed_values));
 
@@ -471,7 +470,6 @@ mod tests {
             predicate!(domain <= 4),
             &mut trailed_values,
             &mut PredicateIdAssignments::default(),
-            3,
         );
         assert!(tracker.is_fixed(&trailed_values));
     }
