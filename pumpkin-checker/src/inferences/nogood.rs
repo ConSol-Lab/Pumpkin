@@ -24,27 +24,29 @@ pub(crate) fn verify_nogood(
     // First, we apply all the premises of the constraint that generated the inference.
     let mut variable_state = VariableState::default();
 
-    for premise in nogood.as_ref().iter() {
-        assert!(
-            variable_state.apply(premise.clone()),
-            "this can only fail if the nogood contains inconsistent atomics"
-        );
-    }
-
     for premise in premises {
-        if !variable_state.is_true(premise.clone()) {
-            return Err(InvalidInference::Unsound);
+        if !variable_state.apply(premise.clone()) {
+            return Err(InvalidInference::InconsistentPremises);
         }
     }
 
     if let Some(consequent) = consequent.clone() {
-        if !variable_state.is_true(!consequent) {
-            return Err(InvalidInference::Unsound);
+        if !variable_state.apply(!consequent.clone()) {
+            return Err(InvalidInference::InconsistentPremises);
         }
     }
 
-    Ok(Fact {
-        premises: premises.to_vec(),
-        consequent,
-    })
+    let is_implied_by_nogood = nogood
+        .iter()
+        .cloned()
+        .all(|atomic| variable_state.is_true(atomic));
+
+    if is_implied_by_nogood {
+        Ok(Fact {
+            premises: premises.to_vec(),
+            consequent,
+        })
+    } else {
+        Err(InvalidInference::Unsound)
+    }
 }

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use drcp_format::ConstraintId;
@@ -29,9 +30,11 @@ where
     }
 }
 
-impl AsRef<[Atomic]> for Nogood {
-    fn as_ref(&self) -> &[Atomic] {
-        self.0.as_ref()
+impl Deref for Nogood {
+    type Target = [Atomic];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
