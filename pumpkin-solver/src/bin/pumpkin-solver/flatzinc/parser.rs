@@ -3,14 +3,15 @@ use std::io::BufReader;
 use std::io::Read;
 use std::str::FromStr;
 
-use pumpkin_core::variables::MAX_INTEGER_VALUE;
-use pumpkin_core::variables::MIN_INTEGER_VALUE;
+use log::info;
 
 use super::ast::FlatZincAst;
 use super::ast::FlatZincAstBuilder;
 use super::ast::SingleVarDecl;
 use super::ast::VarArrayDecl;
 use super::FlatZincError;
+use crate::flatzinc::MAX_INTEGER_VALUE;
+use crate::flatzinc::MIN_INTEGER_VALUE;
 
 pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
     let reader = BufReader::new(source);
@@ -136,6 +137,7 @@ fn parse_var_decl(
 
         flatzinc::VarDeclItem::Int { id, expr, annos } => {
             // For unbounded integers, we take the minimum and maximum possible values
+            info!("Unbounded integer detected in the model, defaulting to minimum value {MIN_INTEGER_VALUE} and maximum value {MAX_INTEGER_VALUE}. If this is insufficient then consider setting the bounds manually");
             ast.add_variable_decl(SingleVarDecl::IntInRange {
                 id,
                 lb: MIN_INTEGER_VALUE as i128,

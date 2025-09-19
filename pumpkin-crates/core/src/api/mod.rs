@@ -51,8 +51,6 @@ pub mod variables {
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::Literal;
     pub use crate::engine::variables::TransformableVariable;
-    pub use crate::solver::MAX_INTEGER_VALUE;
-    pub use crate::solver::MIN_INTEGER_VALUE;
     #[cfg(doc)]
     use crate::Solver;
 }

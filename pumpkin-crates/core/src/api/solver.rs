@@ -40,17 +40,6 @@ use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::statistics::StatisticLogger;
 
-/// The minimum value of an unbounded integer.
-///
-/// This can be overridden by setting specific bounds under this threshold but this should be done
-/// with care since it might lead to overflow/underflow!
-pub const MIN_INTEGER_VALUE: i32 = -500_000_000;
-/// The maximum value of an unbounded integer.
-///
-/// This can be overridden by setting specific bounds over this threshold but this should be done
-/// with care since it might lead to overflow/underflow!
-pub const MAX_INTEGER_VALUE: i32 = 500_000_000;
-
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
 ///
@@ -285,34 +274,6 @@ impl Solver {
             upper_bound,
             Some(name.into()),
         )
-    }
-
-    /// Create a new unbounded integer variable.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use pumpkin_solver::Solver;
-    /// let mut solver = Solver::default();
-    ///
-    /// // We can create an unbounded integer variable
-    /// let integer_between_bounds = solver.new_unbounded_integer();
-    /// ```
-    pub fn new_unbounded_integer(&mut self) -> DomainId {
-        self.new_bounded_integer(MIN_INTEGER_VALUE, MAX_INTEGER_VALUE)
-    }
-
-    /// Create a new named unbounded integer variable.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use pumpkin_solver::Solver;
-    /// let mut solver = Solver::default();
-    ///
-    /// // We can also create such a variable with a name
-    /// let named_integer_between_bounds = solver.new_named_unbounded_integer("x");
-    /// ```
-    pub fn new_named_unbounded_integer(&mut self, name: impl Into<String>) -> DomainId {
-        self.new_named_bounded_integer(MIN_INTEGER_VALUE, MAX_INTEGER_VALUE, name)
     }
 
     /// Create a new integer variable which has a domain of predefined values. We remove duplicates
