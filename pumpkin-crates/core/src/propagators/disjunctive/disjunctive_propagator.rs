@@ -55,12 +55,12 @@ pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     inference_code: InferenceCode,
 }
 
-pub(crate) struct DisjunctivePropagatorConstructor<Var> {
+pub(crate) struct DisjunctiveConstructor<Var> {
     constraint_tag: ConstraintTag,
     tasks: Vec<ArgDisjunctiveTask<Var>>,
 }
 
-impl<Var> DisjunctivePropagatorConstructor<Var> {
+impl<Var> DisjunctiveConstructor<Var> {
     pub(crate) fn new(
         tasks: impl IntoIterator<Item = ArgDisjunctiveTask<Var>>,
         constraint_tag: ConstraintTag,
@@ -72,9 +72,7 @@ impl<Var> DisjunctivePropagatorConstructor<Var> {
     }
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor
-    for DisjunctivePropagatorConstructor<Var>
-{
+impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstructor<Var> {
     type PropagatorImpl = DisjunctivePropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -405,7 +403,7 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
 #[cfg(test)]
 mod tests {
     use crate::engine::test_solver::TestSolver;
-    use crate::propagators::disjunctive::disjunctive_propagator::DisjunctivePropagator;
+    use crate::propagators::disjunctive_propagator::DisjunctiveConstructor;
     use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
 
     #[test]
@@ -416,25 +414,29 @@ mod tests {
         let e = solver.new_variable(5, 10);
         let f = solver.new_variable(5, 10);
 
+        let constraint_tag = solver.new_constraint_tag();
         let _ = solver
-            .new_propagator(DisjunctivePropagator::new([
-                ArgDisjunctiveTask {
-                    start_time: c,
-                    processing_time: 4,
-                },
-                ArgDisjunctiveTask {
-                    start_time: d,
-                    processing_time: 5,
-                },
-                ArgDisjunctiveTask {
-                    start_time: e,
-                    processing_time: 3,
-                },
-                ArgDisjunctiveTask {
-                    start_time: f,
-                    processing_time: 3,
-                },
-            ]))
+            .new_propagator(DisjunctiveConstructor::new(
+                [
+                    ArgDisjunctiveTask {
+                        start_time: c,
+                        processing_time: 4,
+                    },
+                    ArgDisjunctiveTask {
+                        start_time: d,
+                        processing_time: 5,
+                    },
+                    ArgDisjunctiveTask {
+                        start_time: e,
+                        processing_time: 3,
+                    },
+                    ArgDisjunctiveTask {
+                        start_time: f,
+                        processing_time: 3,
+                    },
+                ],
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(c), 18);
     }

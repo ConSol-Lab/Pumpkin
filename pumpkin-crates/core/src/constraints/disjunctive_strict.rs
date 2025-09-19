@@ -1,6 +1,6 @@
 use crate::constraints::Constraint;
 use crate::proof::ConstraintTag;
-use crate::propagators::disjunctive_propagator::DisjunctivePropagatorConstructor;
+use crate::propagators::disjunctive_propagator::DisjunctiveConstructor;
 use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
@@ -39,9 +39,8 @@ struct DisjunctiveConstraint<Var> {
 impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
     fn post(self, solver: &mut crate::Solver) -> Result<(), crate::ConstraintOperationError> {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
-        DisjunctivePropagatorConstructor::new(self.tasks.clone(), self.constraint_tag)
-            .post(solver)?;
-        DisjunctivePropagatorConstructor::new(
+        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)?;
+        DisjunctiveConstructor::new(
             self.tasks.iter().map(|task| ArgDisjunctiveTask {
                 // The propagations on the upper-bound take place by "reversing" the tasks such
                 // that instead of going from [EST, LST], the domain goes from [-LCT, -ECT]
@@ -59,9 +58,9 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
         reification_literal: crate::variables::Literal,
     ) -> Result<(), crate::ConstraintOperationError> {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
-        DisjunctivePropagatorConstructor::new(self.tasks.clone(), self.constraint_tag)
+        DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag)
             .implied_by(solver, reification_literal)?;
-        DisjunctivePropagatorConstructor::new(
+        DisjunctiveConstructor::new(
             self.tasks.iter().map(|task| ArgDisjunctiveTask {
                 // The propagations on the upper-bound take place by "reversing" the tasks such
                 // that instead of going from [EST, LST], the domain goes from [-LCT, -ECT]
