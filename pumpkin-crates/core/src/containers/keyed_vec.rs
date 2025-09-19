@@ -63,6 +63,12 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         Key::create_from_index(self.elements.len() - 1)
     }
 
+    /// Get a mutable reference to a value, if the key is part of the vector.
+    pub(crate) fn get_mut(&mut self, key: &Key) -> Option<&mut Value> {
+        let index = key.index();
+        self.elements.get_mut(index)
+    }
+
     /// Create a new slot for a value, and populate it using [`Slot::populate()`].
     ///
     /// This allows initializing the value with the ID it will have in this vector.

@@ -284,8 +284,26 @@ impl ProofProcessor {
 
                     let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
                     let inference_code = self.get_reason(predicate, &mut reason_buffer);
+
+                    // We do not use the function to mark the constraint in the nogood stack. It
+                    // could happen that the conclusion is a root bound, but the proof does not
+                    // contain a nogood asserting the root bound (an inference is not enough, we
+                    // explicitly want a deduction that makes the conclusion true).
                     trace!("Marking reason for dual bound");
-                    mark_stack_entry(&self.solver, &mut nogood_stack, inference_code.unwrap());
+
+                    let used_constraint_tag =
+                        self.solver.get_constraint_tag_for(inference_code.unwrap());
+                    trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
+                    let Some(stack_entry) = nogood_stack
+                        .get_mut(&used_constraint_tag)
+                        .map(|opt| opt.as_mut())
+                    else {
+                        return Err(ProofProcessError::InvalidConclusion);
+                    };
+
+                    if let Some(posted_deduction) = stack_entry {
+                        posted_deduction.marked = true;
+                    }
 
                     self.reason_buffer = reason_buffer;
                     return Ok((Conclusion::DualBound(bound), nogood_stack));
