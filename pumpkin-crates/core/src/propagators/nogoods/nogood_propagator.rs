@@ -655,7 +655,9 @@ impl NogoodPropagator {
             watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
 
-        notification_engine.track_predicate(predicate, trailed_values, assignments);
+        if watch_lists[predicate].is_empty() {
+            notification_engine.track_predicate(predicate, trailed_values, assignments);
+        }
 
         watch_lists[predicate].push(watcher);
     }
