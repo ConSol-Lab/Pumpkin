@@ -272,41 +272,7 @@ impl ProofProcessor {
                 // A dual bound conclusion is encountered. This is of the form `true -> bound`.
                 // This means we have to find a nogood `!bound -> false` and mark it.
                 Step::Conclusion(Conclusion::DualBound(bound)) => {
-                    let predicate = convert_proof_atomic_to_predicate(&self.solver, &bound)?;
-                    info!("Found dual bound conclusion");
-                    debug!("bound = {}", predicate.display(&self.solver.variable_names));
-
-                    // If the claimed bound is not true given the current assignment, then the
-                    // conclusion does not follow by propagation.
-                    if self.solver.assignments.evaluate_predicate(predicate) != Some(true) {
-                        return Err(ProofProcessError::InvalidConclusion);
-                    }
-
-                    let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
-                    let inference_code = self.get_reason(predicate, &mut reason_buffer);
-
-                    // We do not use the function to mark the constraint in the nogood stack. It
-                    // could happen that the conclusion is a root bound, but the proof does not
-                    // contain a nogood asserting the root bound (an inference is not enough, we
-                    // explicitly want a deduction that makes the conclusion true).
-                    trace!("Marking reason for dual bound");
-
-                    let used_constraint_tag =
-                        self.solver.get_constraint_tag_for(inference_code.unwrap());
-                    trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
-                    let Some(stack_entry) = nogood_stack
-                        .get_mut(&used_constraint_tag)
-                        .map(|opt| opt.as_mut())
-                    else {
-                        return Err(ProofProcessError::InvalidConclusion);
-                    };
-
-                    if let Some(posted_deduction) = stack_entry {
-                        posted_deduction.marked = true;
-                    }
-
-                    self.reason_buffer = reason_buffer;
-                    return Ok((Conclusion::DualBound(bound), nogood_stack));
+                    return self.prepare_trimming_for_dual_bound_conclusion(bound, nogood_stack);
                 }
 
                 Step::Conclusion(Conclusion::Unsat) => {
@@ -356,6 +322,57 @@ impl ProofProcessor {
                 Err(handle) => return self.repair_solver(handle, deduction, nogood_stack),
             }
         }
+    }
+
+    fn prepare_trimming_for_dual_bound_conclusion(
+        &mut self,
+        bound: IntAtomic<Rc<str>, i32>,
+        mut nogood_stack: DeductionStack,
+    ) -> Result<(Conclusion<Rc<str>, i32>, DeductionStack), ProofProcessError> {
+        let predicate = convert_proof_atomic_to_predicate(&self.solver, &bound)?;
+        info!("Found dual bound conclusion");
+        debug!("bound = {}", predicate.display(&self.solver.variable_names));
+
+        // If the claimed bound is not true given the current assignment, then the
+        // conclusion does not follow by propagation.
+        if self.solver.assignments.evaluate_predicate(predicate) != Some(true) {
+            return Err(ProofProcessError::InvalidConclusion);
+        }
+
+        let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
+        let inference_code = self.get_reason(predicate, &mut reason_buffer);
+
+        // We do not use the function to mark the constraint in the nogood stack. It
+        // could happen that the conclusion is a root bound, but the proof does not
+        // contain a nogood asserting the root bound (an inference is not enough, we
+        // explicitly want a deduction that makes the conclusion true).
+        trace!("Marking reason for dual bound");
+
+        let used_constraint_tag = self.solver.get_constraint_tag_for(inference_code.unwrap());
+        trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
+        let Some(stack_entry) = nogood_stack
+            .get_mut(&used_constraint_tag)
+            .map(|opt| opt.as_mut())
+        else {
+            return Err(ProofProcessError::InvalidConclusion);
+        };
+
+        if let Some(posted_deduction) = stack_entry {
+            posted_deduction.marked = true;
+        } else {
+            self.add_predicate_to_explain(predicate);
+            let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
+            let deduction_id = self.solver.new_constraint_tag();
+
+            self.output_proof.push(ProofStage {
+                inferences,
+                constraint_id: deduction_id.into(),
+                premises: vec![convert_predicate_to_proof_atomic(&self.solver, !predicate)],
+            });
+        }
+
+        self.reason_buffer = reason_buffer;
+        Ok((Conclusion::DualBound(bound), nogood_stack))
     }
 
     /// Takes a solver that is in an inconsistent state because we have a proof of
@@ -408,7 +425,6 @@ impl ProofProcessor {
         // same conflict. This means when we encounter an initial bound, it may already be
         // present in the inference sequence. If that is the case, we move it to the back.
         let mut inferences: Vec<Option<Inference<String, i32, Arc<str>>>> = vec![];
-        let mut initial_bound_indices = HashMap::new();
 
         let conflict_info = self.solver.state.get_conflict_info();
 
@@ -468,6 +484,16 @@ impl ProofProcessor {
         for predicate in predicates_to_explain {
             self.add_predicate_to_explain(predicate);
         }
+
+        self.explain_predicates(nogood_stack, inferences)
+    }
+
+    fn explain_predicates(
+        &mut self,
+        nogood_stack: &mut DeductionStack,
+        mut inferences: Vec<Option<Inference<String, i32, Arc<str>>>>,
+    ) -> Vec<Inference<String, i32, Arc<str>>> {
+        let mut initial_bound_indices = HashMap::new();
 
         // We take ownership of the reason buffer here, as it is easier with the borrowing
         // rules. At the end of the function we give ownership back to `self`.

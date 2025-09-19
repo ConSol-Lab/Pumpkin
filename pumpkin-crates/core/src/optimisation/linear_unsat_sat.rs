@@ -138,7 +138,29 @@ where
             objective_lower_bound = solver.lower_bound(&objective);
         }
 
-        solver.conclude_proof_dual_bound(predicate![objective >= primal_objective]);
+        let objective_bound = predicate![objective >= primal_objective];
+        let objective_bound_decision_level = solver
+            .satisfaction_solver
+            .assignments
+            .get_decision_level_for_predicate(&objective_bound)
+            .expect("the objective bound must be assigned");
+        let is_logging_scaffold = !solver.satisfaction_solver.is_logging_full_proof();
+
+        dbg!(objective_bound_decision_level);
+        dbg!(is_logging_scaffold);
+
+        if objective_bound_decision_level == 0 && is_logging_scaffold {
+            let _ = solver
+                .satisfaction_solver
+                .internal_parameters
+                .proof_log
+                .log_deduction(
+                    [!objective_bound],
+                    &solver.satisfaction_solver.variable_names,
+                );
+        }
+
+        solver.conclude_proof_dual_bound(objective_bound);
         OptimisationResult::Optimal(primal_solution)
     }
 }

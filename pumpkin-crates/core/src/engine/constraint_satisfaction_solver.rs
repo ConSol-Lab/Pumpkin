@@ -131,7 +131,7 @@ pub struct ConstraintSatisfactionSolver {
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
-    internal_parameters: SatisfactionSolverOptions,
+    pub(crate) internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     pub(crate) variable_names: VariableNames,
     /// Computes the LBD for nogoods.
