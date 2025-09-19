@@ -25,7 +25,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_solver::Random;
+    /// # use pumpkin_core::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we flip a coin with probability 0.5
@@ -48,7 +48,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_solver::Random;
+    /// # use pumpkin_core::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we create the elements to select from

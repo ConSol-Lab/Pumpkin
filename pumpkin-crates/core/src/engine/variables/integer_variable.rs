@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use enumset::EnumSet;
 
 use super::TransformableVariable;
@@ -10,7 +12,7 @@ use crate::engine::Assignments;
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
 pub trait IntegerVariable:
-    Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView>
+    Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView> + Debug
 {
     type AffineView: IntegerVariable;
 
