@@ -138,6 +138,7 @@ impl ProofProcessor {
         // propagation. If so, a new proof-stage is created with the appropriate
         // inferences.
 
+        info!("Trimming deductions and determining inferences");
         while let Some((tag, maybe_deduction)) = nogood_stack.pop() {
             // Extract the nogood handle and whether the deduction is marked.
             let Some(posted_deduction) = maybe_deduction else {
@@ -186,6 +187,8 @@ impl ProofProcessor {
             });
         }
 
+        info!("Writing final proof to file");
+
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
         for stage in std::mem::take(&mut self.output_proof).into_iter().rev() {
@@ -217,6 +220,8 @@ impl ProofProcessor {
         };
 
         proof_writer.log_conclusion(conclusion)?;
+
+        info!("Proof processed successfully");
 
         Ok(())
     }
@@ -267,24 +272,22 @@ impl ProofProcessor {
                 // A dual bound conclusion is encountered. This is of the form `true -> bound`.
                 // This means we have to find a nogood `!bound -> false` and mark it.
                 Step::Conclusion(Conclusion::DualBound(bound)) => {
-                    let premises_to_mark = &[!bound.clone()];
+                    let predicate = convert_proof_atomic_to_predicate(&self.solver, &bound)?;
+                    info!("Found dual bound conclusion");
+                    debug!("bound = {}", predicate.display(&self.solver.variable_names));
 
-                    let tag_to_mark = nogood_stack.keys().rev().find(|tag| {
-                        let Some(posted_deduction) = &nogood_stack[tag] else {
-                            return false;
-                        };
-
-                        posted_deduction.deduction.premises == premises_to_mark
-                    });
-
-                    match tag_to_mark {
-                        Some(tag) => {
-                            // Mark the step in the proof.
-                            nogood_stack[tag].as_mut().unwrap().marked = true;
-                        }
-                        None => return Err(ProofProcessError::InvalidConclusion),
+                    // If the claimed bound is not true given the current assignment, then the
+                    // conclusion does not follow by propagation.
+                    if self.solver.assignments.evaluate_predicate(predicate) != Some(true) {
+                        return Err(ProofProcessError::InvalidConclusion);
                     }
 
+                    let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
+                    let inference_code = self.get_reason(predicate, &mut reason_buffer);
+                    trace!("Marking reason for dual bound");
+                    mark_stack_entry(&self.solver, &mut nogood_stack, inference_code.unwrap());
+
+                    self.reason_buffer = reason_buffer;
                     return Ok((Conclusion::DualBound(bound), nogood_stack));
                 }
 
@@ -495,19 +498,7 @@ impl ProofProcessor {
 
             // In this case, the predicate was propagated by a constraint. We compute the reason
             // and log the appropriate inference step.
-            assert!(reason_buffer.is_empty());
-            let inference_code = ConflictAnalysisContext::get_propagation_reason(
-                predicate,
-                &self.solver.assignments,
-                CurrentNogood::new(&self.to_process_heap, &[], &self.predicate_ids),
-                &mut self.solver.reason_store,
-                &mut self.solver.propagators,
-                &mut ProofLog::default(),
-                &self.solver.unit_nogood_inference_codes,
-                &mut reason_buffer,
-                &mut self.solver.notification_engine,
-                &self.solver.variable_names,
-            );
+            let inference_code = self.get_reason(predicate, &mut reason_buffer);
 
             // The inference code can be `None` if the reason is constructed to explain an implied
             // predicate. Those inferences do not need to be in the proof, so we only create an
@@ -619,32 +610,20 @@ impl ProofProcessor {
         &mut self,
         predicate: Predicate,
     ) -> Result<(), ProofProcessError> {
-        dbg!(predicate);
         let opposite = !predicate;
         assert_eq!(
             self.solver.assignments.evaluate_predicate(opposite),
             Some(true)
         );
 
-        assert!(self.reason_buffer.is_empty());
-        let inference_code = ConflictAnalysisContext::get_propagation_reason(
-            opposite,
-            &self.solver.assignments,
-            CurrentNogood::new(&self.to_process_heap, &[], &self.predicate_ids),
-            &mut self.solver.reason_store,
-            &mut self.solver.propagators,
-            &mut ProofLog::default(),
-            &self.solver.unit_nogood_inference_codes,
-            &mut self.reason_buffer,
-            &mut self.solver.notification_engine,
-            &self.solver.variable_names,
-        );
+        let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
+        let inference_code = self.get_reason(predicate, &mut reason_buffer);
 
         // The inference code can be `None` if the reason is constructed to explain an implied
         // predicate. Those inferences do not need to be in the proof, so we only create an
         // inference for propagations by constraints.
         if let Some(inference_code) = inference_code {
-            let mut conflict_nogood = self.reason_buffer.clone();
+            let mut conflict_nogood = reason_buffer.clone();
             conflict_nogood.push(predicate);
 
             self.solver
@@ -656,9 +635,31 @@ impl ProofProcessor {
                 });
         }
 
-        self.reason_buffer.clear();
+        reason_buffer.clear();
+        self.reason_buffer = reason_buffer;
 
         Ok(())
+    }
+
+    /// Get the reason of the given predicate being true.
+    fn get_reason(
+        &mut self,
+        predicate: Predicate,
+        buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+    ) -> Option<InferenceCode> {
+        assert!(buffer.as_ref().is_empty());
+        ConflictAnalysisContext::get_propagation_reason(
+            predicate,
+            &self.solver.assignments,
+            CurrentNogood::new(&self.to_process_heap, &[], &self.predicate_ids),
+            &mut self.solver.reason_store,
+            &mut self.solver.propagators,
+            &mut ProofLog::default(),
+            &self.solver.unit_nogood_inference_codes,
+            buffer,
+            &mut self.solver.notification_engine,
+            &self.solver.variable_names,
+        )
     }
 }
 
@@ -669,6 +670,7 @@ fn mark_stack_entry(
     inference_code: InferenceCode,
 ) {
     let used_constraint_tag = solver.get_constraint_tag_for(inference_code);
+    trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
     let stack_entry = stack[used_constraint_tag].as_mut();
 
     if let Some(posted_deduction) = stack_entry {

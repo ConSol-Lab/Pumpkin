@@ -1,11 +1,13 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
 use std::cmp::max;
+use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
 
+use log::debug;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -136,6 +138,12 @@ pub struct ConstraintSatisfactionSolver {
     lbd_helper: Lbd,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
     pub(crate) unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
+    /// A count of how many times a unit nogood is added to the solver.
+    ///
+    /// If redundent unit nogoods are added, we have to keep track of that, to support removing
+    /// nogoods in the proof processor. Therefore, every key also contains a count of how many
+    /// times an entry is inserted.
+    unit_nogood_additions: HashMap<Predicate, usize>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
     /// Keep track of trailed values (i.e. values which automatically backtrack)
@@ -310,6 +318,7 @@ impl ConstraintSatisfactionSolver {
             semantic_minimiser: SemanticMinimiser::default(),
             lbd_helper: Lbd::default(),
             unit_nogood_inference_codes: Default::default(),
+            unit_nogood_additions: Default::default(),
             conflict_resolver: match solver_options.conflict_resolver {
                 ConflictResolver::NoLearning => Box::new(NoLearningResolver),
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
@@ -1414,9 +1423,22 @@ impl ConstraintSatisfactionSolver {
         };
 
         if let NogoodHandle::Unit(ref predicate) = nogood_handle {
-            let _ = self
-                .unit_nogood_inference_codes
-                .insert(!*predicate, inference_code);
+            let applied_predicate = !*predicate;
+
+            // It could be that the predicate was already true. If that is the case, do not update
+            // the unit nogood inference code for this predicate.
+
+            if let Entry::Vacant(entry) = self.unit_nogood_inference_codes.entry(applied_predicate)
+            {
+                let _ = entry.insert(inference_code);
+            }
+
+            // Increase the count of the number of times this unit nogood is added.
+            let count = self
+                .unit_nogood_additions
+                .entry(applied_predicate)
+                .or_insert(0);
+            *count += 1;
         }
 
         // temporary hack for the nogood propagator that does propagation from scratch
@@ -1436,10 +1458,17 @@ impl ConstraintSatisfactionSolver {
         let predicates = match handle {
             NogoodHandle::Empty => panic!("This should never be called"),
             NogoodHandle::Unit(predicate) => {
-                let _ = self
-                    .unit_nogood_inference_codes
-                    .remove(&!predicate)
-                    .expect("a unit nogood has to be linked to its inference code");
+                let applied_predicate = !predicate;
+                let count = self
+                    .unit_nogood_additions
+                    .get_mut(&applied_predicate)
+                    .expect("Removing a unit nogood that was never added.");
+                *count -= 1;
+
+                if *count == 0 {
+                    let _ = self.unit_nogood_additions.remove(&applied_predicate);
+                    let _ = self.unit_nogood_inference_codes.remove(&applied_predicate);
+                }
 
                 vec![predicate]
             }
