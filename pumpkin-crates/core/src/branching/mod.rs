@@ -13,11 +13,11 @@
 //!
 //! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`]:
 //! ```rust
-//! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::variables::Literal;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::SatisfactionResult;
-//! # use crate::pumpkin_solver::results::ProblemSolution;
+//! # use pumpkin_core::Solver;
+//! # use pumpkin_core::variables::Literal;
+//! # use pumpkin_core::termination::Indefinite;
+//! # use pumpkin_core::results::SatisfactionResult;
+//! # use crate::pumpkin_core::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
 //! let variables = vec![solver.new_literal()];
@@ -40,11 +40,11 @@
 //! is provided using the method
 //! [`Solver::default_brancher`].
 //! ```rust
-//! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::variables::Literal;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::SatisfactionResult;
-//! # use crate::pumpkin_solver::results::ProblemSolution;
+//! # use pumpkin_core::Solver;
+//! # use pumpkin_core::variables::Literal;
+//! # use pumpkin_core::termination::Indefinite;
+//! # use pumpkin_core::results::SatisfactionResult;
+//! # use crate::pumpkin_core::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
 //! let literals = vec![solver.new_literal()];
