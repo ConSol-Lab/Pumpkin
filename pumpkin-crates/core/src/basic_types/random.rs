@@ -167,8 +167,9 @@ pub(crate) mod tests {
             selected
         }
 
-        fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32 {
+        fn generate_i32_in_range(&mut self, lb: i32, ub: i32) -> i32 {
             let selected = self.integers.remove(0);
+            let range = lb..ub;
             pumpkin_assert_simple!(
                 range.contains(&selected),
                 "The selected element by `TestRandom` ({selected}) is not in the provided range ({range:?}) and thus should not be returned, please ensure that your test cases are correctly defined"
