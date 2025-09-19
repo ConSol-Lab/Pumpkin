@@ -16,13 +16,13 @@ use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
+use pumpkin_solver::constraint_arguments::CumulativeOptions;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;

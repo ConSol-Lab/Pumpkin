@@ -26,7 +26,7 @@ use crate::pumpkin_assert_moderate;
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
 /// currently be enqueued and potentially the updated [`Task`] (in the form of a
 /// [`UpdatedTaskInfo`]) if the mandatory part of this [`Task`] has changed.
-pub(crate) struct ShouldEnqueueResult<Var> {
+pub(crate) struct ShouldEnqueueResult<Var, PVar, RVar> {
     /// Whether the propagator which called this method should be enqueued
     pub(crate) decision: EnqueueDecision,
     /// If the mandatory part of the task passed to [`should_enqueue`] has changed then this field
@@ -34,27 +34,25 @@ pub(crate) struct ShouldEnqueueResult<Var> {
     ///
     /// In general, non-incremental propagators will not make use of this field since they will
     /// propagate from scratch anyways.
-    pub(crate) update: Option<UpdatedTaskInfo<Var>>,
+    pub(crate) update: Option<UpdatedTaskInfo<Var, PVar, RVar>>,
 }
 
 /// Determines whether a time-table propagator should enqueue and returns a structure containing the
 /// [`EnqueueDecision`] and the info of the task with the extended mandatory part (or [`None`] if no
 /// such task exists). This method should be called in the
 /// [`ConstraintProgrammingPropagator::notify`] method.
-pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
-    updated_task: &Rc<Task<Var>>,
+pub(crate) fn should_enqueue<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+    updatable_structures: &UpdatableStructures<Var, PVar, RVar>,
+    updated_task: &Rc<Task<Var, PVar, RVar>>,
     context: PropagationContext,
     empty_time_table: bool,
-) -> ShouldEnqueueResult<Var> {
-    pumpkin_assert_extreme!(
-        context.lower_bound(&updated_task.start_variable) > updatable_structures.get_stored_lower_bound(updated_task)
-            || updatable_structures.get_stored_upper_bound(updated_task)
-                >= context.upper_bound(&updated_task.start_variable)
-        , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
-    );
-
+) -> ShouldEnqueueResult<Var, PVar, RVar> {
     let mut result = ShouldEnqueueResult {
         decision: EnqueueDecision::Skip,
         update: None,
@@ -62,12 +60,6 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 
     let old_lower_bound = updatable_structures.get_stored_lower_bound(updated_task);
     let old_upper_bound = updatable_structures.get_stored_upper_bound(updated_task);
-
-    if old_lower_bound == context.lower_bound(&updated_task.start_variable)
-        && old_upper_bound == context.upper_bound(&updated_task.start_variable)
-    {
-        return result;
-    }
 
     // We check whether a mandatory part was extended/introduced
     if has_mandatory_part(context, updated_task) {
@@ -105,19 +97,27 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     result
 }
 
-pub(crate) fn has_mandatory_part<Var: IntegerVariable + 'static>(
+pub(crate) fn has_mandatory_part<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
 ) -> bool {
     context.upper_bound(&task.start_variable)
-        < context.lower_bound(&task.start_variable) + task.processing_time
+        < context.lower_bound(&task.start_variable) + context.lower_bound(&task.processing_time)
 }
 
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
-pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn has_mandatory_part_in_interval<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
     start: i32,
     end: i32,
 ) -> bool {
@@ -126,21 +126,30 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
         context.upper_bound(&task.start_variable),
     );
     // There exists a mandatory part
-    (upper_bound < (lower_bound + task.processing_time))
-        && has_overlap_with_interval(upper_bound, lower_bound + task.processing_time, start, end)
+    (upper_bound < (lower_bound + context.lower_bound(&task.processing_time)))
+        && has_overlap_with_interval(
+            upper_bound,
+            lower_bound + context.lower_bound(&task.processing_time),
+            start,
+            end,
+        )
     // Determine whether the mandatory part overlaps with the provided bounds
 }
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
-pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn task_has_overlap_with_interval<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
     start: i32,
     end: i32,
 ) -> bool {
     let (lower_bound, upper_bound) = (
         context.lower_bound(&task.start_variable),
-        context.upper_bound(&task.start_variable) + task.processing_time,
+        context.upper_bound(&task.start_variable) + context.lower_bound(&task.processing_time),
     ); // The release time of the task and the deadline
     has_overlap_with_interval(lower_bound, upper_bound, start, end)
 }
@@ -160,8 +169,13 @@ pub(crate) fn has_overlap_with_interval(
 /// based on start time and that the profiles are maximal (i.e. the [`ResourceProfile::start`] and
 /// [`ResourceProfile::end`] cannot be increased or decreased, respectively). It returns true if
 /// both of these invariants hold and false otherwise.
-fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable + 'static>(
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+fn debug_check_whether_profiles_are_maximal_and_sorted<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var, PVar, RVar>> + Clone,
 ) -> bool {
     let collected_time_table = time_table.clone().collect::<Vec<_>>();
     let sorted_profiles = collected_time_table.is_empty()
@@ -199,12 +213,18 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// sorted in increasing order in terms of [`ResourceProfile::start`] and that the
 /// [`ResourceProfile`] is maximal (i.e. the [`ResourceProfile::start`] and [`ResourceProfile::end`]
 /// cannot be increased or decreased, respectively).
-pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_based_on_timetable<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &mut UpdatableStructures<Var>,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var, PVar, RVar>> + Clone,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+    updatable_structures: &mut UpdatableStructures<Var, PVar, RVar>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
@@ -214,13 +234,19 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     pumpkin_assert_extreme!(
         updatable_structures
             .get_unfixed_tasks()
-            .all(|unfixed_task| !context.is_fixed(&unfixed_task.start_variable)),
+            .all(
+                |unfixed_task| !context.is_fixed(&unfixed_task.start_variable)
+                    || !context.is_fixed(&unfixed_task.processing_time)
+                    || !context.is_fixed(&unfixed_task.resource_usage)
+            ),
         "All of the unfixed tasks should not be fixed at this point"
     );
     pumpkin_assert_extreme!(
         updatable_structures
             .get_fixed_tasks()
-            .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
+            .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)
+                && context.is_fixed(&fixed_task.processing_time)
+                && context.is_fixed(&fixed_task.resource_usage)),
         "All of the fixed tasks should be fixed at this point"
     );
 
@@ -254,12 +280,18 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 ///
 /// This type of propagation is likely to be less beneficial for the explanation
 /// [`CumulativeExplanationType::Pointwise`].
-fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
+fn propagate_single_profiles<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &mut UpdatableStructures<Var>,
-    parameters: &CumulativeParameters<Var>,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var, PVar, RVar>> + Clone,
+    updatable_structures: &mut UpdatableStructures<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
@@ -275,7 +307,10 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
             let task = updatable_structures.get_unfixed_task_at_index(task_index);
-            if context.is_fixed(&task.start_variable) {
+            if context.is_fixed(&task.start_variable)
+                && context.is_fixed(&task.resource_usage)
+                && context.is_fixed(&task.processing_time)
+            {
                 // The task is currently fixed after propagating
                 //
                 // Note that we fix this task temporarily and then wait for the notification to
@@ -289,7 +324,10 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
                 continue;
             }
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.start
+                > context.upper_bound(&task.start_variable)
+                    + context.lower_bound(&task.processing_time)
+            {
                 // The start of the current profile is necessarily after the latest
                 // completion time of the task under consideration The profiles are
                 // sorted by start time (and non-overlapping) so we can remove the task from
@@ -311,12 +349,25 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 // For every possible update we let the propagation handler propagate
                 let result = match possible_update {
                     CanUpdate::LowerBound => propagation_handler
-                        .propagate_lower_bound_with_explanations(context, profile, &task),
+                        .propagate_lower_bound_with_explanations(
+                            context,
+                            profile,
+                            &task,
+                            parameters.capacity.clone(),
+                        ),
                     CanUpdate::UpperBound => propagation_handler
-                        .propagate_upper_bound_with_explanations(context, profile, &task),
-                    CanUpdate::Holes => {
-                        propagation_handler.propagate_holes_in_domain(context, profile, &task)
-                    }
+                        .propagate_upper_bound_with_explanations(
+                            context,
+                            profile,
+                            &task,
+                            parameters.capacity.clone(),
+                        ),
+                    CanUpdate::Holes => propagation_handler.propagate_holes_in_domain(
+                        context,
+                        profile,
+                        &task,
+                        parameters.capacity.clone(),
+                    ),
                 };
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
@@ -338,12 +389,18 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 ///
 /// Especially in the case of [`CumulativeExplanationType::Pointwise`] this is likely to be
 /// beneficial.
-fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
+fn propagate_sequence_of_profiles<
+    'a,
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &UpdatableStructures<Var>,
-    parameters: &CumulativeParameters<Var>,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var, PVar, RVar>> + Clone,
+    updatable_structures: &UpdatableStructures<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
@@ -354,7 +411,10 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 
     // Then we go over all the possible tasks
     for task in updatable_structures.get_unfixed_tasks() {
-        if context.is_fixed(&task.start_variable) {
+        if context.is_fixed(&task.start_variable)
+            && context.is_fixed(&task.resource_usage)
+            && context.is_fixed(&task.processing_time)
+        {
             // If the task is fixed then we are not able to propagate it further
             continue;
         }
@@ -364,7 +424,10 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         'profile_loop: while profile_index < time_table.len() {
             let profile = time_table[profile_index];
 
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.start
+                > context.upper_bound(&task.start_variable)
+                    + context.lower_bound(&task.processing_time)
+            {
                 // The profiles are sorted, if we cannot update using this one then we cannot update
                 // using the subsequent profiles, we can break from the loop
                 break 'profile_loop;
@@ -389,7 +452,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 context.as_readonly(),
                 task,
                 profile,
-                parameters.capacity,
+                context.upper_bound(&parameters.capacity),
             ) {
                 // We find the index (non-inclusive) of the last profile in the chain of lower-bound
                 // propagations
@@ -398,7 +461,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                     &time_table,
                     context.as_readonly(),
                     task,
-                    parameters.capacity,
+                    context.upper_bound(&parameters.capacity),
                 );
 
                 // Then we provide the propagation handler with the chain of profiles and propagate
@@ -407,6 +470,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                     context,
                     &time_table[profile_index..last_index],
                     task,
+                    parameters.capacity.clone(),
                 )?;
 
                 // Then we set the new profile index to the last index, note that this index (since
@@ -418,7 +482,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 context.as_readonly(),
                 task,
                 profile,
-                parameters.capacity,
+                context.upper_bound(&parameters.capacity),
             ) {
                 // We find the index (inclusive) of the last profile in the chain of upper-bound
                 // propagations (note that the index of this last profile in the chain is `<=
@@ -428,7 +492,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                     &time_table,
                     context.as_readonly(),
                     task,
-                    parameters.capacity,
+                    context.upper_bound(&parameters.capacity),
                 );
                 // Then we provide the propagation handler with the chain of profiles and propagate
                 // all of them
@@ -436,6 +500,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                     context,
                     &time_table[first_index..=profile_index],
                     task,
+                    parameters.capacity.clone(),
                 )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
@@ -446,7 +511,12 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             if parameters.options.allow_holes_in_domain {
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
-                propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                propagation_handler.propagate_holes_in_domain(
+                    context,
+                    profile,
+                    task,
+                    parameters.capacity.clone(),
+                )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index
@@ -462,17 +532,22 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 
 /// Returns the index of the profile which cannot propagate the lower-bound of the provided task any
 /// further based on the propagation of the upper-bound due to `time_table[profile_index]`.
-fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + 'static>(
+fn find_index_last_profile_which_propagates_lower_bound<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     profile_index: usize,
-    time_table: &[&ResourceProfile<Var>],
+    time_table: &[&ResourceProfile<Var, PVar, RVar>],
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
     capacity: i32,
 ) -> usize {
     let mut last_index = profile_index + 1;
     while last_index < time_table.len() {
         let next_profile = time_table[last_index];
-        if next_profile.start - time_table[last_index - 1].end >= task.processing_time
+        if next_profile.start - time_table[last_index - 1].end
+            >= context.lower_bound(&task.processing_time)
             || !overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity)
         {
             break;
@@ -484,11 +559,15 @@ fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + '
 
 /// Returns the index of the last profile which could propagate the upper-bound of the task based on
 /// the propagation of the upper-bound due to `time_table[profile_index]`.
-fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + 'static>(
+fn find_index_last_profile_which_propagates_upper_bound<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     profile_index: usize,
-    time_table: &[&ResourceProfile<Var>],
+    time_table: &[&ResourceProfile<Var, PVar, RVar>],
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
+    task: &Rc<Task<Var, PVar, RVar>>,
     capacity: i32,
 ) -> usize {
     if profile_index == 0 {
@@ -497,7 +576,8 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
     let mut first_index = profile_index - 1;
     loop {
         let previous_profile = time_table[first_index];
-        if time_table[first_index + 1].start - previous_profile.end >= task.processing_time
+        if time_table[first_index + 1].start - previous_profile.end
+            >= context.lower_bound(&task.processing_time)
             || !overflows_capacity_and_is_not_part_of_profile(
                 context,
                 task,
@@ -526,17 +606,22 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
 ///
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
-fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
+fn lower_bound_can_be_propagated_by_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
+        profile.height + context.lower_bound(&task.resource_usage) > capacity
             && task_has_overlap_with_interval(context, task, profile.start, profile.end)
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
+    (context.lower_bound(&task.start_variable) + context.lower_bound(&task.processing_time))
+        > profile.start
         && context.lower_bound(&task.start_variable) <= profile.end
 }
 
@@ -546,16 +631,21 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///       [`ResourceProfile`]
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
-fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
+fn upper_bound_can_be_propagated_by_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
+        profile.height + context.lower_bound(&task.resource_usage) > capacity
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
+    (context.upper_bound(&task.start_variable) + context.lower_bound(&task.processing_time))
+        > profile.start
         && context.upper_bound(&task.start_variable) <= profile.end
 }
 
@@ -566,10 +656,14 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///
 /// If the first condition is true, the second false and the third true then this method returns
 /// true (otherwise it returns false)
-fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+fn can_be_updated_by_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
     capacity: i32,
 ) -> bool {
     overflows_capacity_and_is_not_part_of_profile(context, task, profile, capacity)
@@ -582,13 +676,17 @@ fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
 ///
 /// If the first condition is true, and the second false then this method returns
 /// true (otherwise it returns false)
-fn overflows_capacity_and_is_not_part_of_profile<Var: IntegerVariable + 'static>(
+fn overflows_capacity_and_is_not_part_of_profile<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
     capacity: i32,
 ) -> bool {
-    profile.height + task.resource_usage > capacity
+    profile.height + context.lower_bound(&task.resource_usage) > capacity
         && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
 }
 
@@ -605,13 +703,23 @@ enum CanUpdate {
 ///
 /// Note that this method can only find [`Inconsistency::EmptyDomain`] conflicts which means that we
 /// handle that error in the parent function
-fn find_possible_updates<Var: IntegerVariable + 'static>(
+fn find_possible_updates<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
-    parameters: &CumulativeParameters<Var>,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> Vec<CanUpdate> {
-    if !can_be_updated_by_profile(context.as_readonly(), task, profile, parameters.capacity) {
+    if !can_be_updated_by_profile(
+        context.as_readonly(),
+        task,
+        profile,
+        context.upper_bound(&parameters.capacity),
+    ) {
         // If the task cannot be updated by the profile then we simply return the empty list
         vec![]
     } else {
@@ -622,7 +730,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
             context.as_readonly(),
             task,
             profile,
-            parameters.capacity,
+            context.upper_bound(&parameters.capacity),
         ) {
             // The lower-bound of the task can be updated by the profile
             result.push(CanUpdate::LowerBound)
@@ -631,7 +739,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
             context.as_readonly(),
             task,
             profile,
-            parameters.capacity,
+            context.upper_bound(&parameters.capacity),
         ) {
             // The upper-bound of the task can be updated by the profile
             result.push(CanUpdate::UpperBound)
@@ -644,10 +752,14 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
     }
 }
 
-pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
-    updated_task: &Rc<Task<Var>>,
-    updatable_structures: &mut UpdatableStructures<Var>,
-    potential_update: Option<UpdatedTaskInfo<Var>>,
+pub(crate) fn insert_update<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    updated_task: &Rc<Task<Var, PVar, RVar>>,
+    updatable_structures: &mut UpdatableStructures<Var, PVar, RVar>,
+    potential_update: Option<UpdatedTaskInfo<Var, PVar, RVar>>,
 ) {
     if let Some(update) = potential_update {
         updatable_structures.task_has_been_updated(updated_task);
@@ -655,10 +767,14 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     }
 }
 
-pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
+pub(crate) fn backtrack_update<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
-    updatable_structures: &mut UpdatableStructures<Var>,
-    updated_task: &Rc<Task<Var>>,
+    updatable_structures: &mut UpdatableStructures<Var, PVar, RVar>,
+    updated_task: &Rc<Task<Var, PVar, RVar>>,
 ) {
     // Stores whether the stored lower-bound is equal to the current lower-bound
     let lower_bound_equal_to_stored = updatable_structures.get_stored_lower_bound(updated_task)
@@ -671,7 +787,8 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     // Stores whether the stored bounds did not include a mandatory part
     let previously_did_not_have_mandatory_part = updatable_structures
         .get_stored_upper_bound(updated_task)
-        >= updatable_structures.get_stored_lower_bound(updated_task) + updated_task.processing_time;
+        >= updatable_structures.get_stored_lower_bound(updated_task)
+            + context.lower_bound(&updated_task.processing_time);
 
     // If the stored bounds are already the same or the previous stored bounds did not include a
     // mandatory part (which means that this task will also not have mandatory part after

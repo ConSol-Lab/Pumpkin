@@ -1,8 +1,10 @@
+use pumpkin_solver::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 
+use crate::constraints::arguments::PythonConstraintArg;
 use crate::model::Tag;
 use crate::variables::*;
 
@@ -53,6 +55,99 @@ macro_rules! python_constraint {
     };
 }
 
+#[pyclass]
+#[derive(Clone)]
+pub struct Cumulative {
+    start_times: Vec<IntExpression>,
+    durations: Vec<IntExpression>,
+    resource_usages: Vec<IntExpression>,
+    resource_capacity: IntExpression,
+    constraint_tag: Tag,
+}
+
+#[pymethods]
+impl Cumulative {
+    #[new]
+    pub fn new(
+        start_times: Vec<IntExpression>,
+        durations: Vec<IntExpression>,
+        resource_usages: Vec<IntExpression>,
+        resource_capacity: IntExpression,
+        constraint_tag: Tag,
+    ) -> Self {
+        Self {
+            constraint_tag,
+            start_times,
+            durations,
+            resource_usages,
+            resource_capacity,
+        }
+    }
+}
+
+impl Cumulative {
+    pub fn post(
+        self,
+        solver: &mut pumpkin_solver::Solver,
+        variable_map: &VariableMap,
+    ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+        let tasks = self
+            .start_times
+            .into_iter()
+            .zip(self.durations.iter())
+            .zip(self.resource_usages.iter())
+            .map(|((start_time, processing_time), resource_usage)| {
+                let start_time = start_time.to_solver_constraint_argument(variable_map);
+                let processing_time = processing_time.to_solver_constraint_argument(variable_map);
+                let resource_usage = resource_usage.to_solver_constraint_argument(variable_map);
+                ArgTask {
+                    start_time,
+                    processing_time,
+                    resource_usage,
+                }
+            })
+            .collect::<Vec<_>>();
+        constraints::cumulative(
+            tasks,
+            self.resource_capacity
+                .to_solver_constraint_argument(variable_map),
+            self.constraint_tag.0,
+        )
+        .post(solver)
+    }
+
+    pub fn implied_by(
+        self,
+        solver: &mut pumpkin_solver::Solver,
+        reification_literal: pumpkin_solver::variables::Literal,
+        variable_map: &VariableMap,
+    ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
+        let tasks = self
+            .start_times
+            .into_iter()
+            .zip(self.durations.iter())
+            .zip(self.resource_usages.iter())
+            .map(|((start_time, processing_time), resource_usage)| {
+                let start_time = start_time.to_solver_constraint_argument(variable_map);
+                let processing_time = processing_time.to_solver_constraint_argument(variable_map);
+                let resource_usage = resource_usage.to_solver_constraint_argument(variable_map);
+                ArgTask {
+                    start_time,
+                    processing_time,
+                    resource_usage,
+                }
+            })
+            .collect::<Vec<_>>();
+        constraints::cumulative(
+            tasks,
+            self.resource_capacity
+                .to_solver_constraint_argument(variable_map),
+            self.constraint_tag.0,
+        )
+        .implied_by(solver, reification_literal)
+    }
+}
+
 python_constraint! {
     Absolute: absolute {
         signed: IntExpression,
@@ -91,15 +186,6 @@ python_constraint! {
     BinaryNotEquals: binary_not_equals {
         lhs: IntExpression,
         rhs: IntExpression,
-    }
-}
-
-python_constraint! {
-    Cumulative: cumulative {
-        start_times: Vec<IntExpression>,
-        durations: Vec<i32>,
-        resource_requirements: Vec<i32>,
-        resource_capacity: i32,
     }
 }
 
