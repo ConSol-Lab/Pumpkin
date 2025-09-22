@@ -158,6 +158,12 @@ impl From<u64> for Reason {
     }
 }
 
+impl From<usize> for Reason {
+    fn from(value: usize) -> Self {
+        Reason::DynamicLazy(value as u64)
+    }
+}
+
 /// A reserved slot for a new reason in the [`ReasonStore`].
 #[derive(Debug)]
 pub(crate) struct Slot<'a> {
