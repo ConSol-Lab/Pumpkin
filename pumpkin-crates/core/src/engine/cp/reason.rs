@@ -37,6 +37,7 @@ impl ReasonStore {
     /// `destination_buffer`.
     pub(crate) fn get_or_compute(
         &self,
+        predicate: Predicate,
         reference: ReasonRef,
         context: ExplanationContext<'_>,
         propagators: &mut PropagatorStore,
@@ -46,9 +47,13 @@ impl ReasonStore {
             return false;
         };
 
-        reason
-            .1
-            .compute(context, reason.0, propagators, destination_buffer);
+        reason.1.compute(
+            context,
+            predicate,
+            reason.0,
+            propagators,
+            destination_buffer,
+        );
 
         true
     }
@@ -121,6 +126,7 @@ impl StoredReason {
     pub(crate) fn compute(
         &self,
         context: ExplanationContext<'_>,
+        predicate: Predicate,
         propagator_id: PropagatorId,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
@@ -131,7 +137,7 @@ impl StoredReason {
             // Benchmarking will have to show whether this should change or not.
             StoredReason::DynamicLazy(code) => destination_buffer.extend(
                 propagators[propagator_id]
-                    .lazy_explanation(*code, context)
+                    .lazy_explanation(predicate, *code, context)
                     .iter()
                     .copied(),
             ),
@@ -192,6 +198,7 @@ mod tests {
         let mut out_reason = vec![];
         reason.compute(
             ExplanationContext::test_new(&integers, &mut notification_engine),
+            Predicate::trivially_true(),
             PropagatorId(0),
             &mut PropagatorStore::default(),
             &mut out_reason,
@@ -217,6 +224,7 @@ mod tests {
 
         let mut out_reason = vec![];
         let _ = reason_store.get_or_compute(
+            Predicate::trivially_true(),
             reason_ref,
             ExplanationContext::test_new(&integers, &mut notification_engine),
             &mut PropagatorStore::default(),

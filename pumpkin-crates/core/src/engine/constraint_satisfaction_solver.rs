@@ -1052,6 +1052,7 @@ impl ConstraintSatisfactionSolver {
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
         let _ = self.reason_store.get_or_compute(
+            entry.predicate,
             entry_reason,
             ExplanationContext::without_working_nogood(
                 &self.assignments,
@@ -1256,6 +1257,7 @@ impl ConstraintSatisfactionSolver {
             // Get the conjunction of predicates explaining the propagation.
             let mut reason = vec![];
             let _ = self.reason_store.get_or_compute(
+                entry.predicate,
                 reason_ref,
                 ExplanationContext::without_working_nogood(
                     &self.assignments,
