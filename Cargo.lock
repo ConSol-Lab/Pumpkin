@@ -340,8 +340,7 @@ dependencies = [
 [[package]]
 name = "fnv"
 version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+source = "git+https://github.com/servo/rust-fnv?branch=main#4e55052a343a4372c191141f29a17ab829cf1dbc"
 
 [[package]]
 name = "foldhash"
@@ -394,6 +393,16 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
+name = "indexmap"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
+dependencies = [
+ "equivalent",
+ "hashbrown",
+]
 
 [[package]]
 name = "indoc"
@@ -595,6 +604,7 @@ dependencies = [
  "enumset",
  "flate2",
  "fnv",
+ "indexmap",
  "itertools",
  "log",
  "num",
@@ -622,7 +632,6 @@ dependencies = [
  "clap",
  "env_logger",
  "flatzinc",
- "fnv",
  "log",
  "pumpkin-core",
  "pumpkin-macros",
