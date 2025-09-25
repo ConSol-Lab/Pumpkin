@@ -1215,35 +1215,37 @@ impl IntegerDomain {
                 // Recall that by the nature of the updates,
                 // the updates are stored in increasing order of the lower bound.
 
-                // for now a simple inefficient linear scan
-                // in the future this should be done with binary search
-
                 // find the update with smallest lower bound
                 // that is greater than or equal to the input lower bound
-                self.lower_bound_updates
-                    .iter()
-                    .find(|u| u.bound >= value)
-                    .map(|u| PairDecisionLevelTrailPosition {
+                let position = self
+                    .lower_bound_updates
+                    .partition_point(|u| u.bound < value);
+
+                (position < self.lower_bound_updates.len()).then(|| {
+                    let u = &self.lower_bound_updates[position];
+                    PairDecisionLevelTrailPosition {
                         decision_level: u.decision_level,
                         trail_position: u.trail_position,
-                    })
+                    }
+                })
             }
             PredicateType::UpperBound => {
                 // Recall that by the nature of the updates,
                 // the updates are stored in decreasing order of the upper bound.
 
-                // for now a simple inefficient linear scan
-                // in the future this should be done with binary search
-
                 // find the update with greatest upper bound
                 // that is smaller than or equal to the input upper bound
-                self.upper_bound_updates
-                    .iter()
-                    .find(|u| u.bound <= value)
-                    .map(|u| PairDecisionLevelTrailPosition {
+                let position = self
+                    .upper_bound_updates
+                    .partition_point(|u| u.bound > value);
+
+                (position < self.upper_bound_updates.len()).then(|| {
+                    let u = &self.upper_bound_updates[position];
+                    PairDecisionLevelTrailPosition {
                         decision_level: u.decision_level,
                         trail_position: u.trail_position,
-                    })
+                    }
+                })
             }
             PredicateType::NotEqual => {
                 // Check the explictly stored holes.
