@@ -18,9 +18,9 @@ impl ValueSelector<DomainId> for RandomSplitter {
         decision_variable: DomainId,
     ) -> Predicate {
         // Randomly generate a value within the lower-bound and upper-bound
-        let range =
-            context.lower_bound(decision_variable)..context.upper_bound(decision_variable) + 1;
-        let bound = context.random().generate_i32_in_range(range);
+        let lb = context.lower_bound(decision_variable);
+        let ub = context.upper_bound(decision_variable);
+        let bound = context.random().generate_i32_in_range(lb, ub);
 
         // We need to handle two special cases:
         //
