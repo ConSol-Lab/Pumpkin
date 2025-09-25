@@ -9,8 +9,7 @@ pub mod writer;
 
 use std::fmt::Display;
 use std::num::NonZero;
-use std::ops::Not;
-use std::str::FromStr;
+use std::ops::{Add, Mul, Not};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntComparison {
@@ -36,29 +35,73 @@ impl Display for IntComparison {
 /// A contract that must be observed for the value in an [`IntAtomic`].
 ///
 /// Implementations are provided for signed machine integers.
-pub trait IntValue: Clone + Display + FromStr + Ord {
+pub trait IntValue: Clone + Display + Ord + Mul<Output = Self> + Add<Output = Self> {
     fn increment(&self) -> Self;
     fn decrement(&self) -> Self;
+
+    /// Multiply self by the radix.
+    fn shift_left(&self) -> Self;
+
+    /// Create self from char. Can panic if not possible.
+    fn from_digit(byte: u8) -> Self;
+}
+
+pub trait SignedIntValue: IntValue {
+    /// Multiply self by -1.
+    fn negate(&self) -> Self;
 }
 
 macro_rules! impl_int_value {
     ($type:ty) => {
         impl IntValue for $type {
+            #[inline]
             fn increment(&self) -> Self {
                 (*self) + 1
             }
 
+            #[inline]
             fn decrement(&self) -> Self {
                 (*self) - 1
+            }
+
+            #[inline]
+            fn shift_left(&self) -> Self {
+                (*self) * 10
+            }
+
+            #[allow(trivial_numeric_casts, reason = "inside macro")]
+            #[inline]
+            fn from_digit(byte: u8) -> Self {
+                assert!(byte.is_ascii_digit());
+                (byte - b'0') as Self
             }
         }
     };
 }
 
+macro_rules! impl_signed_int_value {
+    ($type:ty) => {
+        impl SignedIntValue for $type {
+            #[inline]
+            fn negate(&self) -> Self {
+                (*self) * -1
+            }
+        }
+    };
+}
+
+impl_int_value!(u8);
+impl_int_value!(u16);
+impl_int_value!(u32);
+impl_int_value!(u64);
 impl_int_value!(i8);
 impl_int_value!(i16);
 impl_int_value!(i32);
 impl_int_value!(i64);
+impl_signed_int_value!(i8);
+impl_signed_int_value!(i16);
+impl_signed_int_value!(i32);
+impl_signed_int_value!(i64);
 
 /// An integer atomic constraint of the form `[name op value]`, where `op` is an [`IntComparison`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
