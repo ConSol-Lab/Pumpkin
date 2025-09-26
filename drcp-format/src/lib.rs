@@ -9,7 +9,9 @@ pub mod writer;
 
 use std::fmt::Display;
 use std::num::NonZero;
-use std::ops::{Add, Mul, Not};
+use std::ops::Add;
+use std::ops::Mul;
+use std::ops::Not;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntComparison {

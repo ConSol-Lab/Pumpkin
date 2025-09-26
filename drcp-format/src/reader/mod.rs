@@ -80,9 +80,9 @@
 //! ```
 
 mod error;
-mod parser;
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::io;
 use std::iter::Peekable;
 use std::num::NonZero;
@@ -92,7 +92,6 @@ use std::rc::Rc;
 
 pub use error::*;
 
-use crate::reader::parser::ProofLine;
 use crate::Conclusion;
 use crate::Deduction;
 use crate::Inference;
@@ -112,6 +111,9 @@ pub struct ProofReader<Source, Int> {
     /// The defined atomics that are used in the proof.
     atomics: BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
 
+    /// A set of all the identifiers encountered, used for interning.
+    identifiers: HashSet<Rc<str>>,
+
     /// The buffer that holds the current line of `source`.
     line_buffer: Vec<u8>,
 
@@ -130,32 +132,10 @@ impl<Source, Int> ProofReader<Source, Int> {
         ProofReader {
             source,
             atomics: BTreeMap::default(),
+            identifiers: HashSet::default(),
             line_buffer: Vec::new(),
             line_nr: 0,
         }
-    }
-
-    fn map_atomic_ids(&self, ids: Vec<NonZero<i32>>) -> Result<Vec<IntAtomic<Rc<str>, Int>>, Error>
-    where
-        Int: IntValue,
-    {
-        ids.into_iter()
-            .map(|code| self.map_atomic_id(code))
-            .collect()
-    }
-
-    fn map_atomic_id(&self, id: NonZero<i32>) -> Result<IntAtomic<Rc<str>, Int>, Error>
-    where
-        Int: IntValue,
-    {
-        self.atomics
-            .get(&id.unsigned_abs())
-            .cloned()
-            .map(|atomic| if id.is_negative() { !atomic } else { atomic })
-            .ok_or(Error::UndefinedAtomic {
-                line: self.line_nr,
-                code: id,
-            })
     }
 }
 
@@ -191,70 +171,17 @@ where
                 self.line_buffer.len()
             };
 
-            let Some(proof_line) = parse_proof_line(&self.line_buffer[..end_index], self.line_nr)?
+            let Some(proof_line) = parse_proof_line(
+                &self.line_buffer[..end_index],
+                self.line_nr,
+                &mut self.atomics,
+                &mut self.identifiers,
+            )?
             else {
                 continue;
             };
 
-            match proof_line {
-                ProofLine::AtomDefinition(atomic_id, atomic) => {
-                    let IntAtomic {
-                        name,
-                        comparison,
-                        value,
-                    } = atomic;
-
-                    let _ = self.atomics.insert(
-                        atomic_id,
-                        IntAtomic {
-                            name: name.into(),
-                            comparison,
-                            value,
-                        },
-                    );
-                }
-
-                ProofLine::Inference {
-                    constraint_id,
-                    premises,
-                    consequent,
-                    generated_by,
-                    label,
-                } => {
-                    let inference = Inference {
-                        constraint_id,
-                        premises: self.map_atomic_ids(premises)?,
-                        consequent: consequent.map(|c| self.map_atomic_id(c)).transpose()?,
-                        generated_by,
-                        label: label.map(|label| label.into()),
-                    };
-
-                    return Ok(Some(Step::Inference(inference)));
-                }
-
-                ProofLine::Deduction {
-                    constraint_id,
-                    premises,
-                    sequence,
-                } => {
-                    let deduction = Deduction {
-                        constraint_id,
-                        premises: self.map_atomic_ids(premises)?,
-                        sequence,
-                    };
-
-                    return Ok(Some(Step::Deduction(deduction)));
-                }
-
-                ProofLine::Conclusion(parser::ProofLineConclusion::Unsat) => {
-                    return Ok(Some(Step::Conclusion(Conclusion::Unsat)));
-                }
-
-                ProofLine::Conclusion(parser::ProofLineConclusion::DualBound(code)) => {
-                    let bound = self.map_atomic_id(code)?;
-                    return Ok(Some(Step::Conclusion(Conclusion::DualBound(bound))));
-                }
-            }
+            return Ok(Some(proof_line));
         }
     }
 }
@@ -262,7 +189,9 @@ where
 fn parse_proof_line<Int: SignedIntValue>(
     line: &[u8],
     line_nr: usize,
-) -> Result<Option<ProofLine<'_, Int>>, Error> {
+    atomics: &mut BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+    identifiers: &mut HashSet<Rc<str>>,
+) -> Result<Option<ReadStep<Int>>, Error> {
     let mut input = Input {
         position: 0,
         source: line,
@@ -278,10 +207,10 @@ fn parse_proof_line<Int: SignedIntValue>(
                 continue;
             }
 
-            Some(b'a') => break parse_atom_definition(&mut input)?,
-            Some(b'i') => break parse_inference(&mut input)?,
-            Some(b'n') => break parse_deduction(&mut input)?,
-            Some(b'c') => break parse_conclusion(&mut input)?,
+            Some(b'a') => parse_atom_definition(&mut input, atomics, identifiers)?,
+            Some(b'i') => break parse_inference(&mut input, atomics, identifiers)?,
+            Some(b'n') => break parse_deduction(&mut input, atomics)?,
+            Some(b'c') => break parse_conclusion(&mut input, atomics)?,
 
             Some(byte) => {
                 return Err(Error::ParseError {
@@ -474,7 +403,9 @@ impl<'src, Iter: Iterator<Item = u8>> Input<'src, Iter> {
 
 fn parse_atom_definition<'src, Int, Iter>(
     input: &mut Input<'src, Iter>,
-) -> Result<ProofLine<'src, Int>, Error>
+    atomics: &mut BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+    identifiers: &mut HashSet<Rc<str>>,
+) -> Result<(), Error>
 where
     Int: SignedIntValue,
     Iter: Iterator<Item = u8>,
@@ -509,18 +440,32 @@ where
 
     input.consume_str("]")?;
 
-    let atomic = IntAtomic {
-        name,
-        comparison,
-        value,
+    let interned_name = match identifiers.get(name) {
+        Some(name_ref) => Rc::clone(name_ref),
+        None => {
+            let name_ref = Rc::from(name);
+            let _ = identifiers.insert(Rc::clone(&name_ref));
+            name_ref
+        }
     };
 
-    Ok(ProofLine::AtomDefinition(code, atomic))
+    let _ = atomics.insert(
+        code,
+        IntAtomic {
+            name: interned_name,
+            comparison,
+            value,
+        },
+    );
+
+    Ok(())
 }
 
 fn parse_inference<'src, Int, Iter>(
     input: &mut Input<'src, Iter>,
-) -> Result<ProofLine<'src, Int>, Error>
+    atomics: &BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+    identifiers: &mut HashSet<Rc<str>>,
+) -> Result<ReadStep<Int>, Error>
 where
     Int: IntValue,
     Iter: Iterator<Item = u8>,
@@ -541,7 +486,8 @@ where
         let next_premise = input.consume_signed_integer::<i32>()?;
 
         if let Some(premise) = NonZero::new(next_premise) {
-            premises.push(premise);
+            let atomic = map_atomic_id(atomics, premise, input.line_nr)?;
+            premises.push(atomic);
         } else {
             break;
         }
@@ -557,7 +503,9 @@ where
 
     match input.peek() {
         Some(byte) if is_start_of_signed_number(byte) => {
-            consequent = Some(input.consume_i32()?);
+            let consequent_code = input.consume_i32()?;
+            let atomic = map_atomic_id(atomics, consequent_code, input.line_nr)?;
+            consequent = Some(atomic);
         }
         Some(b'c') => {
             input.consume_str("c:")?;
@@ -565,7 +513,18 @@ where
         }
         Some(b'l') => {
             input.consume_str("l:")?;
-            label = Some(input.consume_identifier()?);
+
+            let label_str = input.consume_identifier()?;
+            let interned_label = match identifiers.get(label_str) {
+                Some(label_ref) => Rc::clone(label_ref),
+                None => {
+                    let label_ref = Rc::from(label_str);
+                    let _ = identifiers.insert(Rc::clone(&label_ref));
+                    label_ref
+                }
+            };
+
+            label = Some(interned_label);
         }
         _ => {}
     }
@@ -581,7 +540,17 @@ where
         }
         Some(b'l') => {
             input.consume_str("l:")?;
-            label = Some(input.consume_identifier()?);
+            let label_str = input.consume_identifier()?;
+            let interned_label = match identifiers.get(label_str) {
+                Some(label_ref) => Rc::clone(label_ref),
+                None => {
+                    let label_ref = Rc::from(label_str);
+                    let _ = identifiers.insert(Rc::clone(&label_ref));
+                    label_ref
+                }
+            };
+
+            label = Some(interned_label);
         }
         _ => {}
     }
@@ -597,23 +566,34 @@ where
         }
         Some(b'l') => {
             input.consume_str("l:")?;
-            label = Some(input.consume_identifier()?);
+            let label_str = input.consume_identifier()?;
+            let interned_label = match identifiers.get(label_str) {
+                Some(label_ref) => Rc::clone(label_ref),
+                None => {
+                    let label_ref = Rc::from(label_str);
+                    let _ = identifiers.insert(Rc::clone(&label_ref));
+                    label_ref
+                }
+            };
+
+            label = Some(interned_label);
         }
         _ => {}
     }
 
-    Ok(ProofLine::Inference {
+    Ok(Step::Inference(Inference {
         constraint_id,
         premises,
         consequent,
         generated_by,
         label,
-    })
+    }))
 }
 
 fn parse_deduction<'src, Int, Iter>(
     input: &mut Input<'src, Iter>,
-) -> Result<ProofLine<'src, Int>, Error>
+    atomics: &BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+) -> Result<ReadStep<Int>, Error>
 where
     Int: IntValue,
     Iter: Iterator<Item = u8>,
@@ -634,7 +614,8 @@ where
         let next_premise = input.consume_signed_integer::<i32>()?;
 
         if let Some(premise) = NonZero::new(next_premise) {
-            premises.push(premise);
+            let atomic = map_atomic_id(atomics, premise, input.line_nr)?;
+            premises.push(atomic);
         } else {
             break;
         }
@@ -656,16 +637,17 @@ where
         sequence.push(next_constraint);
     }
 
-    Ok(ProofLine::Deduction {
+    Ok(Step::Deduction(Deduction {
         constraint_id,
         premises,
         sequence,
-    })
+    }))
 }
 
 fn parse_conclusion<'src, Int, Iter>(
     input: &mut Input<'src, Iter>,
-) -> Result<ProofLine<'src, Int>, Error>
+    atomics: &BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+) -> Result<ReadStep<Int>, Error>
 where
     Int: IntValue,
     Iter: Iterator<Item = u8>,
@@ -675,14 +657,13 @@ where
     match input.peek() {
         Some(b'U') => {
             input.consume_str("UNSAT")?;
-            Ok(ProofLine::Conclusion(parser::ProofLineConclusion::Unsat))
+            Ok(Step::Conclusion(Conclusion::Unsat))
         }
 
         Some(byte) if is_start_of_signed_number(byte) => {
             let code = input.consume_i32()?;
-            Ok(ProofLine::Conclusion(
-                parser::ProofLineConclusion::DualBound(code),
-            ))
+            let atomic = map_atomic_id(atomics, code, input.line_nr)?;
+            Ok(Step::Conclusion(Conclusion::DualBound(atomic)))
         }
 
         _ => Err(Error::ParseError {
@@ -699,6 +680,24 @@ fn is_separator(byte: u8) -> bool {
 
 fn is_start_of_signed_number(byte: u8) -> bool {
     byte.is_ascii_digit() || byte == b'-'
+}
+
+fn map_atomic_id<Int>(
+    atomics: &BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
+    id: NonZero<i32>,
+    line_nr: usize,
+) -> Result<IntAtomic<Rc<str>, Int>, Error>
+where
+    Int: IntValue,
+{
+    atomics
+        .get(&id.unsigned_abs())
+        .cloned()
+        .map(|atomic| if id.is_negative() { !atomic } else { atomic })
+        .ok_or(Error::UndefinedAtomic {
+            line: line_nr,
+            code: id,
+        })
 }
 
 #[cfg(test)]
