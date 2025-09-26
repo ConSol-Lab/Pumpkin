@@ -39,9 +39,15 @@ use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
 use result::PumpkinError;
 use result::PumpkinResult;
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Debug, Parser)]
 #[command(

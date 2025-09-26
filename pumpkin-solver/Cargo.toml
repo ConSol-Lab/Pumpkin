@@ -17,6 +17,9 @@ pumpkin-core = { version = "0.2.1", path = "../pumpkin-crates/core/", features =
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.6"
+
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
