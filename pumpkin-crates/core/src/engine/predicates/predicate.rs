@@ -98,6 +98,10 @@ impl PredicateType {
         matches!(self, PredicateType::UpperBound)
     }
 
+    pub(crate) fn is_disequality(&self) -> bool {
+        matches!(self, PredicateType::NotEqual)
+    }
+
     pub(crate) fn into_predicate(
         self,
         domain: DomainId,

@@ -1,11 +1,13 @@
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::results::SolutionReference;
 
-/// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
-/// the provided brancher every `x`th solution.
+/// Specifies that the [`AlternatingBrancher`] should switch between
+/// [`BrancherToUse::Default`] and the provided brancher every `x`th solution.
 #[derive(Debug, Clone, Copy)]
 pub struct EveryXSolutions {
     use_default_brancher: bool,

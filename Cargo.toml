@@ -1,6 +1,6 @@
 [workspace]
-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-solver-py", "./pumpkin-macros", "./drcp-debugger", "./pumpkin-crates/*", "./fzn-rs", "fzn-rs-derive", "./pumpkin-checker", "pumpkin-proof-processor"]
-default-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-solver-py", "./pumpkin-macros"]
+members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-solver-py", "./pumpkin-macros", "./drcp-debugger", "./pumpkin-crates/*", "./pumpkin-checker"]
+default-members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-solver-py", "./pumpkin-macros", "./pumpkin-crates/*"]
 resolver = "2"
 
 [workspace.package]
@@ -14,6 +14,9 @@ authors = [
     "Konstantin Sidorov",
     "Jeff Smits"
 ] # Ordered alphabetically based on last name!
+
+[patch.crates-io]
+fnv = { git = "https://github.com/servo/rust-fnv", branch = "main" }
 
 [profile.release]
 lto = true
@@ -63,7 +66,7 @@ str_to_string = "warn"
 string_add = "warn"
 string_add_assign = "warn"
 string_lit_chars_any = "warn"
-string_to_string = "warn"
+implicit_clone = "warn"
 tests_outside_test_module = "warn"
 try_err = "warn"
 undocumented_unsafe_blocks = "warn"

@@ -25,7 +25,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_solver::Random;
+    /// # use pumpkin_core::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we flip a coin with probability 0.5
@@ -48,7 +48,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_solver::Random;
+    /// # use pumpkin_core::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we create the elements to select from
@@ -60,8 +60,8 @@ pub trait Random: Debug {
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize;
 
     /// Generates a random i32 in the provided range with equal probability; this can be seen as
-    /// sampling from a uniform distribution in the range `[range.start, range.end)`
-    fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32;
+    /// sampling from a uniform distribution in the range `[lb, ub]`
+    fn generate_i32_in_range(&mut self, lb: i32, ub: i32) -> i32;
 
     /// Generate a random float in the range 0..1.
     fn generate_f64(&mut self) -> f64;
@@ -91,8 +91,8 @@ where
         self.gen_range(range)
     }
 
-    fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32 {
-        self.gen_range(range)
+    fn generate_i32_in_range(&mut self, lb: i32, ub: i32) -> i32 {
+        self.gen_range(lb..=ub)
     }
 
     fn generate_f64(&mut self) -> f64 {
@@ -167,8 +167,9 @@ pub(crate) mod tests {
             selected
         }
 
-        fn generate_i32_in_range(&mut self, range: Range<i32>) -> i32 {
+        fn generate_i32_in_range(&mut self, lb: i32, ub: i32) -> i32 {
             let selected = self.integers.remove(0);
+            let range = lb..ub;
             pumpkin_assert_simple!(
                 range.contains(&selected),
                 "The selected element by `TestRandom` ({selected}) is not in the provided range ({range:?}) and thus should not be returned, please ensure that your test cases are correctly defined"

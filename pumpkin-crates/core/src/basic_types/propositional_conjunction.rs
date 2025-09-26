@@ -188,10 +188,10 @@ impl Display for PropositionalConjunctionDisplay<'_, '_> {
 ///
 /// # Example
 /// ```rust
-/// # use pumpkin_solver::predicates::PropositionalConjunction;
-/// # use pumpkin_solver::Solver;
-/// # use pumpkin_solver::conjunction;
-/// # use pumpkin_solver::predicate;
+/// # use pumpkin_core::predicates::PropositionalConjunction;
+/// # use pumpkin_core::Solver;
+/// # use pumpkin_core::conjunction;
+/// # use pumpkin_core::predicate;
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 /// let y = solver.new_bounded_integer(5, 15);

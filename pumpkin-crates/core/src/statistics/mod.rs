@@ -34,7 +34,7 @@ impl<Value: Display> Statistic for Value {
 ///
 /// # Example
 /// ```rust
-/// # use pumpkin_solver::create_statistics_struct;
+/// # use pumpkin_core::create_statistics_struct;
 /// create_statistics_struct!(Statistics {
 ///     number_of_calls: usize
 /// });

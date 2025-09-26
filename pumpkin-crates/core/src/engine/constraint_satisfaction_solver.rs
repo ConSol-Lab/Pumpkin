@@ -55,6 +55,7 @@ use crate::engine::DebugHelper;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::predicates::PredicateType;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
@@ -513,9 +514,9 @@ impl ConstraintSatisfactionSolver {
     /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_solver::Solver;
-    /// # use pumpkin_solver::termination::Indefinite;
-    /// # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
+    /// # use pumpkin_core::Solver;
+    /// # use pumpkin_core::termination::Indefinite;
+    /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.
@@ -1096,12 +1097,61 @@ impl ConstraintSatisfactionSolver {
             &self.variable_names,
         );
 
-        let last_inference_explanation = empty_domain_reason.iter().copied().collect();
+        let last_inference_explanation = empty_domain_reason.clone().into();
 
-        empty_domain_reason.extend([
-            predicate!(conflict_domain >= entry.old_lower_bound),
-            predicate!(conflict_domain <= entry.old_upper_bound),
-        ]);
+        // Now we get the explanation for the bound which was conflicting with the last trail entry
+        match entry.predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                // The last trail entry was a lower-bound propagation meaning that the empty domain
+                // was caused by the upper-bound
+                //
+                // We lift so that it is the most general upper-bound possible while still causing
+                // the empty domain
+                empty_domain_reason.push(predicate!(
+                    conflict_domain <= entry.predicate.get_right_hand_side() - 1
+                ));
+            }
+            PredicateType::UpperBound => {
+                // The last trail entry was an upper-bound propagation meaning that the empty domain
+                // was caused by the lower-bound
+                //
+                // We lift so that it is the most general lower-bound possible while still causing
+                // the empty domain
+                empty_domain_reason.push(predicate!(
+                    conflict_domain >= entry.predicate.get_right_hand_side() + 1
+                ));
+            }
+            PredicateType::NotEqual => {
+                // The last trail entry was a not equals propagation meaning that the empty domain
+                // was due to the domain being assigned to the removed value
+                pumpkin_assert_eq_simple!(entry.old_upper_bound, entry.old_lower_bound);
+
+                empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
+            }
+            PredicateType::Equal => {
+                // The last trail entry was an equality propagation; we split into two cases.
+                if entry.predicate.get_right_hand_side() < entry.old_lower_bound {
+                    // 1) The assigned value was lower than the lower-bound
+                    //
+                    // We lift so that it is the most general lower-bound possible while still
+                    // causing the empty domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain >= entry.predicate.get_right_hand_side() + 1
+                    ));
+                } else {
+                    // 2) The assigned value was larger than the upper-bound
+                    //
+                    // We lift so that it is the most general upper-bound possible while still
+                    // causing the empty domain
+                    pumpkin_assert_simple!(
+                        entry.predicate.get_right_hand_side() > entry.old_upper_bound
+                    );
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain <= entry.predicate.get_right_hand_side() - 1
+                    ));
+                }
+            }
+        }
 
         StoredConflictInfo::EmptyDomain {
             inference_code: Some(entry_inference_code),

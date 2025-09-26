@@ -12,6 +12,7 @@ repository.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
 fnv = "1.0.7"
+flatzinc = "0.3.21"
 log = "0.4.27"
 pumpkin-core = { version = "0.2.1", path = "../pumpkin-crates/core/", features = ["clap"] }
 signal-hook = "0.3.18"
@@ -32,7 +33,7 @@ workspace = true
 
 [features]
 default = ["gzipped-proofs"]
-debug-checks = []
+debug-checks = ["pumpkin-core/debug-checks"]
 gzipped-proofs = ["pumpkin-core/gzipped-proofs"]
 
 [build-dependencies]

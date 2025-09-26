@@ -11,5 +11,4 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-chumsky = "0.10.1"
 thiserror = "2.0.12"

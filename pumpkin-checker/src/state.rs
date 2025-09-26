@@ -365,7 +365,8 @@ impl Iterator for DomainIterator<'_> {
 
 #[cfg(test)]
 mod tests {
-    use drcp_format::{IntAtomic, IntComparison};
+    use drcp_format::IntAtomic;
+    use drcp_format::IntComparison;
 
     use super::*;
 

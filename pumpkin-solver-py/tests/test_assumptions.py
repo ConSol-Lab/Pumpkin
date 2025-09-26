@@ -1,10 +1,10 @@
-from pumpkin_solver_py import (
+from pumpkin_solver import (
     Comparator,
     Model,
     Predicate,
     SatisfactionUnderAssumptionsResult,
 )
-from pumpkin_solver_py.constraints import LessThanOrEquals
+from pumpkin_solver.constraints import LessThanOrEquals
 
 
 def test_assumptions_are_respected():
