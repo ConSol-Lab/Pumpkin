@@ -83,18 +83,15 @@ mod error;
 mod parser;
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::io;
 use std::num::NonZero;
 use std::rc::Rc;
 
-use chumsky::Parser;
 pub use error::*;
 
-use crate::Conclusion;
-use crate::Deduction;
-use crate::Inference;
 use crate::IntAtomic;
-use crate::IntValue;
+use crate::SignedIntValue;
 use crate::Step;
 
 /// A parser of DRCP proofs. See module documentation on [`crate::reader`] for examples on how to
@@ -107,8 +104,11 @@ pub struct ProofReader<Source, Int> {
     /// The defined atomics that are used in the proof.
     atomics: BTreeMap<NonZero<u32>, IntAtomic<Rc<str>, Int>>,
 
+    /// A set of all the identifiers encountered, used for interning.
+    identifiers: HashSet<Rc<str>>,
+
     /// The buffer that holds the current line of `source`.
-    line_buffer: String,
+    line_buffer: Vec<u8>,
 
     /// The line number currently being processed in the proof.
     ///
@@ -125,32 +125,10 @@ impl<Source, Int> ProofReader<Source, Int> {
         ProofReader {
             source,
             atomics: BTreeMap::default(),
-            line_buffer: String::new(),
+            identifiers: HashSet::default(),
+            line_buffer: Vec::new(),
             line_nr: 0,
         }
-    }
-
-    fn map_atomic_ids(&self, ids: Vec<NonZero<i32>>) -> Result<Vec<IntAtomic<Rc<str>, Int>>, Error>
-    where
-        Int: IntValue,
-    {
-        ids.into_iter()
-            .map(|code| self.map_atomic_id(code))
-            .collect()
-    }
-
-    fn map_atomic_id(&self, id: NonZero<i32>) -> Result<IntAtomic<Rc<str>, Int>, Error>
-    where
-        Int: IntValue,
-    {
-        self.atomics
-            .get(&id.unsigned_abs())
-            .cloned()
-            .map(|atomic| if id.is_negative() { !atomic } else { atomic })
-            .ok_or(Error::UndefinedAtomic {
-                line: self.line_nr,
-                code: id,
-            })
     }
 }
 
@@ -162,7 +140,7 @@ pub type ReadStep<Int> = Step<Rc<str>, Int, Rc<str>>;
 impl<Source, Int> ProofReader<Source, Int>
 where
     Source: io::BufRead,
-    Int: IntValue,
+    Int: SignedIntValue,
 {
     /// Parse the next [`Step`] from the proof file.
     ///
@@ -170,7 +148,7 @@ where
     pub fn next_step(&mut self) -> Result<Option<ReadStep<Int>>, Error> {
         loop {
             self.line_buffer.clear();
-            let read_bytes = self.source.read_line(&mut self.line_buffer)?;
+            let read_bytes = self.source.read_until(b'\n', &mut self.line_buffer)?;
 
             // Reading 0 bytes indicates we have reached the end of the file.
             if read_bytes == 0 {
@@ -179,89 +157,18 @@ where
 
             self.line_nr += 1;
 
-            // We should get rid of leading or trailing whitespace.
-            let trimmed_line = self.line_buffer.trim();
+            let line_parser = parser::LineParser::new(
+                &self.line_buffer,
+                self.line_nr,
+                &mut self.identifiers,
+                &mut self.atomics,
+            );
 
-            // If the line is empty, go on to the next line.
-            if trimmed_line.is_empty() {
+            let Some(proof_line) = line_parser.parse()? else {
                 continue;
-            }
+            };
 
-            let proof_line: parser::ProofLine<'_, Int> = parser::proof_line()
-                .parse(trimmed_line)
-                .into_result()
-                .map_err(|errs| {
-                    assert_eq!(
-                        errs.len(),
-                        1,
-                        "since we do no recovery, any error will terminate the parsing immediately"
-                    );
-
-                    let reason = format!("{}", errs[0]);
-                    let span = errs[0].span();
-
-                    Error::parse_error(self.line_nr, reason, *span)
-                })?;
-
-            match proof_line {
-                parser::ProofLine::AtomDefinition(atomic_id, atomic) => {
-                    let IntAtomic {
-                        name,
-                        comparison,
-                        value,
-                    } = atomic;
-
-                    let _ = self.atomics.insert(
-                        atomic_id,
-                        IntAtomic {
-                            name: name.into(),
-                            comparison,
-                            value,
-                        },
-                    );
-                }
-
-                parser::ProofLine::Inference {
-                    constraint_id,
-                    premises,
-                    consequent,
-                    generated_by,
-                    label,
-                } => {
-                    let inference = Inference {
-                        constraint_id,
-                        premises: self.map_atomic_ids(premises)?,
-                        consequent: consequent.map(|c| self.map_atomic_id(c)).transpose()?,
-                        generated_by,
-                        label: label.map(|label| label.into()),
-                    };
-
-                    return Ok(Some(Step::Inference(inference)));
-                }
-
-                parser::ProofLine::Deduction {
-                    constraint_id,
-                    premises,
-                    sequence,
-                } => {
-                    let deduction = Deduction {
-                        constraint_id,
-                        premises: self.map_atomic_ids(premises)?,
-                        sequence,
-                    };
-
-                    return Ok(Some(Step::Deduction(deduction)));
-                }
-
-                parser::ProofLine::Conclusion(parser::ProofLineConclusion::Unsat) => {
-                    return Ok(Some(Step::Conclusion(Conclusion::Unsat)));
-                }
-
-                parser::ProofLine::Conclusion(parser::ProofLineConclusion::DualBound(code)) => {
-                    let bound = self.map_atomic_id(code)?;
-                    return Ok(Some(Step::Conclusion(Conclusion::DualBound(bound))));
-                }
-            }
+            return Ok(Some(proof_line));
         }
     }
 }
@@ -269,6 +176,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Conclusion;
+    use crate::Deduction;
+    use crate::Inference;
     use crate::IntComparison::*;
 
     #[test]
@@ -303,6 +213,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn inference_with_consequent_hints_reversed() {
+        let source = r#"
+            a 1 [x1 >= 0]
+            a 2 [x2 >= 0]
+            i 2 1 0 2 l:inf_name c:1
+        "#;
+
+        let a1 = IntAtomic {
+            name: Rc::from("x1".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        let a2 = IntAtomic {
+            name: Rc::from("x2".to_owned()),
+            comparison: GreaterEqual,
+            value: 0,
+        };
+
+        test_single_proof_line(
+            source,
+            Step::Inference(Inference {
+                constraint_id: NonZero::new(2).unwrap(),
+                premises: vec![a1],
+                consequent: Some(a2),
+                generated_by: Some(NonZero::new(1).unwrap()),
+                label: Some("inf_name".into()),
+            }),
+        );
+    }
     #[test]
     fn inference_with_consequent_and_negative_atomic_values() {
         let source = r#"
