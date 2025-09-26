@@ -327,10 +327,12 @@ impl Propagator for NogoodPropagator {
     fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
-        self.temp_nogood_reason = self.nogood_predicates[id][1..]
-            .iter()
-            .map(|predicate_id| context.get_predicate(*predicate_id))
-            .collect::<Vec<_>>();
+        self.temp_nogood_reason.clear();
+        self.temp_nogood_reason.extend(
+            self.nogood_predicates[id][1..]
+                .iter()
+                .map(|predicate_id| context.get_predicate(*predicate_id)),
+        );
 
         let info_id = self.nogood_predicates.get_nogood_index(&id);
 
@@ -425,15 +427,12 @@ impl NogoodPropagator {
             .average_lbd
             .add_term(lbd as u64);
 
-        let nogood = nogood
-            .iter()
-            .map(|predicate| context.get_id(*predicate))
-            .collect::<Vec<_>>();
-
         // Add the nogood to the database.
         //
         // Currently we always allocate a fresh ID
-        let nogood_id = self.nogood_predicates.insert(nogood);
+        let nogood_id = self
+            .nogood_predicates
+            .insert(nogood.iter().map(|predicate| context.get_id(*predicate)));
         let _ = self
             .nogood_info
             .push(NogoodInfo::new_learned_nogood_info(lbd));
@@ -596,15 +595,12 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
-            let nogood = nogood
-                .iter()
-                .map(|predicate| context.get_id(*predicate))
-                .collect::<Vec<_>>();
-
             // Add the nogood to the database.
             //
             // Currently we always allocate a fresh ID
-            let nogood_id = self.nogood_predicates.insert(nogood);
+            let nogood_id = self
+                .nogood_predicates
+                .insert(nogood.iter().map(|predicate| context.get_id(*predicate)));
             let _ = self
                 .nogood_info
                 .push(NogoodInfo::new_permanent_nogood_info());

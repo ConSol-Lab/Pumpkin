@@ -53,7 +53,10 @@ impl ArenaAllocator {
 
     /// Inserts the nogood consisting of [`PredicateId`]s and returns its corresponding
     /// [`NogoodId`].
-    pub(crate) fn insert(&mut self, nogood: Vec<PredicateId>) -> NogoodId {
+    pub(crate) fn insert(
+        &mut self,
+        nogood: impl IntoIterator<Item = PredicateId> + ExactSizeIterator,
+    ) -> NogoodId {
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
         // We store the NogoodId with its index.
