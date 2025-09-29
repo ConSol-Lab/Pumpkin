@@ -117,6 +117,7 @@
 //! ```
 mod time_table;
 pub use time_table::CumulativeExplanationType;
+pub use time_table::CumulativeMergeStrategy;
 pub(crate) use time_table::*;
 mod options;
 pub use options::*;

@@ -378,6 +378,12 @@ struct Args {
     #[arg(long = "cumulative-generate-sequence")]
     cumulative_generate_sequence: bool,
 
+    #[arg(long = "cumulative-merge-strategy", default_value_t = CumulativeMergeStrategy::default())]
+    cumulative_merge_strategy: CumulativeMergeStrategy,
+
+    #[arg(long = "cumulative-merge-strategy", default_value_t = 1_000)]
+    cumulative_merge_constant: u32,
+
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
     ///
@@ -601,6 +607,8 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_generate_sequence,
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
+                    args.cumulative_merge_strategy,
+                    args.cumulative_merge_constant,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),
