@@ -22,6 +22,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::create_time_table_over_interval_from_scratch;
+use crate::propagators::cumulative::time_table::merge_strategy::MergeChecker;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
@@ -96,6 +97,8 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRON
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
 
+    merge_checker: MergeChecker,
+
     // TODO: This should be refactored to use a propagator constructor.
     constraint_tag: ConstraintTag,
     inference_code: Option<InferenceCode>,
@@ -148,6 +151,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             is_time_table_outdated: false,
             constraint_tag,
             inference_code: None,
+            merge_checker: MergeChecker::new(
+                cumulative_options.merge_strategy,
+                cumulative_options.merge_constant,
+            ),
         }
     }
 
@@ -236,7 +243,9 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        if self.is_time_table_outdated {
+        if self.is_time_table_outdated || self.merge_checker.should_merge(&self.time_table) {
+            self.merge_checker.has_recalculated();
+
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_over_interval_from_scratch(
                 context.as_readonly(),
