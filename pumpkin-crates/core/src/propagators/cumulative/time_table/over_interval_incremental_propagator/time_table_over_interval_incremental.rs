@@ -243,7 +243,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        if self.is_time_table_outdated || self.merge_checker.should_merge(&self.time_table) {
+        if self.is_time_table_outdated
+            || (self.parameters.options.incremental_backtracking
+                && self.merge_checker.should_merge(&self.time_table))
+        {
             self.merge_checker.has_recalculated();
 
             // We create the time-table from scratch (and return an error if it overflows)
