@@ -74,6 +74,8 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    pub(crate) add_default_brancher: bool,
 }
 
 fn log_statistics(

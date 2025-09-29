@@ -503,7 +503,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     }
 
     fn priority(&self) -> u32 {
-        3
+        2
     }
 
     fn name(&self) -> &str {

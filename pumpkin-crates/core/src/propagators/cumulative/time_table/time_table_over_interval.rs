@@ -184,7 +184,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     }
 
     fn priority(&self) -> u32 {
-        3
+        2
     }
 
     fn name(&self) -> &str {

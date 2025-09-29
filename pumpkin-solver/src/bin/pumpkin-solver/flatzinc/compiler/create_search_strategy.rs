@@ -18,13 +18,20 @@ use crate::flatzinc::ast::ValueSelectionStrategy;
 use crate::flatzinc::ast::VariableSelectionStrategy;
 use crate::flatzinc::error::FlatZincError;
 use crate::flatzinc::instance::FlatzincObjective;
+use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
     objective: Option<FlatzincObjective>,
+    options: FlatZincOptions,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context, true, objective)
+    create_from_search_strategy(
+        &ast.search,
+        context,
+        options.add_default_brancher,
+        objective,
+    )
 }
 
 fn create_from_search_strategy(

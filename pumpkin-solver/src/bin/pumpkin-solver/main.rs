@@ -159,8 +159,8 @@ struct Args {
     /// If this flag is present then the minimisation is turned off.
     ///
     /// Possible values: bool
-    #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
-    no_learning_clause_minimisation: bool,
+    #[arg(long = "learning-minimise", verbatim_doc_comment)]
+    learning_clause_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     ///
@@ -392,6 +392,9 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 1000)]
     memory_preallocated: usize,
+
+    #[arg(long = "add-default-brancher")]
+    add_default_brancher: bool,
 }
 
 fn configure_logging(
@@ -563,7 +566,7 @@ fn run() -> PumpkinResult<()> {
             warn!("Recursive minimisation is disabled when logging the full proof.");
             false
         } else {
-            !args.no_learning_clause_minimisation
+            args.learning_clause_minimisation
         },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
@@ -602,6 +605,7 @@ fn run() -> PumpkinResult<()> {
                 optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),
                 verbose: args.verbose,
+                add_default_brancher: args.add_default_brancher,
             },
         )?,
     }

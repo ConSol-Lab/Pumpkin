@@ -36,7 +36,7 @@ pub(crate) fn compile(
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context, &options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
-    let search = create_search_strategy::run(&ast, &mut context, objective_function)?;
+    let search = create_search_strategy::run(&ast, &mut context, objective_function, options)?;
 
     Ok(FlatZincInstance {
         outputs: context.outputs,

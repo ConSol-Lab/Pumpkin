@@ -169,7 +169,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn priority(&self) -> u32 {
-        0
+        3
     }
 
     fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
