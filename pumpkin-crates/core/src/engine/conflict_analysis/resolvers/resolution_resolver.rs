@@ -217,30 +217,17 @@ impl ConflictResolver for ResolutionResolver {
                         .is_initial_bound(self.peek_predicate_from_conflict_nogood())
                 {
                     let predicate = self.peek_predicate_from_conflict_nogood();
+                    let trail_position = context
+                        .assignments
+                        .get_trail_position(&predicate)
+                        .expect("The predicate must be true during conflict analysis.");
+                    let trail_entry = context.assignments.get_trail_entry(trail_position);
 
-                    self.reason_buffer.clear();
-                    ConflictAnalysisContext::get_propagation_reason(
-                        predicate,
-                        context.assignments,
-                        CurrentNogood::new(
-                            &self.to_process_heap,
-                            &self.processed_nogood_predicates,
-                            &self.predicate_id_generator,
-                        ),
-                        context.reason_store,
-                        context.propagators,
-                        context.proof_log,
-                        context.unit_nogood_inference_codes,
-                        &mut self.reason_buffer,
-                        context.notification_engine,
-                        context.variable_names,
-                    );
-                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
-                        self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
+                        trail_entry.predicate.is_lower_bound_predicate(),
                         "The reason for the decision predicate should be a lower-bound predicate but was {}", self.reason_buffer[0]
                     );
-                    self.replace_predicate_in_conflict_nogood(predicate, self.reason_buffer[0]);
+                    self.replace_predicate_in_conflict_nogood(predicate, trail_entry.predicate);
                 }
 
                 // The final predicate in the heap will get pushed in `extract_final_nogood`
