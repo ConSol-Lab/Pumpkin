@@ -177,6 +177,7 @@ impl ConflictResolver for ResolutionResolver {
                         if self.reason_buffer.is_empty() {
                             predicate
                         } else {
+                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
                             pumpkin_assert_simple!(
                                 self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
                                 "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
@@ -222,6 +223,7 @@ impl ConflictResolver for ResolutionResolver {
                         .expect("The predicate must be true during conflict analysis.");
                     let trail_entry = context.assignments.get_trail_entry(trail_position);
 
+                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
                         trail_entry.predicate.is_lower_bound_predicate(),
                         "The reason for the decision predicate should be a lower-bound predicate but was {}", self.reason_buffer[0]
