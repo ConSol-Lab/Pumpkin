@@ -21,6 +21,7 @@ use log::warn;
 use log::Level;
 use log::LevelFilter;
 use maxsat::PseudoBooleanEncoding;
+use mimalloc::MiMalloc;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
@@ -39,6 +40,9 @@ use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::Solver;
 use result::PumpkinError;
 use result::PumpkinResult;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
