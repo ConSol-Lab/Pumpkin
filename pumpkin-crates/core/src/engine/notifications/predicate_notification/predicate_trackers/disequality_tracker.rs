@@ -133,6 +133,21 @@ impl DomainTracker for DisequalityTracker {
             // disequalities
             //
             // TODO: This could be optimised
+
+            // If the right-hand side of the disequality predicate is smaller than the value
+            // pointed to by `min_assigned` then no updates can take place
+            if value <= self.watcher.values[trailed_values.read(self.watcher.min_assigned) as usize]
+            {
+                return;
+            }
+
+            // If the right-hand side of the disequality predicate is larger than the value
+            // pointed to by `max_assigned` then no updates can take place
+            if value >= self.watcher.values[trailed_values.read(self.watcher.max_assigned) as usize]
+            {
+                return;
+            }
+
             if let Some(index) = self.get_index_of_value(value) {
                 self.predicate_has_been_satisfied(index, predicate_id_assignments)
             }
