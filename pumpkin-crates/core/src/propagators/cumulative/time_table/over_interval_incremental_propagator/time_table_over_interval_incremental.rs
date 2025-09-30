@@ -628,9 +628,9 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
-    use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::propagators::ArgTask;
+    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
     use crate::variables::DomainId;

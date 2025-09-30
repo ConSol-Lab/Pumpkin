@@ -871,7 +871,7 @@ mod tests {
         ];
 
         let mut profile_buffer = vec![];
-        let last_index = find_profiles_which_propagate_upper_bound(
+        find_profiles_which_propagate_upper_bound(
             1,
             &time_table,
             PropagationContext::new(&assignments),
