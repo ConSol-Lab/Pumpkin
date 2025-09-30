@@ -91,6 +91,12 @@ where
         }
     }
 
+    /// Parses a line in the following shape:
+    /// ```
+    /// "a" <unsigned non-zero u32> "[" <identifier> <comparison> <integer> "]"
+    ///
+    /// comparison := ">=" | "<=" | "==" | "!="
+    /// ```
     fn parse_atom_definition(&mut self) -> Result<(), Error>
     where
         Int: SignedIntValue,
@@ -139,6 +145,10 @@ where
         Ok(())
     }
 
+    /// Parses a line in the following shape:
+    /// ```
+    /// "i" <unsigned non-zero u32> (<signed non-zero u32>)* "0" (<signed non-zero u32>)? ("l:<label>")? ("c:<unsigned non-zero u32>")?
+    /// ```
     fn parse_inference(&mut self) -> Result<ReadStep<Int>, Error>
     where
         Int: IntValue,
@@ -242,6 +252,10 @@ where
         }))
     }
 
+    /// Parses a line in the following shape:
+    /// ```
+    /// "n" <unsigned non-zero u32> (<signed non-zero u32>)* "0" (<unsigned non-zero u32>)*
+    /// ```
     fn parse_deduction(&mut self) -> Result<ReadStep<Int>, Error>
     where
         Int: IntValue,
@@ -292,6 +306,10 @@ where
         }))
     }
 
+    /// Parses a line in the following shape:
+    /// ```
+    /// "c" ("UNSAT" | <signed non-zero u32>)
+    /// ```
     fn parse_conclusion(&mut self) -> Result<ReadStep<Int>, Error>
     where
         Int: IntValue,
