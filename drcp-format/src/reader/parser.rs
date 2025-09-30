@@ -92,7 +92,7 @@ where
     }
 
     /// Parses a line in the following shape:
-    /// ```
+    /// ```ignored
     /// "a" <unsigned non-zero u32> "[" <identifier> <comparison> <integer> "]"
     ///
     /// comparison := ">=" | "<=" | "==" | "!="
@@ -146,7 +146,7 @@ where
     }
 
     /// Parses a line in the following shape:
-    /// ```
+    /// ```ignored
     /// "i" <unsigned non-zero u32> (<signed non-zero u32>)* "0" (<signed non-zero u32>)? ("l:<label>")? ("c:<unsigned non-zero u32>")?
     /// ```
     fn parse_inference(&mut self) -> Result<ReadStep<Int>, Error>
@@ -253,7 +253,7 @@ where
     }
 
     /// Parses a line in the following shape:
-    /// ```
+    /// ```ignored
     /// "n" <unsigned non-zero u32> (<signed non-zero u32>)* "0" (<unsigned non-zero u32>)*
     /// ```
     fn parse_deduction(&mut self) -> Result<ReadStep<Int>, Error>
@@ -307,7 +307,7 @@ where
     }
 
     /// Parses a line in the following shape:
-    /// ```
+    /// ```ignored
     /// "c" ("UNSAT" | <signed non-zero u32>)
     /// ```
     fn parse_conclusion(&mut self) -> Result<ReadStep<Int>, Error>
