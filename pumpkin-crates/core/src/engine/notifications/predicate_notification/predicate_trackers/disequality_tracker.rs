@@ -1,6 +1,5 @@
 use super::DomainTracker;
 use super::HasTracker;
-use super::PredicateId;
 use super::PredicateTracker;
 use super::TrailedValues;
 use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
@@ -42,7 +41,6 @@ impl DomainTracker for DisequalityTracker {
         predicate: Predicate,
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        predicate_id: Option<PredicateId>,
     ) {
         // We are interested in all types of predicates
         let value = predicate.get_right_hand_side();
@@ -135,11 +133,23 @@ impl DomainTracker for DisequalityTracker {
             // disequalities
             //
             // TODO: This could be optimised
-            if self.get_values().contains(&value) {
-                self.predicate_id_has_been_satisfied(
-                    predicate_id.unwrap(),
-                    predicate_id_assignments,
-                )
+
+            // If the right-hand side of the disequality predicate is smaller than the value
+            // pointed to by `min_assigned` then no updates can take place
+            if value <= self.watcher.values[trailed_values.read(self.watcher.min_assigned) as usize]
+            {
+                return;
+            }
+
+            // If the right-hand side of the disequality predicate is larger than the value
+            // pointed to by `max_assigned` then no updates can take place
+            if value >= self.watcher.values[trailed_values.read(self.watcher.max_assigned) as usize]
+            {
+                return;
+            }
+
+            if let Some(index) = self.get_index_of_value(value) {
+                self.predicate_has_been_satisfied(index, predicate_id_assignments)
             }
         } else {
             panic!()

@@ -35,10 +35,9 @@ pub enum CumulativeExplanationType {
     /// The naive explanation approach simply uses the current bounds of the profile and the
     /// propagated task in the explanation.
     Naive,
-    /// The default; lifts the explanation to create an explanation which uses the bounds which
+    /// Lifts the explanation to create an explanation which uses the bounds which
     /// would cause the tasks in the profile to have mandatory parts in the range of the
     /// propagating profile.
-    #[default]
     BigStep,
     /// Creates an explanation over a set of time-points;
     ///
@@ -55,6 +54,7 @@ pub enum CumulativeExplanationType {
     /// For conflicts we follow the work by Schutt (see the documentation for
     /// [`CumulativeExplanationType`]) and select the middle point in the profile as the point used
     /// for the explanation.
+    #[default]
     Pointwise,
 }
 
