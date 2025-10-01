@@ -6,7 +6,6 @@ use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
 use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PredicateIdGenerator;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
@@ -63,50 +62,89 @@ impl PredicateTrackerForDomain {
         domain: DomainId,
         predicate_type: PredicateType,
         assignments: &Assignments,
-        predicate_id_generator: &mut PredicateIdGenerator,
-        stateful_trail: &mut TrailedValues,
+        trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
-        removed_value: Option<i32>,
     ) {
+        // We check three things:
+        // 1. Is the lower-bound tracker tracking anything?
+        // 2. Is the update a lower-bound or upper-bound update?
+        // 3. Can updates still take place?
         if !self.lower_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.lower_bound.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
-                stateful_trail,
+                predicate_type.into_predicate(domain, assignments, None),
+                trailed_values,
                 predicate_id_assignments,
-                None,
             );
         }
 
+        // We check three things:
+        // 1. Is the upper-bound tracker tracking anything?
+        // 2. Is the update a lower-bound or upper-bound update?
+        // 3. Can updates still take place?
         if !self.upper_bound.is_empty()
             && (predicate_type.is_lower_bound() || predicate_type.is_upper_bound())
         {
             self.upper_bound.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
-                stateful_trail,
+                predicate_type.into_predicate(domain, assignments, None),
+                trailed_values,
                 predicate_id_assignments,
-                None,
             );
         }
 
-        if !self.disequality.is_empty() {
-            let predicate = predicate_type.into_predicate(domain, assignments, removed_value);
-            self.disequality.on_update(
-                predicate,
-                stateful_trail,
-                predicate_id_assignments,
-                Some(predicate_id_generator.get_id(predicate)),
-            );
-        }
+        // The case for disequalities is more involved since we need to find the actual holes in
+        // the domain which were created.
+        //
+        // Note that only the trackers of equalities and disequalities care about removal events
+        if predicate_type.is_disequality() {
+            // We first check whether anything is being tracked
+            if !self.disequality.is_empty() || !self.equality.is_empty() {
+                // After that we check whether one of them is unfixed, and we cache the result
+                let disequality_is_fixed = self.disequality.is_fixed(trailed_values);
+                let equality_is_fixed = self.equality.is_fixed(trailed_values);
 
-        if !self.equality.is_empty() {
-            self.equality.on_update(
-                predicate_type.into_predicate(domain, assignments, removed_value),
-                stateful_trail,
-                predicate_id_assignments,
-                None,
-            );
+                if disequality_is_fixed && equality_is_fixed {
+                    return;
+                }
+
+                for removed_value in assignments.get_holes_on_current_decision_level(domain) {
+                    let predicate =
+                        predicate_type.into_predicate(domain, assignments, Some(removed_value));
+                    if !self.disequality.is_empty() && !disequality_is_fixed {
+                        self.disequality.on_update(
+                            predicate,
+                            trailed_values,
+                            predicate_id_assignments,
+                        );
+                    }
+
+                    if !self.equality.is_empty() && !equality_is_fixed {
+                        self.equality.on_update(
+                            predicate,
+                            trailed_values,
+                            predicate_id_assignments,
+                        );
+                    }
+                }
+            }
+        } else {
+            let predicate = predicate_type.into_predicate(domain, assignments, None);
+            // We check two things:
+            // 1. Is the disequality tracker tracking anything?
+            // 2. Can updates still take place?
+            if !self.disequality.is_empty() {
+                self.disequality
+                    .on_update(predicate, trailed_values, predicate_id_assignments);
+            }
+
+            // We check two things:
+            // 1. Is the equality tracker tracking anything?
+            // 2. Can updates still take place?
+            if !self.equality.is_empty() {
+                self.equality
+                    .on_update(predicate, trailed_values, predicate_id_assignments);
+            }
         }
     }
 

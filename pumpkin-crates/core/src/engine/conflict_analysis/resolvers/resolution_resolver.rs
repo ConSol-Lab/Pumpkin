@@ -493,13 +493,29 @@ impl ResolutionResolver {
                 .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
         }
 
-        // Sorting does the trick with placing the correct predicates at the first two positions,
-        // however this can be done more efficiently, since we only need the first two positions
-        // to be properly sorted.
-        //
-        // TODO: Do not sort but do a linear scan to find the correct placement of the predicates
-        clean_nogood.sort_by_key(|p| context.assignments.get_trail_position(p).unwrap());
-        clean_nogood.reverse();
+        // We perform a linear scan to maintain the two invariants:
+        // - The predicate from the current decision level is placed at index 0
+        // - The predicate from the highest decision level below the current is placed at index 1
+        let mut index = 1;
+        let mut highest_level_below_current = 0;
+        while index < clean_nogood.len() {
+            let predicate = clean_nogood[index];
+            let dl = context
+                .assignments
+                .get_decision_level_for_predicate(&predicate)
+                .unwrap();
+
+            if dl == context.assignments.get_decision_level() {
+                clean_nogood.swap(0, index);
+                index -= 1;
+            } else if dl > highest_level_below_current {
+                highest_level_below_current = dl;
+                clean_nogood.swap(1, index);
+            }
+
+            index += 1;
+        }
+
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
         let backjump_level = if clean_nogood.len() > 1 {

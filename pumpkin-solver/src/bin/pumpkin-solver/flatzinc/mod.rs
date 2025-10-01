@@ -16,13 +16,13 @@ use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::Brancher;
+use pumpkin_solver::constraint_arguments::CumulativeOptions;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
@@ -42,6 +42,17 @@ use crate::ProofType;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
+
+/// The minimum value of an unbounded integer.
+///
+/// This can be overridden by setting specific bounds under this threshold but this should be done
+/// with care since it might lead to overflow/underflow!
+pub(crate) const MIN_INTEGER_VALUE: i32 = -500_000_000;
+/// The maximum value of an unbounded integer.
+///
+/// This can be overridden by setting specific bounds over this threshold but this should be done
+/// with care since it might lead to overflow/underflow!
+pub(crate) const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct FlatZincOptions {

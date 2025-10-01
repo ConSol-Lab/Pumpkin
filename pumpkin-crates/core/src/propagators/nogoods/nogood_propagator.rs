@@ -239,8 +239,7 @@ impl Propagator for NogoodPropagator {
                 for i in 2..nogood_predicates.len() {
                     // Find a predicate that is either false or unassigned,
                     // i.e., not assigned true.
-                    let predicate = context.get_predicate(nogood_predicates[i]);
-                    if !context.is_predicate_satisfied(predicate) {
+                    if !context.is_predicate_id_satisfied(nogood_predicates[i]) {
                         // Found another predicate that can be the watcher.
                         found_new_watch = true;
                         // todo: does it make sense to replace the cached predicate with
@@ -660,7 +659,9 @@ impl NogoodPropagator {
             watch_lists.resize((predicate.id + 1) as usize, Vec::default());
         }
 
-        notification_engine.track_predicate(predicate, trailed_values, assignments);
+        if watch_lists[predicate].is_empty() {
+            notification_engine.track_predicate(predicate, trailed_values, assignments);
+        }
 
         watch_lists[predicate].push(watcher);
     }
