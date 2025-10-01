@@ -290,12 +290,7 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(
-        &mut self,
-        _predciate: Predicate,
-        code: u64,
-        _: ExplanationContext,
-    ) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
         use PredicateType::*;
         use Variable::*;
 

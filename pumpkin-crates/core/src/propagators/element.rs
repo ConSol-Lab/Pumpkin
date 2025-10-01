@@ -119,12 +119,7 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(
-        &mut self,
-        _predicate: Predicate,
-        code: u64,
-        context: ExplanationContext,
-    ) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let payload = RightHandSideReason::from_bits(code);
 
         self.rhs_reason_buffer.clear();

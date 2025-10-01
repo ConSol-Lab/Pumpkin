@@ -214,7 +214,6 @@ impl ConflictAnalysisContext<'_> {
             );
 
             let reason_exists = reason_store.get_or_compute(
-                trail_entry.predicate,
                 reason_ref,
                 explanation_context,
                 propagators,

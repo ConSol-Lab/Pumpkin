@@ -323,12 +323,7 @@ impl Propagator for NogoodPropagator {
     ///
     /// In case of the noogood propagator, lazy explanations internally also update information
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
-    fn lazy_explanation(
-        &mut self,
-        _predicate: Predicate,
-        code: u64,
-        mut context: ExplanationContext,
-    ) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
         self.temp_nogood_reason = self.nogood_predicates[id][1..]

@@ -302,7 +302,6 @@ impl TestSolver {
             .get_reason_for_predicate_brute_force(predicate);
         let mut predicates = vec![];
         let _ = self.reason_store.get_or_compute(
-            predicate,
             reason_ref,
             ExplanationContext::without_working_nogood(
                 &self.assignments,

@@ -158,17 +158,12 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         Ok(())
     }
 
-    fn lazy_explanation(
-        &mut self,
-        predicate: Predicate,
-        code: u64,
-        context: ExplanationContext,
-    ) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         self.reason_buffer.clear();
         self.reason_buffer
             .push(self.reification_literal.get_true_predicate());
         self.reason_buffer
-            .extend(self.propagator.lazy_explanation(predicate, code, context));
+            .extend(self.propagator.lazy_explanation(code, context));
         &self.reason_buffer
     }
 }

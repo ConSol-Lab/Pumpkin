@@ -150,12 +150,7 @@ where
         "LinearLeq"
     }
 
-    fn lazy_explanation(
-        &mut self,
-        _predicate: Predicate,
-        code: u64,
-        context: ExplanationContext,
-    ) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let i = code as usize;
 
         self.reason_buffer.clear();

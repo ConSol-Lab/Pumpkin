@@ -169,7 +169,6 @@ impl DebugHelper {
 
             let mut reason = vec![];
             let _ = reason_store.get_or_compute(
-                trail_entry.predicate,
                 trail_entry
                     .reason
                     .expect("Expected checked propagation to have a reason")
