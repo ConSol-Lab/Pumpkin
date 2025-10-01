@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use super::Constraint;
-use crate::options::CumulativePropagationMethod;
+use crate::constraint_arguments::CumulativePropagationMethod;
 use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
@@ -38,12 +38,12 @@ use crate::Solver;
 /// // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
 /// // We can infer that Task 0 and Task 1 execute at the same time
 /// // while Task 2 will start after them
-/// # use pumpkin_solver::termination::Indefinite;
-/// # use pumpkin_solver::Solver;
-/// # use pumpkin_solver::results::SatisfactionResult;
-/// # use pumpkin_solver::constraints;
-/// # use pumpkin_solver::constraints::Constraint;
-/// # use crate::pumpkin_solver::results::ProblemSolution;
+/// # use pumpkin_core::termination::Indefinite;
+/// # use pumpkin_core::Solver;
+/// # use pumpkin_core::results::SatisfactionResult;
+/// # use pumpkin_core::constraints;
+/// # use pumpkin_core::constraints::Constraint;
+/// # use crate::pumpkin_core::results::ProblemSolution;
 /// let solver = Solver::default();
 ///
 /// let mut solver = Solver::default();

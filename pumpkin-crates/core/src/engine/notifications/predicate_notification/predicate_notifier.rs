@@ -1,6 +1,5 @@
 use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use super::PredicateIdAssignments;
-use super::PredicateValue;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -79,13 +78,7 @@ impl PredicateNotifier {
     ) {
         match event {
             DomainEvent::Assign => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::Equal,
-                    assignments,
-                    trailed_values,
-                    None,
-                );
+                self.on_update_predicate(domain, PredicateType::Equal, assignments, trailed_values);
             }
             DomainEvent::LowerBound => {
                 self.on_update_predicate(
@@ -93,7 +86,6 @@ impl PredicateNotifier {
                     PredicateType::LowerBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
             DomainEvent::UpperBound => {
@@ -102,20 +94,16 @@ impl PredicateNotifier {
                     PredicateType::UpperBound,
                     assignments,
                     trailed_values,
-                    None,
                 );
             }
-            DomainEvent::Removal => assignments
-                .get_holes_on_current_decision_level(domain)
-                .for_each(|value| {
-                    self.on_update_predicate(
-                        domain,
-                        PredicateType::NotEqual,
-                        assignments,
-                        trailed_values,
-                        Some(value),
-                    );
-                }),
+            DomainEvent::Removal => {
+                self.on_update_predicate(
+                    domain,
+                    PredicateType::NotEqual,
+                    assignments,
+                    trailed_values,
+                );
+            }
         }
     }
 
@@ -130,7 +118,6 @@ impl PredicateNotifier {
         predicate_type: PredicateType,
         assignments: &Assignments,
         trailed_values: &mut TrailedValues,
-        removed_value: Option<i32>,
     ) {
         if self.domain_id_to_predicate_tracker.len() <= domain.index() {
             // If no predicate has been registered for this domain id then we do nothing
@@ -142,10 +129,8 @@ impl PredicateNotifier {
             domain,
             predicate_type,
             assignments,
-            &mut self.predicate_to_id,
             trailed_values,
             &mut self.predicate_id_assignments,
-            removed_value,
         );
     }
 
@@ -179,28 +164,7 @@ impl PredicateNotifier {
         // Now we add it to the scope of the tracker
         //
         // We check whether it was already tracked or not
-        let was_not_already_tracked = self.domain_id_to_predicate_tracker[predicate.get_domain()]
+        let _ = self.domain_id_to_predicate_tracker[predicate.get_domain()]
             .watch_predicate(predicate, id);
-
-        // If it was not already tracked then we store the update; otherwise we assume that the
-        // cache has already been informed of its value
-        if was_not_already_tracked {
-            // Then we cache the known value of the predicate; note that this method also ensures
-            // that it is added to the list of PredicateIds which the propagators should
-            // be notified about if it has not done so already
-            self.predicate_id_assignments.store_predicate(
-                id,
-                match assignments.evaluate_predicate(predicate) {
-                    Some(satisfied) => {
-                        if satisfied {
-                            PredicateValue::AssignedTrue
-                        } else {
-                            PredicateValue::AssignedFalse
-                        }
-                    }
-                    None => PredicateValue::Unknown,
-                },
-            );
-        }
     }
 }

@@ -1,5 +1,5 @@
 #[cfg(doc)]
-use crate::branching::alternating::AlternatingBrancher;
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
@@ -40,8 +40,7 @@ pub trait AlternatingStrategy {
 
     /// Returns true if only the default strategy is used from now on and false otherwise.
     ///
-    /// This is important if [`AlternatingStrategy::SwitchToDefaultAfterFirstSolution`] is used as
-    /// the strategy.
+    /// This is important if a switch to the default is used after the first solution.
     fn will_always_use_default(&self) -> bool {
         false
     }

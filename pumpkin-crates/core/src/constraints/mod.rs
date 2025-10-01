@@ -6,8 +6,8 @@
 //!
 //! # Example
 //! ```
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::Solver;
+//! # use pumpkin_core::constraints;
+//! # use pumpkin_core::Solver;
 //! let mut solver = Solver::default();
 //!
 //! let a = solver.new_bounded_integer(0, 3);
@@ -33,6 +33,7 @@ mod boolean;
 mod clause;
 mod constraint_poster;
 mod cumulative;
+mod disjunctive_strict;
 mod element;
 mod table;
 
@@ -42,6 +43,7 @@ pub use boolean::*;
 pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
+pub use disjunctive_strict::*;
 pub use element::*;
 pub use table::*;
 

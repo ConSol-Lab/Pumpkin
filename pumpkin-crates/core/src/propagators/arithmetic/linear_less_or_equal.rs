@@ -3,7 +3,6 @@ use itertools::Itertools;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
-use crate::conjunction;
 use crate::declare_inference_label;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -12,6 +11,7 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::ManipulateTrailedValues;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -20,6 +20,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::engine::TrailedInteger;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
@@ -68,6 +69,7 @@ where
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
             inference_code: context.create_inference_code(constraint_tag, LinearBounds),
+            reason_buffer: Vec::default(),
         }
     }
 }
@@ -82,6 +84,8 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     lower_bound_left_hand_side: TrailedInteger,
     /// The value at index `i` is the bound for `x[i]`.
     current_bounds: Box<[TrailedInteger]>,
+    /// A buffer for storing the reason for a propagation.
+    reason_buffer: Vec<Predicate>,
 
     inference_code: InferenceCode,
 }
@@ -92,37 +96,36 @@ where
 {
     /// Find an irreducible set of atomics such that it is inconsistent w.r.t. the linear constraint
     /// and all atomics of the form [var >= lb] for (var, lb) in the `lower_bounds` list.
-    fn extend_reason(
-        &self,
-        context: PropagationContext,
+    fn extend_reason<Context: ReadDomains>(
+        x: &[Var],
+        c: i32,
+        reason_buffer: &mut Vec<Predicate>,
+        context: Context,
         lower_bounds: &[(usize, i32)],
-    ) -> PropositionalConjunction {
-        let mut conjunction = conjunction![];
+        trail_position: usize,
+    ) {
         // Rewrite the constraint x1 + ... + xn >= c with arbitrary lower bounds
         // as (y1 + l1) + ... + (yn + ln) >= c with lk as the global lower bound of xk,
         // and all "variables" y1, ..., yn having lower bounds of 0.
         //
         // Rewrite further as y1 + ... + yn >= c - (l1 + ... + ln) and store the new RHS.
-        let mut rem = self.c
-            - self
-                .x
-                .iter()
-                .enumerate()
-                .map(|(ix, var)| {
-                    // Take the lower bound from the input if exists or from context otherwise
-                    lower_bounds
-                        .iter()
-                        .filter_map(|(lb_ix, lb)| if *lb_ix == ix { Some(*lb) } else { None })
-                        .next()
-                        .unwrap_or(context.lower_bound_at_trail_position(var, 0))
-                })
-                .sum::<i32>();
+        let mut rem = c - x
+            .iter()
+            .enumerate()
+            .map(|(ix, var)| {
+                // Take the lower bound from the input if exists or from context otherwise
+                lower_bounds
+                    .iter()
+                    .filter_map(|(lb_ix, lb)| if *lb_ix == ix { Some(*lb) } else { None })
+                    .next()
+                    .unwrap_or(context.lower_bound_at_trail_position(var, 0))
+            })
+            .sum::<i32>();
 
         // Find the smallest subset of variable bounds from {y1, ..., yn} with the total
         // lower bound exceeding the RHS from the previous step; use the fact that
         // [yk >= t] is equivalent to [xk >= t - lk]
-        for var in self
-            .x
+        for var in x
             .iter()
             .enumerate()
             .filter_map(|(ix, var)| {
@@ -133,7 +136,8 @@ where
                 }
             })
             .sorted_by_cached_key(|&var| {
-                context.lower_bound_at_trail_position(var, 0) - context.lower_bound(var)
+                context.lower_bound_at_trail_position(var, 0)
+                    - context.lower_bound_at_trail_position(var, trail_position)
             })
         {
             // If the condition on the selected set is satisfied, break
@@ -141,29 +145,43 @@ where
                 break;
             }
             // Add the variable accounting for the largest lower bound (in the shifted sense)
-            rem -= context.lower_bound(var) - context.lower_bound_at_trail_position(var, 0);
-            conjunction.push(predicate![var >= context.lower_bound(var)]);
+            rem -= context.lower_bound_at_trail_position(var, trail_position)
+                - context.lower_bound_at_trail_position(var, 0);
+            reason_buffer.push(predicate![
+                var >= context.lower_bound_at_trail_position(var, trail_position)
+            ]);
         }
-        conjunction
     }
 
     fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
         // Find a irreducible set of atomics S such that S -> FALSE
+        let mut reason = Vec::new();
+        Self::extend_reason(
+            &self.x,
+            self.c,
+            &mut reason,
+            context,
+            &[],
+            context.assignments.num_trail_entries(),
+        );
         PropagatorConflict {
-            conjunction: self.extend_reason(context, &[]),
+            conjunction: reason.clone().into(),
             inference_code: self.inference_code,
         }
     }
 
-    fn explain_propagation(
-        &self,
-        context: PropagationContext,
-        var_index: usize,
-        ub: i32,
-    ) -> PropositionalConjunction {
+    fn explain_propagation(&mut self, context: ExplanationContext, var_index: usize, ub: i32) {
         // Find a irreducible set of atomics S such that S -> [self.x[i] <= ub] <=> S /\ [self.x[i]
         // >= ub + 1] -> FALSE
-        self.extend_reason(context, &[(var_index, ub + 1)])
+        let trail_position = context.get_trail_position();
+        Self::extend_reason(
+            &self.x,
+            self.c,
+            &mut self.reason_buffer,
+            context,
+            &[(var_index, ub + 1)],
+            trail_position,
+        )
     }
 }
 
@@ -213,6 +231,18 @@ where
         "LinearLeq"
     }
 
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+        let i = code as usize;
+
+        self.reason_buffer.clear();
+
+        let ub =
+            context.upper_bound_at_trail_position(&self.x[i], context.get_trail_position() + 1);
+        self.explain_propagation(context, i, ub);
+
+        &self.reason_buffer
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
             return Err(conflict.into());
@@ -244,11 +274,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(
-                    predicate![x_i <= bound],
-                    self.explain_propagation(context.as_readonly(), i, bound),
-                    self.inference_code,
-                )?;
+                context.post(predicate![x_i <= bound], i, self.inference_code)?;
             }
         }
 

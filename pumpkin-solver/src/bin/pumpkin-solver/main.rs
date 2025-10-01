@@ -24,6 +24,9 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use pumpkin_core::constraint_arguments::CumulativeExplanationType;
+use pumpkin_core::constraint_arguments::CumulativeOptions;
+use pumpkin_core::constraint_arguments::CumulativePropagationMethod;
 use pumpkin_solver::convert_case::Case;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
@@ -371,12 +374,12 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     cumulative_propagation_method: CumulativePropagationMethod,
 
-    /// Determines whether a sequence of profiles is generated when explaining a propagation for
+    /// Determines whether a single profiles are used generated when explaining a propagation for
     /// the cumulative constraint.
     ///
     /// Possible values: bool
-    #[arg(long = "cumulative-generate-sequence")]
-    cumulative_generate_sequence: bool,
+    #[arg(long = "cumulative-single-profiles")]
+    cumulative_single_profiles: bool,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
@@ -595,7 +598,7 @@ fn run() -> PumpkinResult<()> {
                 cumulative_options: CumulativeOptions::new(
                     args.cumulative_allow_holes,
                     args.cumulative_explanation_type,
-                    args.cumulative_generate_sequence,
+                    !args.cumulative_single_profiles,
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
                 ),

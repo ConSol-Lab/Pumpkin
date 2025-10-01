@@ -1,0 +1,8 @@
+var int: x:: output_var;
+var -2..2: y:: output_var;
+var -2..2: z:: output_var;
+
+constraint int_le(z,x);
+constraint int_le(x,y);
+
+solve satisfy;
