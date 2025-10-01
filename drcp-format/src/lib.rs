@@ -1,8 +1,11 @@
 //! This crate handles the reading and writing of proofs produced by
 //! [Pumpkin](https://github.com/consol-lab/pumpkin).
-//!
+//! TODO: proofs are not Pumpkin-specific?
 //! For reading/parsing of proofs, use the [`reader`] module. To write proofs to string use the
 //! [`writer`] module.
+//! TODO: what is in this file?
+//! TODO: high-level: if we want to add new inferences etc, what needs to be changed (if anything)?
+//! Are there any other circumstances in which we might want to change the parser?
 
 pub mod reader;
 pub mod writer;
@@ -14,6 +17,7 @@ use std::ops::Mul;
 use std::ops::Not;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// TODO: IntegerComparison? Longer names might be nicer. Or do we want "Int"?
 pub enum IntComparison {
     GreaterEqual,
     LessEqual,
@@ -37,14 +41,22 @@ impl Display for IntComparison {
 /// A contract that must be observed for the value in an [`IntAtomic`].
 ///
 /// Implementations are provided for signed machine integers.
+/// TODO: similar comment as above for "Int" vs "Integer".
+/// TODO: does this comment apply to everything in this file, or just IntValue?
 pub trait IntValue: Clone + Display + Ord + Mul<Output = Self> + Add<Output = Self> {
+    // TODO: by how much is this increment? I suppose by one? Could clarify.
     fn increment(&self) -> Self;
     fn decrement(&self) -> Self;
 
     /// Multiply self by the radix.
+    /// TODO: is the radix always 2?
     fn shift_left(&self) -> Self;
 
     /// Create self from char. Can panic if not possible.
+    /// TODO: "can panic" -> I interpret this as "sometimes it will panic, but not always". Clarify.
+    /// TODO: the name says "from_digit", but it receives a u8. From the name, I would expect that
+    /// it panics if the digit is not '0', '1', ..., '9'. But initially I thought any ASCII
+    /// character would do, simply converting it into its integer value. So good to clarify.
     fn from_digit(byte: u8) -> Self;
 }
 
@@ -53,6 +65,7 @@ pub trait SignedIntValue: IntValue {
     fn negate(&self) -> Self;
 }
 
+// TODO: comment
 macro_rules! impl_int_value {
     ($type:ty) => {
         impl IntValue for $type {
@@ -81,6 +94,7 @@ macro_rules! impl_int_value {
     };
 }
 
+// TODO: comment
 macro_rules! impl_signed_int_value {
     ($type:ty) => {
         impl SignedIntValue for $type {
@@ -106,6 +120,8 @@ impl_signed_int_value!(i32);
 impl_signed_int_value!(i64);
 
 /// An integer atomic constraint of the form `[name op value]`, where `op` is an [`IntComparison`].
+/// TODO: int vs integer...
+/// TODO: what is an IntAtomic, how does this differ from AtomicConstraint?
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IntAtomic<Identifier, Int> {
     pub name: Identifier,
@@ -161,6 +177,7 @@ where
 }
 
 /// The ID of a proof step.
+/// TODO: The name says "Constraint", but the comment says "Proof step". Why not ProofStepId?
 pub type ConstraintId = NonZero<u32>;
 
 /// An inference step.

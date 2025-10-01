@@ -1,9 +1,14 @@
 //! Proofs can be read using a [`ProofReader`]. It reads the proof line-by-line, and can be thought
 //! of as an Iterator over [`Step`].
 //!
+//! TODO: "reads line-by-line...iterator", it gives me the impression that this is a lazy approach
+//! (streaming style), this that correct? Could clarify.
+//!
 //! The reader does not do any form of validation of the proof. It is up to the consumer of this
 //! crate to ensure that constraint IDs are valid, that inference labels make sense, etc.
 //!
+//! TODO: not sure if this is too much to ask, but can we write in comments the instance that this
+//! proof in the example below is solving?
 //! ```
 //! use std::num::NonZero;
 //! use std::rc::Rc;
@@ -96,6 +101,7 @@ use crate::Step;
 
 /// A parser of DRCP proofs. See module documentation on [`crate::reader`] for examples on how to
 /// use it.
+/// TODO: to discuss, how do we organise files, what goes into mod.rs and what in a separate file?
 #[derive(Debug)]
 pub struct ProofReader<Source, Int> {
     /// The source of the proof.
@@ -157,6 +163,7 @@ where
 
             self.line_nr += 1;
 
+            // TODO: just to discuss the line parser role
             let line_parser = parser::LineParser::new(
                 &self.line_buffer,
                 self.line_nr,

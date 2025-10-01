@@ -149,6 +149,8 @@ where
     /// ```ignored
     /// "i" <unsigned non-zero u32> (<signed non-zero u32>)* "0" (<signed non-zero u32>)? ("l:<label>")? ("c:<unsigned non-zero u32>")?
     /// ```
+    /// TODO: would it help to write what these numbers mean? Maybe it is not necessary, or maybe it
+    /// is?
     fn parse_inference(&mut self) -> Result<ReadStep<Int>, Error>
     where
         Int: IntValue,
