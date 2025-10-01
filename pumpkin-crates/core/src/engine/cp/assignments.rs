@@ -897,20 +897,23 @@ impl IntegerDomain {
     }
 
     fn lower_bound_at_trail_position(&self, trail_position: usize) -> i32 {
-        // TODO: could possibly cache old queries, and maybe even first checking large/small trail
-        // position values (in case those are commonly used)
+        // for now a simple inefficient linear scan
+        // in the future this should be done with binary search
+        // possibly caching old queries, and
+        // maybe even first checking large/small trail position values
+        // (in case those are commonly used)
 
-        // We find the update with the largest trail position such that it is smaller than or equal
-        // to the input trail position
-        //
-        // Recall that by the nature of the updates, the updates are stored in increasing order of
-        // trail position.
-        let index = self
-            .lower_bound_updates
-            .partition_point(|u| u.trail_position <= trail_position)
-            .min(self.lower_bound_updates.len() - 1); // It could be that the partition point is
-                                                      // after all of the updates
-        self.lower_bound_updates[index].bound
+        // find the update with largest trail position
+        // that is smaller than or equal to the input trail position
+
+        // Recall that by the nature of the updates,
+        // the updates are stored in increasing order of trail position.
+        self.lower_bound_updates
+            .iter()
+            .filter(|u| u.trail_position <= trail_position)
+            .next_back()
+            .expect("Cannot fail")
+            .bound
     }
 
     fn upper_bound(&self) -> i32 {
@@ -935,20 +938,23 @@ impl IntegerDomain {
     }
 
     fn upper_bound_at_trail_position(&self, trail_position: usize) -> i32 {
-        // TODO: could possibly cache old queries, and maybe even first checking large/small trail
-        // position values (in case those are commonly used)
+        // for now a simple inefficient linear scan
+        // in the future this should be done with binary search
+        // possibly caching old queries, and
+        // maybe even first checking large/small trail position values
+        // (in case those are commonly used)
 
-        // We find the update with the largest trail position such that it is smaller than or equal
-        // to the input trail position
-        //
-        // Recall that by the nature of the updates, the updates are stored in increasing order of
-        // trail position.
-        let index = self
-            .upper_bound_updates
-            .partition_point(|u| u.trail_position <= trail_position)
-            .min(self.upper_bound_updates.len() - 1); // It could be that the partition point is
-                                                      // after all of the updates
-        self.upper_bound_updates[index].bound
+        // find the update with largest trail position
+        // that is smaller than or equal to the input trail position
+
+        // Recall that by the nature of the updates,
+        // the updates are stored in increasing order of trail position.
+        self.upper_bound_updates
+            .iter()
+            .filter(|u| u.trail_position <= trail_position)
+            .next_back()
+            .expect("Cannot fail")
+            .bound
     }
 
     fn domain_iterator(&self) -> IntegerDomainIterator<'_> {
