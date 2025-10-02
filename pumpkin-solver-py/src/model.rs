@@ -51,6 +51,14 @@ pub struct Model {
 #[derive(Clone, Debug)]
 pub struct Tag(pub ConstraintTag);
 
+#[pymethods]
+impl Tag {
+    fn __int__(&self) -> u32 {
+        let non_zero: NonZero<u32> = self.0.into();
+        non_zero.get()
+    }
+}
+
 impl StorageKey for Tag {
     fn index(&self) -> usize {
         self.0.index()
