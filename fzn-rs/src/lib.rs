@@ -1,43 +1,17 @@
 //! # fzn-rs
 //!
-//! `fzn-rs` is a crate that allows for easy parsing of FlatZinc instances in Rust.
+//! `fzn-rs` is a crate that allows for easy parsing of FlatZinc instances in Rust. It facilitates
+//! type-driven parsing of a FlatZinc file using derive macros.
 //!
-//! ## Comparison to other FlatZinc crates
-//! There are two well-known crates for parsing FlatZinc files:
-//! - [flatzinc](https://docs.rs/flatzinc), for parsing the original `fzn` format,
-//! - and [flatzinc-serde](https://docs.rs/flatzinc-serde), for parsing `fzn.json`.
-//!
-//! The goal of this crate is to be able to parse both the original `fzn` format, as well as the
-//! newer `fzn.json` format. Additionally, there is a derive macro that allows for strongly-typed
-//! constraints as they are supported by your application. Finally, our aim is to improve the error
-//! messages that are encountered when parsing invalid FlatZinc files.
-//!
-//! ## Typed Instance
-//! The main type exposed by the crate is [`TypedInstance`], which is a fully typed representation
-//! of a FlatZinc model.
-//!
+//! ## Example
 //! ```
-//! use fzn_rs::TypedInstance;
-//!
-//! enum Constraints {
-//!     // ...
-//! }
-//!
-//! type Instance = TypedInstance<i32, Constraints>;
-//! ```
-//!
-//! ## Derive Macro
-//! When parsing a FlatZinc file, the result is an [`ast::Ast`]. That type describes any valid
-//! FlatZinc file. However, when consuming FlatZinc, typically you need to process that AST
-//! further. For example, to support the [`int_lin_le`][1] constraint, you have to validate that the
-//! [`ast::Constraint`] has three arguments, and that each of the arguments has the correct type.
-//!
-//! When using this crate with the `derive` feature, you can instead do the following:
-//! ```rust
 //! use fzn_rs::ArrayExpr;
 //! use fzn_rs::FlatZincConstraint;
+//! use fzn_rs::TypedInstance;
 //! use fzn_rs::VariableExpr;
 //!
+//! /// The FlatZincConstraint derive macro enables the parsing of a strongly typed constraint
+//! /// based on the FlatZinc Ast.
 //! #[derive(FlatZincConstraint)]
 //! pub enum MyConstraints {
 //!     /// The variant name is converted to snake_case to serve as the constraint identifier by
@@ -69,9 +43,27 @@
 //!     b: VariableExpr<i64>,
 //!     c: VariableExpr<i64>,
 //! }
+//!
+//! /// The `TypedInstance` is parameterized by the constraint type, as well as any annotations you
+//! /// may need to parse.
+//! type MyInstance = TypedInstance<i64, MyConstraints>;
+//!
+//! fn parse_flatzinc(source: &str) -> MyInstance {
+//!     // First, the source string is parsed into a structured representation.
+//!     //
+//!     // Note: the `fzn_rs::fzn` module is only available with the `fzn` feature enabled.
+//!     let ast = fzn_rs::fzn::parse(source).expect("source is valid flatzinc");
+//!
+//!     // Then, the strongly-typed instance is created from the AST
+//!     MyInstance::from_ast(ast).expect("type-checking passes")
+//! }
 //! ```
-//! The macro automatically implements [`FlatZincConstraint`] and will handle the parsing
-//! of arguments for you.
+//!
+//! ## Derive Macros
+//! When parsing a FlatZinc file, the result is an [`ast::Ast`]. That type describes any valid
+//! FlatZinc file. However, when consuming FlatZinc, typically you need to process that AST
+//! further. For example, to support the [`int_lin_le`][1] constraint, you have to validate that the
+//! [`ast::Constraint`] has three arguments, and that each of the arguments has the correct type.
 //!
 //! Similar to typed constraints, the derive macro for [`FlatZincAnnotation`] allows for easy
 //! parsing of annotations:
@@ -100,6 +92,16 @@
 //! Different to parsing constraints, is that annotations can be ignored. If the AST contains an
 //! annotation whose name does not match one of the variants in the enum, then the annotation is
 //! simply ignored.
+//!
+//! ## Comparison to other FlatZinc crates
+//! There are two well-known crates for parsing FlatZinc files:
+//! - [flatzinc](https://docs.rs/flatzinc), for parsing the original `fzn` format,
+//! - and [flatzinc-serde](https://docs.rs/flatzinc-serde), for parsing `fzn.json`.
+//!
+//! These crates produce what we call the [`ast::Ast`] in this crate, although the concrete types
+//! can be different. `fzn-rs` builds the strong typing of constraints and annotations on-top of
+//! a unified AST for both file formats. Finally, our aim is to improve the error messages that
+//! are encountered when parsing invalid FlatZinc files.
 //!
 //! [1]: https://docs.minizinc.dev/en/stable/lib-flatzinc-int.html#int-lin-le
 
