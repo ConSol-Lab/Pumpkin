@@ -38,14 +38,14 @@ pub struct TypedInstance<
     pub constraints: Vec<AnnotatedConstraint<Constraint, ConstraintAnnotations>>,
 
     /// The solve item indicating how to solve the model.
-    pub solve: Solve<Int, SolveAnnotations>,
+    pub solve: SolveItem<Int, SolveAnnotations>,
 }
 
 /// Specifies how to solve a [`TypedInstance`].
 ///
 /// This is generic over the integer type.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Solve<Int, Ann> {
+pub struct SolveItem<Int, Ann> {
     pub method: ast::Node<Method<Int>>,
     pub annotations: Vec<ast::Node<Ann>>,
 }
@@ -95,9 +95,6 @@ where
     ///
     /// This parses the constraints and annotations, and can fail e.g. if the number or type of
     /// arguments do not match what is expected in the parser.
-    ///
-    /// This does _not_ type-check the variables. I.e., if a constraint takes a `var int`, but
-    /// is provided with an identifier of a `var bool`, then this function will gladly accept that.
     pub fn from_ast(ast: ast::Ast) -> Result<Self, InstanceError> {
         let variables = ast
             .variables
@@ -145,7 +142,7 @@ where
             })
             .collect::<Result<_, _>>()?;
 
-        let solve = Solve {
+        let solve = SolveItem {
             method: match ast.solve.method.node {
                 ast::Method::Satisfy => ast::Node {
                     node: Method::Satisfy,
