@@ -163,7 +163,6 @@ where
 
             self.line_nr += 1;
 
-            // TODO: just to discuss the line parser role
             let line_parser = parser::LineParser::new(
                 &self.line_buffer,
                 self.line_nr,
