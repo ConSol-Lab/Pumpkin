@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-solver-py"
-version = "0.2.1"
+version = "0.2.1-1"
 description = "The Python interface for the Pumpkin solver library."
 authors.workspace = true
 license.workspace = true
