@@ -40,6 +40,8 @@ use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::statistics::StatisticLogger;
 
+pub use crate::engine::propagation::store::PropagatorHandle;
+
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
 ///
@@ -497,7 +499,7 @@ impl Solver {
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
+    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,

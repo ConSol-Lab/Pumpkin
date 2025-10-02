@@ -43,6 +43,7 @@ use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -1338,7 +1339,7 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
+    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
@@ -1353,7 +1354,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.notification_engine,
             &mut self.trailed_values,
             &mut self.internal_parameters.proof_log,
-            propagator_slot.key(),
+            propagator_slot.key().untyped(),
             &mut self.assignments,
         );
 
@@ -1367,15 +1368,15 @@ impl ConstraintSatisfactionSolver {
         );
         let new_propagator_id = propagator_slot.populate(propagator);
 
-        let new_propagator = &mut self.propagators[new_propagator_id];
+        let new_propagator = &mut self.propagators[new_propagator_id.untyped()];
 
         self.propagator_queue
-            .enqueue_propagator(new_propagator_id, new_propagator.priority());
+            .enqueue_propagator(new_propagator_id.untyped(), new_propagator.priority());
 
         self.propagate();
 
         if self.state.no_conflict() {
-            Ok(())
+            Ok(new_propagator_id)
         } else {
             self.complete_proof();
             let _ = self.conclude_proof_unsat();
