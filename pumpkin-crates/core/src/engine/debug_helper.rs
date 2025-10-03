@@ -11,7 +11,6 @@ use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
-use super::ConstraintSatisfactionSolver;
 use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
@@ -19,6 +18,7 @@ use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
+use crate::propagators::nogoods::NogoodPropagator;
 
 #[derive(Copy, Clone)]
 pub(crate) struct DebugDyn<'a> {
@@ -156,7 +156,7 @@ impl DebugHelper {
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
-        if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
+        if propagators.is_propagator::<NogoodPropagator>(propagator_id) {
             return true;
         }
 

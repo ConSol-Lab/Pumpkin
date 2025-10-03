@@ -25,6 +25,7 @@ use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_simple;
 
 /// Used during conflict analysis to provide the necessary information.
@@ -222,7 +223,7 @@ impl ConflictAnalysisContext<'_> {
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id()
+            if propagators.is_propagator::<NogoodPropagator>(propagator_id)
                 && reason_buffer.as_ref().is_empty()
             {
                 // This means that a unit nogood was propagated, we indicate that this nogood step

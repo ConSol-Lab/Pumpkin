@@ -15,8 +15,8 @@ pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
 }
 
-/// A typed wrapper around a [`PropagatorId`] that allows retrieving concrete propagators from the
-/// [`PropagatorStore`].
+/// A typed wrapper around a propagator id that allows retrieving concrete propagators instead of
+/// type-erased instances `Box<dyn Propagator>`.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PropagatorHandle<P> {
     id: PropagatorId,
@@ -60,14 +60,6 @@ impl PropagatorStore {
         }
     }
 
-    /// Get a reference to the propagator identified by the given handle.
-    ///
-    /// To prevent downcasting, [`PropagatorStore`] implements [`Index`] and [`IndexMut`] with
-    /// [`PropagatorId`] as an index.
-    pub(crate) fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
-        self[handle.id].downcast_ref()
-    }
-
     /// Get an exclusive reference to the propagator identified by the given handle.
     ///
     /// For more info, see [`Self::get_propagator`].
@@ -76,6 +68,11 @@ impl PropagatorStore {
         handle: PropagatorHandle<P>,
     ) -> Option<&mut P> {
         self[handle.id].downcast_mut()
+    }
+
+    /// Test whether the given untyped propagator ID refers to a propagator of type `P`.
+    pub(crate) fn is_propagator<P: Propagator>(&self, propagator_id: PropagatorId) -> bool {
+        self[propagator_id].is::<P>()
     }
 }
 
@@ -98,7 +95,7 @@ pub(crate) struct NewPropagator<'a, P> {
     propagator: PhantomData<P>,
 }
 
-impl<P> NewPropagator<'_, P> {
+impl<P: Propagator + 'static> NewPropagator<'_, P> {
     /// The handle corresponding to this slot.
     pub(crate) fn key(&self) -> PropagatorHandle<P> {
         PropagatorHandle {
@@ -108,9 +105,9 @@ impl<P> NewPropagator<'_, P> {
     }
 
     /// Put a propagator into the slot.
-    pub(crate) fn populate(self, propagator: Box<dyn Propagator>) -> PropagatorHandle<P> {
+    pub(crate) fn populate(self, propagator: P) -> PropagatorHandle<P> {
         PropagatorHandle {
-            id: self.underlying.populate(propagator),
+            id: self.underlying.populate(Box::new(propagator)),
             propagator: PhantomData,
         }
     }

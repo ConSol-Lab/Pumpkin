@@ -18,16 +18,17 @@ use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
+use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::Assignments;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_extreme;
-use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
+use crate::PropagatorHandle;
 
 #[derive(Debug)]
 pub(crate) struct NotificationEngine {
@@ -45,35 +46,12 @@ pub(crate) struct NotificationEngine {
     backtrack_events: EventSink,
 }
 
-#[cfg(not(test))]
 impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
             watch_list_domain_events: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
-            events: Default::default(),
-            backtrack_events: Default::default(),
-        };
-        // Grow for the dummy predicate
-        result.grow();
-        result
-    }
-}
-
-#[cfg(test)]
-impl Default for NotificationEngine {
-    fn default() -> Self {
-        let watch_list_domain_events = WatchListDomainEvents {
-            watchers: Default::default(),
-            is_watching_anything: true,
-            is_watching_any_backtrack_events: true,
-        };
-
-        let mut result = Self {
-            watch_list_domain_events,
-            predicate_notifier: Default::default(),
-            last_notified_trail_index: usize::MAX,
             events: Default::default(),
             backtrack_events: Default::default(),
         };
@@ -245,6 +223,7 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
         propagator_queue: &mut PropagatorQueue,
     ) {
         // We first take the events because otherwise we get mutability issues when calling methods
@@ -257,6 +236,7 @@ impl NotificationEngine {
                 .on_update(trailed_values, assignments, event, domain);
             // Special case: the nogood propagator is notified about each event.
             Self::notify_nogood_propagator(
+                nogood_propagator_handle.untyped(),
                 &mut self.predicate_notifier.predicate_id_assignments,
                 event,
                 domain,
@@ -288,9 +268,15 @@ impl NotificationEngine {
 
         self.events = events;
 
-        // Then we notify the propagators that a predicate has been satisfied
-        self.notify_predicate_id_satisfied(propagators);
-        self.notify_predicate_id_falsified(propagators);
+        // Then we notify the propagators that a predicate has been satisfied.
+        //
+        // Currently, only the nogood propagator is notified.
+        let nogood_propagator = propagators
+            .get_propagator_mut(nogood_propagator_handle)
+            .expect("nogood propagator handle refers to a nogood propagator");
+        self.notify_predicate_id_satisfied(nogood_propagator);
+        // At the moment this does nothing yet, but we call it to drain predicates.
+        self.notify_predicate_id_falsified();
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -328,24 +314,22 @@ impl NotificationEngine {
     /// Notifies propagators that certain [`Predicate`]s have been falsified.
     ///
     /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self, _propagators: &mut PropagatorStore) {
+    fn notify_predicate_id_falsified(&mut self) {
         for _predicate_id in self.predicate_notifier.drain_falsified_predicates() {
             // At the moment this does nothing
         }
     }
 
-    /// Notifies propagators that certain [`Predicate`]s have been satisfied.
-    ///
-    /// Currently, only the [`NogoodPropagator`] is notified.
-    fn notify_predicate_id_satisfied(&mut self, propagators: &mut PropagatorStore) {
+    /// Notifies the propagator that certain [`Predicate`]s have been satisfied.
+    fn notify_predicate_id_satisfied(&mut self, propagator: &mut dyn Propagator) {
         for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
-            let nogood_propagator =
-                &mut propagators[ConstraintSatisfactionSolver::get_nogood_propagator_id()];
-            nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+            propagator.notify_predicate_id_satisfied(predicate_id);
         }
     }
 
+    #[allow(clippy::too_many_arguments, reason = "to be refactored later")]
     fn notify_nogood_propagator(
+        nogood_propagator_id: PropagatorId,
         predicate_id_assignments: &mut PredicateIdAssignments,
         event: DomainEvent,
         domain: DomainId,
@@ -354,11 +338,6 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        pumpkin_assert_moderate!(
-            propagators[ConstraintSatisfactionSolver::get_nogood_propagator_id()].name()
-                == "NogoodPropagator"
-        );
-        let nogood_propagator_id = ConstraintSatisfactionSolver::get_nogood_propagator_id();
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
         // For this reason, its local id matches the domain id.
         // This is special only for the nogood propagator.
@@ -470,9 +449,10 @@ impl NotificationEngine {
             }
         }
 
-        // Then we notify the propagators that a predicate has been satisfied
-        self.notify_predicate_id_satisfied(propagators);
-        self.notify_predicate_id_falsified(propagators);
+        // TODO: Do we notify the nogood propagator here as well? I don't think so, as in
+        // the test solver there may not be one.
+        let _ = self.predicate_notifier.drain_satisfied_predicates();
+        let _ = self.predicate_notifier.drain_falsified_predicates();
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }

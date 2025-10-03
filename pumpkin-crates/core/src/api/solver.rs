@@ -19,6 +19,7 @@ use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructor;
+pub use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -39,8 +40,6 @@ use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::statistics::StatisticLogger;
-
-pub use crate::engine::propagation::store::PropagatorHandle;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
