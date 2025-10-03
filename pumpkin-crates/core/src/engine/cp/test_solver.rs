@@ -86,33 +86,8 @@ impl TestSolver {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        let propagator_slot = self.propagator_store.new_propagator();
-
-        let mut proof_log = ProofLog::default();
-
-        let constructor_context = PropagatorConstructorContext::new(
-            &mut self.notification_engine,
-            &mut self.trailed_values,
-            &mut proof_log,
-            propagator_slot.key().untyped(),
-            &mut self.assignments,
-        );
-
-        let propagator = constructor.create(constructor_context);
-
-        let handle = propagator_slot.populate(propagator);
-
-        let context = PropagationContextMut::new(
-            &mut self.trailed_values,
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.semantic_minimiser,
-            &mut self.notification_engine,
-            PropagatorId(0),
-        );
-        self.propagator_store[handle.untyped()].propagate(context)?;
-
-        Ok(handle.untyped())
+        self.new_propagator_with_handle(move |_| constructor)
+            .map(|handle| handle.untyped())
     }
 
     pub(crate) fn new_propagator_with_handle<Constructor>(
