@@ -223,7 +223,9 @@ impl ConflictAnalysisContext<'_> {
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            if propagators.is_propagator::<NogoodPropagator>(propagator_id)
+            if propagators
+                .as_propagator_handle::<NogoodPropagator>(propagator_id)
+                .is_some()
                 && reason_buffer.as_ref().is_empty()
             {
                 // This means that a unit nogood was propagated, we indicate that this nogood step

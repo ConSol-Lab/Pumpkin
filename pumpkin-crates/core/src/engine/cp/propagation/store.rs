@@ -70,9 +70,24 @@ impl PropagatorStore {
         self[handle.id].downcast_mut()
     }
 
-    /// Test whether the given untyped propagator ID refers to a propagator of type `P`.
-    pub(crate) fn is_propagator<P: Propagator>(&self, propagator_id: PropagatorId) -> bool {
-        self[propagator_id].is::<P>()
+    /// Get the given [`PropagatorId`] as a handle if the ID points to a propagator of type `P`.
+    pub(crate) fn as_propagator_handle<P: Propagator>(
+        &self,
+        propagator_id: PropagatorId,
+    ) -> Option<PropagatorHandle<P>> {
+        if self[propagator_id].is::<P>() {
+            Some(PropagatorHandle {
+                id: propagator_id,
+                propagator: PhantomData,
+            })
+        } else {
+            None
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn keys(&self) -> impl Iterator<Item = PropagatorId> + '_ {
+        self.propagators.keys()
     }
 }
 

@@ -444,6 +444,12 @@ impl NotificationEngine {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
     ) {
+        // There may be a nogood propagator in the store. In that case we need to always
+        // notify it.
+        let nogood_propagator_handle = propagators
+            .keys()
+            .find_map(|id| propagators.as_propagator_handle::<NogoodPropagator>(id));
+
         // Collect so that we can pass the assignments to the methods within the loop
         for (event, domain) in self.events.drain().collect::<Vec<_>>() {
             // First we notify the predicate_notifier that a domain has been updated
@@ -472,10 +478,17 @@ impl NotificationEngine {
             }
         }
 
-        // TODO: Do we notify the nogood propagator here as well? I don't think so, as in
-        // the test solver there may not be one.
-        let _ = self.predicate_notifier.drain_satisfied_predicates();
-        let _ = self.predicate_notifier.drain_falsified_predicates();
+        if let Some(handle) = nogood_propagator_handle {
+            // Then we notify the propagators that a predicate has been satisfied.
+            //
+            // Currently, only the nogood propagator is notified.
+            let nogood_propagator = propagators
+                .get_propagator_mut(handle)
+                .expect("nogood propagator handle refers to a nogood propagator");
+            self.notify_predicate_id_satisfied(nogood_propagator);
+            // At the moment this does nothing yet, but we call it to drain predicates.
+            self.notify_predicate_id_falsified();
+        }
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }

@@ -156,7 +156,10 @@ impl DebugHelper {
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
-        if propagators.is_propagator::<NogoodPropagator>(propagator_id) {
+        if propagators
+            .as_propagator_handle::<NogoodPropagator>(propagator_id)
+            .is_some()
+        {
             return true;
         }
 
