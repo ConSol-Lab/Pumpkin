@@ -46,12 +46,35 @@ pub(crate) struct NotificationEngine {
     backtrack_events: EventSink,
 }
 
+#[cfg(not(test))]
 impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
             watch_list_domain_events: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
+            events: Default::default(),
+            backtrack_events: Default::default(),
+        };
+        // Grow for the dummy predicate
+        result.grow();
+        result
+    }
+}
+
+#[cfg(test)]
+impl Default for NotificationEngine {
+    fn default() -> Self {
+        let watch_list_domain_events = WatchListDomainEvents {
+            watchers: Default::default(),
+            is_watching_anything: true,
+            is_watching_any_backtrack_events: true,
+        };
+
+        let mut result = Self {
+            watch_list_domain_events,
+            predicate_notifier: Default::default(),
+            last_notified_trail_index: usize::MAX,
             events: Default::default(),
             backtrack_events: Default::default(),
         };
