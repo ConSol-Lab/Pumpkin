@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
 
-use log::debug;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 

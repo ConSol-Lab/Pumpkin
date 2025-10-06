@@ -757,7 +757,7 @@ fn compile_table_reif(
 ) -> Result<bool, FlatZincError> {
     let variables = context
         .resolve_integer_variable_array(instance, &table_reif.variables)?
-        .to_vec();
+        .clone();
     let flat_table = context.resolve_integer_array(instance, &table_reif.table)?;
     let table = create_table(&flat_table, variables.len());
     let reified = context.resolve_bool_variable(&table_reif.reification)?;

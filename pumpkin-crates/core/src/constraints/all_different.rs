@@ -1,4 +1,3 @@
-use super::binary_not_equals;
 use super::Constraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::AllDifferentPropagatorArgs;
@@ -12,7 +11,7 @@ pub fn all_different<Var: IntegerVariable + 'static>(
     let variables: Box<[Var]> = variables.into();
     AllDifferentPropagatorArgs {
         vars: variables,
-        constraint_tag: constraint_tag,
+        constraint_tag,
     }
     // let mut constraints = Vec::new();
 

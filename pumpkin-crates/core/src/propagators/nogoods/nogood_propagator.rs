@@ -1344,9 +1344,9 @@ mod tests {
                 propagator,
             );
 
-            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+            let _ = downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
                 .add_nogood(nogood.into(), inference_code, &mut context)
-                .expect("");
+                .unwrap();
         }
 
         let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
@@ -1387,9 +1387,9 @@ mod tests {
                 propagator,
             );
 
-            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+            let _ = downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
                 .add_nogood(nogood.into(), inference_code, &mut context)
-                .expect("");
+                .unwrap();
         }
 
         let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);

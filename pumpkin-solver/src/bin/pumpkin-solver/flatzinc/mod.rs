@@ -47,11 +47,13 @@ const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 ///
 /// This can be overridden by setting specific bounds under this threshold but this should be done
 /// with care since it might lead to overflow/underflow!
+#[allow(dead_code, reason = "will be used later")]
 pub(crate) const MIN_INTEGER_VALUE: i32 = -500_000_000;
 /// The maximum value of an unbounded integer.
 ///
 /// This can be overridden by setting specific bounds over this threshold but this should be done
 /// with care since it might lead to overflow/underflow!
+#[allow(dead_code, reason = "will be used later")]
 pub(crate) const MAX_INTEGER_VALUE: i32 = 500_000_000;
 
 #[derive(Debug, Clone, Copy, Default)]

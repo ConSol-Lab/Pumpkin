@@ -111,7 +111,6 @@ impl From<Solver> for ProofProcessor {
 struct PostedDeduction {
     handle: NogoodHandle,
     marked: bool,
-    deduction: Deduction<Rc<str>, i32>,
 }
 
 type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
@@ -313,7 +312,6 @@ impl ProofProcessor {
                     nogood_stack[constraint_tag] = Some(PostedDeduction {
                         handle,
                         marked: false,
-                        deduction,
                     });
                 }
 
@@ -339,6 +337,22 @@ impl ProofProcessor {
             return Err(ProofProcessError::InvalidConclusion);
         }
 
+        // If the dual bound is the initial bound on the objective variable, write the
+        // correct proof in that situation and short-circuit.
+        if self.solver.assignments.is_initial_bound(predicate) {
+            self.add_predicate_to_explain(predicate);
+            let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
+            let deduction_id = self.solver.new_constraint_tag();
+
+            self.output_proof.push(ProofStage {
+                inferences,
+                constraint_id: deduction_id.into(),
+                premises: vec![convert_predicate_to_proof_atomic(&self.solver, !predicate)],
+            });
+
+            return Ok((Conclusion::DualBound(bound), nogood_stack));
+        }
+
         let mut reason_buffer = std::mem::take(&mut self.reason_buffer);
         let inference_code = self.get_reason(predicate, &mut reason_buffer);
 
@@ -347,9 +361,30 @@ impl ProofProcessor {
         // contain a nogood asserting the root bound (an inference is not enough, we
         // explicitly want a deduction that makes the conclusion true).
         trace!("Marking reason for dual bound");
+        trace!(
+            "  reason = {}",
+            NogoodDisplay {
+                nogood: &reason_buffer,
+                names: &self.solver.variable_names
+            },
+        );
 
+        // TODO: if the predicate is implied, then `inference_code` will be `None`. In that case,
+        // we need to make sure to mark all the inferences that imply predicate, and not just the
+        // first one.
+        //
+        // For example, let's say we have the following proof:
+        // ```
+        // ...
+        // n <id1> [obj <= 5]
+        // ...
+        // n <id2> [obj != 5]
+        // c [obj >= 7]
+        // ```
+        // In this case, we have to mark both <id1> and <id2>.
         let used_constraint_tag = self.solver.get_constraint_tag_for(inference_code.unwrap());
-        trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
+        trace!("  constraint_tag = {}", NonZero::from(used_constraint_tag));
+
         let Some(stack_entry) = nogood_stack
             .get_mut(&used_constraint_tag)
             .map(|opt| opt.as_mut())
@@ -360,6 +395,8 @@ impl ProofProcessor {
         if let Some(posted_deduction) = stack_entry {
             posted_deduction.marked = true;
         } else {
+            // In this case we have to explain by 'root propagation' and no deductions
+            // were used. The predicate is propagated by a propagator.
             self.add_predicate_to_explain(predicate);
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.solver.new_constraint_tag();
@@ -392,7 +429,6 @@ impl ProofProcessor {
         nogood_stack[tag] = Some(PostedDeduction {
             handle: unsat_triggering_nogood,
             marked: true,
-            deduction,
         });
 
         let inferences = self.explain_current_conflict(&mut nogood_stack);
@@ -797,20 +833,20 @@ impl Nogood {
         variable_names: &'names VariableNames,
     ) -> impl Display + 'names {
         NogoodDisplay {
-            nogood: self,
+            nogood: &self.0,
             names: variable_names,
         }
     }
 }
 
 struct NogoodDisplay<'nogood, 'names> {
-    nogood: &'nogood Nogood,
+    nogood: &'nogood Vec<Predicate>,
     names: &'names VariableNames,
 }
 
 impl Display for NogoodDisplay<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (idx, predicate) in self.nogood.0.iter().enumerate() {
+        for (idx, predicate) in self.nogood.iter().enumerate() {
             if idx > 0 {
                 write!(f, " ")?;
             }
@@ -819,5 +855,143 @@ impl Display for NogoodDisplay<'_, '_> {
         }
 
         write!(f, " => false")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use drcp_format::reader::ReadAtomic;
+    use drcp_format::reader::ReadStep;
+    use drcp_format::IntComparison::*;
+
+    use super::*;
+    use crate::constraints;
+
+    #[test]
+    fn dual_bound_is_initial_bound() {
+        let mut solver = Solver::default();
+        let _ = solver.new_named_bounded_integer(10, 20, "x1");
+
+        let scaffold = r#"
+            a 1 [x1 <= 9]
+            n 1 1 0
+            c -1
+        "#;
+
+        let expected = vec![
+            inference(
+                2,
+                [],
+                Some(atomic("x1", GreaterEqual, 10)),
+                None,
+                Some("initial_domain"),
+            ),
+            deduction(3, [atomic("x1", LessEqual, 9)], [2]),
+            Step::Conclusion(Conclusion::DualBound(atomic("x1", GreaterEqual, 10))),
+        ];
+
+        test_processing(solver, scaffold, expected);
+    }
+
+    #[test]
+    fn dual_bound_is_root_propagation() {
+        let mut solver = Solver::default();
+        let x1 = solver.new_named_bounded_integer(0, 20, "x1");
+        let x2 = solver.new_named_bounded_integer(10, 10, "x2");
+
+        let constraint_tag = solver.new_constraint_tag();
+        solver
+            .add_constraint(constraints::binary_equals(x1, x2, constraint_tag))
+            .post()
+            .expect("not root-level unsatisfiable");
+
+        let scaffold = r#"
+            a 1 [x1 <= 9]
+            n 2 1 0
+            c -1
+        "#;
+
+        let expected = vec![
+            inference(
+                4,
+                [],
+                Some(atomic("x2", GreaterEqual, 10)),
+                None,
+                Some("initial_domain"),
+            ),
+            inference(
+                3,
+                [atomic("x2", GreaterEqual, 10)],
+                Some(atomic("x1", GreaterEqual, 10)),
+                Some(1),
+                Some("binary_equals"),
+            ),
+            deduction(5, [atomic("x1", LessEqual, 9)], [4, 3]),
+            Step::Conclusion(Conclusion::DualBound(atomic("x1", GreaterEqual, 10))),
+        ];
+
+        test_processing(solver, scaffold, expected);
+    }
+
+    fn inference(
+        constraint_id: u32,
+        premises: impl Into<Vec<ReadAtomic<i32>>>,
+        consequent: Option<ReadAtomic<i32>>,
+        generated_by: Option<u32>,
+        label: Option<&str>,
+    ) -> ReadStep<i32> {
+        Step::Inference(Inference {
+            constraint_id: NonZero::new(constraint_id).expect("constraint_id is non-zero"),
+            premises: premises.into(),
+            consequent,
+            generated_by: generated_by
+                .map(|id| NonZero::new(id).expect("constraint_id is non-zero")),
+            label: label.map(Rc::from),
+        })
+    }
+
+    fn deduction(
+        constraint_id: u32,
+        premises: impl Into<Vec<ReadAtomic<i32>>>,
+        sequence: impl IntoIterator<Item = u32>,
+    ) -> ReadStep<i32> {
+        Step::Deduction(Deduction {
+            constraint_id: NonZero::new(constraint_id).expect("constraint_id is non-zero"),
+            premises: premises.into(),
+            sequence: sequence
+                .into_iter()
+                .map(|id| NonZero::new(id).expect("constraint_id is non-zero"))
+                .collect(),
+        })
+    }
+
+    fn atomic(name: &str, comparison: IntComparison, value: i32) -> ReadAtomic<i32> {
+        IntAtomic {
+            name: Rc::from(name),
+            comparison,
+            value,
+        }
+    }
+
+    fn test_processing(solver: Solver, scaffold: &str, expected: Vec<ReadStep<i32>>) {
+        let mut processed = Vec::new();
+
+        let processor = ProofProcessor::from(solver);
+        processor
+            .process(
+                ProofReader::new(scaffold.as_bytes()),
+                ProofWriter::new(&mut processed),
+            )
+            .expect("successful process");
+
+        let mut processed_reader = ProofReader::<_, i32>::new(processed.as_slice());
+        let processed_proof = std::iter::from_fn(|| {
+            processed_reader
+                .next_step()
+                .expect("processor returns valid proof")
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(processed_proof, expected);
     }
 }

@@ -1,4 +1,10 @@
-// use env_logger::init;
+#![allow(
+    unused_results,
+    unused,
+    clippy::all,
+    clippy::redundant_type_annotations,
+    reason = "student code that is not refactored yet"
+)]
 
 use std::collections::BTreeMap;
 

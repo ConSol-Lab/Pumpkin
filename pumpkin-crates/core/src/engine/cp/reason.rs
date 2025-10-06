@@ -172,6 +172,8 @@ impl Slot<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use super::*;
     use crate::conjunction;
     use crate::engine::notifications::NotificationEngine;
@@ -197,7 +199,7 @@ mod tests {
             &mut out_reason,
         );
 
-        assert_eq!(conjunction.as_slice(), &out_reason);
+        assert_eq!(conjunction.deref(), &out_reason);
     }
 
     #[test]
@@ -223,6 +225,6 @@ mod tests {
             &mut out_reason,
         );
 
-        assert_eq!(conjunction.as_slice(), &out_reason);
+        assert_eq!(conjunction.deref(), &out_reason);
     }
 }

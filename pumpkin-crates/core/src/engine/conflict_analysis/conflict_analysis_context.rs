@@ -193,6 +193,7 @@ impl ConflictAnalysisContext<'_> {
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
         if assignments.is_initial_bound(predicate) {
+            dbg!("hi");
             return None;
         }
 
