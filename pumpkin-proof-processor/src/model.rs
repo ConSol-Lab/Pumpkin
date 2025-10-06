@@ -36,7 +36,8 @@ pub(crate) fn create_domain_for_variable(
 ) -> DomainId {
     match &variable.domain.node {
         fzn_rs::ast::Domain::UnboundedInt => todo!("unbounded integers are not supported yet"),
-        fzn_rs::ast::Domain::Bool => todo!("boolean variables are not supported yet"),
+
+        fzn_rs::ast::Domain::Bool => solver.new_named_bounded_integer(0, 1, name),
 
         fzn_rs::ast::Domain::Int(domain) => {
             assert!(
