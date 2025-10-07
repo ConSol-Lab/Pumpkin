@@ -159,7 +159,8 @@ pub(crate) trait Propagator: Downcast {
         None
     }
 
-    /// Hook which is called when a propagation was done with a lazy reason.
+    /// Hook which is called when a propagated [`Predicate`] should be explained using a lazy
+    /// reason.
     ///
     /// The code which was attached to the propagation through [`Reason::DynamicLazy`] is given, as
     /// well as a context object which defines what can be inspected from the solver to build the
