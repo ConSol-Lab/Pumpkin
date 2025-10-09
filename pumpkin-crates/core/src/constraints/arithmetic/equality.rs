@@ -86,7 +86,7 @@ where
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         if self.terms.len() == 2 && !solver.is_logging_full_proof() {
-            solver.add_propagator(BinaryEqualsPropagatorArgs {
+            let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
@@ -111,7 +111,7 @@ where
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
         if self.terms.len() == 2 {
-            solver.add_propagator(ReifiedPropagatorArgs {
+            let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
                     a: self.terms[0].clone(),
                     b: self.terms[1].scaled(-1).offset(self.rhs),
@@ -163,11 +163,13 @@ where
         } = self;
 
         if terms.len() == 2 {
-            solver.add_propagator(BinaryNotEqualsPropagatorArgs {
+            let _ = solver.add_propagator(BinaryNotEqualsPropagatorArgs {
                 a: terms[0].clone(),
                 b: terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
-            })
+            })?;
+
+            Ok(())
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
@@ -190,14 +192,15 @@ where
         } = self;
 
         if terms.len() == 2 {
-            solver.add_propagator(ReifiedPropagatorArgs {
+            let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryNotEqualsPropagatorArgs {
                     a: terms[0].clone(),
                     b: terms[1].scaled(-1).offset(self.rhs),
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
-            })
+            })?;
+            Ok(())
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
