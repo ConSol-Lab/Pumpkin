@@ -29,6 +29,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
+use crate::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -85,6 +86,18 @@ impl TestSolver {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        self.new_propagator_with_handle(move |_| constructor)
+            .map(|handle| handle.untyped())
+    }
+
+    pub(crate) fn new_propagator_with_handle<Constructor>(
+        &mut self,
+        constructor: impl FnOnce(PropagatorHandle<Constructor::PropagatorImpl>) -> Constructor,
+    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, Inconsistency>
+    where
+        Constructor: PropagatorConstructor,
+        Constructor::PropagatorImpl: 'static,
+    {
         let propagator_slot = self.propagator_store.new_propagator();
 
         let mut proof_log = ProofLog::default();
@@ -93,13 +106,13 @@ impl TestSolver {
             &mut self.notification_engine,
             &mut self.trailed_values,
             &mut proof_log,
-            propagator_slot.key(),
+            propagator_slot.key().untyped(),
             &mut self.assignments,
         );
 
-        let propagator = Box::new(constructor.create(constructor_context));
+        let propagator = constructor(propagator_slot.key()).create(constructor_context);
 
-        let id = propagator_slot.populate(propagator);
+        let handle = propagator_slot.populate(propagator);
 
         let context = PropagationContextMut::new(
             &mut self.trailed_values,
@@ -109,9 +122,9 @@ impl TestSolver {
             &mut self.notification_engine,
             PropagatorId(0),
         );
-        self.propagator_store[id].propagate(context)?;
+        self.propagator_store[handle.untyped()].propagate(context)?;
 
-        Ok(id)
+        Ok(handle)
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {

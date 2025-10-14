@@ -28,7 +28,6 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
@@ -40,6 +39,7 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::PropagatorHandle;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -49,7 +49,7 @@ use crate::pumpkin_assert_simple;
 ///
 /// The idea for propagation is the two-watcher scheme; this is achieved by internally keeping
 /// track of watch lists.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct NogoodPropagator {
     /// The [`PredicateId`]s of the nogoods.
     nogood_predicates: ArenaAllocator,
@@ -74,6 +74,12 @@ pub(crate) struct NogoodPropagator {
     bumped_nogoods: Vec<NogoodId>,
     /// Used to return lazy reasons
     temp_nogood_reason: Vec<Predicate>,
+    /// The handle of this instance inside the solver.
+    ///
+    /// Used during nogood cleanup. A nogood can only be removed if it is not propagated in the
+    /// current subtree. To test for that, we compare this handle with the propagator ID of a
+    /// proapgated literal to see if this propagator propagated a predicate.
+    handle: PropagatorHandle<NogoodPropagator>,
 }
 
 /// Watcher for a single nogood.
@@ -116,13 +122,28 @@ impl NogoodPropagator {
     /// Creates a new instance of the [`NogoodPropagator`] with the provided [`LearningOptions`]
     /// and `capacity`.
     ///
+    /// The `handle` should be the handle of the propagator used in the solver.
+    ///
     /// The `capacity` indicates how many [`PredicateId`]s to preallocate to the
     /// [`ArenaAllocator`].
-    pub(crate) fn with_options(capacity: usize, parameters: LearningOptions) -> Self {
+    pub(crate) fn with_options(
+        handle: PropagatorHandle<NogoodPropagator>,
+        capacity: usize,
+        parameters: LearningOptions,
+    ) -> Self {
         Self {
+            handle,
             parameters,
             nogood_predicates: ArenaAllocator::new(capacity),
-            ..Default::default()
+            nogood_info: Default::default(),
+            inference_codes: Default::default(),
+            permanent_nogood_ids: Default::default(),
+            learned_nogood_ids: Default::default(),
+            watch_lists: Default::default(),
+            updated_predicate_ids: Default::default(),
+            lbd_helper: Default::default(),
+            bumped_nogoods: Default::default(),
+            temp_nogood_reason: Default::default(),
         }
     }
 
@@ -133,6 +154,7 @@ impl NogoodPropagator {
     ///   propagator
     /// - The reason for the predicate is the nogood propagator
     fn is_nogood_propagating(
+        handle: PropagatorHandle<NogoodPropagator>,
         nogood: &[PredicateId],
         assignments: &Assignments,
         reason_store: &ReasonStore,
@@ -149,8 +171,7 @@ impl NogoodPropagator {
                 let code = reason_store.get_lazy_code(reason_ref);
 
                 // We check whether the predicate was propagated by the nogood propagator first
-                let propagated_by_nogood_propagator =
-                    propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id();
+                let propagated_by_nogood_propagator = propagator_id == handle.untyped();
                 // Then we check whether the lazy reason for the propagation was this particular
                 // nogood
                 let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
@@ -728,6 +749,7 @@ impl NogoodPropagator {
 
             // Then we remove roughly the worst half of the "high" LBD tier nogood IDs
             removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
+                self.handle,
                 &mut self.learned_nogood_ids.high_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -750,6 +772,7 @@ impl NogoodPropagator {
 
             // Then we remove roughly the worst half of the "mid" LBD tier nogood IDs
             removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
+                self.handle,
                 &mut self.learned_nogood_ids.mid_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -770,6 +793,7 @@ impl NogoodPropagator {
 
             // Then we remove roughly the worst half of the "low" LBD tier nogood IDs
             removed_at_least_one_nogood |= NogoodPropagator::remove_roughly_worst_half_nogood_ids(
+                self.handle,
                 &mut self.learned_nogood_ids.low_lbd,
                 &mut self.nogood_info,
                 &self.nogood_predicates,
@@ -922,6 +946,7 @@ impl NogoodPropagator {
     // This means that the function may remove some nogoods from the first half if
     // some of the bottom nogoods are currently propagating.
     fn remove_roughly_worst_half_nogood_ids(
+        handle: PropagatorHandle<NogoodPropagator>,
         nogood_ids: &mut Vec<NogoodId>,
         nogood_info: &mut KeyedVec<NogoodIndex, NogoodInfo>,
         nogoods: &ArenaAllocator,
@@ -951,6 +976,7 @@ impl NogoodPropagator {
 
             // Skip nogoods which are propagating at a non-root level.
             if NogoodPropagator::is_nogood_propagating(
+                handle,
                 &nogoods[id],
                 assignments,
                 reason_store,
@@ -1260,21 +1286,10 @@ impl NogoodPropagator {
 mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
-    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::PropagationContextMut;
-    use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
+    use crate::options::LearningOptions;
     use crate::predicate;
-
-    fn downcast_to_nogood_propagator(
-        nogood_propagator: PropagatorId,
-        propagators: &mut PropagatorStore,
-    ) -> &mut NogoodPropagator {
-        match propagators[nogood_propagator].downcast_mut::<NogoodPropagator>() {
-            Some(nogood_propagator) => nogood_propagator,
-            None => panic!("Provided propagator should be the nogood propagator"),
-        }
-    }
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -1285,11 +1300,13 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let propagator = solver
-            .new_propagator(NogoodPropagator::default())
+        let handle = solver
+            .new_propagator_with_handle(|handle| {
+                NogoodPropagator::with_options(handle, 10, LearningOptions::default())
+            })
             .expect("no empty domains");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id(), dummy, 1);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), dummy.id(), dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -1299,22 +1316,27 @@ mod tests {
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut solver.notification_engine,
-                propagator,
+                handle.untyped(),
             );
 
-            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+            solver
+                .propagator_store
+                .get_propagator_mut(handle)
+                .unwrap()
                 .add_nogood(nogood.into(), inference_code, &mut context)
-                .expect("");
+                .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 0);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), b.id(), b, 0);
 
-        solver.propagate_until_fixed_point(propagator).expect("");
+        solver
+            .propagate_until_fixed_point(handle.untyped())
+            .expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), c.id(), c, 15);
 
-        solver.propagate(propagator).expect("");
+        solver.propagate(handle.untyped()).expect("");
 
         assert_eq!(solver.upper_bound(b), 0);
 
@@ -1330,8 +1352,10 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let propagator = solver
-            .new_propagator(NogoodPropagator::default())
+        let handle = solver
+            .new_propagator_with_handle(|handle| {
+                NogoodPropagator::with_options(handle, 10, LearningOptions::default())
+            })
             .expect("no empty domains");
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
@@ -1342,19 +1366,22 @@ mod tests {
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut solver.notification_engine,
-                propagator,
+                handle.untyped(),
             );
 
-            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+            solver
+                .propagator_store
+                .get_propagator_mut(handle)
+                .unwrap()
                 .add_nogood(nogood.into(), inference_code, &mut context)
-                .expect("");
+                .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(propagator, a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(propagator, b.id(), b, 1);
-        let _ = solver.increase_lower_bound_and_notify(propagator, c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), b.id(), b, 1);
+        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), c.id(), c, 15);
 
-        let result = solver.propagate_until_fixed_point(propagator);
+        let result = solver.propagate_until_fixed_point(handle.untyped());
         assert!(result.is_err());
     }
 }

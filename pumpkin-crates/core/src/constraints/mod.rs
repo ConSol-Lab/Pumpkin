@@ -88,7 +88,8 @@ where
     ConcretePropagator: PropagatorConstructor + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self)
+        let _ = solver.add_propagator(self)?;
+        Ok(())
     }
 
     fn implied_by(
@@ -96,10 +97,11 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagatorArgs {
+        let _ = solver.add_propagator(ReifiedPropagatorArgs {
             propagator: self,
             reification_literal,
-        })
+        })?;
+        Ok(())
     }
 }
 
