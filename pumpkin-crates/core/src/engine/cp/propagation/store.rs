@@ -105,6 +105,8 @@ impl IndexMut<PropagatorId> for PropagatorStore {
     }
 }
 
+/// Wrapper around a [`Slot`] that provides a strongly typed [`PropagatorHandle`] instead of a
+/// type-erased [`PropagatorId`].
 pub(crate) struct NewPropagator<'a, P> {
     underlying: Slot<'a, PropagatorId, Box<dyn Propagator>>,
     propagator: PhantomData<P>,

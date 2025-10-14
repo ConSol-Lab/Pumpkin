@@ -75,6 +75,10 @@ pub(crate) struct NogoodPropagator {
     /// Used to return lazy reasons
     temp_nogood_reason: Vec<Predicate>,
     /// The handle of this instance inside the solver.
+    ///
+    /// Used during nogood cleanup. A nogood can only be removed if it is not propagated in the
+    /// current subtree. To test for that, we compare this handle with the propagator ID of a
+    /// proapgated literal to see if this propagator propagated a predicate.
     handle: PropagatorHandle<NogoodPropagator>,
 }
 
