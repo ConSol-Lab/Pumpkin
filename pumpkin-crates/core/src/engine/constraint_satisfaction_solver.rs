@@ -918,7 +918,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.notification_engine,
-            self.nogood_propagator_handle.untyped(),
+            self.nogood_propagator_handle.propagator_id(),
         );
 
         let nogood_propagator = self
@@ -1349,7 +1349,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.notification_engine,
             &mut self.trailed_values,
             &mut self.internal_parameters.proof_log,
-            propagator_slot.key().untyped(),
+            propagator_slot.key().propagator_id(),
             &mut self.assignments,
         );
 
@@ -1363,10 +1363,10 @@ impl ConstraintSatisfactionSolver {
         );
         let new_propagator_id = propagator_slot.populate(propagator);
 
-        let new_propagator = &mut self.propagators[new_propagator_id.untyped()];
+        let new_propagator = &mut self.propagators[new_propagator_id.propagator_id()];
 
         self.propagator_queue
-            .enqueue_propagator(new_propagator_id.untyped(), new_propagator.priority());
+            .enqueue_propagator(new_propagator_id.propagator_id(), new_propagator.priority());
 
         self.propagate();
 
@@ -1412,7 +1412,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.notification_engine,
-            self.nogood_propagator_handle.untyped(),
+            self.nogood_propagator_handle.propagator_id(),
         );
 
         let nogood_propagator = self
@@ -1420,10 +1420,10 @@ impl ConstraintSatisfactionSolver {
             .get_propagator_mut(self.nogood_propagator_handle)
             .expect("nogood propagator handle should refer to nogood propagator");
 
-        let addition_result =
+        let propagation_status =
             nogood_propagator.add_nogood(nogood, inference_code, &mut propagation_context);
 
-        if addition_result.is_err() || self.state.is_conflicting() {
+        if propagation_status.is_err() || self.state.is_conflicting() {
             self.prepare_for_conflict_resolution();
             self.handle_root_propagation(num_trail_entries);
             self.complete_proof();

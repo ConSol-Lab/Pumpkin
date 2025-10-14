@@ -24,8 +24,8 @@ pub struct PropagatorHandle<P> {
 }
 
 impl<P> PropagatorHandle<P> {
-    /// Get a type-erased handle to the propagator.
-    pub(crate) fn untyped(self) -> PropagatorId {
+    /// Get the type-erased [`PropagatorId`] of the propagator.
+    pub(crate) fn propagator_id(self) -> PropagatorId {
         self.id
     }
 }
@@ -53,10 +53,10 @@ impl PropagatorStore {
         self.propagators.iter_mut()
     }
 
-    pub(crate) fn new_propagator<P>(&mut self) -> NewPropagator<'_, P> {
-        NewPropagator {
-            underlying: self.propagators.new_slot(),
-            propagator: PhantomData,
+    pub(crate) fn new_propagator<P>(&mut self) -> NewPropagatorSlot<'_, P> {
+        NewPropagatorSlot {
+            underlying_slot: self.propagators.new_slot(),
+            propagator_type: PhantomData,
         }
     }
 
@@ -107,16 +107,16 @@ impl IndexMut<PropagatorId> for PropagatorStore {
 
 /// Wrapper around a [`Slot`] that provides a strongly typed [`PropagatorHandle`] instead of a
 /// type-erased [`PropagatorId`].
-pub(crate) struct NewPropagator<'a, P> {
-    underlying: Slot<'a, PropagatorId, Box<dyn Propagator>>,
-    propagator: PhantomData<P>,
+pub(crate) struct NewPropagatorSlot<'a, P> {
+    underlying_slot: Slot<'a, PropagatorId, Box<dyn Propagator>>,
+    propagator_type: PhantomData<P>,
 }
 
-impl<P: Propagator + 'static> NewPropagator<'_, P> {
+impl<P: Propagator + 'static> NewPropagatorSlot<'_, P> {
     /// The handle corresponding to this slot.
     pub(crate) fn key(&self) -> PropagatorHandle<P> {
         PropagatorHandle {
-            id: self.underlying.key(),
+            id: self.underlying_slot.key(),
             propagator: PhantomData,
         }
     }
@@ -124,7 +124,7 @@ impl<P: Propagator + 'static> NewPropagator<'_, P> {
     /// Put a propagator into the slot.
     pub(crate) fn populate(self, propagator: P) -> PropagatorHandle<P> {
         PropagatorHandle {
-            id: self.underlying.populate(Box::new(propagator)),
+            id: self.underlying_slot.populate(Box::new(propagator)),
             propagator: PhantomData,
         }
     }

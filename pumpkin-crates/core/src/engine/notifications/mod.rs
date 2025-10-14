@@ -259,7 +259,7 @@ impl NotificationEngine {
                 .on_update(trailed_values, assignments, event, domain);
             // Special case: the nogood propagator is notified about each event.
             Self::notify_nogood_propagator(
-                nogood_propagator_handle.untyped(),
+                nogood_propagator_handle,
                 &mut self.predicate_notifier.predicate_id_assignments,
                 event,
                 domain,
@@ -352,7 +352,7 @@ impl NotificationEngine {
 
     #[allow(clippy::too_many_arguments, reason = "to be refactored later")]
     fn notify_nogood_propagator(
-        nogood_propagator_id: PropagatorId,
+        nogood_propagator_id: PropagatorHandle<NogoodPropagator>,
         predicate_id_assignments: &mut PredicateIdAssignments,
         event: DomainEvent,
         domain: DomainId,
@@ -367,7 +367,7 @@ impl NotificationEngine {
         let local_id = LocalId::from(domain.id());
         Self::notify_propagator(
             predicate_id_assignments,
-            nogood_propagator_id,
+            nogood_propagator_id.propagator_id(),
             local_id,
             event,
             propagators,

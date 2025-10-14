@@ -171,7 +171,7 @@ impl NogoodPropagator {
                 let code = reason_store.get_lazy_code(reason_ref);
 
                 // We check whether the predicate was propagated by the nogood propagator first
-                let propagated_by_nogood_propagator = propagator_id == handle.untyped();
+                let propagated_by_nogood_propagator = propagator_id == handle.propagator_id();
                 // Then we check whether the lazy reason for the propagation was this particular
                 // nogood
                 let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
@@ -1306,7 +1306,8 @@ mod tests {
             })
             .expect("no empty domains");
 
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), dummy.id(), dummy, 1);
+        let _ =
+            solver.increase_lower_bound_and_notify(handle.propagator_id(), dummy.id(), dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -1316,7 +1317,7 @@ mod tests {
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut solver.notification_engine,
-                handle.untyped(),
+                handle.propagator_id(),
             );
 
             solver
@@ -1327,16 +1328,16 @@ mod tests {
                 .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), b.id(), b, 0);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), b.id(), b, 0);
 
         solver
-            .propagate_until_fixed_point(handle.untyped())
+            .propagate_until_fixed_point(handle.propagator_id())
             .expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), c.id(), c, 15);
 
-        solver.propagate(handle.untyped()).expect("");
+        solver.propagate(handle.propagator_id()).expect("");
 
         assert_eq!(solver.upper_bound(b), 0);
 
@@ -1366,7 +1367,7 @@ mod tests {
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut solver.notification_engine,
-                handle.untyped(),
+                handle.propagator_id(),
             );
 
             solver
@@ -1377,11 +1378,11 @@ mod tests {
                 .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), b.id(), b, 1);
-        let _ = solver.increase_lower_bound_and_notify(handle.untyped(), c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), b.id(), b, 1);
+        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), c.id(), c, 15);
 
-        let result = solver.propagate_until_fixed_point(handle.untyped());
+        let result = solver.propagate_until_fixed_point(handle.propagator_id());
         assert!(result.is_err());
     }
 }

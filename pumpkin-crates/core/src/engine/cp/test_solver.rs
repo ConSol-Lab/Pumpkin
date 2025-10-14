@@ -87,7 +87,7 @@ impl TestSolver {
         Constructor::PropagatorImpl: 'static,
     {
         self.new_propagator_with_handle(move |_| constructor)
-            .map(|handle| handle.untyped())
+            .map(|handle| handle.propagator_id())
     }
 
     pub(crate) fn new_propagator_with_handle<Constructor>(
@@ -106,7 +106,7 @@ impl TestSolver {
             &mut self.notification_engine,
             &mut self.trailed_values,
             &mut proof_log,
-            propagator_slot.key().untyped(),
+            propagator_slot.key().propagator_id(),
             &mut self.assignments,
         );
 
@@ -122,7 +122,7 @@ impl TestSolver {
             &mut self.notification_engine,
             PropagatorId(0),
         );
-        self.propagator_store[handle.untyped()].propagate(context)?;
+        self.propagator_store[handle.propagator_id()].propagate(context)?;
 
         Ok(handle)
     }
