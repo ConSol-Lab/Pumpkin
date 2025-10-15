@@ -1094,7 +1094,7 @@ impl ConstraintSatisfactionSolver {
                 empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
             }
             PredicateType::Equal => {
-                // The last trail entry was an equality propagation; we split into two cases.
+                // The last trail entry was an equality propagation; we split into three cases.
                 if entry.predicate.get_right_hand_side() < entry.old_lower_bound {
                     // 1) The assigned value was lower than the lower-bound
                     //
@@ -1103,17 +1103,19 @@ impl ConstraintSatisfactionSolver {
                     empty_domain_reason.push(predicate!(
                         conflict_domain >= entry.predicate.get_right_hand_side() + 1
                     ));
-                } else {
+                } else if entry.predicate.get_right_hand_side() > entry.old_upper_bound {
                     // 2) The assigned value was larger than the upper-bound
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
-                    pumpkin_assert_simple!(
-                        entry.predicate.get_right_hand_side() > entry.old_upper_bound
-                    );
                     empty_domain_reason.push(predicate!(
                         conflict_domain <= entry.predicate.get_right_hand_side() - 1
                     ));
+                } else {
+                    // 3) The assigned value was equal to a hole in the domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain != entry.predicate.get_right_hand_side()
+                    ))
                 }
             }
         }
