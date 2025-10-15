@@ -747,7 +747,7 @@ impl ConstraintSatisfactionSolver {
 
             let _ = self
                 .assignments
-                .post_predicate(assumption_literal, None, &mut self.notification_engine)
+                .post(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
                     self.state
                         .declare_infeasible_under_assumptions(assumption_literal);
@@ -785,7 +785,7 @@ impl ConstraintSatisfactionSolver {
         self.solver_statistics.engine_statistics.num_decisions += 1;
         let update_occurred = self
             .assignments
-            .post_predicate(decision_predicate, None, &mut self.notification_engine)
+            .post(decision_predicate, None, &mut self.notification_engine)
             .expect("Decisions are expected not to fail.");
         pumpkin_assert_simple!(update_occurred);
 
@@ -1094,7 +1094,7 @@ impl ConstraintSatisfactionSolver {
                 empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
             }
             PredicateType::Equal => {
-                // The last trail entry was an equality propagation; we split into two cases.
+                // The last trail entry was an equality propagation; we split into three cases.
                 if entry.predicate.get_right_hand_side() < entry.old_lower_bound {
                     // 1) The assigned value was lower than the lower-bound
                     //
@@ -1103,17 +1103,19 @@ impl ConstraintSatisfactionSolver {
                     empty_domain_reason.push(predicate!(
                         conflict_domain >= entry.predicate.get_right_hand_side() + 1
                     ));
-                } else {
+                } else if entry.predicate.get_right_hand_side() > entry.old_upper_bound {
                     // 2) The assigned value was larger than the upper-bound
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
-                    pumpkin_assert_simple!(
-                        entry.predicate.get_right_hand_side() > entry.old_upper_bound
-                    );
                     empty_domain_reason.push(predicate!(
                         conflict_domain <= entry.predicate.get_right_hand_side() - 1
                     ));
+                } else {
+                    // 3) The assigned value was equal to a hole in the domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain != entry.predicate.get_right_hand_side()
+                    ))
                 }
             }
         }
@@ -1390,7 +1392,7 @@ impl ConstraintSatisfactionSolver {
         } else {
             match self
                 .assignments
-                .post_predicate(predicate, None, &mut self.notification_engine)
+                .post(predicate, None, &mut self.notification_engine)
             {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),

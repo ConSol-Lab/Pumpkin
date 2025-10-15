@@ -2,7 +2,6 @@ use crate::containers::HashMap;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
-use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct PredicateIdGenerator {
@@ -11,10 +10,6 @@ pub(crate) struct PredicateIdGenerator {
 }
 
 impl PredicateIdGenerator {
-    pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
-        self.predicate_to_id.contains_key(&predicate)
-    }
-
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
@@ -34,12 +29,6 @@ impl PredicateIdGenerator {
     pub(crate) fn clear(&mut self) {
         self.id_to_predicate.clear();
         self.predicate_to_id.clear();
-    }
-
-    pub(crate) fn replace_predicate(&mut self, predicate: Predicate, replacement: Predicate) {
-        pumpkin_assert_moderate!(self.has_id_for_predicate(predicate));
-        let predicate_id = self.get_id(predicate);
-        self.id_to_predicate[predicate_id] = replacement
     }
 
     pub(crate) fn num_predicate_ids(&self) -> usize {

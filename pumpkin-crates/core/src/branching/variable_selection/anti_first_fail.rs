@@ -103,7 +103,7 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments.post_predicate(
+        let _ = assignments.post(
             predicate!(integer_variables[1] >= 15),
             None,
             &mut notification_engine,

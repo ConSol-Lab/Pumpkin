@@ -518,14 +518,41 @@ impl Assignments {
         reason: Option<AssignmentReason>,
     ) -> Result<bool, EmptyDomain> {
         let mut update_took_place = false;
-        // only tighten the lower bound if needed
-        if self.get_lower_bound(domain_id) < assigned_value {
-            update_took_place |= self.tighten_lower_bound(domain_id, assigned_value, reason)?;
+
+        let predicate = predicate!(domain_id == assigned_value);
+
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
+
+        if old_lower_bound == assigned_value && old_upper_bound == assigned_value {
+            return self.domains[domain_id].verify_consistency();
         }
 
-        // only tighten the upper bound if needed
-        if self.get_upper_bound(domain_id) > assigned_value {
-            update_took_place |= self.tighten_upper_bound(domain_id, assigned_value, reason)?;
+        // important to record trail position _before_ pushing to the trail
+        let trail_position = self.trail.len();
+
+        self.trail.push(ConstraintProgrammingTrailEntry {
+            predicate,
+            old_lower_bound,
+            old_upper_bound,
+            reason,
+        });
+
+        let decision_level = self.get_decision_level();
+        let domain = &mut self.domains[domain_id];
+
+        if old_lower_bound < assigned_value {
+            update_took_place |=
+                domain.set_lower_bound(assigned_value, decision_level, trail_position);
+            self.bounds[domain_id].0 = domain.lower_bound();
+            self.pruned_values += domain.lower_bound().abs_diff(old_lower_bound) as u64;
+        }
+
+        if old_upper_bound > assigned_value {
+            update_took_place |=
+                domain.set_upper_bound(assigned_value, decision_level, trail_position);
+            self.bounds[domain_id].1 = domain.upper_bound();
+            self.pruned_values += domain.upper_bound().abs_diff(old_upper_bound) as u64;
         }
 
         let _ = self.domains[domain_id].verify_consistency()?;
@@ -585,7 +612,7 @@ impl Assignments {
     /// return `false`. If the predicate was unassigned and became true, then `true`
     /// is returned. If instead applying the [`Predicate`] leads to an
     /// [`EmptyDomain`], the error variant is returned.
-    pub(crate) fn post_predicate(
+    pub(crate) fn post(
         &mut self,
         predicate: Predicate,
         reason: Option<AssignmentReason>,
@@ -702,43 +729,50 @@ impl Assignments {
             self.trail.get_decision_level(),
         );
 
-        self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
-            pumpkin_assert_moderate!(
-                !entry.predicate.is_equality_predicate(),
-                "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
-            );
+        self.trail
+            .synchronise(new_decision_level)
+            .enumerate()
+            .for_each(|(index, entry)| {
+                // Calculate how many values are re-introduced into the domain.
+                let domain_id = entry.predicate.get_domain();
+                let lower_bound_before = self.domains[domain_id].lower_bound();
+                let upper_bound_before = self.domains[domain_id].upper_bound();
 
-            // Calculate how many values are re-introduced into the domain.
-            let domain_id = entry.predicate.get_domain();
-            let lower_bound_before = self.domains[domain_id].lower_bound();
-            let upper_bound_before = self.domains[domain_id].upper_bound();
+                let trail_index = num_trail_entries_before_synchronisation - index - 1;
 
-            let trail_index = num_trail_entries_before_synchronisation - index - 1;
+                let add_on_upper_bound = entry.old_upper_bound.abs_diff(upper_bound_before) as u64;
+                let add_on_lower_bound = entry.old_lower_bound.abs_diff(lower_bound_before) as u64;
+                self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
 
-            let add_on_upper_bound = entry.old_upper_bound.abs_diff(upper_bound_before) as u64;
-            let add_on_lower_bound = lower_bound_before.abs_diff(entry.old_lower_bound) as u64;
-            self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
+                if entry.predicate.is_not_equal_predicate()
+                    && add_on_lower_bound + add_on_upper_bound == 0
+                {
+                    self.pruned_values -= 1;
+                }
 
-            if entry.predicate.is_not_equal_predicate() && add_on_lower_bound + add_on_upper_bound == 0 {
-                self.pruned_values -= 1;
-            }
+                let fixed_before =
+                    self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
+                self.domains[domain_id].undo_trail_entry(&entry);
 
-            let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
-            self.domains[domain_id].undo_trail_entry(&entry);
+                let new_lower_bound = self.domains[domain_id].lower_bound();
+                let new_upper_bound = self.domains[domain_id].upper_bound();
+                self.bounds[domain_id] = (new_lower_bound, new_upper_bound);
 
-            let new_lower_bound = self.domains[domain_id].lower_bound();
-            let new_upper_bound = self.domains[domain_id].upper_bound();
-            self.bounds[domain_id] = (new_lower_bound, new_upper_bound);
+                notification_engine.undo_trail_entry(
+                    fixed_before,
+                    lower_bound_before,
+                    upper_bound_before,
+                    new_lower_bound,
+                    new_upper_bound,
+                    trail_index,
+                    entry.predicate,
+                );
 
-            notification_engine.undo_trail_entry(fixed_before, lower_bound_before, upper_bound_before, new_lower_bound, new_upper_bound, trail_index, entry.predicate);
-
-            if new_lower_bound != new_upper_bound {
-
-            // Variable used to be fixed but is not after backtracking
-            unfixed_variables.push((domain_id, lower_bound_before));
-            }
-
-        });
+                if new_lower_bound != new_upper_bound {
+                    // Variable used to be fixed but is not after backtracking
+                    unfixed_variables.push((domain_id, lower_bound_before));
+                }
+            });
 
         // Drain does not remove the events from the internal data structure. Elements are removed
         // lazily, as the iterator gets executed. For this reason we go through the entire iterator.
@@ -1187,17 +1221,24 @@ impl IntegerDomain {
                 }
             }
             PredicateType::Equal => {
-                // I think we never push equality predicates to the trail
-                // in the current version. Equality gets substituted
-                // by a lower and upper bound predicate.
-                unreachable!()
+                let lower_bound_update = self.lower_bound_updates.last().unwrap();
+                let upper_bound_update = self.upper_bound_updates.last().unwrap();
+
+                if lower_bound_update.trail_position > upper_bound_update.trail_position {
+                    let _ = self.lower_bound_updates.pop();
+                } else if upper_bound_update.trail_position > lower_bound_update.trail_position {
+                    let _ = self.upper_bound_updates.pop();
+                } else {
+                    let _ = self.lower_bound_updates.pop();
+                    let _ = self.upper_bound_updates.pop();
+                }
             }
         };
 
         // these asserts will be removed, for now it is a sanity check
         // later we may remove the old bound from the trail entry since it is not needed
-        pumpkin_assert_simple!(self.lower_bound() == entry.old_lower_bound);
-        pumpkin_assert_simple!(self.upper_bound() == entry.old_upper_bound);
+        pumpkin_assert_eq_simple!(self.lower_bound(), entry.old_lower_bound);
+        pumpkin_assert_eq_simple!(self.upper_bound(), entry.old_upper_bound);
 
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
@@ -1395,10 +1436,10 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
+            .post(predicate!(d1 != 1), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
+            .post(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1423,19 +1464,19 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
+            .post(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
+            .post(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
+            .post(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
+            .post(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
+            .post(predicate!(d1 != 1), None, &mut notification_engine)
             .expect_err("empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1461,13 +1502,13 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
+            .post(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
+            .post(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
+            .post(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1519,7 +1560,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 >= 2), None, &mut notification_engine)
+            .post(predicate!(d1 >= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1538,7 +1579,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 <= 2), None, &mut notification_engine)
+            .post(predicate!(d1 <= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1559,10 +1600,10 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 >= 5), None, &mut notification_engine)
+            .post(predicate!(d1 >= 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d2 <= 1), None, &mut notification_engine)
+            .post(predicate!(d2 <= 1), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1587,13 +1628,13 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 == 1), None, &mut notification_engine)
+            .post(predicate!(d1 == 1), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d2 == 5), None, &mut notification_engine)
+            .post(predicate!(d2 == 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post_predicate(predicate!(d3 == 3), None, &mut notification_engine)
+            .post(predicate!(d3 == 3), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1622,7 +1663,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
+            .post(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1696,7 +1737,7 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
+            .post(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1835,22 +1876,22 @@ mod tests {
         // decision level 1
         assignment.increase_decision_level();
         let _ = assignment
-            .post_predicate(predicate!(domain_id1 >= 2), None, &mut notification_engine)
+            .post(predicate!(domain_id1 >= 2), None, &mut notification_engine)
             .expect("");
         let _ = assignment
-            .post_predicate(predicate!(domain_id2 >= 25), None, &mut notification_engine)
+            .post(predicate!(domain_id2 >= 25), None, &mut notification_engine)
             .expect("");
 
         // decision level 2
         assignment.increase_decision_level();
         let _ = assignment
-            .post_predicate(predicate!(domain_id1 >= 5), None, &mut notification_engine)
+            .post(predicate!(domain_id1 >= 5), None, &mut notification_engine)
             .expect("");
 
         // decision level 3
         assignment.increase_decision_level();
         let _ = assignment
-            .post_predicate(predicate!(domain_id1 >= 7), None, &mut notification_engine)
+            .post(predicate!(domain_id1 >= 7), None, &mut notification_engine)
             .expect("");
 
         assert_eq!(assignment.get_lower_bound(domain_id1), 7);
@@ -1989,14 +2030,10 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         notification_engine.grow();
 
-        let _ =
-            assignments.post_predicate(predicate!(domain_id != 7), None, &mut notification_engine);
-        let _ =
-            assignments.post_predicate(predicate!(domain_id != 9), None, &mut notification_engine);
-        let _ =
-            assignments.post_predicate(predicate!(domain_id != 2), None, &mut notification_engine);
-        let _ =
-            assignments.post_predicate(predicate!(domain_id <= 6), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain_id != 7), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain_id != 9), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain_id != 2), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain_id <= 6), None, &mut notification_engine);
 
         let lb_predicate = |lower_bound: i32| -> Predicate { predicate!(domain_id >= lower_bound) };
         let ub_predicate = |upper_bound: i32| -> Predicate { predicate!(domain_id <= upper_bound) };
@@ -2093,8 +2130,7 @@ mod tests {
             .evaluate_predicate(eq_predicate(10))
             .is_some_and(|x| !x));
 
-        let _ =
-            assignments.post_predicate(predicate!(domain_id >= 6), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain_id >= 6), None, &mut notification_engine);
 
         assert!(assignments
             .evaluate_predicate(neq_predicate(6))

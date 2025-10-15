@@ -62,7 +62,7 @@ mod tests {
         let mut selector = InDomainInterval;
 
         for to_remove in [2, 3, 7, 8] {
-            let _ = assignments.post_predicate(
+            let _ = assignments.post(
                 predicate!(domain_ids[0] != to_remove),
                 None,
                 &mut notification_engine,

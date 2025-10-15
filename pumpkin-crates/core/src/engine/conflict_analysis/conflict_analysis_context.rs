@@ -73,7 +73,7 @@ impl ConflictAnalysisContext<'_> {
 
         let update_occurred = self
             .assignments
-            .post_predicate(
+            .post(
                 predicate,
                 Some((ReasonRef(0), garbage_inference_code)),
                 self.notification_engine,
@@ -471,6 +471,16 @@ impl ConflictAnalysisContext<'_> {
 
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
+                }
+                (
+                    PredicateType::Equal,
+                    PredicateType::LowerBound | PredicateType::UpperBound | PredicateType::NotEqual,
+                ) => {
+                    // The trail predicate is equality, but the input predicate is either a
+                    // lower-bound, upper-bound, or not equals.
+                    //
+                    // TODO: could consider lifting here
+                    reason_buffer.extend(std::iter::once(trail_entry.predicate))
                 }
                 _ => unreachable!(
                     "Unreachable combination of {} and {}",

@@ -391,15 +391,15 @@ mod tests {
 
         assignments.increase_decision_level();
         // Decision Level 1
-        let _ = assignments.post_predicate(predicate!(x >= 5), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(x >= 5), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // Decision Level 2
-        let _ = assignments.post_predicate(predicate!(x >= 7), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(x >= 7), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // Decision Level 3
-        let _ = assignments.post_predicate(predicate!(x >= 10), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(x >= 10), None, &mut notification_engine);
 
         assignments.increase_decision_level();
         // We end at decision level 4
@@ -459,7 +459,7 @@ mod tests {
         notification_engine.grow();
 
         assignments.increase_decision_level();
-        let _ = assignments.post_predicate(predicate!(x == 7), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(x == 7), None, &mut notification_engine);
 
         let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
 

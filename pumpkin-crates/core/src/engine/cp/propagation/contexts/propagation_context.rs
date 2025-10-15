@@ -338,7 +338,7 @@ impl PropagationContextMut<'_> {
     ) -> Result<(), EmptyDomain> {
         let slot = self.reason_store.new_slot();
 
-        let modification_result = self.assignments.post_predicate(
+        let modification_result = self.assignments.post(
             predicate,
             Some((slot.reason_ref(), inference_code)),
             self.notification_engine,

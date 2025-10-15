@@ -57,7 +57,7 @@ mod tests {
 
         let mut selector = OutDomainMedian;
 
-        let _ = assignments.post_predicate(
+        let _ = assignments.post(
             predicate!(domain_ids[0] != 9),
             None,
             &mut notification_engine,

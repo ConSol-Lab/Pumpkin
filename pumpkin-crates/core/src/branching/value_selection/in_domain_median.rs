@@ -58,7 +58,7 @@ mod tests {
         let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = assignments.post_predicate(
+        let _ = assignments.post(
             predicate!(domain_ids[0] != 9),
             None,
             &mut notification_engine,
@@ -79,7 +79,7 @@ mod tests {
         let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = assignments.post_predicate(
+        let _ = assignments.post(
             predicate!(domain_ids[0] != 5),
             None,
             &mut notification_engine,

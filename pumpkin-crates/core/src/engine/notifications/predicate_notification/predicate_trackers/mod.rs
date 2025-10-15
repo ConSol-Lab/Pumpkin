@@ -450,8 +450,8 @@ mod tests {
         );
         assert!(!tracker.is_fixed(&trailed_values));
 
-        let _ = assignments.post_predicate(predicate!(domain >= 4), None, &mut notification_engine);
-        let _ = assignments.post_predicate(predicate!(domain <= 6), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain >= 4), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain <= 6), None, &mut notification_engine);
 
         tracker.on_update(
             predicate!(domain >= 4),
@@ -465,7 +465,7 @@ mod tests {
         );
         assert!(!tracker.is_fixed(&trailed_values));
 
-        let _ = assignments.post_predicate(predicate!(domain <= 4), None, &mut notification_engine);
+        let _ = assignments.post(predicate!(domain <= 4), None, &mut notification_engine);
         tracker.on_update(
             predicate!(domain <= 4),
             &mut trailed_values,
