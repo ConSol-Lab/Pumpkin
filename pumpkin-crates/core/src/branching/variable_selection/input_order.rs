@@ -72,7 +72,7 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[0]);
         }
 
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[0] == 0),
             None,
             &mut notification_engine,

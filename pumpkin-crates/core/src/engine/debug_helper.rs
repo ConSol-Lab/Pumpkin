@@ -482,7 +482,7 @@ impl DebugHelper {
         notification_engine: &mut NotificationEngine,
     ) -> bool {
         for predicate in predicates {
-            let outcome = assignments.post(*predicate, None, notification_engine);
+            let outcome = assignments.post_predicate(*predicate, None, notification_engine);
             match outcome {
                 Ok(_) => {
                     // do nothing, everything is okay

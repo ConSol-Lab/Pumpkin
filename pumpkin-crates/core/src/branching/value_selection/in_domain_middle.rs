@@ -81,7 +81,7 @@ mod tests {
         let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMiddle;
 
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(domain_ids[0] != 5),
             None,
             &mut notification_engine,

@@ -747,7 +747,7 @@ impl ConstraintSatisfactionSolver {
 
             let _ = self
                 .assignments
-                .post(assumption_literal, None, &mut self.notification_engine)
+                .post_predicate(assumption_literal, None, &mut self.notification_engine)
                 .map_err(|_| {
                     self.state
                         .declare_infeasible_under_assumptions(assumption_literal);
@@ -785,7 +785,7 @@ impl ConstraintSatisfactionSolver {
         self.solver_statistics.engine_statistics.num_decisions += 1;
         let update_occurred = self
             .assignments
-            .post(decision_predicate, None, &mut self.notification_engine)
+            .post_predicate(decision_predicate, None, &mut self.notification_engine)
             .expect("Decisions are expected not to fail.");
         pumpkin_assert_simple!(update_occurred);
 
@@ -1392,7 +1392,7 @@ impl ConstraintSatisfactionSolver {
         } else {
             match self
                 .assignments
-                .post(predicate, None, &mut self.notification_engine)
+                .post_predicate(predicate, None, &mut self.notification_engine)
             {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),

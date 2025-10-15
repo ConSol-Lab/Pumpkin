@@ -140,7 +140,7 @@ mod tests {
         }
 
         assignments.increase_decision_level();
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[1] >= 7),
             None,
             &mut notification_engine,

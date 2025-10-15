@@ -118,7 +118,7 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[0] <= 2),
             None,
             &mut notification_engine,

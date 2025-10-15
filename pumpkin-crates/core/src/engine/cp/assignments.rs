@@ -612,7 +612,7 @@ impl Assignments {
     /// return `false`. If the predicate was unassigned and became true, then `true`
     /// is returned. If instead applying the [`Predicate`] leads to an
     /// [`EmptyDomain`], the error variant is returned.
-    pub(crate) fn post(
+    pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
         reason: Option<AssignmentReason>,
@@ -1436,10 +1436,10 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post(predicate!(d1 != 1), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1464,19 +1464,19 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post(predicate!(d1 != 2), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 3), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 4), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 1), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
             .expect_err("empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1502,13 +1502,13 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post(predicate!(d1 != 3), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 4), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 4), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d1 != 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1560,7 +1560,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post(predicate!(d1 >= 2), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 >= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1579,7 +1579,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post(predicate!(d1 <= 2), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 <= 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1600,10 +1600,10 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post(predicate!(d1 >= 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 >= 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d2 <= 1), None, &mut notification_engine)
+            .post_predicate(predicate!(d2 <= 1), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1628,13 +1628,13 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post(predicate!(d1 == 1), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 == 1), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d2 == 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d2 == 5), None, &mut notification_engine)
             .expect("non-empty domain");
         let _ = assignment
-            .post(predicate!(d3 == 3), None, &mut notification_engine)
+            .post_predicate(predicate!(d3 == 3), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1663,7 +1663,7 @@ mod tests {
         notification_engine.grow();
 
         let _ = assignment
-            .post(predicate!(d1 != 2), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let events = notification_engine
@@ -1737,7 +1737,7 @@ mod tests {
         assignment.increase_decision_level();
 
         let _ = assignment
-            .post(predicate!(d1 != 5), None, &mut notification_engine)
+            .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
             .expect("non-empty domain");
 
         let _ = assignment.synchronise(0, &mut notification_engine);
@@ -1876,22 +1876,22 @@ mod tests {
         // decision level 1
         assignment.increase_decision_level();
         let _ = assignment
-            .post(predicate!(domain_id1 >= 2), None, &mut notification_engine)
+            .post_predicate(predicate!(domain_id1 >= 2), None, &mut notification_engine)
             .expect("");
         let _ = assignment
-            .post(predicate!(domain_id2 >= 25), None, &mut notification_engine)
+            .post_predicate(predicate!(domain_id2 >= 25), None, &mut notification_engine)
             .expect("");
 
         // decision level 2
         assignment.increase_decision_level();
         let _ = assignment
-            .post(predicate!(domain_id1 >= 5), None, &mut notification_engine)
+            .post_predicate(predicate!(domain_id1 >= 5), None, &mut notification_engine)
             .expect("");
 
         // decision level 3
         assignment.increase_decision_level();
         let _ = assignment
-            .post(predicate!(domain_id1 >= 7), None, &mut notification_engine)
+            .post_predicate(predicate!(domain_id1 >= 7), None, &mut notification_engine)
             .expect("");
 
         assert_eq!(assignment.get_lower_bound(domain_id1), 7);
@@ -2030,10 +2030,14 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         notification_engine.grow();
 
-        let _ = assignments.post(predicate!(domain_id != 7), None, &mut notification_engine);
-        let _ = assignments.post(predicate!(domain_id != 9), None, &mut notification_engine);
-        let _ = assignments.post(predicate!(domain_id != 2), None, &mut notification_engine);
-        let _ = assignments.post(predicate!(domain_id <= 6), None, &mut notification_engine);
+        let _ =
+            assignments.post_predicate(predicate!(domain_id != 7), None, &mut notification_engine);
+        let _ =
+            assignments.post_predicate(predicate!(domain_id != 9), None, &mut notification_engine);
+        let _ =
+            assignments.post_predicate(predicate!(domain_id != 2), None, &mut notification_engine);
+        let _ =
+            assignments.post_predicate(predicate!(domain_id <= 6), None, &mut notification_engine);
 
         let lb_predicate = |lower_bound: i32| -> Predicate { predicate!(domain_id >= lower_bound) };
         let ub_predicate = |upper_bound: i32| -> Predicate { predicate!(domain_id <= upper_bound) };
@@ -2130,7 +2134,8 @@ mod tests {
             .evaluate_predicate(eq_predicate(10))
             .is_some_and(|x| !x));
 
-        let _ = assignments.post(predicate!(domain_id >= 6), None, &mut notification_engine);
+        let _ =
+            assignments.post_predicate(predicate!(domain_id >= 6), None, &mut notification_engine);
 
         assert!(assignments
             .evaluate_predicate(neq_predicate(6))

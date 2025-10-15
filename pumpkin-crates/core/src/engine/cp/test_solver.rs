@@ -141,7 +141,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.assignments.post(
+        let result = self.assignments.post_predicate(
             predicate!(var != value),
             None,
             &mut self.notification_engine,
@@ -169,7 +169,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.assignments.post(
+        let result = self.assignments.post_predicate(
             predicate!(var >= value),
             None,
             &mut self.notification_engine,
@@ -197,7 +197,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.assignments.post(
+        let result = self.assignments.post_predicate(
             predicate!(var <= value),
             None,
             &mut self.notification_engine,
@@ -229,7 +229,7 @@ impl TestSolver {
     }
 
     pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
-        let _ = self.assignments.post(
+        let _ = self.assignments.post_predicate(
             predicate!(var != value),
             None,
             &mut self.notification_engine,
@@ -244,12 +244,12 @@ impl TestSolver {
         truth_value: bool,
     ) -> Result<(), EmptyDomain> {
         let _ = match truth_value {
-            true => self.assignments.post(
+            true => self.assignments.post_predicate(
                 literal.get_true_predicate(),
                 None,
                 &mut self.notification_engine,
             )?,
-            false => self.assignments.post(
+            false => self.assignments.post_predicate(
                 (!literal).get_true_predicate(),
                 None,
                 &mut self.notification_engine,

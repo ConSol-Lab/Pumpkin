@@ -73,7 +73,7 @@ impl ConflictAnalysisContext<'_> {
 
         let update_occurred = self
             .assignments
-            .post(
+            .post_predicate(
                 predicate,
                 Some((ReasonRef(0), garbage_inference_code)),
                 self.notification_engine,

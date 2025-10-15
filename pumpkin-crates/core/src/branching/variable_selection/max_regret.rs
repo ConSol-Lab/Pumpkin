@@ -111,7 +111,7 @@ mod tests {
         let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = MaxRegret::new(&integer_variables);
 
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[1] != 6),
             None,
             &mut notification_engine,
@@ -125,12 +125,12 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[0] != 1),
             None,
             &mut notification_engine,
         );
-        let _ = assignments.post(
+        let _ = assignments.post_predicate(
             predicate!(integer_variables[0] != 2),
             None,
             &mut notification_engine,
