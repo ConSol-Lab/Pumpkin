@@ -22,10 +22,10 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 
 The solver currently supports integer variables and a number of (global) constraints:
 
-- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/cumulative).
-- [Disjunctive global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/feat/main/pumpkin-crates/core/src/propagators/disjunctive)
-- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/element.rs).
-- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/element.rs): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/feat/main/pumpkin-crates/core/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/absolute_value.rs).
+- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/cumulative).
+- [Disjunctive global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/disjunctive)
+- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/element.rs).
+- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-crates/core/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
@@ -71,7 +71,7 @@ cargo install pumpkin-solver
 ## Building from Source
 To clone the project, run:
 ```sh 
-git clone https://github.com/ConSol-Lab/pumpkin
+git clone https://github.com/ConSol-Lab/Pumpkin.git
 ```
 
 Since Pumpkin is written in pure Rust, it is easy to install! After cloning, you can build the project using a version of [Rust](https://www.rust-lang.org/tools/install) (1.72.1+) using the following commands:
@@ -94,7 +94,7 @@ To use it as such a backend, follow the following steps:
 ## Components
 Pumpkin consists of 3 different crates:
 
-- The library contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the API through which the solver can be used via Rust.
+- The library contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-crates/core); defines the API through which the solver can be used via Rust.
 - The CLI contained in [here](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/bin/pumpkin-solver); defines the usage of Pumpkin through a command line.
 - The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
 - The python bindings contained in [pumpkin-solver-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver-py); defines the python interface for Pumpkin
