@@ -7,7 +7,7 @@ pub use inequality::*;
 use super::Constraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::absolute_value::AbsoluteValueArgs;
-use crate::propagators::division::DivisionArgs;
+use crate::propagators::integer_division::DivisionArgs;
 use crate::propagators::integer_multiplication::IntegerMultiplicationArgs;
 use crate::propagators::maximum::MaximumArgs;
 use crate::variables::IntegerVariable;
