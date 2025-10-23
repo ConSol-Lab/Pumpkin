@@ -15,6 +15,7 @@ use clap::Subcommand;
 use drcp_format::reader::ProofReader;
 use drcp_format::Conclusion;
 use drcp_format::Step;
+use itertools::Itertools;
 
 #[derive(Parser)]
 struct Cli {
@@ -29,6 +30,12 @@ struct Cli {
 enum Commands {
     /// Replace atomic codes with the actual atomics.
     InlineAtomics {
+        /// Path to the model that the proof is for.
+        ///
+        /// If provided, the `generated_by` labels will be re-written to the actual
+        /// constraint from the model.
+        model: Option<PathBuf>,
+
         /// The output proof where literals are replaced with atomics.
         output: PathBuf,
     },
@@ -39,8 +46,22 @@ enum Commands {
 
 fn inline_atomics<Source: BufRead>(
     output_path: PathBuf,
+    model_path: Option<PathBuf>,
     mut reader: ProofReader<Source, i32>,
 ) -> anyhow::Result<()> {
+    // Parse the model in case it is provided.
+    let model = if let Some(path) = model_path {
+        let contents = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read model from '{}'", path.display()))?;
+
+        let ast = fzn_rs::fzn::parse(&contents).unwrap();
+        //            .with_context(|| format!("Failed to parse model in '{}'.", path.display()));
+
+        Some(ast)
+    } else {
+        None
+    };
+
     let mut output = File::create(&output_path)
         .with_context(|| format!("Failed to create {}", output_path.display()))?;
 
@@ -62,7 +83,32 @@ fn inline_atomics<Source: BufRead>(
                 }
 
                 if let Some(constraint_id) = inference.generated_by {
-                    write!(output, " c:{constraint_id}")?;
+                    if let Some(ref model) = model {
+                        if let Some(constraint) =
+                            model.constraints.get(constraint_id.get() as usize - 1)
+                        {
+                            #[allow(
+                                unstable_name_collisions,
+                                reason = "intersperse will take a while, precisely because it exists in itertools"
+                            )]
+                            write!(
+                                output,
+                                " =| {}({});",
+                                constraint.node.name.node,
+                                constraint
+                                    .node
+                                    .arguments
+                                    .iter()
+                                    .map(|argument| display_argument(&argument.node))
+                                    .intersperse(", ".to_owned())
+                                    .collect::<String>()
+                            )?;
+                        } else {
+                            write!(output, " c:{constraint_id}")?;
+                        }
+                    } else {
+                        write!(output, " c:{constraint_id}")?;
+                    }
                 }
 
                 writeln!(output)?;
@@ -90,6 +136,33 @@ fn inline_atomics<Source: BufRead>(
     }
 
     Ok(())
+}
+
+fn display_argument(argument: &fzn_rs::ast::Argument) -> String {
+    match argument {
+        #[allow(
+            unstable_name_collisions,
+            reason = "intersperse will take a while, precisely because it exists in itertools"
+        )]
+        fzn_rs::ast::Argument::Array(nodes) => format!(
+            "[{}]",
+            nodes
+                .iter()
+                .map(|node| display_literal(&node.node))
+                .intersperse(", ".to_owned())
+                .collect::<String>()
+        ),
+        fzn_rs::ast::Argument::Literal(node) => display_literal(&node.node),
+    }
+}
+
+fn display_literal(literal: &fzn_rs::ast::Literal) -> String {
+    match literal {
+        fzn_rs::ast::Literal::Int(int) => int.to_string(),
+        fzn_rs::ast::Literal::Identifier(identifier) => identifier.as_ref().to_owned(),
+        fzn_rs::ast::Literal::Bool(boolean) => boolean.to_string(),
+        fzn_rs::ast::Literal::IntSet(_) => todo!("Display set literal"),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -245,7 +318,7 @@ fn main() -> anyhow::Result<()> {
     let reader = create_proof_reader(&args.input_proof)?;
 
     match args.command {
-        Commands::InlineAtomics { output } => inline_atomics(output, reader)?,
+        Commands::InlineAtomics { output, model } => inline_atomics(output, model, reader)?,
         Commands::Statistics => gather_statistics(reader)?,
     }
 

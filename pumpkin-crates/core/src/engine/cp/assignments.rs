@@ -910,8 +910,7 @@ impl IntegerDomain {
         // the updates are stored in increasing order of trail position.
         self.lower_bound_updates
             .iter()
-            .filter(|u| u.trail_position <= trail_position)
-            .next_back()
+            .rfind(|u| u.trail_position <= trail_position)
             .expect("Cannot fail")
             .bound
     }
@@ -951,8 +950,7 @@ impl IntegerDomain {
         // the updates are stored in increasing order of trail position.
         self.upper_bound_updates
             .iter()
-            .filter(|u| u.trail_position <= trail_position)
-            .next_back()
+            .rfind(|u| u.trail_position <= trail_position)
             .expect("Cannot fail")
             .bound
     }

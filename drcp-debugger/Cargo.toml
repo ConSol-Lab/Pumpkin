@@ -11,6 +11,8 @@ anyhow = "1.0.97"
 clap = { version = "4.5.31", features = ["derive"] }
 drcp-format = { path = "../drcp-format" }
 flate2 = "1.1.2"
+fzn-rs = { version = "0.1.0", path = "../fzn-rs", features = ["fzn"] }
+itertools = "0.14.0"
 
 [lints]
 workspace = true

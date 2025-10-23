@@ -1,3 +1,5 @@
+#![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
+
 use std::slice;
 
 use bitfield_struct::bitfield;
