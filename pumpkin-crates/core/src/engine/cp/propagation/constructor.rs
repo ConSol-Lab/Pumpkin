@@ -11,6 +11,7 @@ use crate::engine::notifications::Watchers;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::TrailedValues;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
@@ -73,6 +74,16 @@ impl PropagatorConstructorContext<'_> {
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext::new(self.assignments)
+    }
+
+    /// Subscribes the propagator to the predicate becoming true.
+    pub(crate) fn register_predicate(&mut self, predicate: Predicate) {
+        let _ = self.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_id,
+            self.trailed_values,
+            self.assignments,
+        );
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].

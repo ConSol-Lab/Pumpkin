@@ -1,7 +1,9 @@
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
+use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagatorArgs;
+use crate::propagators::HypercubeLinear;
+use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -107,9 +109,19 @@ struct Inequality<Var> {
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagatorArgs {
-            x: self.terms,
-            c: self.rhs,
+        // LinearLessOrEqualPropagatorArgs {
+        //     x: self.terms,
+        //     c: self.rhs,
+        //     constraint_tag: self.constraint_tag,
+        // }
+        // .post(solver)
+
+        HypercubeLinearPropagatorArgs {
+            hypercube_linear: HypercubeLinear {
+                hypercube: PropositionalConjunction::default(),
+                linear_terms: self.terms,
+                linear_rhs: self.rhs,
+            },
             constraint_tag: self.constraint_tag,
         }
         .post(solver)
@@ -117,15 +129,17 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
-        reification_literal: crate::variables::Literal,
+        _solver: &mut Solver,
+        _reification_literal: crate::variables::Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagatorArgs {
-            x: self.terms,
-            c: self.rhs,
-            constraint_tag: self.constraint_tag,
-        }
-        .implied_by(solver, reification_literal)
+        // LinearLessOrEqualPropagatorArgs {
+        //     x: self.terms,
+        //     c: self.rhs,
+        //     constraint_tag: self.constraint_tag,
+        // }
+        // .implied_by(solver, reification_literal)
+
+        unreachable!("For now this should no longer happen")
     }
 }
 

@@ -11,27 +11,26 @@ use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::variables::AffineView;
-use crate::variables::DomainId;
+use crate::variables::IntegerVariable;
 
 declare_inference_label!(HypercubeLinearInference);
 
 #[derive(Clone, Debug)]
-pub(crate) struct HypercubeLinear {
+pub(crate) struct HypercubeLinear<Var> {
     pub(crate) hypercube: PropositionalConjunction,
-    pub(crate) linear_terms: Box<[AffineView<DomainId>]>,
+    pub(crate) linear_terms: Box<[Var]>,
     pub(crate) linear_rhs: i32,
 }
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
-pub(crate) struct HypercubeLinearPropagatorArgs {
-    pub(crate) hypercube_linear: HypercubeLinear,
+pub(crate) struct HypercubeLinearPropagatorArgs<Var> {
+    pub(crate) hypercube_linear: HypercubeLinear<Var>,
     pub(crate) constraint_tag: ConstraintTag,
 }
 
-impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
-    type PropagatorImpl = HypercubeLinearPropagator;
+impl<Var: IntegerVariable + 'static> PropagatorConstructor for HypercubeLinearPropagatorArgs<Var> {
+    type PropagatorImpl = HypercubeLinearPropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let HypercubeLinearPropagatorArgs {
@@ -39,8 +38,16 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
             constraint_tag,
         } = self;
 
+        for predicate in hypercube_linear.hypercube.iter().copied() {
+            context.register_predicate(predicate);
+        }
+
         for (i, x_i) in hypercube_linear.linear_terms.iter().enumerate() {
-            context.register(*x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
+            context.register(
+                x_i.clone(),
+                DomainEvents::LOWER_BOUND,
+                LocalId::from(i as u32),
+            );
         }
 
         HypercubeLinearPropagator {
@@ -52,12 +59,12 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
 
 /// Propagator for the constraint `/\ hypercube -> \sum x_i <= c`.
 #[derive(Clone, Debug)]
-pub(crate) struct HypercubeLinearPropagator {
-    hypercube_linear: HypercubeLinear,
+pub(crate) struct HypercubeLinearPropagator<Var> {
+    hypercube_linear: HypercubeLinear<Var>,
     inference_code: InferenceCode,
 }
 
-impl Propagator for HypercubeLinearPropagator {
+impl<Var: IntegerVariable + 'static> Propagator for HypercubeLinearPropagator<Var> {
     fn name(&self) -> &str {
         "HypercubeLinear"
     }
@@ -132,7 +139,7 @@ mod tests {
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear {
                     hypercube: conjunction!([x >= 2]),
-                    linear_terms: [x.into(), y.into()].into(),
+                    linear_terms: [x, y].into(),
                     linear_rhs: 7,
                 },
                 constraint_tag,
@@ -157,7 +164,7 @@ mod tests {
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear {
                     hypercube: conjunction!([x >= 2]),
-                    linear_terms: [x.into(), y.into()].into(),
+                    linear_terms: [x, y].into(),
                     linear_rhs: 7,
                 },
                 constraint_tag,

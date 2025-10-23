@@ -55,6 +55,10 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         Key::create_from_index(self.elements.len() - 1)
     }
 
+    pub(crate) fn get(&self, key: Key) -> Option<&Value> {
+        self.elements.get(key.index())
+    }
+
     /// Create a new slot for a value, and populate it using [`Slot::populate()`].
     ///
     /// This allows initializing the value with the ID it will have in this vector.
@@ -117,6 +121,14 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
+    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
+        let new_len = key.index() + 1;
+
+        if self.elements.len() < new_len {
+            self.elements.resize(new_len, default_value);
+        }
+    }
+
     pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
     }
