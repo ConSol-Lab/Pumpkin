@@ -1,15 +1,9 @@
 use std::fmt::Debug;
 
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::conflict_analysis::LearnedNogood;
 
 pub(crate) trait ConflictResolver: Debug {
-    fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood>;
-
-    #[allow(clippy::result_unit_err, reason = "unknown, this should be refactored")]
-    fn process(
-        &mut self,
-        context: &mut ConflictAnalysisContext,
-        learned_nogood: &Option<LearnedNogood>,
-    ) -> Result<(), ()>;
+    /// Restore the solver such that search can continue. If the solver cannot be repaired, then
+    /// false is returned. Otherwise, true is returned.
+    fn resolve_conflict(&mut self, context: ConflictAnalysisContext) -> bool;
 }

@@ -76,7 +76,10 @@ impl StorageKey for InferenceCode {
 #[macro_export]
 macro_rules! declare_inference_label {
     ($name:ident) => {
-        declare_inference_label!($name, {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct $name;
+
+        declare_inference_label!(@impl_trait $name, {
             let ident_str = stringify!($name);
             <&str as convert_case::Casing<&str>>::to_case(
                 &ident_str,
@@ -85,9 +88,9 @@ macro_rules! declare_inference_label {
         });
     };
 
-    ($name:ident, $label:expr) => {
+    (pub(crate) $name:ident, $label:expr) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        struct $name;
+        pub(crate) struct $name;
 
         declare_inference_label!(@impl_trait $name, $label);
     };
