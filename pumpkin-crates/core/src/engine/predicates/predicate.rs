@@ -42,6 +42,27 @@ impl Predicate {
     }
 }
 
+impl PartialOrd for Predicate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Predicate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.get_domain().cmp(&other.get_domain()) {
+            std::cmp::Ordering::Equal => match self.get_type_code().cmp(&other.get_type_code()) {
+                std::cmp::Ordering::Equal => {
+                    self.get_right_hand_side().cmp(&other.get_right_hand_side())
+                }
+                ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
+            },
+
+            ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
 #[repr(u8)]
 pub enum PredicateType {

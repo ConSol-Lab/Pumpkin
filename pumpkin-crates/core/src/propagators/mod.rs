@@ -18,5 +18,5 @@ pub use cumulative::CumulativePropagationMethod;
 pub(crate) use cumulative::*;
 pub use disjunctive::disjunctive_task::ArgDisjunctiveTask;
 pub(crate) use disjunctive::*;
-pub(crate) use hypercube_linear::*;
+pub use hypercube_linear::*;
 pub(crate) use reified_propagator::*;

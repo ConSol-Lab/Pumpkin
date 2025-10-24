@@ -17,9 +17,9 @@ use crate::math::num_ext::NumExt;
 /// domain of `x`.
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
-    inner: Inner,
-    scale: i32,
-    offset: i32,
+    pub(crate) inner: Inner,
+    pub(crate) scale: i32,
+    pub(crate) offset: i32,
 }
 
 impl<Inner> AffineView<Inner> {
@@ -188,8 +188,8 @@ where
 {
     fn scaled(&self, scale: i32) -> AffineView<View> {
         let mut result = self.clone();
-        result.scale *= scale;
-        result.offset *= scale;
+        result.scale = result.scale.checked_mul(scale).unwrap();
+        result.offset = result.offset.checked_mul(scale).unwrap();
         result
     }
 

@@ -1,8 +1,11 @@
 //! Compile constraints into CP propagators
 
+use std::num::NonZero;
 use std::rc::Rc;
 
 use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
+use pumpkin_core::constraints::hypercube_linear;
+use pumpkin_core::constraints::HypercubeLinear;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
@@ -76,14 +79,27 @@ pub(crate) fn run(
                 constraint_tag,
                 constraints::not_equals,
             )?,
-            "int_lin_le" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le",
-                constraint_tag,
-                constraints::less_than_or_equals,
-            )?,
+            // "int_lin_le" => compile_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_le",
+            //     constraint_tag,
+            //     constraints::less_than_or_equals,
+            // )?,
+            "int_lin_le" => {
+                let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+
+                let terms = vars.iter()
+                    .zip(weights.iter())
+                    .filter_map(|(&domain, &weight)| NonZero::new(weight).map(|weight| (weight, domain)))
+                    .collect();
+
+                let constraint = hypercube_linear(HypercubeLinear::new(vec![], terms, rhs), constraint_tag);
+                constraint.post(context.solver).is_ok()
+            }
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,

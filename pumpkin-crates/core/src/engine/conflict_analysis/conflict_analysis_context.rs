@@ -118,6 +118,9 @@ impl ConflictAnalysisContext<'_> {
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
+            StoredConflictInfo::EmptyDomainTwo { .. } => {
+                unreachable!("Should never attempt to extract a conflict nogood when using hypercube linear resolution")
+            }
         };
 
         for &predicate in conflict_nogood.iter() {

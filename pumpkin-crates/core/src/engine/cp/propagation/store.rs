@@ -60,6 +60,11 @@ impl PropagatorStore {
         }
     }
 
+    /// Get a shared reference to the propagator identified by the given handle.
+    pub(crate) fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
+        self[handle.id].downcast_ref()
+    }
+
     /// Get an exclusive reference to the propagator identified by the given handle.
     ///
     /// For more info, see [`Self::get_propagator`].

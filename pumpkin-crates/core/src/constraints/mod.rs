@@ -48,6 +48,8 @@ pub use element::*;
 pub use table::*;
 
 use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::proof::ConstraintTag;
+use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -151,5 +153,16 @@ pub trait NegatableConstraint: Constraint {
 
         self.implied_by(solver, reification_literal)?;
         negation.implied_by(solver, !reification_literal)
+    }
+}
+
+pub use crate::propagators::HypercubeLinear;
+pub fn hypercube_linear(
+    hypercube_linear: HypercubeLinear,
+    constraint_tag: ConstraintTag,
+) -> impl Constraint {
+    HypercubeLinearPropagatorArgs {
+        hypercube_linear,
+        constraint_tag,
     }
 }

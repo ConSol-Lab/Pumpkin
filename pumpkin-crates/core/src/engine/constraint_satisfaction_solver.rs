@@ -38,6 +38,7 @@ use crate::branching::SelectionContext;
 use crate::containers::HashMap;
 use crate::declare_inference_label;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
+use crate::engine::conflict_analysis::HypercubeLinearResolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
@@ -178,6 +179,7 @@ pub enum ConflictResolver {
     NoLearning,
     #[default]
     UIP,
+    HypercubeLinear,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -251,6 +253,9 @@ impl ConstraintSatisfactionSolver {
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("There should always be a specified conflicting constraint.")
             }
+            StoredConflictInfo::EmptyDomainTwo { .. } => {
+                return;
+            }
         };
 
         let context = FinalizingContext {
@@ -309,6 +314,7 @@ impl ConstraintSatisfactionSolver {
                     nogood_propagator_handle,
                     Rc::clone(&restart_strategy),
                 )),
+                ConflictResolver::HypercubeLinear => Box::new(HypercubeLinearResolver::default()),
             },
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
@@ -383,6 +389,8 @@ impl ConstraintSatisfactionSolver {
             StatisticLogger::default(),
             verbose,
         );
+        self.conflict_resolver
+            .log_statistics(StatisticLogger::default());
         if verbose {
             for (index, propagator) in self.propagators.iter_propagators().enumerate() {
                 propagator.log_statistics(StatisticLogger::new([
@@ -1356,7 +1364,25 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        let empty_domain_reason = self.compute_reason_for_empty_domain();
+        let conflict_info =
+            if self.internal_parameters.conflict_resolver == ConflictResolver::HypercubeLinear {
+                // The last predicate on the trail reveals the domain id that has resulted
+                // in an empty domain.
+                let entry = self.assignments.get_last_entry_on_trail();
+                let (entry_reason, _) = entry
+                    .reason
+                    .expect("Cannot cause an empty domain using a decision.");
+
+                StoredConflictInfo::EmptyDomainTwo {
+                    conflict_trigger: entry.predicate,
+                    conflict_trigger_reason: entry_reason,
+                }
+            } else {
+                let empty_domain_reason = self.compute_reason_for_empty_domain();
+                StoredConflictInfo::EmptyDomain {
+                    conflict_nogood: empty_domain_reason,
+                }
+            };
 
         // TODO: As a temporary solution, we remove the last trail element.
         // This way we guarantee that the assignment is consistent, which is needed
@@ -1364,10 +1390,7 @@ impl ConstraintSatisfactionSolver {
         // be to forbid the assignments from getting into an inconsistent state.
         self.assignments.remove_last_trail_element();
 
-        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
-            conflict_nogood: empty_domain_reason,
-        };
-        self.state.declare_conflict(stored_conflict_info);
+        self.state.declare_conflict(conflict_info);
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
