@@ -48,7 +48,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
 
-    pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
+    pub(crate) unit_nogood_inference_codes: &'a mut HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) variable_names: &'a VariableNames,
 }

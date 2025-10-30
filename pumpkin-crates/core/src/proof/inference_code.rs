@@ -85,9 +85,9 @@ macro_rules! declare_inference_label {
         });
     };
 
-    ($name:ident, $label:expr) => {
+    ($v:vis $name:ident, $label:expr) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        struct $name;
+        $v struct $name;
 
         declare_inference_label!(@impl_trait $name, $label);
     };
