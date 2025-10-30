@@ -6,13 +6,13 @@ use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
 use super::SolutionReference;
+use crate::Solver;
 use crate::branching::Brancher;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::results::ProblemSolution;
 use crate::results::Solution;
 use crate::termination::TerminationCondition;
-use crate::Solver;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]

@@ -1,16 +1,16 @@
 use super::less_than_or_equals;
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
 use crate::proof::ConstraintTag;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::propagators::binary::BinaryEqualsPropagatorArgs;
 use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
 use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
-use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::variables::TransformableVariable;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 struct EqualConstraint<Var> {
     terms: Box<[Var]>,

@@ -7,24 +7,28 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::time::Instant;
 
-use rand::rngs::SmallRng;
+use log::debug;
+use log::trace;
 use rand::SeedableRng;
+use rand::rngs::SmallRng;
 
+use super::ResolutionResolver;
+use super::TrailedValues;
+use super::VariableNames;
 use super::conflict_analysis::AnalysisMode;
 use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::notifications::NotificationEngine;
+use super::propagation::PropagatorId;
 use super::propagation::constructor::PropagatorConstructor;
 use super::propagation::store::PropagatorStore;
-use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
-use super::ResolutionResolver;
-use super::TrailedValues;
-use super::VariableNames;
+#[cfg(doc)]
+use crate::Solver;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
@@ -37,31 +41,31 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;
 use crate::declare_inference_label;
-use crate::engine::conflict_analysis::ConflictResolver as Resolver;
-use crate::engine::conflict_analysis::HypercubeLinearResolver;
-use crate::engine::cp::PropagatorQueue;
-use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::store::PropagatorHandle;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::reason::ReasonStore;
-use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::DebugHelper;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
+use crate::engine::conflict_analysis::ConflictResolver as Resolver;
+use crate::engine::conflict_analysis::HypercubeLinearResolver;
+use crate::engine::cp::PropagatorQueue;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::ExplanationContext;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::store::PropagatorHandle;
+use crate::engine::reason::ReasonStore;
+use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::predicates::PredicateType;
-use crate::proof::explain_root_assignment;
-use crate::proof::finalize_proof;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
+use crate::proof::finalize_proof;
 use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
@@ -71,8 +75,6 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
-#[cfg(doc)]
-use crate::Solver;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
 /// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
@@ -630,11 +632,7 @@ impl ConstraintSatisfactionSolver {
         let lb = self.get_lower_bound(variable);
         let ub = self.get_upper_bound(variable);
 
-        if lb == ub {
-            Some(lb)
-        } else {
-            None
-        }
+        if lb == ub { Some(lb) } else { None }
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
@@ -783,6 +781,8 @@ impl ConstraintSatisfactionSolver {
             self.state.declare_solution_found();
             return Err(CSPSolverExecutionFlag::Feasible);
         };
+
+        trace!("decided {decision_predicate}");
 
         self.declare_new_decision_level();
 
@@ -1610,13 +1610,13 @@ declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
+    use crate::DefaultBrancher;
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
     use crate::termination::Indefinite;
     use crate::variables::TransformableVariable;
-    use crate::DefaultBrancher;
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1847,23 +1847,29 @@ mod tests {
 
         assert_eq!(ub, solver.assignments.get_upper_bound(domain_id));
 
-        assert!(!solver
-            .assignments
-            .is_predicate_satisfied(predicate![domain_id == lb]));
+        assert!(
+            !solver
+                .assignments
+                .is_predicate_satisfied(predicate![domain_id == lb])
+        );
 
         for value in (lb + 1)..ub {
             let predicate = predicate![domain_id >= value];
 
             assert!(!solver.assignments.is_predicate_satisfied(predicate));
 
-            assert!(!solver
-                .assignments
-                .is_predicate_satisfied(predicate![domain_id == value]));
+            assert!(
+                !solver
+                    .assignments
+                    .is_predicate_satisfied(predicate![domain_id == value])
+            );
         }
 
-        assert!(!solver
-            .assignments
-            .is_predicate_satisfied(predicate![domain_id == ub]));
+        assert!(
+            !solver
+                .assignments
+                .is_predicate_satisfied(predicate![domain_id == ub])
+        );
     }
 
     #[test]

@@ -1,4 +1,8 @@
 use crate::basic_types::PredicateId;
+use crate::engine::Assignments;
+use crate::engine::EmptyDomain;
+use crate::engine::TrailedInteger;
+use crate::engine::TrailedValues;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
@@ -9,10 +13,6 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
-use crate::engine::TrailedInteger;
-use crate::engine::TrailedValues;
 use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
 

@@ -1,8 +1,8 @@
+use crate::engine::Assignments;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::variables::IntegerVariable;
 

@@ -6,6 +6,7 @@ pub(crate) mod test_solver;
 mod trailed;
 
 pub(crate) use assignments::Assignments;
+pub(crate) use assignments::ConstraintProgrammingTrailEntry;
 pub(crate) use assignments::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use trailed::*;
@@ -16,13 +17,13 @@ mod tests {
 
     use crate::conjunction;
     use crate::containers::StorageKey;
+    use crate::engine::TrailedValues;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::TrailedValues;
     use crate::predicate;
     use crate::proof::InferenceCode;
 

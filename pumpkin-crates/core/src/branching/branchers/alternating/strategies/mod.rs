@@ -1,8 +1,8 @@
-#[cfg(doc)]
-use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::results::SolutionReference;
 
 /// Defines methods for selecting which of two branching strategies to use; the default or the

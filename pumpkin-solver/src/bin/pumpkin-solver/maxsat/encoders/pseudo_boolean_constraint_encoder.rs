@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use log::debug;
-use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::Function;
+use pumpkin_solver::pumpkin_assert_simple;
 use thiserror::Error;
 
 use super::CardinalityNetworkEncoder;
@@ -193,7 +193,8 @@ impl PseudoBooleanConstraintEncoder {
             State::Encoded(ref mut encoder) => {
                 pumpkin_assert_simple!(
                     self.k_previous > k,
-                    "The strenthened k value ({k}) for the right hand side is not smaller than the previous k ({}).", self.k_previous
+                    "The strenthened k value ({k}) for the right hand side is not smaller than the previous k ({}).",
+                    self.k_previous
                 );
 
                 pumpkin_assert_simple!(

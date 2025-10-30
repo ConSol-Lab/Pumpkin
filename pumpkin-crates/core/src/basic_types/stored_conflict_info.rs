@@ -1,12 +1,12 @@
-use super::propagation_status_cp::PropagatorConflict;
 use super::PropositionalConjunction;
+use super::propagation_status_cp::PropagatorConflict;
+use crate::ConstraintOperationError;
+#[cfg(doc)]
+use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
-#[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicates::Predicate;
-use crate::ConstraintOperationError;
 
 /// A conflict info which can be stored in the solver.
 /// Two (related) conflicts can happen:

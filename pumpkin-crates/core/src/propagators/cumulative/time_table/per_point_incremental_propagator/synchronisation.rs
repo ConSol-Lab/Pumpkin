@@ -4,12 +4,12 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
-use crate::propagators::create_time_table_per_point_from_scratch;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
+use crate::propagators::create_time_table_per_point_from_scratch;
+use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 

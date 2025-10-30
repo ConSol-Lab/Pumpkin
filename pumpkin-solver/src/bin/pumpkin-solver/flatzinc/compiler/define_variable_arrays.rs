@@ -14,10 +14,10 @@ use flatzinc::SetLiteralExpr;
 use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
+use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::VarArrayDecl;
 use crate::flatzinc::instance::Output;
-use crate::flatzinc::FlatZincError;
 
 pub(crate) fn run(
     ast: &FlatZincAst,

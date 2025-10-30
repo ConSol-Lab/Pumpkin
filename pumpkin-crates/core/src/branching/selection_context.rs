@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
+use crate::engine::Assignments;
 #[cfg(test)]
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -12,7 +13,6 @@ use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::Assignments;
 
 /// The context provided to the [`Brancher`],
 /// it allows the retrieval of domain values of variables and access to methods from a [`Random`]
@@ -78,6 +78,25 @@ impl<'a> SelectionContext<'a> {
     /// Returns all currently defined [`DomainId`]s.
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         self.assignments.get_domains()
+    }
+
+    /// Tests whether the given predicate is a propagated predicate or not.
+    ///
+    /// If the predicate is not assigned, this returns `None`.
+    pub fn is_propagated_predicate(&self, predicate: Predicate) -> Option<bool> {
+        let trail_index = self.assignments.get_trail_position(&predicate)?;
+
+        Some(
+            self.assignments
+                .get_trail_entry(trail_index)
+                .reason
+                .is_some(),
+        )
+    }
+
+    /// Tests whether the given predicate is an initial bound.
+    pub fn is_initial_bound(&self, predicate: Predicate) -> bool {
+        self.assignments.is_initial_bound(predicate)
     }
 
     #[cfg(test)]

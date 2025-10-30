@@ -1,8 +1,8 @@
 use std::io::BufWriter;
 use std::io::Write;
 
-use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
@@ -44,19 +44,11 @@ impl<W: Write> DimacsProof<W> {
                 }
                 PredicateType::Equal => {
                     pumpkin_assert_simple!(value == 0 || value == 1);
-                    if value == 0 {
-                        "-"
-                    } else {
-                        ""
-                    }
+                    if value == 0 { "-" } else { "" }
                 }
                 PredicateType::NotEqual => {
                     pumpkin_assert_simple!(value == 0 || value == 1);
-                    if value == 0 {
-                        ""
-                    } else {
-                        "-"
-                    }
+                    if value == 0 { "" } else { "-" }
                 }
 
                 PredicateType::UpperBound => {

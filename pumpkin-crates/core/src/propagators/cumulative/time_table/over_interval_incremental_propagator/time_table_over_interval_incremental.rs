@@ -363,10 +363,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
         // We check whether there are no non-conflicting profiles in the time-table if we do not
         // report any conflicts
-        pumpkin_assert_extreme!(self
-            .time_table
-            .iter()
-            .all(|profile| profile.height <= self.parameters.capacity));
+        pumpkin_assert_extreme!(
+            self.time_table
+                .iter()
+                .all(|profile| profile.height <= self.parameters.capacity)
+        );
         Ok(())
     }
 }

@@ -1,10 +1,10 @@
+use crate::branching::Brancher;
+use crate::branching::BrancherEvent;
+use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::AlternatingStrategy;
 use crate::branching::branchers::alternating::BrancherToUse;
-use crate::branching::Brancher;
-use crate::branching::BrancherEvent;
-use crate::branching::SelectionContext;
 
 /// Specifies that the [`AlternatingBrancher`] should always use the other strategy.
 #[derive(Default, Debug, Clone, Copy)]

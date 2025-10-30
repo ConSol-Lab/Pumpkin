@@ -4,9 +4,9 @@ use flatzinc::BoolExpr;
 use flatzinc::Goal;
 
 use super::context::CompilationContext;
+use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::instance::FlatzincObjective;
-use crate::flatzinc::FlatZincError;
 
 pub(crate) fn run(
     ast: &FlatZincAst,

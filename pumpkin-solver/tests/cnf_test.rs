@@ -5,12 +5,12 @@ use std::process::Output;
 
 mod helpers;
 
-use helpers::run_solution_checker;
-use helpers::run_solver;
-use helpers::verify_proof;
 use helpers::Checker;
 use helpers::CheckerOutput;
 use helpers::Files;
+use helpers::run_solution_checker;
+use helpers::run_solver;
+use helpers::verify_proof;
 
 macro_rules! test_cnf_instance {
     ($name:ident) => {

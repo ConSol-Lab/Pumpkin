@@ -1,12 +1,15 @@
 use std::rc::Rc;
 
+use pumpkin_core::branching::SelectionContext;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_solver::branching::branchers::warm_start::WarmStart;
 use pumpkin_solver::branching::value_selection::InDomainMax;
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::InputOrder;
-use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 
@@ -24,7 +27,42 @@ pub(crate) fn run(
     context: &mut CompilationContext,
     objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context, true, objective)
+    // TODO: Relax this assumption. For now, we only want to assign to the upper or
+    // lower bound of the domain.
+    let variables: Vec<DomainId> = context.variable_map.values().copied().collect();
+
+    Ok(DynamicBrancher::new(vec![Box::new(
+        IndependentVariableValueBrancher::new(
+            InputOrder::new(&variables),
+            |context: &mut SelectionContext, var: DomainId| -> Predicate {
+                let lower_bound = context.lower_bound(var);
+                let upper_bound = context.upper_bound(var);
+
+                let is_lb_propagated = context
+                    .is_propagated_predicate(predicate![var >= lower_bound])
+                    .unwrap();
+
+                let is_lb_initial_bound = context.is_initial_bound(predicate![var >= lower_bound]);
+
+                let is_ub_propagated = context
+                    .is_propagated_predicate(predicate![var <= upper_bound])
+                    .unwrap();
+
+                let is_ub_initial_bound = context.is_initial_bound(predicate![var <= upper_bound]);
+
+                if is_lb_initial_bound || is_lb_propagated {
+                    return predicate![var <= lower_bound];
+                }
+
+                if is_ub_initial_bound || is_ub_propagated {
+                    return predicate![var >= upper_bound];
+                }
+
+                unreachable!()
+            },
+        ),
+    )]))
+    // create_from_search_strategy(&ast.search, context, true, objective)
 }
 
 fn create_from_search_strategy(

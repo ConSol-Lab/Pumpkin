@@ -1,5 +1,5 @@
-use enumset::enum_set;
 use enumset::EnumSet;
+use enumset::enum_set;
 
 use super::DomainEvent;
 

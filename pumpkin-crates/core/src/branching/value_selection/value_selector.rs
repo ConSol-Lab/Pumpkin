@@ -1,4 +1,7 @@
 use crate::basic_types::SolutionReference;
+#[cfg(doc)]
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
@@ -7,12 +10,9 @@ use crate::branching::value_selection::InDomainMin;
 #[cfg(doc)]
 use crate::branching::value_selection::InDomainRandom;
 #[cfg(doc)]
-use crate::branching::Brancher;
-use crate::branching::SelectionContext;
+use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-#[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
 
 /// A trait containing the interface for [`ValueSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting a value
@@ -23,7 +23,7 @@ pub trait ValueSelector<Var> {
     /// otherwise should not have been selected as `decision_variable`). Returns a
     /// [`Predicate`] specifying the required change in the domain.
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var)
-        -> Predicate;
+    -> Predicate;
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
@@ -60,4 +60,18 @@ pub trait ValueSelector<Var> {
     /// This can be used by [`Brancher::subscribe_to_events`] to determine upon which
     /// events which [`ValueSelector`] should be called.
     fn subscribe_to_events(&self) -> Vec<BrancherEvent>;
+}
+
+impl<Var, F: FnMut(&mut SelectionContext, Var) -> Predicate> ValueSelector<Var> for F {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: Var,
+    ) -> Predicate {
+        self(context, decision_variable)
+    }
+
+    fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
+        vec![]
+    }
 }

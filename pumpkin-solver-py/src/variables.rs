@@ -165,11 +165,7 @@ impl BoolExpression {
     pub fn to_literal(self, variable_map: &VariableMap) -> Literal {
         let literal = variable_map.get_boolean(self.0);
 
-        if self.1 {
-            literal
-        } else {
-            !literal
-        }
+        if self.1 { literal } else { !literal }
     }
 }
 

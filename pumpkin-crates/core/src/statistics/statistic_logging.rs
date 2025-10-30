@@ -4,8 +4,8 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io::stdout;
 use std::io::Write;
+use std::io::stdout;
 use std::sync::OnceLock;
 use std::sync::RwLock;
 

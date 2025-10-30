@@ -5,13 +5,13 @@
 use super::InferenceCode;
 use super::ProofLog;
 use crate::containers::HashMap;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::notifications::NotificationEngine;
-use crate::engine::propagation::store::PropagatorStore;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
 use crate::engine::VariableNames;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::notifications::NotificationEngine;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::reason::ReasonStore;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 

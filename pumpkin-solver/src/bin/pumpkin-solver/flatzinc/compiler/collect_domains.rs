@@ -3,17 +3,17 @@
 use std::rc::Rc;
 
 use flatzinc::Annotation;
+use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::Solver;
 use pumpkin_solver::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
+use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::instance::Output;
-use crate::flatzinc::FlatZincError;
 
 pub(crate) fn run(
     ast: &FlatZincAst,

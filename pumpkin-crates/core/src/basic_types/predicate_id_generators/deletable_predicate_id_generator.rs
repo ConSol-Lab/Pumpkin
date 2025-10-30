@@ -75,8 +75,8 @@ impl DeletablePredicateIdGenerator {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::predicate_id_generators::predicate_id_generator::PredicateIdIterator;
     use crate::basic_types::PredicateId;
+    use crate::basic_types::predicate_id_generators::predicate_id_generator::PredicateIdIterator;
 
     fn new_predicate_ids(ids: Vec<u32>) -> Vec<PredicateId> {
         ids.iter().map(|id| PredicateId { id: *id }).collect()

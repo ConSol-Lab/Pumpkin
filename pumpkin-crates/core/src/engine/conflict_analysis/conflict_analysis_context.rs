@@ -5,26 +5,26 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
 use crate::containers::StorageKey;
-use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::notifications::NotificationEngine;
-use crate::engine::predicates::predicate::Predicate;
-use crate::engine::predicates::predicate::PredicateType;
-use crate::engine::propagation::store::PropagatorStore;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::reason::ReasonRef;
-use crate::engine::reason::ReasonStore;
-use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
+use crate::engine::constraint_satisfaction_solver::CSPSolverState;
+use crate::engine::notifications::NotificationEngine;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate::PredicateType;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::ExplanationContext;
+use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::reason::ReasonRef;
+use crate::engine::reason::ReasonStore;
+use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
-use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_simple;
 
@@ -119,7 +119,9 @@ impl ConflictAnalysisContext<'_> {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
             StoredConflictInfo::EmptyDomainTwo { .. } => {
-                unreachable!("Should never attempt to extract a conflict nogood when using hypercube linear resolution")
+                unreachable!(
+                    "Should never attempt to extract a conflict nogood when using hypercube linear resolution"
+                )
             }
         };
 

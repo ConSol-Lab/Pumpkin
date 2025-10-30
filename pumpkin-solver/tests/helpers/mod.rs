@@ -313,7 +313,21 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
             .parse::<Solutions<ORDERED>>()
             .expect("Valid solution");
 
-        assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
+        assert_eq!(
+            actual_solutions,
+            expected_solutions,
+            "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.",
+            actual_solutions
+                .assignments
+                .iter()
+                .filter(|solution| !expected_solutions.assignments.contains(solution))
+                .collect::<Vec<_>>(),
+            expected_solutions
+                .assignments
+                .iter()
+                .filter(|solution| !actual_solutions.assignments.contains(solution))
+                .collect::<Vec<_>>()
+        );
     }
 
     output

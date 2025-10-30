@@ -2,31 +2,31 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use super::ConflictResolver;
-use crate::basic_types::moving_averages::MovingAverage;
+use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
-use crate::engine::conflict_analysis::minimisers::Mode;
-use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::conflict_analysis::LearnedNogood;
-use crate::engine::constraint_satisfaction_solver::NogoodLabel;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::PropagationContextMut;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::RestartStrategy;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::conflict_analysis::LearnedNogood;
+use crate::engine::conflict_analysis::minimisers::Mode;
+use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
+use crate::engine::constraint_satisfaction_solver::NogoodLabel;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::PropagationContextMut;
 use crate::predicates::Predicate;
-use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::PropagatorHandle;
 
 /// Resolve conflicts according to the CDCL procedure.
 ///
@@ -278,9 +278,15 @@ impl ResolutionResolver {
                         if self.reason_buffer.is_empty() {
                             predicate
                         } else {
-                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
                             pumpkin_assert_simple!(
-                                self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
+                                predicate.is_lower_bound_predicate()
+                                    || predicate.is_not_equal_predicate(),
+                                "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}",
+                                self.reason_buffer
+                            );
+                            pumpkin_assert_simple!(
+                                self.reason_buffer.len() == 1
+                                    && self.reason_buffer[0].is_lower_bound_predicate(),
                                 "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
                                 self.reason_buffer,
                             );
@@ -336,10 +342,15 @@ impl ResolutionResolver {
                         context.notification_engine,
                         context.variable_names,
                     );
-                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
-                        self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
-                        "The reason for the decision predicate should be a lower-bound predicate but was {}", self.reason_buffer[0]
+                        predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(),
+                        "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}"
+                    );
+                    pumpkin_assert_simple!(
+                        self.reason_buffer.len() == 1
+                            && self.reason_buffer[0].is_lower_bound_predicate(),
+                        "The reason for the decision predicate should be a lower-bound predicate but was {}",
+                        self.reason_buffer[0]
                     );
                     self.replace_predicate_in_conflict_nogood(predicate, self.reason_buffer[0]);
                 }
@@ -572,7 +583,10 @@ impl ResolutionResolver {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
             self.processed_nogood_predicates.push(last_predicate);
         } else {
-            pumpkin_assert_simple!(matches!(self.mode, AnalysisMode::AllDecision), "If the heap is empty when extracting the final nogood then we should be performing all decision learning")
+            pumpkin_assert_simple!(
+                matches!(self.mode, AnalysisMode::AllDecision),
+                "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
+            )
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
@@ -646,10 +660,12 @@ impl ResolutionResolver {
             0
         };
 
-        pumpkin_assert_advanced!(clean_nogood
-            .iter()
-            .skip(1)
-            .all(|p| context.assignments.is_predicate_satisfied(*p)));
+        pumpkin_assert_advanced!(
+            clean_nogood
+                .iter()
+                .skip(1)
+                .all(|p| context.assignments.is_predicate_satisfied(*p))
+        );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
         for predicate in clean_nogood.iter() {

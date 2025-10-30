@@ -1,6 +1,6 @@
 use super::VariableSelector;
-use crate::branching::brancher::BrancherEvent;
 use crate::branching::SelectionContext;
+use crate::branching::brancher::BrancherEvent;
 use crate::pumpkin_assert_extreme;
 use crate::variables::DomainId;
 
@@ -44,10 +44,12 @@ impl VariableSelector<DomainId> for ProportionalDomainSize {
         }
 
         if self.domain_sizes.is_empty() {
-            pumpkin_assert_extreme!(self
-                .variables
-                .iter()
-                .all(|variable| context.is_integer_fixed(*variable)), "There was a variable which was not fixed while the proportional domain selector returned None");
+            pumpkin_assert_extreme!(
+                self.variables
+                    .iter()
+                    .all(|variable| context.is_integer_fixed(*variable)),
+                "There was a variable which was not fixed while the proportional domain selector returned None"
+            );
             return None;
         }
 

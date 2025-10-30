@@ -397,13 +397,13 @@ pub(crate) trait DomainTracker: DomainTrackerInformation {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::PredicateIdGenerator;
+    use crate::engine::Assignments;
+    use crate::engine::TrailedValues;
+    use crate::engine::notifications::NotificationEngine;
+    use crate::engine::notifications::PredicateIdAssignments;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTracker;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
     use crate::engine::notifications::predicate_notification::predicate_trackers::LowerBoundTracker;
-    use crate::engine::notifications::NotificationEngine;
-    use crate::engine::notifications::PredicateIdAssignments;
-    use crate::engine::Assignments;
-    use crate::engine::TrailedValues;
     use crate::predicate;
 
     #[test]

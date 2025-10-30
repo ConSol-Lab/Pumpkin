@@ -1,12 +1,12 @@
-use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use super::PredicateIdAssignments;
+use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::notifications::DomainEvent;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
+use crate::engine::notifications::DomainEvent;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::variables::DomainId;

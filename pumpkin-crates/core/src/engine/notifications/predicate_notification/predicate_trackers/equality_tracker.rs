@@ -2,8 +2,8 @@ use super::DomainTracker;
 use super::HasTracker;
 use super::PredicateTracker;
 use super::TrailedValues;
-use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
 use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
+use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
 use crate::predicate;
 use crate::predicates::Predicate;
 

@@ -6,6 +6,7 @@ use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Solution;
+use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::value_selection::RandomSplitter;
@@ -14,9 +15,9 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::RandomSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::Brancher;
 use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
+use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 pub use crate::engine::propagation::store::PropagatorHandle;
@@ -24,22 +25,21 @@ use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::ConstraintSatisfactionSolver;
+use crate::optimisation::OptimisationProcedure;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
 #[cfg(doc)]
 use crate::optimisation::linear_unsat_sat::LinearUnsatSat;
 use crate::optimisation::solution_callback::SolutionCallback;
-use crate::optimisation::OptimisationProcedure;
 use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
 use crate::proof::ConstraintTag;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
-use crate::statistics::StatisticLogger;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.

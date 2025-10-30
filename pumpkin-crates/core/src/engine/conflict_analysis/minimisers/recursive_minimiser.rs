@@ -1,12 +1,12 @@
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
+use crate::engine::Assignments;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::propagation::CurrentNogood;
-use crate::engine::Assignments;
 use crate::predicates::Predicate;
-use crate::proof::explain_root_assignment;
 use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 

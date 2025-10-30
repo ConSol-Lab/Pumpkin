@@ -3,12 +3,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_solver::ConstraintOperationError;
+use pumpkin_solver::DefaultBrancher;
+use pumpkin_solver::Solver;
 use pumpkin_solver::containers::KeyGenerator;
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::containers::StorageKey;
+use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
-use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::ConstraintTag;
@@ -19,9 +22,6 @@ use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
-use pumpkin_solver::ConstraintOperationError;
-use pumpkin_solver::DefaultBrancher;
-use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
 use crate::constraints::Constraint;

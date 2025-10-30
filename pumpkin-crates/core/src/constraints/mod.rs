@@ -47,13 +47,13 @@ pub use disjunctive_strict::*;
 pub use element::*;
 pub use table::*;
 
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::proof::ConstraintTag;
 use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// A [`Constraint`] is a relation over variables. It disqualifies certain partial assignments of
 /// making it into a solution of the problem.
