@@ -277,6 +277,16 @@ impl ProofLog {
         )
     }
 
+    pub(crate) fn is_scaffolding(&self) -> bool {
+        matches!(
+            self.internal_proof,
+            Some(ProofImpl::CpProof {
+                propagation_order_hint: None,
+                ..
+            })
+        )
+    }
+
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
         let Some(ProofImpl::CpProof {
             ref mut proof_atomics,

@@ -85,22 +85,14 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        if self.terms.len() == 2 && !solver.is_logging_full_proof() {
-            let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
-                a: self.terms[0].clone(),
-                b: self.terms[1].scaled(-1).offset(self.rhs),
-                constraint_tag: self.constraint_tag,
-            })?;
-        } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
 
-            let negated = self
-                .terms
-                .iter()
-                .map(|var| var.scaled(-1))
-                .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
-        }
+        let negated = self
+            .terms
+            .iter()
+            .map(|var| var.scaled(-1))
+            .collect::<Box<[_]>>();
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
 
         Ok(())
     }
@@ -110,27 +102,16 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        if self.terms.len() == 2 {
-            let _ = solver.add_propagator(ReifiedPropagatorArgs {
-                propagator: BinaryEqualsPropagatorArgs {
-                    a: self.terms[0].clone(),
-                    b: self.terms[1].scaled(-1).offset(self.rhs),
-                    constraint_tag: self.constraint_tag,
-                },
-                reification_literal,
-            })?;
-        } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+        less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal)?;
 
-            let negated = self
-                .terms
-                .iter()
-                .map(|var| var.scaled(-1))
-                .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
-        }
+        let negated = self
+            .terms
+            .iter()
+            .map(|var| var.scaled(-1))
+            .collect::<Box<[_]>>();
+        less_than_or_equals(negated, -self.rhs, self.constraint_tag)
+            .implied_by(solver, reification_literal)?;
 
         Ok(())
     }
@@ -162,22 +143,12 @@ where
             constraint_tag,
         } = self;
 
-        if terms.len() == 2 {
-            let _ = solver.add_propagator(BinaryNotEqualsPropagatorArgs {
-                a: terms[0].clone(),
-                b: terms[1].scaled(-1).offset(self.rhs),
-                constraint_tag: self.constraint_tag,
-            })?;
-
-            Ok(())
-        } else {
-            LinearNotEqualPropagatorArgs {
-                terms: terms.into(),
-                rhs,
-                constraint_tag,
-            }
-            .post(solver)
+        LinearNotEqualPropagatorArgs {
+            terms: terms.into(),
+            rhs,
+            constraint_tag,
         }
+        .post(solver)
     }
 
     fn implied_by(
@@ -191,24 +162,12 @@ where
             constraint_tag,
         } = self;
 
-        if terms.len() == 2 {
-            let _ = solver.add_propagator(ReifiedPropagatorArgs {
-                propagator: BinaryNotEqualsPropagatorArgs {
-                    a: terms[0].clone(),
-                    b: terms[1].scaled(-1).offset(self.rhs),
-                    constraint_tag: self.constraint_tag,
-                },
-                reification_literal,
-            })?;
-            Ok(())
-        } else {
-            LinearNotEqualPropagatorArgs {
-                terms: terms.into(),
-                rhs,
-                constraint_tag,
-            }
-            .implied_by(solver, reification_literal)
+        LinearNotEqualPropagatorArgs {
+            terms: terms.into(),
+            rhs,
+            constraint_tag,
         }
+        .implied_by(solver, reification_literal)
     }
 }
 

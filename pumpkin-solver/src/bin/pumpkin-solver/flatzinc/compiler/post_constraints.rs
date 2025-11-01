@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use log::{debug, info};
 use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
@@ -12,6 +13,8 @@ use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::AffineView;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::TransformableVariable;
+
+use itertools::Itertools;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -719,10 +722,119 @@ fn compile_int_lin_predicate<C: Constraint>(
     let vars = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
+    if let Some(post_result) = tabulate_int_lin_predicate(
+        context,
+        &weights,
+        &vars,
+        rhs,
+        predicate_name,
+        constraint_tag,
+    ) {
+        return Ok(post_result);
+    }
+
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
     Ok(constraint.post(context.solver).is_ok())
+}
+
+fn tabulate_int_lin_predicate(
+    context: &mut CompilationContext,
+    weights: &[i32],
+    vars: &[DomainId],
+    rhs: i32,
+    predicate_name: &str,
+    constraint_tag: ConstraintTag,
+) -> Option<bool> {
+    // We only tabulate well-defined equalities,
+    // and we only do so when we are *not* logging anything
+    if predicate_name != "int_lin_eq" || weights.len() != vars.len() {
+        return None;
+    }
+    if context.solver.is_logging_full_proof() || context.solver.is_scaffolding() {
+        return None;
+    }
+    // Compute domain cardinalities for all involved variables
+    let range_sizes = vars
+        .iter()
+        .map(|var| context.solver.upper_bound(var) - context.solver.lower_bound(var) + 1)
+        .collect_vec();
+    // Choose the variable with the *largest* domain as the dependent variable,
+    // that is, rewrite a1 * x1 + ... + an * xn = b as
+    // x1 = (b - (a2 * x2 + ... + an * xn)) / a1,
+    // assuming that x1 has the largest domain
+    let dependent_var_index =
+        if let Some(index) = (0..range_sizes.len()).max_by_key(|&index| range_sizes[index]) {
+            index
+        } else {
+            // We should not have inequalities with no terms at all, but if we have,
+            // we might as well not tabulate them
+            return None;
+        };
+    // Proceed with tabulation if the vector of "free" variables
+    // can take at most <MAX_TABULATE> values
+    // TODO where would you place the magic constant?
+    let mut free_cardinality = 1_u64;
+    for index in 0..range_sizes.len() {
+        if index == dependent_var_index {
+            continue;
+        }
+        free_cardinality *= range_sizes[index] as u64;
+        if free_cardinality > 128 {
+            return None;
+        }
+    }
+    info!(
+        "Tabulating {} = {rhs} w.r.t. dependent variable {}",
+        weights
+            .iter()
+            .zip(vars.iter())
+            .map(|(w, v)| format!("{w} * {v}"))
+            .join(" + "),
+        vars[dependent_var_index]
+    );
+    // Enumerate all assignments of free variables and push them into a new table constraint
+    // Populate a Cartesian product of free variable domains
+    let free_assignments = vars
+        .iter()
+        .enumerate()
+        .filter_map(|(index, var)| {
+            if index == dependent_var_index {
+                None
+            } else {
+                Some(
+                    (context.solver.lower_bound(var)..=context.solver.upper_bound(var))
+                        .map(move |val| (index, val)),
+                )
+            }
+        })
+        .multi_cartesian_product();
+    let mut assignments = vec![];
+    // Go through each Cartesian product member and impute the dependent variable assignment
+    // (if possible) or discard the whole assignment (otherwise).
+    for free_assignment in free_assignments {
+        // Invariant: assignment[dependent_var_index] + sum (i free) (weight[i] * assignment[i]) == rhs
+        let mut assignment = vec![0; vars.len()];
+        assignment[dependent_var_index] = rhs;
+        for (index, val) in free_assignment {
+            assignment[index] = val;
+            assignment[dependent_var_index] -= weights[index] * val;
+        }
+        // If the dependent variable assignment is divided by the corresponding weight,
+        // then dividing it yields a feasible assignment, otherwise, no feasible assignment
+        // corresponds to this assignment of free variables.
+        if assignment[dependent_var_index] % weights[dependent_var_index] == 0 {
+            assignment[dependent_var_index] /= weights[dependent_var_index];
+            debug!("Adding {assignment:?}");
+            assignments.push(assignment);
+        }
+    }
+    Some(
+        constraints::table(vars.to_vec(), assignments, constraint_tag)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(

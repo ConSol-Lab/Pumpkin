@@ -145,8 +145,12 @@ impl Solver {
         self.satisfaction_solver.get_solution_reference()
     }
 
-    pub(crate) fn is_logging_full_proof(&self) -> bool {
+    pub fn is_logging_full_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_full_proof()
+    }
+
+    pub fn is_scaffolding(&self) -> bool {
+        self.satisfaction_solver.is_scaffolding()
     }
 }
 
