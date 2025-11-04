@@ -1,10 +1,10 @@
-use super::propagation_status_cp::PropagatorConflict;
 use super::PropositionalConjunction;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
+use super::propagation_status_cp::PropagatorConflict;
+use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::ConstraintOperationError;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 
 /// A conflict info which can be stored in the solver.
 /// Two (related) conflicts can happen:

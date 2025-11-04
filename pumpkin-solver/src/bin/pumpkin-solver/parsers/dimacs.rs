@@ -19,11 +19,11 @@ use std::num::NonZeroI32;
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
+use pumpkin_solver::Function;
+use pumpkin_solver::Solver;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::Literal;
-use pumpkin_solver::Function;
-use pumpkin_solver::Solver;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.

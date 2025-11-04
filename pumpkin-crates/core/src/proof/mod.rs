@@ -14,13 +14,15 @@ use std::path::Path;
 use std::sync::Arc;
 
 use dimacs::DimacsProof;
-use drcp_format::writer::ProofWriter;
 use drcp_format::Deduction;
 use drcp_format::Inference;
+use drcp_format::writer::ProofWriter;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
 
+#[cfg(doc)]
+use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::containers::KeyedVec;
@@ -28,8 +30,6 @@ use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
 use crate::variables::Literal;
-#[cfg(doc)]
-use crate::Solver;
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
 /// allow the following types of proofs:

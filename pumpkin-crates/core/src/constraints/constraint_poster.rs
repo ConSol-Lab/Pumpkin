@@ -2,9 +2,9 @@ use log::warn;
 
 use super::Constraint;
 use super::NegatableConstraint;
-use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
+use crate::variables::Literal;
 
 /// A structure which is responsible for adding the created [`Constraint`]s to the
 /// [`Solver`]. For an example on how to use this, see [`crate::constraints`].

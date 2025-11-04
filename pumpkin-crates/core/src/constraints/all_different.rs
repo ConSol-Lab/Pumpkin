@@ -1,5 +1,5 @@
-use super::binary_not_equals;
 use super::Constraint;
+use super::binary_not_equals;
 use crate::proof::ConstraintTag;
 use crate::variables::IntegerVariable;
 

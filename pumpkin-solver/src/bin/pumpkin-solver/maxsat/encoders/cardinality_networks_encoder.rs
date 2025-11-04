@@ -1,14 +1,14 @@
 use std::time::Instant;
 
+use pumpkin_solver::Solver;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::pumpkin_assert_eq_simple;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::variables::Literal;
-use pumpkin_solver::Solver;
 
-use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
 use super::WeightedLiteral;
+use super::pseudo_boolean_constraint_encoder::EncodingError;
 use crate::maxsat::encoders::EncodingError::CannotStrengthen;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
@@ -427,12 +427,16 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
-        assert!(solver
-            .add_clause([xs[0].get_true_predicate()], constraint_tag)
-            .is_ok());
-        assert!(solver
-            .add_clause([xs[1].get_true_predicate()], constraint_tag)
-            .is_err());
+        assert!(
+            solver
+                .add_clause([xs[0].get_true_predicate()], constraint_tag)
+                .is_ok()
+        );
+        assert!(
+            solver
+                .add_clause([xs[1].get_true_predicate()], constraint_tag)
+                .is_err()
+        );
     }
 
     #[test]
@@ -443,15 +447,21 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
-        assert!(solver
-            .add_clause([xs[0].get_true_predicate()], constraint_tag)
-            .is_ok());
-        assert!(solver
-            .add_clause([xs[1].get_true_predicate()], constraint_tag)
-            .is_ok());
-        assert!(solver
-            .add_clause([xs[2].get_true_predicate()], constraint_tag)
-            .is_err());
+        assert!(
+            solver
+                .add_clause([xs[0].get_true_predicate()], constraint_tag)
+                .is_ok()
+        );
+        assert!(
+            solver
+                .add_clause([xs[1].get_true_predicate()], constraint_tag)
+                .is_ok()
+        );
+        assert!(
+            solver
+                .add_clause([xs[2].get_true_predicate()], constraint_tag)
+                .is_err()
+        );
     }
 
     fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {

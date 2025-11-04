@@ -1,8 +1,8 @@
 use log::warn;
 
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::variables::Literal;
 

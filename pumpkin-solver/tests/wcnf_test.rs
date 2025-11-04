@@ -4,11 +4,11 @@ use std::process::Output;
 
 mod helpers;
 
-use helpers::run_solution_checker;
-use helpers::run_solver;
 use helpers::Checker;
 use helpers::CheckerOutput;
 use helpers::Files;
+use helpers::run_solution_checker;
+use helpers::run_solver;
 
 macro_rules! test_wcnf_instance {
     ($name:ident, $optimal_objective:literal) => {

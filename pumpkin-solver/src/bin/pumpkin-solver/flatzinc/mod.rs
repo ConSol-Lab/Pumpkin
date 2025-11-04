@@ -10,35 +10,35 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
-use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::statistics::log_statistic;
-use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::Solver;
 use pumpkin_solver::branching::Brancher;
+use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::constraint_arguments::CumulativeOptions;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
-use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::results::solution_iterator::IteratedSolution;
+use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
+use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::Solver;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;
+use crate::ProofType;
 use crate::flatzinc::error::FlatZincError;
 use crate::os_signal_termination::OsSignal;
-use crate::ProofType;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";

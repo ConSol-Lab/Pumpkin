@@ -4,15 +4,15 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_solver::Solver;
 use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::containers::HashSet;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
-use pumpkin_solver::Solver;
 
-use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::instance::Output;
 
 pub(crate) struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
@@ -644,7 +644,9 @@ impl Domain {
             }
             (Domain::SparseDomain { values }, Domain::IntervalDomain { lb, ub })
             | (Domain::IntervalDomain { lb, ub }, Domain::SparseDomain { values }) => {
-                warn!("Merging `SparseDomain` with `IntervalDomain`, this could lead to memory issues depending on the implementation");
+                warn!(
+                    "Merging `SparseDomain` with `IntervalDomain`, this could lead to memory issues depending on the implementation"
+                );
                 // We take all of the values in the sparse set which lie within the interval; note
                 // that we do not check whether the resulting values represent an interval
                 Domain::SparseDomain {

@@ -1,10 +1,10 @@
+use super::PredicateIdAssignments;
 use super::predicate_trackers::DisequalityTracker;
 use super::predicate_trackers::DomainTracker;
 use super::predicate_trackers::DomainTrackerInformation;
 use super::predicate_trackers::EqualityTracker;
 use super::predicate_trackers::LowerBoundTracker;
 use super::predicate_trackers::UpperBoundTracker;
-use super::PredicateIdAssignments;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;

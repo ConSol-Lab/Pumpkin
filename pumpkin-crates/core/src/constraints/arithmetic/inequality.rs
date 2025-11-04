@@ -1,10 +1,10 @@
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
 use crate::proof::ConstraintTag;
 use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagatorArgs;
 use crate::variables::IntegerVariable;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// Create the [`NegatableConstraint`] `\sum terms_i <= rhs`.
 ///

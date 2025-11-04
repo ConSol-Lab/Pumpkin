@@ -1,6 +1,6 @@
 use super::ValueSelector;
-use crate::branching::brancher::BrancherEvent;
 use crate::branching::SelectionContext;
+use crate::branching::brancher::BrancherEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -26,9 +26,9 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMin {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
+    use crate::branching::SelectionContext;
     use crate::branching::value_selection::InDomainMin;
     use crate::branching::value_selection::ValueSelector;
-    use crate::branching::SelectionContext;
     use crate::predicate;
 
     #[test]

@@ -9,13 +9,13 @@ use std::fmt::Debug;
 use enum_map::EnumMap;
 
 use crate::basic_types::SolutionReference;
-use crate::branching::brancher::BrancherEvent;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::branching::brancher::BrancherEvent;
 use crate::containers::HashSet;
+use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::Assignments;
 use crate::statistics::StatisticLogger;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and

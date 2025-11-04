@@ -1,15 +1,15 @@
+#[cfg(doc)]
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
-use crate::branching::Brancher;
-use crate::branching::SelectionContext;
+use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-#[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
 
 /// A trait containing the interface for [`VariableSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting

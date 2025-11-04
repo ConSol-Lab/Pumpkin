@@ -11,9 +11,9 @@ use optimisation::optimisation_solver::OptimisationSolver;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::termination::TimeBudget;
 
-use crate::parsers::dimacs::parse_wcnf;
 use crate::parsers::dimacs::SolverArgs;
 use crate::parsers::dimacs::SolverDimacsSink;
+use crate::parsers::dimacs::parse_wcnf;
 use crate::result::PumpkinError;
 use crate::stringify_solution;
 

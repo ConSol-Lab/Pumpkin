@@ -14,12 +14,12 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::propagators::UpdatableStructures;
 use crate::propagators::UpdatedTaskInfo;
+use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::pumpkin_assert_extreme;
 
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
@@ -48,10 +48,11 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
-        context.lower_bound(&updated_task.start_variable) > updatable_structures.get_stored_lower_bound(updated_task)
+        context.lower_bound(&updated_task.start_variable)
+            > updatable_structures.get_stored_lower_bound(updated_task)
             || updatable_structures.get_stored_upper_bound(updated_task)
-                >= context.upper_bound(&updated_task.start_variable)
-        , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
+                >= context.upper_bound(&updated_task.start_variable),
+        "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
     );
 
     let mut result = ShouldEnqueueResult {
@@ -780,12 +781,12 @@ mod tests {
     use std::rc::Rc;
 
     use super::find_profiles_which_propagate_lower_bound;
+    use crate::engine::Assignments;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
-    use crate::engine::Assignments;
-    use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
+    use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
 
     #[test]
     fn test_finding_last_index_lower_bound() {

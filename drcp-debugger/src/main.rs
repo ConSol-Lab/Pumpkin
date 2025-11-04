@@ -5,9 +5,9 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
-use drcp_format::reader::ProofReader;
 use drcp_format::Conclusion;
 use drcp_format::Step;
+use drcp_format::reader::ProofReader;
 
 #[derive(Parser)]
 struct Cli {

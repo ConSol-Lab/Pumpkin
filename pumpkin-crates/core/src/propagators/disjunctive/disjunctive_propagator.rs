@@ -1,5 +1,5 @@
-use std::cmp::min;
 use std::cmp::Reverse;
+use std::cmp::min;
 
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
@@ -8,13 +8,13 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::StorageKey;
+use crate::engine::DomainEvents;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;

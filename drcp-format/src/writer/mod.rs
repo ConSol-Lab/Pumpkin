@@ -4,12 +4,12 @@
 //! ```
 //! use std::num::NonZero;
 //!
-//! use drcp_format::writer::ProofWriter;
 //! use drcp_format::Conclusion;
 //! use drcp_format::Deduction;
 //! use drcp_format::Inference;
 //! use drcp_format::IntAtomic;
 //! use drcp_format::IntComparison::*;
+//! use drcp_format::writer::ProofWriter;
 //!
 //! let mut buffer = Vec::new();
 //! let mut writer = ProofWriter::new(&mut buffer);

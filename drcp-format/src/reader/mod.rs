@@ -8,13 +8,13 @@
 //! use std::num::NonZero;
 //! use std::rc::Rc;
 //!
-//! use drcp_format::reader::ProofReader;
 //! use drcp_format::Conclusion;
 //! use drcp_format::Deduction;
 //! use drcp_format::Inference;
 //! use drcp_format::IntAtomic;
 //! use drcp_format::IntComparison::*;
 //! use drcp_format::Step;
+//! use drcp_format::reader::ProofReader;
 //!
 //! let source = r#"
 //!     a 1 [x1 >= 0]
