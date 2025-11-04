@@ -210,7 +210,7 @@ impl ConflictResolver for HypercubeLinearResolver {
             ) {
                 panic!(
                     "Not conflicting. slack_conflict = {}",
-                    slack(
+                    compute_slack(
                         &conflicting_hypercube_linear,
                         trail_index,
                         context.assignments
@@ -321,11 +321,11 @@ fn fourier_eliminate(
     trace!("  - tightly propagating: {tightly_propagating_b}");
     trace!(
         "  - slack a: {}",
-        slack(constraint_a, trail_position, context.assignments)
+        compute_slack(constraint_a, trail_position, context.assignments)
     );
     trace!(
         "  - slack b: {}",
-        slack(&tightly_propagating_b, trail_position, context.assignments)
+        compute_slack(&tightly_propagating_b, trail_position, context.assignments)
     );
 
     for (_, domain_id) in constraint_b.iter_linear_terms() {
@@ -451,13 +451,13 @@ fn is_conflicting(
         return false;
     }
 
-    slack(hypercube_linear, trail_position, assignments) < 0
+    compute_slack(hypercube_linear, trail_position, assignments) < 0
 }
 
 /// Compute the slack for the linear component of the hypercube linear.
 ///
 /// If the slack is negative, the linear component is conflicting.
-fn slack(
+fn compute_slack(
     hypercube_linear: &HypercubeLinear,
     trail_position: usize,
     assignments: &Assignments,
