@@ -175,16 +175,16 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         task,
                         self.parameters.capacity,
                     );
-                    if let Err(conflict_tasks) = result {
-                        if conflict.is_none() {
-                            conflict = Some(Err(create_conflict_explanation(
-                                context,
-                                self.inference_code.unwrap(),
-                                &conflict_tasks,
-                                self.parameters.options.explanation_type,
-                            )
-                            .into()));
-                        }
+                    if let Err(conflict_tasks) = result
+                        && conflict.is_none()
+                    {
+                        conflict = Some(Err(create_conflict_explanation(
+                            context,
+                            self.inference_code.unwrap(),
+                            &conflict_tasks,
+                            self.parameters.options.explanation_type,
+                        )
+                        .into()));
                     }
                 }
                 Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(

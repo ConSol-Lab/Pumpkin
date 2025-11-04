@@ -202,7 +202,7 @@ impl Model {
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
 
-        let result = match solver.satisfy(&mut brancher, &mut termination) {
+        match solver.satisfy(&mut brancher, &mut termination) {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution {
                     solver_solution: satisfiable.solution().into(),
@@ -215,9 +215,7 @@ impl Model {
             pumpkin_solver::results::SatisfactionResult::Unknown(_, _) => {
                 SatisfactionResult::Unknown()
             }
-        };
-
-        result
+        }
     }
 
     #[pyo3(signature = (assumptions,timeout=None))]
@@ -241,7 +239,7 @@ impl Model {
             .map(|pred| pred.to_solver_predicate(&variable_map))
             .collect::<Vec<_>>();
 
-        let result = match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
+        match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
             pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
                     solver_solution: satisfiable.solution().into(),
@@ -276,9 +274,7 @@ impl Model {
             pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
-        };
-
-        result
+        }
     }
 
     #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None, timeout=None))]

@@ -212,6 +212,7 @@ pub(crate) struct FlatZincAst {
     pub(crate) variable_arrays: Vec<VarArrayDecl>,
     pub(crate) constraint_decls: Vec<flatzinc::ConstraintItem>,
     pub(crate) solve_item: flatzinc::SolveItem,
+    #[allow(unused, reason = "experimentation")]
     pub(crate) search: Search,
 }
 

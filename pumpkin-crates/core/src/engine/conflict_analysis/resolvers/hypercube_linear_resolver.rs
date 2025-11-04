@@ -736,6 +736,7 @@ fn compute_reason_for_initial_bound(predicate: Predicate) -> HypercubeLinear {
 }
 
 // Taken from https://docs.rs/num-integer/latest/src/num_integer/lib.rs.html#420-422
+#[allow(unused, reason = "experimentation")]
 fn gcd(a: i32, b: i32) -> i32 {
     let mut m = a;
     let mut n = b;
@@ -779,23 +780,6 @@ fn gcd(a: i32, b: i32) -> i32 {
     m << shift
 }
 
-fn div_floor(numerator: i32, denominator: i32) -> i32 {
-    /// Simultaneous truncated integer division and modulus.
-    #[inline]
-    fn div_rem(numerator: i32, denominator: i32) -> (i32, i32) {
-        (numerator / denominator, numerator % denominator)
-    }
-
-    // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
-    // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
-    let (d, r) = div_rem(numerator, denominator);
-    if (r > 0 && denominator < 0) || (r < 0 && denominator > 0) {
-        d - 1
-    } else {
-        d
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -803,7 +787,6 @@ mod tests {
     use crate::engine::TrailedValues;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::propagation::PropagationContext;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
     use crate::proof::InferenceCode;
@@ -882,7 +865,7 @@ mod tests {
             ))
             .expect("no empty domain");
 
-        assignments
+        let _ = assignments
             .post_predicate(predicate![x <= 2], None, &mut notification_engine)
             .expect("no empty domain");
 

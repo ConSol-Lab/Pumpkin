@@ -1302,7 +1302,7 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(
             {
-                let same = if let Err(Inconsistency::Conflict(conflict)) = &result {
+                if let Err(Inconsistency::Conflict(conflict)) = &result {
                     if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                         conflict.conjunction.iter().collect::<Vec<_>>()
                             == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
@@ -1311,8 +1311,7 @@ mod tests {
                     }
                 } else {
                     false
-                };
-                same
+                }
             },
             "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
         );
@@ -1402,7 +1401,7 @@ mod tests {
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+            if let Err(Inconsistency::Conflict(explanation)) = &result {
                 if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
@@ -1411,8 +1410,7 @@ mod tests {
                 }
             } else {
                 false
-            };
-            same
+            }
         });
     }
 
@@ -1498,7 +1496,7 @@ mod tests {
         let result = solver.propagate(propagator);
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!({
-            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+            if let Err(Inconsistency::Conflict(explanation)) = &result {
                 if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
@@ -1507,8 +1505,7 @@ mod tests {
                 }
             } else {
                 false
-            };
-            same
+            }
         });
     }
 

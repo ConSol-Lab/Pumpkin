@@ -182,17 +182,19 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conflict) = self
-                .propagator
-                .detect_inconsistency(context.as_trailed_readonly())
-            {
-                context.post(
-                    self.reification_literal.get_false_predicate(),
-                    conflict.conjunction,
-                    conflict.inference_code,
-                )?;
-            }
+        if context.is_literal_fixed(&self.reification_literal) {
+            return Ok(());
+        }
+
+        if let Some(conflict) = self
+            .propagator
+            .detect_inconsistency(context.as_trailed_readonly())
+        {
+            context.post(
+                self.reification_literal.get_false_predicate(),
+                conflict.conjunction,
+                conflict.inference_code,
+            )?;
         }
 
         Ok(())

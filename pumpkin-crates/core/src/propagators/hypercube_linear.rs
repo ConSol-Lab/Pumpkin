@@ -127,6 +127,7 @@ impl HypercubeLinear {
             .map(view_to_tuple)
     }
 
+    #[allow(unused, reason = "experimentation")]
     pub(crate) fn weaken(&self, predicate: Predicate) -> Option<HypercubeLinear> {
         let domain = predicate.get_domain();
         let value = predicate.get_right_hand_side();

@@ -133,10 +133,8 @@ impl Solver {
     /// Logs the statistics currently present in the solver.
     pub fn log_statistics(&self, brancher: Option<&impl Brancher>, verbose: bool) {
         self.satisfaction_solver.log_statistics(verbose);
-        if verbose {
-            if let Some(brancher) = brancher {
-                brancher.log_statistics(StatisticLogger::new(["brancher"]));
-            }
+        if verbose && let Some(brancher) = brancher {
+            brancher.log_statistics(StatisticLogger::new(["brancher"]));
         }
         log_statistic_postfix();
     }

@@ -1063,11 +1063,12 @@ impl IntegerDomain {
 
         // In case the hole is made at the given trail position or earlier,
         // the value is not in the domain.
-        if let Some(hole_info) = self.holes.get(&value) {
-            if hole_info.trail_position <= trail_position {
-                return false;
-            }
+        if let Some(hole_info) = self.holes.get(&value)
+            && hole_info.trail_position <= trail_position
+        {
+            return false;
         }
+
         // Since none of the previous checks triggered, the value is in the domain.
         true
     }

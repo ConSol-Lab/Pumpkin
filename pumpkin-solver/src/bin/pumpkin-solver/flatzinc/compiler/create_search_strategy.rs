@@ -1,3 +1,4 @@
+#![allow(unused, reason = "experimentation")]
 use std::rc::Rc;
 
 use pumpkin_core::branching::SelectionContext;
