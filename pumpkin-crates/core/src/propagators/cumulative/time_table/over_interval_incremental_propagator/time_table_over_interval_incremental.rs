@@ -175,16 +175,16 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         task,
                         self.parameters.capacity,
                     );
-                    if let Err(conflict_tasks) = result {
-                        if conflict.is_none() {
-                            conflict = Some(Err(create_conflict_explanation(
-                                context,
-                                self.inference_code.unwrap(),
-                                &conflict_tasks,
-                                self.parameters.options.explanation_type,
-                            )
-                            .into()));
-                        }
+                    if let Err(conflict_tasks) = result
+                        && conflict.is_none()
+                    {
+                        conflict = Some(Err(create_conflict_explanation(
+                            context,
+                            self.inference_code.unwrap(),
+                            &conflict_tasks,
+                            self.parameters.options.explanation_type,
+                        )
+                        .into()));
                     }
                 }
                 Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
@@ -363,10 +363,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
         // We check whether there are no non-conflicting profiles in the time-table if we do not
         // report any conflicts
-        pumpkin_assert_extreme!(self
-            .time_table
-            .iter()
-            .all(|profile| profile.height <= self.parameters.capacity));
+        pumpkin_assert_extreme!(
+            self.time_table
+                .iter()
+                .all(|profile| profile.height <= self.parameters.capacity)
+        );
         Ok(())
     }
 }
