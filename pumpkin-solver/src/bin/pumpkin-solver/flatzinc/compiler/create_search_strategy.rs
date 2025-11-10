@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use flatzinc::AnnExpr;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_solver::branching::branchers::warm_start::WarmStart;
@@ -27,6 +28,33 @@ pub(crate) fn run(
     create_from_search_strategy(&ast.search, context, true, objective)
 }
 
+fn get_bool_variables(
+    context: &mut CompilationContext,
+    variables: &AnnExpr,
+) -> Result<Vec<Literal>, FlatZincError> {
+    Ok(match variables {
+        AnnExpr::String(identifier) => {
+            vec![context.resolve_bool_variable_from_identifier(identifier)?]
+        }
+        AnnExpr::Expr(expr) => context.resolve_bool_variable_array(expr)?.as_ref().to_vec(),
+        other => panic!("Expected string or expression but got {other:?}"),
+    })
+}
+
+fn get_int_variables(
+    context: &mut CompilationContext,
+    variables: &AnnExpr,
+) -> Result<Rc<[DomainId]>, FlatZincError> {
+    Ok(match variables {
+        AnnExpr::String(identifier) => {
+            // TODO: unnecessary to create Rc here, for now it's just for the return type
+            Rc::new([context.resolve_integer_variable_from_identifier(identifier)?])
+        }
+        AnnExpr::Expr(expr) => context.resolve_integer_variable_array(expr)?,
+        other => panic!("Expected string or expression but got {other:?}"),
+    })
+}
+
 fn create_from_search_strategy(
     strategy: &Search,
     context: &mut CompilationContext,
@@ -39,15 +67,7 @@ fn create_from_search_strategy(
                 variable_selection_strategy,
                 value_selection_strategy,
             }) => {
-                let search_variables = match variables {
-                    flatzinc::AnnExpr::String(identifier) => {
-                        vec![context.resolve_bool_variable_from_identifier(identifier)?]
-                    }
-                    flatzinc::AnnExpr::Expr(expr) => {
-                        context.resolve_bool_variable_array(expr)?.as_ref().to_vec()
-                    }
-                    other => panic!("Expected string or expression but got {other:?}"),
-                };
+                let search_variables = get_bool_variables(context, variables)?;
 
                 create_search_over_propositional_variables(
                     &search_variables,
@@ -60,19 +80,22 @@ fn create_from_search_strategy(
                 variable_selection_strategy,
                 value_selection_strategy,
             }) => {
-                let search_variables = match variables {
-                    flatzinc::AnnExpr::String(identifier) => {
-                        // TODO: unnecessary to create Rc here, for now it's just for the return type
-                        Rc::new([context.resolve_integer_variable_from_identifier(identifier)?])
-                    }
-                    flatzinc::AnnExpr::Expr(expr) => context.resolve_integer_variable_array(expr)?,
-                    other => panic!("Expected string or expression but got {other:?}"),
-                };
+                if let Ok(search_variables) = get_int_variables(context, variables) {
                 create_search_over_domains(
                     &search_variables,
                     variable_selection_strategy,
                     value_selection_strategy,
                 )
+                } else {
+                    let search_variables = get_bool_variables(context, variables)?;
+
+                    create_search_over_propositional_variables(
+                        &search_variables,
+                        variable_selection_strategy,
+                        value_selection_strategy,
+                    )
+
+                }
             }
         Search::Seq(search_strategies) => DynamicBrancher::new(
                 search_strategies
@@ -97,13 +120,13 @@ fn create_from_search_strategy(
             }
         Search::WarmStartInt { variables, values } => {
                 match variables {
-                    flatzinc::AnnExpr::String(identifier) => {
+                    AnnExpr::String(identifier) => {
                         panic!("Expected either an array of integers or an array of booleans; not an identifier {identifier}")
                     }
-                    flatzinc::AnnExpr::Expr(expr) => {
+                    AnnExpr::Expr(expr) => {
                     let int_variable_array = context.resolve_integer_variable_array(expr)?;
                             match values {
-                                flatzinc::AnnExpr::Expr(expr) => {
+                                AnnExpr::Expr(expr) => {
                                     let int_values_array = context.resolve_array_integer_constants(expr)?;
                                     DynamicBrancher::new(vec![Box::new(WarmStart::new(
                                         &int_variable_array,
@@ -118,10 +141,10 @@ fn create_from_search_strategy(
             },
         Search::WarmStartBool{ variables, values } => {
                 match variables {
-                    flatzinc::AnnExpr::String(identifier) => {
+                    AnnExpr::String(identifier) => {
                         panic!("Expected either an array of integers or an array of booleans; not an identifier {identifier}")
                     }
-                    flatzinc::AnnExpr::Expr(expr) => {
+                    AnnExpr::Expr(expr) => {
                             let bool_variable_array = context
                                 .resolve_bool_variable_array(expr)?
                                 .iter()
@@ -129,7 +152,7 @@ fn create_from_search_strategy(
                                 .collect::<Vec<_>>();
 
                             match values {
-                                    flatzinc::AnnExpr::Expr(expr) => {
+                                    AnnExpr::Expr(expr) => {
                                         let bool_values_array = context
                                             .resolve_bool_constants(expr)?
                                             .iter()
