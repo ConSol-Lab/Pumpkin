@@ -27,6 +27,7 @@ use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_simple;
+use crate::Random;
 
 /// Used during conflict analysis to provide the necessary information.
 ///
@@ -51,6 +52,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) variable_names: &'a VariableNames,
+
+    pub(crate) rng: &'a mut dyn Random,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -97,6 +100,7 @@ impl ConflictAnalysisContext<'_> {
             backtrack_level,
             self.brancher,
             self.trailed_values,
+            self.rng,
         )
     }
 

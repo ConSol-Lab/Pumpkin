@@ -9,7 +9,6 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::Assignments;
 use crate::statistics::StatisticLogger;
 use crate::DefaultBrancher;
 use crate::Solver;
@@ -113,10 +112,10 @@ impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher> Brancher
         }
     }
 
-    fn synchronise(&mut self, assignments: &Assignments) {
-        self.default_brancher.synchronise(assignments);
+    fn synchronise(&mut self, context: &mut SelectionContext) {
+        self.default_brancher.synchronise(context);
         if !self.strategy.will_always_use_default() {
-            self.other_brancher.synchronise(assignments);
+            self.other_brancher.synchronise(context);
         }
     }
 

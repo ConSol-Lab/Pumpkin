@@ -568,6 +568,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                     trailed_values: &mut self.trailed_values,
                     variable_names: &self.variable_names,
+                    rng: &mut self.internal_parameters.random_generator,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -636,6 +637,7 @@ impl ConstraintSatisfactionSolver {
                 0,
                 brancher,
                 &mut self.trailed_values,
+                &mut self.internal_parameters.random_generator,
             );
             self.state.declare_ready();
         } else if self.state.internal_state == CSPSolverStateInternal::ContainsSolution {
@@ -829,6 +831,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
             trailed_values: &mut self.trailed_values,
             variable_names: &self.variable_names,
+            rng: &mut self.internal_parameters.random_generator,
         };
 
         let learned_nogood = self
@@ -971,6 +974,7 @@ impl ConstraintSatisfactionSolver {
             0,
             brancher,
             &mut self.trailed_values,
+            &mut self.internal_parameters.random_generator,
         );
 
         self.restart_strategy.notify_restart();
@@ -989,6 +993,7 @@ impl ConstraintSatisfactionSolver {
         backtrack_level: usize,
         brancher: &mut BrancherType,
         trailed_values: &mut TrailedValues,
+        rng: &mut dyn Random,
     ) {
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
@@ -1014,7 +1019,7 @@ impl ConstraintSatisfactionSolver {
             propagator.synchronise(context);
         }
 
-        brancher.synchronise(assignments);
+        brancher.synchronise(&mut SelectionContext::new(assignments, rng));
 
         let _ = notification_engine.process_backtrack_events(assignments, propagators);
         notification_engine.clear_event_drain();
