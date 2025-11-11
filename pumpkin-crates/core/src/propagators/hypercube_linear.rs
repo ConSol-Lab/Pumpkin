@@ -231,6 +231,7 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
 
         HypercubeLinearPropagator {
             hypercube_linear,
+            constraint_tag,
             inference_code: context.create_inference_code(constraint_tag, HypercubeLinearInference),
         }
     }
@@ -240,14 +241,20 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
 #[derive(Clone, Debug)]
 pub(crate) struct HypercubeLinearPropagator {
     pub(crate) hypercube_linear: HypercubeLinear,
+    pub(crate) constraint_tag: ConstraintTag,
     inference_code: InferenceCode,
 }
 
 impl HypercubeLinearPropagator {
     #[cfg(test)]
-    pub(crate) fn new(hypercube_linear: HypercubeLinear, inference_code: InferenceCode) -> Self {
+    pub(crate) fn new(
+        hypercube_linear: HypercubeLinear,
+        constraint_tag: ConstraintTag,
+        inference_code: InferenceCode,
+    ) -> Self {
         Self {
             hypercube_linear,
+            constraint_tag,
             inference_code,
         }
     }

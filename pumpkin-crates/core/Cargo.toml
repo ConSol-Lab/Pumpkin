@@ -35,3 +35,6 @@ default = ["gzipped-proofs"]
 debug-checks = []
 clap = ["dep:clap"]
 gzipped-proofs = ["dep:flate2"]
+
+[dev-dependencies]
+env_logger = "0.11.8"

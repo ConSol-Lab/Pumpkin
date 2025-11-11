@@ -28,42 +28,42 @@ pub(crate) fn run(
     context: &mut CompilationContext,
     objective: Option<FlatzincObjective>,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    // TODO: Relax this assumption. For now, we only want to assign to the upper or
-    // lower bound of the domain.
-    let variables: Vec<DomainId> = context.variable_map.values().copied().collect();
+    // // TODO: Relax this assumption. For now, we only want to assign to the upper or
+    // // lower bound of the domain.
+    // let variables: Vec<DomainId> = context.variable_map.values().copied().collect();
 
-    Ok(DynamicBrancher::new(vec![Box::new(
-        IndependentVariableValueBrancher::new(
-            InputOrder::new(&variables),
-            |context: &mut SelectionContext, var: DomainId| -> Predicate {
-                let lower_bound = context.lower_bound(var);
-                let upper_bound = context.upper_bound(var);
+    // Ok(DynamicBrancher::new(vec![Box::new(
+    //     IndependentVariableValueBrancher::new(
+    //         InputOrder::new(&variables),
+    //         |context: &mut SelectionContext, var: DomainId| -> Predicate {
+    //             let lower_bound = context.lower_bound(var);
+    //             let upper_bound = context.upper_bound(var);
 
-                let is_lb_propagated = context
-                    .is_propagated_predicate(predicate![var >= lower_bound])
-                    .unwrap();
+    //             let is_lb_propagated = context
+    //                 .is_propagated_predicate(predicate![var >= lower_bound])
+    //                 .unwrap();
 
-                let is_lb_initial_bound = context.is_initial_bound(predicate![var >= lower_bound]);
+    //             let is_lb_initial_bound = context.is_initial_bound(predicate![var >= lower_bound]);
 
-                let is_ub_propagated = context
-                    .is_propagated_predicate(predicate![var <= upper_bound])
-                    .unwrap();
+    //             let is_ub_propagated = context
+    //                 .is_propagated_predicate(predicate![var <= upper_bound])
+    //                 .unwrap();
 
-                let is_ub_initial_bound = context.is_initial_bound(predicate![var <= upper_bound]);
+    //             let is_ub_initial_bound = context.is_initial_bound(predicate![var <= upper_bound]);
 
-                if is_lb_initial_bound || is_lb_propagated {
-                    return predicate![var <= lower_bound];
-                }
+    //             if is_lb_initial_bound || is_lb_propagated {
+    //                 return predicate![var <= lower_bound];
+    //             }
 
-                if is_ub_initial_bound || is_ub_propagated {
-                    return predicate![var >= upper_bound];
-                }
+    //             if is_ub_initial_bound || is_ub_propagated {
+    //                 return predicate![var >= upper_bound];
+    //             }
 
-                unreachable!()
-            },
-        ),
-    )]))
-    // create_from_search_strategy(&ast.search, context, true, objective)
+    //             unreachable!()
+    //         },
+    //     ),
+    // )]))
+    create_from_search_strategy(&ast.search, context, true, objective)
 }
 
 fn create_from_search_strategy(
