@@ -513,6 +513,13 @@ impl ResolutionResolver {
     }
 }
 
+/// A structure which stores a learned nogood
+///
+/// There are two assumptions:
+/// - The asserting literal (i.e. the literal of the current decision level) is placed at the `0`th
+///   index of [`LearnedNogood::literals`].
+/// - A literal from the second-highest decision level is placed at the `1`st index of
+///   [`LearnedNogood::literals`].
 #[derive(Clone, Debug)]
 pub(crate) struct LearnedNogood {
     pub(crate) predicates: Vec<Predicate>,
