@@ -122,8 +122,8 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for RandomTieBreaker<V
 mod tests {
     use super::RandomTieBreaker;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::tie_breaking::random_tie_breaker::Direction;
     use crate::branching::tie_breaking::TieBreaker;
+    use crate::branching::tie_breaking::random_tie_breaker::Direction;
 
     #[test]
     fn test_selection_new_value() {

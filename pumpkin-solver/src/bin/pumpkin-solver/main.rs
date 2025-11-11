@@ -15,31 +15,31 @@ use std::time::Duration;
 use clap::Parser;
 use clap::ValueEnum;
 use file_format::FileFormat;
+use log::Level;
+use log::LevelFilter;
 use log::error;
 use log::info;
 use log::warn;
-use log::Level;
-use log::LevelFilter;
 use maxsat::PseudoBooleanEncoding;
-use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use parsers::dimacs::parse_cnf;
 use pumpkin_core::constraint_arguments::CumulativeExplanationType;
 use pumpkin_core::constraint_arguments::CumulativeOptions;
 use pumpkin_core::constraint_arguments::CumulativePropagationMethod;
+use pumpkin_solver::Solver;
 use pumpkin_solver::convert_case::Case;
 use pumpkin_solver::optimisation::OptimisationStrategy;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::rand::rngs::SmallRng;
 use pumpkin_solver::rand::SeedableRng;
+use pumpkin_solver::rand::rngs::SmallRng;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::Solver;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -522,14 +522,17 @@ fn run() -> PumpkinResult<()> {
     if pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         >= pumpkin_solver::asserts::PUMPKIN_ASSERT_MODERATE
     {
-        warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
+        warn!(
+            "Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.",
+            pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+        );
     };
 
     let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {
-                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
+                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()));
             }
             FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }

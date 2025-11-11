@@ -1,8 +1,8 @@
 use self::unsatisfiable::UnsatisfiableUnderAssumptions;
+use crate::Solver;
 pub use crate::basic_types::ProblemSolution;
 use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
-use crate::Solver;
 pub mod solution_iterator;
 pub mod unsatisfiable;
 use crate::branching::Brancher;

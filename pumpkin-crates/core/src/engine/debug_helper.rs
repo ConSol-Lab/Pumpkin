@@ -5,13 +5,13 @@ use std::iter::once;
 use log::debug;
 use log::warn;
 
+use super::TrailedValues;
 use super::conflict_analysis::SemanticMinimiser;
 use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
-use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
+use super::propagation::store::PropagatorStore;
 use super::reason::ReasonStore;
-use super::TrailedValues;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;

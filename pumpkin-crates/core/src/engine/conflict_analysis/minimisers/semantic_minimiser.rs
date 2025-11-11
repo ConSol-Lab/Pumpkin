@@ -3,8 +3,8 @@ use std::cmp;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
-use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::Assignments;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -254,9 +254,9 @@ impl SimpleIntegerDomain {
 #[cfg(test)]
 mod tests {
     use crate::conjunction;
+    use crate::engine::Assignments;
     use crate::engine::conflict_analysis::Mode;
     use crate::engine::conflict_analysis::SemanticMinimiser;
-    use crate::engine::Assignments;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;

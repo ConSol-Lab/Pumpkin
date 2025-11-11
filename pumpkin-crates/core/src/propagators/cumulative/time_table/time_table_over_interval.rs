@@ -1,30 +1,26 @@
 use std::rc::Rc;
 
+use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use super::TimeTable;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -33,6 +29,10 @@ use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
+use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
+use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -381,10 +381,10 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
             }
             // Process the current event, note that `change_in_resource_usage` can be negative
             pumpkin_assert_simple!(
-                    event.change_in_resource_usage > 0
-                        || current_resource_usage >= event.change_in_resource_usage,
-                    "Processing this task would have caused negative resource usage which should not be possible"
-                );
+                event.change_in_resource_usage > 0
+                    || current_resource_usage >= event.change_in_resource_usage,
+                "Processing this task would have caused negative resource usage which should not be possible"
+            );
             current_resource_usage += event.change_in_resource_usage;
             if current_resource_usage == 0 {
                 // No tasks have an active mandatory at the current `time_stamp`
@@ -411,9 +411,9 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                     // The mandatory part of a task has started, we should thus add it to the
                     // set of contributing tasks
                     pumpkin_assert_extreme!(
-                            !current_profile_tasks.contains(&event.task),
-                            "Task is being added to the profile while it is already part of the contributing tasks"
-                        );
+                        !current_profile_tasks.contains(&event.task),
+                        "Task is being added to the profile while it is already part of the contributing tasks"
+                    );
                     if !is_conflicting {
                         // If the profile is already conflicting then we shouldn't add more tasks.
                         // This could be changed in the future so that we can pick the tasks which
@@ -434,7 +434,9 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
     current_profile_tasks: &[Rc<Task<Var>>],
 ) -> bool {
     if event.change_in_resource_usage <= 0 {
-        eprintln!("The resource usage of an event which causes a new profile to be started should never be negative")
+        eprintln!(
+            "The resource usage of an event which causes a new profile to be started should never be negative"
+        )
     }
     if current_resource_usage != 0 {
         eprintln!("The resource usage should be 0 when a new profile is started")

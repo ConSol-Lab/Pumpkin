@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
+use crate::engine::Assignments;
 #[cfg(test)]
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -12,7 +13,6 @@ use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::Assignments;
 
 /// The context provided to the [`Brancher`],
 /// it allows the retrieval of domain values of variables and access to methods from a [`Random`]

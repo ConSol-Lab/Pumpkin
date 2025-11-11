@@ -3,14 +3,14 @@
 use flatzinc::ConstraintItem;
 use log::warn;
 
+use crate::FlatZincOptions;
+use crate::ProofType;
+use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::compiler::context::CompilationContext;
 use crate::flatzinc::compiler::context::Identifiers;
 use crate::flatzinc::compiler::context::VariableEquivalences;
-use crate::flatzinc::FlatZincError;
-use crate::FlatZincOptions;
-use crate::ProofType;
 
 pub(crate) fn run(
     ast: &mut FlatZincAst,

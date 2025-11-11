@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use super::context::CompilationContext;
 use super::context::Set;
-use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::ast::FlatZincAst;
 
 pub(crate) fn run(
     ast: &FlatZincAst,

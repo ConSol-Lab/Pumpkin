@@ -1,27 +1,26 @@
 use enum_map::Enum;
 
 #[cfg(doc)]
+use crate::Solver;
+#[cfg(doc)]
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 #[cfg(doc)]
 use crate::branching;
+use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::create_statistics_struct;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::results::solution_iterator::SolutionIterator;
 use crate::statistics::StatisticLogger;
-#[cfg(doc)]
-use crate::Solver;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
 /// [`ValueSelector`]).
@@ -98,7 +97,7 @@ pub trait Brancher {
     ///
     /// To receive information about this event, use [`BrancherEvent::Synchronise`] in
     /// [`Self::subscribe_to_events`]
-    fn synchronise(&mut self, _assignments: &Assignments) {}
+    fn synchronise(&mut self, _context: &mut SelectionContext) {}
 
     /// This method returns whether a restart is *currently* pointless for the [`Brancher`].
     ///

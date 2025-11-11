@@ -6,31 +6,32 @@ use log::warn;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodInfo;
-use crate::basic_types::moving_averages::MovingAverage;
+use crate::PropagatorHandle;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::engine::Assignments;
+use crate::engine::Lbd;
+use crate::engine::SolverStatistics;
+use crate::engine::TrailedValues;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
-use crate::engine::Assignments;
-use crate::engine::Lbd;
-use crate::engine::SolverStatistics;
-use crate::engine::TrailedValues;
 use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
@@ -39,7 +40,6 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::PropagatorHandle;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -1217,9 +1217,11 @@ impl NogoodPropagator {
                 .unwrap()
                 .not();
 
-            assert!(nogood
-                .iter()
-                .any(|p| context.get_predicate(*p) == propagated_predicate.not()));
+            assert!(
+                nogood
+                    .iter()
+                    .any(|p| context.get_predicate(*p) == propagated_predicate.not())
+            );
 
             // Cannot use lazy explanations when propagating from scratch
             // since the propagated predicate may not be at position zero.

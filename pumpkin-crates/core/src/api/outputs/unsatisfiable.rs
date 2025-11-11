@@ -1,11 +1,11 @@
 //! Contains the representation of a unsatisfiable solution.
 
-use crate::branching::Brancher;
-use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
-use crate::engine::ConstraintSatisfactionSolver;
-use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::Solver;
+use crate::branching::Brancher;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
+use crate::predicates::Predicate;
 
 /// A struct which allows the retrieval of an unsatisfiable core consisting of the provided
 /// assumptions passed to the initial [`Solver::satisfy_under_assumptions`].
@@ -104,7 +104,10 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     pub fn extract_core(&mut self) -> Box<[Predicate]> {
         match self.solver.extract_clausal_core(self.brancher) {
             CoreExtractionResult::ConflictingAssumption(conflicting_assumption) => {
-                panic!("Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}", !conflicting_assumption)
+                panic!(
+                    "Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}",
+                    !conflicting_assumption
+                )
             }
             CoreExtractionResult::Core(core) => core.into(),
         }

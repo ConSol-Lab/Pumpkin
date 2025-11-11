@@ -3,15 +3,18 @@
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 
+use super::PropagatorQueue;
+use super::TrailedValues;
+use super::propagation::EnqueueDecision;
+use super::propagation::ExplanationContext;
 use super::propagation::constructor::PropagatorConstructor;
 use super::propagation::constructor::PropagatorConstructorContext;
 use super::propagation::store::PropagatorStore;
-use super::propagation::EnqueueDecision;
-use super::propagation::ExplanationContext;
-use super::PropagatorQueue;
-use super::TrailedValues;
+use crate::PropagatorHandle;
 use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
+use crate::engine::Assignments;
+use crate::engine::EmptyDomain;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
@@ -22,14 +25,11 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::Assignments;
-use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
-use crate::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -146,7 +146,10 @@ impl TestSolver {
             None,
             &mut self.notification_engine,
         );
-        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        assert!(
+            result.is_ok(),
+            "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
+        );
         let mut propagator_queue = PropagatorQueue::new(4);
         self.notification_engine
             .notify_propagators_about_domain_events_test(
@@ -174,7 +177,10 @@ impl TestSolver {
             None,
             &mut self.notification_engine,
         );
-        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        assert!(
+            result.is_ok(),
+            "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
+        );
         let mut propagator_queue = PropagatorQueue::new(4);
         self.notification_engine
             .notify_propagators_about_domain_events_test(
@@ -202,7 +208,10 @@ impl TestSolver {
             None,
             &mut self.notification_engine,
         );
-        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        assert!(
+            result.is_ok(),
+            "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
+        );
         let mut propagator_queue = PropagatorQueue::new(4);
         self.notification_engine
             .notify_propagators_about_domain_events_test(
@@ -345,7 +354,8 @@ impl TestSolver {
         let actual_ub = self.upper_bound(var);
 
         assert_eq!(
-            (lb, ub), (actual_lb, actual_ub),
+            (lb, ub),
+            (actual_lb, actual_ub),
             "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
         );
     }

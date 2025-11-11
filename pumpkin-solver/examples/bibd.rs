@@ -13,12 +13,12 @@
 //!
 //! Hence, the problem is defined in terms of v, k, and l.
 
+use pumpkin_solver::Solver;
 use pumpkin_solver::constraints;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::Solver;
 
 struct Bibd {
     /// The number of rows in the matrix.

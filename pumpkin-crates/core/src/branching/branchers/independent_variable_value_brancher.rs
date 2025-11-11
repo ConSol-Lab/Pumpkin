@@ -4,11 +4,11 @@
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::Brancher;
-use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 

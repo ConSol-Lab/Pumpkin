@@ -2,13 +2,13 @@
 
 use std::path::PathBuf;
 
+use pumpkin_solver::Solver;
 use pumpkin_solver::constraints;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::Solver;
 
 #[test]
 fn proof_with_reified_literals() {

@@ -1,5 +1,5 @@
-use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::variables::DomainId;
 use crate::predicate;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple

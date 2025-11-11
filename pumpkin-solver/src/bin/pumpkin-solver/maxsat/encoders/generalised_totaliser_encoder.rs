@@ -5,9 +5,9 @@ use pumpkin_solver::pumpkin_assert_moderate;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::variables::Literal;
 
+use super::WeightedLiteral;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
-use super::WeightedLiteral;
 use crate::Solver;
 
 /// Implementation of the generalized totalizer encoding for pseudo-boolean constraints.

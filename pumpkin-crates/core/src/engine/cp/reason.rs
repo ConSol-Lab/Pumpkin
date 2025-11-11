@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorId;
+use super::propagation::store::PropagatorStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 #[cfg(doc)]
@@ -180,9 +180,9 @@ impl Slot<'_> {
 mod tests {
     use super::*;
     use crate::conjunction;
+    use crate::engine::Assignments;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::variables::DomainId;
-    use crate::engine::Assignments;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
