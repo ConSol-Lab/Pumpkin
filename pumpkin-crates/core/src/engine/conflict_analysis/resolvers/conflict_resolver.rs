@@ -14,7 +14,8 @@ pub(crate) trait ConflictResolver: Debug {
     /// The state provided will be inconsistent. The last entry on the trail is the last
     /// _successful_ propagation, and the conflict information contains either an explicit conflict
     /// nogood or the predicate and reason that triggered a domain to become empty. The reason of
-    /// the conflict can be queried from the [`ReasonStore`] in the provided context.
+    /// the conflict can be queried using [`ReasonStore::get_or_compute`]. An instance of
+    /// [`ReasonStore`] is provided in the context.
     ///
     /// Additionally, it is guaranteed that the conflict is not at the root-level. Such a conflict
     /// means that nothing could restore the solver, so resolving a root-level conflict is
@@ -22,9 +23,15 @@ pub(crate) trait ConflictResolver: Debug {
     /// [`ConflictResolver::resolve_conflict`] does not have an error path. All implementations
     /// should succeed, or panic if an unexpected state is encountered.
     ///
+    /// For now, we assume that infeasibility is always discovered at the root. Hence, we assume
+    /// this function is never called at decision level 0. However, it is conceivable that this
+    /// assumption will be relaxed in the future, as expensive propagators may not be called at
+    /// every node. We explain this here for completeness only, and it remains safe to assume
+    /// decision level will be non-zero.
+    ///
     /// When this function exits, the solver must be in a state that it can proceed in the solving
     /// loop. This means it will first perform fixpoint propagation, then branch, and repeat.
-    /// Typically, implementations of this function will enqueue a propagator that will prevent
-    /// the propagator from entering the same subtree again.
+    /// Typically, implementations of this function will make an assignment that will prevent
+    /// the solver from entering the same subtree again.
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext);
 }
