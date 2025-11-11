@@ -1,6 +1,8 @@
 use pumpkin_solver::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::{self};
+use pumpkin_solver::variables::AffineView;
+use pumpkin_solver::variables::DomainId;
 use pyo3::pyclass;
 use pyo3::pymethods;
 
@@ -53,99 +55,6 @@ macro_rules! python_constraint {
             }
         }
     };
-}
-
-#[pyclass]
-#[derive(Clone)]
-pub struct Cumulative {
-    start_times: Vec<IntExpression>,
-    durations: Vec<IntExpression>,
-    resource_usages: Vec<IntExpression>,
-    resource_capacity: IntExpression,
-    constraint_tag: Tag,
-}
-
-#[pymethods]
-impl Cumulative {
-    #[new]
-    pub fn new(
-        start_times: Vec<IntExpression>,
-        durations: Vec<IntExpression>,
-        resource_usages: Vec<IntExpression>,
-        resource_capacity: IntExpression,
-        constraint_tag: Tag,
-    ) -> Self {
-        Self {
-            constraint_tag,
-            start_times,
-            durations,
-            resource_usages,
-            resource_capacity,
-        }
-    }
-}
-
-impl Cumulative {
-    pub fn post(
-        self,
-        solver: &mut pumpkin_solver::Solver,
-        variable_map: &VariableMap,
-    ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-        let tasks = self
-            .start_times
-            .into_iter()
-            .zip(self.durations.iter())
-            .zip(self.resource_usages.iter())
-            .map(|((start_time, processing_time), resource_usage)| {
-                let start_time = start_time.to_solver_constraint_argument(variable_map);
-                let processing_time = processing_time.to_solver_constraint_argument(variable_map);
-                let resource_usage = resource_usage.to_solver_constraint_argument(variable_map);
-                ArgTask {
-                    start_time,
-                    processing_time,
-                    resource_usage,
-                }
-            })
-            .collect::<Vec<_>>();
-        constraints::cumulative(
-            tasks,
-            self.resource_capacity
-                .to_solver_constraint_argument(variable_map),
-            self.constraint_tag.0,
-        )
-        .post(solver)
-    }
-
-    pub fn implied_by(
-        self,
-        solver: &mut pumpkin_solver::Solver,
-        reification_literal: pumpkin_solver::variables::Literal,
-        variable_map: &VariableMap,
-    ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-        let tasks = self
-            .start_times
-            .into_iter()
-            .zip(self.durations.iter())
-            .zip(self.resource_usages.iter())
-            .map(|((start_time, processing_time), resource_usage)| {
-                let start_time = start_time.to_solver_constraint_argument(variable_map);
-                let processing_time = processing_time.to_solver_constraint_argument(variable_map);
-                let resource_usage = resource_usage.to_solver_constraint_argument(variable_map);
-                ArgTask {
-                    start_time,
-                    processing_time,
-                    resource_usage,
-                }
-            })
-            .collect::<Vec<_>>();
-        constraints::cumulative(
-            tasks,
-            self.resource_capacity
-                .to_solver_constraint_argument(variable_map),
-            self.constraint_tag.0,
-        )
-        .implied_by(solver, reification_literal)
-    }
 }
 
 python_constraint! {
@@ -279,5 +188,44 @@ python_constraint! {
     NegativeTable: negative_table {
         variables: Vec<IntExpression>,
         table: Vec<Vec<i32>>,
+    }
+}
+
+python_constraint! {
+    Cumulative: cumulative {
+        tasks: Vec<Task>,
+        capacity: i32
+    }
+}
+
+#[pyclass(eq, hash, frozen)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Task {
+    start_time: IntExpression,
+    processing_time: i32,
+    resource_usage: i32,
+}
+
+#[pymethods]
+impl Task {
+    #[new]
+    fn new(start_time: IntExpression, processing_time: i32, resource_usage: i32) -> Self {
+        Self {
+            start_time,
+            processing_time,
+            resource_usage,
+        }
+    }
+}
+
+impl PythonConstraintArg for Task {
+    type Output = ArgTask<AffineView<DomainId>, i32, i32>;
+
+    fn to_solver_constraint_argument(self, variable_map: &VariableMap) -> Self::Output {
+        ArgTask {
+            start_time: self.start_time.to_solver_constraint_argument(variable_map),
+            processing_time: self.processing_time,
+            resource_usage: self.resource_usage,
+        }
     }
 }

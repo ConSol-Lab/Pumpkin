@@ -36,6 +36,7 @@ macro_rules! declare_constraints {
 
         pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
             $(m.add_class::<$constraint>()?;)+
+            m.add_class::<Task>()?;
             Ok(())
         }
     };

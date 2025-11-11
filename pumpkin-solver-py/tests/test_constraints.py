@@ -1,15 +1,14 @@
-"""
-Generate constraints and expressions based on the grammar supported by the API
+"""Generate constraints and expressions based on the grammar supported by the API.
 
-Generates linear constraints, special operators and global constraints.
-Whenever possible, the script also generates 'boolean as integer' versions of the arguments
+Generates linear constraints, special operators and global constraints. Whenever possible, the script also generates
+'boolean as integer' versions of the arguments
 """
 
 from random import randint
 
+import pumpkin_solver
 import pytest
 from pumpkin_solver import constraints
-import pumpkin_solver
 
 
 # generate all linear sum-expressions
@@ -28,10 +27,7 @@ def generate_linear():
                         for i in range(3)
                     ]
                 else:
-                    args = [
-                        model.new_integer_variable(-3, 5, name=f"x[{i}]")
-                        for i in range(3)
-                    ]
+                    args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
                 if scaled:  # do scaling (0, -2, 4,...)
                     args = [
                         a.scaled(-2 * i + 1) for i, a in enumerate(args)
@@ -43,9 +39,7 @@ def generate_linear():
                 if comp == "!=":
                     cons = constraints.NotEquals(args, rhs, model.new_constraint_tag())
                 if comp == "<=":
-                    cons = constraints.LessThanOrEquals(
-                        args, rhs, model.new_constraint_tag()
-                    )
+                    cons = constraints.LessThanOrEquals(args, rhs, model.new_constraint_tag())
 
                 yield model, cons, comp, scaled, bool
 
@@ -66,10 +60,7 @@ def generate_operators():
                         for i in range(3)
                     ]
                 else:
-                    args = [
-                        model.new_integer_variable(-3, 5, name=f"x[{i}]")
-                        for i in range(3)
-                    ]
+                    args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
                 if scaled:  # do scaling (0, -2, 4,...)
                     args = [
                         a.scaled(-2 * i + 1) for i, a in enumerate(args)
@@ -78,26 +69,18 @@ def generate_operators():
                 rhs = model.new_integer_variable(-3, 5, name="rhs")
                 if name == "div":
                     denom = model.new_integer_variable(1, 3, name="denom")
-                    cons = constraints.Division(
-                        args[0], denom, rhs, model.new_constraint_tag()
-                    )
+                    cons = constraints.Division(args[0], denom, rhs, model.new_constraint_tag())
                 if name == "mul":
                     cons = constraints.Times(*args[:2], rhs, model.new_constraint_tag())
                 if name == "abs":
-                    cons = constraints.Absolute(
-                        args[0], rhs, model.new_constraint_tag()
-                    )
+                    cons = constraints.Absolute(args[0], rhs, model.new_constraint_tag())
                 if name == "min":
                     cons = constraints.Minimum(args, rhs, model.new_constraint_tag())
                 if name == "max":
                     cons = constraints.Maximum(args, rhs, model.new_constraint_tag())
                 if name == "element":
-                    idx = model.new_integer_variable(
-                        -1, 5, name="idx"
-                    )  # sneaky, idx can be out of bounds
-                    cons = constraints.Element(
-                        idx, args, rhs, model.new_constraint_tag()
-                    )
+                    idx = model.new_integer_variable(-1, 5, name="idx")  # sneaky, idx can be out of bounds
+                    cons = constraints.Element(idx, args, rhs, model.new_constraint_tag())
 
                 yield model, cons, name, scaled, bool
 
@@ -116,9 +99,7 @@ def generate_alldiff():
                     for i in range(3)
                 ]
             else:
-                args = [
-                    model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)
-                ]
+                args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
             if scaled or bool:  # do scaling (0, -2, 4,...)
                 args = [
                     a.scaled(-2 * i + 1) for i, a in enumerate(args)
@@ -154,17 +135,31 @@ def generate_cumulative():
     capacity = 4
 
     model = pumpkin_solver.Model()
-    start = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
+    start = [model.new_integer_variable(0, 5, name=f"x[{i}]") for i in range(3)]
     cons = constraints.Cumulative(
-        start, duration, demand, capacity, model.new_constraint_tag()
+        list(
+            map(
+                lambda task: constraints.Task(*task),
+                zip(start, duration, demand),
+            )
+        ),
+        capacity,
+        model.new_constraint_tag(),
     )
     yield model, cons, "cumulative", False, False
 
     model = pumpkin_solver.Model()
-    start = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
+    start = [model.new_integer_variable(0, 5, name=f"x[{i}]") for i in range(3)]
     start = [a.scaled(-2 * i) for i, a in enumerate(start)]
     cons = constraints.Cumulative(
-        start, duration, demand, capacity, model.new_constraint_tag()
+        list(
+            map(
+                lambda task: constraints.Task(*task),
+                zip(start, duration, demand),
+            )
+        ),
+        capacity,
+        model.new_constraint_tag(),
     )
     yield model, cons, "cumulative", True, False
 
@@ -177,17 +172,13 @@ def generate_globals():
 
 
 def label(model, cons, name, scaled, bool):
-    return " ".join(
-        ["Scaled" if scaled else "Unscaled", "Boolean" if bool else "Integer", name]
-    )
+    return " ".join(["Scaled" if scaled else "Unscaled", "Boolean" if bool else "Integer", name])
 
 
 LINEAR = list(generate_operators())
 
 
-@pytest.mark.parametrize(
-    ("model", "cons", "name", "scaled", "bool"), LINEAR, ids=[label(*a) for a in LINEAR]
-)
+@pytest.mark.parametrize(("model", "cons", "name", "scaled", "bool"), LINEAR, ids=[label(*a) for a in LINEAR])
 def test_linear(model, cons, name, scaled, bool):
     model.add_constraint(cons)
     res = model.satisfy()
@@ -222,9 +213,7 @@ def test_global(model, cons, name, scaled, bool):
     assert isinstance(res, pumpkin_solver.SatisfactionResult.Satisfiable)
 
 
-ALL_EXPR = (
-    list(generate_operators()) + list(generate_linear()) + list(generate_globals())
-)
+ALL_EXPR = list(generate_operators()) + list(generate_linear()) + list(generate_globals())
 
 
 @pytest.mark.parametrize(
