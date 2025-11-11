@@ -9,6 +9,7 @@ use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::PropagatorQueue;
+use crate::engine::RestartStrategy;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
@@ -49,11 +50,12 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
 
-    pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
+    pub(crate) unit_nogood_inference_codes: &'a mut HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) variable_names: &'a VariableNames,
 
     pub(crate) rng: &'a mut dyn Random,
+    pub(crate) restart_strategy: &'a mut RestartStrategy,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {

@@ -1,4 +1,5 @@
 use super::ConflictResolver;
+use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -6,14 +7,18 @@ use crate::branching::Brancher;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
+use crate::engine::Lbd;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::conflict_analysis::LearnedNogood;
-use crate::engine::conflict_analysis::minimisers::Mode;
-use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
+use crate::engine::conflict_analysis::Mode;
+use crate::engine::conflict_analysis::RecursiveMinimiser;
+use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::PropagationContextMut;
 use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -23,7 +28,7 @@ use crate::pumpkin_assert_simple;
 /// This conflict resolver will derive a nogood that is implied by the constraints already present
 /// in the solver. This new nogood is added as a constraint to the solver, and the solver
 /// backtracks to the decision level at which the new constraint propagates.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct ResolutionResolver {
     /// Heap containing the predicates which still need to be processed; sorted non-increasing
     /// based on trail-index where implied predicates are processed first.
@@ -43,6 +48,10 @@ pub(crate) struct ResolutionResolver {
     mode: AnalysisMode,
     /// Re-usable buffer which reasons are written into.
     reason_buffer: Vec<Predicate>,
+    /// The handle to the nogood propagator that learned nogoods are added to.
+    nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    /// Computes the LBD for nogoods.
+    lbd_helper: Lbd,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -58,17 +67,87 @@ pub(crate) enum AnalysisMode {
     AllDecision,
 }
 
-impl ResolutionResolver {
-    pub(crate) fn with_mode(mode: AnalysisMode) -> Self {
-        Self {
-            mode,
-            ..Default::default()
+impl ConflictResolver for ResolutionResolver {
+    fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
+        let learned_nogood = self.learn_nogood(context);
+
+        let current_decision_level = context.assignments.get_decision_level();
+        context
+            .counters
+            .learned_clause_statistics
+            .average_backtrack_amount
+            .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
+
+        context.counters.engine_statistics.sum_of_backjumps +=
+            current_decision_level as u64 - 1 - learned_nogood.backjump_level as u64;
+        if current_decision_level - learned_nogood.backjump_level > 1 {
+            context.counters.engine_statistics.num_backjumps += 1;
         }
+
+        // important to notify about the conflict _before_ backtracking removes literals from
+        // the trail -> although in the current version this does nothing but notify that a
+        // conflict happened
+        context.restart_strategy.notify_conflict(
+            self.lbd_helper
+                .compute_lbd(&learned_nogood.predicates, context.assignments),
+            context.assignments.get_pruned_value_count(),
+        );
+
+        context.backtrack(learned_nogood.backjump_level);
+
+        let constraint_tag = context
+            .proof_log
+            .log_deduction(
+                learned_nogood.predicates.iter().copied(),
+                context.variable_names,
+            )
+            .expect("Failed to write proof log");
+
+        let inference_code = context
+            .proof_log
+            .create_inference_code(constraint_tag, NogoodLabel);
+
+        if learned_nogood.predicates.len() == 1 {
+            let _ = context
+                .unit_nogood_inference_codes
+                .insert(!learned_nogood.predicates[0], inference_code);
+        }
+
+        context
+            .counters
+            .learned_clause_statistics
+            .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
+
+        context
+            .counters
+            .learned_clause_statistics
+            .average_learned_nogood_length
+            .add_term(learned_nogood.predicates.len() as u64);
+
+        self.add_learned_nogood(context, learned_nogood, inference_code);
+
+        context.solver_state.declare_solving();
     }
 }
 
-impl ConflictResolver for ResolutionResolver {
-    fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood> {
+impl ResolutionResolver {
+    pub(crate) fn new(
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+        mode: AnalysisMode,
+    ) -> Self {
+        Self {
+            nogood_propagator_handle,
+            mode,
+            to_process_heap: Default::default(),
+            predicate_id_generator: Default::default(),
+            processed_nogood_predicates: Default::default(),
+            recursive_minimiser: Default::default(),
+            reason_buffer: Default::default(),
+            lbd_helper: Default::default(),
+        }
+    }
+
+    pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
@@ -174,22 +253,37 @@ impl ConflictResolver for ResolutionResolver {
             }
         }
 
-        Some(self.extract_final_nogood(context))
+        self.extract_final_nogood(context)
     }
 
-    fn process(
+    fn add_learned_nogood(
         &mut self,
         context: &mut ConflictAnalysisContext,
-        learned_nogood: &Option<LearnedNogood>,
-    ) -> Result<(), ()> {
-        let learned_nogood = learned_nogood.as_ref().expect("Expected nogood");
+        learned_nogood: LearnedNogood,
+        inference_code: InferenceCode,
+    ) {
+        let mut propagation_context = PropagationContextMut::new(
+            context.trailed_values,
+            context.assignments,
+            context.reason_store,
+            context.semantic_minimiser,
+            context.notification_engine,
+            self.nogood_propagator_handle.propagator_id(),
+        );
 
-        context.backtrack(learned_nogood.backjump_level);
-        Ok(())
+        let nogood_propagator = context
+            .propagators
+            .get_propagator_mut(self.nogood_propagator_handle)
+            .expect("nogood propagator handle should refer to nogood propagator");
+
+        nogood_propagator.add_asserting_nogood(
+            learned_nogood.predicates,
+            inference_code,
+            &mut propagation_context,
+            context.counters,
+        );
     }
-}
 
-impl ResolutionResolver {
     /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
         self.processed_nogood_predicates.clear();
@@ -417,4 +511,17 @@ impl ResolutionResolver {
             predicates: clean_nogood,
         }
     }
+}
+
+/// A structure which stores a learned nogood
+///
+/// There are two assumptions:
+/// - The asserting literal (i.e. the literal of the current decision level) is placed at the `0`th
+///   index of [`LearnedNogood::literals`].
+/// - A literal from the second-highest decision level is placed at the `1`st index of
+///   [`LearnedNogood::literals`].
+#[derive(Clone, Debug)]
+pub(crate) struct LearnedNogood {
+    pub(crate) predicates: Vec<Predicate>,
+    pub(crate) backjump_level: usize,
 }

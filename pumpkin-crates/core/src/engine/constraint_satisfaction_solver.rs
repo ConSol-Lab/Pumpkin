@@ -8,13 +8,11 @@ use std::time::Instant;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-use super::Lbd;
 use super::ResolutionResolver;
 use super::TrailedValues;
 use super::VariableNames;
 use super::conflict_analysis::AnalysisMode;
 use super::conflict_analysis::ConflictAnalysisContext;
-use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::notifications::NotificationEngine;
@@ -35,7 +33,6 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;
@@ -133,8 +130,6 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     variable_names: VariableNames,
-    /// Computes the LBD for nogoods.
-    lbd_helper: Lbd,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
     unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
     /// The resolver which is used upon a conflict.
@@ -302,11 +297,13 @@ impl ConstraintSatisfactionSolver {
             solver_statistics: SolverStatistics::default(),
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
-            lbd_helper: Lbd::default(),
             unit_nogood_inference_codes: Default::default(),
             conflict_resolver: match solver_options.conflict_resolver {
                 ConflictResolver::NoLearning => Box::new(NoLearningResolver),
-                ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
+                ConflictResolver::UIP => Box::new(ResolutionResolver::new(
+                    nogood_propagator_handle,
+                    AnalysisMode::OneUIP,
+                )),
             },
             internal_parameters: solver_options,
             trailed_values: TrailedValues::default(),
@@ -565,16 +562,19 @@ impl ConstraintSatisfactionSolver {
                     propagator_queue: &mut self.propagator_queue,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
-                    unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
+                    unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
                     trailed_values: &mut self.trailed_values,
                     variable_names: &self.variable_names,
                     rng: &mut self.internal_parameters.random_generator,
+                    restart_strategy: &mut self.restart_strategy,
                 };
 
-                let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
-                let learned_nogood = resolver
-                    .resolve_conflict(&mut conflict_analysis_context)
-                    .expect("Expected core extraction to be able to extract a core");
+                let mut resolver = ResolutionResolver::new(
+                    self.nogood_propagator_handle,
+                    AnalysisMode::AllDecision,
+                );
+
+                let learned_nogood = resolver.learn_nogood(&mut conflict_analysis_context);
 
                 CoreExtractionResult::Core(learned_nogood.predicates.clone())
             })
@@ -810,8 +810,6 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
-        let current_decision_level = self.get_decision_level();
-
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assignments: &mut self.assignments,
             counters: &mut self.solver_statistics,
@@ -824,113 +822,15 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: &mut self.propagator_queue,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
-            unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
+            unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
             trailed_values: &mut self.trailed_values,
             variable_names: &self.variable_names,
             rng: &mut self.internal_parameters.random_generator,
+            restart_strategy: &mut self.restart_strategy,
         };
 
-        let learned_nogood = self
-            .conflict_resolver
+        self.conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
-
-        // important to notify about the conflict _before_ backtracking removes literals from
-        // the trail -> although in the current version this does nothing but notify that a
-        // conflict happened
-        if let Some(learned_nogood) = learned_nogood.as_ref() {
-            conflict_analysis_context
-                .counters
-                .learned_clause_statistics
-                .average_backtrack_amount
-                .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
-
-            conflict_analysis_context
-                .counters
-                .engine_statistics
-                .sum_of_backjumps +=
-                current_decision_level as u64 - 1 - learned_nogood.backjump_level as u64;
-            if current_decision_level - learned_nogood.backjump_level > 1 {
-                conflict_analysis_context
-                    .counters
-                    .engine_statistics
-                    .num_backjumps += 1;
-            }
-
-            self.restart_strategy.notify_conflict(
-                self.lbd_helper.compute_lbd(
-                    &learned_nogood.predicates,
-                    conflict_analysis_context.assignments,
-                ),
-                conflict_analysis_context
-                    .assignments
-                    .get_pruned_value_count(),
-            );
-        }
-
-        let result = self
-            .conflict_resolver
-            .process(&mut conflict_analysis_context, &learned_nogood);
-        if result.is_err() {
-            unreachable!("Cannot resolve nogood and reach error")
-        }
-
-        if let Some(learned_nogood) = learned_nogood {
-            let constraint_tag = self
-                .internal_parameters
-                .proof_log
-                .log_deduction(
-                    learned_nogood.predicates.iter().copied(),
-                    &self.variable_names,
-                )
-                .expect("Failed to write proof log");
-
-            let inference_code = self
-                .internal_parameters
-                .proof_log
-                .create_inference_code(constraint_tag, NogoodLabel);
-
-            if learned_nogood.predicates.len() == 1 {
-                let _ = self
-                    .unit_nogood_inference_codes
-                    .insert(!learned_nogood.predicates[0], inference_code);
-            }
-
-            self.solver_statistics
-                .learned_clause_statistics
-                .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
-
-            self.solver_statistics
-                .learned_clause_statistics
-                .average_learned_nogood_length
-                .add_term(learned_nogood.predicates.len() as u64);
-
-            self.add_learned_nogood(learned_nogood, inference_code);
-        }
-
-        self.state.declare_solving();
-    }
-
-    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood, inference_code: InferenceCode) {
-        let mut context = PropagationContextMut::new(
-            &mut self.trailed_values,
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.semantic_minimiser,
-            &mut self.notification_engine,
-            self.nogood_propagator_handle.propagator_id(),
-        );
-
-        let nogood_propagator = self
-            .propagators
-            .get_propagator_mut(self.nogood_propagator_handle)
-            .expect("nogood propagator handle should refer to nogood propagator");
-
-        nogood_propagator.add_asserting_nogood(
-            learned_nogood.predicates,
-            inference_code,
-            &mut context,
-            &mut self.solver_statistics,
-        );
     }
 
     /// Performs a restart during the search process; it is only called when it has been determined
@@ -1680,7 +1580,7 @@ impl CSPSolverState {
     }
 }
 
-declare_inference_label!(NogoodLabel, "nogood");
+declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 
 #[cfg(test)]
 mod tests {
