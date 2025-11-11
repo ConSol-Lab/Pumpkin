@@ -1,10 +1,8 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
-use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::rc::Rc;
 use std::time::Instant;
 
 use rand::SeedableRng;
@@ -117,7 +115,7 @@ pub struct ConstraintSatisfactionSolver {
     /// information is kept after a restart.
     ///
     /// Can possibly be used in the conflict resolver, hence the reference counting.
-    restart_strategy: Rc<RefCell<RestartStrategy>>,
+    restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
     semantic_minimiser: SemanticMinimiser,
@@ -288,9 +286,6 @@ impl ConstraintSatisfactionSolver {
         );
 
         let nogood_propagator_handle = nogood_propagator_slot.populate(nogood_propagator);
-        let restart_strategy = Rc::new(RefCell::new(RestartStrategy::new(
-            solver_options.restart_options,
-        )));
 
         let mut csp_solver = ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
@@ -298,7 +293,7 @@ impl ConstraintSatisfactionSolver {
             assignments: Assignments::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
-            restart_strategy: Rc::clone(&restart_strategy),
+            restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators,
             nogood_propagator_handle,
             solver_statistics: SolverStatistics::default(),
@@ -309,7 +304,6 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::NoLearning => Box::new(NoLearningResolver),
                 ConflictResolver::UIP => Box::new(ResolutionResolver::new(
                     nogood_propagator_handle,
-                    restart_strategy,
                     AnalysisMode::OneUIP,
                 )),
             },
@@ -574,11 +568,11 @@ impl ConstraintSatisfactionSolver {
                     trailed_values: &mut self.trailed_values,
                     variable_names: &self.variable_names,
                     rng: &mut self.internal_parameters.random_generator,
+                    restart_strategy: &mut self.restart_strategy,
                 };
 
                 let mut resolver = ResolutionResolver::new(
                     self.nogood_propagator_handle,
-                    Rc::clone(&self.restart_strategy),
                     AnalysisMode::AllDecision,
                 );
 
@@ -682,7 +676,7 @@ impl ConstraintSatisfactionSolver {
                 // assigned when the decision level is strictly larger than the number of
                 // assumptions.
                 if self.get_decision_level() > self.assumptions.len()
-                    && self.restart_strategy.borrow_mut().should_restart()
+                    && self.restart_strategy.should_restart()
                 {
                     self.restart_during_search(brancher);
                 }
@@ -834,6 +828,7 @@ impl ConstraintSatisfactionSolver {
             trailed_values: &mut self.trailed_values,
             variable_names: &self.variable_names,
             rng: &mut self.internal_parameters.random_generator,
+            restart_strategy: &mut self.restart_strategy,
         };
 
         self.conflict_resolver
@@ -880,7 +875,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.internal_parameters.random_generator,
         );
 
-        self.restart_strategy.borrow_mut().notify_restart();
+        self.restart_strategy.notify_restart();
     }
 
     #[allow(

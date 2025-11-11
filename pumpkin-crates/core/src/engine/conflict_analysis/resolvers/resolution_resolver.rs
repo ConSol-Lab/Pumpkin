@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use super::ConflictResolver;
 use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
@@ -11,7 +8,6 @@ use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
-use crate::engine::RestartStrategy;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::conflict_analysis::RecursiveMinimiser;
@@ -56,10 +52,6 @@ pub(crate) struct ResolutionResolver {
     nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
-    /// The restart strategy in use by the solver.
-    ///
-    /// It will be notified of the LBD of newly learned nogoods.
-    restart_strategy: Rc<RefCell<RestartStrategy>>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -95,7 +87,7 @@ impl ConflictResolver for ResolutionResolver {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
         // conflict happened
-        self.restart_strategy.borrow_mut().notify_conflict(
+        context.restart_strategy.notify_conflict(
             self.lbd_helper
                 .compute_lbd(&learned_nogood.predicates, context.assignments),
             context.assignments.get_pruned_value_count(),
@@ -141,13 +133,11 @@ impl ConflictResolver for ResolutionResolver {
 impl ResolutionResolver {
     pub(crate) fn new(
         nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
-        restart_strategy: Rc<RefCell<RestartStrategy>>,
         mode: AnalysisMode,
     ) -> Self {
         Self {
             nogood_propagator_handle,
             mode,
-            restart_strategy,
             to_process_heap: Default::default(),
             predicate_id_generator: Default::default(),
             processed_nogood_predicates: Default::default(),
