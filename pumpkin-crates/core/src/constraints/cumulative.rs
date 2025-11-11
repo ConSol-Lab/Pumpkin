@@ -1,6 +1,8 @@
 use log::info;
 
 use super::Constraint;
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::constraint_arguments::CumulativePropagationMethod;
 use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
@@ -11,8 +13,6 @@ use crate::propagators::TimeTablePerPointConstructor;
 use crate::propagators::TimeTablePerPointIncrementalConstructor;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
 ///
@@ -186,11 +186,11 @@ struct CumulativeConstraint<Var, PVar, RVar, CVar> {
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > CumulativeConstraint<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> CumulativeConstraint<Var, PVar, RVar, CVar>
 {
     fn new(
         tasks: &[ArgTask<Var, PVar, RVar>],
@@ -225,19 +225,27 @@ impl<
         let is_variable = !resource_usage_constant || !duration_constant || !capacity_constant;
         let result = match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPointIncremental if is_variable => {
-                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                info!(
+                    "Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version"
+                );
                 CumulativePropagationMethod::TimeTablePerPoint
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
-                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                info!(
+                    "Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version"
+                );
                 CumulativePropagationMethod::TimeTablePerPoint
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                info!(
+                    "Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version"
+                );
                 CumulativePropagationMethod::TimeTableOverInterval
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
-                info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
+                info!(
+                    "Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version"
+                );
                 CumulativePropagationMethod::TimeTableOverInterval
             }
             other => other,
@@ -248,11 +256,11 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > Constraint for CumulativeConstraint<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> Constraint for CumulativeConstraint<Var, PVar, RVar, CVar>
 {
     fn post(mut self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         self.swap_if_variable(solver, self.resource_capacity.clone());

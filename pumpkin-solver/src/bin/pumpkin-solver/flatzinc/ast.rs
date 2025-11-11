@@ -47,12 +47,16 @@ impl VariableSelectionStrategy {
     ) -> DynamicVariableSelector<Literal> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => {
-                warn!("AntiFirstFail does not make sense for propositional variables, defaulting to input order...");
+                warn!(
+                    "AntiFirstFail does not make sense for propositional variables, defaulting to input order..."
+                );
                 Box::new(InputOrder::new(propositional_variables))
             }
             VariableSelectionStrategy::DomWDeg => todo!("DomWDeg is not yet implemented"),
             VariableSelectionStrategy::FirstFail => {
-                warn!("FirstFail does not make sense for propositional variables, defaulting to input order...");
+                warn!(
+                    "FirstFail does not make sense for propositional variables, defaulting to input order..."
+                );
                 Box::new(InputOrder::new(propositional_variables))
             }
             VariableSelectionStrategy::Impact => todo!("Impact is not yet implemented"),
@@ -60,11 +64,15 @@ impl VariableSelectionStrategy {
                 Box::new(InputOrder::new(propositional_variables))
             }
             VariableSelectionStrategy::Largest => {
-                warn!("Largest does not make sense for propositional variables, defaulting to input order...");
+                warn!(
+                    "Largest does not make sense for propositional variables, defaulting to input order..."
+                );
                 Box::new(InputOrder::new(propositional_variables))
             }
             VariableSelectionStrategy::MaxRegret => {
-                warn!("MaxRegret does not make sense for propositional variables, defaulting to input order...");
+                warn!(
+                    "MaxRegret does not make sense for propositional variables, defaulting to input order..."
+                );
                 Box::new(InputOrder::new(propositional_variables))
             }
             VariableSelectionStrategy::MostConstrained => {
@@ -72,7 +80,9 @@ impl VariableSelectionStrategy {
             }
             VariableSelectionStrategy::Occurrence => todo!("Occurrence is not yet implemented"),
             VariableSelectionStrategy::Smallest => {
-                warn!("Smallest does not make sense for propositional variables, defaulting to input order...");
+                warn!(
+                    "Smallest does not make sense for propositional variables, defaulting to input order..."
+                );
                 Box::new(InputOrder::new(propositional_variables))
             }
         })
@@ -129,18 +139,24 @@ impl ValueSelectionStrategy {
             | ValueSelectionStrategy::InDomainReverseSplit
             | ValueSelectionStrategy::OutDomainMin => Box::new(InDomainMax),
             ValueSelectionStrategy::InDomainMedian => {
-                warn!("InDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+                warn!(
+                    "InDomainMedian does not make sense for propositional variables, defaulting to InDomainMin..."
+                );
                 Box::new(InDomainMin)
             }
             ValueSelectionStrategy::InDomainMiddle => {
-                warn!("InDomainMiddle does not make sense for propositional variables, defaulting to InDomainMin...");
+                warn!(
+                    "InDomainMiddle does not make sense for propositional variables, defaulting to InDomainMin..."
+                );
                 Box::new(InDomainMin)
             }
             ValueSelectionStrategy::InDomainRandom
             | ValueSelectionStrategy::InDomainSplitRandom
             | ValueSelectionStrategy::OutDomainRandom => Box::new(InDomainRandom),
             ValueSelectionStrategy::OutDomainMedian => {
-                warn!("OutDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+                warn!(
+                    "OutDomainMedian does not make sense for propositional variables, defaulting to InDomainMin..."
+                );
                 Box::new(InDomainMin)
             }
         })
@@ -282,17 +298,17 @@ impl FlatZincAstBuilder {
                 variables: annotation.expressions[0].clone(),
                 values: annotation.expressions[1].clone(),
             }),
-            "warm_start_array" => {
-                Some(Search::WarmStartArray(match &annotation.expressions[0] {
-                    flatzinc::AnnExpr::Annotations(annotations) => annotations
-                        .iter()
-                        .filter_map(FlatZincAstBuilder::find_search)
-                        .collect::<Vec<_>>(),
-                    other => {
-                        panic!("Expected a list of annotations for `warm_start_array` but was {other:?}")
-                    }
-                }))
-            }
+            "warm_start_array" => Some(Search::WarmStartArray(match &annotation.expressions[0] {
+                flatzinc::AnnExpr::Annotations(annotations) => annotations
+                    .iter()
+                    .filter_map(FlatZincAstBuilder::find_search)
+                    .collect::<Vec<_>>(),
+                other => {
+                    panic!(
+                        "Expected a list of annotations for `warm_start_array` but was {other:?}"
+                    )
+                }
+            })),
             "constraint_name" => {
                 warn!("`constraint_name` is currently not supported; ignoring search annotation");
                 None

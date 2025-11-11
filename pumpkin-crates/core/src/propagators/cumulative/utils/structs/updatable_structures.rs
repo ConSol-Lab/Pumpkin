@@ -28,10 +28,10 @@ pub(crate) struct UpdatableStructures<Var, PVar, RVar> {
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > UpdatableStructures<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> UpdatableStructures<Var, PVar, RVar>
 {
     pub(crate) fn new<CVar>(parameters: &CumulativeParameters<Var, PVar, RVar, CVar>) -> Self {
         let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);

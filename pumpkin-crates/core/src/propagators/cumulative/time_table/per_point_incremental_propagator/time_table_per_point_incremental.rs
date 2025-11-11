@@ -1,5 +1,5 @@
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::fmt::Debug;
 use std::rc::Rc;
 
@@ -10,32 +10,17 @@ use crate::conjunction;
 use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagators::create_time_table_per_point_from_scratch;
-use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
-use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::find_synchronised_conflict;
-use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::synchronise_time_table;
-use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
-use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
-use crate::propagators::cumulative::time_table::time_table_util::insert_update;
-use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
-use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
-use crate::propagators::cumulative::time_table::TimeTable;
-use crate::propagators::debug_propagate_from_scratch_time_table_point;
-use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -46,6 +31,21 @@ use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
+use crate::propagators::create_time_table_per_point_from_scratch;
+use crate::propagators::cumulative::time_table::TimeTable;
+use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
+use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::find_synchronised_conflict;
+use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::synchronise_time_table;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
+use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
+use crate::propagators::cumulative::time_table::time_table_util::insert_update;
+use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
+use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
+use crate::propagators::debug_propagate_from_scratch_time_table_point;
+use crate::propagators::util::check_bounds_equal_at_propagation;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
+use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
@@ -133,12 +133,12 @@ impl<Var, PVar, RVar, CVar, const SYNCHRONISE: bool>
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-        const SYNCHRONISE: bool,
-    > PropagatorConstructor
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> PropagatorConstructor
     for TimeTablePerPointIncrementalConstructor<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     type PropagatorImpl =
@@ -158,12 +158,12 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-        const SYNCHRONISE: bool,
-    > TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     fn new(
         mut context: PropagatorConstructorContext,
@@ -211,9 +211,18 @@ impl<
 
         for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
             pumpkin_assert_extreme!(
-                        !self.time_table.contains_key(&(time_point as u32))
-                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
-                        "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
+                !self.time_table.contains_key(&(time_point as u32))
+                    || !self
+                        .time_table
+                        .get(&(time_point as u32))
+                        .unwrap()
+                        .profile_tasks
+                        .iter()
+                        .any(|profile_task| profile_task.id.unpack() as usize
+                            == task.id.unpack() as usize),
+                "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n",
+                task.id.unpack() as usize
+            );
 
             // Add the updated profile to the ResourceProfile at time t
             let current_profile: &mut ResourceProfile<Var, PVar, RVar> = self
@@ -255,8 +264,18 @@ impl<
     ) {
         for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
             pumpkin_assert_extreme!(
-                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
-                        "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
+                self.time_table.contains_key(&(time_point as u32))
+                    && self
+                        .time_table
+                        .get(&(time_point as u32))
+                        .unwrap()
+                        .profile_tasks
+                        .iter()
+                        .any(|profile_task| profile_task.id.unpack() as usize
+                            == task.id.unpack() as usize),
+                "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator",
+                task.id.unpack() as usize
+            );
 
             // Then we update the time-table
             if let Entry::Occupied(entry) =
@@ -429,21 +448,22 @@ impl<
 
         // We check whether there are no non-conflicting profiles in the time-table if we do not
         // report any conflicts
-        pumpkin_assert_extreme!(self
-            .time_table
-            .values()
-            .all(|profile| profile.height <= context.upper_bound(&self.parameters.capacity)));
+        pumpkin_assert_extreme!(
+            self.time_table
+                .values()
+                .all(|profile| profile.height <= context.upper_bound(&self.parameters.capacity))
+        );
         Ok(())
     }
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-        const SYNCHRONISE: bool,
-    > Propagator for TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> Propagator for TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
@@ -602,9 +622,9 @@ mod debug {
 
     use crate::engine::propagation::PropagationContextMut;
     use crate::proof::InferenceCode;
-    use crate::propagators::create_time_table_per_point_from_scratch;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
+    use crate::propagators::create_time_table_per_point_from_scratch;
     use crate::variables::IntegerVariable;
 
     /// Determines whether the provided `time_table` is the same as the one creatd from scratch
@@ -1397,16 +1417,21 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-
-        assert!(result.is_err());
-        assert!(result_scratch.is_err());
-
-        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
-        if let Err(Inconsistency::Conflict(conflict)) = &result {
-            assert_eq!(conflict.conjunction, reason_scratch)
-        } else {
-            panic!()
-        }
+        assert!(
+            {
+                if let Err(Inconsistency::Conflict(conflict)) = &result {
+                    if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+                        conflict.conjunction.iter().collect::<Vec<_>>()
+                            == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            },
+            "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
+        );
     }
 
     #[test]
@@ -1496,14 +1521,18 @@ mod tests {
         assert!(result.is_err());
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
-
-        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
-
-        if let Err(Inconsistency::Conflict(explanation)) = &result {
-            assert_eq!(explanation.conjunction, reason_scratch)
-        } else {
-            panic!("Synchronised version did not find a conflict");
-        }
+        assert!({
+            if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+                    explanation.conjunction.iter().collect::<Vec<_>>()
+                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
     }
 
     #[test]
@@ -1591,20 +1620,18 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
         let result_scratch = solver_scratch.propagate(propagator_scratch);
-
-        assert!(result.is_err());
-        assert!(result_scratch.is_err());
-
-        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
-
-        if let Err(Inconsistency::Conflict(conflict)) = result {
-            assert_ne!(
-                conflict.conjunction.iter().collect::<Vec<_>>(),
-                reason_scratch.iter().collect::<Vec<_>>()
-            );
-        } else {
-            panic!()
-        }
+        assert!({
+            if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+                    explanation.conjunction.iter().collect::<Vec<_>>()
+                        != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
     }
 
     #[test]

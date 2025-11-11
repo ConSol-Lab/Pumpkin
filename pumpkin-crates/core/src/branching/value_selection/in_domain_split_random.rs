@@ -1,6 +1,6 @@
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -40,9 +40,9 @@ impl ValueSelector<DomainId> for InDomainSplitRandom {
 mod tests {
 
     use crate::basic_types::tests::TestRandom;
+    use crate::branching::SelectionContext;
     use crate::branching::value_selection::InDomainSplitRandom;
     use crate::branching::value_selection::ValueSelector;
-    use crate::branching::SelectionContext;
     use crate::predicate;
 
     #[test]

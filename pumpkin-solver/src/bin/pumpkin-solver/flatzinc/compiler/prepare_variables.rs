@@ -3,10 +3,10 @@
 use flatzinc::BoolExpr;
 use flatzinc::IntExpr;
 
+use crate::flatzinc::FlatZincError;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::compiler::context::CompilationContext;
-use crate::flatzinc::FlatZincError;
 
 pub(crate) fn run(
     ast: &FlatZincAst,

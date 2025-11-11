@@ -14,12 +14,12 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::propagators::UpdatableStructures;
 use crate::propagators::UpdatedTaskInfo;
+use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::pumpkin_assert_extreme;
 
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
@@ -921,12 +921,12 @@ mod tests {
     use std::rc::Rc;
 
     use super::find_profiles_which_propagate_lower_bound;
+    use crate::engine::Assignments;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
-    use crate::engine::Assignments;
-    use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
+    use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
 
     #[test]
     fn test_finding_last_index_lower_bound() {

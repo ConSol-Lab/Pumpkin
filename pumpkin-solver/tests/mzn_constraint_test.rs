@@ -1,9 +1,9 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
 mod helpers;
+use helpers::TestType;
 use helpers::check_statistic_equality;
 use helpers::run_mzn_test_with_options;
-use helpers::TestType;
 use pumpkin_macros::cumulative;
 use pumpkin_macros::cumulative_synchronised;
 

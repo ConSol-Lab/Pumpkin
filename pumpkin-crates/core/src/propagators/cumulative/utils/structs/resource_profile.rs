@@ -21,10 +21,10 @@ pub(crate) struct ResourceProfile<Var, PVar, RVar> {
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > ResourceProfile<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> ResourceProfile<Var, PVar, RVar>
 {
     pub(crate) fn default(time: i32) -> ResourceProfile<Var, PVar, RVar> {
         ResourceProfile {

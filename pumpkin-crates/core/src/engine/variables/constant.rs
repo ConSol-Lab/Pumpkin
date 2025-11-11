@@ -1,6 +1,6 @@
+use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
 use crate::variables::IntegerVariable;

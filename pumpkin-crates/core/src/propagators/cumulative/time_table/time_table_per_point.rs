@@ -5,9 +5,9 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use super::TimeTable;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -15,27 +15,27 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::ResourceProfile;
 use crate::propagators::UpdatableStructures;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
+use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -96,11 +96,11 @@ impl<Var, PVar, RVar, CVar> TimeTablePerPointConstructor<Var, PVar, RVar, CVar> 
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > PropagatorConstructor for TimeTablePerPointConstructor<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> PropagatorConstructor for TimeTablePerPointConstructor<Var, PVar, RVar, CVar>
 {
     type PropagatorImpl = TimeTablePerPointPropagator<Var, PVar, RVar, CVar>;
 
@@ -118,11 +118,11 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
 {
     fn new(
         mut context: PropagatorConstructorContext,
@@ -155,11 +155,11 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > Propagator for TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> Propagator for TimeTablePerPointPropagator<Var, PVar, RVar, CVar>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if self.parameters.is_infeasible {

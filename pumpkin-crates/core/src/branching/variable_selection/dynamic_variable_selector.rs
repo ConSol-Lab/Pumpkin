@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
 use super::VariableSelector;
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
-use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 

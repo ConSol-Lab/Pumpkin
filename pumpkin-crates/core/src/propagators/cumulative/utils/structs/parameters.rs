@@ -28,11 +28,11 @@ pub(crate) struct CumulativeParameters<Var, PVar, RVar, CVar> {
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-        CVar: IntegerVariable + 'static,
-    > CumulativeParameters<Var, PVar, RVar, CVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> CumulativeParameters<Var, PVar, RVar, CVar>
 {
     pub(crate) fn new(
         context: PropagationContext,

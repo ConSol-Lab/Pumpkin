@@ -5,13 +5,13 @@ use enumset::EnumSet;
 use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
+use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
-use crate::engine::Assignments;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {

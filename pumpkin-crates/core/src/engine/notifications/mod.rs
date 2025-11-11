@@ -1,34 +1,34 @@
 mod domain_event_notification;
 mod predicate_notification;
 
-pub(crate) use domain_event_notification::domain_events::DomainEvents;
-pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 pub(crate) use domain_event_notification::DomainEvent;
 pub(crate) use domain_event_notification::EventSink;
 pub(crate) use domain_event_notification::WatchListDomainEvents;
 pub(crate) use domain_event_notification::Watchers;
+pub(crate) use domain_event_notification::domain_events::DomainEvents;
+pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
+use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
-use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::Assignments;
+use crate::engine::PropagatorQueue;
+use crate::engine::TrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
-use crate::engine::Assignments;
-use crate::engine::PropagatorQueue;
-use crate::engine::TrailedValues;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
+use crate::engine::propagation::store::PropagatorStore;
 use crate::predicates::Predicate;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
-use crate::PropagatorHandle;
 
 #[derive(Debug)]
 pub(crate) struct NotificationEngine {

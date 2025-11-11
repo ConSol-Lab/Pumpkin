@@ -3,6 +3,7 @@ use std::cmp::max;
 use std::cmp::min;
 use std::rc::Rc;
 
+use super::CumulativeExplanationType;
 use super::explanations::add_propagating_task_predicate_lower_bound;
 use super::explanations::add_propagating_task_predicate_upper_bound;
 use super::explanations::big_step::create_big_step_conflict_explanation;
@@ -13,20 +14,19 @@ use super::explanations::naive::create_naive_conflict_explanation;
 use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
-use super::CumulativeExplanationType;
 use crate::basic_types::PropagatorConflict;
-use crate::engine::propagation::contexts::HasAssignments;
+use crate::engine::EmptyDomain;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
-use crate::engine::EmptyDomain;
+use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
+use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
@@ -117,7 +117,9 @@ impl CumulativePropagationHandler {
                             )
                         }
                         CumulativeExplanationType::Pointwise => {
-                            unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
+                            unreachable!(
+                                "At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations"
+                            )
                         }
                     };
 
@@ -192,7 +194,9 @@ impl CumulativePropagationHandler {
                             )
                         }
                         CumulativeExplanationType::Pointwise => {
-                            unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
+                            unreachable!(
+                                "At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations"
+                            )
                         }
                     };
 
@@ -526,21 +530,21 @@ where
 pub(crate) mod test_propagation_handler {
     use std::rc::Rc;
 
-    use super::create_explanation_profile_height;
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
+    use super::create_explanation_profile_height;
     use crate::containers::StorageKey;
+    use crate::engine::Assignments;
+    use crate::engine::TrailedValues;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
+    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::Assignments;
-    use crate::engine::TrailedValues;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;

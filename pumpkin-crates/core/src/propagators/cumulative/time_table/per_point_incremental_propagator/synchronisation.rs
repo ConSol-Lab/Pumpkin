@@ -4,11 +4,11 @@ use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 

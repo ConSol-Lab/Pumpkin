@@ -1,10 +1,10 @@
-use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
-#[cfg(doc)]
-use crate::branching::branchers::alternating::AlternatingBrancher;
-use crate::branching::branchers::alternating::BrancherToUse;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
+#[cfg(doc)]
+use crate::branching::branchers::alternating::AlternatingBrancher;
+use crate::branching::branchers::alternating::BrancherToUse;
+use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
 
 /// Specifies that the [`AlternatingBrancher`] should switch between
 /// [`BrancherToUse::Default`] and the provided brancher every `x`th considered restart.
@@ -82,13 +82,13 @@ impl AlternatingStrategy for EveryXRestarts {
 
 #[cfg(test)]
 mod tests {
+    use crate::Solver;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
-    use crate::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
+    use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
+    use crate::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
     use crate::engine::Assignments;
-    use crate::Solver;
 
     #[test]
     fn test_every_restart() {

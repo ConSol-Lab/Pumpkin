@@ -2,10 +2,10 @@ use itertools::Itertools;
 use proc_macro::TokenStream;
 use quote::format_ident;
 use quote::quote;
-use syn::parse_macro_input;
-use syn::punctuated::Punctuated;
 use syn::Ident;
 use syn::Token;
+use syn::parse_macro_input;
+use syn::punctuated::Punctuated;
 
 const EXPLANATION_TYPES: [&str; 3] = ["naive", "big-step", "pointwise"];
 const OTHER_OPTIONS: [&str; 3] = [

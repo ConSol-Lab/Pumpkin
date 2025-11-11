@@ -20,10 +20,10 @@ pub(crate) struct Task<Var, PVar, RVar> {
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > Task<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> Task<Var, PVar, RVar>
 {
     pub(crate) fn get_id(task: &Rc<Task<Var, PVar, RVar>>) -> usize {
         task.id.unpack() as usize
@@ -31,10 +31,10 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > Hash for Task<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> Hash for Task<Var, PVar, RVar>
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
@@ -42,10 +42,10 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > PartialEq for Task<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> PartialEq for Task<Var, PVar, RVar>
 {
     fn eq(&self, other: &Self) -> bool {
         self.id.unpack() == other.id.unpack()
@@ -53,10 +53,10 @@ impl<
 }
 
 impl<
-        Var: IntegerVariable + 'static,
-        PVar: IntegerVariable + 'static,
-        RVar: IntegerVariable + 'static,
-    > Eq for Task<Var, PVar, RVar>
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> Eq for Task<Var, PVar, RVar>
 {
 }
 

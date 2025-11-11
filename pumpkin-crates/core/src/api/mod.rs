@@ -15,19 +15,19 @@ pub mod results {
     //! right state for these operations. For example,
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract
     //! a core consisting of the assumptions using [`UnsatisfiableUnderAssumptions::extract_core`].
-    pub use crate::api::outputs::solution_iterator;
-    pub use crate::api::outputs::unsatisfiable;
+    #[cfg(doc)]
+    use crate::Solver;
     pub use crate::api::outputs::OptimisationResult;
     pub use crate::api::outputs::ProblemSolution;
     pub use crate::api::outputs::SatisfactionResult;
     pub use crate::api::outputs::SatisfactionResultUnderAssumptions;
     pub use crate::api::outputs::Satisfiable;
     pub use crate::api::outputs::SolutionReference;
+    pub use crate::api::outputs::solution_iterator;
+    pub use crate::api::outputs::unsatisfiable;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-    #[cfg(doc)]
-    use crate::Solver;
 }
 
 pub mod variables {
@@ -46,13 +46,13 @@ pub mod variables {
     //!   trait [`TransformableVariable`]) to create an [`AffineView`].
     //! - Literals ([`Literal`]) - These specify booleans that can be used when interacting with the
     //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
+    #[cfg(doc)]
+    use crate::Solver;
     pub use crate::engine::variables::AffineView;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::Literal;
     pub use crate::engine::variables::TransformableVariable;
-    #[cfg(doc)]
-    use crate::Solver;
 }
 
 pub mod constraint_arguments {
@@ -72,13 +72,13 @@ pub mod options {
     //! - The restart strategy of the solver
     //! - The learned clause database management approach
     //! - The proof logging
+    #[cfg(doc)]
+    use crate::Solver;
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
     pub use crate::engine::ConflictResolver;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::nogoods::LearningOptions;
-    #[cfg(doc)]
-    use crate::Solver;
 }
 
 pub mod termination {
@@ -91,12 +91,12 @@ pub mod termination {
     //!
     //! The most common example would be [`TimeBudget`], which terminates the [`Solver`] whenever
     //! the time budget is exceeded.
+    #[cfg(doc)]
+    use crate::Solver;
+    pub use crate::engine::termination::TerminationCondition;
     pub use crate::engine::termination::combinator::*;
     pub use crate::engine::termination::indefinite::*;
     pub use crate::engine::termination::time_budget::*;
-    pub use crate::engine::termination::TerminationCondition;
-    #[cfg(doc)]
-    use crate::Solver;
 }
 
 pub mod predicates {

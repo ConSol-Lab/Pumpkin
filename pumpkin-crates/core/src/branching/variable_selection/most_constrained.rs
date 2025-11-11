@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use log::warn;
 
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
@@ -9,7 +10,6 @@ use crate::branching::tie_breaking::TieBreaker;
 #[cfg(doc)]
 use crate::branching::variable_selection::FirstFail;
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 
@@ -55,7 +55,8 @@ impl PartialOrd for MostConstrainedValue {
 impl<Var: Copy + 'static> MostConstrained<Var, InOrderTieBreaker<Var, MostConstrainedValue>> {
     pub fn new(variables: &[Var], num_occurrences: &[u32]) -> Self {
         pumpkin_assert_eq_simple!(
-            variables.len(), num_occurrences.len(),
+            variables.len(),
+            num_occurrences.len(),
             "The number of variables and the number of elements in num_occurrences for the MostConstrained variable selector should be the same"
         );
         if variables.is_empty() {

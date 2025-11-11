@@ -1,11 +1,11 @@
 use log::warn;
 
 use super::VariableSelector;
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
-use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 

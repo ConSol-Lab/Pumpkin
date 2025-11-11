@@ -4,8 +4,8 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io::stdout;
 use std::io::Write;
+use std::io::stdout;
 use std::sync::OnceLock;
 use std::sync::RwLock;
 
@@ -64,20 +64,24 @@ pub fn configure_statistic_logging(
 /// Logs the provided statistic with name `name` and value `value`. At the moment it will log in
 /// the format `STATISTIC_PREFIX NAME=VALUE`.
 pub fn log_statistic(name: impl Display, value: impl Display) {
-    if let Some(statistic_options_lock) = STATISTIC_OPTIONS.get() {
-        if let Ok(mut statistic_options) = statistic_options_lock.write() {
-            let name = if let Some(casing) = &statistic_options.statistics_casing {
-                name.to_string().to_case(*casing)
-            } else {
-                name.to_string()
-            };
-            let prefix = statistic_options.statistic_prefix;
-            let _ = writeln!(
-                statistic_options.statistics_writer,
-                "{prefix} {name}={value}"
-            );
-        }
-    }
+    let Some(statistic_options_lock) = STATISTIC_OPTIONS.get() else {
+        return;
+    };
+
+    let Ok(mut statistic_options) = statistic_options_lock.write() else {
+        return;
+    };
+
+    let name = if let Some(casing) = &statistic_options.statistics_casing {
+        name.to_string().to_case(*casing)
+    } else {
+        name.to_string()
+    };
+    let prefix = statistic_options.statistic_prefix;
+    let _ = writeln!(
+        statistic_options.statistics_writer,
+        "{prefix} {name}={value}"
+    );
 }
 
 /// Logs the postfix of the statistics (if it has been set).
@@ -86,13 +90,19 @@ pub fn log_statistic(name: impl Display, value: impl Display) {
 /// output format) require that a block of statistics is followed by a closing line; this
 /// function outputs this closing line **if** it is configued.
 pub fn log_statistic_postfix() {
-    if let Some(statistic_options_lock) = STATISTIC_OPTIONS.get() {
-        if let Ok(mut statistic_options) = statistic_options_lock.write() {
-            if let Some(post_fix) = statistic_options.after_statistics {
-                let _ = writeln!(statistic_options.statistics_writer, "{post_fix}");
-            }
-        }
-    }
+    let Some(statistic_options_lock) = STATISTIC_OPTIONS.get() else {
+        return;
+    };
+
+    let Ok(mut statistic_options) = statistic_options_lock.write() else {
+        return;
+    };
+
+    let Some(post_fix) = statistic_options.after_statistics else {
+        return;
+    };
+
+    let _ = writeln!(statistic_options.statistics_writer, "{post_fix}");
 }
 
 /// Returns whether or not statistics should be logged by determining whether the

@@ -75,6 +75,8 @@ pub use brancher::*;
 pub use selection_context::SelectionContext;
 
 #[cfg(doc)]
+use crate::Solver;
+#[cfg(doc)]
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
@@ -82,5 +84,3 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::AntiFirstFail;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
-#[cfg(doc)]
-use crate::Solver;

@@ -2,8 +2,8 @@
 
 mod helpers;
 
-use helpers::run_mzn_test;
 use helpers::TestType;
+use helpers::run_mzn_test;
 
 macro_rules! mzn_optimization_test {
     ($name:ident) => {

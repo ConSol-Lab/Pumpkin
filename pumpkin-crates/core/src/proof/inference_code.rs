@@ -1,9 +1,9 @@
 use std::num::NonZero;
 use std::sync::Arc;
 
-use crate::containers::StorageKey;
 #[cfg(doc)]
 use crate::Solver;
+use crate::containers::StorageKey;
 
 /// An identifier for constraints, which is used to relate constraints from the model to steps in
 /// the proof. Under the hood, a tag is just a [`NonZero<u32>`]. The underlying integer can be
@@ -85,9 +85,9 @@ macro_rules! declare_inference_label {
         });
     };
 
-    ($name:ident, $label:expr) => {
+    ($v:vis $name:ident, $label:expr) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        struct $name;
+        $v struct $name;
 
         declare_inference_label!(@impl_trait $name, $label);
     };

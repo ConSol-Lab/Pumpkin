@@ -4,8 +4,8 @@ use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
-use crate::engine::notifications::NotificationEngine;
 use crate::engine::Assignments;
+use crate::engine::notifications::NotificationEngine;
 use crate::predicates::Predicate;
 
 /// The context that is available when lazily explaining propagations.

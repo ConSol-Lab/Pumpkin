@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
-use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
+use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;

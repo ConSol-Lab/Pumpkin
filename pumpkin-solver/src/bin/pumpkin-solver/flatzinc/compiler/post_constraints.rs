@@ -15,10 +15,10 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::TransformableVariable;
 
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::compiler::context::Set;
 
 pub(crate) fn run(
     _: &FlatZincAst,
@@ -854,7 +854,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
     vars.iter()
         .zip(weights.iter())
-        .filter(|(_, &w)| w != 0)
+        .filter(|&(_, w)| *w != 0)
         .map(|(x_i, &w_i)| x_i.scaled(w_i))
         .collect::<Box<[_]>>()
 }

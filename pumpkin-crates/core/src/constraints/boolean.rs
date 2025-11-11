@@ -1,13 +1,13 @@
+use super::Constraint;
 use super::equals;
 use super::less_than_or_equals;
-use super::Constraint;
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::proof::ConstraintTag;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
 use crate::variables::TransformableVariable;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// Creates the [`Constraint`] `\sum weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(

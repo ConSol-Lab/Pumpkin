@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use super::Constraint;
 use super::NegatableConstraint;
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// Create a table constraint over the variables `xs`.
 ///

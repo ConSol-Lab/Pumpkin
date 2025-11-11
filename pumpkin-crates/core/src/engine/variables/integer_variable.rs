@@ -3,11 +3,11 @@ use std::fmt::Debug;
 use enumset::EnumSet;
 
 use super::TransformableVariable;
+use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
-use crate::engine::Assignments;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
@@ -21,14 +21,14 @@ pub trait IntegerVariable:
 
     /// Get the lower bound of the variable at the given trail position.
     fn lower_bound_at_trail_position(&self, assignment: &Assignments, trail_position: usize)
-        -> i32;
+    -> i32;
 
     /// Get the upper bound of the variable.
     fn upper_bound(&self, assignment: &Assignments) -> i32;
 
     /// Get the upper bound of the variable at the given trail position.
     fn upper_bound_at_trail_position(&self, assignment: &Assignments, trail_position: usize)
-        -> i32;
+    -> i32;
 
     /// Determine whether the value is in the domain of this variable.
     fn contains(&self, assignment: &Assignments, value: i32) -> bool;

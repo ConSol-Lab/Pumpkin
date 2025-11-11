@@ -8,13 +8,13 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::proof::InferenceCode;
-use crate::propagators::create_time_table_over_interval_from_scratch;
-use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
 #[cfg(doc)]
 use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::propagators::create_time_table_over_interval_from_scratch;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::variables::IntegerVariable;
 
 /// Finds the conflicting profile which would have been found by the
