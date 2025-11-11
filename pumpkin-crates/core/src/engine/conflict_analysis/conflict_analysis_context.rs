@@ -25,7 +25,9 @@ use crate::proof::explain_root_assignment;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_simple;
+use crate::Random;
 
 /// Used during conflict analysis to provide the necessary information.
 ///
@@ -50,6 +52,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) variable_names: &'a VariableNames,
+
+    pub(crate) rng: &'a mut dyn Random,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -96,6 +100,7 @@ impl ConflictAnalysisContext<'_> {
             backtrack_level,
             self.brancher,
             self.trailed_values,
+            self.rng,
         )
     }
 
@@ -222,7 +227,9 @@ impl ConflictAnalysisContext<'_> {
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id()
+            if propagators
+                .as_propagator_handle::<NogoodPropagator>(propagator_id)
+                .is_some()
                 && reason_buffer.as_ref().is_empty()
             {
                 // This means that a unit nogood was propagated, we indicate that this nogood step
@@ -468,6 +475,16 @@ impl ConflictAnalysisContext<'_> {
 
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
+                }
+                (
+                    PredicateType::Equal,
+                    PredicateType::LowerBound | PredicateType::UpperBound | PredicateType::NotEqual,
+                ) => {
+                    // The trail predicate is equality, but the input predicate is either a
+                    // lower-bound, upper-bound, or not equals.
+                    //
+                    // TODO: could consider lifting here
+                    reason_buffer.extend(std::iter::once(trail_entry.predicate))
                 }
                 _ => unreachable!(
                     "Unreachable combination of {} and {}",

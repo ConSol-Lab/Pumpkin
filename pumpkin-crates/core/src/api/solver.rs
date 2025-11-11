@@ -19,6 +19,7 @@ use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::constructor::PropagatorConstructor;
+pub use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -501,7 +502,7 @@ impl Solver {
     pub(crate) fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
+    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,

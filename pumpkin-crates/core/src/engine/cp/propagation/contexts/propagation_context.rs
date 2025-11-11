@@ -237,11 +237,17 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     fn is_literal_true(&self, literal: &Literal) -> bool {
-        self.is_predicate_satisfied(literal.get_true_predicate())
+        literal
+            .get_integer_variable()
+            .lower_bound(self.assignments())
+            == 1
     }
 
     fn is_literal_false(&self, literal: &Literal) -> bool {
-        self.is_predicate_satisfied(literal.get_false_predicate())
+        literal
+            .get_integer_variable()
+            .upper_bound(self.assignments())
+            == 0
     }
 
     fn is_literal_fixed(&self, literal: &Literal) -> bool {

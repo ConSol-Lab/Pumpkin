@@ -130,125 +130,7 @@ impl ConflictResolver for ResolutionResolver {
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = self.pop_predicate_from_conflict_nogood();
 
-            // 2) Add the reason of the next_predicate to the nogood.
-
-            // 2.a) Here we treat the special case: if the next predicate is a decision, this means
-            // that we are done with analysis since the only remaining predicate in the heap is the
-            // other decision.
-            if context.assignments.is_decision_predicate(&next_predicate) {
-                // As a simple workaround, we add the currently analysed predicate to set of
-                // predicates from the lower predicate level, and stop analysis.
-                //
-                // Semantic minimisation will ensure the bound predicates get converted into an
-                // equality decision predicate.
-                while self.to_process_heap.num_nonremoved_elements() != 1 {
-                    let predicate = self.pop_predicate_from_conflict_nogood();
-                    let predicate_replacement = if context
-                        .assignments
-                        .is_decision_predicate(&predicate)
-                    {
-                        predicate
-                    } else {
-                        // Note that we decompose [x == v] into the two predicates [x >= v] and [x
-                        // <= v] and that these have distinct trail entries (where [x >= v] has a
-                        // lower trail position than [x <= v])
-                        //
-                        // However, this can lead to [x <= v] to be processed *before* [x >= v -
-                        // y], meaning that these implied predicates should be replaced with their
-                        // reason
-                        self.reason_buffer.clear();
-                        ConflictAnalysisContext::get_propagation_reason(
-                            predicate,
-                            context.assignments,
-                            CurrentNogood::new(
-                                &self.to_process_heap,
-                                &self.processed_nogood_predicates,
-                                &self.predicate_id_generator,
-                            ),
-                            context.reason_store,
-                            context.propagators,
-                            context.proof_log,
-                            context.unit_nogood_inference_codes,
-                            &mut self.reason_buffer,
-                            context.notification_engine,
-                            context.variable_names,
-                        );
-
-                        if self.reason_buffer.is_empty() {
-                            predicate
-                        } else {
-                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {:?}", self.reason_buffer);
-                            pumpkin_assert_simple!(
-                                self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
-                                "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
-                                self.reason_buffer,
-                            );
-
-                            self.reason_buffer[0]
-                        }
-                    };
-
-                    // We push to `predicates_lower_decision_level` since this structure will be
-                    // used for creating the final nogood
-                    self.processed_nogood_predicates.push(predicate_replacement);
-                }
-                // It could be the case that the final predicate in the nogood is implied, in
-                // this case we eagerly replace it since the conflict analysis output assumes
-                // that a single variable is propagating.
-                //
-                // For example, let's say we have made the decision [x == v] (which is
-                // decomposed into [x >= v] and [x <= v]).
-                //
-                // Now let's say we have the nogood [[x>= v - 1], [x <= v]], then we have a
-                // final element [x >= v - 1] left in the heap which is
-                // implied. This could mean that we end up with 2 predicates in
-                // the conflict nogood which goes against the 2-watcher scheme so we eagerly
-                // replace it here!
-                //
-                // If it is an initial bound then it will be removed by semantic minimisation when
-                // extracting the final nogood.
-                //
-                // TODO: This leads to a less general explanation!
-                if !context
-                    .assignments
-                    .is_decision_predicate(&self.peek_predicate_from_conflict_nogood())
-                    && !context
-                        .assignments
-                        .is_initial_bound(self.peek_predicate_from_conflict_nogood())
-                {
-                    let predicate = self.peek_predicate_from_conflict_nogood();
-
-                    self.reason_buffer.clear();
-                    ConflictAnalysisContext::get_propagation_reason(
-                        predicate,
-                        context.assignments,
-                        CurrentNogood::new(
-                            &self.to_process_heap,
-                            &self.processed_nogood_predicates,
-                            &self.predicate_id_generator,
-                        ),
-                        context.reason_store,
-                        context.propagators,
-                        context.proof_log,
-                        context.unit_nogood_inference_codes,
-                        &mut self.reason_buffer,
-                        context.notification_engine,
-                        context.variable_names,
-                    );
-                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
-                    pumpkin_assert_simple!(
-                        self.reason_buffer.len() == 1 && self.reason_buffer[0].is_lower_bound_predicate(),
-                        "The reason for the decision predicate should be a lower-bound predicate but was {}", self.reason_buffer[0]
-                    );
-                    self.replace_predicate_in_conflict_nogood(predicate, self.reason_buffer[0]);
-                }
-
-                // The final predicate in the heap will get pushed in `extract_final_nogood`
-                self.processed_nogood_predicates.push(next_predicate);
-                break;
-            }
-
-            // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
+            // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
             ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
@@ -428,21 +310,6 @@ impl ResolutionResolver {
         self.predicate_id_generator.get_predicate(next_predicate_id)
     }
 
-    fn peek_predicate_from_conflict_nogood(&self) -> Predicate {
-        let next_predicate_id = self.to_process_heap.peek_max().unwrap().0;
-        self.predicate_id_generator
-            .get_predicate(*next_predicate_id)
-    }
-
-    fn replace_predicate_in_conflict_nogood(
-        &mut self,
-        predicate: Predicate,
-        replacement: Predicate,
-    ) {
-        self.predicate_id_generator
-            .replace_predicate(predicate, replacement);
-    }
-
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
@@ -493,13 +360,29 @@ impl ResolutionResolver {
                 .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
         }
 
-        // Sorting does the trick with placing the correct predicates at the first two positions,
-        // however this can be done more efficiently, since we only need the first two positions
-        // to be properly sorted.
-        //
-        // TODO: Do not sort but do a linear scan to find the correct placement of the predicates
-        clean_nogood.sort_by_key(|p| context.assignments.get_trail_position(p).unwrap());
-        clean_nogood.reverse();
+        // We perform a linear scan to maintain the two invariants:
+        // - The predicate from the current decision level is placed at index 0
+        // - The predicate from the highest decision level below the current is placed at index 1
+        let mut index = 1;
+        let mut highest_level_below_current = 0;
+        while index < clean_nogood.len() {
+            let predicate = clean_nogood[index];
+            let dl = context
+                .assignments
+                .get_decision_level_for_predicate(&predicate)
+                .unwrap();
+
+            if dl == context.assignments.get_decision_level() {
+                clean_nogood.swap(0, index);
+                index -= 1;
+            } else if dl > highest_level_below_current {
+                highest_level_below_current = dl;
+                clean_nogood.swap(1, index);
+            }
+
+            index += 1;
+        }
+
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
         let backjump_level = if clean_nogood.len() > 1 {

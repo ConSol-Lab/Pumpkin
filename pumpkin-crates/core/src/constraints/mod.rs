@@ -33,6 +33,7 @@ mod boolean;
 mod clause;
 mod constraint_poster;
 mod cumulative;
+mod disjunctive_strict;
 mod element;
 mod table;
 
@@ -42,6 +43,7 @@ pub use boolean::*;
 pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
+pub use disjunctive_strict::*;
 pub use element::*;
 pub use table::*;
 
@@ -86,7 +88,8 @@ where
     ConcretePropagator: PropagatorConstructor + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self)
+        let _ = solver.add_propagator(self)?;
+        Ok(())
     }
 
     fn implied_by(
@@ -94,10 +97,11 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagatorArgs {
+        let _ = solver.add_propagator(ReifiedPropagatorArgs {
             propagator: self,
             reification_literal,
-        })
+        })?;
+        Ok(())
     }
 }
 

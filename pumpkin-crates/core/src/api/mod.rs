@@ -58,6 +58,7 @@ pub mod variables {
 pub mod constraint_arguments {
     //! Contains inputs to constraints.
 
+    pub use crate::propagators::ArgDisjunctiveTask;
     pub use crate::propagators::ArgTask;
     pub use crate::propagators::CumulativeExplanationType;
     pub use crate::propagators::CumulativeOptions;

@@ -1,8 +1,6 @@
 use std::io;
 use std::num::NonZero;
 
-use chumsky::span::SimpleSpan;
-
 #[cfg(doc)]
 use super::ProofReader;
 
@@ -21,14 +19,4 @@ pub enum Error {
 
     #[error("undefined atomic {code} on line {line}")]
     UndefinedAtomic { line: usize, code: NonZero<i32> },
-}
-
-impl Error {
-    pub(super) fn parse_error(line_nr: usize, reason: String, span: SimpleSpan) -> Self {
-        Error::ParseError {
-            line_nr,
-            span: (span.start, span.end),
-            reason,
-        }
-    }
 }

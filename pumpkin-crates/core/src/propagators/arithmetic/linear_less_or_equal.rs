@@ -9,6 +9,7 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::ManipulateTrailedValues;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -17,6 +18,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::engine::TrailedInteger;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::pumpkin_assert_simple;
@@ -65,6 +67,7 @@ where
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
             inference_code: context.create_inference_code(constraint_tag, LinearBounds),
+            reason_buffer: Vec::default(),
         }
     }
 }
@@ -79,6 +82,8 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     lower_bound_left_hand_side: TrailedInteger,
     /// The value at index `i` is the bound for `x[i]`.
     current_bounds: Box<[TrailedInteger]>,
+    /// A buffer for storing the reason for a propagation.
+    reason_buffer: Vec<Predicate>,
 
     inference_code: InferenceCode,
 }
@@ -145,6 +150,26 @@ where
         "LinearLeq"
     }
 
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+        let i = code as usize;
+
+        self.reason_buffer.clear();
+
+        self.reason_buffer
+            .extend(self.x.iter().enumerate().filter_map(|(j, x_j)| {
+                if j != i {
+                    Some(predicate![
+                        x_j >= context
+                            .lower_bound_at_trail_position(x_j, context.get_trail_position())
+                    ])
+                } else {
+                    None
+                }
+            }));
+
+        &self.reason_buffer
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
             return Err(conflict.into());
@@ -176,20 +201,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                let reason: PropositionalConjunction = self
-                    .x
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(j, x_j)| {
-                        if j != i {
-                            Some(predicate![x_j >= context.lower_bound(x_j)])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
+                context.post(predicate![x_i <= bound], i, self.inference_code)?;
             }
         }
 

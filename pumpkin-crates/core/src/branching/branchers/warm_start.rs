@@ -1,7 +1,6 @@
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
-use crate::engine::Assignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_eq_simple;
@@ -57,7 +56,7 @@ impl<Var: IntegerVariable> Brancher for WarmStart<Var> {
         None
     }
 
-    fn synchronise(&mut self, _assignments: &Assignments) {
+    fn synchronise(&mut self, _context: &mut SelectionContext) {
         self.index = 0
     }
 

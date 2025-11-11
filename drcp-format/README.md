@@ -1,17 +1,20 @@
 # DRCP Format
 
-The Deletion Reverse Constraint Propagation format describes how a constraint programming solver proves unsatisfiability or optimality. This is a Rust library which provides a reader and writer of DRCP proof files, as well as the accompanying literal mapping file.
+The Deletion Reverse Constraint Propagation format describes how a constraint programming solver proves unsatisfiability or optimality. This is a Rust library that provides a reader and writer of DRCP proof files, as well as the accompanying literal mapping file.
 
 ## Proof Format
 
-In a DRCP proof, the smallest building block is an _atomic constraint_, which describes a fact about the domain of a single variable. An atomic constraint has the form `[x <op> v]`, where `x` is an integer variable, `<op>` is one of `==, !=, <=, >=`, and `v` is an integer constant. In a DRCP proof, the proof uses integer identifiers to refer to atomic constraints. A mapping of identifiers to atomic constraints is a `.lits` file, and looks like this:
+In a DRCP proof, the smallest building block is an _atomic constraint_, which describes a fact about the domain of a single variable. An atomic constraint has the form `[x <op> v]`, where `x` is an integer variable, `<op>` is one of `==, !=, <=, >=`, and `v` is an integer constant. In a DRCP proof, the proof uses integer identifiers (which we will refer to as literals) to refer to atomic constraints. A new literal is introduced with the following line:
 
 ```
-1 [x1 >= 1]
-2 [x2 <= 2]
+a <non-zero unsigned integer> [<variable> <op> <value>]
+
+e.g.
+a 1 [x1 >= 5]
+a 3 [some_variable <= 5]
 ```
 
-Each line starts with a non-zero integer which is the identifier, then a space, and then the atomic constraint.
+**Note:** Identifiers should follow the common identifier regex `[a-zA-Z_][a-zA-Z0-9_]*`. Essentially, an identifier can be an alphanumeric character or '_', but the first character cannot be a number.
 
 Atomic constraints are used in the following proof steps:
 
@@ -23,13 +26,12 @@ i <step_id> <premises> [0 <propagated>] [c:<constraint tag>] [l:<filtering algor
 
 The individual components:
   - `<step_id>`: A non-zero integer which serves as a unique identifier for the step in the proof.
-  - `<premises>` A space-separated list of atomic constraint identfiers.
+  - `<premises>` A space-separated list of atomic constraint identifiers.
   - `<propagated>` A single atomic constraint identifier.
-  - `c:<constraint tag>`: _Optional_. A hint which constraint triggered the inference.
-  - `l:<filtering algorithm>`: _Optional_. A hint which filtering algorithm identified the inference.
+  - `c:<constraint tag>`: _Optional_. A hint identifying the constraint that triggered the inference. This refers either to a constraint from the model or a previously derived nogood.
+  - `l:<filtering algorithm>`: _Optional_. A hint specifying which filtering algorithm identified the inference.
 
-  If there is no `<propagated>`, then the inference reads that the premises imply false.
-  I.e., the premises form a nogood which is enforced by a propagator.
+If there is no `<propagated>`, then the inference reads that the premises imply false.
 
 ### Nogood
 A nogood step encodes a partial assignment which cannot be extended to a solution.
@@ -39,17 +41,11 @@ n <step_id> <atomic constraint ids> [0 <propagation hint>]
 
 The individual components:
   - `<step_id>`: A non-zero integer which serves as a unique identifier for the step in the proof.
-  - `<atomic constraint ids>` A space-separated list of atomic constraint identfiers. These encode the nogood _as a clause_.
+  - `<atomic constraint ids>` A space-separated list of atomic constraint identifiers. These encode the nogood _as an implication that implies false_.
   - `0 <propagation hint>`: _Optional_. A hint which is a separated list of step ids, noting what order the steps can be applied to derive this nogood.
 
-### Deletion
-A deletion step can be used to indicate a nogood will no-longer be used in the derivation of new nogoods.
-```
-d <step_id>
-```
-
 ### Conclusion
-The conclusion finishes the proof. It is either the claim the problem is unsatisfiable:
+The conclusion finishes the proof. It is either the claim that the problem is unsatisfiable:
 ```
 c UNSAT
 ```

@@ -207,9 +207,11 @@ impl<
         }
     }
 
-    fn swap_if_variable(&mut self, solver: &Solver) {
+    fn swap_if_variable(&mut self, solver: &Solver, capacity: CVar) {
         let mut resource_usage_constant = true;
         let mut duration_constant = true;
+        let capacity_constant = solver.is_fixed(&capacity);
+
         for task in self.tasks.iter() {
             if !solver.is_fixed(&task.resource_usage) {
                 resource_usage_constant = false;
@@ -220,7 +222,7 @@ impl<
             }
         }
 
-        let is_variable = !resource_usage_constant || !duration_constant;
+        let is_variable = !resource_usage_constant || !duration_constant || !capacity_constant;
         let result = match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPointIncremental if is_variable => {
                 info!("Could not use incremental version when having either variable resource usage or duration, switching to non-incremental version");
@@ -253,7 +255,7 @@ impl<
     > Constraint for CumulativeConstraint<Var, PVar, RVar, CVar>
 {
     fn post(mut self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.swap_if_variable(solver);
+        self.swap_if_variable(solver, self.resource_capacity.clone());
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointConstructor::new(
                 self.tasks,
@@ -316,7 +318,7 @@ impl<
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.swap_if_variable(solver);
+        self.swap_if_variable(solver, self.resource_capacity.clone());
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointConstructor::new(
                 self.tasks,

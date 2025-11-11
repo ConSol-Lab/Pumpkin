@@ -1,5 +1,5 @@
 {
-  "pumpkin-solver": "0.2.1",
+  "pumpkin-solver": "0.2.2",
   "drcp-format": "0.3.0",
-  "pumpkin-crates/core": "0.2.1"
+  "pumpkin-crates/core": "0.2.2"
 }

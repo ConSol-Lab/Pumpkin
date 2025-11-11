@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
 use pumpkin_core::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
@@ -28,6 +29,9 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
+            "pumpkin_disjunctive_strict" => {
+                compile_disjunctive_strict(context, exprs, constraint_tag)?
+            }
             "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,
             "array_int_minimum" => compile_array_int_minimum(context, exprs, constraint_tag)?,
             "int_max" => compile_ternary_int_predicate(
@@ -364,6 +368,32 @@ macro_rules! check_parameters {
             });
         }
     };
+}
+
+fn compile_disjunctive_strict(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_cumulative");
+
+    let start_times = context.resolve_integer_variable_array(&exprs[0])?;
+    let durations = context.resolve_array_integer_constants(&exprs[1])?;
+
+    assert_eq!(start_times.len(), durations.len());
+
+    let post_result = constraints::disjunctive_strict(
+        start_times
+            .iter()
+            .zip(durations.iter())
+            .map(|(&start_time, &duration)| ArgDisjunctiveTask {
+                start_time,
+                processing_time: duration,
+            }),
+        constraint_tag,
+    )
+    .post(context.solver);
+    Ok(post_result.is_ok())
 }
 
 fn compile_cumulative(

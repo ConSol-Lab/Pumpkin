@@ -126,7 +126,7 @@ pub(crate) fn merge_profiles<
             let new_profile = ResourceProfile {
                 start: start_profile.start,
                 end: end_profile.end,
-                profile_tasks: start_profile.profile_tasks.to_owned(),
+                profile_tasks: start_profile.profile_tasks.clone(),
                 height: start_profile.height,
             };
 
