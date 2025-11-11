@@ -113,8 +113,6 @@ pub struct ConstraintSatisfactionSolver {
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
-    ///
-    /// Can possibly be used in the conflict resolver, hence the reference counting.
     restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
