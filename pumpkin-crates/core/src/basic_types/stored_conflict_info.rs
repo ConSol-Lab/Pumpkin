@@ -1,10 +1,12 @@
-use super::PropositionalConjunction;
 use super::propagation_status_cp::PropagatorConflict;
 use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
+use crate::engine::reason::ReasonRef;
+use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 
 /// A conflict info which can be stored in the solver.
 /// Two (related) conflicts can happen:
@@ -14,7 +16,10 @@ use crate::engine::propagation::Propagator;
 pub(crate) enum StoredConflictInfo {
     Propagator(PropagatorConflict),
     EmptyDomain {
-        conflict_nogood: PropositionalConjunction,
+        trigger_predicate: Predicate,
+        trigger_reason: ReasonRef,
+        trigger_inference_code: InferenceCode,
     },
+    InfeasibleAssumptions(Predicate),
     RootLevelConflict(ConstraintOperationError),
 }

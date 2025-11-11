@@ -112,10 +112,6 @@ impl Assignments {
         self.trail[index]
     }
 
-    pub(crate) fn get_last_entry_on_trail(&self) -> ConstraintProgrammingTrailEntry {
-        *self.trail.last().unwrap()
-    }
-
     // registers the domain of a new integer variable
     // note that this is an internal method that does _not_ allocate additional information
     // necessary for the solver apart from the domain when creating a new integer variable, use
@@ -782,11 +778,15 @@ impl Assignments {
     }
 
     /// todo: This is a temporary hack, not to be used in general.
-    pub(crate) fn remove_last_trail_element(&mut self) {
+    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef, InferenceCode) {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
         self.update_bounds_snapshot(domain_id);
+
+        let (reason, inference_code) = entry.reason.unwrap();
+
+        (entry.predicate, reason, inference_code)
     }
 
     /// Get the number of values pruned from all the domains.

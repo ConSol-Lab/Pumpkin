@@ -23,6 +23,7 @@ use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
+use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
@@ -120,9 +121,20 @@ impl ConflictAnalysisContext<'_> {
 
                 conflict.conjunction
             }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood,
+            StoredConflictInfo::EmptyDomain {
+                trigger_predicate,
+                trigger_reason,
+                trigger_inference_code,
+            } => self.compute_conflict_nogood(
+                trigger_predicate,
+                trigger_reason,
+                trigger_inference_code,
+            ),
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
+            }
+            StoredConflictInfo::InfeasibleAssumptions(predicate) => {
+                vec![predicate, !predicate].into()
             }
         };
 
@@ -494,5 +506,93 @@ impl ConflictAnalysisContext<'_> {
                 ),
             };
         }
+    }
+
+    fn compute_conflict_nogood(
+        &mut self,
+        trigger_predicate: Predicate,
+        trigger_reason: ReasonRef,
+        trigger_inference_code: InferenceCode,
+    ) -> PropositionalConjunction {
+        let conflict_domain = trigger_predicate.get_domain();
+
+        // Look up the reason for the bound that changed.
+        // The reason for changing the bound cannot be a decision, so we can safely unwrap.
+        let mut empty_domain_reason: Vec<Predicate> = vec![];
+        let _ = self.reason_store.get_or_compute(
+            trigger_reason,
+            ExplanationContext::without_working_nogood(
+                self.assignments,
+                self.assignments.num_trail_entries() - 1,
+                self.notification_engine,
+            ),
+            self.propagators,
+            &mut empty_domain_reason,
+        );
+
+        // We also need to log this last propagation to the proof log as an inference.
+        let _ = self.proof_log.log_inference(
+            trigger_inference_code,
+            empty_domain_reason.iter().copied(),
+            Some(trigger_predicate),
+            self.variable_names,
+        );
+
+        let old_lower_bound = self.assignments.get_lower_bound(conflict_domain);
+        let old_upper_bound = self.assignments.get_upper_bound(conflict_domain);
+
+        // Now we get the explanation for the bound which was conflicting with the last trail entry
+        match trigger_predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                // The last trail entry was a lower-bound propagation meaning that the empty domain
+                // was caused by the upper-bound
+                //
+                // We lift so that it is the most general upper-bound possible while still causing
+                // the empty domain
+                empty_domain_reason.push(predicate!(
+                    conflict_domain <= trigger_predicate.get_right_hand_side() - 1
+                ));
+            }
+            PredicateType::UpperBound => {
+                // The last trail entry was an upper-bound propagation meaning that the empty domain
+                // was caused by the lower-bound
+                //
+                // We lift so that it is the most general lower-bound possible while still causing
+                // the empty domain
+                empty_domain_reason.push(predicate!(
+                    conflict_domain >= trigger_predicate.get_right_hand_side() + 1
+                ));
+            }
+            PredicateType::NotEqual => {
+                empty_domain_reason.push(trigger_predicate);
+            }
+            PredicateType::Equal => {
+                // The last trail entry was an equality propagation; we split into three cases.
+                if trigger_predicate.get_right_hand_side() < old_lower_bound {
+                    // 1) The assigned value was lower than the lower-bound
+                    //
+                    // We lift so that it is the most general lower-bound possible while still
+                    // causing the empty domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain >= trigger_predicate.get_right_hand_side() + 1
+                    ));
+                } else if trigger_predicate.get_right_hand_side() > old_upper_bound {
+                    // 2) The assigned value was larger than the upper-bound
+                    //
+                    // We lift so that it is the most general upper-bound possible while still
+                    // causing the empty domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain <= trigger_predicate.get_right_hand_side() - 1
+                    ));
+                } else {
+                    // 3) The assigned value was equal to a hole in the domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain != trigger_predicate.get_right_hand_side()
+                    ))
+                }
+            }
+        }
+
+        empty_domain_reason.into()
     }
 }
