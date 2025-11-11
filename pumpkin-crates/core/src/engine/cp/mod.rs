@@ -16,13 +16,13 @@ mod tests {
 
     use crate::conjunction;
     use crate::containers::StorageKey;
+    use crate::engine::TrailedValues;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::TrailedValues;
     use crate::predicate;
     use crate::proof::InferenceCode;
 

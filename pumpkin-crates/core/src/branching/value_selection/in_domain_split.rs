@@ -1,6 +1,6 @@
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -51,9 +51,9 @@ impl InDomainSplit {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
+    use crate::branching::SelectionContext;
     use crate::branching::value_selection::InDomainSplit;
     use crate::branching::value_selection::ValueSelector;
-    use crate::branching::SelectionContext;
     use crate::predicate;
 
     #[test]

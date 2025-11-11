@@ -1,19 +1,19 @@
 use super::ConflictResolver;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
-use crate::engine::conflict_analysis::minimisers::Mode;
-use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
+use crate::engine::Assignments;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
+use crate::engine::conflict_analysis::minimisers::Mode;
+use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
 use crate::engine::propagation::CurrentNogood;
-use crate::engine::Assignments;
 use crate::predicates::Predicate;
-use crate::proof::explain_root_assignment;
 use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -321,7 +321,10 @@ impl ResolutionResolver {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
             self.processed_nogood_predicates.push(last_predicate);
         } else {
-            pumpkin_assert_simple!(matches!(self.mode, AnalysisMode::AllDecision), "If the heap is empty when extracting the final nogood then we should be performing all decision learning")
+            pumpkin_assert_simple!(
+                matches!(self.mode, AnalysisMode::AllDecision),
+                "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
+            )
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
@@ -395,10 +398,12 @@ impl ResolutionResolver {
             0
         };
 
-        pumpkin_assert_advanced!(clean_nogood
-            .iter()
-            .skip(1)
-            .all(|p| context.assignments.is_predicate_satisfied(*p)));
+        pumpkin_assert_advanced!(
+            clean_nogood
+                .iter()
+                .skip(1)
+                .all(|p| context.assignments.is_predicate_satisfied(*p))
+        );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
         for predicate in clean_nogood.iter() {

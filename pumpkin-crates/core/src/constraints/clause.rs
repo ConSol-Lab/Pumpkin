@@ -1,9 +1,9 @@
 use super::Constraint;
 use super::NegatableConstraint;
-use crate::proof::ConstraintTag;
-use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
+use crate::proof::ConstraintTag;
+use crate::variables::Literal;
 
 /// Creates the [`NegatableConstraint`] `\/ literal`
 ///

@@ -1,9 +1,9 @@
-use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
+use crate::branching::BrancherEvent;
+use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::branching::branchers::alternating::AlternatingBrancher;
 use crate::branching::branchers::alternating::BrancherToUse;
-use crate::branching::BrancherEvent;
-use crate::branching::SelectionContext;
+use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
 use crate::results::SolutionReference;
 
 /// Specifies that the [`AlternatingBrancher`] should switch between
@@ -52,12 +52,12 @@ impl AlternatingStrategy for EveryXSolutions {
 
 #[cfg(test)]
 mod tests {
+    use crate::Solver;
+    use crate::branching::Brancher;
     use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
     use crate::branching::branchers::alternating::strategies::every_x_solutions::EveryXSolutions;
-    use crate::branching::Brancher;
     use crate::engine::Assignments;
     use crate::results::SolutionReference;
-    use crate::Solver;
 
     #[test]
     fn test_every_other_solution() {

@@ -1,18 +1,18 @@
 use std::rc::Rc;
 
 use crate::constraint_arguments::CumulativeExplanationType;
-use crate::engine::propagation::contexts::propagation_context::HasAssignments;
+use crate::engine::EmptyDomain;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
-use crate::engine::EmptyDomain;
+use crate::engine::propagation::contexts::propagation_context::HasAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
-use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
-use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
+use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
+use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
@@ -50,12 +50,12 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
 
     loop {
         pumpkin_assert_simple!(
-                        time_point >= profiles[current_profile_index].start
-                            && time_point <= profiles[current_profile_index].end,
-                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
-                        profiles[current_profile_index].start,
-                        profiles[current_profile_index].end
-                    );
+            time_point >= profiles[current_profile_index].start
+                && time_point <= profiles[current_profile_index].end,
+            "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+            profiles[current_profile_index].start,
+            profiles[current_profile_index].end
+        );
 
         if time_point >= context.lower_bound(&propagating_task.start_variable) {
             let explanation = add_propagating_task_predicate_lower_bound(
@@ -157,12 +157,12 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
 
     loop {
         pumpkin_assert_simple!(
-                        time_point >= profiles[current_profile_index].start
-                            && time_point <= profiles[current_profile_index].end,
-                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
-                        profiles[current_profile_index].start,
-                        profiles[current_profile_index].end
-                    );
+            time_point >= profiles[current_profile_index].start
+                && time_point <= profiles[current_profile_index].end,
+            "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+            profiles[current_profile_index].start,
+            profiles[current_profile_index].end
+        );
 
         if time_point - propagating_task.processing_time
             < context.upper_bound(&propagating_task.start_variable)
@@ -313,8 +313,8 @@ where
 mod tests {
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
     use crate::propagators::CumulativeExplanationType;
+    use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 
     #[test]
     fn test_pointwise_explanation_lower_bound() {

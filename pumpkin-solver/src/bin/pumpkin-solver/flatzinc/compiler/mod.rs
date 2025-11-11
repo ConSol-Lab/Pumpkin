@@ -14,10 +14,10 @@ mod reserve_constraint_tags;
 use context::CompilationContext;
 use pumpkin_solver::Solver;
 
-use super::ast::FlatZincAst;
-use super::instance::FlatZincInstance;
 use super::FlatZincError;
 use super::FlatZincOptions;
+use super::ast::FlatZincAst;
+use super::instance::FlatZincInstance;
 
 pub(crate) fn compile(
     mut ast: FlatZincAst,

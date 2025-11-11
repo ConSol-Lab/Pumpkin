@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
 use super::Constraint;
+use crate::ConstraintOperationError;
+use crate::Solver;
 use crate::constraint_arguments::CumulativePropagationMethod;
 use crate::proof::ConstraintTag;
 use crate::propagators::ArgTask;
@@ -12,8 +14,6 @@ use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
-use crate::ConstraintOperationError;
-use crate::Solver;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
 ///

@@ -1,10 +1,10 @@
-use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
+use downcast_rs::impl_downcast;
 
-use super::contexts::PropagationContextWithTrailedValues;
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
+use super::contexts::PropagationContextWithTrailedValues;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
@@ -12,10 +12,10 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
-use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::notifications::OpaqueDomainEvent;
+use crate::engine::propagation::local_id::LocalId;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;

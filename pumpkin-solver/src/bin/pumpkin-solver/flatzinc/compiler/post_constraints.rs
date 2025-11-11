@@ -14,10 +14,10 @@ use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::TransformableVariable;
 
 use super::context::CompilationContext;
-use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
+use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::compiler::context::Set;
 
 pub(crate) fn run(
     _: &FlatZincAst,
@@ -28,37 +28,131 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
-            "pumpkin_disjunctive_strict" => compile_disjunctive_strict(context,exprs, constraint_tag)?,
+            "pumpkin_disjunctive_strict" => {
+                compile_disjunctive_strict(context, exprs, constraint_tag)?
+            }
             "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,
             "array_int_minimum" => compile_array_int_minimum(context, exprs, constraint_tag)?,
-            "int_max" => {
-                compile_ternary_int_predicate(context, exprs, annos, "int_max", constraint_tag, |a, b, c, constraint_tag| {
-                    constraints::maximum([a, b], c, constraint_tag)
-                })?
-            }
-            "int_min" => {
-                compile_ternary_int_predicate(context, exprs, annos, "int_min", constraint_tag, |a, b, c, constraint_tag| {
-                    constraints::minimum([a, b], c, constraint_tag)
-                })?
-            }
+            "int_max" => compile_ternary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_max",
+                constraint_tag,
+                |a, b, c, constraint_tag| constraints::maximum([a, b], c, constraint_tag),
+            )?,
+            "int_min" => compile_ternary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_min",
+                constraint_tag,
+                |a, b, c, constraint_tag| constraints::minimum([a, b], c, constraint_tag),
+            )?,
 
             // We rewrite `array_int_element` to `array_var_int_element`.
             "array_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
-            "array_var_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
+            "array_var_int_element" => {
+                compile_array_var_int_element(context, exprs, constraint_tag)?
+            }
 
-            "int_eq_imp" => compile_binary_int_imp(context, exprs, annos, "int_eq_imp", constraint_tag, constraints::binary_equals)?,
-            "int_ge_imp" => compile_binary_int_imp(context, exprs, annos, "int_ge_imp", constraint_tag, constraints::binary_greater_than_or_equals)?,
-            "int_gt_imp" => compile_binary_int_imp(context, exprs, annos, "int_gt_imp", constraint_tag, constraints::binary_greater_than)?,
-            "int_le_imp" => compile_binary_int_imp(context, exprs, annos, "int_le_imp", constraint_tag, constraints::binary_less_than_or_equals)?,
-            "int_lt_imp" => compile_binary_int_imp(context, exprs, annos, "int_lt_imp", constraint_tag, constraints::binary_less_than)?,
-            "int_ne_imp" => compile_binary_int_imp(context, exprs, annos, "int_ne_imp", constraint_tag, constraints::binary_not_equals)?,
+            "int_eq_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_eq_imp",
+                constraint_tag,
+                constraints::binary_equals,
+            )?,
+            "int_ge_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_ge_imp",
+                constraint_tag,
+                constraints::binary_greater_than_or_equals,
+            )?,
+            "int_gt_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_gt_imp",
+                constraint_tag,
+                constraints::binary_greater_than,
+            )?,
+            "int_le_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_le_imp",
+                constraint_tag,
+                constraints::binary_less_than_or_equals,
+            )?,
+            "int_lt_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_lt_imp",
+                constraint_tag,
+                constraints::binary_less_than,
+            )?,
+            "int_ne_imp" => compile_binary_int_imp(
+                context,
+                exprs,
+                annos,
+                "int_ne_imp",
+                constraint_tag,
+                constraints::binary_not_equals,
+            )?,
 
-            "int_lin_eq_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_eq_imp", constraint_tag, constraints::equals)?,
-            "int_lin_ge_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_ge_imp", constraint_tag, constraints::greater_than_or_equals)?,
-            "int_lin_gt_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_gt_imp", constraint_tag, constraints::greater_than)?,
-            "int_lin_le_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_le_imp", constraint_tag, constraints::less_than_or_equals)?,
-            "int_lin_lt_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_lt_imp", constraint_tag, constraints::less_than)?,
-            "int_lin_ne_imp" => compile_int_lin_imp_predicate(context, exprs, annos, "int_lin_ne_imp", constraint_tag, constraints::not_equals)?,
+            "int_lin_eq_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_eq_imp",
+                constraint_tag,
+                constraints::equals,
+            )?,
+            "int_lin_ge_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_ge_imp",
+                constraint_tag,
+                constraints::greater_than_or_equals,
+            )?,
+            "int_lin_gt_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_gt_imp",
+                constraint_tag,
+                constraints::greater_than,
+            )?,
+            "int_lin_le_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_le_imp",
+                constraint_tag,
+                constraints::less_than_or_equals,
+            )?,
+            "int_lin_lt_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_lt_imp",
+                constraint_tag,
+                constraints::less_than,
+            )?,
+            "int_lin_ne_imp" => compile_int_lin_imp_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_ne_imp",
+                constraint_tag,
+                constraints::not_equals,
+            )?,
 
             "int_lin_ne" => compile_int_lin_predicate(
                 context,
@@ -92,9 +186,14 @@ pub(crate) fn run(
                 constraint_tag,
                 constraints::less_than_or_equals,
             )?,
-            "int_lin_eq" => {
-                compile_int_lin_predicate(context, exprs, annos, "int_lin_eq", constraint_tag, constraints::equals)?
-            }
+            "int_lin_eq" => compile_int_lin_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_eq",
+                constraint_tag,
+                constraints::equals,
+            )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
@@ -168,9 +267,14 @@ pub(crate) fn run(
                 constraints::binary_less_than,
             )?,
 
-            "int_plus" => {
-                compile_ternary_int_predicate(context, exprs, annos, "int_plus", constraint_tag, constraints::plus)?
-            }
+            "int_plus" => compile_ternary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_plus",
+                constraint_tag,
+                constraints::plus,
+            )?,
 
             "int_times" => compile_ternary_int_predicate(
                 context,
@@ -197,30 +301,34 @@ pub(crate) fn run(
                 constraints::absolute,
             )?,
 
-            "pumpkin_all_different" => compile_all_different(context, exprs, annos, constraint_tag)?,
+            "pumpkin_all_different" => {
+                compile_all_different(context, exprs, annos, constraint_tag)?
+            }
             "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
             "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
-            "array_bool_element" => {
-                compile_array_var_bool_element(context, exprs, "array_bool_element", constraint_tag)?
-            }
-            "array_var_bool_element" => {
-                compile_array_var_bool_element(context, exprs, "array_var_bool_element", constraint_tag)?
-            }
+            "array_bool_element" => compile_array_var_bool_element(
+                context,
+                exprs,
+                "array_bool_element",
+                constraint_tag,
+            )?,
+            "array_var_bool_element" => compile_array_var_bool_element(
+                context,
+                exprs,
+                "array_var_bool_element",
+                constraint_tag,
+            )?,
             "array_bool_or" => compile_bool_or(context, exprs, constraint_tag)?,
             "pumpkin_bool_xor" => compile_bool_xor(context, exprs, constraint_tag)?,
             "pumpkin_bool_xor_reif" => compile_bool_xor_reif(context, exprs, constraint_tag)?,
 
             "bool2int" => compile_bool2int(context, exprs, constraint_tag)?,
 
-            "bool_lin_eq" => {
-                compile_bool_lin_eq_predicate(context, exprs, constraint_tag)?
-            }
+            "bool_lin_eq" => compile_bool_lin_eq_predicate(context, exprs, constraint_tag)?,
 
-            "bool_lin_le" => {
-                compile_bool_lin_le_predicate(context, exprs, constraint_tag)?
-            }
+            "bool_lin_le" => compile_bool_lin_le_predicate(context, exprs, constraint_tag)?,
 
             "bool_and" => compile_bool_and(context, exprs, constraint_tag)?,
             "bool_clause" => compile_bool_clause(context, exprs, constraint_tag)?,
@@ -235,7 +343,9 @@ pub(crate) fn run(
             }
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
-            "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
+            "pumpkin_cumulative_var" => todo!(
+                "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
+            ),
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -700,7 +810,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
     vars.iter()
         .zip(weights.iter())
-        .filter(|(_, &w)| w != 0)
+        .filter(|&(_, w)| *w != 0)
         .map(|(x_i, &w_i)| x_i.scaled(w_i))
         .collect::<Box<[_]>>()
 }

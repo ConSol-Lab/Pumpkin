@@ -1,7 +1,8 @@
 use std::num::NonZero;
 
-use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
+use super::solution_callback::SolutionCallback;
+use crate::Solver;
 use crate::branching::Brancher;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
@@ -13,7 +14,6 @@ use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
-use crate::Solver;
 
 /// Implements the linear UNSAT-SAT (LUS) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
@@ -96,14 +96,13 @@ where
                     SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                         Some(OptimisationResult::Optimal(satisfiable.solution().into()))
                     }
-                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
-                        _,
-                    ) => {
-                        None
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(_) => None,
+                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!(
+                        "If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."
+                    ),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => {
+                        Some(OptimisationResult::Unknown)
                     }
-                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) =>
-                        unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
-                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Unknown),
                 }
             };
 

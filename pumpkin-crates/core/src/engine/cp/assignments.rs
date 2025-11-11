@@ -1016,11 +1016,12 @@ impl IntegerDomain {
 
         // In case the hole is made at the given trail position or earlier,
         // the value is not in the domain.
-        if let Some(hole_info) = self.holes.get(&value) {
-            if hole_info.trail_position <= trail_position {
-                return false;
-            }
+        if let Some(hole_info) = self.holes.get(&value)
+            && hole_info.trail_position <= trail_position
+        {
+            return false;
         }
+
         // Since none of the previous checks triggered, the value is in the domain.
         true
     }
@@ -1797,9 +1798,11 @@ mod tests {
     fn lower_bound_trail_position_beyond_value() {
         let (domain_id, domain) = get_domain1();
 
-        assert!(domain
-            .get_update_info(&predicate!(domain_id >= 101))
-            .is_none());
+        assert!(
+            domain
+                .get_update_info(&predicate!(domain_id >= 101))
+                .is_none()
+        );
     }
 
     #[test]
@@ -2046,27 +2049,37 @@ mod tests {
         let neq_predicate =
             |not_equal_constant: i32| -> Predicate { predicate!(domain_id != not_equal_constant) };
 
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(0))
-            .is_some_and(|x| x));
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(0))
+                .is_some_and(|x| x)
+        );
         assert!(assignments.evaluate_predicate(lb_predicate(1)).is_none());
         assert!(assignments.evaluate_predicate(lb_predicate(2)).is_none());
         assert!(assignments.evaluate_predicate(lb_predicate(3)).is_none());
         assert!(assignments.evaluate_predicate(lb_predicate(4)).is_none());
         assert!(assignments.evaluate_predicate(lb_predicate(5)).is_none());
         assert!(assignments.evaluate_predicate(lb_predicate(6)).is_none());
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(7))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(8))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(9))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(10))
-            .is_some_and(|x| !x));
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(7))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(8))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(9))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(10))
+                .is_some_and(|x| !x)
+        );
 
         assert!(assignments.evaluate_predicate(ub_predicate(0)).is_none());
         assert!(assignments.evaluate_predicate(ub_predicate(1)).is_none());
@@ -2074,80 +2087,118 @@ mod tests {
         assert!(assignments.evaluate_predicate(ub_predicate(3)).is_none());
         assert!(assignments.evaluate_predicate(ub_predicate(4)).is_none());
         assert!(assignments.evaluate_predicate(ub_predicate(5)).is_none());
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(6))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(7))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(8))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(9))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(10))
-            .is_some_and(|x| x));
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(6))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(7))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(8))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(9))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(10))
+                .is_some_and(|x| x)
+        );
 
         assert!(assignments.evaluate_predicate(neq_predicate(0)).is_none());
         assert!(assignments.evaluate_predicate(neq_predicate(1)).is_none());
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(2))
-            .is_some_and(|x| x));
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(2))
+                .is_some_and(|x| x)
+        );
         assert!(assignments.evaluate_predicate(neq_predicate(3)).is_none());
         assert!(assignments.evaluate_predicate(neq_predicate(4)).is_none());
         assert!(assignments.evaluate_predicate(neq_predicate(5)).is_none());
         assert!(assignments.evaluate_predicate(neq_predicate(6)).is_none());
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(7))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(8))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(9))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(10))
-            .is_some_and(|x| x));
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(7))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(8))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(9))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(10))
+                .is_some_and(|x| x)
+        );
 
         assert!(assignments.evaluate_predicate(eq_predicate(0)).is_none());
         assert!(assignments.evaluate_predicate(eq_predicate(1)).is_none());
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(2))
-            .is_some_and(|x| !x));
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(2))
+                .is_some_and(|x| !x)
+        );
         assert!(assignments.evaluate_predicate(eq_predicate(3)).is_none());
         assert!(assignments.evaluate_predicate(eq_predicate(4)).is_none());
         assert!(assignments.evaluate_predicate(eq_predicate(5)).is_none());
         assert!(assignments.evaluate_predicate(eq_predicate(6)).is_none());
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(7))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(8))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(9))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(10))
-            .is_some_and(|x| !x));
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(7))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(8))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(9))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(10))
+                .is_some_and(|x| !x)
+        );
 
         let _ =
             assignments.post_predicate(predicate!(domain_id >= 6), None, &mut notification_engine);
 
-        assert!(assignments
-            .evaluate_predicate(neq_predicate(6))
-            .is_some_and(|x| !x));
-        assert!(assignments
-            .evaluate_predicate(eq_predicate(6))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(lb_predicate(6))
-            .is_some_and(|x| x));
-        assert!(assignments
-            .evaluate_predicate(ub_predicate(6))
-            .is_some_and(|x| x));
+        assert!(
+            assignments
+                .evaluate_predicate(neq_predicate(6))
+                .is_some_and(|x| !x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(eq_predicate(6))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(lb_predicate(6))
+                .is_some_and(|x| x)
+        );
+        assert!(
+            assignments
+                .evaluate_predicate(ub_predicate(6))
+                .is_some_and(|x| x)
+        );
     }
 }

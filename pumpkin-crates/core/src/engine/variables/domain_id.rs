@@ -2,12 +2,12 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::containers::StorageKey;
+use crate::engine::Assignments;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::Assignments;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links

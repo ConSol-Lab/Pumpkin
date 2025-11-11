@@ -2,10 +2,10 @@
 
 use solution_callback::SolutionCallback;
 
+use crate::Solver;
 use crate::branching::Brancher;
 use crate::results::OptimisationResult;
 use crate::termination::TerminationCondition;
-use crate::Solver;
 
 pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;

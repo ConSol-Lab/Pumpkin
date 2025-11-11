@@ -1,5 +1,6 @@
-use super::solution_callback::SolutionCallback;
 use super::OptimisationProcedure;
+use super::solution_callback::SolutionCallback;
+use crate::Solver;
 use crate::branching::Brancher;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
@@ -10,7 +11,6 @@ use crate::results::SatisfactionResultUnderAssumptions;
 use crate::results::Solution;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
-use crate::Solver;
 
 /// Implements the linear SAT-UNSAT (LSU) optimisation procedure.
 #[derive(Debug, Clone, Copy)]
@@ -80,13 +80,15 @@ where
                         best_solution = satisfiable.solution().into();
                         None
                     }
-                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
-                        _,
-                    ) => {
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(_) => {
                         Some(OptimisationResult::Optimal(best_solution.clone()))
                     }
-                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!("If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."),
-                    SatisfactionResultUnderAssumptions::Unknown(_) => Some(OptimisationResult::Satisfiable(best_solution.clone())),
+                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!(
+                        "If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."
+                    ),
+                    SatisfactionResultUnderAssumptions::Unknown(_) => {
+                        Some(OptimisationResult::Satisfiable(best_solution.clone()))
+                    }
                 }
             };
 

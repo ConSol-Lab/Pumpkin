@@ -1,6 +1,6 @@
+use crate::Solver;
 use crate::branching::Brancher;
 use crate::results::SolutionReference;
-use crate::Solver;
 
 pub trait SolutionCallback<B: Brancher> {
     fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B);

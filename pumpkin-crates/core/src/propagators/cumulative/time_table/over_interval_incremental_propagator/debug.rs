@@ -4,10 +4,10 @@ use std::ops::Range;
 use crate::containers::HashSet;
 use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
-use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
@@ -60,7 +60,7 @@ pub(crate) fn time_tables_are_the_same_interval<
             .iter()
             .zip(time_table_scratch)
             .all(|(actual, expected)| {
-                let result = actual.height == expected.height
+                actual.height == expected.height
                     && actual.start == expected.start
                     && actual.end == expected.end
                     && actual.profile_tasks.len() == expected.profile_tasks.len()
@@ -73,8 +73,7 @@ pub(crate) fn time_tables_are_the_same_interval<
                                 .iter()
                                 .all(|task| expected.profile_tasks.contains(task))
                         }
-                    };
-                result
+                    }
             })
 }
 
@@ -159,10 +158,10 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
     }
     // It could be that there were merged profiles at the end which we have not merged yet, we
     // add them now (note that we do not need to adjust any of the other elements now)
-    if let Some(replacing_profiles) = to_add.take() {
-        if let Some(replacing_range) = insertion_range.take() {
-            let _ = time_table.splice(replacing_range, replacing_profiles);
-        }
+    if let Some(replacing_profiles) = to_add.take()
+        && let Some(replacing_range) = insertion_range.take()
+    {
+        let _ = time_table.splice(replacing_range, replacing_profiles);
     }
 
     // A sanity check which checks whether all of the adjacent profiles are not mergeable (which

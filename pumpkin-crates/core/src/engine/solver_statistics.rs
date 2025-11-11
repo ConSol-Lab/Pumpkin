@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::create_statistics_struct;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::Assignments;
-use crate::statistics::log_statistic;
+use crate::engine::propagation::store::PropagatorStore;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
+use crate::statistics::log_statistic;
 
 /// Structure responsible for storing several statistics of the solving process of the
 /// [`ConstraintSatisfactionSolver`].

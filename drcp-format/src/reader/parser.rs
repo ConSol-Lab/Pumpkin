@@ -6,9 +6,6 @@ use std::num::NonZero;
 use std::rc::Rc;
 use std::slice::Iter;
 
-use crate::reader::Error;
-use crate::reader::ReadAtomic;
-use crate::reader::ReadStep;
 use crate::Conclusion;
 use crate::Deduction;
 use crate::Inference;
@@ -16,6 +13,9 @@ use crate::IntComparison;
 use crate::IntValue;
 use crate::SignedIntValue;
 use crate::Step;
+use crate::reader::Error;
+use crate::reader::ReadAtomic;
+use crate::reader::ReadStep;
 
 /// Parses a single line to possibly return a proof step.
 ///
@@ -85,7 +85,7 @@ where
                             "expected a, i, n, or c".to_owned()
                         },
                         span: (self.position, self.position + 1),
-                    })
+                    });
                 }
             }
         }

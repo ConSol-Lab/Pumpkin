@@ -94,13 +94,13 @@ pub(crate) use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 
 #[cfg(doc)]
-use crate::engine::test_solver::TestSolver;
-#[cfg(doc)]
-use crate::engine::variables::IntegerVariable;
-#[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
 use crate::engine::DomainEvents;
+#[cfg(doc)]
+use crate::engine::test_solver::TestSolver;
+#[cfg(doc)]
+use crate::engine::variables::IntegerVariable;
 #[cfg(doc)]
 use crate::propagators;
 #[cfg(doc)]

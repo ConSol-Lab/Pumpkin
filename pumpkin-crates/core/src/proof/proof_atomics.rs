@@ -2,8 +2,8 @@ use drcp_format::IntAtomic;
 use drcp_format::IntComparison;
 
 use crate::containers::HashMap;
-use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::VariableNames;
+use crate::engine::predicates::predicate::PredicateType;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 use crate::variables::Literal;

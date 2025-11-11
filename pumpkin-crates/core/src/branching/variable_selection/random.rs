@@ -66,9 +66,9 @@ impl VariableSelector<DomainId> for RandomSelector {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
+    use crate::branching::SelectionContext;
     use crate::branching::variable_selection::RandomSelector;
     use crate::branching::variable_selection::VariableSelector;
-    use crate::branching::SelectionContext;
     use crate::predicate;
 
     #[test]

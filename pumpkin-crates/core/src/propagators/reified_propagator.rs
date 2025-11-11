@@ -1,9 +1,7 @@
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::DomainEvents;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
@@ -11,7 +9,9 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
-use crate::engine::DomainEvents;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::Literal;
@@ -182,17 +182,19 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conflict) = self
-                .propagator
-                .detect_inconsistency(context.as_trailed_readonly())
-            {
-                context.post(
-                    self.reification_literal.get_false_predicate(),
-                    conflict.conjunction,
-                    conflict.inference_code,
-                )?;
-            }
+        if context.is_literal_fixed(&self.reification_literal) {
+            return Ok(());
+        }
+
+        if let Some(conflict) = self
+            .propagator
+            .detect_inconsistency(context.as_trailed_readonly())
+        {
+            context.post(
+                self.reification_literal.get_false_predicate(),
+                conflict.conjunction,
+                conflict.inference_code,
+            )?;
         }
 
         Ok(())

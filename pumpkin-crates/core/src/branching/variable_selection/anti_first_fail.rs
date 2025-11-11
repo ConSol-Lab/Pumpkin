@@ -1,11 +1,11 @@
 use log::warn;
 
+use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
 use crate::branching::variable_selection::VariableSelector;
-use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 
@@ -83,8 +83,8 @@ impl<TieBreaking: TieBreaker<DomainId, i32>> VariableSelector<DomainId>
 mod tests {
     use super::AntiFirstFail;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
+    use crate::branching::variable_selection::VariableSelector;
     use crate::predicate;
 
     #[test]

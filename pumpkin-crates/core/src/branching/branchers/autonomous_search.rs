@@ -1,24 +1,24 @@
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
-use crate::basic_types::moving_averages::MovingAverage;
+use crate::DefaultBrancher;
 use crate::basic_types::DeletablePredicateIdGenerator;
 use crate::basic_types::PredicateId;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::RandomSplitter;
-use crate::branching::variable_selection::RandomSelector;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
+use crate::branching::value_selection::RandomSplitter;
+use crate::branching::variable_selection::RandomSelector;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
+use crate::engine::predicates::predicate::Predicate;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
-use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
 ///
@@ -353,8 +353,8 @@ mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
-    use crate::engine::notifications::NotificationEngine;
     use crate::engine::Assignments;
+    use crate::engine::notifications::NotificationEngine;
     use crate::predicate;
     use crate::results::SolutionReference;
 

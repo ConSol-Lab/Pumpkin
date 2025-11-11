@@ -2,14 +2,14 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::declare_inference_label;
+use crate::engine::DomainEvents;
 use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
+use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
@@ -349,7 +349,10 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
 /// Assumes `numerator, denominator > 0`.
 #[inline]
 fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
-    pumpkin_assert_simple!(numerator > 0 && denominator > 0, "Either the numerator {numerator} was non-positive or the denominator {denominator} was non-positive");
+    pumpkin_assert_simple!(
+        numerator > 0 && denominator > 0,
+        "Either the numerator {numerator} was non-positive or the denominator {denominator} was non-positive"
+    );
     numerator / denominator + (numerator % denominator).signum()
 }
 
