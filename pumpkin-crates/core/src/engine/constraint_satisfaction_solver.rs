@@ -568,6 +568,7 @@ impl ConstraintSatisfactionSolver {
                     unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
                     trailed_values: &mut self.trailed_values,
                     variable_names: &self.variable_names,
+                    rng: &mut self.internal_parameters.random_generator,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -632,6 +633,7 @@ impl ConstraintSatisfactionSolver {
                 0,
                 brancher,
                 &mut self.trailed_values,
+                &mut self.internal_parameters.random_generator,
             );
             self.state.declare_ready();
         } else if self.state.internal_state == CSPSolverStateInternal::ContainsSolution {
@@ -825,6 +827,7 @@ impl ConstraintSatisfactionSolver {
             unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
             trailed_values: &mut self.trailed_values,
             variable_names: &self.variable_names,
+            rng: &mut self.internal_parameters.random_generator,
         };
 
         let learned_nogood = self
@@ -967,6 +970,7 @@ impl ConstraintSatisfactionSolver {
             0,
             brancher,
             &mut self.trailed_values,
+            &mut self.internal_parameters.random_generator,
         );
 
         self.restart_strategy.notify_restart();
@@ -985,6 +989,7 @@ impl ConstraintSatisfactionSolver {
         backtrack_level: usize,
         brancher: &mut BrancherType,
         trailed_values: &mut TrailedValues,
+        rng: &mut dyn Random,
     ) {
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
@@ -1010,7 +1015,7 @@ impl ConstraintSatisfactionSolver {
             propagator.synchronise(context);
         }
 
-        brancher.synchronise(assignments);
+        brancher.synchronise(&mut SelectionContext::new(assignments, rng));
 
         let _ = notification_engine.process_backtrack_events(assignments, propagators);
         notification_engine.clear_event_drain();
@@ -1090,7 +1095,7 @@ impl ConstraintSatisfactionSolver {
                 empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
             }
             PredicateType::Equal => {
-                // The last trail entry was an equality propagation; we split into two cases.
+                // The last trail entry was an equality propagation; we split into three cases.
                 if entry.predicate.get_right_hand_side() < entry.old_lower_bound {
                     // 1) The assigned value was lower than the lower-bound
                     //
@@ -1099,17 +1104,19 @@ impl ConstraintSatisfactionSolver {
                     empty_domain_reason.push(predicate!(
                         conflict_domain >= entry.predicate.get_right_hand_side() + 1
                     ));
-                } else {
+                } else if entry.predicate.get_right_hand_side() > entry.old_upper_bound {
                     // 2) The assigned value was larger than the upper-bound
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
-                    pumpkin_assert_simple!(
-                        entry.predicate.get_right_hand_side() > entry.old_upper_bound
-                    );
                     empty_domain_reason.push(predicate!(
                         conflict_domain <= entry.predicate.get_right_hand_side() - 1
                     ));
+                } else {
+                    // 3) The assigned value was equal to a hole in the domain
+                    empty_domain_reason.push(predicate!(
+                        conflict_domain != entry.predicate.get_right_hand_side()
+                    ))
                 }
             }
         }

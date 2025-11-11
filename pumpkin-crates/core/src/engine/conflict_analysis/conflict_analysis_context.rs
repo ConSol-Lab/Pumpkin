@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use super::minimisers::SemanticMinimiser;
+use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
@@ -51,6 +52,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) variable_names: &'a VariableNames,
+
+    pub(crate) rng: &'a mut dyn Random,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -97,6 +100,7 @@ impl ConflictAnalysisContext<'_> {
             backtrack_level,
             self.brancher,
             self.trailed_values,
+            self.rng,
         )
     }
 
@@ -471,6 +475,16 @@ impl ConflictAnalysisContext<'_> {
 
                     reason_buffer.extend(std::iter::once(predicate_lb));
                     reason_buffer.extend(std::iter::once(predicate_ub));
+                }
+                (
+                    PredicateType::Equal,
+                    PredicateType::LowerBound | PredicateType::UpperBound | PredicateType::NotEqual,
+                ) => {
+                    // The trail predicate is equality, but the input predicate is either a
+                    // lower-bound, upper-bound, or not equals.
+                    //
+                    // TODO: could consider lifting here
+                    reason_buffer.extend(std::iter::once(trail_entry.predicate))
                 }
                 _ => unreachable!(
                     "Unreachable combination of {} and {}",

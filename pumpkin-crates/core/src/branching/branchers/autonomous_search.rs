@@ -299,9 +299,9 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     }
 
     /// Restores dormant predicates after backtracking.
-    fn synchronise(&mut self, assignments: &Assignments) {
+    fn synchronise(&mut self, context: &mut SelectionContext) {
         self.should_synchronise = true;
-        self.backup_brancher.synchronise(assignments);
+        self.backup_brancher.synchronise(context);
     }
 
     fn on_conflict(&mut self) {
@@ -421,7 +421,10 @@ mod tests {
         assert!(brancher.dormant_predicates.contains(&predicate));
 
         let _ = assignments.synchronise(0, &mut notification_engine);
-        brancher.synchronise(&assignments);
+        brancher.synchronise(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
             &assignments,

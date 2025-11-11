@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-solver-py"
-version = "0.2.1-1"
+version = "0.2.2"
 description = "The Python interface for the Pumpkin solver library."
 authors.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ doc = false
 
 [dependencies]
 pyo3 = { version = "0.25.1", features= ["extension-module"] }
-pumpkin-solver = { path = "../pumpkin-solver" }
+pumpkin-solver = { version = "0.2.2", path = "../pumpkin-solver" }
 
 [build-dependencies]
 pyo3-build-config = "0.25.1"

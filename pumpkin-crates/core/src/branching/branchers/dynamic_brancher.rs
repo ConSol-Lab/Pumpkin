@@ -13,7 +13,6 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::containers::HashSet;
-use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::statistics::StatisticLogger;
@@ -149,10 +148,10 @@ impl Brancher for DynamicBrancher {
             .for_each(|&brancher_index| self.branchers[brancher_index].on_restart());
     }
 
-    fn synchronise(&mut self, assignments: &Assignments) {
+    fn synchronise(&mut self, context: &mut SelectionContext) {
         self.relevant_event_to_index[BrancherEvent::Synchronise]
             .iter()
-            .for_each(|&brancher_index| self.branchers[brancher_index].synchronise(assignments));
+            .for_each(|&brancher_index| self.branchers[brancher_index].synchronise(context));
     }
 
     fn is_restart_pointless(&mut self) -> bool {
