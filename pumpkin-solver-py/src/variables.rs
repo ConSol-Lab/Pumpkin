@@ -2,6 +2,7 @@ use pumpkin_solver::predicate;
 use pumpkin_solver::variables::AffineView;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
+use pumpkin_solver::variables::TransformableVariable;
 use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen)]
@@ -11,6 +12,17 @@ pub struct IntExpression(pub AffineView<DomainId>);
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {
         IntExpression(domain_id.into())
+    }
+}
+
+#[pymethods]
+impl IntExpression {
+    fn offset(&self, add_offset: i32) -> IntExpression {
+        IntExpression(self.0.offset(add_offset))
+    }
+
+    fn scaled(&self, scaling: i32) -> IntExpression {
+        IntExpression(self.0.scaled(scaling))
     }
 }
 
