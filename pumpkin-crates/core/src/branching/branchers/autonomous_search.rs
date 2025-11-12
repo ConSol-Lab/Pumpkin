@@ -135,6 +135,10 @@ impl DefaultBrancher {
             statistics: Default::default(),
         }
     }
+
+    pub fn add_domain(&mut self, domain: DomainId) {
+        self.backup_brancher.variable_selector.add_domain(domain);
+    }
 }
 
 impl<BackupSelector> AutonomousSearch<BackupSelector> {

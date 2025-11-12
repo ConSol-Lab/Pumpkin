@@ -88,25 +88,31 @@ impl Model {
         upper_bound: i32,
         name: Option<&str>,
     ) -> IntExpression {
-        if let Some(name) = name {
+        let domain_id = if let Some(name) = name {
             self.solver
                 .new_named_bounded_integer(lower_bound, upper_bound, name)
-                .into()
         } else {
-            self.solver
-                .new_bounded_integer(lower_bound, upper_bound)
-                .into()
-        }
+            self.solver.new_bounded_integer(lower_bound, upper_bound)
+        };
+
+        self.brancher.add_domain(domain_id);
+
+        domain_id.into()
     }
 
     /// Create a new boolean variable.
     #[pyo3(signature = (name=None))]
     fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
-        if let Some(name) = name {
-            self.solver.new_named_literal(name).into()
+        let literal = if let Some(name) = name {
+            self.solver.new_named_literal(name)
         } else {
-            self.solver.new_literal().into()
-        }
+            self.solver.new_literal()
+        };
+
+        self.brancher
+            .add_domain(literal.get_true_predicate().get_domain());
+
+        literal.into()
     }
 
     /// Create a new constraint tag.
@@ -121,6 +127,8 @@ impl Model {
     /// A tag should be provided for this link to be identifiable in the proof.
     fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
         let new_domain = self.solver.new_bounded_integer(0, 1);
+        self.brancher.add_domain(new_domain);
+
         let boolean_true = boolean.0.get_true_predicate();
 
         self.solver
