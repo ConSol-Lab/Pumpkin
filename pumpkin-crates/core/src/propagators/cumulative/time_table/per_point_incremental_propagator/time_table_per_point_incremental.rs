@@ -1417,21 +1417,19 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        assert!(
-            {
-                if let Err(Inconsistency::Conflict(conflict)) = &result {
-                    if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                        conflict.conjunction.iter().collect::<Vec<_>>()
-                            == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            },
-            "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
-        );
+        if let Err(Inconsistency::Conflict(conflict)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_eq!(
+                conflict.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!(
+                "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
+            )
+        }
     }
 
     #[test]
@@ -1518,21 +1516,21 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        assert!(result.is_err());
         let result_scratch = solver_scratch.propagate(propagator_scratch);
-        assert!(result_scratch.is_err());
-        assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.conjunction.iter().collect::<Vec<_>>()
-                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        });
+
+        if let Err(Inconsistency::Conflict(explanation)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_eq!(
+                explanation.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!(
+                "Expected {result_scratch:?} to be an empty domain and {result:?} to be a conflict"
+            )
+        }
     }
 
     #[test]
@@ -1575,6 +1573,7 @@ mod tests {
             solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s3_scratch, 7);
         let _ =
             solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 7);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(5, 5);
@@ -1619,19 +1618,18 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        let result_scratch = solver_scratch.propagate(propagator_scratch);
-        assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.conjunction.iter().collect::<Vec<_>>()
-                        != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        });
+
+        if let Err(Inconsistency::Conflict(explanation)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_ne!(
+                explanation.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!("{result:?} is not an error or {result_scratch:?} is not an error")
+        }
     }
 
     #[test]
