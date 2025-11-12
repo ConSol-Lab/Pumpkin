@@ -136,7 +136,7 @@ impl ConflictAnalysisContext<'_> {
             let predicate_dl = self
                 .assignments
                 .get_decision_level_for_predicate(&predicate)
-                .unwrap();
+                .expect("all predicates in the conflict nogood should be assigned to true");
 
             if predicate_dl == 0 {
                 explain_root_assignment(
