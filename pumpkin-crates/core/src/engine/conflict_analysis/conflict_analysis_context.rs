@@ -30,6 +30,7 @@ use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
 
 /// Used during conflict analysis to provide the necessary information.
@@ -132,12 +133,12 @@ impl ConflictAnalysisContext<'_> {
         };
 
         for &predicate in conflict_nogood.iter() {
-            if self
+            let predicate_dl = self
                 .assignments
                 .get_decision_level_for_predicate(&predicate)
-                .unwrap()
-                == 0
-            {
+                .unwrap();
+
+            if predicate_dl == 0 {
                 explain_root_assignment(
                     &mut RootExplanationContext {
                         propagators: self.propagators,
@@ -532,7 +533,6 @@ impl ConflictAnalysisContext<'_> {
         let old_lower_bound = self.assignments.get_lower_bound(conflict_domain);
         let old_upper_bound = self.assignments.get_upper_bound(conflict_domain);
 
-        // Now we get the explanation for the bound which was conflicting with the last trail entry
         match conflict.trigger_predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 // The last trail entry was a lower-bound propagation meaning that the empty domain
@@ -555,7 +555,11 @@ impl ConflictAnalysisContext<'_> {
                 ));
             }
             PredicateType::NotEqual => {
-                empty_domain_reason.push(conflict.trigger_predicate);
+                // The last trail entry was a not equals propagation meaning that the empty domain
+                // was due to the domain being assigned to the removed value
+                pumpkin_assert_eq_simple!(old_upper_bound, old_lower_bound);
+
+                empty_domain_reason.push(predicate!(conflict_domain == old_lower_bound));
             }
             PredicateType::Equal => {
                 // The last trail entry was an equality propagation; we split into three cases.
