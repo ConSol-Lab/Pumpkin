@@ -126,7 +126,7 @@ impl ConflictAnalysisContext<'_> {
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
-            StoredConflictInfo::InfeasibleAssumptions(predicate) => {
+            StoredConflictInfo::InconsistentAssumptions(predicate) => {
                 vec![predicate, !predicate].into()
             }
         };

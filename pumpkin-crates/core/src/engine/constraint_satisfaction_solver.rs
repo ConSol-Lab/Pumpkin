@@ -1441,7 +1441,7 @@ impl CSPSolverState {
             CSPSolverStateInternal::Conflict { conflict_info } => conflict_info.clone(),
             CSPSolverStateInternal::InfeasibleUnderAssumptions {
                 violated_assumption,
-            } => StoredConflictInfo::InfeasibleAssumptions(*violated_assumption),
+            } => StoredConflictInfo::InconsistentAssumptions(*violated_assumption),
             _ => {
                 panic!("Cannot extract conflict clause if solver is not in a conflict.");
             }

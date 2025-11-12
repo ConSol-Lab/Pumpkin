@@ -17,7 +17,10 @@ use crate::variables::DomainId;
 pub(crate) enum StoredConflictInfo {
     Propagator(PropagatorConflict),
     EmptyDomain(EmptyDomainConflict),
-    InfeasibleAssumptions(Predicate),
+    /// The conflict is due to inconsistent assumptions.
+    ///
+    /// The provided predicate and its negation are both assumptions.
+    InconsistentAssumptions(Predicate),
     RootLevelConflict(ConstraintOperationError),
 }
 
