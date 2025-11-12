@@ -27,6 +27,7 @@ use super::variables::Literal;
 use crate::Solver;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::Random;
@@ -1276,11 +1277,11 @@ impl ConstraintSatisfactionSolver {
         let (trigger_predicate, trigger_reason, trigger_inference_code) =
             self.assignments.remove_last_trail_element();
 
-        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
+        let stored_conflict_info = StoredConflictInfo::EmptyDomain(EmptyDomainConflict {
             trigger_predicate,
             trigger_reason,
             trigger_inference_code,
-        };
+        });
         self.state.declare_conflict(stored_conflict_info);
     }
 

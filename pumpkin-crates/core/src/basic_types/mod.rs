@@ -23,5 +23,5 @@ pub use random::*;
 pub use solution::ProblemSolution;
 pub use solution::Solution;
 pub use solution::SolutionReference;
-pub(crate) use stored_conflict_info::StoredConflictInfo;
+pub(crate) use stored_conflict_info::*;
 pub(crate) use trail::Trail;

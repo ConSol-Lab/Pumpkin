@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use super::minimisers::SemanticMinimiser;
 use crate::Random;
+use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
@@ -121,15 +122,7 @@ impl ConflictAnalysisContext<'_> {
 
                 conflict.conjunction
             }
-            StoredConflictInfo::EmptyDomain {
-                trigger_predicate,
-                trigger_reason,
-                trigger_inference_code,
-            } => self.compute_conflict_nogood(
-                trigger_predicate,
-                trigger_reason,
-                trigger_inference_code,
-            ),
+            StoredConflictInfo::EmptyDomain(conflict) => self.compute_conflict_nogood(conflict),
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
@@ -510,17 +503,15 @@ impl ConflictAnalysisContext<'_> {
 
     fn compute_conflict_nogood(
         &mut self,
-        trigger_predicate: Predicate,
-        trigger_reason: ReasonRef,
-        trigger_inference_code: InferenceCode,
+        conflict: EmptyDomainConflict,
     ) -> PropositionalConjunction {
-        let conflict_domain = trigger_predicate.get_domain();
+        let conflict_domain = conflict.domain();
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
         let _ = self.reason_store.get_or_compute(
-            trigger_reason,
+            conflict.trigger_reason,
             ExplanationContext::without_working_nogood(
                 self.assignments,
                 self.assignments.num_trail_entries() - 1,
@@ -532,9 +523,9 @@ impl ConflictAnalysisContext<'_> {
 
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
-            trigger_inference_code,
+            conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),
-            Some(trigger_predicate),
+            Some(conflict.trigger_predicate),
             self.variable_names,
         );
 
@@ -542,7 +533,7 @@ impl ConflictAnalysisContext<'_> {
         let old_upper_bound = self.assignments.get_upper_bound(conflict_domain);
 
         // Now we get the explanation for the bound which was conflicting with the last trail entry
-        match trigger_predicate.get_predicate_type() {
+        match conflict.trigger_predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 // The last trail entry was a lower-bound propagation meaning that the empty domain
                 // was caused by the upper-bound
@@ -550,7 +541,7 @@ impl ConflictAnalysisContext<'_> {
                 // We lift so that it is the most general upper-bound possible while still causing
                 // the empty domain
                 empty_domain_reason.push(predicate!(
-                    conflict_domain <= trigger_predicate.get_right_hand_side() - 1
+                    conflict_domain <= conflict.trigger_predicate.get_right_hand_side() - 1
                 ));
             }
             PredicateType::UpperBound => {
@@ -560,34 +551,34 @@ impl ConflictAnalysisContext<'_> {
                 // We lift so that it is the most general lower-bound possible while still causing
                 // the empty domain
                 empty_domain_reason.push(predicate!(
-                    conflict_domain >= trigger_predicate.get_right_hand_side() + 1
+                    conflict_domain >= conflict.trigger_predicate.get_right_hand_side() + 1
                 ));
             }
             PredicateType::NotEqual => {
-                empty_domain_reason.push(trigger_predicate);
+                empty_domain_reason.push(conflict.trigger_predicate);
             }
             PredicateType::Equal => {
                 // The last trail entry was an equality propagation; we split into three cases.
-                if trigger_predicate.get_right_hand_side() < old_lower_bound {
+                if conflict.trigger_predicate.get_right_hand_side() < old_lower_bound {
                     // 1) The assigned value was lower than the lower-bound
                     //
                     // We lift so that it is the most general lower-bound possible while still
                     // causing the empty domain
                     empty_domain_reason.push(predicate!(
-                        conflict_domain >= trigger_predicate.get_right_hand_side() + 1
+                        conflict_domain >= conflict.trigger_predicate.get_right_hand_side() + 1
                     ));
-                } else if trigger_predicate.get_right_hand_side() > old_upper_bound {
+                } else if conflict.trigger_predicate.get_right_hand_side() > old_upper_bound {
                     // 2) The assigned value was larger than the upper-bound
                     //
                     // We lift so that it is the most general upper-bound possible while still
                     // causing the empty domain
                     empty_domain_reason.push(predicate!(
-                        conflict_domain <= trigger_predicate.get_right_hand_side() - 1
+                        conflict_domain <= conflict.trigger_predicate.get_right_hand_side() - 1
                     ));
                 } else {
                     // 3) The assigned value was equal to a hole in the domain
                     empty_domain_reason.push(predicate!(
-                        conflict_domain != trigger_predicate.get_right_hand_side()
+                        conflict_domain != conflict.trigger_predicate.get_right_hand_side()
                     ))
                 }
             }
