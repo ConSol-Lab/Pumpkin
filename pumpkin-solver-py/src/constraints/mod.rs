@@ -15,10 +15,9 @@ macro_rules! declare_constraints {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.post(solver, variable_map)),+
+                    $($name::$constraint(cns) => cns.post(solver)),+
                 }
             }
 
@@ -26,10 +25,9 @@ macro_rules! declare_constraints {
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::variables::Literal,
-                variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, variable_map)),+
+                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal)),+
                 }
             }
         }
