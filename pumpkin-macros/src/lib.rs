@@ -65,6 +65,36 @@ pub fn cumulative(item: TokenStream) -> TokenStream {
                 }
                 .into();
                 output.extend(stream);
+
+                let test_name_var = format_ident!(
+                    "{}_var",
+                    stringcase::snake_case(
+                        &[
+                            "cumulative",
+                            &propagation_method,
+                            explanation_type,
+                            &option_string,
+                        ]
+                        .into_iter()
+                        .filter(|string| !string.is_empty())
+                        .join("_")
+                    )
+                );
+                let stream: TokenStream = quote! {
+                    mzn_test!(
+                        #test_name_var,
+                        "cumulative_var",
+                        vec![
+                            "--cumulative-propagation-method".to_string(),
+                            stringcase::kebab_case(#propagation_method),
+                            "--cumulative-explanation-type".to_string(),
+                            #explanation_type.to_string(),
+                            #(#options.to_string()),*
+                        ]
+                    );
+                }
+                .into();
+                output.extend(stream);
             }
         }
 

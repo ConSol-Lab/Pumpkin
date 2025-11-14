@@ -12,7 +12,7 @@ use crate::variables::IntegerVariable;
 /// Structures which are adjusted during search; either due to incrementality or to keep track of
 /// bounds.
 #[derive(Debug, Clone)]
-pub(crate) struct UpdatableStructures<Var> {
+pub(crate) struct UpdatableStructures<Var, PVar, RVar> {
     /// The current known bounds of the different [tasks][CumulativeParameters::tasks]; stored as
     /// (lower bound, upper bound)
     ///
@@ -20,15 +20,20 @@ pub(crate) struct UpdatableStructures<Var> {
     bounds: Vec<(i32, i32)>,
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
-    updates: Vec<UpdatedTaskInfo<Var>>,
+    updates: Vec<UpdatedTaskInfo<Var, PVar, RVar>>,
     /// The tasks which have been updated since the last iteration
-    updated_tasks: SparseSet<Rc<Task<Var>>>,
+    updated_tasks: SparseSet<Rc<Task<Var, PVar, RVar>>>,
     /// The tasks which are unfixed
-    unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    unfixed_tasks: SparseSet<Rc<Task<Var, PVar, RVar>>>,
 }
 
-impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
-    pub(crate) fn new(parameters: &CumulativeParameters<Var>) -> Self {
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+> UpdatableStructures<Var, PVar, RVar>
+{
+    pub(crate) fn new<CVar>(parameters: &CumulativeParameters<Var, PVar, RVar, CVar>) -> Self {
         let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         updated_tasks.set_to_empty();
 
@@ -47,7 +52,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     /// Returns the next updated task and removes it from the updated list
-    pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
+    pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var, PVar, RVar>>> {
         if self.updated_tasks.is_empty() {
             return None;
         }
@@ -60,14 +65,14 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     /// whether the updated task was actually updated).
     pub(crate) fn get_update_for_task(
         &mut self,
-        updated_task: &Rc<Task<Var>>,
-    ) -> UpdatedTaskInfo<Var> {
+        updated_task: &Rc<Task<Var, PVar, RVar>>,
+    ) -> UpdatedTaskInfo<Var, PVar, RVar> {
         self.updates[updated_task.id.unpack() as usize].clone()
     }
 
     /// Resets the stored update for the current task to be equal to the current scenario; i.e.
     /// resets the old bounds to be equal to the new bounds
-    pub(crate) fn reset_update_for_task(&mut self, updated_task: &Rc<Task<Var>>) {
+    pub(crate) fn reset_update_for_task(&mut self, updated_task: &Rc<Task<Var, PVar, RVar>>) {
         let update = &mut self.updates[updated_task.id.unpack() as usize];
 
         update.old_lower_bound = update.new_lower_bound;
@@ -85,30 +90,30 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     /// Returns the stored lower-bound for a task.
-    pub(crate) fn get_stored_lower_bound(&self, task: &Rc<Task<Var>>) -> i32 {
+    pub(crate) fn get_stored_lower_bound(&self, task: &Rc<Task<Var, PVar, RVar>>) -> i32 {
         self.bounds[task.id.unpack() as usize].0
     }
 
     /// Returns the stored upper-bound for a task.
-    pub(crate) fn get_stored_upper_bound(&self, task: &Rc<Task<Var>>) -> i32 {
+    pub(crate) fn get_stored_upper_bound(&self, task: &Rc<Task<Var, PVar, RVar>>) -> i32 {
         self.bounds[task.id.unpack() as usize].1
     }
 
     /// Fixes a task in the internal structure(s).
-    pub(crate) fn fix_task(&mut self, updated_task: &Rc<Task<Var>>) {
+    pub(crate) fn fix_task(&mut self, updated_task: &Rc<Task<Var, PVar, RVar>>) {
         self.unfixed_tasks.remove(updated_task);
     }
 
     /// Unfixes a task in the internal structure(s).
-    pub(crate) fn unfix_task(&mut self, updated_task: Rc<Task<Var>>) {
+    pub(crate) fn unfix_task(&mut self, updated_task: Rc<Task<Var, PVar, RVar>>) {
         self.unfixed_tasks.insert(updated_task);
     }
 
     /// Removes the fixed tasks from the internal structure(s).
-    pub(crate) fn remove_fixed(
+    pub(crate) fn remove_fixed<CVar>(
         &mut self,
         context: PropagationContext,
-        parameters: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) {
         for task in parameters.tasks.iter() {
             // If the task is fixed then we remove it, otherwise we insert it as an unfixed task
@@ -122,10 +127,10 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
 
     /// Resets all of the bounds to the current values in the context and removes all of the fixed
     /// tasks from the internal structure(s).
-    pub(crate) fn reset_all_bounds_and_remove_fixed(
+    pub(crate) fn reset_all_bounds_and_remove_fixed<CVar>(
         &mut self,
         context: PropagationContext,
-        parameters: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) {
         for task in parameters.tasks.iter() {
             if self.updates.len() <= task.id.unpack() as usize {
@@ -172,29 +177,39 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     // Initialises all stored bounds to their current values and removes any tasks which are fixed
-    pub(crate) fn initialise_bounds_and_remove_fixed(
+    pub(crate) fn initialise_bounds_and_remove_fixed<CVar>(
         &mut self,
         context: PropagationContext,
-        parameters: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) {
         for task in parameters.tasks.iter() {
+            self.updates.push(UpdatedTaskInfo {
+                task: Rc::clone(task),
+                old_lower_bound: context.lower_bound(&task.start_variable),
+                old_upper_bound: context.upper_bound(&task.start_variable),
+                new_lower_bound: context.lower_bound(&task.start_variable),
+                new_upper_bound: context.upper_bound(&task.start_variable),
+            });
             self.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
             ));
-            if context.is_fixed(&task.start_variable) {
+            if context.is_fixed(&task.start_variable)
+                && context.is_fixed(&task.processing_time)
+                && context.is_fixed(&task.resource_usage)
+            {
                 self.fix_task(task);
             }
         }
     }
 
     /// Returns all of the tasks which are not currently fixed
-    pub(crate) fn get_unfixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
+    pub(crate) fn get_unfixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var, PVar, RVar>>> {
         self.unfixed_tasks.iter()
     }
 
     // Returns all of the tasks which are currently fixed
-    pub(crate) fn get_fixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
+    pub(crate) fn get_fixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var, PVar, RVar>>> {
         self.unfixed_tasks.out_of_domain()
     }
 
@@ -209,7 +224,10 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     // Temporarily removes a task from the set of unfixed tasks
-    pub(crate) fn temporarily_remove_task_from_unfixed(&mut self, task: &Rc<Task<Var>>) {
+    pub(crate) fn temporarily_remove_task_from_unfixed(
+        &mut self,
+        task: &Rc<Task<Var, PVar, RVar>>,
+    ) {
         self.unfixed_tasks.remove_temporarily(task)
     }
 
@@ -219,12 +237,12 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     // Returns the unfixed task at the specified index
-    pub(crate) fn get_unfixed_task_at_index(&self, index: usize) -> Rc<Task<Var>> {
+    pub(crate) fn get_unfixed_task_at_index(&self, index: usize) -> Rc<Task<Var, PVar, RVar>> {
         Rc::clone(self.unfixed_tasks.get(index))
     }
 
     // Marks a task as updated in the internal structure(s)
-    pub(crate) fn task_has_been_updated(&mut self, task: &Rc<Task<Var>>) {
+    pub(crate) fn task_has_been_updated(&mut self, task: &Rc<Task<Var, PVar, RVar>>) {
         self.updated_tasks.insert(Rc::clone(task))
     }
 
@@ -232,8 +250,8 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     // are updated to the ones provided in the update
     pub(crate) fn insert_update_for_task(
         &mut self,
-        task: &Rc<Task<Var>>,
-        updated_task_info: UpdatedTaskInfo<Var>,
+        task: &Rc<Task<Var, PVar, RVar>>,
+        updated_task_info: UpdatedTaskInfo<Var, PVar, RVar>,
     ) {
         let stored_updated_task_info = &mut self.updates[task.id.unpack() as usize];
 
@@ -242,10 +260,10 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     /// Used for creating the dynamic structures from the provided context
-    pub(crate) fn recreate_from_context(
+    pub(crate) fn recreate_from_context<CVar>(
         &self,
         context: PropagationContext,
-        parameters: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) -> Self {
         let mut other = self.clone();
 
