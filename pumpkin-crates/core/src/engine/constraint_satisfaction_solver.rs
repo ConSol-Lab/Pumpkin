@@ -845,6 +845,8 @@ impl ConstraintSatisfactionSolver {
         let _ = self
             .conflict_resolver
             .resolve_conflict(conflict_analysis_context);
+
+        self.state.declare_solving();
     }
 
     /// Performs a restart during the search process; it is only called when it has been determined

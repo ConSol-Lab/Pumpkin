@@ -1,6 +1,5 @@
 use std::num::NonZero;
 
-use itertools::Itertools;
 use log::debug;
 use log::trace;
 
@@ -11,15 +10,11 @@ use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::ConflictResolver;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::store::PropagatorStore;
-use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
-use crate::engine::reason::StoredReason;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
@@ -151,8 +146,6 @@ impl HypercubeLinearResolver {
         context
             .propagator_queue
             .enqueue_propagator(new_propagator_id.propagator_id(), 0);
-
-        context.solver_state.declare_solving();
     }
 
     fn learn_hypercube_linear(

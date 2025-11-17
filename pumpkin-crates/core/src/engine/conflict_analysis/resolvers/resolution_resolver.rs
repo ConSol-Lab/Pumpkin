@@ -144,8 +144,6 @@ impl ConflictResolver for ResolutionResolver {
         context.backtrack(learned_nogood.backjump_level);
         self.add_learned_nogood(&mut context, learned_nogood, inference_code);
 
-        context.solver_state.declare_solving();
-
         true
     }
 }
