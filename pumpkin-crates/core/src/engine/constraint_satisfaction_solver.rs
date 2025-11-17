@@ -65,6 +65,8 @@ use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
+use crate::propagators::HypercubeLinear;
+use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
@@ -1411,60 +1413,65 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
-        // We can simply negate the clause and retrieve a nogood, e.g. if we have the
-        // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
-        // 5] /\ [x2 = 3] /\ [x3 > 5]`
+        let _ = self.add_propagator(HypercubeLinearPropagatorArgs {
+            hypercube_linear: HypercubeLinear::new(predicates.into_iter().collect(), vec![], -1),
+            constraint_tag,
+        })?;
 
-        let mut are_all_falsified_at_root = true;
-        let predicates = predicates
-            .into_iter()
-            .map(|predicate| {
-                are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
-                !predicate
-            })
-            .collect::<Vec<_>>();
+        // // We can simply negate the clause and retrieve a nogood, e.g. if we have the
+        // // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
+        // // 5] /\ [x2 = 3] /\ [x3 > 5]`
 
-        if predicates.is_empty() {
-            // This breaks the proof. If it occurs, we should fix up the proof logging.
-            // The main issue is that nogoods are not tagged. In the proof that is problematic.
-            self.state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
+        // let mut are_all_falsified_at_root = true;
+        // let predicates = predicates
+        //     .into_iter()
+        //     .map(|predicate| {
+        //         are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
+        //         !predicate
+        //     })
+        //     .collect::<Vec<_>>();
 
-        if are_all_falsified_at_root {
-            finalize_proof(FinalizingContext {
-                conflict: predicates.into(),
-                propagators: &mut self.propagators,
-                proof_log: &mut self.internal_parameters.proof_log,
-                unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
-                assignments: &self.assignments,
-                reason_store: &mut self.reason_store,
-                notification_engine: &mut self.notification_engine,
-                variable_names: &self.variable_names,
-            });
-            self.state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
+        // if predicates.is_empty() {
+        //     // This breaks the proof. If it occurs, we should fix up the proof logging.
+        //     // The main issue is that nogoods are not tagged. In the proof that is problematic.
+        //     self.state
+        //         .declare_conflict(StoredConflictInfo::RootLevelConflict(
+        //             ConstraintOperationError::InfeasibleClause,
+        //         ));
+        //     return Err(ConstraintOperationError::InfeasibleClause);
+        // }
 
-        let inference_code = self
-            .internal_parameters
-            .proof_log
-            .create_inference_code(constraint_tag, NogoodLabel);
-        if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
-            let _ = self.conclude_proof_unsat();
+        // if are_all_falsified_at_root {
+        //     finalize_proof(FinalizingContext {
+        //         conflict: predicates.into(),
+        //         propagators: &mut self.propagators,
+        //         proof_log: &mut self.internal_parameters.proof_log,
+        //         unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
+        //         assignments: &self.assignments,
+        //         reason_store: &mut self.reason_store,
+        //         notification_engine: &mut self.notification_engine,
+        //         variable_names: &self.variable_names,
+        //     });
+        //     self.state
+        //         .declare_conflict(StoredConflictInfo::RootLevelConflict(
+        //             ConstraintOperationError::InfeasibleClause,
+        //         ));
+        //     return Err(ConstraintOperationError::InfeasibleClause);
+        // }
 
-            self.state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    constraint_operation_error,
-                ));
-            return Err(constraint_operation_error);
-        }
+        // let inference_code = self
+        //     .internal_parameters
+        //     .proof_log
+        //     .create_inference_code(constraint_tag, NogoodLabel);
+        // if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
+        //     let _ = self.conclude_proof_unsat();
+
+        //     self.state
+        //         .declare_conflict(StoredConflictInfo::RootLevelConflict(
+        //             constraint_operation_error,
+        //         ));
+        //     return Err(constraint_operation_error);
+        // }
         Ok(())
     }
 

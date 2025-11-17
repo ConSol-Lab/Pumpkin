@@ -1,3 +1,5 @@
+use log::trace;
+
 use super::ConflictResolver;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 
@@ -7,12 +9,14 @@ pub(crate) struct NoLearningResolver;
 
 impl ConflictResolver for NoLearningResolver {
     fn resolve_conflict(&mut self, mut context: ConflictAnalysisContext) -> bool {
-        if let Some(last_decision) = context.find_last_decision() {
-            context.backtrack(context.assignments.get_decision_level() - 1);
-            context.enqueue_propagated_predicate(!last_decision);
-            true
-        } else {
-            false
-        }
+        let last_decision = context
+            .find_last_decision()
+            .expect("resolve_conflict is never called at the root");
+
+        let dl = context.assignments.get_decision_level() - 1;
+        trace!("backtracking to dl {dl}");
+        context.backtrack(dl);
+        context.enqueue_propagated_predicate(!last_decision);
+        true
     }
 }

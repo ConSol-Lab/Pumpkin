@@ -4,9 +4,11 @@ use std::num::NonZero;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
+use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::constructor::PropagatorConstructor;
@@ -17,6 +19,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
+use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
 declare_inference_label!(HypercubeLinearInference);
@@ -44,11 +47,49 @@ impl HypercubeLinear {
     pub fn new(
         mut hypercube: Vec<Predicate>,
         mut linear_terms: Vec<(NonZero<i32>, DomainId)>,
-        linear_rhs: i32,
+        mut linear_rhs: i32,
     ) -> Self {
         // Remove duplicates from the hypercube.
         hypercube.sort();
-        hypercube.dedup();
+        let hypercube = hypercube.into_iter().fold(vec![], |mut acc, predicate| {
+            // Get the last predicate in the hypercube.
+            let Some(last_predicate) = acc.last_mut() else {
+                acc.push(predicate);
+                return acc;
+            };
+
+            if last_predicate.implies(predicate) {
+                // Don't add the predicate if it is implied in the hypercube already.
+                return acc;
+            }
+
+            if predicate.implies(*last_predicate) {
+                // The new predicate is stronger than the last predicate, so we replace it.
+                *last_predicate = predicate;
+                return acc;
+            }
+
+            acc.push(predicate);
+
+            acc
+        });
+
+        let fixed_domain_value_pairs = hypercube.windows(2).filter_map(|window| {
+            let p1 = window[0];
+            let p2 = window[1];
+
+            if p1.get_domain() != p2.get_domain() {
+                return None;
+            }
+
+            assert_ne!(p1.get_predicate_type(), p2.get_predicate_type());
+
+            if p1.get_right_hand_side() == p2.get_right_hand_side() {
+                Some((p1.get_domain(), p1.get_right_hand_side()))
+            } else {
+                None
+            }
+        });
 
         // Merge domain IDs with multiple weights.
         linear_terms.sort_by_key(|(_, domain)| *domain);
@@ -76,16 +117,37 @@ impl HypercubeLinear {
 
         linear_terms.retain(|view| view.scale != 0);
 
-        // assert!(
-        //     !linear_terms.is_empty() || linear_rhs < 0,
-        //     "a linear component that is trivially satisfiable should never be computed"
-        // );
+        // If the domain is fixed, then modify the right-hand side and exclude the term from the
+        // linear component.
+        for (domain, value) in fixed_domain_value_pairs {
+            if let Some(index) = linear_terms.iter().position(|view| view.inner == domain) {
+                let view = linear_terms.remove(index);
+                linear_rhs -= value * view.scale;
+            }
+        }
+
+        assert!(
+            !linear_terms.is_empty() || linear_rhs < 0,
+            "a linear component that is trivially satisfiable should never be computed"
+        );
 
         Self {
             hypercube,
             linear_terms,
             linear_rhs,
         }
+    }
+
+    pub(crate) fn compute_slack(&self, context: PropagationContext) -> i32 {
+        let lhs = self.evaluate_linear_lower_bound(context);
+        self.linear_rhs - lhs
+    }
+
+    fn evaluate_linear_lower_bound(&self, context: PropagationContext) -> i32 {
+        self.linear_terms
+            .iter()
+            .map(|view| context.lower_bound(view))
+            .sum::<i32>()
     }
 
     /// Get an iterator over the hypercube of this constraint.
@@ -118,16 +180,6 @@ impl HypercubeLinear {
         })
     }
 
-    pub(crate) fn extract_linear_term_if(
-        &mut self,
-        mut f: impl FnMut((NonZero<i32>, DomainId)) -> bool + 'static,
-    ) -> impl Iterator<Item = (NonZero<i32>, DomainId)> + '_ {
-        self.linear_terms
-            .extract_if(.., move |view| f(view_to_tuple(*view)))
-            .map(view_to_tuple)
-    }
-
-    #[allow(unused, reason = "experimentation")]
     pub(crate) fn weaken(&self, predicate: Predicate) -> Option<HypercubeLinear> {
         let domain = predicate.get_domain();
         let value = predicate.get_right_hand_side();
@@ -174,31 +226,6 @@ impl HypercubeLinear {
             linear_rhs: self.linear_rhs - rhs_delta,
         })
     }
-
-    /// Scale the linear component of the hypercube linear by the given scalar.
-    pub(crate) fn scale(&mut self, scale: NonZero<i32>) {
-        self.linear_terms
-            .iter_mut()
-            .for_each(|view| *view = view.scaled(scale.get()));
-
-        self.linear_rhs *= scale.get();
-    }
-
-    /// Add a linear inequality to the linear component of this hypercube linear.
-    pub(crate) fn add_polynomial(
-        &mut self,
-        terms: impl IntoIterator<Item = (NonZero<i32>, DomainId)>,
-        rhs: i32,
-    ) {
-        let hypercube = std::mem::take(&mut self.hypercube);
-        let linear_terms = std::mem::take(&mut self.linear_terms)
-            .into_iter()
-            .map(view_to_tuple)
-            .chain(terms)
-            .collect();
-
-        *self = HypercubeLinear::new(hypercube, linear_terms, self.linear_rhs + rhs)
-    }
 }
 
 fn view_to_tuple(view: AffineView<DomainId>) -> (NonZero<i32>, DomainId) {
@@ -242,7 +269,7 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
 pub(crate) struct HypercubeLinearPropagator {
     pub(crate) hypercube_linear: HypercubeLinear,
     pub(crate) constraint_tag: ConstraintTag,
-    inference_code: InferenceCode,
+    pub(crate) inference_code: InferenceCode,
 }
 
 impl HypercubeLinearPropagator {
@@ -269,48 +296,63 @@ impl Propagator for HypercubeLinearPropagator {
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        // If not all bounds of the hypercube are satisfied, don't propagate.
-        if !self
+        let num_satisfied_bounds = self
             .hypercube_linear
             .hypercube
             .iter()
-            .all(|&predicate| context.evaluate_predicate(predicate) == Some(true))
+            .filter(|&&predicate| context.evaluate_predicate(predicate) == Some(true))
+            .count();
+
+        if !self.hypercube_linear.hypercube.is_empty()
+            && num_satisfied_bounds == self.hypercube_linear.hypercube.len() - 1
         {
-            return Ok(());
-        }
+            let slack = self.hypercube_linear.compute_slack(context.as_readonly());
 
-        let lower_bound_left_hand_side = self
-            .hypercube_linear
-            .linear_terms
-            .iter()
-            .map(|term| context.lower_bound(term))
-            .sum::<i32>();
+            if slack < 0 {
+                let unassigned_predicate = self
+                    .hypercube_linear
+                    .hypercube
+                    .iter()
+                    .copied()
+                    .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+                    .expect("at least one predicate does not evaluate to true");
 
-        for (i, term) in self.hypercube_linear.linear_terms.iter().enumerate() {
-            let bound = self.hypercube_linear.linear_rhs
-                - (lower_bound_left_hand_side - context.lower_bound(term));
-
-            let reason: PropositionalConjunction = self
+                context.post(!unassigned_predicate, 0_u64, self.inference_code)?;
+            }
+        } else if num_satisfied_bounds == self.hypercube_linear.hypercube.len() {
+            let lower_bound_left_hand_side = self
                 .hypercube_linear
-                .hypercube
+                .linear_terms
                 .iter()
-                .copied()
-                .chain(
-                    self.hypercube_linear
-                        .linear_terms
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(j, x_j)| {
-                            if j != i {
-                                Some(predicate![x_j >= context.lower_bound(x_j)])
-                            } else {
-                                None
-                            }
-                        }),
-                )
-                .collect();
+                .map(|term| context.lower_bound(term))
+                .sum::<i32>();
 
-            context.post(predicate![term <= bound], reason, self.inference_code)?;
+            for (i, term) in self.hypercube_linear.linear_terms.iter().enumerate() {
+                let bound = self.hypercube_linear.linear_rhs
+                    - (lower_bound_left_hand_side - context.lower_bound(term));
+
+                let reason: PropositionalConjunction = self
+                    .hypercube_linear
+                    .hypercube
+                    .iter()
+                    .copied()
+                    .chain(
+                        self.hypercube_linear
+                            .linear_terms
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(j, x_j)| {
+                                if j != i {
+                                    Some(predicate![x_j >= context.lower_bound(x_j)])
+                                } else {
+                                    None
+                                }
+                            }),
+                    )
+                    .collect();
+
+                context.post(predicate![term <= bound], reason, self.inference_code)?;
+            }
         }
 
         Ok(())
@@ -433,6 +475,36 @@ mod tests {
             constraint.weaken(predicate![y <= 2]),
             Some(weakened_constraint)
         );
+    }
+
+    #[test]
+    fn terms_fixed_in_premise_are_removed_from_linear() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let constraint = HypercubeLinear::new(
+            vec![predicate![x >= 2], predicate![x <= 2]],
+            vec![(NonZero::new(2).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            4,
+        );
+
+        let linear_terms = constraint.iter_linear_terms().collect::<Vec<_>>();
+        assert_eq!(linear_terms, vec![(NonZero::new(1).unwrap(), y)]);
+        assert_eq!(constraint.linear_rhs, 0);
+    }
+
+    #[test]
+    fn terms_fixed_positive_in_premise_are_removed_from_linear() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+        let constraint = HypercubeLinear::new(
+            vec![predicate![x >= -2], predicate![x <= -2]],
+            vec![(NonZero::new(2).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            4,
+        );
+
+        let linear_terms = constraint.iter_linear_terms().collect::<Vec<_>>();
+        assert_eq!(linear_terms, vec![(NonZero::new(1).unwrap(), y)]);
+        assert_eq!(constraint.linear_rhs, 8);
     }
 
     #[test]

@@ -347,10 +347,11 @@ impl PropagationContextMut<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
-                let _ = slot.populate(
-                    self.propagator_id,
-                    build_reason(reason, self.reification_literal),
-                );
+                println!("propagated {predicate}");
+                let reason = build_reason(reason, self.reification_literal);
+                println!("because of {reason:?}");
+
+                let _ = slot.populate(self.propagator_id, reason);
                 Ok(())
             }
             Err(e) => {

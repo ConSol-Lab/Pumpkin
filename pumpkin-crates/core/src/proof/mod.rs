@@ -316,6 +316,10 @@ impl ProofLog {
             _ => ConstraintTag::create_from_index(0),
         }
     }
+
+    fn is_logging_proof(&self) -> bool {
+        self.internal_proof.is_some()
+    }
 }
 
 #[derive(Debug)]

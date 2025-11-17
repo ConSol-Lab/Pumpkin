@@ -34,6 +34,10 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
+    if !context.proof_log.is_logging_proof() {
+        return;
+    }
+
     let final_nogood = context
         .conflict
         .into_iter()

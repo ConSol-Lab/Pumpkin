@@ -337,7 +337,7 @@ var 0..64: X_INTRODUCED_322_;
 var 0..64: X_INTRODUCED_323_;
 var 0..64: X_INTRODUCED_324_;
 var 0..64: X_INTRODUCED_325_;
-var 0..5459: X_INTRODUCED_327_ ::var_is_introduced :: is_defined_var;
+var 0..5459: X_INTRODUCED_327_ ::var_is_introduced :: is_defined_var :: output_var;
 var 0..64: X_INTRODUCED_666_ ::var_is_introduced ;
 var 0..1: X_INTRODUCED_672_ ::var_is_introduced ;
 var 0..1: X_INTRODUCED_673_ ::var_is_introduced ;
@@ -2408,5 +2408,5 @@ constraint int_lin_le(X_INTRODUCED_681_,[X_INTRODUCED_325_,X_INTRODUCED_320_,X_I
 constraint int_lin_le(X_INTRODUCED_685_,[X_INTRODUCED_4975_,X_INTRODUCED_4981_],64);
 constraint int_lin_le(X_INTRODUCED_778_,[X_INTRODUCED_4_,X_INTRODUCED_290_,X_INTRODUCED_4885_,X_INTRODUCED_4900_,X_INTRODUCED_4915_,X_INTRODUCED_4930_,X_INTRODUCED_4945_,X_INTRODUCED_4960_,X_INTRODUCED_4975_],0);
 constraint int_lin_eq([65,1,-1],[Beamtime,K,X_INTRODUCED_327_],0):: defines_var(X_INTRODUCED_327_);
-% solve :: int_search(X_INTRODUCED_4992_,input_order,indomain_split,complete) minimize X_INTRODUCED_327_;
-solve :: int_search(X_INTRODUCED_4992_,input_order,indomain_split,complete) satisfy;
+solve :: int_search(X_INTRODUCED_4992_,input_order,indomain_split,complete) minimize X_INTRODUCED_327_;
+% solve :: int_search(X_INTRODUCED_4992_,input_order,indomain_split,complete) satisfy;

@@ -628,7 +628,10 @@ impl Assignments {
         };
 
         if update_took_place {
-            trace!("propagated {predicate}");
+            if self.get_decision_level() == 0 {
+                trace!("propagated {predicate} at root");
+            }
+
             notification_engine.event_occurred(
                 lower_bound_before,
                 upper_bound_before,
