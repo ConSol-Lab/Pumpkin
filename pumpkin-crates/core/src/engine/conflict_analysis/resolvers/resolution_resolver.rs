@@ -123,8 +123,6 @@ impl ConflictResolver for ResolutionResolver {
             .add_term(learned_nogood.predicates.len() as u64);
 
         self.add_learned_nogood(context, learned_nogood, inference_code);
-
-        context.solver_state.declare_solving();
     }
 }
 

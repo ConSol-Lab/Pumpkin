@@ -717,6 +717,8 @@ impl ConstraintSatisfactionSolver {
 
         self.conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
+
+        self.solver_state.declare_solving();
     }
 
     /// Performs a restart during the search process; it is only called when it has been determined
