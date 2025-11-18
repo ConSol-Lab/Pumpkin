@@ -8,6 +8,7 @@ pub(crate) mod notifications;
 pub(crate) mod predicates;
 mod restart_strategy;
 mod solver_statistics;
+pub(crate) mod state;
 pub(crate) mod termination;
 pub(crate) mod variable_names;
 pub(crate) mod variables;
@@ -23,6 +24,7 @@ pub(crate) use literal_block_distance::Lbd;
 pub use restart_strategy::RestartOptions;
 pub(crate) use restart_strategy::RestartStrategy;
 pub(crate) use solver_statistics::SolverStatistics;
+pub use state::State;
 pub(crate) use variable_names::VariableNames;
 
 pub(crate) use crate::engine::notifications::DomainEvents;

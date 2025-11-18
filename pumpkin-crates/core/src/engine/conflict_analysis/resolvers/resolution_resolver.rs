@@ -6,14 +6,12 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
-use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::conflict_analysis::RecursiveMinimiser;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::PropagationContextMut;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
@@ -71,7 +69,7 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         let learned_nogood = self.learn_nogood(context);
 
-        let current_decision_level = context.assignments.get_decision_level();
+        let current_decision_level = context.state.get_assignment_level();
         context
             .counters
             .learned_clause_statistics
@@ -89,8 +87,8 @@ impl ConflictResolver for ResolutionResolver {
         // conflict happened
         context.restart_strategy.notify_conflict(
             self.lbd_helper
-                .compute_lbd(&learned_nogood.predicates, context.assignments),
-            context.assignments.get_pruned_value_count(),
+                .compute_lbd(&learned_nogood.predicates, &context.state.assignments),
+            context.state.assignments.get_pruned_value_count(),
         );
 
         context.backtrack(learned_nogood.backjump_level);
@@ -99,12 +97,12 @@ impl ConflictResolver for ResolutionResolver {
             .proof_log
             .log_deduction(
                 learned_nogood.predicates.iter().copied(),
-                context.variable_names,
+                &context.state.variable_names,
             )
             .expect("Failed to write proof log");
 
         let inference_code = context
-            .proof_log
+            .state
             .create_inference_code(constraint_tag, NogoodLabel);
 
         if learned_nogood.predicates.len() == 1 {
@@ -152,28 +150,19 @@ impl ResolutionResolver {
 
         let conflict_nogood = context.get_conflict_nogood();
 
-        let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
-            Some(RootExplanationContext {
-                propagators: context.propagators,
-                proof_log: context.proof_log,
-                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                assignments: context.assignments,
-                reason_store: context.reason_store,
-                notification_engine: context.notification_engine,
-                variable_names: context.variable_names,
-            })
-        } else {
-            None
-        };
-
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
+            let should_explain = context.proof_log.is_logging_inferences();
             self.add_predicate_to_conflict_nogood(
                 *predicate,
-                context.assignments,
                 context.brancher,
                 self.mode,
-                root_explanation_context.as_mut(),
+                &mut RootExplanationContext {
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    state: context.state,
+                },
+                should_explain,
             );
         }
 
@@ -213,42 +202,29 @@ impl ResolutionResolver {
             self.reason_buffer.clear();
             ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
-                context.assignments,
                 CurrentNogood::new(
                     &self.to_process_heap,
                     &self.processed_nogood_predicates,
                     &self.predicate_id_generator,
                 ),
-                context.reason_store,
-                context.propagators,
                 context.proof_log,
                 context.unit_nogood_inference_codes,
                 &mut self.reason_buffer,
-                context.notification_engine,
-                context.variable_names,
+                context.state,
             );
 
-            let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
-                Some(RootExplanationContext {
-                    propagators: context.propagators,
-                    proof_log: context.proof_log,
-                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                    assignments: context.assignments,
-                    reason_store: context.reason_store,
-                    notification_engine: context.notification_engine,
-                    variable_names: context.variable_names,
-                })
-            } else {
-                None
-            };
-
             for i in 0..self.reason_buffer.len() {
+                let should_explain = context.proof_log.is_logging_inferences();
                 self.add_predicate_to_conflict_nogood(
                     self.reason_buffer[i],
-                    context.assignments,
                     context.brancher,
                     self.mode,
-                    root_explanation_context.as_mut(),
+                    &mut RootExplanationContext {
+                        proof_log: context.proof_log,
+                        unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                        state: context.state,
+                    },
+                    should_explain,
                 );
             }
         }
@@ -262,19 +238,11 @@ impl ResolutionResolver {
         learned_nogood: LearnedNogood,
         inference_code: InferenceCode,
     ) {
-        let mut propagation_context = PropagationContextMut::new(
-            context.trailed_values,
-            context.assignments,
-            context.reason_store,
-            context.semantic_minimiser,
-            context.notification_engine,
-            self.nogood_propagator_handle.propagator_id(),
-        );
-
-        let nogood_propagator = context
-            .propagators
-            .get_propagator_mut(self.nogood_propagator_handle)
-            .expect("nogood propagator handle should refer to nogood propagator");
+        let (nogood_propagator, mut propagation_context) = context
+            .state
+            .get_propagator_mut_with_context(self.nogood_propagator_handle);
+        let nogood_propagator =
+            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
 
         nogood_propagator.add_asserting_nogood(
             learned_nogood.predicates,
@@ -298,24 +266,32 @@ impl ResolutionResolver {
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
-        assignments: &Assignments,
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
-        root_explanation_context: Option<&mut RootExplanationContext>,
+        context: &mut RootExplanationContext,
+        should_explain: bool,
     ) {
-        let dec_level = assignments
+        let dec_level = context
+            .state
+            .assignments
             .get_decision_level_for_predicate(&predicate)
             .unwrap_or_else(|| {
                 panic!(
                     "Expected predicate {predicate} to be assigned but bounds were ({}, {})",
-                    assignments.get_lower_bound(predicate.get_domain()),
-                    assignments.get_upper_bound(predicate.get_domain()),
+                    context
+                        .state
+                        .assignments
+                        .get_lower_bound(predicate.get_domain()),
+                    context
+                        .state
+                        .assignments
+                        .get_upper_bound(predicate.get_domain()),
                 )
             });
         // Ignore root level predicates.
         if dec_level == 0 {
             // do nothing, only possibly explain the predicate in the proof
-            if let Some(context) = root_explanation_context {
+            if should_explain {
                 explain_root_assignment(context, predicate);
             }
         }
@@ -327,8 +303,10 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP => dec_level == assignments.get_decision_level(),
-            AnalysisMode::AllDecision => !assignments.is_decision_predicate(&predicate),
+            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_assignment_level(),
+            AnalysisMode::AllDecision => {
+                !context.state.assignments.is_decision_predicate(&predicate)
+            }
         } {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
             // The first time we encounter the predicate, we initialise its value in the
@@ -356,7 +334,11 @@ impl ResolutionResolver {
             {
                 brancher.on_appearance_in_conflict_predicate(predicate);
 
-                let trail_position = assignments.get_trail_position(&predicate).unwrap();
+                let trail_position = context
+                    .state
+                    .assignments
+                    .get_trail_position(&predicate)
+                    .unwrap();
 
                 // The goal is to traverse predicate in reverse order of the trail.
                 //
@@ -375,11 +357,12 @@ impl ResolutionResolver {
                 // by assigning explicitly set predicates the
                 // value `2 * trail_position`, whereas implied predicates get `2 *
                 // trail_position + 1`.
-                let heap_value = if assignments.trail[trail_position].predicate == predicate {
-                    trail_position * 2
-                } else {
-                    trail_position * 2 + 1
-                };
+                let heap_value =
+                    if context.state.assignments.trail[trail_position].predicate == predicate {
+                        trail_position * 2
+                    } else {
+                        trail_position * 2 + 1
+                    };
 
                 // We restore the key and since we know that the value is 0, we can safely
                 // increment with `heap_value`
@@ -426,7 +409,7 @@ impl ResolutionResolver {
         // recursive minimisation)
         let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
             &self.processed_nogood_predicates,
-            context.assignments,
+            &context.state.assignments,
             if !context.should_minimise {
                 // If we do not minimise then we do the equality
                 // merging in the first iteration of removing
@@ -447,7 +430,7 @@ impl ResolutionResolver {
             let size_before_semantic_minimisation = clean_nogood.len();
             clean_nogood = context.semantic_minimiser.minimise(
                 &clean_nogood,
-                context.assignments,
+                &context.state.assignments,
                 Mode::EnableEqualityMerging,
             );
             context
@@ -465,11 +448,11 @@ impl ResolutionResolver {
         while index < clean_nogood.len() {
             let predicate = clean_nogood[index];
             let dl = context
-                .assignments
-                .get_decision_level_for_predicate(&predicate)
+                .state
+                .get_decision_level_for_predicate(predicate)
                 .unwrap();
 
-            if dl == context.assignments.get_decision_level() {
+            if dl == context.state.get_assignment_level() {
                 clean_nogood.swap(0, index);
                 index -= 1;
             } else if dl > highest_level_below_current {
@@ -484,8 +467,8 @@ impl ResolutionResolver {
         // This is the backjump level.
         let backjump_level = if clean_nogood.len() > 1 {
             context
-                .assignments
-                .get_decision_level_for_predicate(&clean_nogood[1])
+                .state
+                .get_decision_level_for_predicate(clean_nogood[1])
                 .unwrap()
         } else {
             // For unit nogoods, the solver backtracks to the root level.
@@ -496,7 +479,7 @@ impl ResolutionResolver {
             clean_nogood
                 .iter()
                 .skip(1)
-                .all(|p| context.assignments.is_predicate_satisfied(*p))
+                .all(|p| context.state.is_predicate_satisfied(*p))
         );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.

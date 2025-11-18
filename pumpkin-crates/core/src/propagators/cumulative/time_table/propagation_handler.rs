@@ -59,7 +59,7 @@ fn check_explanation(
             .assignments()
             .get_decision_level_for_predicate(&predicate)
             .unwrap()
-            == context.assignments().get_decision_level()
+            == context.assignments().get_assignment_level()
     });
     if !at_least_one_element_from_current_level {
         eprintln!(

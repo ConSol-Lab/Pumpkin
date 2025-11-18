@@ -118,6 +118,7 @@ pub mod predicates {
 }
 
 pub use crate::basic_types::Function;
+pub use crate::engine::State;
 
 #[doc(hidden)]
 pub mod asserts {

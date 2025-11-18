@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::create_statistics_struct;
-use crate::engine::Assignments;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
@@ -19,34 +17,16 @@ pub(crate) struct SolverStatistics {
 }
 
 impl SolverStatistics {
-    pub(crate) fn log(
-        &self,
-        assignments: &Assignments,
-        propagators: &PropagatorStore,
-        statistic_logger: StatisticLogger,
-        verbose: bool,
-    ) {
+    pub(crate) fn log(&self, statistic_logger: StatisticLogger, verbose: bool) {
         log_statistic("nodes", self.engine_statistics.num_decisions);
-        log_statistic("failures", self.engine_statistics.num_conflicts);
         log_statistic("restarts", self.engine_statistics.num_restarts);
-        log_statistic("variables", assignments.num_domains());
-        log_statistic("propagators", propagators.num_propagators());
-        log_statistic(
-            "propagations",
-            self.engine_statistics.num_propagators_called,
-        );
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
-        log_statistic("nogoods", self.engine_statistics.num_conflicts);
         log_statistic("backjumps", self.engine_statistics.sum_of_backjumps);
         log_statistic(
             "solveTime",
             self.engine_statistics.time_spent_in_solver.as_secs_f64(),
         );
         if verbose {
-            log_statistic(
-                "numAtomicConstraintsPropagated",
-                self.engine_statistics.num_propagations,
-            );
             log_statistic("numberOfBackjumps", self.engine_statistics.num_backjumps);
             self.learned_clause_statistics.log(statistic_logger)
         }
@@ -58,14 +38,8 @@ impl SolverStatistics {
 pub(crate) struct EngineStatistics {
     /// The number of decisions taken by the solver
     pub(crate) num_decisions: u64,
-    /// The number of conflicts encountered by the solver
-    pub(crate) num_conflicts: u64,
     /// The number of times the solver has restarted
     pub(crate) num_restarts: u64,
-    /// The number of (integer) propagations made by the solver
-    pub(crate) num_propagations: u64,
-    /// The number of times a propagator was called.
-    pub(crate) num_propagators_called: u64,
     /// The amount of time which is spent in the solver.
     pub(crate) time_spent_in_solver: Duration,
     /// The peak depth of the seach tree

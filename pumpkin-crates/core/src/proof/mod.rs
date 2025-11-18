@@ -61,7 +61,6 @@ impl ProofLog {
                 writer,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 logged_domain_inferences: HashMap::default(),
-                inference_codes: KeyedVec::default(),
                 proof_atomics: ProofAtomics::default(),
                 constraint_tags: KeyGenerator::default(),
             }),
@@ -79,6 +78,7 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
+        inference_codes: &Option<KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
@@ -87,7 +87,6 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
-            inference_codes,
             constraint_tags,
             proof_atomics,
             ..
@@ -96,7 +95,7 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        let (tag, label) = inference_codes[inference_code].clone();
+        let (tag, label) = inference_codes.as_ref().unwrap()[inference_code].clone();
 
         let inference_tag = constraint_tags.next_key();
 
@@ -289,23 +288,6 @@ impl ProofLog {
         proof_atomics.reify_predicate(literal, predicate);
     }
 
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    /// The inference codes are required to log inferences with [`Self::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        match &mut self.internal_proof {
-            Some(ProofImpl::CpProof {
-                inference_codes, ..
-            }) => inference_codes.push((constraint_tag, inference_label.to_str())),
-
-            // If we are not logging a CP proof, then we do not care about this value.
-            _ => InferenceCode::create_from_index(0),
-        }
-    }
-
     /// Create a new constraint tag.
     pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
         match self.internal_proof {
@@ -329,7 +311,6 @@ enum ProofImpl {
         writer: ProofWriter<flate2::write::GzEncoder<File>, i32>,
         #[cfg(not(feature = "gzipped-proofs"))]
         writer: ProofWriter<File, i32>,
-        inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         /// The [`ConstraintTag`]s generated for this proof.
         constraint_tags: KeyGenerator<ConstraintTag>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the

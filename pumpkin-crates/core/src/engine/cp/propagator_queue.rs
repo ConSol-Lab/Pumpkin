@@ -13,6 +13,12 @@ pub(crate) struct PropagatorQueue {
     present_priorities: BinaryHeap<Reverse<u32>>,
 }
 
+impl Default for PropagatorQueue {
+    fn default() -> Self {
+        Self::new(5)
+    }
+}
+
 impl PropagatorQueue {
     pub(crate) fn new(num_priority_levels: u32) -> PropagatorQueue {
         PropagatorQueue {

@@ -19,7 +19,6 @@ use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
-use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::ExplanationContext;
@@ -1119,14 +1118,6 @@ impl NogoodPropagator {
         // assigned predicates in the final nogood. This could happen since the root bound can
         // change since the initial time the semantic minimiser recorded it, so it would not know
         // that a previously nonroot bound is now actually a root bound.
-
-        // Semantic minimisation will take care of removing duplicate predicates, conflicting
-        // nogoods, and may result in few predicates since it removes redundancies.
-        *nogood = context.semantic_minimiser.minimise(
-            nogood,
-            context.assignments,
-            Mode::EnableEqualityMerging,
-        );
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {

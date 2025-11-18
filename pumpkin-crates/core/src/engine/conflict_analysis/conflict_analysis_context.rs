@@ -7,21 +7,15 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
 use crate::containers::StorageKey;
-use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::engine::PropagatorQueue;
 use crate::engine::RestartStrategy;
-use crate::engine::TrailedValues;
-use crate::engine::VariableNames;
+use crate::engine::State;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::reason::ReasonRef;
-use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
@@ -37,16 +31,9 @@ use crate::pumpkin_assert_simple;
 ///
 /// All fields are made public for the time being for simplicity. In the future that may change.
 pub(crate) struct ConflictAnalysisContext<'a> {
-    pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
-    pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) brancher: &'a mut dyn Brancher,
-    pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
-
-    pub(crate) propagator_queue: &'a mut PropagatorQueue,
-
-    pub(crate) notification_engine: &'a mut NotificationEngine,
 
     pub(crate) counters: &'a mut SolverStatistics,
 
@@ -54,11 +41,10 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) should_minimise: bool,
 
     pub(crate) unit_nogood_inference_codes: &'a mut HashMap<Predicate, InferenceCode>,
-    pub(crate) trailed_values: &'a mut TrailedValues,
-    pub(crate) variable_names: &'a VariableNames,
 
     pub(crate) rng: &'a mut dyn Random,
     pub(crate) restart_strategy: &'a mut RestartStrategy,
+    pub(crate) state: &'a mut State,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -70,7 +56,7 @@ impl Debug for ConflictAnalysisContext<'_> {
 impl ConflictAnalysisContext<'_> {
     /// Returns the last decision which was made by the solver.
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
-        self.assignments.find_last_decision()
+        self.state.assignments.find_last_decision()
     }
 
     /// Posts the predicate with reason an empty reason.
@@ -80,12 +66,8 @@ impl ConflictAnalysisContext<'_> {
         let garbage_inference_code = InferenceCode::create_from_index(0);
 
         let update_occurred = self
-            .assignments
-            .post_predicate(
-                predicate,
-                Some((ReasonRef(0), garbage_inference_code)),
-                self.notification_engine,
-            )
+            .state
+            .post(predicate, Some((ReasonRef(0), garbage_inference_code)))
             .expect("Expected enqueued predicate to not lead to conflict directly");
 
         pumpkin_assert_simple!(
@@ -97,14 +79,9 @@ impl ConflictAnalysisContext<'_> {
     /// Backtracks the solver to the provided backtrack level.
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         ConstraintSatisfactionSolver::backtrack(
-            self.notification_engine,
-            self.assignments,
-            self.reason_store,
-            self.propagator_queue,
-            self.propagators,
+            self.state,
             backtrack_level,
             self.brancher,
-            self.trailed_values,
             self.rng,
         )
     }
@@ -115,10 +92,11 @@ impl ConflictAnalysisContext<'_> {
         let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
+                    &self.state.inference_codes,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
-                    self.variable_names,
+                    &self.state.variable_names,
                 );
 
                 conflict.conjunction
@@ -134,20 +112,16 @@ impl ConflictAnalysisContext<'_> {
 
         for &predicate in conflict_nogood.iter() {
             let predicate_dl = self
-                .assignments
-                .get_decision_level_for_predicate(&predicate)
+                .state
+                .get_decision_level_for_predicate(predicate)
                 .expect("all predicates in the conflict nogood should be assigned to true");
 
             if predicate_dl == 0 {
                 explain_root_assignment(
                     &mut RootExplanationContext {
-                        propagators: self.propagators,
                         proof_log: self.proof_log,
                         unit_nogood_inference_codes: self.unit_nogood_inference_codes,
-                        assignments: self.assignments,
-                        reason_store: self.reason_store,
-                        notification_engine: self.notification_engine,
-                        variable_names: self.variable_names,
+                        state: self.state,
                     },
                     predicate,
                 );
@@ -156,12 +130,7 @@ impl ConflictAnalysisContext<'_> {
 
         conflict_nogood
             .into_iter()
-            .filter(|p| {
-                self.assignments
-                    .get_decision_level_for_predicate(p)
-                    .unwrap()
-                    > 0
-            })
+            .filter(|&p| self.state.get_decision_level_for_predicate(p).unwrap() > 0)
             .collect()
     }
 
@@ -169,21 +138,13 @@ impl ConflictAnalysisContext<'_> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "borrow checker complains either here or elsewhere"
-    )]
     pub(crate) fn get_propagation_reason(
         predicate: Predicate,
-        assignments: &Assignments,
         current_nogood: CurrentNogood<'_>,
-        reason_store: &mut ReasonStore,
-        propagators: &mut PropagatorStore,
         proof_log: &mut ProofLog,
         unit_nogood_inference_codes: &HashMap<Predicate, InferenceCode>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-        notification_engine: &mut NotificationEngine,
-        variable_names: &VariableNames,
+        state: &mut State,
     ) {
         // TODO: this function could be put into the reason store
 
@@ -200,15 +161,16 @@ impl ConflictAnalysisContext<'_> {
         // there would be only one predicate from the current decision level. For this
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
-        if assignments.is_initial_bound(predicate) {
+        if state.assignments.is_initial_bound(predicate) {
             return;
         }
 
-        let trail_position = assignments
+        let trail_position = state
+            .assignments
             .get_trail_position(&predicate)
             .expect("The predicate must be true during conflict analysis.");
 
-        let trail_entry = assignments.get_trail_entry(trail_position);
+        let trail_entry = state.assignments.get_trail_entry(trail_position);
 
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
@@ -217,25 +179,26 @@ impl ConflictAnalysisContext<'_> {
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
-            let propagator_id = reason_store.get_propagator(reason_ref);
+            let propagator_id = state.reason_store.get_propagator(reason_ref);
 
             let explanation_context = ExplanationContext::new(
-                assignments,
+                &state.assignments,
                 current_nogood,
                 trail_position,
-                notification_engine,
+                &mut state.notification_engine,
             );
 
-            let reason_exists = reason_store.get_or_compute(
+            let reason_exists = state.reason_store.get_or_compute(
                 reason_ref,
                 explanation_context,
-                propagators,
+                &mut state.propagators,
                 reason_buffer,
             );
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            if propagators
+            if state
+                .propagators
                 .as_propagator_handle::<NogoodPropagator>(propagator_id)
                 .is_some()
                 && reason_buffer.as_ref().is_empty()
@@ -258,15 +221,21 @@ impl ConflictAnalysisContext<'_> {
                     })
                     .expect("Expected to be able to retrieve step id for unit nogood");
 
-                let _ =
-                    proof_log.log_inference(*inference_code, [], Some(predicate), variable_names);
+                let _ = proof_log.log_inference(
+                    &state.inference_codes,
+                    *inference_code,
+                    [],
+                    Some(predicate),
+                    &state.variable_names,
+                );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
+                    &state.inference_codes,
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
-                    variable_names,
+                    &state.variable_names,
                 );
             }
         }
@@ -511,27 +480,20 @@ impl ConflictAnalysisContext<'_> {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
-        let _ = self.reason_store.get_or_compute(
-            conflict.trigger_reason,
-            ExplanationContext::without_working_nogood(
-                self.assignments,
-                self.assignments.num_trail_entries() - 1,
-                self.notification_engine,
-            ),
-            self.propagators,
-            &mut empty_domain_reason,
-        );
+        self.state
+            .get_propagation_reason(conflict.trigger_predicate, &mut empty_domain_reason);
 
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
+            &self.state.inference_codes,
             conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
-            self.variable_names,
+            &self.state.variable_names,
         );
 
-        let old_lower_bound = self.assignments.get_lower_bound(conflict_domain);
-        let old_upper_bound = self.assignments.get_upper_bound(conflict_domain);
+        let old_lower_bound = self.state.lower_bound(conflict_domain);
+        let old_upper_bound = self.state.upper_bound(conflict_domain);
 
         match conflict.trigger_predicate.get_predicate_type() {
             PredicateType::LowerBound => {

@@ -63,7 +63,7 @@ impl Assignments {
         &self,
         domain_id: DomainId,
     ) -> impl Iterator<Item = i32> + '_ {
-        self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
+        self.domains[domain_id].get_holes_from_current_decision_level(self.get_assignment_level())
     }
 
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were
@@ -77,12 +77,12 @@ impl Assignments {
     }
 
     pub(crate) fn find_last_decision(&self) -> Option<Predicate> {
-        if self.get_decision_level() == 0 {
+        if self.get_assignment_level() == 0 {
             None
         } else {
             let values_on_current_decision_level = self
                 .trail
-                .values_on_decision_level(self.get_decision_level());
+                .values_on_decision_level(self.get_assignment_level());
             let entry = values_on_current_decision_level[0];
             pumpkin_assert_eq_simple!(None, entry.reason);
 
@@ -90,7 +90,7 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_assignment_level(&self) -> usize {
         self.trail.get_decision_level()
     }
 
@@ -121,7 +121,7 @@ impl Assignments {
         // when values are removed at levels beyond the root, and then it becomes a tricky value to
         // update when a fresh domain needs to be considered.
         pumpkin_assert_simple!(
-            self.get_decision_level() == 0,
+            self.get_assignment_level() == 0,
             "can only create variables at the root"
         );
 
@@ -421,7 +421,7 @@ impl Assignments {
     }
 }
 
-type AssignmentReason = (ReasonRef, InferenceCode);
+pub(crate) type AssignmentReason = (ReasonRef, InferenceCode);
 
 // methods to change the domains
 impl Assignments {
@@ -451,7 +451,7 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let decision_level = self.get_assignment_level();
         let domain = &mut self.domains[domain_id];
 
         let update_took_place =
@@ -492,7 +492,7 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let decision_level = self.get_assignment_level();
         let domain = &mut self.domains[domain_id];
 
         let update_took_place =
@@ -534,7 +534,7 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let decision_level = self.get_assignment_level();
         let domain = &mut self.domains[domain_id];
 
         if old_lower_bound < assigned_value {
@@ -582,7 +582,7 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let decision_level = self.get_assignment_level();
         let domain = &mut self.domains[domain_id];
 
         let _ = domain.remove_value(removed_value_from_domain, decision_level, trail_position);

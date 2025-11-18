@@ -19,8 +19,8 @@ pub(crate) struct PropagatorStore {
 /// type-erased instances `Box<dyn Propagator>`.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PropagatorHandle<P> {
-    id: PropagatorId,
-    propagator: PhantomData<P>,
+    pub(crate) id: PropagatorId,
+    pub(crate) propagator: PhantomData<P>,
 }
 
 impl<P> PropagatorHandle<P> {
@@ -58,6 +58,13 @@ impl PropagatorStore {
             underlying_slot: self.propagators.new_slot(),
             propagator_type: PhantomData,
         }
+    }
+
+    /// Get an exclusive reference to the propagator identified by the given handle.
+    ///
+    /// For more info, see [`Self::get_propagator`].
+    pub(crate) fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
+        self[handle.id].downcast_ref()
     }
 
     /// Get an exclusive reference to the propagator identified by the given handle.

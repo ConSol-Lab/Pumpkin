@@ -40,7 +40,7 @@ impl RecursiveMinimiser {
     ) {
         let num_literals_before_minimisation = nogood.len();
 
-        self.initialise_minimisation_data_structures(nogood, context.assignments);
+        self.initialise_minimisation_data_structures(nogood, &context.state.assignments);
 
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
@@ -78,7 +78,7 @@ impl RecursiveMinimiser {
         context: &mut ConflictAnalysisContext,
         current_nogood: &[Predicate],
     ) {
-        pumpkin_assert_moderate!(context.assignments.is_predicate_satisfied(input_predicate));
+        pumpkin_assert_moderate!(context.state.is_predicate_satisfied(input_predicate));
 
         self.current_depth += 1;
 
@@ -98,7 +98,11 @@ impl RecursiveMinimiser {
         // If the predicate is a decision predicate, it cannot be a predicate from the original
         // learned nogood since those are labelled as part of initialisation.
         // Therefore the decision literal is labelled as poison and then return.
-        if context.assignments.is_decision_predicate(&input_predicate) {
+        if context
+            .state
+            .assignments
+            .is_decision_predicate(&input_predicate)
+        {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
@@ -108,8 +112,8 @@ impl RecursiveMinimiser {
         // (levels from the original learned clause) cannot be removed.
         if !self.is_decision_level_allowed(
             context
-                .assignments
-                .get_decision_level_for_predicate(&input_predicate)
+                .state
+                .get_decision_level_for_predicate(input_predicate)
                 .unwrap(),
         ) {
             self.assign_predicate_label(input_predicate, Label::Poison);
@@ -122,22 +126,18 @@ impl RecursiveMinimiser {
         let mut reason = vec![];
         ConflictAnalysisContext::get_propagation_reason(
             input_predicate,
-            context.assignments,
             CurrentNogood::from(current_nogood),
-            context.reason_store,
-            context.propagators,
             context.proof_log,
             context.unit_nogood_inference_codes,
             &mut reason,
-            context.notification_engine,
-            context.variable_names,
+            context.state,
         );
 
         for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
             if context
-                .assignments
-                .get_decision_level_for_predicate(&antecedent_predicate)
+                .state
+                .get_decision_level_for_predicate(antecedent_predicate)
                 .unwrap()
                 == 0
             {
@@ -146,13 +146,9 @@ impl RecursiveMinimiser {
                 // the proof is aware that that root-level assignment is used.
                 explain_root_assignment(
                     &mut RootExplanationContext {
-                        propagators: context.propagators,
                         proof_log: context.proof_log,
                         unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                        assignments: context.assignments,
-                        reason_store: context.reason_store,
-                        notification_engine: context.notification_engine,
-                        variable_names: context.variable_names,
+                        state: context.state,
                     },
                     antecedent_predicate,
                 );
@@ -246,7 +242,7 @@ impl RecursiveMinimiser {
             if assignments
                 .get_decision_level_for_predicate(&predicate)
                 .unwrap()
-                == assignments.get_decision_level()
+                == assignments.get_assignment_level()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;
