@@ -1,5 +1,4 @@
 use super::ConflictResolver;
-use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -20,6 +19,7 @@ use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::PropagatorHandle;
 
 /// Resolve conflicts according to the CDCL procedure.
 ///

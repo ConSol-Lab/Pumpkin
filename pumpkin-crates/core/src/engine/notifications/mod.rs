@@ -13,7 +13,6 @@ pub(crate) use predicate_notification::PredicateNotifier;
 
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
-use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
@@ -28,6 +27,7 @@ use crate::predicates::Predicate;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
 
 #[derive(Debug, Clone)]

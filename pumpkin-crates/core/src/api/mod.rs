@@ -118,6 +118,10 @@ pub mod predicates {
 }
 
 pub mod state {
+    //! Contains structures for the state containing the propagators and variables.
+    //!
+    //! See [`State`] for more information.
+    pub use crate::api::solver::PropagatorHandle;
     pub use crate::engine::Conflict;
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::State;

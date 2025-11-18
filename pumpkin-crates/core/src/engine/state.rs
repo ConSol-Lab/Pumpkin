@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::PropagatorHandle;
 use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagatorConflict;
@@ -38,6 +37,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::results::SolutionReference;
+use crate::state::PropagatorHandle;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::variables::DomainId;

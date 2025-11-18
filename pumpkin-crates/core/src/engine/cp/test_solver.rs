@@ -7,7 +7,6 @@ use super::PropagatorQueue;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::constructor::PropagatorConstructor;
-use crate::PropagatorHandle;
 use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
 use crate::engine::EmptyDomain;
@@ -23,6 +22,7 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]

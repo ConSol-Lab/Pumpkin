@@ -6,7 +6,6 @@ use log::warn;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodInfo;
-use crate::PropagatorHandle;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
@@ -39,6 +38,7 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::PropagatorHandle;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
