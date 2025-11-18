@@ -332,8 +332,7 @@ impl State {
         self.propagators.get_propagator_mut(handle)
     }
 
-    /// Get an exclusive reference to the propagator identified by the given handle and a
-    /// [`PropagationContextMut`].
+    /// Get an exclusive reference to the propagator identified by the given handle and a context.
     #[allow(
         private_bounds,
         reason = "Propagator will be part of public interface in the future"
@@ -575,6 +574,7 @@ impl State {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    #[allow(unused, reason = "Will be part of public API")]
     pub(crate) fn get_propagation_reason(
         &mut self,
         predicate: Predicate,

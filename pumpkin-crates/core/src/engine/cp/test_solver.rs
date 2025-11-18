@@ -88,7 +88,9 @@ impl TestSolver {
             &mut self.state.notification_engine,
             handle.propagator_id(),
         );
-        self.state.propagators[handle.propagator_id()].propagate(context).map(|_| handle)
+        self.state.propagators[handle.propagator_id()]
+            .propagate(context)
+            .map(|_| handle)
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
@@ -226,7 +228,7 @@ impl TestSolver {
             &mut self.state.assignments,
             &mut self.state.reason_store,
             &mut self.state.notification_engine,
-            propagator
+            propagator,
         );
         self.state.propagators[propagator].propagate(context)
     }
