@@ -463,10 +463,11 @@ impl State {
     ///
     /// # Example
     /// ```
-    /// use pumpkin_core::State;
+    /// use pumpkin_core::predicate;
+    /// use pumpkin_core::state::State;
     ///
     /// let mut state = State::default();
-    /// let variable = state.new_interval_variable(1, 10, "x1");
+    /// let variable = state.new_interval_variable(1, 10, Some("x1".to_string()));
     ///
     /// state.new_checkpoint();
     /// state
