@@ -6,7 +6,7 @@ use crate::containers::HashSet;
 use crate::engine::cp::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,
     present_propagators: HashSet<PropagatorId>,

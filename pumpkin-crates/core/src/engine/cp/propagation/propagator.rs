@@ -1,5 +1,7 @@
 use downcast_rs::Downcast;
 use downcast_rs::impl_downcast;
+use dyn_clone::DynClone;
+use dyn_clone::clone_trait_object;
 
 use super::ExplanationContext;
 use super::PropagationContext;
@@ -27,6 +29,9 @@ use crate::statistics::statistic_logger::StatisticLogger;
 // does not allow downcasting from the trait definition to its concrete type.
 impl_downcast!(Propagator);
 
+// To allow the State object to be cloneable, we need to allow `Box<dyn Propagator>` to be cloned.
+clone_trait_object!(Propagator);
+
 /// All propagators implement the [`Propagator`] trait, which defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
 ///
@@ -36,7 +41,7 @@ impl_downcast!(Propagator);
 /// enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
-pub(crate) trait Propagator: Downcast {
+pub(crate) trait Propagator: Downcast + DynClone {
     /// Return the name of the propagator, this is a convenience method that is used for printing.
     fn name(&self) -> &str;
 

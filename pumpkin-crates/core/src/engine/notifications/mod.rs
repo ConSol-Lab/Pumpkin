@@ -30,7 +30,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
     predicate_notifier: PredicateNotifier,

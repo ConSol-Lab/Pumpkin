@@ -23,7 +23,7 @@ use crate::variables::IntegerVariable;
 /// of the solver.
 pub(crate) trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
-    type PropagatorImpl: Propagator;
+    type PropagatorImpl: Propagator + Clone;
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;

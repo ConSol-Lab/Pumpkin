@@ -41,6 +41,7 @@ use crate::variables::IntegerVariable;
 ///   Sciences, vol. 18, no. 2, pp. 159–202, 2008.
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
+#[derive(Debug, Clone)]
 pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,

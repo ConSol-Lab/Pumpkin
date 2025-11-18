@@ -59,7 +59,7 @@ pub(crate) struct Event<Var> {
 ///
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,

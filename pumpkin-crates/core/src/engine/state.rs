@@ -43,7 +43,7 @@ use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct State {
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.

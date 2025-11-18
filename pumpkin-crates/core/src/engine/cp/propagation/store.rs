@@ -10,7 +10,7 @@ use crate::containers::Slot;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
 }
