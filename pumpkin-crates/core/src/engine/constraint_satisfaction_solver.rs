@@ -260,6 +260,10 @@ impl ConstraintSatisfactionSolver {
         ));
         pumpkin_assert_eq_simple!(handle.propagator_id(), result.propagator_id());
 
+        if solver_options.proof_log.is_logging_inferences() {
+            state.with_inference_codes();
+        }
+
         ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),
             assumptions: Vec::default(),

@@ -89,7 +89,7 @@ impl State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: Some(KeyedVec::default()),
+            inference_codes: None,
             statistics: StateStatistics::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -105,6 +105,10 @@ impl State {
         assert!(result.assignments.get_upper_bound(dummy_id) == 1);
 
         result
+    }
+
+    pub(crate) fn with_inference_codes(&mut self) {
+        self.inference_codes = Some(KeyedVec::default())
     }
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
