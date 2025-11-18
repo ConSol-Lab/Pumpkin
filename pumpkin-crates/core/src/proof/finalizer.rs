@@ -43,7 +43,7 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
 
     let _ = context
         .proof_log
-        .log_deduction(final_nogood, &context.state.variable_names);
+        .log_deduction(final_nogood, context.state.variable_names());
 }
 
 pub(crate) struct RootExplanationContext<'a> {
@@ -88,7 +88,7 @@ fn get_required_assumptions(
     if context.state.assignments.is_initial_bound(predicate) {
         let _ = context
             .proof_log
-            .log_domain_inference(predicate, &context.state.variable_names);
+            .log_domain_inference(predicate, context.state.variable_names());
         return vec![];
     }
 
@@ -99,7 +99,7 @@ fn get_required_assumptions(
             *inference_code,
             [],
             Some(predicate),
-            &context.state.variable_names,
+            context.state.variable_names(),
         );
         return vec![];
     }

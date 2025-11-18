@@ -90,7 +90,7 @@ impl ConflictAnalysisContext<'_> {
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
-                    &self.state.variable_names,
+                    self.state.variable_names(),
                 );
 
                 conflict.conjunction
@@ -220,7 +220,7 @@ impl ConflictAnalysisContext<'_> {
                     *inference_code,
                     [],
                     Some(predicate),
-                    &state.variable_names,
+                    state.variable_names(),
                 );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
@@ -229,7 +229,7 @@ impl ConflictAnalysisContext<'_> {
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
-                    &state.variable_names,
+                    state.variable_names(),
                 );
             }
         }
@@ -491,7 +491,7 @@ impl ConflictAnalysisContext<'_> {
             conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
-            &self.state.variable_names,
+            self.state.variable_names(),
         );
 
         let old_lower_bound = self.state.lower_bound(conflict_domain);

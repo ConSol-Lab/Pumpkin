@@ -835,7 +835,7 @@ impl ConstraintSatisfactionSolver {
                 inference_code,
                 inference_premises,
                 None,
-                &self.state.variable_names,
+                self.state.variable_names(),
             );
 
             // Since inference steps are only related to the nogood they directly precede,
@@ -870,7 +870,7 @@ impl ConstraintSatisfactionSolver {
             let constraint_tag = self
                 .internal_parameters
                 .proof_log
-                .log_deduction([!propagated], &self.state.variable_names);
+                .log_deduction([!propagated], self.state.variable_names());
 
             if let Ok(constraint_tag) = constraint_tag {
                 let inference_code = self

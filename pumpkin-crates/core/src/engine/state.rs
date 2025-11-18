@@ -58,7 +58,7 @@ pub struct State {
     /// Keep track of trailed values (i.e. values which automatically backtrack).
     pub(crate) trailed_values: TrailedValues,
     /// The names of the variables in the solver.
-    pub(crate) variable_names: VariableNames,
+    variable_names: VariableNames,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct

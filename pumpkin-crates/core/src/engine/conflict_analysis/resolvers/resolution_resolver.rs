@@ -97,7 +97,7 @@ impl ConflictResolver for ResolutionResolver {
             .proof_log
             .log_deduction(
                 learned_nogood.predicates.iter().copied(),
-                &context.state.variable_names,
+                context.state.variable_names(),
             )
             .expect("Failed to write proof log");
 
