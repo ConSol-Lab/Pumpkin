@@ -74,7 +74,10 @@ impl HypercubeLinearResolver {
 
         reason_set.push(!conflict_trigger);
 
-        trace!("constraint ID = {:?}", propagator.constraint_tag);
+        trace!(
+            "constraint ID = {:?}, pid = {}",
+            propagator.constraint_tag, propagator_id
+        );
         trace!("learned = {:?}", propagator.is_learned);
 
         (propagator.hypercube_linear.clone(), reason_set)
@@ -151,15 +154,13 @@ impl HypercubeLinearResolver {
         let conflict_dl = context.assignments.get_decision_level();
         let mut trail_index = context.assignments.num_trail_entries();
 
-        let mut is_first_iteration = true;
-
         // Iterate the trail backwards until a constraint is obtained that propagates at a
         // previous decision level.
         loop {
-            // println!("{conflicting_hypercube_linear:?}");
+            // println!("{conflicting_hypercube_linear}");
             // dbg!(&conflicting_reason_set);
 
-            // for p in conflicting_reason_set.iter() {
+            // for p in conflicting_reason_set.iter_hypercube() {
             //     let domain = p.get_domain();
             //     println!(
             //         "{} in [{}, {}]",
@@ -170,20 +171,32 @@ impl HypercubeLinearResolver {
             // }
 
             assert!(conflicting_reason_set.iter_hypercube().all(|predicate| {
-                context
+                let truth_value = context
                     .assignments
-                    .evaluate_predicate_at_trail_position(predicate, trail_index)
-                    == Some(true)
+                    .evaluate_predicate_at_trail_position(predicate, trail_index);
+
+                // let domain = predicate.get_domain();
+                // println!(
+                //     "{predicate} -> {} in [{}, {}]",
+                //     domain,
+                //     domain.lower_bound_at_trail_position(context.assignments, trail_index),
+                //     domain.upper_bound_at_trail_position(context.assignments, trail_index)
+                // );
+
+                truth_value == Some(true)
             }));
 
             let reasons_on_current_dl = conflicting_reason_set
                 .iter_hypercube()
                 .filter(|predicate| {
-                    context
+                    let predicate_dl = context
                         .assignments
                         .get_decision_level_for_predicate(predicate)
-                        .unwrap()
-                        == conflict_dl
+                        .unwrap();
+
+                    // println!("{predicate}: {predicate_dl}");
+
+                    predicate_dl == conflict_dl
                 })
                 .collect::<Vec<_>>();
 
@@ -193,30 +206,11 @@ impl HypercubeLinearResolver {
             );
 
             if reasons_on_current_dl.len() <= 1 {
-                if is_first_iteration {
-                    panic!("returning conflict as learned");
-                }
-
-                // The bound may contribute to the slack of the constraint. After backtracking that
-                // would result in a possibly non-negative slack. Therefore, weaken on the bound
-                // just in case.
-                //
-                // For the other bounds we know their contribution will still be the same after
-                // backtracking, so this is only an issue with the bound to propagate.
-                if let Some(bound_to_propagate_to_false) = reasons_on_current_dl.first().copied()
-                    && let Some(hypercube_linear) =
-                        conflicting_hypercube_linear.weaken(bound_to_propagate_to_false)
-                {
-                    conflicting_hypercube_linear = hypercube_linear;
-                }
-
                 return (
                     conflicting_hypercube_linear,
                     conflicting_reason_set.iter_hypercube().collect(),
                 );
             }
-
-            is_first_iteration = false;
 
             assert_eq!(
                 is_conflicting(
@@ -377,8 +371,13 @@ impl ConflictResolver for HypercubeLinearResolver {
                 reason_store: context.reason_store,
                 propagators: context.propagators,
             },
-            conflicting_hypercube_linear,
+            conflicting_hypercube_linear.clone(),
             reason_set,
+        );
+
+        assert_ne!(
+            learned_hypercube_linear, conflicting_hypercube_linear,
+            "learning should produce a new constraint"
         );
 
         let backjump_level = reason_set
@@ -479,12 +478,24 @@ fn propositional_resolution(
         })
         .collect();
 
-    let new_constraint = HypercubeLinear::new(
+    let mut new_constraint = HypercubeLinear::new(
         hypercube,
         conflicting_hypercube_linear.iter_linear_terms().collect(),
         conflicting_hypercube_linear.linear_rhs(),
     )
     .expect("not trivially satisfiable");
+
+    // The bounds in the explanation may contribute to the slack of the constraint.
+    // After backtracking that would result in a possibly non-negative slack.
+    // Therefore, weaken on these bounds just in case.
+    for predicate in weakened_reason
+        .iter_hypercube()
+        .filter(|&predicate| predicate != !pivot_predicate)
+    {
+        if let Some(l) = new_constraint.weaken(predicate) {
+            new_constraint = l;
+        }
+    }
 
     trace!("result = {new_constraint}");
 
@@ -608,8 +619,14 @@ fn fourier_eliminate(
         .unwrap()
         + reason.linear_rhs().checked_mul(scale_reason.get()).unwrap();
 
-    let new_constraint = HypercubeLinear::new(hypercube, linear_terms, linear_rhs)
+    let mut new_constraint = HypercubeLinear::new(hypercube, linear_terms, linear_rhs)
         .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)?;
+
+    for bound in reason.iter_hypercube() {
+        if let Some(l) = new_constraint.weaken(bound) {
+            new_constraint = l;
+        }
+    }
 
     trace!("result = {new_constraint}");
     Ok(new_constraint)

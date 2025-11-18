@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
@@ -347,6 +349,7 @@ impl PropagationContextMut<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
+                trace!("propagated {predicate}");
                 let reason = build_reason(reason, self.reification_literal);
 
                 let _ = slot.populate(self.propagator_id, reason);

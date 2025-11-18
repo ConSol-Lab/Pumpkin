@@ -278,21 +278,6 @@ pub(crate) struct HypercubeLinearPropagator {
     pub(crate) is_learned: bool,
 }
 
-impl HypercubeLinearPropagator {
-    #[cfg(test)]
-    pub(crate) fn new(
-        hypercube_linear: HypercubeLinear,
-        constraint_tag: ConstraintTag,
-        inference_code: InferenceCode,
-    ) -> Self {
-        Self {
-            hypercube_linear,
-            constraint_tag,
-            inference_code,
-        }
-    }
-}
-
 impl Propagator for HypercubeLinearPropagator {
     fn name(&self) -> &str {
         "HypercubeLinear"
@@ -309,17 +294,20 @@ impl Propagator for HypercubeLinearPropagator {
             .filter(|&&predicate| context.evaluate_predicate(predicate) == Some(true))
             .count();
 
+        // println!("{}", self.hypercube_linear);
         // dbg!(num_satisfied_bounds);
         // for p in self.hypercube_linear.iter_hypercube() {
         //     let domain = p.get_domain();
         //     println!(
         //         "{} in [{}, {}]",
         //         domain,
-        //         domain.lower_bound(context.assignments),
-        //         domain.upper_bound(context.assignments)
+        //         context.assignments.get_lower_bound(domain),
+        //         context.assignments.get_upper_bound(domain)
         //     );
         // }
         // for domain in self.hypercube_linear.linear_terms.iter() {
+        //     use crate::engine::variables::IntegerVariable;
+
         //     println!(
         //         "{:?} in [{}, {}]",
         //         domain,
