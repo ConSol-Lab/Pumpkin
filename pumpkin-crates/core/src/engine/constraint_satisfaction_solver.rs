@@ -340,7 +340,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn create_new_literal(&mut self, name: Option<String>) -> Literal {
-        self.state.create_new_literal(name)
+        self.state.new_literal(name)
     }
 
     pub fn create_new_literal_for_predicate(
@@ -349,7 +349,7 @@ impl ConstraintSatisfactionSolver {
         name: Option<String>,
         constraint_tag: ConstraintTag,
     ) -> Literal {
-        let literal = self.state.create_new_literal(name);
+        let literal = self.state.new_literal(name);
 
         self.internal_parameters
             .proof_log
@@ -383,7 +383,7 @@ impl ConstraintSatisfactionSolver {
         );
 
         self.state
-            .create_new_integer_variable(lower_bound, upper_bound, name)
+            .new_interval_variable(lower_bound, upper_bound, name)
     }
 
     /// Creates an integer variable with a domain containing only the values in `values`
@@ -392,7 +392,7 @@ impl ConstraintSatisfactionSolver {
         values: Vec<i32>,
         name: Option<String>,
     ) -> DomainId {
-        self.state.create_new_integer_variable_sparse(values, name)
+        self.state.new_sparse_variable(values, name)
     }
 
     /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
@@ -529,7 +529,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        if self.state.get_assignment_level() != 0 {
+        if self.state.get_decision_level() != 0 {
             ConstraintSatisfactionSolver::backtrack(
                 &mut self.state,
                 0,
@@ -584,7 +584,7 @@ impl ConstraintSatisfactionSolver {
 
                 self.solver_statistics.engine_statistics.peak_depth = max(
                     self.solver_statistics.engine_statistics.peak_depth,
-                    self.state.get_assignment_level() as u64,
+                    self.state.get_decision_level() as u64,
                 );
 
                 match branching_result {
@@ -641,7 +641,7 @@ impl ConstraintSatisfactionSolver {
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
             self.declare_new_decision_level();
 
-            let _ = self.state.post(assumption_literal, None).map_err(|_| {
+            let _ = self.state.post(assumption_literal).map_err(|_| {
                 self.solver_state
                     .declare_infeasible_under_assumptions(assumption_literal);
                 CSPSolverExecutionFlag::Infeasible
@@ -678,7 +678,7 @@ impl ConstraintSatisfactionSolver {
         self.solver_statistics.engine_statistics.num_decisions += 1;
         let update_occurred = self
             .state
-            .post(decision_predicate, None)
+            .post(decision_predicate)
             .expect("Decisions are expected not to fail.");
         pumpkin_assert_simple!(update_occurred);
 
@@ -767,7 +767,7 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut BrancherType,
         rng: &mut dyn Random,
     ) {
-        pumpkin_assert_simple!(backtrack_level < state.get_assignment_level());
+        pumpkin_assert_simple!(backtrack_level < state.get_decision_level());
 
         brancher.on_backtrack();
 
@@ -787,12 +787,12 @@ impl ConstraintSatisfactionSolver {
 
         let result = self.state.fixed_point_propagate();
 
-        if self.state.get_assignment_level() == 0 {
+        if self.state.get_decision_level() == 0 {
             self.handle_root_propagation(num_trail_entries_prev);
         }
 
         if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict);
+            self.solver_state.declare_conflict(conflict.into());
         }
     }
 
@@ -911,7 +911,7 @@ impl ConstraintSatisfactionSolver {
         let result = self.state.fixed_point_propagate();
 
         if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict);
+            self.solver_state.declare_conflict(conflict.into());
         }
 
         if self.solver_state.no_conflict() {
@@ -932,7 +932,7 @@ impl ConstraintSatisfactionSolver {
         if self.solver_state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
-            match self.state.post(predicate, None) {
+            match self.state.post(predicate) {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
@@ -958,7 +958,7 @@ impl ConstraintSatisfactionSolver {
 
         if addition_status.is_err() || self.solver_state.is_conflicting() {
             let conflict = self.state.prepare_for_conflict_resolution();
-            self.solver_state.declare_conflict(conflict);
+            self.solver_state.declare_conflict(conflict.into());
 
             self.handle_root_propagation(num_trail_entries);
             self.complete_proof();
@@ -967,18 +967,17 @@ impl ConstraintSatisfactionSolver {
 
         self.handle_root_propagation(num_trail_entries);
 
-        self.state
-            .enqueue_propagator(self.nogood_propagator_handle.propagator_id());
+        self.state.enqueue_propagator(self.nogood_propagator_handle);
         let result = self.state.fixed_point_propagate();
         if let Err(conflict) = result {
-            self.solver_state.declare_conflict(conflict);
+            self.solver_state.declare_conflict(conflict.into());
         }
 
         self.handle_root_propagation(num_trail_entries);
 
         if self.solver_state.is_infeasible() {
             let conflict = self.state.prepare_for_conflict_resolution();
-            self.solver_state.declare_conflict(conflict);
+            self.solver_state.declare_conflict(conflict.into());
 
             self.complete_proof();
             Err(ConstraintOperationError::InfeasibleState)
@@ -1059,7 +1058,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {
-        self.state.get_assignment_level()
+        self.state.get_decision_level()
     }
 }
 

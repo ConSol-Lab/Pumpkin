@@ -69,7 +69,7 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         let learned_nogood = self.learn_nogood(context);
 
-        let current_decision_level = context.state.get_assignment_level();
+        let current_decision_level = context.state.get_decision_level();
         context
             .counters
             .learned_clause_statistics
@@ -303,7 +303,7 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_assignment_level(),
+            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_decision_level(),
             AnalysisMode::AllDecision => {
                 !context.state.assignments.is_decision_predicate(&predicate)
             }
@@ -452,7 +452,7 @@ impl ResolutionResolver {
                 .get_decision_level_for_predicate(predicate)
                 .unwrap();
 
-            if dl == context.state.get_assignment_level() {
+            if dl == context.state.get_decision_level() {
                 clean_nogood.swap(0, index);
                 index -= 1;
             } else if dl > highest_level_below_current {

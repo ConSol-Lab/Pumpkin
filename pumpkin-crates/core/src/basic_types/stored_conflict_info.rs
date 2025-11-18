@@ -5,14 +5,15 @@ use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
+use crate::engine::state::Conflict;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::variables::DomainId;
 
-/// A conflict info which can be stored in the solver.
-/// Two (related) conflicts can happen:
-/// 1) A propagator explicitly detects a conflict.
-/// 2) A propagator post a domain change that results in a variable having an empty domain.
+/// a conflict info which can be stored in the solver.
+/// two (related) conflicts can happen:
+/// 1) a propagator explicitly detects a conflict.
+/// 2) a propagator post a domain change that results in a variable having an empty domain.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum StoredConflictInfo {
     Propagator(PropagatorConflict),
@@ -24,20 +25,33 @@ pub(crate) enum StoredConflictInfo {
     RootLevelConflict(ConstraintOperationError),
 }
 
+impl From<Conflict> for StoredConflictInfo {
+    fn from(value: Conflict) -> Self {
+        match value {
+            Conflict::Propagator(propagator_conflict) => {
+                StoredConflictInfo::Propagator(propagator_conflict)
+            }
+            Conflict::EmptyDomain(empty_domain_conflict) => {
+                StoredConflictInfo::EmptyDomain(empty_domain_conflict)
+            }
+        }
+    }
+}
+
 /// A conflict because a domain became empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct EmptyDomainConflict {
+pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
-    pub(crate) trigger_predicate: Predicate,
+    pub trigger_predicate: Predicate,
     /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
     pub(crate) trigger_reason: ReasonRef,
     /// The [`InferenceCode`] that accompanies [`EmptyDomainConflict::trigger_reason`].
-    pub(crate) trigger_inference_code: InferenceCode,
+    pub trigger_inference_code: InferenceCode,
 }
 
 impl EmptyDomainConflict {
     /// The domain that became empty.
-    pub(crate) fn domain(&self) -> DomainId {
+    pub fn domain(&self) -> DomainId {
         self.trigger_predicate.get_domain()
     }
 }

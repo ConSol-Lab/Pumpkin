@@ -121,7 +121,7 @@ impl<'a> PropagationContextMut<'a> {
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {
-        self.assignments.get_assignment_level()
+        self.assignments.get_decision_level()
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is

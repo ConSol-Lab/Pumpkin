@@ -6,7 +6,6 @@ use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
-use crate::containers::StorageKey;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -15,7 +14,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::ExplanationContext;
-use crate::engine::reason::ReasonRef;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
@@ -61,13 +59,9 @@ impl ConflictAnalysisContext<'_> {
 
     /// Posts the predicate with reason an empty reason.
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
-        // This should only happen when we are not learning clauses. In that case, the proof log is
-        // also nonsensical. So we can supply a garbage inference code.
-        let garbage_inference_code = InferenceCode::create_from_index(0);
-
         let update_occurred = self
             .state
-            .post(predicate, Some((ReasonRef(0), garbage_inference_code)))
+            .post(predicate)
             .expect("Expected enqueued predicate to not lead to conflict directly");
 
         pumpkin_assert_simple!(

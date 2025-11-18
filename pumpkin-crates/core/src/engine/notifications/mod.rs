@@ -573,7 +573,7 @@ impl NotificationEngine {
         _trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(
-            assignments.get_assignment_level() == backtrack_level,
+            assignments.get_decision_level() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
         );
         self.predicate_notifier

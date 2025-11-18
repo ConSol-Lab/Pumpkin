@@ -242,7 +242,7 @@ impl RecursiveMinimiser {
             if assignments
                 .get_decision_level_for_predicate(&predicate)
                 .unwrap()
-                == assignments.get_assignment_level()
+                == assignments.get_decision_level()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;

@@ -90,7 +90,7 @@ pub(crate) use contexts::propagation_context::ReadDomains;
 pub(crate) use local_id::LocalId;
 pub(crate) use propagator::EnqueueDecision;
 pub(crate) use propagator::Propagator;
-pub(crate) use propagator_id::PropagatorId;
+pub use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 
 #[cfg(doc)]

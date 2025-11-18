@@ -3,11 +3,10 @@ use std::sync::Arc;
 use crate::PropagatorHandle;
 use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::StoredConflictInfo;
+use crate::basic_types::PropagatorConflict;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
-use crate::engine::AssignmentReason;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::engine::DebugHelper;
@@ -32,6 +31,8 @@ use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+#[cfg(doc)]
+use crate::proof::ProofLog;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -43,21 +44,25 @@ use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
+/// The [`State`] is the container of variables and propagators.
+///
+/// [`State`] implements [`Clone`], and cloning the [`State`] will create a fresh copy of the
+/// [`State`]. If the [`State`] is large, this may be extremely expensive.
 #[derive(Debug, Clone)]
 pub struct State {
-    /// The list of propagators. Propagators live here and are queried when events (domain changes)
-    /// happen. The list is only traversed during synchronisation for now.
+    /// The list of propagators; propagators live here and are queried when events (domain changes)
+    /// happen.
     pub(crate) propagators: PropagatorStore,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments: Assignments,
-    /// Keep track of trailed values (i.e. values which automatically backtrack)
+    /// Keep track of trailed values (i.e. values which automatically backtrack).
     pub(crate) trailed_values: TrailedValues,
     /// The names of the variables in the solver.
     pub(crate) variable_names: VariableNames,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
-    /// explanations during conflict analysis
+    /// explanations during conflict analysis.
     pub(crate) reason_store: ReasonStore,
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
@@ -72,6 +77,19 @@ create_statistics_struct!(StateStatistics {
     num_propagations: usize,
     num_conflicts: usize,
 });
+
+/// Information concerning the conflict returned by [`State::fixed_point_propagate`].
+///
+/// Two (related) conflicts can happen:
+/// 1) a propagator explicitly detects a conflict.
+/// 2) a propagator post a domain change that results in a variable having an empty domain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Conflict {
+    /// A conflict raised explicitly by a propagator.
+    Propagator(PropagatorConflict),
+    /// A conflict caused by an empty domain for a variable occurring.
+    EmptyDomain(EmptyDomainConflict),
+}
 
 impl Default for State {
     fn default() -> Self {
@@ -140,7 +158,8 @@ impl State {
 /// Operations to create .
 impl State {
     /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    /// The inference codes are required to log inferences with [`Self::log_inference`].
+    ///
+    /// The inference codes are required to log inferences with [`ProofLog::log_inference`].
     pub(crate) fn create_inference_code(
         &mut self,
         constraint_tag: ConstraintTag,
@@ -153,13 +172,30 @@ impl State {
         }
     }
 
-    pub(crate) fn create_new_literal(&mut self, name: Option<String>) -> Literal {
-        let domain_id = self.create_new_integer_variable(0, 1, name);
+    /// Creates a new Boolean (0-1) variable.
+    ///
+    /// The name is used in solver traces to identify individual domains. They are required to be
+    /// unique. If the state already contains a domain with the given name, then this function
+    /// will panic.
+    ///
+    /// Creation of new [`Literal`]s is not influenced by the current decision level of the state.
+    /// If a [`Literal`] is created at a non-zero decision level, then it will _not_ 'disappear'
+    /// when backtracking past the decision level where the domain was created.
+    pub fn new_literal(&mut self, name: Option<String>) -> Literal {
+        let domain_id = self.new_interval_variable(0, 1, name);
         Literal::new(domain_id)
     }
 
-    /// Create a new integer variable. Its domain will have the given lower and upper bounds.
-    pub(crate) fn create_new_integer_variable(
+    /// Creates a new interval variable with the given lower and upper bound.
+    ///
+    /// The name is used in solver traces to identify individual domains. They are required to be
+    /// unique. If the state already contains a domain with the given name, then this function
+    /// will panic.
+    ///
+    /// Creation of new domains is not influenced by the current decision level of the state. If
+    /// a domain is created at a non-zero decision level, then it will _not_ 'disappear' when
+    /// backtracking past the decision level where the domain was created.)
+    pub fn new_interval_variable(
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
@@ -176,8 +212,10 @@ impl State {
         domain_id
     }
 
-    /// Creates an integer variable with a domain containing only the values in `values`
-    pub(crate) fn create_new_integer_variable_sparse(
+    /// Creates a new sparse domain with the given values.
+    ///
+    /// For more information on creation of domains, see [`State::new_interval_variable`].
+    pub(crate) fn new_sparse_variable(
         &mut self,
         values: Vec<i32>,
         name: Option<String>,
@@ -196,44 +234,63 @@ impl State {
 
 /// Operations to retrieve information about values
 impl State {
-    pub(crate) fn lower_bound<Var: IntegerVariable>(&self, variable: Var) -> i32 {
+    /// Returns the lower-bound of the given `variable`.
+    pub fn lower_bound<Var: IntegerVariable>(&self, variable: Var) -> i32 {
         variable.lower_bound(&self.assignments)
     }
 
-    pub(crate) fn upper_bound<Var: IntegerVariable>(&self, variable: Var) -> i32 {
+    /// Returns the upper-bound of the given `variable`.
+    pub fn upper_bound<Var: IntegerVariable>(&self, variable: Var) -> i32 {
         variable.upper_bound(&self.assignments)
     }
 
-    pub(crate) fn contains<Var: IntegerVariable>(&self, variable: Var, value: i32) -> bool {
+    /// Returns whether the given `variable` contains the provided `value`.
+    pub fn contains<Var: IntegerVariable>(&self, variable: Var, value: i32) -> bool {
         variable.contains(&self.assignments, value)
     }
-    pub(crate) fn is_fixed<Var: IntegerVariable>(&self, variable: Var) -> bool {
+
+    /// Returns whether the given `variable` is fixed.
+    pub fn is_fixed<Var: IntegerVariable>(&self, variable: Var) -> bool {
         self.lower_bound(variable.clone()) == self.upper_bound(variable)
     }
 
-    pub(crate) fn fixed_value<Var: IntegerVariable>(&self, variable: Var) -> Option<i32> {
+    /// If the given `variable` is fixed, then [`Some`] containing the assigned value is
+    /// returned. Otherwise, [`None`] is returned.
+    pub fn fixed_value<Var: IntegerVariable>(&self, variable: Var) -> Option<i32> {
         self.is_fixed(variable.clone())
             .then(|| self.lower_bound(variable))
     }
 
-    pub(crate) fn truth_value(&self, predicate: Predicate) -> Option<bool> {
+    /// Returns the truth value of the provided [`Predicate`].
+    ///
+    /// If the [`Predicate`] is assigned in the current [`State`] then [`Some`] containing whether
+    /// the [`Predicate`] is satisfied or falsified is returned. Otherwise, [`None`] is returned.
+    pub fn truth_value(&self, predicate: Predicate) -> Option<bool> {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
+    /// Returns whether the provided [`Predicate`] is satisfied in the current [`State`].
+    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.assignments.is_predicate_satisfied(predicate)
     }
 
-    pub(crate) fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
+    /// Returns whether the provided [`Predicate`] is falsified in the current [`State`].
+    pub fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.assignments.is_predicate_falsified(predicate)
     }
 
-    pub(crate) fn get_decision_level_for_predicate(&self, predicate: Predicate) -> Option<usize> {
+    /// If the provided [`Predicate`] is satisfied then it returns [`Some`] containing the decision
+    /// level at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
+    pub fn get_decision_level_for_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments
             .get_decision_level_for_predicate(&predicate)
     }
 
-    pub(crate) fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+    /// Returns the truth value of the provided [`Literal`].
+    ///
+    /// If the [`Literal`] is assigned in the current [`State`] then [`Some`] containing whether
+    /// the [`Literal`] is satisfied or falsified is returned. Otherwise, [`None`] is returned.
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
         let literal_is_true = self
             .assignments
             .is_predicate_satisfied(literal.get_true_predicate());
@@ -252,17 +309,20 @@ impl State {
         }
     }
 
-    pub(crate) fn get_assignment_level(&self) -> usize {
-        self.assignments.get_assignment_level()
+    /// Returns the number of created decision levels.
+    pub fn get_decision_level(&self) -> usize {
+        self.assignments.get_decision_level()
     }
 }
 
 /// Operations for retrieving information about trail
 impl State {
-    pub(crate) fn trail_len(&self) -> usize {
+    /// Returns the length fo teh trail.
+    pub fn trail_len(&self) -> usize {
         self.assignments.num_trail_entries()
     }
 
+    /// Returns the [`Predicate`] at the provided `trail_index`.
     pub(crate) fn trail_entry(&self, trail_index: usize) -> ConstraintProgrammingTrailEntry {
         self.assignments.get_trail_entry(trail_index)
     }
@@ -270,17 +330,35 @@ impl State {
 
 /// Operations for adding constraints.
 impl State {
-    pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId) {
-        let priority = self.propagators[propagator_id].priority();
+    /// Enqueues the propagator with [`PropagatorHandle`] `handle` for propagation.
+    #[allow(private_bounds, reason = "Propagator will be part of public API")]
+    pub fn enqueue_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
+        let priority = self.propagators[handle.propagator_id()].priority();
         self.propagator_queue
-            .enqueue_propagator(propagator_id, priority);
+            .enqueue_propagator(handle.propagator_id(), priority);
     }
 
-    pub(crate) fn new_propagator_handle<P: Propagator>(&mut self) -> PropagatorHandle<P> {
+    /// Returns the [`PropagatorHandle`] that would be assigned to the propagator that is added
+    /// next.
+    ///
+    /// **Note:** This method is only meant to be used to create a propagator that takes as
+    /// input the [`PropagatorHandle`]. The method [`State::add_propagator`] should be called
+    /// directly after this method to ensure that the handle is valid.
+    #[allow(private_bounds, reason = "Propagator will be part of public API")]
+    pub fn new_propagator_handle<P: Propagator>(&mut self) -> PropagatorHandle<P> {
         self.propagators.new_propagator().key()
     }
 
-    pub(crate) fn add_propagator<Constructor>(
+    /// Add a new propagator to the [`State`]. The constructor for that propagator should
+    /// subscribe to the appropriate domain events so that the propagator is called when
+    /// necessary (using `PropagatorConstructorContext::register`).
+    ///
+    /// While the propagator is added to the queue for propagation, this function does _not_
+    /// trigger a round of propagation. An explicit call to [`State::fixed_point_propagate`] is
+    /// necessary to run the new propagator for the first time.
+    #[allow(private_bounds, reason = "Propagator will be part of public API")]
+    #[allow(private_interfaces, reason = "Constructor will be part of public API")]
+    pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
     ) -> PropagatorHandle<Constructor::PropagatorImpl>
@@ -305,7 +383,7 @@ impl State {
         let slot = self.propagators.new_propagator();
         let handle = slot.populate(propagator);
 
-        self.enqueue_propagator(handle.propagator_id());
+        self.enqueue_propagator(handle);
 
         handle
     }
@@ -336,7 +414,8 @@ impl State {
         self.propagators.get_propagator_mut(handle)
     }
 
-    /// Get an exclusive reference to the propagator identified by the given handle and a context.
+    /// Get an exclusive reference to the propagator identified by the given handle and a context
+    /// which can be used for propagation.
     #[allow(
         private_bounds,
         reason = "Propagator will be part of public interface in the future"
@@ -360,28 +439,59 @@ impl State {
 
 /// Operations for modifying the state.
 impl State {
-    pub(crate) fn post(
-        &mut self,
-        predicate: Predicate,
-        reason: Option<AssignmentReason>,
-    ) -> Result<bool, EmptyDomain> {
+    /// Apply a [`Predicate`] to the [`State`].
+    ///
+    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] [`Err`] is returned.
+    ///
+    /// This method does _not_ perform any propagate. For that, an explicit call to
+    /// [`State::fixed_point_propagate`] is required. This allows the
+    /// posting of multiple predicates before the entire propagation engine is invoked.
+    ///
+    /// A call to [`State::restore_to`] that goes past the decision level at which a [`Predicate`]
+    /// was posted will undo the effect of that [`Predicate`]. See the documentation of
+    /// [`State::new_checkpoint`] and
+    /// [`State::restore_to`] for more information.
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
         self.assignments
-            .post_predicate(predicate, reason, &mut self.notification_engine)
+            .post_predicate(predicate, None, &mut self.notification_engine)
     }
 
-    pub(crate) fn new_checkpoint(&mut self) {
+    /// Create a checkpoint of the current [`State`], that can be returned to with
+    /// [`State::restore_to`].
+    ///
+    /// This method should only be called if nothing can be propagated anymore.
+    ///
+    /// # Example
+    /// ```
+    /// use pumpkin_core::State;
+    ///
+    /// let mut state = State::default();
+    /// let variable = state.new_interval_variable(1, 10, "x1");
+    ///
+    /// state.new_checkpoint();
+    /// state
+    ///     .post(predicate![variable <= 5])
+    ///     .expect("The lower bound is 1 so no conflict");
+    /// state.restore_to(0);
+    ///
+    /// assert_eq!(state.upper_bound(variable), 10);
+    /// ```
+    pub fn new_checkpoint(&mut self) {
         self.assignments.increase_decision_level();
         self.notification_engine.increase_decision_level();
         self.trailed_values.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
-    )]
-    pub(crate) fn restore_to(&mut self, backtrack_level: usize) -> Vec<(DomainId, i32)> {
-        pumpkin_assert_simple!(backtrack_level < self.get_assignment_level());
+    /// Return to the given level.
+    ///
+    /// If the provided level is equal to the current level, this is a no-op. If
+    /// the provided level is larger than the current level, this method will
+    /// panic.
+    ///
+    /// See [`State::new_checkpoint`] for an example.
+    pub fn restore_to(&mut self, backtrack_level: usize) -> Vec<(DomainId, i32)> {
+        pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
         let unfixed_after_backtracking = self
             .assignments
@@ -416,7 +526,9 @@ impl State {
         unfixed_after_backtracking
     }
 
-    pub(crate) fn prepare_for_conflict_resolution(&mut self) -> StoredConflictInfo {
+    /// This method should only be called when an empty domain is encountered during propagation.
+    /// It removes the final trail element and returns the [`Conflict`].
+    pub(crate) fn prepare_for_conflict_resolution(&mut self) -> Conflict {
         // TODO: As a temporary solution, we remove the last trail element.
         // This way we guarantee that the assignment is consistent, which is needed
         // for the conflict analysis data structures. The proper alternative would
@@ -424,17 +536,26 @@ impl State {
         let (trigger_predicate, trigger_reason, trigger_inference_code) =
             self.assignments.remove_last_trail_element();
 
-        StoredConflictInfo::EmptyDomain(EmptyDomainConflict {
+        Conflict::EmptyDomain(EmptyDomainConflict {
             trigger_predicate,
             trigger_reason,
             trigger_inference_code,
         })
     }
 
-    pub(crate) fn propagate(
-        &mut self,
-        propagator_id: PropagatorId,
-    ) -> Result<(), StoredConflictInfo> {
+    /// Performs a single call to [`Propagator::propagate`] for the propagator with the provided
+    /// [`PropagatorId`].
+    ///
+    /// Other propagators could be enqueued as a result of the changes made by the propagated
+    /// propagator but a call to [`State::fixed_point_propagate`] is
+    /// required for further propagation to occur.
+    ///
+    /// It could be that the current [`State`] implies a conflict by propagation. In that case, an
+    /// [`Err`] with [`Conflict`] is returned.
+    ///
+    /// Once the [`State`] is conflicting, then the only operation that is defined is
+    /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
+    pub(crate) fn propagate(&mut self, propagator_id: PropagatorId) -> Result<(), Conflict> {
         self.statistics.num_propagators_called += 1;
 
         let num_trail_entries_before = self.assignments.num_trail_entries();
@@ -485,7 +606,7 @@ impl State {
                             &self.notification_engine
                         ));
 
-                        let stored_conflict_info = StoredConflictInfo::Propagator(conflict);
+                        let stored_conflict_info = Conflict::Propagator(conflict);
                         return Err(stored_conflict_info);
                     }
                 }
@@ -506,7 +627,20 @@ impl State {
         Ok(())
     }
 
-    pub(crate) fn fixed_point_propagate(&mut self) -> Result<(), StoredConflictInfo> {
+    /// Performs fixed-point propagation using the propagators defined in the [`State`].
+    ///
+    /// The posted [`Predicate`]s (using [`State::post`]) and added propagators (using
+    /// [`State::add_propagator`]) cause propagators to be enqueued when the events that
+    /// they have subscribed to are triggered. As propagation causes more changes to be made,
+    /// more propagators are enqueued. This continues until applying all (enqueued)
+    /// propagators leads to no more domain changes.
+    ///
+    /// It could be that the current [`State`] implies a conflict by propagation. In that case, an
+    /// [`Err`] with [`Conflict`] is returned.
+    ///
+    /// Once the [`State`] is conflicting, then the only operation that is defined is
+    /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
+    pub fn fixed_point_propagate(&mut self) -> Result<(), Conflict> {
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
@@ -549,6 +683,7 @@ impl State {
         SolutionReference::new(&self.assignments)
     }
 
+    /// Returns a mapping of [`DomainId`] to variable name.
     pub(crate) fn variable_names(&self) -> &VariableNames {
         &self.variable_names
     }
@@ -573,13 +708,13 @@ impl State {
             reason_buffer,
         );
     }
-
-    /// Compute the reason for `predicate` being true. The reason will be stored in
-    /// `reason_buffer`.
+    /// Get the reason for a predicate being true.
     ///
-    /// If `predicate` is not true, or it is a decision, then this function will panic.
+    /// All the predicates in the returned slice will evaluate to `true`.
+    ///
+    /// If the provided predicate is not true, then this method will panic.
     #[allow(unused, reason = "Will be part of public API")]
-    pub(crate) fn get_propagation_reason(
+    pub fn get_propagation_reason(
         &mut self,
         predicate: Predicate,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),

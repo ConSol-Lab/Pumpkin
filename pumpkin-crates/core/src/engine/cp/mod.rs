@@ -5,10 +5,9 @@ pub(crate) mod reason;
 pub(crate) mod test_solver;
 mod trailed;
 
-pub(crate) use assignments::AssignmentReason;
 pub(crate) use assignments::Assignments;
 pub(crate) use assignments::ConstraintProgrammingTrailEntry;
-pub(crate) use assignments::EmptyDomain;
+pub use assignments::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use trailed::*;
 

@@ -117,8 +117,14 @@ pub mod predicates {
     use crate::variables::Literal;
 }
 
+pub mod state {
+    pub use crate::engine::Conflict;
+    pub use crate::engine::EmptyDomain;
+    pub use crate::engine::State;
+    pub use crate::engine::propagation::PropagatorId;
+}
+
 pub use crate::basic_types::Function;
-pub use crate::engine::State;
 
 #[doc(hidden)]
 pub mod asserts {

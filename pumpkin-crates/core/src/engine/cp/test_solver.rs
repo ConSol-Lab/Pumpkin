@@ -8,10 +8,10 @@ use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::constructor::PropagatorConstructor;
 use crate::PropagatorHandle;
-use crate::State;
 use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
 use crate::engine::EmptyDomain;
+use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -45,11 +45,11 @@ impl Default for TestSolver {
 
 impl TestSolver {
     pub(crate) fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
-        self.state.create_new_integer_variable(lb, ub, None)
+        self.state.new_interval_variable(lb, ub, None)
     }
 
     pub(crate) fn new_sparse_variable(&mut self, values: Vec<i32>) -> DomainId {
-        self.state.create_new_integer_variable_sparse(values, None)
+        self.state.new_sparse_variable(values, None)
     }
 
     pub(crate) fn new_literal(&mut self) -> Literal {
@@ -81,16 +81,10 @@ impl TestSolver {
         let result = self.state.add_propagator(constructor(handle));
         assert_eq!(handle.propagator_id(), result.propagator_id());
 
-        let context = PropagationContextMut::new(
-            &mut self.state.trailed_values,
-            &mut self.state.assignments,
-            &mut self.state.reason_store,
-            &mut self.state.notification_engine,
-            handle.propagator_id(),
-        );
-        self.state.propagators[handle.propagator_id()]
-            .propagate(context)
+        self.state
+            .propagate(handle.propagator_id())
             .map(|_| handle)
+            .map_err(|err| err.into())
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
@@ -107,7 +101,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.state.post(predicate!(var != value), None);
+        let result = self.state.post(predicate!(var != value));
         assert!(
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
@@ -135,7 +129,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.state.post(predicate!(var >= value), None);
+        let result = self.state.post(predicate!(var >= value));
         assert!(
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
@@ -163,7 +157,7 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.state.post(predicate!(var <= value), None);
+        let result = self.state.post(predicate!(var <= value));
         assert!(
             result.is_ok(),
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
@@ -196,7 +190,7 @@ impl TestSolver {
     }
 
     pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
-        let _ = self.state.post(predicate!(var != value), None)?;
+        let _ = self.state.post(predicate!(var != value))?;
 
         Ok(())
     }
@@ -223,14 +217,7 @@ impl TestSolver {
     }
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
-        let context = PropagationContextMut::new(
-            &mut self.state.trailed_values,
-            &mut self.state.assignments,
-            &mut self.state.reason_store,
-            &mut self.state.notification_engine,
-            propagator,
-        );
-        self.state.propagators[propagator].propagate(context)
+        self.state.propagate(propagator).map_err(|err| err.into())
     }
 
     pub(crate) fn propagate_until_fixed_point(

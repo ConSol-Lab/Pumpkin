@@ -30,7 +30,7 @@ impl Lbd {
     ) -> u32 {
         self.lbd_helper.set_to_empty();
         self.lbd_helper
-            .accommodate(&(assignments.get_assignment_level() as u32));
+            .accommodate(&(assignments.get_decision_level() as u32));
 
         for predicate in predicates {
             let decision_level = assignments
