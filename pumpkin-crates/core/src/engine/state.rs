@@ -602,7 +602,7 @@ impl State {
         let trail_position = self
             .assignments
             .get_trail_position(&predicate)
-            .expect("The predicate must be true during conflict analysis.");
+            .unwrap_or_else(|| panic!("The predicate {predicate:?} must be true during conflict analysis. Bounds were {},{}", self.lower_bound(predicate.get_domain()), self.upper_bound(predicate.get_domain())));
 
         let trail_entry = self.assignments.get_trail_entry(trail_position);
 

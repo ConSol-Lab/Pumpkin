@@ -81,10 +81,14 @@ impl TestSolver {
         let result = self.state.add_propagator(constructor(handle));
         assert_eq!(handle.propagator_id(), result.propagator_id());
 
-        self.state
-            .propagate(handle.propagator_id())
-            .map(|_| handle)
-            .map_err(|err| err.try_into().unwrap())
+        let context = PropagationContextMut::new(
+            &mut self.state.trailed_values,
+            &mut self.state.assignments,
+            &mut self.state.reason_store,
+            &mut self.state.notification_engine,
+            handle.propagator_id(),
+        );
+        self.state.propagators[handle.propagator_id()].propagate(context).map(|_| handle)
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
@@ -217,9 +221,14 @@ impl TestSolver {
     }
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
-        self.state
-            .propagate(propagator)
-            .map_err(|err| err.try_into().unwrap())
+        let context = PropagationContextMut::new(
+            &mut self.state.trailed_values,
+            &mut self.state.assignments,
+            &mut self.state.reason_store,
+            &mut self.state.notification_engine,
+            propagator
+        );
+        self.state.propagators[propagator].propagate(context)
     }
 
     pub(crate) fn propagate_until_fixed_point(
