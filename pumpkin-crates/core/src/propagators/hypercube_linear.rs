@@ -19,7 +19,6 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
-use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
 declare_inference_label!(HypercubeLinearInference);
@@ -44,11 +43,15 @@ impl Display for HypercubeLinear {
 }
 
 impl HypercubeLinear {
+    pub fn clause(hypercube: Vec<Predicate>) -> Self {
+        HypercubeLinear::new(hypercube, vec![], -1).expect("clause is never trivially satisfiable")
+    }
+
     pub fn new(
         mut hypercube: Vec<Predicate>,
         mut linear_terms: Vec<(NonZero<i32>, DomainId)>,
         mut linear_rhs: i32,
-    ) -> Self {
+    ) -> Option<Self> {
         // Remove duplicates from the hypercube.
         hypercube.sort();
         let hypercube = hypercube.into_iter().fold(vec![], |mut acc, predicate| {
@@ -126,15 +129,14 @@ impl HypercubeLinear {
             }
         }
 
-        assert!(
-            !linear_terms.is_empty() || linear_rhs < 0,
-            "a linear component that is trivially satisfiable should never be computed"
-        );
-
-        Self {
-            hypercube,
-            linear_terms,
-            linear_rhs,
+        if linear_terms.is_empty() && linear_rhs >= 0 {
+            None
+        } else {
+            Some(Self {
+                hypercube,
+                linear_terms,
+                linear_rhs,
+            })
         }
     }
 
@@ -237,6 +239,7 @@ fn view_to_tuple(view: AffineView<DomainId>) -> (NonZero<i32>, DomainId) {
 pub(crate) struct HypercubeLinearPropagatorArgs {
     pub(crate) hypercube_linear: HypercubeLinear,
     pub(crate) constraint_tag: ConstraintTag,
+    pub(crate) is_learned: bool,
 }
 
 impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
@@ -246,6 +249,7 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
         let HypercubeLinearPropagatorArgs {
             hypercube_linear,
             constraint_tag,
+            is_learned,
         } = self;
 
         for predicate in hypercube_linear.hypercube.iter().copied() {
@@ -260,6 +264,7 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
             hypercube_linear,
             constraint_tag,
             inference_code: context.create_inference_code(constraint_tag, HypercubeLinearInference),
+            is_learned,
         }
     }
 }
@@ -270,6 +275,7 @@ pub(crate) struct HypercubeLinearPropagator {
     pub(crate) hypercube_linear: HypercubeLinear,
     pub(crate) constraint_tag: ConstraintTag,
     pub(crate) inference_code: InferenceCode,
+    pub(crate) is_learned: bool,
 }
 
 impl HypercubeLinearPropagator {
@@ -303,10 +309,30 @@ impl Propagator for HypercubeLinearPropagator {
             .filter(|&&predicate| context.evaluate_predicate(predicate) == Some(true))
             .count();
 
+        // dbg!(num_satisfied_bounds);
+        // for p in self.hypercube_linear.iter_hypercube() {
+        //     let domain = p.get_domain();
+        //     println!(
+        //         "{} in [{}, {}]",
+        //         domain,
+        //         domain.lower_bound(context.assignments),
+        //         domain.upper_bound(context.assignments)
+        //     );
+        // }
+        // for domain in self.hypercube_linear.linear_terms.iter() {
+        //     println!(
+        //         "{:?} in [{}, {}]",
+        //         domain,
+        //         domain.lower_bound(context.assignments),
+        //         domain.upper_bound(context.assignments)
+        //     );
+        // }
+
         if !self.hypercube_linear.hypercube.is_empty()
             && num_satisfied_bounds == self.hypercube_linear.hypercube.len() - 1
         {
             let slack = self.hypercube_linear.compute_slack(context.as_readonly());
+            // dbg!(slack);
 
             if slack < 0 {
                 let unassigned_predicate = self
@@ -364,6 +390,18 @@ mod tests {
     use super::*;
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
+
+    #[test]
+    fn duplicate_bounds_in_hypercube_are_collapsed() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(0, 10);
+
+        let constraint =
+            HypercubeLinear::new(vec![predicate![x <= 4], predicate![x <= 4]], vec![], -1);
+
+        let hypercube = constraint.iter_hypercube().collect::<Vec<_>>();
+        assert_eq!(hypercube, vec![predicate![x <= 4]]);
+    }
 
     #[test]
     fn weakening_of_positive_weight_term() {

@@ -164,5 +164,6 @@ pub fn hypercube_linear(
     HypercubeLinearPropagatorArgs {
         hypercube_linear,
         constraint_tag,
+        is_learned: false,
     }
 }

@@ -39,6 +39,9 @@ use crate::variables::Literal;
 /// When a proof log should not be generated, use the implementation of [`Default`].
 #[derive(Debug, Default)]
 pub struct ProofLog {
+    inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
+    /// The [`ConstraintTag`]s generated for this proof.
+    constraint_tags: KeyGenerator<ConstraintTag>,
     internal_proof: Option<ProofImpl>,
 }
 
@@ -61,10 +64,10 @@ impl ProofLog {
                 writer,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 logged_domain_inferences: HashMap::default(),
-                inference_codes: KeyedVec::default(),
                 proof_atomics: ProofAtomics::default(),
-                constraint_tags: KeyGenerator::default(),
             }),
+            inference_codes: KeyedVec::default(),
+            constraint_tags: KeyGenerator::default(),
         })
     }
 
@@ -73,6 +76,8 @@ impl ProofLog {
         let file = File::create(file_path)?;
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::DimacsProof(DimacsProof::new(file))),
+            inference_codes: KeyedVec::default(),
+            constraint_tags: KeyGenerator::default(),
         })
     }
 
@@ -87,8 +92,6 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
-            inference_codes,
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
@@ -96,9 +99,9 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        let (tag, label) = inference_codes[inference_code].clone();
+        let (tag, label) = self.inference_codes[inference_code].clone();
 
-        let inference_tag = constraint_tags.next_key();
+        let inference_tag = self.constraint_tags.next_key();
 
         let inference = Inference {
             constraint_id: inference_tag.into(),
@@ -130,7 +133,6 @@ impl ProofLog {
             writer,
             propagation_order_hint: Some(propagation_sequence),
             logged_domain_inferences,
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
@@ -149,7 +151,7 @@ impl ProofLog {
             return Ok(tag);
         }
 
-        let inference_tag = constraint_tags.next_key();
+        let inference_tag = self.constraint_tags.next_key();
 
         let inference = Inference {
             constraint_id: inference_tag.into(),
@@ -183,7 +185,6 @@ impl ProofLog {
             Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint,
-                constraint_tags,
                 proof_atomics,
                 logged_domain_inferences,
                 ..
@@ -191,7 +192,7 @@ impl ProofLog {
                 // Reset the logged domain inferences.
                 logged_domain_inferences.clear();
 
-                let constraint_tag = constraint_tags.next_key();
+                let constraint_tag = self.constraint_tags.next_key();
 
                 let deduction = Deduction {
                     constraint_id: constraint_tag.into(),
@@ -296,25 +297,13 @@ impl ProofLog {
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
     ) -> InferenceCode {
-        match &mut self.internal_proof {
-            Some(ProofImpl::CpProof {
-                inference_codes, ..
-            }) => inference_codes.push((constraint_tag, inference_label.to_str())),
-
-            // If we are not logging a CP proof, then we do not care about this value.
-            _ => InferenceCode::create_from_index(0),
-        }
+        self.inference_codes
+            .push((constraint_tag, inference_label.to_str()))
     }
 
     /// Create a new constraint tag.
     pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
-        match self.internal_proof {
-            Some(ProofImpl::CpProof {
-                ref mut constraint_tags,
-                ..
-            }) => constraint_tags.next_key(),
-            _ => ConstraintTag::create_from_index(0),
-        }
+        self.constraint_tags.next_key()
     }
 
     fn is_logging_proof(&self) -> bool {
@@ -333,9 +322,6 @@ enum ProofImpl {
         writer: ProofWriter<flate2::write::GzEncoder<File>, i32>,
         #[cfg(not(feature = "gzipped-proofs"))]
         writer: ProofWriter<File, i32>,
-        inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
-        /// The [`ConstraintTag`]s generated for this proof.
-        constraint_tags: KeyGenerator<ConstraintTag>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the
         // order they can be applied to derive the next nogood.
         //

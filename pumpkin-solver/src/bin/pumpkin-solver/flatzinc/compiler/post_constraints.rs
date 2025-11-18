@@ -194,8 +194,11 @@ pub(crate) fn run(
                     })
                     .collect();
 
-                let constraint =
-                    hypercube_linear(HypercubeLinear::new(vec![], terms, rhs), constraint_tag);
+                let constraint = hypercube_linear(
+                    HypercubeLinear::new(vec![], terms, rhs)
+                        .expect("flatzinc constraint is not trivially satisfiable"),
+                    constraint_tag,
+                );
                 constraint.post(context.solver).is_ok()
             }
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
@@ -231,9 +234,14 @@ pub(crate) fn run(
                     })
                     .collect();
 
-                let c1 = hypercube_linear(HypercubeLinear::new(vec![], terms, rhs), constraint_tag);
+                let c1 = hypercube_linear(
+                    HypercubeLinear::new(vec![], terms, rhs)
+                        .expect("flatzinc constraint is not trivially satisfiable"),
+                    constraint_tag,
+                );
                 let c2 = hypercube_linear(
-                    HypercubeLinear::new(vec![], terms_negated, -rhs),
+                    HypercubeLinear::new(vec![], terms_negated, -rhs)
+                        .expect("flatzinc constraint is not trivially satisfiable"),
                     constraint_tag,
                 );
 
