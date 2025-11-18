@@ -46,6 +46,11 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.len()
     }
 
+    #[cfg(test)]
+    pub(crate) fn next_key(&self) -> Key {
+        Key::create_from_index(self.len())
+    }
+
     /// Add a new value to the vector.
     ///
     /// Returns the key for the inserted value.

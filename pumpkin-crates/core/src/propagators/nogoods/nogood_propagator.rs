@@ -1279,7 +1279,6 @@ impl NogoodPropagator {
 mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
-    use crate::engine::propagation::PropagationContextMut;
     use crate::engine::test_solver::TestSolver;
     use crate::options::LearningOptions;
     use crate::predicate;
@@ -1304,19 +1303,11 @@ mod tests {
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let mut context = PropagationContextMut::new(
-                &mut solver.trailed_values,
-                &mut solver.assignments,
-                &mut solver.reason_store,
-                &mut solver.semantic_minimiser,
-                &mut solver.notification_engine,
-                handle.propagator_id(),
-            );
+            let (nogood_propagator, mut context) =
+                solver.state.get_propagator_mut_with_context(handle);
+            let nogood_propagator = nogood_propagator.unwrap();
 
-            solver
-                .propagator_store
-                .get_propagator_mut(handle)
-                .unwrap()
+            nogood_propagator
                 .add_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }
@@ -1354,19 +1345,11 @@ mod tests {
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let mut context = PropagationContextMut::new(
-                &mut solver.trailed_values,
-                &mut solver.assignments,
-                &mut solver.reason_store,
-                &mut solver.semantic_minimiser,
-                &mut solver.notification_engine,
-                handle.propagator_id(),
-            );
+            let (nogood_propagator, mut context) =
+                solver.state.get_propagator_mut_with_context(handle);
+            let nogood_propagator = nogood_propagator.unwrap();
 
-            solver
-                .propagator_store
-                .get_propagator_mut(handle)
-                .unwrap()
+            nogood_propagator
                 .add_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }

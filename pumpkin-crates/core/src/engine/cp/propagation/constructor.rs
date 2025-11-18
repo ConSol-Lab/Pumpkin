@@ -219,20 +219,10 @@ mod tests {
 
     #[test]
     fn reborrowing_remembers_next_local_id() {
-        let mut notification_engine = NotificationEngine::default();
-        notification_engine.grow();
-        let mut trailed_values = TrailedValues::default();
-        let mut proof_log = ProofLog::default();
-        let propagator_id = PropagatorId(0);
-        let mut assignments = Assignments::default();
+        let mut state = State::default();
+        state.notification_engine.grow();
 
-        let mut c1 = PropagatorConstructorContext::new(
-            &mut notification_engine,
-            &mut trailed_values,
-            &mut proof_log,
-            propagator_id,
-            &mut assignments,
-        );
+        let mut c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
 
         let mut c2 = c1.reborrow();
         c2.register(DomainId::new(0), DomainEvents::ANY_INT, LocalId::from(1));

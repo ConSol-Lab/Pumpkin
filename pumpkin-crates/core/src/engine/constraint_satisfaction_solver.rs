@@ -1224,7 +1224,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: CoreExtractionResult,
     ) {
-        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.assignments);
+        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert_eq!(flag, expected_flag, "The flags do not match.");
 
@@ -1426,12 +1426,13 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let domain_id = solver.create_new_integer_variable(lb, ub, None);
 
-        assert_eq!(lb, solver.assignments.get_lower_bound(domain_id));
+        assert_eq!(lb, solver.state.assignments.get_lower_bound(domain_id));
 
-        assert_eq!(ub, solver.assignments.get_upper_bound(domain_id));
+        assert_eq!(ub, solver.state.assignments.get_upper_bound(domain_id));
 
         assert!(
             !solver
+                .state
                 .assignments
                 .is_predicate_satisfied(predicate![domain_id == lb])
         );
@@ -1439,10 +1440,11 @@ mod tests {
         for value in (lb + 1)..ub {
             let predicate = predicate![domain_id >= value];
 
-            assert!(!solver.assignments.is_predicate_satisfied(predicate));
+            assert!(!solver.state.assignments.is_predicate_satisfied(predicate));
 
             assert!(
                 !solver
+                    .state
                     .assignments
                     .is_predicate_satisfied(predicate![domain_id == value])
             );
@@ -1450,6 +1452,7 @@ mod tests {
 
         assert!(
             !solver
+                .state
                 .assignments
                 .is_predicate_satisfied(predicate![domain_id == ub])
         );
