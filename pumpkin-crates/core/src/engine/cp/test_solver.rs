@@ -22,7 +22,6 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -66,22 +65,7 @@ impl TestSolver {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        self.new_propagator_with_handle(move |_| constructor)
-            .map(|handle| handle.propagator_id())
-    }
-
-    pub(crate) fn new_propagator_with_handle<Constructor>(
-        &mut self,
-        constructor: impl FnOnce(PropagatorHandle<Constructor::PropagatorImpl>) -> Constructor,
-    ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, Inconsistency>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::PropagatorImpl: 'static,
-    {
-        let handle = self.state.new_propagator_handle();
-        let result = self.state.add_propagator(constructor(handle));
-        assert_eq!(handle.propagator_id(), result.propagator_id());
-
+        let handle = self.state.add_propagator(constructor);
         let context = PropagationContextMut::new(
             &mut self.state.trailed_values,
             &mut self.state.assignments,
@@ -91,7 +75,7 @@ impl TestSolver {
         );
         self.state.propagators[handle.propagator_id()]
             .propagate(context)
-            .map(|_| handle)
+            .map(|_| handle.propagator_id())
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {

@@ -46,6 +46,7 @@ use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -251,14 +252,10 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
-        let handle = state.new_propagator_handle();
-        let result = state.add_propagator(NogoodPropagator::with_options(
-            // 1_000_000 bytes in 1 MB
-            handle,
+        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
         ));
-        pumpkin_assert_eq_simple!(handle.propagator_id(), result.propagator_id());
 
         ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),

@@ -32,6 +32,7 @@ use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -346,17 +347,6 @@ impl State {
             .enqueue_propagator(handle.propagator_id(), priority);
     }
 
-    /// Returns the [`PropagatorHandle`] that would be assigned to the propagator that is added
-    /// next.
-    ///
-    /// **Note:** This method is only meant to be used to create a propagator that takes as
-    /// input the [`PropagatorHandle`]. The method [`State::add_propagator`] should be called
-    /// directly after this method to ensure that the handle is valid.
-    #[allow(private_bounds, reason = "Propagator will be part of public API")]
-    pub fn new_propagator_handle<P: Propagator>(&mut self) -> PropagatorHandle<P> {
-        self.propagators.new_propagator().key()
-    }
-
     /// Add a new propagator to the [`State`]. The constructor for that propagator should
     /// subscribe to the appropriate domain events so that the propagator is called when
     /// necessary (using `PropagatorConstructorContext::register`).
@@ -374,11 +364,10 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        let constructor_context = PropagatorConstructorContext::new(
-            self.new_propagator_handle::<Constructor::PropagatorImpl>()
-                .propagator_id(),
-            self,
-        );
+        let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
+            self.propagators.new_propagator().key();
+        let constructor_context =
+            PropagatorConstructorContext::new(original_handle.propagator_id(), self);
         let propagator = constructor.create(constructor_context);
 
         pumpkin_assert_simple!(
@@ -390,6 +379,8 @@ impl State {
 
         let slot = self.propagators.new_propagator();
         let handle = slot.populate(propagator);
+
+        pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
 
         self.enqueue_propagator(handle);
 
@@ -595,6 +586,18 @@ impl State {
                         },
                         &mut self.propagator_queue,
                     );
+                pumpkin_assert_extreme!(
+                    DebugHelper::debug_check_propagations(
+                        num_trail_entries_before,
+                        propagator_id,
+                        &self.trailed_values,
+                        &self.assignments,
+                        &mut self.reason_store,
+                        &mut self.propagators,
+                        &self.notification_engine
+                    ),
+                    "Checking the propagations performed by the propagator led to inconsistencies!"
+                );
             }
             Err(inconsistency) => {
                 self.statistics.num_conflicts += 1;
@@ -621,18 +624,6 @@ impl State {
                 }
             }
         }
-        pumpkin_assert_extreme!(
-            DebugHelper::debug_check_propagations(
-                num_trail_entries_before,
-                propagator_id,
-                &self.trailed_values,
-                &self.assignments,
-                &mut self.reason_store,
-                &mut self.propagators,
-                &self.notification_engine
-            ),
-            "Checking the propagations performed by the propagator led to inconsistencies!"
-        );
         Ok(())
     }
 
@@ -665,19 +656,17 @@ impl State {
 
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            if let Err(conflict) = self.propagate(propagator_id) {
-                // Only check fixed point propagation if there was no reported conflict,
-                // since otherwise the state may be inconsistent.
-                pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
-                    &self.trailed_values,
-                    &self.assignments,
-                    &self.propagators,
-                    &self.notification_engine
-                ));
-
-                return Err(conflict);
-            }
+            self.propagate(propagator_id)?;
         }
+
+        // Only check fixed point propagation if there was no reported conflict,
+        // since otherwise the state may be inconsistent.
+        pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
+            &self.trailed_values,
+            &self.assignments,
+            &self.propagators,
+            &self.notification_engine
+        ));
 
         Ok(())
     }

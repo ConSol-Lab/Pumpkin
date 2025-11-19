@@ -81,6 +81,44 @@ pub(crate) struct NogoodPropagator {
     handle: PropagatorHandle<NogoodPropagator>,
 }
 
+/// [`PropagatorConstructor`] for constructing a new instance of the [`NogoodPropagator`] with the
+/// provided [`LearningOptions`] and `capacity`.
+pub(crate) struct NogoodPropagatorConstructor {
+    /// How many [`PredicateId`]s to preallocate to the [`ArenaAllocator`].
+    capacity: usize,
+    parameters: LearningOptions,
+}
+
+impl NogoodPropagatorConstructor {
+    pub(crate) fn new(capacity: usize, parameters: LearningOptions) -> Self {
+        Self {
+            capacity,
+            parameters,
+        }
+    }
+}
+
+impl PropagatorConstructor for NogoodPropagatorConstructor {
+    type PropagatorImpl = NogoodPropagator;
+
+    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        NogoodPropagator {
+            handle: PropagatorHandle::new(context.propagator_id),
+            parameters: self.parameters,
+            nogood_predicates: ArenaAllocator::new(self.capacity),
+            nogood_info: Default::default(),
+            inference_codes: Default::default(),
+            permanent_nogood_ids: Default::default(),
+            learned_nogood_ids: Default::default(),
+            watch_lists: Default::default(),
+            updated_predicate_ids: Default::default(),
+            lbd_helper: Default::default(),
+            bumped_nogoods: Default::default(),
+            temp_nogood_reason: Default::default(),
+        }
+    }
+}
+
 /// Watcher for a single nogood.
 ///
 /// A watcher is a combination of a nogood ID and a cached predicate. If the nogood has a predicate
@@ -118,34 +156,6 @@ struct LearnedNogoodIds {
 }
 
 impl NogoodPropagator {
-    /// Creates a new instance of the [`NogoodPropagator`] with the provided [`LearningOptions`]
-    /// and `capacity`.
-    ///
-    /// The `handle` should be the handle of the propagator used in the solver.
-    ///
-    /// The `capacity` indicates how many [`PredicateId`]s to preallocate to the
-    /// [`ArenaAllocator`].
-    pub(crate) fn with_options(
-        handle: PropagatorHandle<NogoodPropagator>,
-        capacity: usize,
-        parameters: LearningOptions,
-    ) -> Self {
-        Self {
-            handle,
-            parameters,
-            nogood_predicates: ArenaAllocator::new(capacity),
-            nogood_info: Default::default(),
-            inference_codes: Default::default(),
-            permanent_nogood_ids: Default::default(),
-            learned_nogood_ids: Default::default(),
-            watch_lists: Default::default(),
-            updated_predicate_ids: Default::default(),
-            lbd_helper: Default::default(),
-            bumped_nogoods: Default::default(),
-            temp_nogood_reason: Default::default(),
-        }
-    }
-
     /// Determines whether the nogood (pointed to by `id`) is propagating using the following
     /// reasoning:
     ///
@@ -1282,6 +1292,8 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::options::LearningOptions;
     use crate::predicate;
+    use crate::propagators::nogoods::NogoodPropagatorConstructor;
+    use crate::state::PropagatorHandle;
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -1292,36 +1304,35 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let handle = solver
-            .new_propagator_with_handle(|handle| {
-                NogoodPropagator::with_options(handle, 10, LearningOptions::default())
-            })
-            .expect("no empty domains");
+        let id = solver
+            .new_propagator(NogoodPropagatorConstructor::new(
+                10,
+                LearningOptions::default(),
+            ))
+            .expect("No empty domains");
 
-        let _ =
-            solver.increase_lower_bound_and_notify(handle.propagator_id(), dummy.id(), dummy, 1);
+        let _ = solver.increase_lower_bound_and_notify(id, dummy.id(), dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let (nogood_propagator, mut context) =
-                solver.state.get_propagator_mut_with_context(handle);
-            let nogood_propagator = nogood_propagator.unwrap();
+            let (nogood_propagator, mut context) = solver
+                .state
+                .get_propagator_mut_with_context(PropagatorHandle::new(id));
+            let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
                 .add_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), b.id(), b, 0);
+        let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 0);
 
-        solver
-            .propagate_until_fixed_point(handle.propagator_id())
-            .expect("");
+        solver.propagate_until_fixed_point(id).expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(id, c.id(), c, 15);
 
-        solver.propagate(handle.propagator_id()).expect("");
+        solver.propagate(id).expect("");
 
         assert_eq!(solver.upper_bound(b), 0);
 
@@ -1337,28 +1348,30 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let handle = solver
-            .new_propagator_with_handle(|handle| {
-                NogoodPropagator::with_options(handle, 10, LearningOptions::default())
-            })
-            .expect("no empty domains");
+        let id = solver
+            .new_propagator(NogoodPropagatorConstructor::new(
+                10,
+                LearningOptions::default(),
+            ))
+            .expect("No empty domains");
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let (nogood_propagator, mut context) =
-                solver.state.get_propagator_mut_with_context(handle);
-            let nogood_propagator = nogood_propagator.unwrap();
+            let (nogood_propagator, mut context) = solver
+                .state
+                .get_propagator_mut_with_context(PropagatorHandle::new(id));
+            let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
                 .add_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }
 
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), a.id(), a, 3);
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), b.id(), b, 1);
-        let _ = solver.increase_lower_bound_and_notify(handle.propagator_id(), c.id(), c, 15);
+        let _ = solver.increase_lower_bound_and_notify(id, a.id(), a, 3);
+        let _ = solver.increase_lower_bound_and_notify(id, b.id(), b, 1);
+        let _ = solver.increase_lower_bound_and_notify(id, c.id(), c, 15);
 
-        let result = solver.propagate_until_fixed_point(handle.propagator_id());
+        let result = solver.propagate_until_fixed_point(id);
         assert!(result.is_err());
     }
 }

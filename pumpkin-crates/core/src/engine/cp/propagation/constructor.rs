@@ -37,7 +37,7 @@ pub(crate) trait PropagatorConstructor {
 #[derive(Debug)]
 pub(crate) struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
-    propagator_id: PropagatorId,
+    pub(crate) propagator_id: PropagatorId,
 
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support

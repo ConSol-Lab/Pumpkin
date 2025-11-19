@@ -24,6 +24,13 @@ pub struct PropagatorHandle<P> {
 }
 
 impl<P> PropagatorHandle<P> {
+    pub(crate) fn new(propagator_id: PropagatorId) -> PropagatorHandle<P> {
+        Self {
+            id: propagator_id,
+            propagator: PhantomData,
+        }
+    }
+
     /// Get the type-erased [`PropagatorId`] of the propagator.
     pub(crate) fn propagator_id(self) -> PropagatorId {
         self.id

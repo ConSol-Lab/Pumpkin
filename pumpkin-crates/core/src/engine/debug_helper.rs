@@ -3,7 +3,6 @@ use std::fmt::Formatter;
 use std::iter::once;
 
 use log::debug;
-use log::warn;
 
 use super::TrailedValues;
 use super::notifications::NotificationEngine;
@@ -88,12 +87,11 @@ impl DebugHelper {
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!(
+                panic!(
                     "Propagator '{}' with id '{propagator_id}' seems to have missed a conflict in its regular propagation algorithms!
                      Aborting!\n
                      Expected reason: {failure_reason:?}", propagator.name()
                 );
-                panic!();
             }
 
             let num_missed_propagations =
