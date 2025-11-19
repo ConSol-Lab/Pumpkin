@@ -33,8 +33,7 @@ pub(crate) struct TestSolver {
 
 impl Default for TestSolver {
     fn default() -> Self {
-        let mut state = State::default();
-        state.with_inference_codes();
+        let state = State::default();
         let mut solver = Self {
             state,
             constraint_tags: Default::default(),
@@ -324,7 +323,7 @@ impl TestSolver {
     }
 
     pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
-        self.state.inference_codes.as_ref().unwrap().next_key()
+        self.state.inference_codes.next_key()
     }
 
     pub(crate) fn increase_decision_level(&mut self) {

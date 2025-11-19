@@ -78,7 +78,7 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        inference_codes: &Option<KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>>,
+        inference_codes: &KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
@@ -95,7 +95,7 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        let (tag, label) = inference_codes.as_ref().unwrap()[inference_code].clone();
+        let (tag, label) = inference_codes[inference_code].clone();
 
         let inference_tag = constraint_tags.next_key();
 

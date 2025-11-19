@@ -2,13 +2,11 @@ use super::propagation_status_cp::PropagatorConflict;
 use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::EmptyDomainConflict;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
-use crate::engine::reason::ReasonRef;
 use crate::engine::state::Conflict;
 use crate::predicates::Predicate;
-use crate::proof::InferenceCode;
-use crate::variables::DomainId;
 
 /// a conflict info which can be stored in the solver.
 /// two (related) conflicts can happen:
@@ -35,23 +33,5 @@ impl From<Conflict> for StoredConflictInfo {
                 StoredConflictInfo::EmptyDomain(empty_domain_conflict)
             }
         }
-    }
-}
-
-/// A conflict because a domain became empty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EmptyDomainConflict {
-    /// The predicate that caused a domain to become empty.
-    pub trigger_predicate: Predicate,
-    /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
-    pub(crate) trigger_reason: ReasonRef,
-    /// The [`InferenceCode`] that accompanies [`EmptyDomainConflict::trigger_reason`].
-    pub trigger_inference_code: InferenceCode,
-}
-
-impl EmptyDomainConflict {
-    /// The domain that became empty.
-    pub fn domain(&self) -> DomainId {
-        self.trigger_predicate.get_domain()
     }
 }

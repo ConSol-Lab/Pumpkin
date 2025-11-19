@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -23,6 +21,7 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -67,7 +66,7 @@ pub struct State {
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
-    pub(crate) inference_codes: Option<KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>>,
+    pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
 
     statistics: StateStatistics,
 }
@@ -91,14 +90,26 @@ pub enum Conflict {
     EmptyDomain(EmptyDomainConflict),
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self::new()
+/// A conflict because a domain became empty.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmptyDomainConflict {
+    /// The predicate that caused a domain to become empty.
+    pub trigger_predicate: Predicate,
+    /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
+    pub(crate) trigger_reason: ReasonRef,
+    /// The [`InferenceCode`] that accompanies [`EmptyDomainConflict::trigger_reason`].
+    pub trigger_inference_code: InferenceCode,
+}
+
+impl EmptyDomainConflict {
+    /// The domain that became empty.
+    pub fn domain(&self) -> DomainId {
+        self.trigger_predicate.get_domain()
     }
 }
 
-impl State {
-    pub(crate) fn new() -> Self {
+impl Default for State {
+    fn default() -> Self {
         let mut result = Self {
             assignments: Default::default(),
             trailed_values: TrailedValues::default(),
@@ -107,7 +118,7 @@ impl State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: None,
+            inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -124,15 +135,9 @@ impl State {
 
         result
     }
+}
 
-    pub(crate) fn with_inference_codes(&mut self) {
-        self.inference_codes = Some(KeyedVec::default())
-    }
-
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext::new(&self.assignments)
-    }
-
+impl State {
     pub(crate) fn log_statistics(&self, verbose: bool) {
         log_statistic("variables", self.assignments.num_domains());
         log_statistic("propagators", self.propagators.num_propagators());
@@ -165,11 +170,8 @@ impl State {
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
     ) -> InferenceCode {
-        if let Some(inference_codes) = &mut self.inference_codes {
-            inference_codes.push((constraint_tag, inference_label.to_str()))
-        } else {
-            InferenceCode::create_from_index(0)
-        }
+        self.inference_codes
+            .push((constraint_tag, inference_label.to_str()))
     }
 
     /// Creates a new Boolean (0-1) variable.
@@ -205,6 +207,9 @@ impl State {
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
+        } else {
+            self.variable_names
+                .add_integer(domain_id, format!("internal{}", domain_id.id()));
         }
 
         self.notification_engine.grow();
@@ -224,6 +229,9 @@ impl State {
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
+        } else {
+            self.variable_names
+                .add_integer(domain_id, format!("internal{}", domain_id.id()));
         }
 
         self.notification_engine.grow();
@@ -317,7 +325,7 @@ impl State {
 
 /// Operations for retrieving information about trail
 impl State {
-    /// Returns the length fo teh trail.
+    /// Returns the length of the trail.
     pub fn trail_len(&self) -> usize {
         self.assignments.num_trail_entries()
     }
@@ -332,7 +340,7 @@ impl State {
 impl State {
     /// Enqueues the propagator with [`PropagatorHandle`] `handle` for propagation.
     #[allow(private_bounds, reason = "Propagator will be part of public API")]
-    pub fn enqueue_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
+    pub(crate) fn enqueue_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
         let priority = self.propagators[handle.propagator_id()].priority();
         self.propagator_queue
             .enqueue_propagator(handle.propagator_id(), priority);
@@ -654,27 +662,24 @@ impl State {
                 },
                 &mut self.propagator_queue,
             );
+
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
-        let mut result = Ok(());
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            result = self.propagate(propagator_id);
-            if result.is_err() {
-                break;
-            }
-        }
-        // Only check fixed point propagation if there was no reported conflict,
-        // since otherwise the state may be inconsistent.
-        pumpkin_assert_extreme!(
-            result.is_err()
-                || DebugHelper::debug_fixed_point_propagation(
+            if let Err(conflict) = self.propagate(propagator_id) {
+                // Only check fixed point propagation if there was no reported conflict,
+                // since otherwise the state may be inconsistent.
+                pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
                     &self.trailed_values,
                     &self.assignments,
                     &self.propagators,
                     &self.notification_engine
-                )
-        );
+                ));
 
-        result
+                return Err(conflict);
+            }
+        }
+
+        Ok(())
     }
 }
 

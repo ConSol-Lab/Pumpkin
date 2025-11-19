@@ -58,7 +58,9 @@ impl PropagatorConstructorContext<'_> {
     }
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        self.state.as_readonly()
+        PropagationContext {
+            assignments: &self.state.assignments,
+        }
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].

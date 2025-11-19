@@ -1,7 +1,6 @@
 use super::PropositionalConjunction;
 use crate::engine::EmptyDomain;
 use crate::proof::InferenceCode;
-use crate::state::Conflict;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
@@ -12,17 +11,6 @@ pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 pub(crate) enum Inconsistency {
     Conflict(PropagatorConflict),
     EmptyDomain,
-}
-
-impl From<Conflict> for Inconsistency {
-    fn from(value: Conflict) -> Self {
-        match value {
-            Conflict::Propagator(propagator_conflict) => {
-                Inconsistency::Conflict(propagator_conflict)
-            }
-            Conflict::EmptyDomain(_) => Inconsistency::EmptyDomain,
-        }
-    }
 }
 
 impl From<EmptyDomain> for Inconsistency {

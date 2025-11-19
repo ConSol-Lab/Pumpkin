@@ -2,11 +2,11 @@ use std::fmt::Debug;
 
 use super::minimisers::SemanticMinimiser;
 use crate::Random;
-use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::containers::HashMap;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
