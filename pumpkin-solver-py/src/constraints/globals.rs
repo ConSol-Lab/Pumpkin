@@ -1,8 +1,12 @@
+use pumpkin_solver::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::{self};
+use pumpkin_solver::variables::AffineView;
+use pumpkin_solver::variables::DomainId;
 use pyo3::pyclass;
 use pyo3::pymethods;
 
+use crate::constraints::arguments::PythonConstraintArg;
 use crate::model::Tag;
 use crate::variables::*;
 
@@ -91,15 +95,6 @@ python_constraint! {
     BinaryNotEquals: binary_not_equals {
         lhs: IntExpression,
         rhs: IntExpression,
-    }
-}
-
-python_constraint! {
-    Cumulative: cumulative {
-        start_times: Vec<IntExpression>,
-        durations: Vec<i32>,
-        resource_requirements: Vec<i32>,
-        resource_capacity: i32,
     }
 }
 
@@ -193,5 +188,44 @@ python_constraint! {
     NegativeTable: negative_table {
         variables: Vec<IntExpression>,
         table: Vec<Vec<i32>>,
+    }
+}
+
+python_constraint! {
+    Cumulative: cumulative {
+        tasks: Vec<Task>,
+        capacity: i32
+    }
+}
+
+#[pyclass(eq, hash, frozen)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Task {
+    start_time: IntExpression,
+    processing_time: i32,
+    resource_usage: i32,
+}
+
+#[pymethods]
+impl Task {
+    #[new]
+    fn new(start_time: IntExpression, processing_time: i32, resource_usage: i32) -> Self {
+        Self {
+            start_time,
+            processing_time,
+            resource_usage,
+        }
+    }
+}
+
+impl PythonConstraintArg for Task {
+    type Output = ArgTask<AffineView<DomainId>, i32, i32>;
+
+    fn to_solver_constraint_argument(self, variable_map: &VariableMap) -> Self::Output {
+        ArgTask {
+            start_time: self.start_time.to_solver_constraint_argument(variable_map),
+            processing_time: self.processing_time,
+            resource_usage: self.resource_usage,
+        }
     }
 }

@@ -7,6 +7,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
+use crate::engine::cp::propagation::contexts::propagation_context::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -32,11 +33,10 @@ use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
 use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::TimeTable;
-use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_per_point;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::find_synchronised_conflict;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::synchronise_time_table;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
@@ -70,16 +70,22 @@ use crate::pumpkin_assert_extreme;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 
-pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTablePerPointIncrementalPropagator<
+    Var,
+    PVar,
+    RVar,
+    CVar,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: PerPointTimeTableType<Var>,
+    time_table: PerPointTimeTableType<Var, PVar, RVar>,
     /// Stores the input parameters to the cumulative constraint
-    parameters: CumulativeParameters<Var>,
+    parameters: CumulativeParameters<Var, PVar, RVar, CVar>,
     /// Stores structures which change during the search; either to store bounds or when applying
     /// incrementality
-    updatable_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var, PVar, RVar>,
     /// Stores whether the propagator found a conflict in the previous call
     ///
     /// This is stored to deal with the case where the same conflict can be created via two
@@ -92,51 +98,101 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE:
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
 
-    // TODO: This should be refactored to use a separate propagator constructor, but that is a lot
-    // of work in this module and I don't know enough about it to not break it.
-    constraint_tag: ConstraintTag,
-    inference_code: Option<InferenceCode>,
+    inference_code: InferenceCode,
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> PropagatorConstructor
-    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+pub(crate) struct TimeTablePerPointIncrementalConstructor<
+    Var,
+    PVar,
+    RVar,
+    CVar,
+    const SYNCHRONISE: bool,
+> {
+    tasks: Vec<ArgTask<Var, PVar, RVar>>,
+    capacity: CVar,
+    cumulative_options: CumulativePropagatorOptions,
+    constraint_tag: ConstraintTag,
+}
+
+impl<Var, PVar, RVar, CVar, const SYNCHRONISE: bool>
+    TimeTablePerPointIncrementalConstructor<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
-    type PropagatorImpl = Self;
-
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        register_tasks(&self.parameters.tasks, context.reborrow(), true);
-        self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-
-        // Then we do normal propagation
-        self.is_time_table_outdated = true;
-
-        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
-
-        self
+    pub(crate) fn new(
+        arg_tasks: Vec<ArgTask<Var, PVar, RVar>>,
+        capacity: CVar,
+        cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
+    ) -> Self {
+        Self {
+            tasks: arg_tasks,
+            capacity,
+            cumulative_options,
+            constraint_tag,
+        }
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
-    TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> PropagatorConstructor
+    for TimeTablePerPointIncrementalConstructor<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
-    pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var>],
-        capacity: i32,
+    type PropagatorImpl =
+        TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let inference_code = context.create_inference_code(self.constraint_tag, TimeTable);
+
+        TimeTablePerPointIncrementalPropagator::new(
+            context,
+            &self.tasks,
+            self.capacity,
+            self.cumulative_options,
+            inference_code,
+        )
+    }
+}
+
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
+{
+    fn new(
+        mut context: PropagatorConstructorContext,
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        capacity: CVar,
         cumulative_options: CumulativePropagatorOptions,
-        constraint_tag: ConstraintTag,
-    ) -> TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let updatable_structures = UpdatableStructures::new(&parameters);
+        inference_code: InferenceCode,
+    ) -> TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE> {
+        let tasks = create_tasks(context.as_readonly(), arg_tasks);
+
+        let parameters =
+            CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
+        register_tasks(
+            &parameters.tasks,
+            &parameters.capacity,
+            context.reborrow(),
+            cumulative_options.incremental_backtracking,
+        );
+
+        let mut updatable_structures = UpdatableStructures::new(&parameters);
+        updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);
+
         TimeTablePerPointIncrementalPropagator {
             time_table: BTreeMap::new(),
             parameters,
             updatable_structures,
             found_previous_conflict: false,
-            is_time_table_outdated: false,
-            constraint_tag,
-            inference_code: None,
+            is_time_table_outdated: true,
+            inference_code,
         }
     }
 
@@ -146,7 +202,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         &mut self,
         context: PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) -> PropagationStatusCP {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
         // that for each of these tasks, a mandatory part exists, otherwise it would not
@@ -169,19 +225,21 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             );
 
             // Add the updated profile to the ResourceProfile at time t
-            let current_profile: &mut ResourceProfile<Var> = self
+            let current_profile: &mut ResourceProfile<Var, PVar, RVar> = self
                 .time_table
                 .entry(time_point as u32)
                 .or_insert(ResourceProfile::default(time_point));
 
-            current_profile.height += task.resource_usage;
+            current_profile.height += context.lower_bound(&task.resource_usage);
             current_profile.profile_tasks.push(Rc::clone(task));
 
-            if current_profile.height > self.parameters.capacity && conflict.is_none() {
+            if current_profile.height > context.upper_bound(&self.parameters.capacity)
+                && conflict.is_none()
+            {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
-                conflict = Some(Err(create_conflict_explanation(
+                conflict = Some(Err(create_explanation_profile_height(
                     context,
-                    self.inference_code.unwrap(),
+                    self.inference_code,
                     current_profile,
                     self.parameters.options.explanation_type,
                 )
@@ -200,8 +258,9 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
     fn remove_from_time_table(
         &mut self,
+        context: PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
-        task: &Rc<Task<Var>>,
+        task: &Rc<Task<Var, PVar, RVar>>,
     ) {
         for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
             pumpkin_assert_extreme!(
@@ -224,7 +283,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     .entry(time_point as u32)
                     .and_modify(|profile| {
                         // We remove the resource usage of the task from the height of the profile
-                        profile.height -= task.resource_usage;
+                        profile.height -= context.lower_bound(&task.resource_usage);
 
                         // If the height of the profile is not equal to 0 then we remove the task
                         // from the profile tasks
@@ -257,8 +316,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_per_point_from_scratch(
-                context.as_readonly(),
-                self.inference_code.unwrap(),
+                context,
+                self.inference_code,
                 &self.parameters,
             )?;
 
@@ -280,13 +339,18 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             let element = self.updatable_structures.get_update_for_task(&updated_task);
 
             // We get the adjustments based on the stored updated
-            let mandatory_part_adjustments = element.get_mandatory_part_adjustments();
+            let mandatory_part_adjustments =
+                element.get_mandatory_part_adjustments(context.as_readonly());
 
             // Then we first remove from the time-table (if necessary)
             //
             // This order ensures that there is less of a chance of incorrect overflows being
             // reported
-            self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
+            self.remove_from_time_table(
+                context.as_readonly(),
+                &mandatory_part_adjustments,
+                &updated_task,
+            );
 
             // Then we add to the time-table (if necessary)
             //
@@ -312,8 +376,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             if SYNCHRONISE {
                 // If we are synchronising then we need to search for the conflict which would have
                 // been found by the non-incremental propagator
-                let synchronised_conflict =
-                    find_synchronised_conflict(&mut self.time_table, &self.parameters);
+                let synchronised_conflict = find_synchronised_conflict(
+                    context.as_readonly(),
+                    &mut self.time_table,
+                    &self.parameters,
+                );
 
                 // After finding the profile which would have been found by the non-incremental
                 // propagator, we also need to find the profile explanation which would have been
@@ -326,20 +393,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
-                            self.inference_code.unwrap(),
+                            self.inference_code,
                             conflicting_profile,
                             &self.parameters,
                         );
-
-                    pumpkin_assert_extreme!(
-                        check_synchronisation_conflict_explanation_per_point(
-                            &synchronised_conflict_explanation,
-                            context.as_readonly(),
-                            self.inference_code.unwrap(),
-                            &self.parameters,
-                        ),
-                        "The conflict explanation was not the same as the conflict explanation from scratch!"
-                    );
 
                     // We have found the previous conflict
                     self.found_previous_conflict = true;
@@ -351,17 +408,16 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 self.found_previous_conflict = false;
             } else {
                 // We linearly scan the profiles and find the first one which exceeds the capacity
-                let conflicting_profile = self
-                    .time_table
-                    .values_mut()
-                    .find(|profile| profile.height > self.parameters.capacity);
+                let conflicting_profile = self.time_table.values_mut().find(|profile| {
+                    profile.height > context.upper_bound(&self.parameters.capacity)
+                });
 
                 // If we have found such a conflict then we return it
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
                         create_time_table_per_point_from_scratch(
-                            context.as_readonly(),
-                            self.inference_code.unwrap(),
+                            context,
+                            self.inference_code,
                             &self.parameters
                         )
                         .is_err(),
@@ -370,9 +426,9 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     // We have found the previous conflict
                     self.found_previous_conflict = true;
 
-                    return Err(create_conflict_explanation(
+                    return Err(create_explanation_profile_height(
                         context.as_readonly(),
-                        self.inference_code.unwrap(),
+                        self.inference_code,
                         conflicting_profile,
                         self.parameters.options.explanation_type,
                     )
@@ -395,14 +451,19 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         pumpkin_assert_extreme!(
             self.time_table
                 .values()
-                .all(|profile| profile.height <= self.parameters.capacity)
+                .all(|profile| profile.height <= context.upper_bound(&self.parameters.capacity))
         );
         Ok(())
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
-    for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> Propagator for TimeTablePerPointIncrementalPropagator<Var, PVar, RVar, CVar, SYNCHRONISE>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
@@ -417,16 +478,22 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         if self.parameters.is_infeasible {
             return Err(Inconsistency::Conflict(PropagatorConflict {
                 conjunction: conjunction!(),
-                inference_code: self.inference_code.unwrap(),
+                inference_code: self.inference_code,
             }));
         }
 
         // We update the time-table based on the stored updates
         self.update_time_table(&mut context)?;
 
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
-            context.as_readonly(),
-            self.inference_code.unwrap(),
+        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<
+            Var,
+            PVar,
+            RVar,
+            CVar,
+            SYNCHRONISE,
+        >(
+            &mut context,
+            self.inference_code,
             &self.time_table,
             &self.parameters
         ));
@@ -437,7 +504,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code,
             self.time_table.values(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -448,7 +515,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         &mut self,
         context: PropagationContextWithTrailedValues,
         local_id: LocalId,
-        event: OpaqueDomainEvent,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that we do not take into account the fact that the time-table could be outdated
@@ -476,11 +543,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             &updated_task,
         );
 
-        if matches!(
-            updated_task.start_variable.unpack_event(event),
-            DomainEvent::Assign
-        ) {
-            self.updatable_structures.fix_task(&updated_task);
+        if context.is_fixed(&updated_task.start_variable)
+            && context.is_fixed(&updated_task.processing_time)
+            && context.is_fixed(&updated_task.resource_usage)
+        {
+            self.updatable_structures.fix_task(&updated_task)
         }
 
         result.decision
@@ -543,7 +610,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // Use the same debug propagator from `TimeTablePerPoint`
         debug_propagate_from_scratch_time_table_point(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code,
             &self.parameters,
             &self.updatable_structures,
         )
@@ -553,7 +620,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 /// Contains functions related to debugging
 mod debug {
 
-    use crate::engine::propagation::PropagationContext;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::proof::InferenceCode;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
@@ -571,12 +638,15 @@ mod debug {
     ///        the same!
     pub(crate) fn time_tables_are_the_same_point<
         Var: IntegerVariable + 'static,
+        PVar: IntegerVariable + 'static,
+        RVar: IntegerVariable + 'static,
+        CVar: IntegerVariable + 'static,
         const SYNCHRONISE: bool,
     >(
-        context: PropagationContext,
+        context: &mut PropagationContextMut,
         inference_code: InferenceCode,
-        time_table: &PerPointTimeTableType<Var>,
-        parameters: &CumulativeParameters<Var>,
+        time_table: &PerPointTimeTableType<Var, PVar, RVar>,
+        parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     ) -> bool {
         let time_table_scratch =
             create_time_table_per_point_from_scratch(context, inference_code, parameters)
@@ -622,17 +692,18 @@ mod debug {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::Inconsistency;
+    use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PredicateConstructor;
     use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTablePerPointIncrementalPropagator;
-    use crate::propagators::TimeTablePerPointPropagator;
+    use crate::propagators::TimeTablePerPointConstructor;
+    use crate::propagators::TimeTablePerPointIncrementalConstructor;
     use crate::variables::DomainId;
 
     #[test]
@@ -643,27 +714,31 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
@@ -678,47 +753,49 @@ mod tests {
         let s2 = solver.new_variable(1, 1);
         let constraint_tag = solver.new_constraint_tag();
 
-        let result = solver.new_propagator(
-            TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                &[
-                    ArgTask {
-                        start_time: s1,
-                        processing_time: 4,
-                        resource_usage: 1,
-                    },
-                    ArgTask {
-                        start_time: s2,
-                        processing_time: 4,
-                        resource_usage: 1,
-                    },
-                ]
-                .into_iter()
-                .collect::<Vec<_>>(),
-                1,
-                CumulativePropagatorOptions {
-                    explanation_type: CumulativeExplanationType::Naive,
-                    ..Default::default()
+        let result = solver.new_propagator(TimeTablePerPointIncrementalConstructor::<
+            DomainId,
+            i32,
+            i32,
+            i32,
+            false,
+        >::new(
+            [
+                ArgTask {
+                    start_time: s1,
+                    processing_time: 4,
+                    resource_usage: 1,
                 },
-                constraint_tag,
-            ),
+                ArgTask {
+                    start_time: s2,
+                    processing_time: 4,
+                    resource_usage: 1,
+                },
+            ]
+            .into_iter()
+            .collect::<Vec<_>>(),
+            1,
+            CumulativePropagatorOptions {
+                explanation_type: CumulativeExplanationType::Naive,
+                ..Default::default()
+            },
+            constraint_tag,
+        ));
+
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
         );
-        assert!(match result {
-            Err(Inconsistency::Conflict(x)) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 <= 1),
-                    predicate!(s2 >= 1),
-                ];
-                expected.iter().all(|y| {
-                    x.conjunction
-                        .iter()
-                        .collect::<Vec<&Predicate>>()
-                        .contains(&y)
-                }) && x.conjunction.iter().all(|y| expected.contains(y))
-            }
-            _ => false,
-        });
     }
 
     #[test]
@@ -729,27 +806,31 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
         assert_eq!(solver.upper_bound(s2), 6);
@@ -769,47 +850,51 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: a,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: b,
-                            processing_time: 6,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: c,
-                            processing_time: 2,
-                            resource_usage: 4,
-                        },
-                        ArgTask {
-                            start_time: d,
-                            processing_time: 2,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: e,
-                            processing_time: 5,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: f,
-                            processing_time: 6,
-                            resource_usage: 2,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    5,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 5,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                5,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -822,27 +907,31 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
         assert_eq!(solver.upper_bound(s2), 10);
@@ -870,30 +959,34 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_ok());
@@ -918,47 +1011,51 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: a,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: b,
-                            processing_time: 6,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: c,
-                            processing_time: 2,
-                            resource_usage: 4,
-                        },
-                        ArgTask {
-                            start_time: d,
-                            processing_time: 2,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: e,
-                            processing_time: 4,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: f,
-                            processing_time: 6,
-                            resource_usage: 2,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    5,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                5,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
@@ -996,52 +1093,56 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: a,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: b1,
-                            processing_time: 2,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: b2,
-                            processing_time: 3,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: c,
-                            processing_time: 2,
-                            resource_usage: 4,
-                        },
-                        ArgTask {
-                            start_time: d,
-                            processing_time: 2,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: e,
-                            processing_time: 4,
-                            resource_usage: 2,
-                        },
-                        ArgTask {
-                            start_time: f,
-                            processing_time: 6,
-                            resource_usage: 2,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    5,
-                    CumulativePropagatorOptions::default(),
-                    constraint_tag,
-                ),
-            )
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b1,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: b2,
+                        processing_time: 3,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                5,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
@@ -1072,30 +1173,34 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
@@ -1125,35 +1230,39 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
         assert_eq!(solver.upper_bound(s3), 15);
@@ -1181,31 +1290,35 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 3,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        allow_holes_in_domain: true,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    allow_holes_in_domain: true,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
         assert_eq!(solver.upper_bound(s2), 8);
@@ -1227,8 +1340,8 @@ mod tests {
         let s3_scratch = solver_scratch.new_variable(1, 10);
         let constraint_tag = solver_scratch.new_constraint_tag();
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1_scratch,
                         processing_time: 2,
@@ -1267,54 +1380,56 @@ mod tests {
         let s3 = solver.new_variable(1, 10);
         let constraint_tag = solver.new_constraint_tag();
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                true,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        assert!(
-            {
-                if let Err(Inconsistency::Conflict(conflict)) = &result {
-                    if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                        conflict.conjunction.iter().collect::<Vec<_>>()
-                            == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            },
-            "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
-        );
+        if let Err(Inconsistency::Conflict(conflict)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_eq!(
+                conflict.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!(
+                "The results are different than expected - Expected: {result_scratch:?} but was: {result:?}"
+            )
+        }
     }
 
     #[test]
@@ -1325,8 +1440,8 @@ mod tests {
         let s3_scratch = solver_scratch.new_variable(1, 10);
         let constraint_tag = solver_scratch.new_constraint_tag();
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1_scratch,
                         processing_time: 2,
@@ -1364,54 +1479,58 @@ mod tests {
         let s3 = solver.new_variable(1, 10);
         let constraint_tag = solver.new_constraint_tag();
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                true,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        assert!(result.is_err());
         let result_scratch = solver_scratch.propagate(propagator_scratch);
-        assert!(result_scratch.is_err());
-        assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.conjunction.iter().collect::<Vec<_>>()
-                        == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        });
+
+        if let Err(Inconsistency::Conflict(explanation)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_eq!(
+                explanation.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!(
+                "Expected {result_scratch:?} to be an empty domain and {result:?} to be a conflict"
+            )
+        }
     }
 
     #[test]
@@ -1422,8 +1541,8 @@ mod tests {
         let s3_scratch = solver_scratch.new_variable(1, 10);
         let constraint_tag = solver_scratch.new_constraint_tag();
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1_scratch,
                         processing_time: 2,
@@ -1454,6 +1573,7 @@ mod tests {
             solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s3_scratch, 7);
         let _ =
             solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 7);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(5, 5);
@@ -1461,52 +1581,55 @@ mod tests {
         let s3 = solver.new_variable(1, 10);
         let constraint_tag = solver.new_constraint_tag();
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
         let result = solver.propagate(propagator);
-        let result_scratch = solver_scratch.propagate(propagator_scratch);
-        assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
-                    explanation.conjunction.iter().collect::<Vec<_>>()
-                        != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        });
+
+        if let Err(Inconsistency::Conflict(explanation)) = &result
+            && let Err(Inconsistency::EmptyDomain) = &result_scratch
+        {
+            let reason_scratch = solver_scratch.get_reason_empty_domain();
+            assert_ne!(
+                explanation.conjunction.iter().copied().collect::<Vec<_>>(),
+                reason_scratch
+            )
+        } else {
+            panic!("{result:?} is not an error or {result_scratch:?} is not an error")
+        }
     }
 
     #[test]
@@ -1517,8 +1640,8 @@ mod tests {
         let s3_scratch = solver_scratch.new_variable(5, 11);
         let constraint_tag = solver_scratch.new_constraint_tag();
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1_scratch,
                         processing_time: 2,
@@ -1556,35 +1679,39 @@ mod tests {
         let s3 = solver.new_variable(5, 11);
         let constraint_tag = solver.new_constraint_tag();
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    2,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                true,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                2,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 5);
         let result = solver.propagate(propagator);
@@ -1611,8 +1738,8 @@ mod tests {
         let s3_scratch = solver_scratch.new_variable(5, 11);
         let constraint_tag = solver_scratch.new_constraint_tag();
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s1_scratch,
                         processing_time: 2,
@@ -1649,35 +1776,39 @@ mod tests {
         let s3 = solver.new_variable(5, 11);
         let constraint_tag = solver.new_constraint_tag();
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 2,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s3,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    2,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                2,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 5);
         let result = solver.propagate(propagator);
@@ -1709,8 +1840,8 @@ mod tests {
         let constraint_tag = solver_scratch.new_constraint_tag();
 
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s0_scratch,
                         processing_time: 4,
@@ -1753,35 +1884,39 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
-                    &[
-                        ArgTask {
-                            start_time: s0,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 1,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 1,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                false,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s0,
+                        processing_time: 4,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 1,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 1,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s2, 5);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s1, 5);
@@ -1792,26 +1927,20 @@ mod tests {
         assert!(result_scratch.is_err());
         let result = solver.propagate(propagator);
         assert!(result.is_err());
-        if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
-        ) = (result, result_scratch)
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
+        if let Err(Inconsistency::Conflict(PropagatorConflict {
+            conjunction,
+            inference_code: _,
+        })) = result
         {
-            assert_ne!(explanation, explanation_scratch);
-            let explanation_vec = explanation.conjunction.iter().cloned().collect::<Vec<_>>();
-            let explanation_scratch_vec = explanation_scratch
-                .conjunction
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
+            assert_ne!(conjunction, reason_scratch);
 
-            println!("{explanation_vec:?}");
-            println!("{explanation_scratch_vec:?}");
-
-            assert!(explanation_vec.contains(&s2.lower_bound_predicate(5)));
-            assert!(!explanation_scratch_vec.contains(&s2.lower_bound_predicate(5)));
+            assert!(conjunction.contains(s2.lower_bound_predicate(5)));
+            assert!(!reason_scratch.contains(s2.lower_bound_predicate(5)));
         } else {
-            panic!("Incorrect result")
+            panic!()
         }
     }
 
@@ -1824,8 +1953,8 @@ mod tests {
         let constraint_tag = solver_scratch.new_constraint_tag();
 
         let propagator_scratch = solver_scratch
-            .new_propagator(TimeTablePerPointPropagator::new(
-                &[
+            .new_propagator(TimeTablePerPointConstructor::new(
+                [
                     ArgTask {
                         start_time: s0_scratch,
                         processing_time: 4,
@@ -1867,35 +1996,39 @@ mod tests {
         let s2 = solver.new_variable(1, 5);
 
         let propagator = solver
-            .new_propagator(
-                TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
-                    &[
-                        ArgTask {
-                            start_time: s0,
-                            processing_time: 4,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s1,
-                            processing_time: 1,
-                            resource_usage: 1,
-                        },
-                        ArgTask {
-                            start_time: s2,
-                            processing_time: 1,
-                            resource_usage: 1,
-                        },
-                    ]
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-                    1,
-                    CumulativePropagatorOptions {
-                        explanation_type: CumulativeExplanationType::Naive,
-                        ..Default::default()
+            .new_propagator(TimeTablePerPointIncrementalConstructor::<
+                DomainId,
+                i32,
+                i32,
+                i32,
+                true,
+            >::new(
+                [
+                    ArgTask {
+                        start_time: s0,
+                        processing_time: 4,
+                        resource_usage: 1,
                     },
-                    constraint_tag,
-                ),
-            )
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 1,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 1,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    ..Default::default()
+                },
+                constraint_tag,
+            ))
             .expect("No conflict");
         let _ = solver.increase_lower_bound_and_notify(propagator, 2, s2, 5);
         let _ = solver.increase_lower_bound_and_notify(propagator, 1, s1, 5);
@@ -1906,15 +2039,11 @@ mod tests {
         assert!(result_scratch.is_err());
         let result = solver.propagate(propagator);
         assert!(result.is_err());
-        if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
-        ) = (result, result_scratch)
-        {
-            assert_eq!(
-                explanation.conjunction.iter().collect::<Vec<_>>(),
-                explanation_scratch.conjunction.iter().collect::<Vec<_>>()
-            );
+
+        let reason_scratch = solver_scratch.get_reason_int(Predicate::trivially_false());
+
+        if let Err(Inconsistency::Conflict(explanation)) = result {
+            assert_eq!(explanation.conjunction, reason_scratch);
         } else {
             panic!("Incorrect result")
         }

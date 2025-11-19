@@ -12,8 +12,15 @@ use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
-pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_big_step_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    context: PropagationContext,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -21,18 +28,36 @@ pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'st
         .flat_map(|profile_task| {
             [
                 predicate!(
-                    profile_task.start_variable >= profile.end - profile_task.processing_time + 1
+                    profile_task.start_variable
+                        >= profile.end - context.lower_bound(&profile_task.processing_time) + 1
                 ),
                 predicate!(profile_task.start_variable <= profile.start),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
+        .chain(std::iter::once(predicate!(
+            capacity <= context.upper_bound(&capacity)
+        )))
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
 /// Creates the conflict explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
-pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'static>(
-    conflict_profile: &ResourceProfile<Var>,
+pub(crate) fn create_big_step_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    context: PropagationContext,
+    conflict_profile: &ResourceProfile<Var, PVar, RVar>,
 ) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
@@ -41,40 +66,74 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
             [
                 predicate!(
                     profile_task.start_variable
-                        >= conflict_profile.end - profile_task.processing_time + 1
+                        >= conflict_profile.end
+                            - context.lower_bound(&profile_task.processing_time)
+                            + 1
                 ),
                 predicate!(profile_task.start_variable <= conflict_profile.start),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<Var>(
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
-) -> Predicate
+pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<Var, PVar, RVar>(
+    context: PropagationContext,
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable >= profile.start + 1 - task.processing_time)
+    [
+        predicate!(
+            task.start_variable >= profile.start + 1 - context.lower_bound(&task.processing_time)
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var>(
-    task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
+    task: &Rc<Task<Var, PVar, RVar>>,
+    profile: &ResourceProfile<Var, PVar, RVar>,
     context: PropagationContext,
-) -> Predicate
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end))
+    [
+        predicate!(
+            task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end)
+        ),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 
     #[test]

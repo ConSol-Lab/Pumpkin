@@ -5,6 +5,7 @@ use super::debug::merge_profiles;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::proof::InferenceCode;
 use crate::propagators::CumulativeParameters;
@@ -13,24 +14,30 @@ use crate::propagators::ResourceProfile;
 #[cfg(doc)]
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::create_time_table_over_interval_from_scratch;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::variables::IntegerVariable;
 
 /// Finds the conflicting profile which would have been found by the
 /// [`TimeTableOverIntervalPropagator`]; this is the first conflicting profile in terms of start
 /// time, however, the returned profile should be merged with adjacent profiles to create the
 /// returned conflict profile.
-pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
-    parameters: &CumulativeParameters<Var>,
-) -> Option<ResourceProfile<Var>> {
+pub(crate) fn find_synchronised_conflict<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    context: PropagationContext,
+    time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+) -> Option<ResourceProfile<Var, PVar, RVar>> {
     if time_table.is_empty() {
         return None;
     }
 
     let first_conflict_profile_index = time_table
         .iter()
-        .position(|profile| profile.height > parameters.capacity);
+        .position(|profile| profile.height > context.upper_bound(&parameters.capacity));
     if let Some(mut first_conflict_profile_index) = first_conflict_profile_index {
         let mut new_profile = time_table[first_conflict_profile_index].clone();
 
@@ -55,15 +62,18 @@ pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
 /// [`TimeTableOverIntervalPropagator`].
 pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
-    context: PropagationContext,
-    parameters: &CumulativeParameters<Var>,
+    context: &mut PropagationContextMut,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     inference_code: InferenceCode,
 ) -> bool {
     let error_from_scratch =
         create_time_table_over_interval_from_scratch(context, parameters, inference_code);
-    if let Err(explanation_scratch) = error_from_scratch {
+    if let Err(Inconsistency::Conflict(explanation_scratch)) = error_from_scratch {
         if let Err(Inconsistency::Conflict(explanation)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
@@ -80,11 +90,16 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 /// by [`TimeTableOverIntervalPropagator`]), this function calculates the error which would have
 /// been reported by [`TimeTableOverIntervalPropagator`] by finding the tasks which should be
 /// included in the profile and sorting them in the same order.
-pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_synchronised_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: PropagationContext,
     inference_code: InferenceCode,
-    conflicting_profile: &mut ResourceProfile<Var>,
-    parameters: &CumulativeParameters<Var>,
+    conflicting_profile: &mut ResourceProfile<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> PropagationStatusCP {
     // If we need to synchronise then we need to find the conflict profile which
     // would have been found by the non-incremental propagator; we thus first sort based on
@@ -100,14 +115,14 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
     let mut new_profile = Vec::new();
 
     // Now we find the tasks in the profile which together overflow the resource
-    while resource_usage <= parameters.capacity {
+    while resource_usage <= context.upper_bound(&parameters.capacity) {
         let task = &conflicting_profile.profile_tasks[index];
-        resource_usage += task.resource_usage;
+        resource_usage += context.lower_bound(&task.resource_usage);
         new_profile.push(Rc::clone(task));
         index += 1;
     }
 
-    Err(create_conflict_explanation(
+    Err(create_explanation_profile_height(
         context,
         inference_code,
         &ResourceProfile {
@@ -125,8 +140,12 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 /// 1. Adjacent profiles are merged which have been split due to the incremental updates
 /// 2. Each profile is sorted such that it corresponds to the order in which
 ///    [`TimeTableOverIntervalPropagator`] would have found them
-pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn synchronise_time_table<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     context: PropagationContext,
 ) {
     if !time_table.is_empty() {
@@ -143,8 +162,12 @@ pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
 
 /// Sorts the provided `profile` on non-decreasing order of upper-bound while tie-breaking in
 /// non-decreasing order of ID
-fn sort_profile_based_on_upper_bound_and_id<Var: IntegerVariable + 'static>(
-    profile: &mut ResourceProfile<Var>,
+fn sort_profile_based_on_upper_bound_and_id<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    profile: &mut ResourceProfile<Var, PVar, RVar>,
     context: PropagationContext,
 ) {
     profile.profile_tasks.sort_by(|a, b| {
