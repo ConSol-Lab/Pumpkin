@@ -310,7 +310,7 @@ impl TestSolver {
         self.state.inference_codes.next_key()
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
+    pub(crate) fn new_checkpoint(&mut self) {
         self.state.new_checkpoint();
     }
 

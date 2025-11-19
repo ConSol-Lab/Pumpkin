@@ -11,7 +11,7 @@ impl ConflictResolver for NoLearningResolver {
             .find_last_decision()
             .expect("the solver is not at decision level 0, so there exists a last decision");
 
-        context.backtrack(context.state.get_decision_level() - 1);
+        context.backtrack(context.state.get_checkpoint() - 1);
         context.enqueue_propagated_predicate(!last_decision);
     }
 }

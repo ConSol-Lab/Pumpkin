@@ -497,10 +497,10 @@ impl NotificationEngine {
         self.predicate_notifier.predicate_to_id.num_predicate_ids()
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
+    pub(crate) fn new_checkpoint(&mut self) {
         self.predicate_notifier
             .predicate_id_assignments
-            .increase_decision_level();
+            .new_checkpoint();
     }
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
@@ -573,7 +573,7 @@ impl NotificationEngine {
         _trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(
-            assignments.get_decision_level() == backtrack_level,
+            assignments.get_checkpoint() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
         );
         self.predicate_notifier

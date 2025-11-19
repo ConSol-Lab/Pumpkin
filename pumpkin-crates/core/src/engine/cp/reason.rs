@@ -63,8 +63,8 @@ impl ReasonStore {
         }
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     pub(crate) fn synchronise(&mut self, level: usize) {

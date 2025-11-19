@@ -50,20 +50,20 @@ pub struct EmptyDomain;
 impl Assignments {
     #[allow(unused, reason = "Could be used in the future")]
     /// Returns all of the holes in the domain which were created at the provided decision level
-    pub(crate) fn get_holes_on_decision_level(
+    pub(crate) fn get_holes_at_checkpoint(
         &self,
         domain_id: DomainId,
-        decision_level: usize,
+        checkpoint: usize,
     ) -> impl Iterator<Item = i32> + '_ {
-        self.domains[domain_id].get_holes_from_decision_level(decision_level)
+        self.domains[domain_id].get_holes_at_checkpoint(checkpoint)
     }
 
     /// Returns all of the holes in the domain which were created at the current decision level
-    pub(crate) fn get_holes_on_current_decision_level(
+    pub(crate) fn get_holes_at_current_checkpoint(
         &self,
         domain_id: DomainId,
     ) -> impl Iterator<Item = i32> + '_ {
-        self.domains[domain_id].get_holes_from_current_decision_level(self.get_decision_level())
+        self.domains[domain_id].get_holes_from_current_checkpoint(self.get_checkpoint())
     }
 
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were
@@ -72,26 +72,25 @@ impl Assignments {
         self.domains[domain_id].get_holes()
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     pub(crate) fn find_last_decision(&self) -> Option<Predicate> {
-        if self.get_decision_level() == 0 {
+        if self.get_checkpoint() == 0 {
             None
         } else {
-            let values_on_current_decision_level = self
-                .trail
-                .values_on_decision_level(self.get_decision_level());
-            let entry = values_on_current_decision_level[0];
+            let values_at_current_checkpoint =
+                self.trail.values_at_checkpoint(self.get_checkpoint());
+            let entry = values_at_current_checkpoint[0];
             pumpkin_assert_eq_simple!(None, entry.reason);
 
             Some(entry.predicate)
         }
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.trail.get_decision_level()
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.trail.get_checkpoint()
     }
 
     pub(crate) fn num_domains(&self) -> u32 {
@@ -121,7 +120,7 @@ impl Assignments {
         // when values are removed at levels beyond the root, and then it becomes a tricky value to
         // update when a fresh domain needs to be considered.
         pumpkin_assert_simple!(
-            self.get_decision_level() == 0,
+            self.get_checkpoint() == 0,
             "can only create variables at the root"
         );
 
@@ -336,19 +335,19 @@ impl Assignments {
 
         // If the domain assigned at a nonroot level, this is just one predicate.
         if domain.lower_bound() == domain.upper_bound()
-            && domain.lower_bound_decision_level() > 0
-            && domain.upper_bound_decision_level() > 0
+            && domain.lower_bound_checkpoint() > 0
+            && domain.checkpoint() > 0
         {
             predicates.push(predicate![domain_id == domain.lower_bound()]);
             return predicates;
         }
 
         // Add bounds but avoid root assignments.
-        if domain.lower_bound_decision_level() > 0 {
+        if domain.lower_bound_checkpoint() > 0 {
             predicates.push(predicate![domain_id >= domain.lower_bound()]);
         }
 
-        if domain.upper_bound_decision_level() > 0 {
+        if domain.checkpoint() > 0 {
             predicates.push(predicate![domain_id <= domain.upper_bound()]);
         }
 
@@ -358,7 +357,7 @@ impl Assignments {
             // that are not root assignments.
             // Since bound values cannot be in the holes,
             // we can use '<' or '>'.
-            if hole.1.decision_level > 0
+            if hole.1.checkpoint > 0
                 && domain.lower_bound() < *hole.0
                 && *hole.0 < domain.upper_bound()
             {
@@ -405,10 +404,10 @@ impl Assignments {
 
     /// If the predicate is assigned true, returns the decision level of the predicate.
     /// Otherwise returns None.
-    pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
+    pub(crate) fn get_checkpoint_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
-            .map(|u| u.decision_level)
+            .map(|u| u.checkpoint)
     }
 
     pub fn get_domain_descriptions(&self) -> Vec<Predicate> {
@@ -451,11 +450,10 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let checkpoint = self.get_checkpoint();
         let domain = &mut self.domains[domain_id];
 
-        let update_took_place =
-            domain.set_lower_bound(new_lower_bound, decision_level, trail_position);
+        let update_took_place = domain.set_lower_bound(new_lower_bound, checkpoint, trail_position);
 
         self.bounds[domain_id].0 = domain.lower_bound();
 
@@ -492,11 +490,10 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let checkpoint = self.get_checkpoint();
         let domain = &mut self.domains[domain_id];
 
-        let update_took_place =
-            domain.set_upper_bound(new_upper_bound, decision_level, trail_position);
+        let update_took_place = domain.set_upper_bound(new_upper_bound, checkpoint, trail_position);
 
         self.bounds[domain_id].1 = domain.upper_bound();
 
@@ -534,19 +531,17 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let checkpoint = self.get_checkpoint();
         let domain = &mut self.domains[domain_id];
 
         if old_lower_bound < assigned_value {
-            update_took_place |=
-                domain.set_lower_bound(assigned_value, decision_level, trail_position);
+            update_took_place |= domain.set_lower_bound(assigned_value, checkpoint, trail_position);
             self.bounds[domain_id].0 = domain.lower_bound();
             self.pruned_values += domain.lower_bound().abs_diff(old_lower_bound) as u64;
         }
 
         if old_upper_bound > assigned_value {
-            update_took_place |=
-                domain.set_upper_bound(assigned_value, decision_level, trail_position);
+            update_took_place |= domain.set_upper_bound(assigned_value, checkpoint, trail_position);
             self.bounds[domain_id].1 = domain.upper_bound();
             self.pruned_values += domain.upper_bound().abs_diff(old_upper_bound) as u64;
         }
@@ -582,10 +577,10 @@ impl Assignments {
             reason,
         });
 
-        let decision_level = self.get_decision_level();
+        let checkpoint = self.get_checkpoint();
         let domain = &mut self.domains[domain_id];
 
-        let _ = domain.remove_value(removed_value_from_domain, decision_level, trail_position);
+        let _ = domain.remove_value(removed_value_from_domain, checkpoint, trail_position);
 
         let changed_lower_bound = domain.lower_bound().abs_diff(old_lower_bound) as u64;
         let changed_upper_bound = old_upper_bound.abs_diff(domain.upper_bound()) as u64;
@@ -708,25 +703,25 @@ impl Assignments {
     }
 
     /// Synchronises the internal structures of [`Assignments`] based on the fact that
-    /// backtracking to `new_decision_level` is taking place. This method returns the list of
+    /// backtracking to `new_checkpoint` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
     /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
     pub(crate) fn synchronise(
         &mut self,
-        new_decision_level: usize,
+        new_checkpoint: usize,
         notification_engine: &mut NotificationEngine,
     ) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
         let num_trail_entries_before_synchronisation = self.num_trail_entries();
 
         pumpkin_assert_simple!(
-            new_decision_level <= self.trail.get_decision_level(),
-            "Expected the new decision level {new_decision_level} to be less than or equal to the current decision level {}",
-            self.trail.get_decision_level(),
+            new_checkpoint <= self.trail.get_checkpoint(),
+            "Expected the new decision level {new_checkpoint} to be less than or equal to the current decision level {}",
+            self.trail.get_checkpoint(),
         );
 
         self.trail
-            .synchronise(new_decision_level)
+            .synchronise(new_checkpoint)
             .enumerate()
             .for_each(|(index, entry)| {
                 // Calculate how many values are re-introduced into the domain.
@@ -833,14 +828,14 @@ pub(crate) struct ConstraintProgrammingTrailEntry {
 
 #[derive(Clone, Copy, Debug)]
 struct PairDecisionLevelTrailPosition {
-    decision_level: usize,
+    checkpoint: usize,
     trail_position: usize,
 }
 
 #[derive(Clone, Debug)]
 struct BoundUpdateInfo {
     bound: i32,
-    decision_level: usize,
+    checkpoint: usize,
     trail_position: usize,
 }
 
@@ -848,7 +843,7 @@ struct BoundUpdateInfo {
 struct HoleUpdateInfo {
     removed_value: i32,
 
-    decision_level: usize,
+    checkpoint: usize,
 
     triggered_lower_bound_update: bool,
     triggered_upper_bound_update: bool,
@@ -888,13 +883,13 @@ impl IntegerDomain {
 
         let lower_bound_updates = vec![BoundUpdateInfo {
             bound: lower_bound,
-            decision_level: 0,
+            checkpoint: 0,
             trail_position: 0,
         }];
 
         let upper_bound_updates = vec![BoundUpdateInfo {
             bound: upper_bound,
-            decision_level: 0,
+            checkpoint: 0,
             trail_position: 0,
         }];
 
@@ -917,11 +912,11 @@ impl IntegerDomain {
             .bound
     }
 
-    fn lower_bound_decision_level(&self) -> usize {
+    fn lower_bound_checkpoint(&self) -> usize {
         self.lower_bound_updates
             .last()
             .expect("Cannot be empty.")
-            .decision_level
+            .checkpoint
     }
 
     fn initial_lower_bound(&self) -> i32 {
@@ -957,11 +952,11 @@ impl IntegerDomain {
             .bound
     }
 
-    fn upper_bound_decision_level(&self) -> usize {
+    fn checkpoint(&self) -> usize {
         self.upper_bound_updates
             .last()
             .expect("Cannot be empty.")
-            .decision_level
+            .checkpoint
     }
 
     fn initial_upper_bound(&self) -> i32 {
@@ -1029,7 +1024,7 @@ impl IntegerDomain {
     fn remove_value(
         &mut self,
         removed_value: i32,
-        decision_level: usize,
+        checkpoint: usize,
         trail_position: usize,
     ) -> bool {
         if removed_value < self.lower_bound()
@@ -1041,7 +1036,7 @@ impl IntegerDomain {
 
         self.hole_updates.push(HoleUpdateInfo {
             removed_value,
-            decision_level,
+            checkpoint,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
@@ -1050,7 +1045,7 @@ impl IntegerDomain {
         let old_none_entry = self.holes.insert(
             removed_value,
             PairDecisionLevelTrailPosition {
-                decision_level,
+                checkpoint,
                 trail_position,
             },
         );
@@ -1058,7 +1053,7 @@ impl IntegerDomain {
 
         // Check if removing a value triggers a lower bound update.
         if self.lower_bound() == removed_value {
-            let _ = self.set_lower_bound(removed_value + 1, decision_level, trail_position);
+            let _ = self.set_lower_bound(removed_value + 1, checkpoint, trail_position);
             self.hole_updates
                 .last_mut()
                 .expect("we just pushed a value, so must be present")
@@ -1066,7 +1061,7 @@ impl IntegerDomain {
         }
         // Check if removing the value triggers an upper bound update.
         if self.upper_bound() == removed_value {
-            let _ = self.set_upper_bound(removed_value - 1, decision_level, trail_position);
+            let _ = self.set_upper_bound(removed_value - 1, checkpoint, trail_position);
             self.hole_updates
                 .last_mut()
                 .expect("we just pushed a value, so must be present")
@@ -1078,22 +1073,22 @@ impl IntegerDomain {
 
     fn debug_is_valid_upper_bound_domain_update(
         &self,
-        decision_level: usize,
+        checkpoint: usize,
         trail_position: usize,
     ) -> bool {
         trail_position == 0
-            || self.upper_bound_updates.last().unwrap().decision_level <= decision_level
+            || self.upper_bound_updates.last().unwrap().checkpoint <= checkpoint
                 && self.upper_bound_updates.last().unwrap().trail_position < trail_position
     }
 
     fn set_upper_bound(
         &mut self,
         new_upper_bound: i32,
-        decision_level: usize,
+        checkpoint: usize,
         trail_position: usize,
     ) -> bool {
         pumpkin_assert_moderate!(
-            self.debug_is_valid_upper_bound_domain_update(decision_level, trail_position)
+            self.debug_is_valid_upper_bound_domain_update(checkpoint, trail_position)
         );
 
         if new_upper_bound >= self.upper_bound() {
@@ -1102,7 +1097,7 @@ impl IntegerDomain {
 
         self.upper_bound_updates.push(BoundUpdateInfo {
             bound: new_upper_bound,
-            decision_level,
+            checkpoint,
             trail_position,
         });
         self.update_upper_bound_with_respect_to_holes();
@@ -1120,22 +1115,22 @@ impl IntegerDomain {
 
     fn debug_is_valid_lower_bound_domain_update(
         &self,
-        decision_level: usize,
+        checkpoint: usize,
         trail_position: usize,
     ) -> bool {
         trail_position == 0
-            || self.lower_bound_updates.last().unwrap().decision_level <= decision_level
+            || self.lower_bound_updates.last().unwrap().checkpoint <= checkpoint
                 && self.lower_bound_updates.last().unwrap().trail_position < trail_position
     }
 
     fn set_lower_bound(
         &mut self,
         new_lower_bound: i32,
-        decision_level: usize,
+        checkpoint: usize,
         trail_position: usize,
     ) -> bool {
         pumpkin_assert_moderate!(
-            self.debug_is_valid_lower_bound_domain_update(decision_level, trail_position)
+            self.debug_is_valid_lower_bound_domain_update(checkpoint, trail_position)
         );
 
         if new_lower_bound <= self.lower_bound() {
@@ -1144,7 +1139,7 @@ impl IntegerDomain {
 
         self.lower_bound_updates.push(BoundUpdateInfo {
             bound: new_lower_bound,
-            decision_level,
+            checkpoint,
             trail_position,
         });
         self.update_lower_bound_with_respect_to_holes();
@@ -1265,7 +1260,7 @@ impl IntegerDomain {
                 (position < self.lower_bound_updates.len()).then(|| {
                     let u = &self.lower_bound_updates[position];
                     PairDecisionLevelTrailPosition {
-                        decision_level: u.decision_level,
+                        checkpoint: u.checkpoint,
                         trail_position: u.trail_position,
                     }
                 })
@@ -1283,7 +1278,7 @@ impl IntegerDomain {
                 (position < self.upper_bound_updates.len()).then(|| {
                     let u = &self.upper_bound_updates[position];
                     PairDecisionLevelTrailPosition {
-                        decision_level: u.decision_level,
+                        checkpoint: u.checkpoint,
                         trail_position: u.trail_position,
                     }
                 })
@@ -1347,25 +1342,25 @@ impl IntegerDomain {
     }
 
     /// Returns the holes which were created on the provided decision level.
-    pub(crate) fn get_holes_from_decision_level(
+    pub(crate) fn get_holes_at_checkpoint(
         &self,
-        decision_level: usize,
+        checkpoint: usize,
     ) -> impl Iterator<Item = i32> + '_ {
         self.hole_updates
             .iter()
-            .filter(move |entry| entry.decision_level == decision_level)
+            .filter(move |entry| entry.checkpoint == checkpoint)
             .map(|entry| entry.removed_value)
     }
 
     /// Returns the holes which were created on the current decision level.
-    pub(crate) fn get_holes_from_current_decision_level(
+    pub(crate) fn get_holes_from_current_checkpoint(
         &self,
-        current_decision_level: usize,
+        current_checkpoint: usize,
     ) -> impl Iterator<Item = i32> + '_ {
         self.hole_updates
             .iter()
             .rev()
-            .take_while(move |entry| entry.decision_level == current_decision_level)
+            .take_while(move |entry| entry.checkpoint == current_checkpoint)
             .map(|entry| entry.removed_value)
     }
 
@@ -1434,7 +1429,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
 
         let _ = assignment
             .post_predicate(predicate!(d1 != 1), None, &mut notification_engine)
@@ -1462,7 +1457,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
 
         let _ = assignment
             .post_predicate(predicate!(d1 != 2), None, &mut notification_engine)
@@ -1500,7 +1495,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
 
         let _ = assignment
             .post_predicate(predicate!(d1 != 3), None, &mut notification_engine)
@@ -1530,7 +1525,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
 
         let _ = assignment
             .remove_value_from_domain(d1, 3, None)
@@ -1735,7 +1730,7 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
 
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
 
         let _ = assignment
             .post_predicate(predicate!(d1 != 5), None, &mut notification_engine)
@@ -1877,7 +1872,7 @@ mod tests {
         notification_engine.grow();
 
         // decision level 1
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
         let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 2), None, &mut notification_engine)
             .expect("");
@@ -1886,13 +1881,13 @@ mod tests {
             .expect("");
 
         // decision level 2
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
         let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 5), None, &mut notification_engine)
             .expect("");
 
         // decision level 3
-        assignment.increase_decision_level();
+        assignment.new_checkpoint();
         let _ = assignment
             .post_predicate(predicate!(domain_id1 >= 7), None, &mut notification_engine)
             .expect("");

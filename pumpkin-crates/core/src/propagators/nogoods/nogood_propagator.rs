@@ -435,7 +435,7 @@ impl NogoodPropagator {
         // root-level; this is essentially the same as adding a predicate at the root level
         if nogood.len() == 1 {
             pumpkin_assert_moderate!(
-                context.get_decision_level() == 0,
+                context.get_checkpoint() == 0,
                 "A unit nogood should have backtracked to the root-level"
             );
             self.add_permanent_nogood(nogood, inference_code, context)
@@ -533,7 +533,7 @@ impl NogoodPropagator {
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
-            context.get_decision_level() == 0,
+            context.get_checkpoint() == 0,
             "Only allowed to add nogoods permanently at the root for now."
         );
 
@@ -826,12 +826,12 @@ impl NogoodPropagator {
         let watcher2 = notification_engine.get_predicate(nogood[1]);
         assignments.is_predicate_falsified(watcher1)
             && assignments
-                .get_decision_level_for_predicate(&!watcher1)
+                .get_checkpoint_for_predicate(&!watcher1)
                 .expect("Falsified predicates must have a decision level.")
                 == 0
             || assignments.is_predicate_falsified(watcher2)
                 && assignments
-                    .get_decision_level_for_predicate(&!watcher2)
+                    .get_checkpoint_for_predicate(&!watcher2)
                     .expect("Falsified predicates must have a decision level.")
                     == 0
     }
@@ -898,7 +898,7 @@ impl NogoodPropagator {
                 else if notification_engine
                     .is_predicate_id_falsified(watcher.cached_predicate, assignments)
                     && assignments
-                        .get_decision_level_for_predicate(
+                        .get_checkpoint_for_predicate(
                             &!notification_engine.get_predicate(watcher.cached_predicate),
                         )
                         .expect("Falsified predicates must have a decision level.")
@@ -992,9 +992,7 @@ impl NogoodPropagator {
                 id,
                 notification_engine,
             ) && assignments
-                .get_decision_level_for_predicate(
-                    &!notification_engine.get_predicate(nogoods[id][0]),
-                )
+                .get_checkpoint_for_predicate(&!notification_engine.get_predicate(nogoods[id][0]))
                 .expect("A propagating predicate must have a decision level.")
                 > 0
             {
@@ -1121,7 +1119,7 @@ impl NogoodPropagator {
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
     fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContextMut) {
-        pumpkin_assert_simple!(context.get_decision_level() == 0);
+        pumpkin_assert_simple!(context.get_checkpoint() == 0);
         // The code below is broken down into several parts
 
         // We opt for semantic minimisation upfront. This way we avoid the possibility of having

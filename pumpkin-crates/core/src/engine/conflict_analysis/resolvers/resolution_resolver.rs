@@ -69,16 +69,16 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         let learned_nogood = self.learn_nogood(context);
 
-        let current_decision_level = context.state.get_decision_level();
+        let current_checkpoint = context.state.get_checkpoint();
         context
             .counters
             .learned_clause_statistics
             .average_backtrack_amount
-            .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
+            .add_term((current_checkpoint - learned_nogood.backjump_level) as u64);
 
         context.counters.engine_statistics.sum_of_backjumps +=
-            current_decision_level as u64 - 1 - learned_nogood.backjump_level as u64;
-        if current_decision_level - learned_nogood.backjump_level > 1 {
+            current_checkpoint as u64 - 1 - learned_nogood.backjump_level as u64;
+        if current_checkpoint - learned_nogood.backjump_level > 1 {
             context.counters.engine_statistics.num_backjumps += 1;
         }
 
@@ -272,7 +272,7 @@ impl ResolutionResolver {
         let dec_level = context
             .state
             .assignments
-            .get_decision_level_for_predicate(&predicate)
+            .get_checkpoint_for_predicate(&predicate)
             .unwrap_or_else(|| {
                 panic!(
                     "Expected predicate {predicate} to be assigned but bounds were ({}, {})",
@@ -301,7 +301,7 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_decision_level(),
+            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_checkpoint(),
             AnalysisMode::AllDecision => {
                 !context.state.assignments.is_decision_predicate(&predicate)
             }
@@ -447,10 +447,10 @@ impl ResolutionResolver {
             let predicate = clean_nogood[index];
             let dl = context
                 .state
-                .get_decision_level_for_predicate(predicate)
+                .get_checkpoint_for_predicate(predicate)
                 .unwrap();
 
-            if dl == context.state.get_decision_level() {
+            if dl == context.state.get_checkpoint() {
                 clean_nogood.swap(0, index);
                 index -= 1;
             } else if dl > highest_level_below_current {
@@ -466,7 +466,7 @@ impl ResolutionResolver {
         let backjump_level = if clean_nogood.len() > 1 {
             context
                 .state
-                .get_decision_level_for_predicate(clean_nogood[1])
+                .get_checkpoint_for_predicate(clean_nogood[1])
                 .unwrap()
         } else {
             // For unit nogoods, the solver backtracks to the root level.

@@ -522,7 +522,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        if self.state.get_decision_level() != 0 {
+        if self.state.get_checkpoint() != 0 {
             ConstraintSatisfactionSolver::backtrack(
                 &mut self.state,
                 0,
@@ -567,7 +567,7 @@ impl ConstraintSatisfactionSolver {
                 // place. Since one assumption is posted per decision level, all assumptions are
                 // assigned when the decision level is strictly larger than the number of
                 // assumptions.
-                if self.get_decision_level() > self.assumptions.len()
+                if self.get_checkpoint() > self.assumptions.len()
                     && self.restart_strategy.should_restart()
                 {
                     self.restart_during_search(brancher);
@@ -577,7 +577,7 @@ impl ConstraintSatisfactionSolver {
 
                 self.solver_statistics.engine_statistics.peak_depth = max(
                     self.solver_statistics.engine_statistics.peak_depth,
-                    self.state.get_decision_level() as u64,
+                    self.state.get_checkpoint() as u64,
                 );
 
                 match branching_result {
@@ -600,7 +600,7 @@ impl ConstraintSatisfactionSolver {
                     return flag;
                 }
             } else {
-                if self.get_decision_level() == 0 {
+                if self.get_checkpoint() == 0 {
                     self.complete_proof();
                     self.solver_state.declare_infeasible();
 
@@ -632,7 +632,7 @@ impl ConstraintSatisfactionSolver {
         // Currently assumptions are implemented by adding an assumption predicate
         // at separate decision levels.
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
-            self.declare_new_decision_level();
+            self.new_checkpoint();
 
             let _ = self.state.post(assumption_literal).map_err(|_| {
                 self.solver_state
@@ -658,7 +658,7 @@ impl ConstraintSatisfactionSolver {
             return Err(CSPSolverExecutionFlag::Feasible);
         };
 
-        self.declare_new_decision_level();
+        self.new_checkpoint();
 
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of
@@ -678,7 +678,7 @@ impl ConstraintSatisfactionSolver {
         Ok(())
     }
 
-    pub(crate) fn declare_new_decision_level(&mut self) {
+    pub(crate) fn new_checkpoint(&mut self) {
         self.state.new_checkpoint();
     }
 
@@ -725,12 +725,12 @@ impl ConstraintSatisfactionSolver {
     /// Returns true if a restart took place and false otherwise.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
-            self.get_decision_level() > self.assumptions.len(),
+            self.get_checkpoint() > self.assumptions.len(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
         // no point backtracking past the assumption level
-        if self.get_decision_level() <= self.assumptions.len() {
+        if self.get_checkpoint() <= self.assumptions.len() {
             return;
         }
 
@@ -762,7 +762,7 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut BrancherType,
         rng: &mut dyn Random,
     ) {
-        pumpkin_assert_simple!(backtrack_level < state.get_decision_level());
+        pumpkin_assert_simple!(backtrack_level < state.get_checkpoint());
 
         brancher.on_backtrack();
 
@@ -782,7 +782,7 @@ impl ConstraintSatisfactionSolver {
 
         let result = self.state.fixed_point_propagate();
 
-        if self.state.get_decision_level() == 0 {
+        if self.state.get_checkpoint() == 0 {
             self.handle_root_propagation(num_trail_entries_prev);
         }
 
@@ -798,7 +798,7 @@ impl ConstraintSatisfactionSolver {
     /// 1. Infernce `R /\ ~l -> false`
     /// 2. Nogood (clause) `l`
     fn handle_root_propagation(&mut self, start_trail_index: usize) {
-        pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
+        pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
 
         for trail_idx in start_trail_index..self.state.trail_len() {
             let entry = self.state.trail_entry(trail_idx);
@@ -882,7 +882,7 @@ impl ConstraintSatisfactionSolver {
     fn peek_next_assumption_predicate(&self) -> Option<Predicate> {
         // The convention is that at decision level i, the (i-1)th assumption is posted.
         // Note that decisions start being posted start at 1, hence the minus one.
-        let next_assumption_index = self.get_decision_level();
+        let next_assumption_index = self.get_checkpoint();
         self.assumptions.get(next_assumption_index).copied()
     }
 }
@@ -920,7 +920,7 @@ impl ConstraintSatisfactionSolver {
 
     pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {
         assert!(
-            self.get_decision_level() == 0,
+            self.get_checkpoint() == 0,
             "Can only post predicates at the root level."
         );
 
@@ -939,7 +939,7 @@ impl ConstraintSatisfactionSolver {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
     ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
+        pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
 
         let (nogood_propagator, mut context) = self
@@ -992,7 +992,7 @@ impl ConstraintSatisfactionSolver {
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
-            self.get_decision_level() == 0,
+            self.get_checkpoint() == 0,
             "Clauses can only be added in the root"
         );
 
@@ -1052,8 +1052,8 @@ impl ConstraintSatisfactionSolver {
         Ok(())
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.state.get_decision_level()
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.state.get_checkpoint()
     }
 }
 

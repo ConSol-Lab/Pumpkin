@@ -80,8 +80,8 @@ impl PredicateIdAssignments {
         self.satisfied_predicates.drain(..)
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
@@ -175,14 +175,14 @@ impl PredicateIdAssignments {
         self.predicate_values[predicate_id].is_falsified()
     }
 
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
+    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
         // We also need to clear the stored updated predicates; if this is not done, then it can be
         // the case that a predicate is erroneously said to be satisfied/falsified while it is not
         self.satisfied_predicates.clear();
         self.falsified_predicates.clear();
 
         self.trail
-            .synchronise(new_decision_level)
+            .synchronise(new_checkpoint)
             .for_each(|predicate_id| {
                 // If the predicate id is unassigned then backtracking will not change anything;
                 // this is more of a sanity check since it should not be on the trail if it is

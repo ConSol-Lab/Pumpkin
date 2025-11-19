@@ -6,7 +6,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Trail<T> {
-    current_decision_level: usize,
+    current_checkpoint: usize,
     /// At index i is the position where the i-th decision level ends (exclusive) on the trail
     trail_delimiter: Vec<usize>,
     trail: Vec<T>,
@@ -17,7 +17,7 @@ pub(crate) struct Trail<T> {
 impl<T> Default for Trail<T> {
     fn default() -> Self {
         Trail {
-            current_decision_level: Default::default(),
+            current_checkpoint: Default::default(),
             trail_delimiter: Default::default(),
             trail: Default::default(),
         }
@@ -25,40 +25,40 @@ impl<T> Default for Trail<T> {
 }
 
 impl<T> Trail<T> {
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.current_decision_level += 1;
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.current_checkpoint += 1;
         self.trail_delimiter.push(self.trail.len());
     }
 
-    pub(crate) fn values_on_decision_level(&self, decision_level: usize) -> &[T] {
-        assert!(decision_level <= self.current_decision_level);
+    pub(crate) fn values_at_checkpoint(&self, checkpoint: usize) -> &[T] {
+        assert!(checkpoint <= self.current_checkpoint);
 
-        let start = if decision_level == 0 {
+        let start = if checkpoint == 0 {
             0
         } else {
-            self.trail_delimiter[decision_level - 1]
+            self.trail_delimiter[checkpoint - 1]
         };
 
-        let end = if decision_level == self.current_decision_level {
+        let end = if checkpoint == self.current_checkpoint {
             self.trail.len()
         } else {
-            self.trail_delimiter[decision_level]
+            self.trail_delimiter[checkpoint]
         };
 
         &self.trail[start..end]
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.current_decision_level
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.current_checkpoint
     }
 
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) -> Rev<Drain<'_, T>> {
-        pumpkin_assert_simple!(new_decision_level < self.current_decision_level);
+    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) -> Rev<Drain<'_, T>> {
+        pumpkin_assert_simple!(new_checkpoint < self.current_checkpoint);
 
-        let new_trail_len = self.trail_delimiter[new_decision_level];
+        let new_trail_len = self.trail_delimiter[new_checkpoint];
 
-        self.current_decision_level = new_decision_level;
-        self.trail_delimiter.truncate(new_decision_level);
+        self.current_checkpoint = new_checkpoint;
+        self.trail_delimiter.truncate(new_checkpoint);
         self.trail.drain(new_trail_len..).rev()
     }
 
@@ -100,10 +100,10 @@ mod tests {
     }
 
     #[test]
-    fn backtracking_removes_elements_beyond_decision_level() {
+    fn backtracking_removes_elements_beyond_checkpoint() {
         let mut trail = Trail::default();
 
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(1);
         let _ = trail.synchronise(0);
 
@@ -115,11 +115,11 @@ mod tests {
         let mut trail = Trail::default();
         trail.push(1);
 
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(2);
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(3);
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(4);
 
         let _ = trail.synchronise(1);
@@ -132,11 +132,11 @@ mod tests {
         let mut trail = Trail::default();
         trail.push(1);
 
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(2);
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(3);
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(4);
 
         let popped = trail.synchronise(0).collect::<Vec<_>>();
@@ -144,19 +144,19 @@ mod tests {
     }
 
     #[test]
-    fn elements_at_current_decision_level() {
+    fn elements_at_current_checkpoint() {
         let mut trail = Trail::default();
         trail.push(1);
         trail.push(2);
 
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(3);
-        trail.increase_decision_level();
+        trail.new_checkpoint();
         trail.push(4);
         trail.push(5);
 
-        assert_eq!(&[1, 2], trail.values_on_decision_level(0));
-        assert_eq!(&[3], trail.values_on_decision_level(1));
-        assert_eq!(&[4, 5], trail.values_on_decision_level(2));
+        assert_eq!(&[1, 2], trail.values_at_checkpoint(0));
+        assert_eq!(&[3], trail.values_at_checkpoint(1));
+        assert_eq!(&[4, 5], trail.values_at_checkpoint(2));
     }
 }

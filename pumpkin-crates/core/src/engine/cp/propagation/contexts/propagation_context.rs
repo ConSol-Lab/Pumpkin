@@ -120,8 +120,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.assignments.get_decision_level()
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.assignments.get_checkpoint()
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
@@ -251,11 +251,11 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     /// Returns the holes which were created on the current decision level.
-    fn get_holes_on_current_decision_level<Var: IntegerVariable>(
+    fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
         &self,
         var: &Var,
     ) -> impl Iterator<Item = i32> {
-        var.get_holes_on_current_decision_level(self.assignments())
+        var.get_holes_at_current_checkpoint(self.assignments())
     }
 
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were

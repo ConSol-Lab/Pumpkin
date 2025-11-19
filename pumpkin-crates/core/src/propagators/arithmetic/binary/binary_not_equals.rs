@@ -230,7 +230,7 @@ mod tests {
 
         solver.assert_bounds(b, 1, 10);
 
-        solver.increase_decision_level();
+        solver.new_checkpoint();
 
         let should_enqueue = solver.decrease_upper_bound_and_notify(propagator, 1, b, 5);
         assert_eq!(should_enqueue, EnqueueDecision::Skip);

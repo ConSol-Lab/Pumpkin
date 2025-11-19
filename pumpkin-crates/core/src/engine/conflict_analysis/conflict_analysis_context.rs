@@ -107,7 +107,7 @@ impl ConflictAnalysisContext<'_> {
         for &predicate in conflict_nogood.iter() {
             let predicate_dl = self
                 .state
-                .get_decision_level_for_predicate(predicate)
+                .get_checkpoint_for_predicate(predicate)
                 .expect("all predicates in the conflict nogood should be assigned to true");
 
             if predicate_dl == 0 {
@@ -124,7 +124,7 @@ impl ConflictAnalysisContext<'_> {
 
         conflict_nogood
             .into_iter()
-            .filter(|&p| self.state.get_decision_level_for_predicate(p).unwrap() > 0)
+            .filter(|&p| self.state.get_checkpoint_for_predicate(p).unwrap() > 0)
             .collect()
     }
 

@@ -290,9 +290,8 @@ impl State {
 
     /// If the provided [`Predicate`] is satisfied then it returns [`Some`] containing the decision
     /// level at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
-    pub fn get_decision_level_for_predicate(&self, predicate: Predicate) -> Option<usize> {
-        self.assignments
-            .get_decision_level_for_predicate(&predicate)
+    pub fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
+        self.assignments.get_checkpoint_for_predicate(&predicate)
     }
 
     /// Returns the truth value of the provided [`Literal`].
@@ -319,8 +318,8 @@ impl State {
     }
 
     /// Returns the number of created decision levels.
-    pub fn get_decision_level(&self) -> usize {
-        self.assignments.get_decision_level()
+    pub fn get_checkpoint(&self) -> usize {
+        self.assignments.get_checkpoint()
     }
 }
 
@@ -442,7 +441,7 @@ impl State {
     ///
     /// If a domain becomes empty due to this operation, an [`EmptyDomain`] [`Err`] is returned.
     ///
-    /// This method does _not_ perform any propagate. For that, an explicit call to
+    /// This method does _not_ perform any propagation. For that, an explicit call to
     /// [`State::fixed_point_propagate`] is required. This allows the
     /// posting of multiple predicates before the entire propagation engine is invoked.
     ///
@@ -477,10 +476,10 @@ impl State {
     /// assert_eq!(state.upper_bound(variable), 10);
     /// ```
     pub fn new_checkpoint(&mut self) {
-        self.assignments.increase_decision_level();
-        self.notification_engine.increase_decision_level();
-        self.trailed_values.increase_decision_level();
-        self.reason_store.increase_decision_level();
+        self.assignments.new_checkpoint();
+        self.notification_engine.new_checkpoint();
+        self.trailed_values.new_checkpoint();
+        self.reason_store.new_checkpoint();
     }
 
     /// Return to the given level.
@@ -491,7 +490,7 @@ impl State {
     ///
     /// See [`State::new_checkpoint`] for an example.
     pub fn restore_to(&mut self, backtrack_level: usize) -> Vec<(DomainId, i32)> {
-        pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
+        pumpkin_assert_simple!(backtrack_level < self.get_checkpoint());
 
         let unfixed_after_backtracking = self
             .assignments

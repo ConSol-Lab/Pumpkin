@@ -58,7 +58,7 @@ pub(crate) fn explain_root_assignment(
     predicate: Predicate,
 ) {
     assert_eq!(
-        context.state.get_decision_level_for_predicate(predicate),
+        context.state.get_checkpoint_for_predicate(predicate),
         Some(0)
     );
 

@@ -113,7 +113,7 @@ impl RecursiveMinimiser {
         if !self.is_decision_level_allowed(
             context
                 .state
-                .get_decision_level_for_predicate(input_predicate)
+                .get_checkpoint_for_predicate(input_predicate)
                 .unwrap(),
         ) {
             self.assign_predicate_label(input_predicate, Label::Poison);
@@ -137,7 +137,7 @@ impl RecursiveMinimiser {
             // Root assignments can be safely ignored.
             if context
                 .state
-                .get_decision_level_for_predicate(antecedent_predicate)
+                .get_checkpoint_for_predicate(antecedent_predicate)
                 .unwrap()
                 == 0
             {
@@ -240,9 +240,9 @@ impl RecursiveMinimiser {
             // Predicates from the current decision level are always kept.
             // This is the analogue of asserting literals.
             if assignments
-                .get_decision_level_for_predicate(&predicate)
+                .get_checkpoint_for_predicate(&predicate)
                 .unwrap()
-                == assignments.get_decision_level()
+                == assignments.get_checkpoint()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;
@@ -257,7 +257,7 @@ impl RecursiveMinimiser {
 
             self.mark_decision_level_as_allowed(
                 assignments
-                    .get_decision_level_for_predicate(&predicate)
+                    .get_checkpoint_for_predicate(&predicate)
                     .unwrap(),
             );
         }

@@ -14,17 +14,17 @@ impl TrailedValues {
         self.values.push(initial_value)
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     pub(crate) fn read(&self, trailed_integer: TrailedInteger) -> i64 {
         self.values[trailed_integer]
     }
 
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
+    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
         self.trail
-            .synchronise(new_decision_level)
+            .synchronise(new_checkpoint)
             .for_each(|state_change| self.values[state_change.reference] = state_change.old_value)
     }
 
@@ -52,7 +52,7 @@ impl TrailedValues {
     pub(crate) fn debug_create_empty_clone(&self) -> Self {
         let mut new_trail = self.trail.clone();
         let mut new_values = self.values.clone();
-        if new_trail.get_decision_level() > 0 {
+        if new_trail.get_checkpoint() > 0 {
             new_trail.synchronise(0).for_each(|state_change| {
                 new_values[state_change.reference] = state_change.old_value
             });
@@ -75,7 +75,7 @@ mod tests {
 
         assert_eq!(assignments.read(trailed_integer), 0);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         assignments.add_assign(trailed_integer, 5);
 
         assert_eq!(assignments.read(trailed_integer), 5);
@@ -83,7 +83,7 @@ mod tests {
         assignments.add_assign(trailed_integer, 5);
         assert_eq!(assignments.read(trailed_integer), 10);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         assignments.add_assign(trailed_integer, 1);
 
         assert_eq!(assignments.read(trailed_integer), 11);
