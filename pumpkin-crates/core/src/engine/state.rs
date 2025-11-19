@@ -457,6 +457,8 @@ impl State {
     /// Create a checkpoint of the current [`State`], that can be returned to with
     /// [`State::restore_to`].
     ///
+    /// The current checkpoint can be retrieved using the method [`State::get_checkpoint`].
+    ///
     /// This method should only be called if nothing can be propagated anymore.
     ///
     /// # Example
@@ -467,12 +469,20 @@ impl State {
     /// let mut state = State::default();
     /// let variable = state.new_interval_variable(1, 10, Some("x1".to_string()));
     ///
+    /// assert_eq!(state.get_checkpoint(), 0);
+    ///
     /// state.new_checkpoint();
+    ///
+    /// assert_eq!(state.get_checkpoint(), 1);
+    ///
     /// state
     ///     .post(predicate![variable <= 5])
     ///     .expect("The lower bound is 1 so no conflict");
+    /// assert_eq!(state.upper_bound(variable), 5);
+    ///
     /// state.restore_to(0);
     ///
+    /// assert_eq!(state.get_checkpoint(), 0);
     /// assert_eq!(state.upper_bound(variable), 10);
     /// ```
     pub fn new_checkpoint(&mut self) {
