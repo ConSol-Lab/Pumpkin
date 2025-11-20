@@ -33,7 +33,6 @@ use crate::proof::ProofLog;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
-use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::results::SolutionReference;
 use crate::state::PropagatorHandle;
@@ -310,22 +309,7 @@ impl State {
     /// If the [`Literal`] is assigned in the current [`State`] then [`Some`] containing whether
     /// the [`Literal`] is satisfied or falsified is returned. Otherwise, [`None`] is returned.
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        let literal_is_true = self
-            .assignments
-            .is_predicate_satisfied(literal.get_true_predicate());
-        let opposite_literal_is_true = self
-            .assignments
-            .is_predicate_satisfied((!literal).get_true_predicate());
-
-        pumpkin_assert_moderate!(!(literal_is_true && opposite_literal_is_true));
-
-        // If both the literal is not true and its negation is not true then the literal is
-        // unassigned
-        if !literal_is_true && !opposite_literal_is_true {
-            None
-        } else {
-            Some(literal_is_true)
-        }
+        self.truth_value(literal.get_true_predicate())
     }
 
     /// Returns the number of created decision levels.
