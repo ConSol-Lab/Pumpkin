@@ -120,8 +120,10 @@ pub(crate) trait Propagator: Downcast {
 
     /// Called when a [`PredicateId`] has been satisfied.
     ///
-    /// By default, the propagator does nothing when this method is called.
-    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
+    /// By default, the propagator is enqueued when the predicate becomes true.
+    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {
+        EnqueueDecision::Enqueue
+    }
 
     /// Called when a [`PredicateId`] has been falsified.
     ///

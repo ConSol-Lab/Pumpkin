@@ -143,11 +143,6 @@ impl HypercubeLinearResolver {
         mut conflicting_hypercube_linear: HypercubeLinear,
         conflicting_reason_set: Vec<Predicate>,
     ) -> (HypercubeLinear, Vec<Predicate>) {
-        debug!(
-            "Resolving conflict (dl = {}) {conflicting_hypercube_linear}",
-            context.assignments.get_decision_level()
-        );
-
         let mut conflicting_reason_set = HypercubeLinear::clause(conflicting_reason_set);
 
         let conflict_dl = context.assignments.get_decision_level();
@@ -228,19 +223,19 @@ impl HypercubeLinearResolver {
                     || top_of_trail.predicate.is_upper_bound_predicate()
             );
 
+            let pivot_predicate = top_of_trail.predicate;
+            trace!("processing {}", pivot_predicate);
+
             // Remove the top of trail from the reason set if it is in the reason set.
             if !conflicting_reason_set
                 .iter_hypercube()
-                .any(|p| p == top_of_trail.predicate)
+                .any(|p| pivot_predicate.implies(p))
             {
+                trace!("  => skipping, does not contribute to conflict");
                 // The current top of trail is not in the reason set and therefore does not
                 // contribute to the conflict.
                 continue;
             }
-
-            let pivot_predicate = top_of_trail.predicate;
-
-            trace!("processing {}", pivot_predicate);
 
             let Some((reason_ref, _)) = top_of_trail.reason else {
                 panic!("resolution should never reach the last decision");
@@ -318,7 +313,22 @@ impl HypercubeLinearResolver {
                 }
             }
 
-            if hypercube_models_bound(&conflicting_hypercube_linear, top_of_trail.predicate) {
+            if !elimination_happened {
+                // If the pivot contributes to the conflict via the linear part of the conflicting
+                // hypercube linear, and is propagated by the hypercube of the reason, we need to
+                // weaken the conflict here to ensure propositional resolution can eliminate the
+                // pivot.
+                if let Some(hypercube_linear) = conflicting_hypercube_linear.weaken(pivot_predicate)
+                {
+                    trace!(
+                        "Pivot is propagated by the hypercube of the reason, but is in the linear of the conflict."
+                    );
+                    trace!("weakening conflict to {hypercube_linear}");
+                    conflicting_hypercube_linear = hypercube_linear;
+                }
+            }
+
+            if hypercube_models_bound(&conflicting_hypercube_linear, pivot_predicate) {
                 // Here we need to perform propositional resolution to eliminate the
                 // variable from the hypercube.
 
@@ -337,10 +347,12 @@ impl HypercubeLinearResolver {
                 trace!("no propositional resolution");
             }
 
-            assert!(
-                elimination_happened,
-                "if the predicate contributes to the conflict, an elimination should be possible"
-            );
+            if !elimination_happened {
+                trace!("current conflict: {conflicting_hypercube_linear}");
+                panic!(
+                    "if the predicate contributes to the conflict, an elimination should be possible"
+                );
+            }
 
             // In this case the fourier elimination may have removed multiple variables, which we
             // also need to remove from the new reason set.
@@ -348,6 +360,13 @@ impl HypercubeLinearResolver {
                 &conflicting_hypercube_linear,
                 trail_index,
                 context.assignments,
+            );
+
+            assert!(
+                !conflicting_reason_set
+                    .iter_hypercube()
+                    .any(|p| p == pivot_predicate),
+                "the pivot predicate is removed from the reason of the conflict"
             );
         }
     }
@@ -359,37 +378,77 @@ impl ConflictResolver for HypercubeLinearResolver {
     }
 
     fn resolve_conflict(&mut self, mut context: ConflictAnalysisContext) -> bool {
-        let (conflicting_hypercube_linear, reason_set) =
+        let (original_conflicting_hypercube_linear, mut reason_set) =
             self.compute_conflicting_hypercube_linear(&mut context);
 
-        let (learned_hypercube_linear, reason_set) = self.learn_hypercube_linear(
-            HlResolverContext {
-                assignments: context.assignments,
-                reason_store: context.reason_store,
-                propagators: context.propagators,
-            },
-            conflicting_hypercube_linear.clone(),
-            reason_set,
+        debug!(
+            "Resolving conflict (dl = {}) {original_conflicting_hypercube_linear}",
+            context.assignments.get_decision_level()
         );
+
+        let mut conflicting_hypercube_linear = original_conflicting_hypercube_linear.clone();
+
+        let learned_hypercube_linear = loop {
+            let (learned_hypercube_linear, learned_reason_set) = self.learn_hypercube_linear(
+                HlResolverContext {
+                    assignments: context.assignments,
+                    reason_store: context.reason_store,
+                    propagators: context.propagators,
+                },
+                conflicting_hypercube_linear.clone(),
+                reason_set.clone(),
+            );
+
+            let reasons_on_current_dl = learned_reason_set
+                .iter()
+                .map(|p| {
+                    context
+                        .assignments
+                        .get_decision_level_for_predicate(p)
+                        .expect("all predicates are assigned (and true)")
+                })
+                .filter(|&dl| dl == context.assignments.get_decision_level())
+                .count();
+            let backjump_level = learned_reason_set
+                .iter()
+                .map(|p| {
+                    context
+                        .assignments
+                        .get_decision_level_for_predicate(p)
+                        .expect("all predicates are assigned (and true)")
+                })
+                .filter(|&dl| dl < context.assignments.get_decision_level())
+                .max()
+                .unwrap_or(0);
+
+            assert!(reasons_on_current_dl <= 1);
+
+            if reasons_on_current_dl == 1 {
+                self.restore_solver(
+                    &mut context,
+                    backjump_level,
+                    learned_hypercube_linear.clone(),
+                );
+                break learned_hypercube_linear;
+            }
+
+            trace!(
+                "Learning resulted in zero reasons on the current DL. We backtrack and continue learning."
+            );
+
+            // There are 0 reasons on the current decision level that contribute to the conflict.
+            // Therefore, the conflict exists at a previous decision level. We backtrack there and
+            // restart the analysis.
+            context.backtrack(backjump_level);
+
+            conflicting_hypercube_linear = learned_hypercube_linear;
+            reason_set = learned_reason_set;
+        };
 
         assert_ne!(
-            learned_hypercube_linear, conflicting_hypercube_linear,
+            learned_hypercube_linear, original_conflicting_hypercube_linear,
             "learning should produce a new constraint"
         );
-
-        let backjump_level = reason_set
-            .iter()
-            .map(|p| {
-                context
-                    .assignments
-                    .get_decision_level_for_predicate(p)
-                    .expect("all predicates are assigned (and true)")
-            })
-            .filter(|&dl| dl < context.assignments.get_decision_level())
-            .max()
-            .unwrap_or(0);
-
-        self.restore_solver(&mut context, backjump_level, learned_hypercube_linear);
 
         true
     }
@@ -452,19 +511,24 @@ fn propositional_resolution(
     pivot_predicate: Predicate,
 ) -> HypercubeLinear {
     trace!("applying propositional resolution on {pivot_predicate}",);
-    trace!("  - {conflicting_hypercube_linear}");
-    trace!("  - {reason}");
 
+    // Make sure that the pivot is not also contributing to the conflict in the linear part.
+    trace!("  - {conflicting_hypercube_linear}");
+    let weakened_conflict = conflicting_hypercube_linear.weaken(pivot_predicate);
+    let weakened_conflict = weakened_conflict.unwrap_or(conflicting_hypercube_linear);
+    trace!("    - weakened: {weakened_conflict}");
+
+    trace!("  - {reason}");
     let weakened_reason = weaken_to_clause(assignments, trail_position, reason, pivot_predicate);
     trace!("     - as clause: {weakened_reason}");
 
-    let hypercube = conflicting_hypercube_linear
+    let hypercube = weakened_conflict
         .iter_hypercube()
         .chain(weakened_reason.iter_hypercube())
-        .filter(|predicate| {
+        .filter(|&predicate| {
             // Only keep predicates that are not the propagated predicate or its
             // opposite.
-            !predicate.implies(pivot_predicate) && !predicate.implies(!pivot_predicate)
+            !pivot_predicate.implies(predicate) && !pivot_predicate.implies(!predicate)
         })
         .filter(|predicate| {
             // Ignore predicates that are true at the root.
@@ -475,24 +539,12 @@ fn propositional_resolution(
         })
         .collect();
 
-    let mut new_constraint = HypercubeLinear::new(
+    let new_constraint = HypercubeLinear::new(
         hypercube,
-        conflicting_hypercube_linear.iter_linear_terms().collect(),
-        conflicting_hypercube_linear.linear_rhs(),
+        weakened_conflict.iter_linear_terms().collect(),
+        weakened_conflict.linear_rhs(),
     )
     .expect("not trivially satisfiable");
-
-    // The bounds in the explanation may contribute to the slack of the constraint.
-    // After backtracking that would result in a possibly non-negative slack.
-    // Therefore, weaken on these bounds just in case.
-    for predicate in weakened_reason
-        .iter_hypercube()
-        .filter(|&predicate| predicate != !pivot_predicate)
-    {
-        if let Some(l) = new_constraint.weaken(predicate) {
-            new_constraint = l;
-        }
-    }
 
     trace!("result = {new_constraint}");
 
@@ -532,7 +584,7 @@ fn weaken_to_clause(
 fn hypercube_models_bound(hypercube_linear: &HypercubeLinear, predicate: Predicate) -> bool {
     hypercube_linear
         .iter_hypercube()
-        .any(|hypercube_predicate| hypercube_predicate.implies(predicate))
+        .any(|hypercube_predicate| predicate.implies(hypercube_predicate))
 }
 
 struct HlResolverContext<'a> {
@@ -572,6 +624,19 @@ fn fourier_eliminate(
             _ => return Err(FourierError::NoVariableElimination),
         };
 
+    let contributes_to_conflict_in_linear = (weight_in_conflicting.is_positive()
+        && pivot_predicate.is_lower_bound_predicate())
+        || (weight_in_conflicting.is_negative() && pivot_predicate.is_upper_bound_predicate());
+
+    // We should only do fourier elimination if the pivot predicate actually contributes to the
+    // conflict. Otherwise performing the combination will not remove any contribution to the
+    // conflict.
+    if !contributes_to_conflict_in_linear {
+        return Err(FourierError::NoVariableElimination);
+    }
+
+    let reason_slack = reason.compute_slack_at_trail_position(assignments, trail_position);
+
     trace!("applying fourier elimination on {pivot_predicate}",);
     trace!("  - {conflicting_hypercube_linear}");
     trace!("  - {reason}");
@@ -579,10 +644,12 @@ fn fourier_eliminate(
         "  - slack a: {}",
         conflicting_hypercube_linear.compute_slack_at_trail_position(assignments, trail_position)
     );
-    trace!(
-        "  - slack b: {}",
-        reason.compute_slack_at_trail_position(assignments, trail_position)
-    );
+    trace!("  - slack b: {reason_slack}");
+
+    if reason_slack < 0 {
+        trace!("  => no fourier possible as reason propagated through hypercube");
+        return Err(FourierError::ResultOfEliminationTriviallySatisfiable);
+    }
 
     // Determine by how much to scale both linear terms.
     let g = gcd(
@@ -649,6 +716,7 @@ fn hypercube_from_reason(
         "combining with constraint ID {:?} (is_learned = {})",
         propagator.constraint_tag, propagator.is_learned
     );
+    trace!("{}", propagator.hypercube_linear);
 
     propagator.hypercube_linear.clone()
 }

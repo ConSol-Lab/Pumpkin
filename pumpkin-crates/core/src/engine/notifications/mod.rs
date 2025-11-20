@@ -8,6 +8,7 @@ pub(crate) use domain_event_notification::Watchers;
 pub(crate) use domain_event_notification::domain_events::DomainEvents;
 pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
+use log::trace;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;
 
@@ -316,7 +317,7 @@ impl NotificationEngine {
         // Then we notify the propagators that a predicate has been satisfied.
         //
         // Currently, only the nogood propagator is notified.
-        self.notify_predicate_id_satisfied(propagators, nogood_propagator_handle);
+        self.notify_predicate_id_satisfied(propagators, propagator_queue, nogood_propagator_handle);
         // At the moment this does nothing yet, but we call it to drain predicates.
         self.notify_predicate_id_falsified();
 
@@ -366,6 +367,7 @@ impl NotificationEngine {
     fn notify_predicate_id_satisfied(
         &mut self,
         propagators: &mut PropagatorStore,
+        propagator_queue: &mut PropagatorQueue,
         nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
     ) {
         for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
@@ -376,7 +378,13 @@ impl NotificationEngine {
                 .map(|vec| vec.as_slice())
                 .unwrap_or(&[])
             {
-                propagators[*propagator_id].notify_predicate_id_satisfied(predicate_id);
+                trace!("notifying {propagator_id}");
+                if propagators[*propagator_id].notify_predicate_id_satisfied(predicate_id)
+                    == EnqueueDecision::Enqueue
+                {
+                    propagator_queue
+                        .enqueue_propagator(*propagator_id, propagators[*propagator_id].priority());
+                }
             }
 
             // TODO: For now we always notify the NogoodPropagator explicitly. In the future, it
@@ -384,8 +392,7 @@ impl NotificationEngine {
             let nogood_propagator = propagators
                 .get_propagator_mut(nogood_propagator_handle)
                 .expect("nogood propagator handle refers to a nogood propagator");
-
-            nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+            let _ = nogood_propagator.notify_predicate_id_satisfied(predicate_id);
         }
     }
 
@@ -521,7 +528,7 @@ impl NotificationEngine {
             // Then we notify the propagators that a predicate has been satisfied.
             //
             // Currently, only the nogood propagator is notified.
-            self.notify_predicate_id_satisfied(propagators, handle);
+            self.notify_predicate_id_satisfied(propagators, propagator_queue, handle);
             // At the moment this does nothing yet, but we call it to drain predicates.
             self.notify_predicate_id_falsified();
         }

@@ -22,6 +22,7 @@ use crate::engine::TrailedValues;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -193,8 +194,9 @@ impl Propagator for NogoodPropagator {
         0
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
+    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
         self.updated_predicate_ids.push(predicate_id);
+        EnqueueDecision::Enqueue
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {

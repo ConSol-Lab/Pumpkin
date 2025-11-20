@@ -72,15 +72,21 @@ impl Hypercube {
         assert!(*lower_bound <= *upper_bound);
     }
 
-    fn lower_bound(&self, view: AffineView<DomainId>) -> i32 {
-        let Some((lower_bound, upper_bound)) = self.domains.get(&view.inner) else {
-            return i32::MIN;
-        };
+    fn lower_bound(&self, view: AffineView<DomainId>) -> Option<i32> {
+        let (lower_bound, upper_bound) = self.domains.get(&view.inner)?;
 
         if view.scale > 0 {
-            lower_bound * view.scale
+            if *lower_bound == i32::MIN {
+                None
+            } else {
+                Some(lower_bound * view.scale)
+            }
         } else if view.scale < 0 {
-            upper_bound * view.scale
+            if *upper_bound == i32::MAX {
+                None
+            } else {
+                Some(upper_bound * view.scale)
+            }
         } else {
             unreachable!("term weight is never zero")
         }
@@ -116,6 +122,15 @@ impl Hypercube {
     }
 }
 
+impl Display for Hypercube {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut bounds = self.iter().collect::<Vec<_>>();
+        bounds.sort();
+
+        write!(f, "{bounds:?}")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HypercubeLinear {
     hypercube: Hypercube,
@@ -131,7 +146,7 @@ impl Display for HypercubeLinear {
             linear_rhs,
         } = self;
 
-        write!(f, "{hypercube:?} -> {linear_terms:?} <= {linear_rhs}")
+        write!(f, "{hypercube} -> {linear_terms:?} <= {linear_rhs}")
     }
 }
 
@@ -225,10 +240,14 @@ impl HypercubeLinear {
         self.linear_terms
             .iter()
             .map(|view| {
-                i32::max(
-                    view.lower_bound_at_trail_position(assignments, trail_position),
-                    self.hypercube.lower_bound(*view),
-                )
+                let domain_lower_bound =
+                    view.lower_bound_at_trail_position(assignments, trail_position);
+
+                if let Some(hypercube_bound) = self.hypercube.lower_bound(*view) {
+                    i32::max(hypercube_bound, domain_lower_bound)
+                } else {
+                    domain_lower_bound
+                }
             })
             .sum::<i32>()
     }
