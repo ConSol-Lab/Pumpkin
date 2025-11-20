@@ -261,10 +261,6 @@ impl Assignments {
             }
         }
     }
-
-    pub(crate) fn get_position_at_decision_level(&self, decision_level: usize) -> usize {
-        self.trail.get_position_at_decision_level(decision_level)
-    }
 }
 
 // methods for getting info about the domains

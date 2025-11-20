@@ -21,7 +21,6 @@ use crate::propagators::HypercubeLinear;
 use crate::propagators::HypercubeLinearPropagator;
 use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::statistics::Statistic;
-use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
@@ -202,7 +201,7 @@ impl HypercubeLinearResolver {
 
             trace!(
                 "reasons on conflict dl = {reasons_on_current_dl:?} (out of {})",
-                conflicting_reason_set.iter_hypercube().len()
+                conflicting_reason_set.iter_hypercube().count()
             );
 
             if reasons_on_current_dl.len() <= 1 {
@@ -266,15 +265,15 @@ impl HypercubeLinearResolver {
                 top_of_trail.predicate,
             ) {
                 Ok(hypercube_linear) => {
-                    let new_slack =
-                        compute_slack(&hypercube_linear, trail_index, context.assignments);
+                    let new_slack = hypercube_linear
+                        .compute_slack_at_trail_position(context.assignments, trail_index);
                     trace!("new slack = {new_slack}");
 
                     let new_conflicting = if new_slack >= 0 {
                         let weakened_conflicting =
                             conflicting_hypercube_linear.weaken(pivot_predicate).expect("if we could do fourier elimination then the top of trail contributes to the conflict and can therefore be weakened on");
-                        let weakened_conflicting_slack =
-                            compute_slack(&weakened_conflicting, trail_index, context.assignments);
+                        let weakened_conflicting_slack = weakened_conflicting
+                            .compute_slack_at_trail_position(context.assignments, trail_index);
                         assert!(
                             weakened_conflicting_slack < 0,
                             "weakening like this does not affect slack"
@@ -297,8 +296,8 @@ impl HypercubeLinearResolver {
                 Err(FourierError::ResultOfEliminationTriviallySatisfiable) => {
                     let weakened_conflicting =
                             conflicting_hypercube_linear.weaken(pivot_predicate).expect("if we could do fourier elimination then the top of trail contributes to the conflict and can therefore be weakened on");
-                    let weakened_conflicting_slack =
-                        compute_slack(&weakened_conflicting, trail_index, context.assignments);
+                    let weakened_conflicting_slack = weakened_conflicting
+                        .compute_slack_at_trail_position(context.assignments, trail_index);
                     assert!(
                         weakened_conflicting_slack < 0,
                         "weakening like this does not affect slack"
@@ -331,11 +330,8 @@ impl HypercubeLinearResolver {
                     top_of_trail.predicate,
                 );
                 elimination_happened = true;
-                let new_slack = compute_slack(
-                    &conflicting_hypercube_linear,
-                    trail_index,
-                    context.assignments,
-                );
+                let new_slack = conflicting_hypercube_linear
+                    .compute_slack_at_trail_position(context.assignments, trail_index);
                 trace!("slack after resh = {new_slack}");
             } else {
                 trace!("no propositional resolution");
@@ -346,7 +342,8 @@ impl HypercubeLinearResolver {
                 "if the predicate contributes to the conflict, an elimination should be possible"
             );
 
-            // In this case the fourier elimination may have removed multiple variables, which we also need to remove from the new reason set.
+            // In this case the fourier elimination may have removed multiple variables, which we
+            // also need to remove from the new reason set.
             conflicting_reason_set = explain_conflict(
                 &conflicting_hypercube_linear,
                 trail_index,
@@ -580,11 +577,11 @@ fn fourier_eliminate(
     trace!("  - {reason}");
     trace!(
         "  - slack a: {}",
-        compute_slack(conflicting_hypercube_linear, trail_position, assignments)
+        conflicting_hypercube_linear.compute_slack_at_trail_position(assignments, trail_position)
     );
     trace!(
         "  - slack b: {}",
-        compute_slack(reason, trail_position, assignments)
+        reason.compute_slack_at_trail_position(assignments, trail_position)
     );
 
     // Determine by how much to scale both linear terms.
@@ -676,44 +673,11 @@ fn is_conflicting(
         return ConflictingStatus::PremisesNotTrue;
     }
 
-    if compute_slack(hypercube_linear, trail_position, assignments) < 0 {
+    if hypercube_linear.compute_slack_at_trail_position(assignments, trail_position) < 0 {
         ConflictingStatus::Conflicting
     } else {
         ConflictingStatus::NonNegativeSlack
     }
-}
-
-/// Compute the slack for the linear component of the hypercube linear.
-///
-/// If the slack is negative, the linear component is conflicting.
-fn compute_slack(
-    hypercube_linear: &HypercubeLinear,
-    trail_position: usize,
-    assignments: &Assignments,
-) -> i32 {
-    let lhs = evaluate_linear_lower_bound(hypercube_linear, trail_position, assignments);
-    hypercube_linear.linear_rhs() - lhs
-}
-
-fn evaluate_linear_lower_bound(
-    hypercube_linear: &HypercubeLinear,
-    trail_position: usize,
-    assignments: &Assignments,
-) -> i32 {
-    hypercube_linear
-        .iter_linear_terms()
-        .map(|term| term_lower_bound(term, trail_position, assignments))
-        .sum::<i32>()
-}
-
-fn term_lower_bound(
-    (weight, domain): (NonZero<i32>, DomainId),
-    trail_position: usize,
-    assignments: &Assignments,
-) -> i32 {
-    domain
-        .scaled(weight.get())
-        .lower_bound_at_trail_position(assignments, trail_position)
 }
 
 // Taken from https://docs.rs/num-integer/latest/src/num_integer/lib.rs.html#420-422

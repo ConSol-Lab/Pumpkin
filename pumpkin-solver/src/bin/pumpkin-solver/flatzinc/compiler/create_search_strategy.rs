@@ -43,13 +43,15 @@ pub(crate) fn run(
     //                 .is_propagated_predicate(predicate![var >= lower_bound])
     //                 .unwrap();
 
-    //             let is_lb_initial_bound = context.is_initial_bound(predicate![var >= lower_bound]);
+    //             let is_lb_initial_bound = context.is_initial_bound(predicate![var >=
+    // lower_bound]);
 
     //             let is_ub_propagated = context
     //                 .is_propagated_predicate(predicate![var <= upper_bound])
     //                 .unwrap();
 
-    //             let is_ub_initial_bound = context.is_initial_bound(predicate![var <= upper_bound]);
+    //             let is_ub_initial_bound = context.is_initial_bound(predicate![var <=
+    // upper_bound]);
 
     //             if is_lb_initial_bound || is_lb_propagated {
     //                 return predicate![var <= lower_bound];

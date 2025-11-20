@@ -52,15 +52,6 @@ impl<T> Trail<T> {
         self.current_decision_level
     }
 
-    /// Get the last trail index of the given decision level.
-    pub(crate) fn get_position_at_decision_level(&self, decision_level: usize) -> usize {
-        if decision_level == self.trail_delimiter.len() {
-            self.trail.len() - 1
-        } else {
-            self.trail_delimiter[decision_level] - 1
-        }
-    }
-
     pub(crate) fn synchronise(&mut self, new_decision_level: usize) -> Rev<Drain<'_, T>> {
         pumpkin_assert_simple!(new_decision_level < self.current_decision_level);
 
