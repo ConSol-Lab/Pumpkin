@@ -372,10 +372,10 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
     use crate::engine::variables::TransformableVariable;
+    use crate::state::Conflict;
 
     #[test]
     fn test_value_is_removed() {
@@ -419,8 +419,8 @@ mod tests {
         let expected = conjunction!([x == 2] & [y == 2]);
 
         match err {
-            Inconsistency::EmptyDomain => panic!("expected an explicit conflict"),
-            Inconsistency::Conflict(conflict) => assert_eq!(expected, conflict.conjunction),
+            Conflict::EmptyDomain(_) => panic!("expected an explicit conflict"),
+            Conflict::Propagator(conflict) => assert_eq!(expected, conflict.conjunction),
         }
     }
 

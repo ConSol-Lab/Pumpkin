@@ -7,7 +7,6 @@ use super::PropagatorQueue;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::constructor::PropagatorConstructor;
-use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
 use crate::engine::EmptyDomain;
 use crate::engine::State;
@@ -22,6 +21,7 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::state::Conflict;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -60,7 +60,7 @@ impl TestSolver {
     pub(crate) fn new_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<PropagatorId, Inconsistency>
+    ) -> Result<PropagatorId, Conflict>
     where
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
@@ -207,7 +207,7 @@ impl TestSolver {
         Ok(())
     }
 
-    pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
+    pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
         let context = PropagationContextMut::new(
             &mut self.state.trailed_values,
             &mut self.state.assignments,
@@ -221,7 +221,7 @@ impl TestSolver {
     pub(crate) fn propagate_until_fixed_point(
         &mut self,
         propagator: PropagatorId,
-    ) -> Result<(), Inconsistency> {
+    ) -> Result<(), Conflict> {
         let mut num_trail_entries = self.state.assignments.num_trail_entries();
         self.notify_propagator(propagator);
         loop {

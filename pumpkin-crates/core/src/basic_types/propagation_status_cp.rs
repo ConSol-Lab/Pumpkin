@@ -1,29 +1,11 @@
 use super::PropositionalConjunction;
-use crate::engine::EmptyDomain;
 use crate::proof::InferenceCode;
+use crate::state::Conflict;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
 /// variant, i.e. a propositional conjunction.
-pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Inconsistency {
-    Conflict(PropagatorConflict),
-    EmptyDomain,
-}
-
-impl From<EmptyDomain> for Inconsistency {
-    fn from(_: EmptyDomain) -> Self {
-        Inconsistency::EmptyDomain
-    }
-}
-
-impl From<PropagatorConflict> for Inconsistency {
-    fn from(conflict: PropagatorConflict) -> Self {
-        Inconsistency::Conflict(conflict)
-    }
-}
+pub(crate) type PropagationStatusCP = Result<(), Conflict>;
 
 /// A conflict stated by a propagator. A propagator that identifies a conflict that is _not_ an
 /// empty domain, describes that conflict with this type.

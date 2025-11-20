@@ -952,8 +952,9 @@ impl ConstraintSatisfactionSolver {
         let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
 
         if addition_status.is_err() || self.solver_state.is_conflicting() {
-            let conflict = self.state.prepare_for_conflict_resolution();
-            self.solver_state.declare_conflict(conflict.into());
+            if let Err(conflict) = addition_status {
+                self.solver_state.declare_conflict(conflict.into());
+            }
 
             self.handle_root_propagation(num_trail_entries);
             self.complete_proof();
@@ -971,9 +972,6 @@ impl ConstraintSatisfactionSolver {
         self.handle_root_propagation(num_trail_entries);
 
         if self.solver_state.is_infeasible() {
-            let conflict = self.state.prepare_for_conflict_resolution();
-            self.solver_state.declare_conflict(conflict.into());
-
             self.complete_proof();
             Err(ConstraintOperationError::InfeasibleState)
         } else {

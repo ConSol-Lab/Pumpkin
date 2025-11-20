@@ -1,6 +1,7 @@
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
@@ -331,7 +332,7 @@ impl PropagationContextMut<'_> {
         predicate: Predicate,
         reason: impl Into<Reason>,
         inference_code: InferenceCode,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         let slot = self.reason_store.new_slot();
 
         let modification_result = self.assignments.post_predicate(
@@ -349,12 +350,19 @@ impl PropagationContextMut<'_> {
                 );
                 Ok(())
             }
-            Err(e) => {
+            Err(EmptyDomain) => {
                 let _ = slot.populate(
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),
                 );
-                Err(e)
+                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                    self.assignments.remove_last_trail_element();
+
+                Err(EmptyDomainConflict {
+                    trigger_predicate,
+                    trigger_reason,
+                    trigger_inference_code,
+                })
             }
         }
     }

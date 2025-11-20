@@ -7,8 +7,6 @@ use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
 use super::contexts::PropagationContextWithTrailedValues;
-#[cfg(doc)]
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -23,6 +21,8 @@ use crate::predicates::Predicate;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+#[cfg(doc)]
+use crate::state::Conflict;
 use crate::statistics::statistic_logger::StatisticLogger;
 
 // We need to use this to cast from `Box<dyn Propagator>` to `NogoodPropagator`; rust inherently
@@ -64,10 +64,10 @@ pub(crate) trait Propagator: Downcast + DynClone {
     /// This method extends the current partial
     /// assignments with inferred domain changes found by the
     /// [`Propagator`]. In case no conflict has been detected it should return
-    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Inconsistency`] which
+    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Conflict`] which
     /// contains the reason for the failure; either because a propagation caused an
-    /// an empty domain ([`Inconsistency::EmptyDomain`]) or because the logic of the propagator
-    /// found the current state to be inconsistent ([`Inconsistency::Conflict`]).
+    /// an empty domain ([`Conflict::EmptyDomain`]) or because the logic of the propagator
+    /// found the current state to be inconsistent ([`Conflict::Propagator`]).
     ///
     /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
     /// failure

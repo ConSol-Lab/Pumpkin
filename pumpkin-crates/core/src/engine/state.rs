@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
@@ -89,6 +88,18 @@ pub enum Conflict {
     Propagator(PropagatorConflict),
     /// A conflict caused by an empty domain for a variable occurring.
     EmptyDomain(EmptyDomainConflict),
+}
+
+impl From<EmptyDomainConflict> for Conflict {
+    fn from(value: EmptyDomainConflict) -> Self {
+        Conflict::EmptyDomain(value)
+    }
+}
+
+impl From<PropagatorConflict> for Conflict {
+    fn from(value: PropagatorConflict) -> Self {
+        Conflict::Propagator(value)
+    }
 }
 
 /// A conflict because a domain became empty.
@@ -535,23 +546,6 @@ impl State {
         unfixed_after_backtracking
     }
 
-    /// This method should only be called when an empty domain is encountered during propagation.
-    /// It removes the final trail element and returns the [`Conflict`].
-    pub(crate) fn prepare_for_conflict_resolution(&mut self) -> Conflict {
-        // TODO: As a temporary solution, we remove the last trail element.
-        // This way we guarantee that the assignment is consistent, which is needed
-        // for the conflict analysis data structures. The proper alternative would
-        // be to forbid the assignments from getting into an inconsistent state.
-        let (trigger_predicate, trigger_reason, trigger_inference_code) =
-            self.assignments.remove_last_trail_element();
-
-        Conflict::EmptyDomain(EmptyDomainConflict {
-            trigger_predicate,
-            trigger_reason,
-            trigger_inference_code,
-        })
-    }
-
     /// Performs a single call to [`Propagator::propagate`] for the propagator with the provided
     /// [`PropagatorId`].
     ///
@@ -608,29 +602,20 @@ impl State {
                     "Checking the propagations performed by the propagator led to inconsistencies!"
                 );
             }
-            Err(inconsistency) => {
+            Err(conflict) => {
                 self.statistics.num_conflicts += 1;
-                match inconsistency {
-                    // A propagator did a change that resulted in an empty domain.
-                    Inconsistency::EmptyDomain => {
-                        let info = self.prepare_for_conflict_resolution();
-                        return Err(info);
-                    }
-                    // A propagator-specific reason for the current conflict.
-                    Inconsistency::Conflict(conflict) => {
-                        pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                            &self.trailed_values,
-                            &self.assignments,
-                            &conflict.conjunction,
-                            &self.propagators[propagator_id],
-                            propagator_id,
-                            &self.notification_engine
-                        ));
-
-                        let stored_conflict_info = Conflict::Propagator(conflict);
-                        return Err(stored_conflict_info);
-                    }
+                if let Conflict::Propagator(inner) = &conflict {
+                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                        &self.trailed_values,
+                        &self.assignments,
+                        &inner.conjunction,
+                        &self.propagators[propagator_id],
+                        propagator_id,
+                        &self.notification_engine
+                    ));
                 }
+
+                return Err(conflict);
             }
         }
         Ok(())

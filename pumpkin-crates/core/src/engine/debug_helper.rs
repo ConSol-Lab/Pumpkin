@@ -10,13 +10,13 @@ use super::predicates::predicate::Predicate;
 use super::propagation::ExplanationContext;
 use super::propagation::store::PropagatorStore;
 use super::reason::ReasonStore;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::state::Conflict;
 
 #[derive(Copy, Clone)]
 pub(crate) struct DebugDyn<'a> {
@@ -278,7 +278,7 @@ impl DebugHelper {
 
                     assert!(
                         {
-                            let is_empty_domain = matches!(conflict, Inconsistency::EmptyDomain);
+                            let is_empty_domain = matches!(conflict, Conflict::EmptyDomain(_));
                             let has_propagated_predicate =
                                 assignments.is_predicate_satisfied(propagated_predicate);
                             if is_empty_domain && has_propagated_predicate {
@@ -290,7 +290,7 @@ impl DebugHelper {
 
                             // If this is not the case then we check whether the explanation is a
                             // subset of the premises
-                            if let Inconsistency::Conflict(ref found_inconsistency) = conflict {
+                            if let Conflict::Propagator(ref found_inconsistency) = conflict {
                                 found_inconsistency
                                     .conjunction
                                     .iter()

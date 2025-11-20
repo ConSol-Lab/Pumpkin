@@ -15,7 +15,7 @@ use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use crate::basic_types::PropagatorConflict;
-use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
@@ -89,7 +89,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -154,7 +154,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -219,7 +219,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -270,7 +270,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -326,7 +326,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {

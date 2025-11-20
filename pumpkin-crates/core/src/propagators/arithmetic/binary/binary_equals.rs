@@ -10,7 +10,7 @@ use crate::conjunction;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::DomainEvents;
-use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -120,7 +120,7 @@ where
         variable: Variable,
         predicate_type: PredicateType,
         value: i32,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         use PredicateType::*;
         use Variable::*;
 

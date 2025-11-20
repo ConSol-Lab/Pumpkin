@@ -6,7 +6,6 @@ use log::warn;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodInfo;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -38,6 +37,7 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::state::PropagatorHandle;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
@@ -206,7 +206,7 @@ impl Propagator for NogoodPropagator {
         self.updated_predicate_ids.push(predicate_id);
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Conflict> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -336,7 +336,7 @@ impl Propagator for NogoodPropagator {
     fn debug_propagate_from_scratch(
         &self,
         mut context: PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    ) -> Result<(), Conflict> {
         // Very inefficient version!
 
         // The algorithm goes through every nogood explicitly
@@ -1152,7 +1152,7 @@ impl NogoodPropagator {
         &self,
         nogood_id: NogoodId,
         context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    ) -> Result<(), Conflict> {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);

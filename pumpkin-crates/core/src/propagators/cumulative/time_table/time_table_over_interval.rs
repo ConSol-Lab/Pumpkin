@@ -3,7 +3,6 @@ use std::rc::Rc;
 use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
@@ -36,6 +35,7 @@ use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
 #[derive(Debug)]
@@ -119,7 +119,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
                 inference_code: self.inference_code.unwrap(),
             }));
@@ -213,7 +213,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 ///
 /// The result of this method is either the time-table of type
 /// [`OverIntervalTimeTableType`] or the tasks responsible for the
-/// conflict in the form of an [`Inconsistency`].
+/// conflict in the form of an [`PropagatorConflict`].
 pub(crate) fn create_time_table_over_interval_from_scratch<
     Var: IntegerVariable + 'static,
     Context: ReadDomains + Copy,
@@ -474,7 +474,6 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
@@ -484,6 +483,7 @@ mod tests {
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalPropagator;
+    use crate::state::Conflict;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -552,8 +552,8 @@ mod tests {
         assert!(match result {
             Err(e) => {
                 match e {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Conflict(x) => {
+                    Conflict::EmptyDomain(_) => false,
+                    Conflict::Propagator(x) => {
                         let expected = [
                             predicate!(s1 <= 1),
                             predicate!(s1 >= 1),

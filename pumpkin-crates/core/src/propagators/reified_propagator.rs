@@ -1,4 +1,3 @@
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::DomainEvents;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -14,6 +13,7 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the [`ReifiedPropagator`].
@@ -170,7 +170,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
 
 impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
-        if let Err(Inconsistency::Conflict(ref mut conflict)) = status {
+        if let Err(Conflict::Propagator(ref mut conflict)) = status {
             conflict
                 .conjunction
                 .add(self.reification_literal.get_true_predicate());
@@ -231,7 +231,6 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
     use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
     use crate::containers::StorageKey;
@@ -346,7 +345,7 @@ mod tests {
             .expect_err("eagerly triggered the conflict");
 
         match inconsistency {
-            Inconsistency::Conflict(conflict_nogood) => {
+            Conflict::Propagator(conflict_nogood) => {
                 assert_eq!(
                     conflict_nogood.conjunction,
                     PropositionalConjunction::from(vec![
