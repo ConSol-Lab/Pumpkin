@@ -583,10 +583,7 @@ impl State {
                         &mut self.assignments,
                         &mut self.trailed_values,
                         &mut self.propagators,
-                        PropagatorHandle {
-                            id: PropagatorId(0),
-                            propagator: std::marker::PhantomData,
-                        },
+                        PropagatorHandle::new(PropagatorId(0)),
                         &mut self.propagator_queue,
                     );
                 pumpkin_assert_extreme!(
@@ -641,10 +638,7 @@ impl State {
                 &mut self.assignments,
                 &mut self.trailed_values,
                 &mut self.propagators,
-                PropagatorHandle {
-                    id: PropagatorId(0),
-                    propagator: std::marker::PhantomData,
-                },
+                PropagatorHandle::new(PropagatorId(0)),
                 &mut self.propagator_queue,
             );
 

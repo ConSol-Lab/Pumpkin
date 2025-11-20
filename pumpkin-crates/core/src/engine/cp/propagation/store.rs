@@ -19,8 +19,8 @@ pub(crate) struct PropagatorStore {
 /// type-erased instances `Box<dyn Propagator>`.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PropagatorHandle<P> {
-    pub(crate) id: PropagatorId,
-    pub(crate) propagator: PhantomData<P>,
+    id: PropagatorId,
+    propagator: PhantomData<P>,
 }
 
 impl<P> PropagatorHandle<P> {
