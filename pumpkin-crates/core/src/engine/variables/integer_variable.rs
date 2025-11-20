@@ -53,7 +53,7 @@ pub trait IntegerVariable:
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
 
     /// Returns all of the holes in the domain which were created at the current decision level
-    fn get_holes_on_current_decision_level(
+    fn get_holes_at_current_checkpoint(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32>;

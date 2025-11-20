@@ -389,19 +389,19 @@ mod tests {
         ));
         assert_eq!(decision, Some(predicate));
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 1
         let _ = assignments.post_predicate(predicate!(x >= 5), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 2
         let _ = assignments.post_predicate(predicate!(x >= 7), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 3
         let _ = assignments.post_predicate(predicate!(x >= 10), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // We end at decision level 4
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
@@ -461,7 +461,7 @@ mod tests {
         let x = assignments.grow(0, 10);
         notification_engine.grow();
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         let _ = assignments.post_predicate(predicate!(x == 7), None, &mut notification_engine);
 
         let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);

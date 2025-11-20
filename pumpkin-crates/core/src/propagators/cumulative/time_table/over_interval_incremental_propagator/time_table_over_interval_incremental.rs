@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use super::insertion;
 use super::removal;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
@@ -53,6 +52,7 @@ use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -386,7 +386,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         );
 
         if self.parameters.is_infeasible {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
                 inference_code: self.inference_code.unwrap(),
             }));
@@ -624,7 +624,6 @@ fn find_overlapping_profile<Var: IntegerVariable + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
@@ -634,6 +633,7 @@ mod tests {
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
+    use crate::state::Conflict;
     use crate::variables::DomainId;
 
     #[test]
@@ -705,9 +705,9 @@ mod tests {
             constraint_tag,
         ));
 
-        assert!(matches!(result, Err(Inconsistency::Conflict(_))));
+        assert!(matches!(result, Err(Conflict::Propagator(_))));
         assert!(match result {
-            Err(Inconsistency::Conflict(conflict)) => {
+            Err(Conflict::Propagator(conflict)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),

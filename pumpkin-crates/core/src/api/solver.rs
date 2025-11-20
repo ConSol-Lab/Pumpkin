@@ -388,7 +388,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 if self
                     .satisfaction_solver
-                    .state
+                    .solver_state
                     .is_infeasible_under_assumptions()
                 {
                     // The state is automatically reset when we return this result
@@ -509,7 +509,7 @@ impl Solver {
 impl Solver {
     /// Creates an instance of the [`DefaultBrancher`].
     pub fn default_brancher(&self) -> DefaultBrancher {
-        DefaultBrancher::default_over_all_variables(&self.satisfaction_solver.assignments)
+        DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
     }
 }
 

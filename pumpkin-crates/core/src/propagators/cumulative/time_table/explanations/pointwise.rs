@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::constraint_arguments::CumulativeExplanationType;
-use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::propagation::contexts::propagation_context::HasAssignments;
@@ -22,7 +22,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,
-) -> Result<(), EmptyDomain> {
+) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = lb(s)`
@@ -131,7 +131,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,
-) -> Result<(), EmptyDomain> {
+) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = ub(s) + p`

@@ -10,7 +10,7 @@ use crate::conjunction;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::DomainEvents;
-use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -120,7 +120,7 @@ where
         variable: Variable,
         predicate_type: PredicateType,
         value: i32,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         use PredicateType::*;
         use Variable::*;
 
@@ -195,7 +195,7 @@ where
                     // If it is a removal then we need to make sure that all of the removed values
                     // from `a` are also removed from `b`
                     self.a_removed_values
-                        .extend(context.get_holes_on_current_decision_level(&self.a));
+                        .extend(context.get_holes_at_current_checkpoint(&self.a));
                 }
             }
             1 => {
@@ -203,7 +203,7 @@ where
                     // If it is a removal then we need to make sure that all of the removed values
                     // from `b` are also removed from `a`
                     self.b_removed_values
-                        .extend(context.get_holes_on_current_decision_level(&self.b));
+                        .extend(context.get_holes_at_current_checkpoint(&self.b));
                 }
             }
             _ => panic!("Unexpected local id {local_id:?}"),

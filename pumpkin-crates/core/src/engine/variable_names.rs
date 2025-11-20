@@ -1,8 +1,7 @@
 use crate::containers::HashMap;
 use crate::engine::variables::DomainId;
 
-#[derive(Debug, Default)]
-
+#[derive(Debug, Default, Clone)]
 pub(crate) struct VariableNames {
     integers: HashMap<DomainId, String>,
 }

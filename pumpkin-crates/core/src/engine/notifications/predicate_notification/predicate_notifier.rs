@@ -21,7 +21,7 @@ use crate::variables::DomainId;
 ///
 /// It also contains the [`PredicateIdAssignments`] which serves as a (lazy) structure for
 /// retrieving the polarity of [`Predicate`]s (represented by [`PredicateId`]s).
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
     pub(crate) predicate_to_id: PredicateIdGenerator,

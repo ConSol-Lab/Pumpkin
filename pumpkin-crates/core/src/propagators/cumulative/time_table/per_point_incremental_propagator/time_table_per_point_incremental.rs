@@ -3,7 +3,6 @@ use std::collections::btree_map::Entry;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
@@ -48,6 +47,7 @@ use crate::propagators::util::register_tasks;
 use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
+use crate::state::Conflict;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -68,7 +68,7 @@ use crate::pumpkin_assert_extreme;
 ///
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
@@ -415,7 +415,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         );
 
         if self.parameters.is_infeasible {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
                 inference_code: self.inference_code.unwrap(),
             }));
@@ -621,7 +621,6 @@ mod debug {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
@@ -633,6 +632,7 @@ mod tests {
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTablePerPointIncrementalPropagator;
     use crate::propagators::TimeTablePerPointPropagator;
+    use crate::state::Conflict;
     use crate::variables::DomainId;
 
     #[test]
@@ -703,7 +703,7 @@ mod tests {
             ),
         );
         assert!(match result {
-            Err(Inconsistency::Conflict(x)) => {
+            Err(Conflict::Propagator(x)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -1302,8 +1302,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(
             {
-                if let Err(Inconsistency::Conflict(conflict)) = &result {
-                    if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+                if let Err(Conflict::Propagator(conflict)) = &result {
+                    if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                         conflict.conjunction.iter().collect::<Vec<_>>()
                             == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                     } else {
@@ -1401,8 +1401,8 @@ mod tests {
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+            if let Err(Conflict::Propagator(explanation)) = &result {
+                if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
@@ -1496,8 +1496,8 @@ mod tests {
         let result = solver.propagate(propagator);
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+            if let Err(Conflict::Propagator(explanation)) = &result {
+                if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
@@ -1793,8 +1793,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
+            Err(Conflict::Propagator(explanation)),
+            Err(Conflict::Propagator(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
@@ -1907,8 +1907,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
+            Err(Conflict::Propagator(explanation)),
+            Err(Conflict::Propagator(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_eq!(

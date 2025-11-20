@@ -30,14 +30,12 @@ impl Lbd {
     ) -> u32 {
         self.lbd_helper.set_to_empty();
         self.lbd_helper
-            .accommodate(&(assignments.get_decision_level() as u32));
+            .accommodate(&(assignments.get_checkpoint() as u32));
 
         for predicate in predicates {
-            let decision_level = assignments
-                .get_decision_level_for_predicate(predicate)
-                .unwrap();
+            let checkpoint = assignments.get_checkpoint_for_predicate(predicate).unwrap();
 
-            self.lbd_helper.insert(decision_level as u32);
+            self.lbd_helper.insert(checkpoint as u32);
         }
 
         self.lbd_helper.len() as u32

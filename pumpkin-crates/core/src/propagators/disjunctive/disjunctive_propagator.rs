@@ -4,7 +4,6 @@ use std::cmp::min;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::StorageKey;
@@ -21,6 +20,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::variables::IntegerVariable;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
@@ -41,6 +41,7 @@ use crate::variables::IntegerVariable;
 ///   Sciences, vol. 18, no. 2, pp. 159–202, 2008.
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
+#[derive(Debug, Clone)]
 pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,
@@ -167,7 +168,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // (which takes into account `j`) is larger than the LCT of `j` then we can report an
         // overflow
         if theta_lambda_tree.ect() > lct_j {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: create_conflict_explanation(theta_lambda_tree, context, lct_j),
                 inference_code,
             }));

@@ -139,7 +139,7 @@ mod tests {
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         let _ = assignments.post_predicate(
             predicate!(integer_variables[1] >= 7),
             None,

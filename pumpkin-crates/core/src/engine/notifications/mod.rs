@@ -13,7 +13,6 @@ pub(crate) use predicate_notification::PredicateNotifier;
 
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
-use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
@@ -28,9 +27,10 @@ use crate::predicates::Predicate;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::state::PropagatorHandle;
 use crate::variables::DomainId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
     predicate_notifier: PredicateNotifier,
@@ -497,10 +497,10 @@ impl NotificationEngine {
         self.predicate_notifier.predicate_to_id.num_predicate_ids()
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
+    pub(crate) fn new_checkpoint(&mut self) {
         self.predicate_notifier
             .predicate_id_assignments
-            .increase_decision_level();
+            .new_checkpoint();
     }
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
@@ -573,7 +573,7 @@ impl NotificationEngine {
         _trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(
-            assignments.get_decision_level() == backtrack_level,
+            assignments.get_checkpoint() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
         );
         self.predicate_notifier
