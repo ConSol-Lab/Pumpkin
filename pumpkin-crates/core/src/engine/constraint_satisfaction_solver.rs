@@ -783,6 +783,13 @@ impl ConstraintSatisfactionSolver {
             return Err(CSPSolverExecutionFlag::Feasible);
         };
 
+        if self.internal_parameters.conflict_resolver == ConflictResolver::HypercubeLinear
+            && !(decision_predicate.is_lower_bound_predicate()
+                || decision_predicate.is_upper_bound_predicate())
+        {
+            panic!("when using hypercube linear resolution, decisions can only be made on bounds");
+        }
+
         trace!("decided {decision_predicate}");
 
         self.declare_new_decision_level();
