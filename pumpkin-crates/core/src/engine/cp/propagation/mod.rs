@@ -82,7 +82,7 @@ pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
-pub(crate) use contexts::explanation_context::CurrentNogood;
+pub use contexts::explanation_context::CurrentNogood;
 pub(crate) use contexts::explanation_context::ExplanationContext;
 pub(crate) use contexts::propagation_context::PropagationContext;
 pub(crate) use contexts::propagation_context::PropagationContextMut;

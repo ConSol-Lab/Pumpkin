@@ -125,6 +125,7 @@ pub mod state {
     pub use crate::engine::Conflict;
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::State;
+    pub use crate::engine::propagation::CurrentNogood;
     pub use crate::engine::propagation::PropagatorId;
 }
 

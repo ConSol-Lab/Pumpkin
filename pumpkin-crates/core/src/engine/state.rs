@@ -697,7 +697,12 @@ impl State {
             reason_buffer,
         );
     }
-    /// Get the reason for a predicate being true.
+    /// Get the reason for a predicate being true and store it in `reason_buffer`; additionally, if
+    /// the provided [`Predicate`] is explicitly on the trail, this method will return the
+    /// corresponding trail index.
+    ///
+    /// The provided `current_nogood` can be used by the propagator to provide a different reason;
+    /// use [`CurrentNogood::empty`] otherwise.
     ///
     /// All the predicates in the returned slice will evaluate to `true`.
     ///
@@ -707,7 +712,8 @@ impl State {
         &mut self,
         predicate: Predicate,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-    ) {
+        current_nogood: CurrentNogood<'_>,
+    ) -> Option<usize> {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
@@ -724,7 +730,7 @@ impl State {
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
         if self.assignments.is_initial_bound(predicate) {
-            return;
+            return None;
         }
 
         let trail_position = self
@@ -737,13 +743,13 @@ impl State {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let (reason_ref, _) = trail_entry
+            let (reason_ref, inference_code) = trail_entry
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
             let explanation_context = ExplanationContext::new(
                 &self.assignments,
-                CurrentNogood::empty(),
+                current_nogood,
                 trail_position,
                 &mut self.notification_engine,
             );
@@ -756,6 +762,8 @@ impl State {
             );
 
             assert!(reason_exists, "reason reference should not be stale");
+
+            Some(trail_position)
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.
         // It is necessary to further analyse what was the reason for setting the predicate true.
@@ -986,6 +994,7 @@ impl State {
                     trail_entry.predicate, predicate
                 ),
             };
+            None
         }
     }
 }
