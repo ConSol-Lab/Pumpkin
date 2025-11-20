@@ -2,6 +2,7 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
+use std::num::NonZero;
 
 use super::PropagatorQueue;
 use super::propagation::EnqueueDecision;
@@ -307,7 +308,12 @@ impl TestSolver {
     }
 
     pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
-        self.state.inference_codes.next_key()
+        self.state.inference_codes.push((
+            ConstraintTag::from_non_zero(
+                NonZero::try_from(1 + self.state.inference_codes.len() as u32).unwrap(),
+            ),
+            "label".into(),
+        ))
     }
 
     pub(crate) fn new_checkpoint(&mut self) {
