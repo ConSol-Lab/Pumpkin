@@ -415,15 +415,48 @@ impl Propagator for HypercubeLinearPropagator {
             let slack = self.hypercube_linear.compute_slack(context.assignments);
             // dbg!(slack);
 
-            if slack < 0 {
-                let unassigned_predicate = self
-                    .hypercube_linear
-                    .hypercube
-                    .iter()
-                    .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-                    .expect("at least one predicate does not evaluate to true");
+            let unassigned_predicate = self
+                .hypercube_linear
+                .hypercube
+                .iter()
+                .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+                .expect("at least one predicate does not evaluate to true");
 
-                context.post(!unassigned_predicate, 0_u64, self.inference_code)?;
+            let neg_unassigned_predicate = !unassigned_predicate;
+
+            if slack < 0 {
+                context.post(neg_unassigned_predicate, 0_u64, self.inference_code)?;
+            } else if let Some(weight) = self
+                .hypercube_linear
+                .variable_weight(unassigned_predicate.get_domain())
+            {
+                let positive_weight_and_lower_bound =
+                    weight.is_positive() && unassigned_predicate.is_lower_bound_predicate();
+                let negative_weight_and_upper_bound =
+                    weight.is_negative() && unassigned_predicate.is_upper_bound_predicate();
+
+                if positive_weight_and_lower_bound || negative_weight_and_upper_bound {
+                    let term = unassigned_predicate.get_domain().scaled(weight.get());
+
+                    // The slack is computed wrt unassigned_predicate being true. It is guaranteed
+                    // to be stronger than the current bound for `term`, so we have to update the
+                    // slack with the bound for `term` in the domain instead of in the hypercube.
+
+                    let slack_without_term = slack
+                        + self
+                            .hypercube_linear
+                            .hypercube
+                            .lower_bound(term)
+                            .expect("unassigned predicate contributes to slack");
+                    let to_propagate = predicate![term <= slack_without_term];
+
+                    assert!(
+                        (neg_unassigned_predicate).implies(to_propagate),
+                        "{neg_unassigned_predicate} should imply {to_propagate}"
+                    );
+
+                    context.post(to_propagate, 0_u64, self.inference_code)?;
+                }
             }
         } else if num_satisfied_bounds == self.hypercube_linear.hypercube.len() {
             let lower_bound_left_hand_side = self
@@ -602,7 +635,7 @@ mod tests {
 
         let constraint_tag = solver.new_constraint_tag();
 
-        let propagator = solver
+        let _ = solver
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear::new(
                     vec![predicate![x >= 2]],
@@ -614,8 +647,6 @@ mod tests {
                 is_learned: false,
             })
             .expect("no empty domains");
-
-        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 1, 5);
         solver.assert_bounds(y, 0, 10);
@@ -629,7 +660,7 @@ mod tests {
 
         let constraint_tag = solver.new_constraint_tag();
 
-        let propagator = solver
+        let _ = solver
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear::new(
                     vec![predicate![x >= 2]],
@@ -641,8 +672,6 @@ mod tests {
                 is_learned: false,
             })
             .expect("no empty domains");
-
-        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 2, 5);
         solver.assert_bounds(y, 0, 5);
@@ -657,7 +686,7 @@ mod tests {
 
         let constraint_tag = solver.new_constraint_tag();
 
-        let propagator = solver
+        let _ = solver
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear::new(
                     vec![predicate![x >= 2]],
@@ -669,8 +698,6 @@ mod tests {
                 is_learned: false,
             })
             .expect("no empty domains");
-
-        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 0, 1);
         solver.assert_bounds(y, 2, 10);
@@ -686,7 +713,7 @@ mod tests {
 
         let constraint_tag = solver.new_constraint_tag();
 
-        let propagator = solver
+        let _ = solver
             .new_propagator(HypercubeLinearPropagatorArgs {
                 hypercube_linear: HypercubeLinear::new(
                     vec![predicate![x >= 2], predicate![z >= 4]],
@@ -699,10 +726,32 @@ mod tests {
             })
             .expect("no empty domains");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
         solver.assert_bounds(x, 2, 5);
         solver.assert_bounds(y, 2, 10);
         solver.assert_bounds(z, 0, 3);
+    }
+
+    #[test]
+    fn linear_propagates_when_hypercube_is_true_except_shared_variable_with_linear() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(0, 10);
+        let y = solver.new_variable(1, 5);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(HypercubeLinearPropagatorArgs {
+                hypercube_linear: HypercubeLinear::new(
+                    vec![predicate![x >= 4]],
+                    vec![(ONE, x), (ONE, y)],
+                    6,
+                )
+                .expect("not trivially satisfied"),
+                constraint_tag,
+                is_learned: false,
+            })
+            .expect("no empty domains");
+
+        solver.assert_bounds(x, 0, 5);
+        solver.assert_bounds(y, 1, 5);
     }
 }
