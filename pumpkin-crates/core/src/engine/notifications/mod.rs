@@ -8,7 +8,6 @@ pub(crate) use domain_event_notification::Watchers;
 pub(crate) use domain_event_notification::domain_events::DomainEvents;
 pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
-use log::trace;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;
 
@@ -378,7 +377,6 @@ impl NotificationEngine {
                 .map(|vec| vec.as_slice())
                 .unwrap_or(&[])
             {
-                trace!("notifying {propagator_id}");
                 if propagators[*propagator_id].notify_predicate_id_satisfied(predicate_id)
                     == EnqueueDecision::Enqueue
                 {

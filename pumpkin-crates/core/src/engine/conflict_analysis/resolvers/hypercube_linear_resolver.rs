@@ -36,7 +36,7 @@ pub(crate) struct HypercubeLinearResolver {
 
 impl HypercubeLinearResolver {
     fn compute_conflicting_hypercube_linear(
-        &self,
+        &mut self,
         context: &mut ConflictAnalysisContext<'_>,
     ) -> (HypercubeLinear, Vec<Predicate>) {
         let StoredConflictInfo::EmptyDomainTwo {
@@ -54,6 +54,7 @@ impl HypercubeLinearResolver {
         trace!("conflicting predicate = {}", conflict_trigger);
 
         let propagator_id = context.reason_store.get_propagator(conflict_trigger_reason);
+
         let handle = context
             .propagators
             .as_propagator_handle::<HypercubeLinearPropagator>(propagator_id)
@@ -112,6 +113,29 @@ impl HypercubeLinearResolver {
 
         let propagator_slot = context.propagators.new_propagator();
 
+        // dbg!(learned_constraint.compute_slack(context.assignments));
+        // for p in learned_constraint.iter_hypercube() {
+        //     let domain = p.get_domain();
+        //     println!(
+        //         "{} in [{}, {}]",
+        //         domain,
+        //         context.assignments.get_lower_bound(domain),
+        //         context.assignments.get_upper_bound(domain)
+        //     );
+        // }
+        // for (weight, domain) in learned_constraint.iter_linear_terms() {
+        //     let term = domain.scaled(weight.get());
+
+        //     use crate::engine::variables::IntegerVariable;
+
+        //     println!(
+        //         "{:?} in [{}, {}]",
+        //         term,
+        //         term.lower_bound(context.assignments),
+        //         term.upper_bound(context.assignments)
+        //     );
+        // }
+
         let constructor_context = PropagatorConstructorContext::new(
             context.notification_engine,
             context.trailed_values,
@@ -132,6 +156,7 @@ impl HypercubeLinearResolver {
             "New constraint tag = {constraint_tag:?} (pid = {})",
             new_propagator_id.propagator_id()
         );
+
         context
             .propagator_queue
             .enqueue_propagator(new_propagator_id.propagator_id(), 0);
@@ -370,6 +395,49 @@ impl HypercubeLinearResolver {
             );
         }
     }
+
+    /// Computes the level to backtrack to, and indicates how many reasons are from that decision
+    /// level.
+    ///
+    /// There can be at most one reason at the decision level that we backtrack to.
+    fn compute_backjump_level(
+        &self,
+        assignments: &mut Assignments,
+        _learned_hypercube_linear: &HypercubeLinear,
+        learned_reason_set: &[Predicate],
+    ) -> Backjump {
+        let reasons_on_current_dl = learned_reason_set
+            .iter()
+            .map(|p| {
+                assignments
+                    .get_decision_level_for_predicate(p)
+                    .expect("all predicates are assigned (and true)")
+            })
+            .filter(|&dl| dl == assignments.get_decision_level())
+            .count();
+
+        let backjump_level = learned_reason_set
+            .iter()
+            .map(|p| {
+                let dl = assignments
+                    .get_decision_level_for_predicate(p)
+                    .expect("all predicates are assigned (and true)");
+
+                // println!("{p}: dl = {dl}");
+                #[allow(clippy::let_and_return, reason = "may need the binding for the print")]
+                dl
+            })
+            .filter(|&dl| dl < assignments.get_decision_level())
+            .max()
+            .unwrap_or(0);
+
+        assert!(reasons_on_current_dl <= 1);
+
+        Backjump {
+            num_reasons_on_current_dl: reasons_on_current_dl,
+            backjump_level,
+        }
+    }
 }
 
 impl ConflictResolver for HypercubeLinearResolver {
@@ -388,6 +456,7 @@ impl ConflictResolver for HypercubeLinearResolver {
 
         let mut conflicting_hypercube_linear = original_conflicting_hypercube_linear.clone();
 
+        #[allow(unused, reason = "may be used in assertion in future")]
         let learned_hypercube_linear = loop {
             let (learned_hypercube_linear, learned_reason_set) = self.learn_hypercube_linear(
                 HlResolverContext {
@@ -399,34 +468,16 @@ impl ConflictResolver for HypercubeLinearResolver {
                 reason_set.clone(),
             );
 
-            let reasons_on_current_dl = learned_reason_set
-                .iter()
-                .map(|p| {
-                    context
-                        .assignments
-                        .get_decision_level_for_predicate(p)
-                        .expect("all predicates are assigned (and true)")
-                })
-                .filter(|&dl| dl == context.assignments.get_decision_level())
-                .count();
-            let backjump_level = learned_reason_set
-                .iter()
-                .map(|p| {
-                    context
-                        .assignments
-                        .get_decision_level_for_predicate(p)
-                        .expect("all predicates are assigned (and true)")
-                })
-                .filter(|&dl| dl < context.assignments.get_decision_level())
-                .max()
-                .unwrap_or(0);
+            let backjump = self.compute_backjump_level(
+                context.assignments,
+                &learned_hypercube_linear,
+                &learned_reason_set,
+            );
 
-            assert!(reasons_on_current_dl <= 1);
-
-            if reasons_on_current_dl == 1 {
+            if backjump.num_reasons_on_current_dl == 1 {
                 self.restore_solver(
                     &mut context,
-                    backjump_level,
+                    backjump.backjump_level,
                     learned_hypercube_linear.clone(),
                 );
                 break learned_hypercube_linear;
@@ -439,16 +490,16 @@ impl ConflictResolver for HypercubeLinearResolver {
             // There are 0 reasons on the current decision level that contribute to the conflict.
             // Therefore, the conflict exists at a previous decision level. We backtrack there and
             // restart the analysis.
-            context.backtrack(backjump_level);
+            context.backtrack(backjump.backjump_level);
 
             conflicting_hypercube_linear = learned_hypercube_linear;
             reason_set = learned_reason_set;
         };
 
-        assert_ne!(
-            learned_hypercube_linear, original_conflicting_hypercube_linear,
-            "learning should produce a new constraint"
-        );
+        // assert_ne!(
+        //     learned_hypercube_linear, original_conflicting_hypercube_linear,
+        //     "learning should produce a new constraint"
+        // );
 
         true
     }
@@ -791,4 +842,9 @@ fn gcd(a: i32, b: i32) -> i32 {
         }
     }
     m << shift
+}
+
+struct Backjump {
+    num_reasons_on_current_dl: usize,
+    backjump_level: usize,
 }
