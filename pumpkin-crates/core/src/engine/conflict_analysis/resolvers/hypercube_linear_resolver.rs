@@ -15,6 +15,7 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
+use crate::math::num_ext::NumExt;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::propagators::HypercubeLinear;
@@ -27,6 +28,7 @@ use crate::variables::TransformableVariable;
 create_statistics_struct!(HypercubeLinearResolutionStatistics {
     average_num_linear_terms_in_learned_hypercube_linear: CumulativeMovingAverage<usize>,
     num_learned_hypercube_linear: usize,
+    num_overflow_errors: usize,
 });
 
 #[derive(Debug, Default)]
@@ -313,7 +315,14 @@ impl HypercubeLinearResolver {
                     conflicting_hypercube_linear = new_conflicting;
                     elimination_happened = true;
                 }
-                Err(FourierError::ResultOfEliminationTriviallySatisfiable) => {
+                Err(
+                    e @ (FourierError::ResultOfEliminationTriviallySatisfiable
+                    | FourierError::IntegerOverflow),
+                ) => {
+                    if matches!(e, FourierError::IntegerOverflow) {
+                        self.statistics.num_overflow_errors += 1;
+                    }
+
                     let weakened_conflicting =
                             conflicting_hypercube_linear.weaken(pivot_predicate).expect("if we could do fourier elimination then the top of trail contributes to the conflict and can therefore be weakened on");
                     let weakened_conflicting_slack = weakened_conflicting
@@ -647,6 +656,7 @@ struct HlResolverContext<'a> {
 enum FourierError {
     NoVariableElimination,
     ResultOfEliminationTriviallySatisfiable,
+    IntegerOverflow,
 }
 
 /// Apply fourier elimination between two hypercube linear constraints.
@@ -713,26 +723,46 @@ fn fourier_eliminate(
 
     // The linear terms of the new hypercube linear is the addition of the scaled terms of both
     // input constraints.
-    let linear_terms = conflicting_hypercube_linear
+    let mut linear_terms = conflicting_hypercube_linear
         .iter_linear_terms()
-        .map(|(weight, domain)| (weight.checked_mul(scale_conflicting).unwrap(), domain))
-        .chain(
-            reason
-                .iter_linear_terms()
-                .map(|(weight, domain)| (weight.checked_mul(scale_reason).unwrap(), domain)),
-        )
-        .collect();
+        .map(|(weight, domain)| {
+            weight
+                .checked_mul(scale_conflicting)
+                .ok_or(FourierError::IntegerOverflow)
+                .map(|scaled_weight| (scaled_weight, domain))
+        })
+        .chain(reason.iter_linear_terms().map(|(weight, domain)| {
+            weight
+                .checked_mul(scale_reason)
+                .ok_or(FourierError::IntegerOverflow)
+                .map(|scaled_weight| (scaled_weight, domain))
+        }))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let hypercube = conflicting_hypercube_linear
         .iter_hypercube()
         .chain(reason.iter_hypercube())
         .collect();
 
-    let linear_rhs = conflicting_hypercube_linear
+    let mut linear_rhs = conflicting_hypercube_linear
         .linear_rhs()
         .checked_mul(scale_conflicting.get())
         .unwrap()
         + reason.linear_rhs().checked_mul(scale_reason.get()).unwrap();
+
+    // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
+    // future.
+    let normalize_by = linear_terms
+        .iter()
+        .map(|(weight, _)| weight.get())
+        .chain(std::iter::once(linear_rhs))
+        .reduce(gcd)
+        .unwrap_or(linear_rhs);
+
+    linear_terms.iter_mut().for_each(|(weight, _)| {
+        *weight = NonZero::new(<i32 as NumExt>::div_ceil(weight.get(), normalize_by)).unwrap();
+    });
+    linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
 
     let mut new_constraint = HypercubeLinear::new(hypercube, linear_terms, linear_rhs)
         .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)?;
