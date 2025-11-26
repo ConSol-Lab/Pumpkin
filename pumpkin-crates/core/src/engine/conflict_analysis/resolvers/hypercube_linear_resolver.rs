@@ -412,14 +412,15 @@ impl HypercubeLinearResolver {
     /// Computes the level to backtrack to, and indicates how many reasons are from that decision
     /// level.
     ///
-    /// There can be at most one reason at the decision level that we backtrack to.
+    /// There can be at most one predicate in the reason set that is unassigned at the decision
+    /// level that we backtrack to.
     fn compute_backjump_level(
         &self,
         assignments: &mut Assignments,
-        _learned_hypercube_linear: &HypercubeLinear,
+        learned_hypercube_linear: &HypercubeLinear,
         learned_reason_set: &[Predicate],
     ) -> Backjump {
-        let reasons_on_current_dl = learned_reason_set
+        let reasons_on_current_dl: Vec<_> = learned_reason_set
             .iter()
             .map(|p| {
                 assignments
@@ -427,9 +428,12 @@ impl HypercubeLinearResolver {
                     .expect("all predicates are assigned (and true)")
             })
             .filter(|&dl| dl == assignments.get_decision_level())
-            .count();
+            .collect();
 
-        let backjump_level = learned_reason_set
+        assert!(reasons_on_current_dl.len() <= 1);
+
+        // Initialize the backjump level based on the decision levels in the reason set.
+        let mut backjump_level = learned_reason_set
             .iter()
             .map(|p| {
                 let dl = assignments
@@ -444,10 +448,40 @@ impl HypercubeLinearResolver {
             .max()
             .unwrap_or(0);
 
-        assert!(reasons_on_current_dl <= 1);
+        if reasons_on_current_dl.is_empty() {
+            // If there are no reasons at the conflict decision level, then we can
+            // backjump to `backjump_level` and proceed analysis from there.
+            return Backjump {
+                num_reasons_on_current_dl: reasons_on_current_dl.len(),
+                backjump_level,
+            };
+        }
+
+        // Otherwise, there is exactly one reason that is assigned at the current decision
+        // level.
+
+        // Test whether we can backjump further than the reason set indicates.
+        loop {
+            // We cannot backjump further than the root.
+            if backjump_level == 0 {
+                break;
+            }
+
+            let trail_position_after_backjump =
+                assignments.get_trail_position_at_decision_level(backjump_level - 1);
+
+            let propagations =
+                learned_hypercube_linear.propagate_at(assignments, trail_position_after_backjump);
+
+            if propagations.is_empty() {
+                break;
+            }
+
+            backjump_level -= 1;
+        }
 
         Backjump {
-            num_reasons_on_current_dl: reasons_on_current_dl,
+            num_reasons_on_current_dl: reasons_on_current_dl.len(),
             backjump_level,
         }
     }

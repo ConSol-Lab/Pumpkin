@@ -7,7 +7,6 @@ use crate::containers::HashMap;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -220,10 +219,6 @@ impl HypercubeLinear {
         }
     }
 
-    pub(crate) fn compute_slack(&self, assignments: &Assignments) -> i32 {
-        self.compute_slack_at_trail_position(assignments, assignments.num_trail_entries() - 1)
-    }
-
     pub(crate) fn compute_slack_at_trail_position(
         &self,
         assignments: &Assignments,
@@ -318,6 +313,162 @@ impl HypercubeLinear {
             linear_rhs: self.linear_rhs - rhs_delta,
         })
     }
+
+    pub(crate) fn propagate_at(
+        &self,
+        assignments: &mut Assignments,
+        trail_position: usize,
+    ) -> Vec<(Predicate, PropositionalConjunction)> {
+        let mut propagations = vec![];
+
+        let num_satisfied_bounds = self
+            .hypercube
+            .iter()
+            .filter(|&predicate| {
+                assignments.evaluate_predicate_at_trail_position(predicate, trail_position)
+                    == Some(true)
+            })
+            .count();
+
+        let slack = self.compute_slack_at_trail_position(assignments, trail_position);
+
+        // if context.propagator_id == PropagatorId::create_from_index(2102) {
+        //     println!("{}", self.hypercube_linear);
+        //     dbg!(context.assignments.get_decision_level());
+        //     dbg!(
+        //         self.hypercube_linear
+        //             .hypercube
+        //             .iter()
+        //             .filter(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+        //             .collect::<Vec<_>>()
+        //     );
+        //     dbg!(num_satisfied_bounds);
+        //     dbg!(self.hypercube_linear.hypercube.len());
+        //     dbg!(slack);
+        //     for p in self.hypercube_linear.iter_hypercube() {
+        //         let domain = p.get_domain();
+        //         println!(
+        //             "{} in [{}, {}]",
+        //             domain,
+        //             context.assignments.get_lower_bound(domain),
+        //             context.assignments.get_upper_bound(domain)
+        //         );
+        //     }
+        //     for domain in self.hypercube_linear.linear_terms.iter() {
+        //         use crate::engine::variables::IntegerVariable;
+
+        //         println!(
+        //             "{:?} in [{}, {}]",
+        //             domain,
+        //             domain.lower_bound(context.assignments),
+        //             domain.upper_bound(context.assignments)
+        //         );
+        //     }
+        // }
+
+        if !self.hypercube.is_empty() && num_satisfied_bounds == self.hypercube.len() - 1 {
+            let unassigned_predicate = self
+                .hypercube
+                .iter()
+                .find(|&predicate| {
+                    assignments.evaluate_predicate_at_trail_position(predicate, trail_position)
+                        != Some(true)
+                })
+                .expect("at least one bound in the hypercube is not satisfied");
+
+            let neg_unassigned_predicate = !unassigned_predicate;
+            // dbg!(neg_unassigned_predicate);
+
+            if slack < 0 {
+                let reason: PropositionalConjunction = self
+                    .iter_hypercube()
+                    .chain(self.linear_terms.iter().map(|term| {
+                        predicate![
+                            term >= term.lower_bound_at_trail_position(assignments, trail_position)
+                        ]
+                    }))
+                    .collect();
+
+                propagations.push((neg_unassigned_predicate, reason));
+            } else if let Some(weight) = self.variable_weight(unassigned_predicate.get_domain()) {
+                let positive_weight_and_lower_bound =
+                    weight.is_positive() && unassigned_predicate.is_lower_bound_predicate();
+                let negative_weight_and_upper_bound =
+                    weight.is_negative() && unassigned_predicate.is_upper_bound_predicate();
+
+                if positive_weight_and_lower_bound || negative_weight_and_upper_bound {
+                    let term = unassigned_predicate.get_domain().scaled(weight.get());
+
+                    // The slack is computed wrt unassigned_predicate being true. It is guaranteed
+                    // to be stronger than the current bound for `term`, so we have to update the
+                    // slack with the bound for `term` in the domain instead of in the hypercube.
+
+                    let slack_without_term = slack
+                        + self
+                            .hypercube
+                            .lower_bound(term)
+                            .expect("unassigned predicate contributes to slack");
+                    let to_propagate = predicate![term <= slack_without_term];
+
+                    assert!(
+                        (neg_unassigned_predicate).implies(to_propagate),
+                        "{neg_unassigned_predicate} should imply {to_propagate}"
+                    );
+
+                    let reason: PropositionalConjunction = self
+                        .iter_hypercube()
+                        .filter(|&p| p != unassigned_predicate)
+                        .chain(self.linear_terms.iter().filter_map(|&other_term| {
+                            if other_term != term {
+                                Some(predicate![
+                                    other_term
+                                        >= other_term.lower_bound_at_trail_position(
+                                            assignments,
+                                            trail_position
+                                        )
+                                ])
+                            } else {
+                                None
+                            }
+                        }))
+                        .collect();
+
+                    propagations.push((to_propagate, reason));
+                }
+            }
+        } else if num_satisfied_bounds == self.hypercube.len() {
+            let lower_bound_left_hand_side = self
+                .linear_terms
+                .iter()
+                .map(|term| term.lower_bound_at_trail_position(assignments, trail_position))
+                .sum::<i32>();
+
+            for (i, term) in self.linear_terms.iter().enumerate() {
+                let bound = self.linear_rhs
+                    - (lower_bound_left_hand_side
+                        - term.lower_bound_at_trail_position(assignments, trail_position));
+
+                let reason: PropositionalConjunction = self
+                    .hypercube
+                    .iter()
+                    .chain(self.linear_terms.iter().enumerate().filter_map(|(j, x_j)| {
+                        if j != i {
+                            Some(predicate![
+                                x_j >= x_j
+                                    .lower_bound_at_trail_position(assignments, trail_position)
+                            ])
+                        } else {
+                            None
+                        }
+                    }))
+                    .collect();
+
+                propagations.push((predicate![term <= bound], reason));
+            }
+        }
+
+        propagations
+    }
 }
 
 fn view_to_tuple(view: AffineView<DomainId>) -> (NonZero<i32>, DomainId) {
@@ -377,155 +528,12 @@ impl Propagator for HypercubeLinearPropagator {
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        let num_satisfied_bounds = self
+        let propagations = self
             .hypercube_linear
-            .hypercube
-            .iter()
-            .filter(|&predicate| context.evaluate_predicate(predicate) == Some(true))
-            .count();
+            .propagate_at(context.assignments, context.assignments.num_trail_entries());
 
-        let slack = self.hypercube_linear.compute_slack(context.assignments);
-
-        // if context.propagator_id == PropagatorId::create_from_index(2102) {
-        //     println!("{}", self.hypercube_linear);
-        //     dbg!(context.assignments.get_decision_level());
-        //     dbg!(
-        //         self.hypercube_linear
-        //             .hypercube
-        //             .iter()
-        //             .filter(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-        //             .collect::<Vec<_>>()
-        //     );
-        //     dbg!(num_satisfied_bounds);
-        //     dbg!(self.hypercube_linear.hypercube.len());
-        //     dbg!(slack);
-        //     for p in self.hypercube_linear.iter_hypercube() {
-        //         let domain = p.get_domain();
-        //         println!(
-        //             "{} in [{}, {}]",
-        //             domain,
-        //             context.assignments.get_lower_bound(domain),
-        //             context.assignments.get_upper_bound(domain)
-        //         );
-        //     }
-        //     for domain in self.hypercube_linear.linear_terms.iter() {
-        //         use crate::engine::variables::IntegerVariable;
-
-        //         println!(
-        //             "{:?} in [{}, {}]",
-        //             domain,
-        //             domain.lower_bound(context.assignments),
-        //             domain.upper_bound(context.assignments)
-        //         );
-        //     }
-        // }
-
-        if !self.hypercube_linear.hypercube.is_empty()
-            && num_satisfied_bounds == self.hypercube_linear.hypercube.len() - 1
-        {
-            let unassigned_predicate = self
-                .hypercube_linear
-                .hypercube
-                .iter()
-                .find(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-                .expect("at least one bound in the hypercube is not satisfied");
-
-            let neg_unassigned_predicate = !unassigned_predicate;
-            // dbg!(neg_unassigned_predicate);
-
-            if slack < 0 {
-                let reason: PropositionalConjunction = self
-                    .hypercube_linear
-                    .iter_hypercube()
-                    .chain(
-                        self.hypercube_linear
-                            .linear_terms
-                            .iter()
-                            .map(|term| predicate![term >= context.lower_bound(term)]),
-                    )
-                    .collect();
-
-                context.post(neg_unassigned_predicate, reason, self.inference_code)?;
-            } else if let Some(weight) = self
-                .hypercube_linear
-                .variable_weight(unassigned_predicate.get_domain())
-            {
-                let positive_weight_and_lower_bound =
-                    weight.is_positive() && unassigned_predicate.is_lower_bound_predicate();
-                let negative_weight_and_upper_bound =
-                    weight.is_negative() && unassigned_predicate.is_upper_bound_predicate();
-
-                if positive_weight_and_lower_bound || negative_weight_and_upper_bound {
-                    let term = unassigned_predicate.get_domain().scaled(weight.get());
-
-                    // The slack is computed wrt unassigned_predicate being true. It is guaranteed
-                    // to be stronger than the current bound for `term`, so we have to update the
-                    // slack with the bound for `term` in the domain instead of in the hypercube.
-
-                    let slack_without_term = slack
-                        + self
-                            .hypercube_linear
-                            .hypercube
-                            .lower_bound(term)
-                            .expect("unassigned predicate contributes to slack");
-                    let to_propagate = predicate![term <= slack_without_term];
-
-                    assert!(
-                        (neg_unassigned_predicate).implies(to_propagate),
-                        "{neg_unassigned_predicate} should imply {to_propagate}"
-                    );
-
-                    let reason: PropositionalConjunction = self
-                        .hypercube_linear
-                        .iter_hypercube()
-                        .filter(|&p| p != unassigned_predicate)
-                        .chain(self.hypercube_linear.linear_terms.iter().filter_map(
-                            |&other_term| {
-                                if other_term != term {
-                                    Some(predicate![other_term >= context.lower_bound(&other_term)])
-                                } else {
-                                    None
-                                }
-                            },
-                        ))
-                        .collect();
-
-                    context.post(to_propagate, reason, self.inference_code)?;
-                }
-            }
-        } else if num_satisfied_bounds == self.hypercube_linear.hypercube.len() {
-            let lower_bound_left_hand_side = self
-                .hypercube_linear
-                .linear_terms
-                .iter()
-                .map(|term| context.lower_bound(term))
-                .sum::<i32>();
-
-            for (i, term) in self.hypercube_linear.linear_terms.iter().enumerate() {
-                let bound = self.hypercube_linear.linear_rhs
-                    - (lower_bound_left_hand_side - context.lower_bound(term));
-
-                let reason: PropositionalConjunction = self
-                    .hypercube_linear
-                    .hypercube
-                    .iter()
-                    .chain(
-                        self.hypercube_linear
-                            .linear_terms
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(j, x_j)| {
-                                if j != i {
-                                    Some(predicate![x_j >= context.lower_bound(x_j)])
-                                } else {
-                                    None
-                                }
-                            }),
-                    )
-                    .collect();
-
-                context.post(predicate![term <= bound], reason, self.inference_code)?;
-            }
+        for (predicate, reason) in propagations {
+            context.post(predicate, reason, self.inference_code)?;
         }
 
         Ok(())
