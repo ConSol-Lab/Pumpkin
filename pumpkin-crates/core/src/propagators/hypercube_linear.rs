@@ -4,7 +4,6 @@ use std::num::NonZero;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::HashMap;
-use crate::containers::StorageKey;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
@@ -12,7 +11,6 @@ use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::predicate;
@@ -388,39 +386,39 @@ impl Propagator for HypercubeLinearPropagator {
 
         let slack = self.hypercube_linear.compute_slack(context.assignments);
 
-        if context.propagator_id == PropagatorId::create_from_index(2102) {
-            println!("{}", self.hypercube_linear);
-            dbg!(context.assignments.get_decision_level());
-            dbg!(
-                self.hypercube_linear
-                    .hypercube
-                    .iter()
-                    .filter(|&predicate| context.evaluate_predicate(predicate) != Some(true))
-                    .collect::<Vec<_>>()
-            );
-            dbg!(num_satisfied_bounds);
-            dbg!(self.hypercube_linear.hypercube.len());
-            dbg!(slack);
-            for p in self.hypercube_linear.iter_hypercube() {
-                let domain = p.get_domain();
-                println!(
-                    "{} in [{}, {}]",
-                    domain,
-                    context.assignments.get_lower_bound(domain),
-                    context.assignments.get_upper_bound(domain)
-                );
-            }
-            for domain in self.hypercube_linear.linear_terms.iter() {
-                use crate::engine::variables::IntegerVariable;
+        // if context.propagator_id == PropagatorId::create_from_index(2102) {
+        //     println!("{}", self.hypercube_linear);
+        //     dbg!(context.assignments.get_decision_level());
+        //     dbg!(
+        //         self.hypercube_linear
+        //             .hypercube
+        //             .iter()
+        //             .filter(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+        //             .collect::<Vec<_>>()
+        //     );
+        //     dbg!(num_satisfied_bounds);
+        //     dbg!(self.hypercube_linear.hypercube.len());
+        //     dbg!(slack);
+        //     for p in self.hypercube_linear.iter_hypercube() {
+        //         let domain = p.get_domain();
+        //         println!(
+        //             "{} in [{}, {}]",
+        //             domain,
+        //             context.assignments.get_lower_bound(domain),
+        //             context.assignments.get_upper_bound(domain)
+        //         );
+        //     }
+        //     for domain in self.hypercube_linear.linear_terms.iter() {
+        //         use crate::engine::variables::IntegerVariable;
 
-                println!(
-                    "{:?} in [{}, {}]",
-                    domain,
-                    domain.lower_bound(context.assignments),
-                    domain.upper_bound(context.assignments)
-                );
-            }
-        }
+        //         println!(
+        //             "{:?} in [{}, {}]",
+        //             domain,
+        //             domain.lower_bound(context.assignments),
+        //             domain.upper_bound(context.assignments)
+        //         );
+        //     }
+        // }
 
         if !self.hypercube_linear.hypercube.is_empty()
             && num_satisfied_bounds == self.hypercube_linear.hypercube.len() - 1
