@@ -677,7 +677,30 @@ fn weaken_to_clause(
         .chain(std::iter::once(!propagated_predicate))
         .collect::<Vec<_>>();
 
-    HypercubeLinear::clause(hypercube)
+    let clause = HypercubeLinear::clause(hypercube);
+
+    if clause.iter_hypercube().next().is_some() {
+        let num_satisfied_predicates = clause
+            .iter_hypercube()
+            .filter(|&p| {
+                assignments.evaluate_predicate_at_trail_position(p, trail_position) == Some(true)
+            })
+            .count();
+        assert_eq!(
+            num_satisfied_predicates,
+            clause.iter_hypercube().count() - 1
+        );
+    }
+
+    let num_falsified_predicates = clause
+        .iter_hypercube()
+        .filter(|&p| {
+            assignments.evaluate_predicate_at_trail_position(p, trail_position) == Some(false)
+        })
+        .count();
+    assert_eq!(num_falsified_predicates, 1);
+
+    clause
 }
 
 fn hypercube_models_bound(hypercube_linear: &HypercubeLinear, predicate: Predicate) -> bool {
@@ -715,7 +738,9 @@ fn fourier_eliminate(
 
     let (weight_in_conflicting, weight_in_reason) =
         match (maybe_weight_in_conflicting, maybe_weight_in_reason) {
-            (Some(a_weight), Some(b_weight)) if a_weight.get() * b_weight.get() < 0 => {
+            (Some(a_weight), Some(b_weight))
+                if a_weight.is_positive() != b_weight.is_positive() =>
+            {
                 (a_weight, b_weight)
             }
 

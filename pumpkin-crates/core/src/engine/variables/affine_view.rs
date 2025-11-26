@@ -44,7 +44,7 @@ impl<Inner> AffineView<Inner> {
     }
 
     fn map(&self, value: i32) -> i32 {
-        self.scale * value + self.offset
+        self.scale.checked_mul(value).expect("integer overflow") + self.offset
     }
 }
 
@@ -188,8 +188,8 @@ where
 {
     fn scaled(&self, scale: i32) -> AffineView<View> {
         let mut result = self.clone();
-        result.scale = result.scale.checked_mul(scale).unwrap();
-        result.offset = result.offset.checked_mul(scale).unwrap();
+        result.scale = result.scale.checked_mul(scale).expect("integer overflow");
+        result.offset = result.offset.checked_mul(scale).expect("integer overflow");
         result
     }
 
