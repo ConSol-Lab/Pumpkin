@@ -434,7 +434,18 @@ impl Propagator for HypercubeLinearPropagator {
             // dbg!(neg_unassigned_predicate);
 
             if slack < 0 {
-                context.post(neg_unassigned_predicate, 0_u64, self.inference_code)?;
+                let reason: PropositionalConjunction = self
+                    .hypercube_linear
+                    .iter_hypercube()
+                    .chain(
+                        self.hypercube_linear
+                            .linear_terms
+                            .iter()
+                            .map(|term| predicate![term >= context.lower_bound(term)]),
+                    )
+                    .collect();
+
+                context.post(neg_unassigned_predicate, reason, self.inference_code)?;
             } else if let Some(weight) = self
                 .hypercube_linear
                 .variable_weight(unassigned_predicate.get_domain())
@@ -464,7 +475,22 @@ impl Propagator for HypercubeLinearPropagator {
                         "{neg_unassigned_predicate} should imply {to_propagate}"
                     );
 
-                    context.post(to_propagate, 0_u64, self.inference_code)?;
+                    let reason: PropositionalConjunction = self
+                        .hypercube_linear
+                        .iter_hypercube()
+                        .filter(|&p| p != unassigned_predicate)
+                        .chain(self.hypercube_linear.linear_terms.iter().filter_map(
+                            |&other_term| {
+                                if other_term != term {
+                                    Some(predicate![other_term >= context.lower_bound(&other_term)])
+                                } else {
+                                    None
+                                }
+                            },
+                        ))
+                        .collect();
+
+                    context.post(to_propagate, reason, self.inference_code)?;
                 }
             }
         } else if num_satisfied_bounds == self.hypercube_linear.hypercube.len() {

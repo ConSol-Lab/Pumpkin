@@ -10,6 +10,9 @@ use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::ConflictResolver;
+use crate::engine::notifications::NotificationEngine;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::store::PropagatorStore;
@@ -273,6 +276,7 @@ impl HypercubeLinearResolver {
                     assignments: context.assignments,
                     reason_store: context.reason_store,
                     propagators: context.propagators,
+                    notification_engine: context.notification_engine,
                 },
                 reason_ref,
             );
@@ -472,6 +476,7 @@ impl ConflictResolver for HypercubeLinearResolver {
                     assignments: context.assignments,
                     reason_store: context.reason_store,
                     propagators: context.propagators,
+                    notification_engine: context.notification_engine,
                 },
                 conflicting_hypercube_linear.clone(),
                 reason_set.clone(),
@@ -650,7 +655,8 @@ fn hypercube_models_bound(hypercube_linear: &HypercubeLinear, predicate: Predica
 struct HlResolverContext<'a> {
     assignments: &'a Assignments,
     reason_store: &'a mut ReasonStore,
-    propagators: &'a PropagatorStore,
+    propagators: &'a mut PropagatorStore,
+    notification_engine: &'a mut NotificationEngine,
 }
 
 enum FourierError {
@@ -684,6 +690,16 @@ fn fourier_eliminate(
             // elimination on the specified domain.
             _ => return Err(FourierError::NoVariableElimination),
         };
+
+    let reason_hypercube_satisfied = reason
+        .iter_hypercube()
+        .all(|p| assignments.evaluate_predicate_at_trail_position(p, trail_position) == Some(true));
+
+    // This is important if the hypercube linear propagated when all but one hypercube bound
+    // was satisfied.
+    if !reason_hypercube_satisfied {
+        return Err(FourierError::NoVariableElimination);
+    }
 
     let contributes_to_conflict_in_linear = (weight_in_conflicting.is_positive()
         && pivot_predicate.is_lower_bound_predicate())
@@ -744,11 +760,15 @@ fn fourier_eliminate(
         .chain(reason.iter_hypercube())
         .collect();
 
-    let mut linear_rhs = conflicting_hypercube_linear
+    let scaled_conflict_linear_rhs = conflicting_hypercube_linear
         .linear_rhs()
         .checked_mul(scale_conflicting.get())
-        .unwrap()
-        + reason.linear_rhs().checked_mul(scale_reason.get()).unwrap();
+        .ok_or(FourierError::IntegerOverflow)?;
+    let scaled_reason_linear_rhs = reason
+        .linear_rhs()
+        .checked_mul(scale_reason.get())
+        .ok_or(FourierError::IntegerOverflow)?;
+    let mut linear_rhs = scaled_conflict_linear_rhs + scaled_reason_linear_rhs;
 
     // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
     // future.
@@ -782,6 +802,19 @@ fn hypercube_from_reason(
     context: &mut HlResolverContext<'_>,
     reason: ReasonRef,
 ) -> HypercubeLinear {
+    let mut clausal_reason = Vec::new();
+    assert!(context.reason_store.get_or_compute(
+        reason,
+        ExplanationContext::new(
+            context.assignments,
+            CurrentNogood::empty(),
+            0,
+            context.notification_engine,
+        ),
+        context.propagators,
+        &mut clausal_reason,
+    ));
+
     let propagator_id = context.reason_store.get_propagator(reason);
     let handle = context
         .propagators
@@ -798,6 +831,7 @@ fn hypercube_from_reason(
         propagator.constraint_tag, propagator.is_learned
     );
     trace!("{}", propagator.hypercube_linear);
+    trace!("clausal reason = {clausal_reason:?}",);
 
     propagator.hypercube_linear.clone()
 }
