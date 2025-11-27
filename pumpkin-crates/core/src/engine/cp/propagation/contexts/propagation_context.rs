@@ -236,6 +236,15 @@ pub(crate) trait ReadDomains: HasAssignments {
             .is_some_and(|truth_value| !truth_value)
     }
 
+    fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
+        self.assignments().is_decision_predicate(predicate)
+    }
+
+    fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
+        self.assignments()
+            .get_decision_level_for_predicate(predicate)
+    }
+
     fn is_literal_true(&self, literal: &Literal) -> bool {
         literal
             .get_integer_variable()
