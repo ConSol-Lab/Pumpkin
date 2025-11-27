@@ -23,6 +23,12 @@ impl OsSignal {
         )
         .expect("failed to register signal listener");
 
+        let _ = signal_hook::flag::register(
+            signal_hook::consts::SIGTERM,
+            Arc::clone(&signal.signal_received),
+        )
+        .expect("failed to register signal listener");
+
         signal
     }
 }
