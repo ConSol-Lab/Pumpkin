@@ -13,23 +13,23 @@ pub(crate) struct OsSignal {
 impl OsSignal {
     /// Create a termination and install the event listeners.
     pub(crate) fn install() -> OsSignal {
-        let signal = OsSignal {
+        // The signals to listen to for termination.
+        const TERMINATION_SIGNALS: &[std::ffi::c_int] =
+            &[signal_hook::consts::SIGINT, signal_hook::consts::SIGTERM];
+
+        let signal_termination = OsSignal {
             signal_received: Arc::new(AtomicBool::new(false)),
         };
 
-        let _ = signal_hook::flag::register(
-            signal_hook::consts::SIGINT,
-            Arc::clone(&signal.signal_received),
-        )
-        .expect("failed to register signal listener");
+        for &signal in TERMINATION_SIGNALS {
+            let _ = signal_hook::flag::register(
+                signal,
+                Arc::clone(&signal_termination.signal_received),
+            )
+            .expect("failed to register signal listener");
+        }
 
-        let _ = signal_hook::flag::register(
-            signal_hook::consts::SIGTERM,
-            Arc::clone(&signal.signal_received),
-        )
-        .expect("failed to register signal listener");
-
-        signal
+        signal_termination
     }
 }
 
