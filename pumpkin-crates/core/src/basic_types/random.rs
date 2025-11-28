@@ -1,7 +1,15 @@
 use std::fmt::Debug;
 use std::ops::Range;
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "we implement our random generator using rand"
+)]
 use rand::Rng;
+#[allow(
+    clippy::disallowed_types,
+    reason = "we implement our random generator using rand"
+)]
 use rand::SeedableRng;
 
 use crate::pumpkin_assert_moderate;
@@ -74,6 +82,10 @@ pub trait Random: Debug {
 // We provide a blanket implementation of the trait for any type which implements `SeedableRng`,
 // `Rng` and `Debug` to ensure that we can use any "regular" random generator where we expect an
 // implementation of Random.
+#[allow(
+    clippy::disallowed_types,
+    reason = "we implement our random generator using rand"
+)]
 impl<T> Random for T
 where
     T: SeedableRng + Rng + Debug,
