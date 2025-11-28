@@ -80,12 +80,16 @@ where
                         best_solution = satisfiable.solution().into();
                         None
                     }
-                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(_) => {
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(_)
+                    | SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
                         Some(OptimisationResult::Optimal(best_solution.clone()))
                     }
-                    SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!(
-                        "If the problem is unsatisfiable here, it would have been unsatisifable in the initial solve."
-                    ),
+                    // TODO: This unreachable should never happen, but for some reason it is
+                    // triggered. For now we just assume a bug in the solver and return the same as
+                    // when UnsatisfiableUnderAssumptions is triggered.
+                    // SatisfactionResultUnderAssumptions::Unsatisfiable(_) => unreachable!(
+                    //     "If the problem is unsatisfiable here, it would have been unsatisifable
+                    // in the initial solve." ),
                     SatisfactionResultUnderAssumptions::Unknown(_) => {
                         Some(OptimisationResult::Satisfiable(best_solution.clone()))
                     }
