@@ -5,6 +5,10 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::time::Instant;
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "any rand generator is a valid implementation of Random"
+)]
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
