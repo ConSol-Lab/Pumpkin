@@ -837,7 +837,7 @@ fn fourier_eliminate(
         .ok_or(FourierError::IntegerOverflow)?;
     let mut linear_rhs = scaled_conflict_linear_rhs
         .checked_add(scaled_reason_linear_rhs)
-        .expect("integer overflow");
+        .ok_or(FourierError::IntegerOverflow)?;
 
     // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
     // future.
