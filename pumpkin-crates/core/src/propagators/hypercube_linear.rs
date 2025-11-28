@@ -4,12 +4,16 @@ use std::num::NonZero;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::HashMap;
+#[allow(unused, reason = "used when debugging")]
+use crate::containers::StorageKey;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
+#[allow(unused, reason = "used when debugging")]
+use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::predicate;
@@ -241,7 +245,8 @@ impl HypercubeLinear {
                     domain_lower_bound
                 }
             })
-            .sum::<i32>()
+            .reduce(|lb1, lb2| lb1.checked_add(lb2).expect("integer overflow"))
+            .unwrap_or(0)
     }
 
     /// Get an iterator over the hypercube of this constraint.
@@ -318,6 +323,7 @@ impl HypercubeLinear {
         &self,
         assignments: &mut Assignments,
         trail_position: usize,
+        #[allow(unused, reason = "used for debugging")] propagator_id: Option<PropagatorId>,
     ) -> Vec<(Predicate, PropositionalConjunction)> {
         let mut propagations = vec![];
 
@@ -332,36 +338,39 @@ impl HypercubeLinear {
 
         let slack = self.compute_slack_at_trail_position(assignments, trail_position);
 
-        // if context.propagator_id == PropagatorId::create_from_index(2102) {
-        //     println!("{}", self.hypercube_linear);
-        //     dbg!(context.assignments.get_decision_level());
+        // if let Some(pid) = propagator_id
+        //     && pid == PropagatorId::create_from_index(10750)
+        // {
+        //     println!("{}", self);
+        //     dbg!(assignments.get_decision_level());
         //     dbg!(
-        //         self.hypercube_linear
-        //             .hypercube
+        //         self.hypercube
         //             .iter()
-        //             .filter(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+        //             .filter(|&predicate| assignments
+        //                 .evaluate_predicate_at_trail_position(predicate, trail_position)
+        //                 != Some(true))
         //             .collect::<Vec<_>>()
         //     );
         //     dbg!(num_satisfied_bounds);
-        //     dbg!(self.hypercube_linear.hypercube.len());
+        //     dbg!(self.hypercube.len());
         //     dbg!(slack);
-        //     for p in self.hypercube_linear.iter_hypercube() {
+        //     for p in self.iter_hypercube() {
         //         let domain = p.get_domain();
         //         println!(
         //             "{} in [{}, {}]",
         //             domain,
-        //             context.assignments.get_lower_bound(domain),
-        //             context.assignments.get_upper_bound(domain)
+        //             assignments.get_lower_bound(domain),
+        //             assignments.get_upper_bound(domain)
         //         );
         //     }
-        //     for domain in self.hypercube_linear.linear_terms.iter() {
+        //     for domain in self.linear_terms.iter() {
         //         use crate::engine::variables::IntegerVariable;
 
         //         println!(
         //             "{:?} in [{}, {}]",
         //             domain,
-        //             domain.lower_bound(context.assignments),
-        //             domain.upper_bound(context.assignments)
+        //             domain.lower_bound(assignments),
+        //             domain.upper_bound(assignments)
         //         );
         //     }
         // }
@@ -528,9 +537,11 @@ impl Propagator for HypercubeLinearPropagator {
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        let propagations = self
-            .hypercube_linear
-            .propagate_at(context.assignments, context.assignments.num_trail_entries());
+        let propagations = self.hypercube_linear.propagate_at(
+            context.assignments,
+            context.assignments.num_trail_entries(),
+            Some(context.propagator_id),
+        );
 
         for (predicate, reason) in propagations {
             context.post(predicate, reason, self.inference_code)?;

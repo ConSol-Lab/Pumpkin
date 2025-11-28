@@ -470,8 +470,11 @@ impl HypercubeLinearResolver {
             let trail_position_after_backjump =
                 assignments.get_trail_position_at_decision_level(backjump_level - 1);
 
-            let propagations =
-                learned_hypercube_linear.propagate_at(assignments, trail_position_after_backjump);
+            let propagations = learned_hypercube_linear.propagate_at(
+                assignments,
+                trail_position_after_backjump,
+                None,
+            );
 
             if propagations.is_empty() {
                 break;
