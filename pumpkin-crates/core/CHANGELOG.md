@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.2.3) (2025-11-28)
+
+
+### Bug Fixes
+
+* Off-by-one error when explaining empty domain conflict ([#322](https://github.com/ConSol-Lab/Pumpkin/issues/322)) ([c3739c4](https://github.com/ConSol-Lab/Pumpkin/commit/c3739c427406f8f46a743c35233664028318f73f)), closes [#321](https://github.com/ConSol-Lab/Pumpkin/issues/321)
+* **pumpkin-core:** Declare solving after conflict resolution ([#317](https://github.com/ConSol-Lab/Pumpkin/issues/317)) ([4824567](https://github.com/ConSol-Lab/Pumpkin/commit/48245670d15bceeea843194213949da83a6509ab))
+* **pumpkin-core:** Don't use binary equality when logging proof ([#320](https://github.com/ConSol-Lab/Pumpkin/issues/320)) ([f528527](https://github.com/ConSol-Lab/Pumpkin/commit/f528527bf51f73c8dcf05d77d308ff6b16e6a53b))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.1...pumpkin-core-v0.2.2) (2025-11-10)
 
 
