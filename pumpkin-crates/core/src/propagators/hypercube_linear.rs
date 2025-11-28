@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::num::NonZero;
 
@@ -18,12 +19,10 @@ use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::variables::AffineView;
 use crate::variables::DomainId;
-use crate::variables::IntegerVariable;
-use crate::variables::TransformableVariable;
 
 declare_inference_label!(HypercubeLinearInference);
 
@@ -72,20 +71,20 @@ impl Hypercube {
         assert!(*lower_bound <= *upper_bound);
     }
 
-    fn lower_bound(&self, view: AffineView<DomainId>) -> Option<i32> {
-        let (lower_bound, upper_bound) = self.domains.get(&view.inner)?;
+    fn lower_bound(&self, term: Term) -> Option<i64> {
+        let (lower_bound, upper_bound) = self.domains.get(&term.domain)?;
 
-        if view.scale > 0 {
+        if term.weight.is_positive() {
             if *lower_bound == i32::MIN {
                 None
             } else {
-                Some(lower_bound * view.scale)
+                Some(*lower_bound as i64 * term.weight.get() as i64)
             }
-        } else if view.scale < 0 {
+        } else if term.weight.is_negative() {
             if *upper_bound == i32::MAX {
                 None
             } else {
-                Some(upper_bound * view.scale)
+                Some(*upper_bound as i64 * term.weight.get() as i64)
             }
         } else {
             unreachable!("term weight is never zero")
@@ -131,10 +130,75 @@ impl Display for Hypercube {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Term {
+    weight: NonZero<i32>,
+    domain: DomainId,
+}
+
+impl Debug for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Term")
+            .field(&self.weight)
+            .field(&self.domain)
+            .finish()
+    }
+}
+
+impl Term {
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i64 {
+        let unscaled_bound = if self.weight.is_positive() {
+            assignment.get_lower_bound_at_trail_position(self.domain, trail_position)
+        } else {
+            assignment.get_upper_bound_at_trail_position(self.domain, trail_position)
+        };
+
+        self.weight.get() as i64 * unscaled_bound as i64
+    }
+}
+
+impl PredicateConstructor for Term {
+    type Value = i64;
+
+    fn lower_bound_predicate(&self, scaled_bound: Self::Value) -> Predicate {
+        let bound =
+            i32::try_from(scaled_bound / self.weight.get() as i64).expect("integer overflow");
+
+        if self.weight.is_positive() {
+            predicate![self.domain >= bound]
+        } else {
+            predicate![self.domain <= bound]
+        }
+    }
+
+    fn upper_bound_predicate(&self, scaled_bound: Self::Value) -> Predicate {
+        let bound =
+            i32::try_from(scaled_bound / self.weight.get() as i64).expect("integer overflow");
+
+        if self.weight.is_positive() {
+            predicate![self.domain <= bound]
+        } else {
+            predicate![self.domain >= bound]
+        }
+    }
+
+    fn equality_predicate(&self, _: Self::Value) -> Predicate {
+        todo!("cannot create equality predicates for terms")
+    }
+
+    fn disequality_predicate(&self, _: Self::Value) -> Predicate {
+        todo!("cannot create disequality predicates for terms")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HypercubeLinear {
     hypercube: Hypercube,
-    linear_terms: Vec<AffineView<DomainId>>,
+    linear_terms: Vec<Term>,
     linear_rhs: i32,
 }
 
@@ -185,30 +249,45 @@ impl HypercubeLinear {
                 .fold(vec![], |mut acc, (weight, domain)| {
                     // Get the last term in the linear component.
                     let Some(last_term) = acc.last_mut() else {
-                        acc.push(domain.scaled(weight.get()));
+                        acc.push(Term { domain, weight });
                         return acc;
                     };
 
                     // If it is the same domain as the current domain, then add the weights
                     // together.
-                    if domain == last_term.inner {
-                        last_term.scale += weight.get();
-                        return acc;
+                    if domain == last_term.domain {
+                        let new_weight = last_term
+                            .weight
+                            .get()
+                            .checked_add(weight.get())
+                            .expect("integer overflow");
+
+                        if let Some(new_weight) = NonZero::new(new_weight) {
+                            last_term.weight = new_weight;
+                            return acc;
+                        } else {
+                            let _ = acc.pop();
+                            return acc;
+                        }
                     }
 
                     // Otherwise, add the current term to the accumulator.
-                    acc.push(domain.scaled(weight.get()));
+                    acc.push(Term { domain, weight });
                     acc
                 });
-
-        linear_terms.retain(|view| view.scale != 0);
 
         // If the domain is fixed, then modify the right-hand side and exclude the term from the
         // linear component.
         for (domain, value) in fixed_domain_value_pairs {
-            if let Some(index) = linear_terms.iter().position(|view| view.inner == domain) {
+            if let Some(index) = linear_terms.iter().position(|view| view.domain == domain) {
                 let view = linear_terms.remove(index);
-                linear_rhs -= value * view.scale;
+                linear_rhs = linear_rhs
+                    .checked_sub(
+                        value
+                            .checked_mul(view.weight.get())
+                            .expect("integer overflow"),
+                    )
+                    .expect("integer overflow");
             }
         }
 
@@ -227,20 +306,20 @@ impl HypercubeLinear {
         &self,
         assignments: &Assignments,
         trail_position: usize,
-    ) -> i32 {
+    ) -> i64 {
         let lhs = self.evaluate_linear_lower_bound(assignments, trail_position);
-        self.linear_rhs - lhs
+        self.linear_rhs as i64 - lhs
     }
 
-    fn evaluate_linear_lower_bound(&self, assignments: &Assignments, trail_position: usize) -> i32 {
+    fn evaluate_linear_lower_bound(&self, assignments: &Assignments, trail_position: usize) -> i64 {
         self.linear_terms
             .iter()
-            .map(|view| {
+            .map(|term| {
                 let domain_lower_bound =
-                    view.lower_bound_at_trail_position(assignments, trail_position);
+                    term.lower_bound_at_trail_position(assignments, trail_position);
 
-                if let Some(hypercube_bound) = self.hypercube.lower_bound(*view) {
-                    i32::max(hypercube_bound, domain_lower_bound)
+                if let Some(hypercube_bound) = self.hypercube.lower_bound(*term) {
+                    i64::max(hypercube_bound, domain_lower_bound)
                 } else {
                     domain_lower_bound
                 }
@@ -259,7 +338,7 @@ impl HypercubeLinear {
     pub fn iter_linear_terms(
         &self,
     ) -> impl ExactSizeIterator<Item = (NonZero<i32>, DomainId)> + '_ {
-        self.linear_terms.iter().copied().map(view_to_tuple)
+        self.linear_terms.iter().copied().map(term_to_tuple)
     }
 
     pub fn linear_rhs(&self) -> i32 {
@@ -270,9 +349,9 @@ impl HypercubeLinear {
     ///
     /// If the domain is not in the linear component, this returns `None`.
     pub(crate) fn variable_weight(&self, domain: DomainId) -> Option<NonZero<i32>> {
-        self.linear_terms.iter().find_map(|view| {
-            if view.inner == domain {
-                Some(view.scale.try_into().expect("scales should be non-zero"))
+        self.linear_terms.iter().find_map(|term| {
+            if term.domain == domain {
+                Some(term.weight)
             } else {
                 None
             }
@@ -283,20 +362,20 @@ impl HypercubeLinear {
         let domain = predicate.get_domain();
         let value = predicate.get_right_hand_side();
 
-        assert!(self.linear_terms.is_sorted_by_key(|term| term.inner));
+        assert!(self.linear_terms.is_sorted_by_key(|term| term.domain));
 
         let term_index = self
             .linear_terms
-            .binary_search_by(|term| term.inner.cmp(&domain))
+            .binary_search_by(|term| term.domain.cmp(&domain))
             .ok()?;
 
         let term_to_weaken = self.linear_terms[term_index];
 
         let rhs_delta = if predicate.is_lower_bound_predicate()
-            && term_to_weaken.scale.is_positive()
-            || predicate.is_upper_bound_predicate() && term_to_weaken.scale.is_negative()
+            && term_to_weaken.weight.is_positive()
+            || predicate.is_upper_bound_predicate() && term_to_weaken.weight.is_negative()
         {
-            term_to_weaken.scale.checked_mul(value).unwrap()
+            term_to_weaken.weight.get().checked_mul(value).unwrap()
         } else {
             return None;
         };
@@ -406,7 +485,10 @@ impl HypercubeLinear {
                     weight.is_negative() && unassigned_predicate.is_upper_bound_predicate();
 
                 if positive_weight_and_lower_bound || negative_weight_and_upper_bound {
-                    let term = unassigned_predicate.get_domain().scaled(weight.get());
+                    let term = Term {
+                        domain: unassigned_predicate.get_domain(),
+                        weight,
+                    };
 
                     // The slack is computed wrt unassigned_predicate being true. It is guaranteed
                     // to be stronger than the current bound for `term`, so we have to update the
@@ -450,10 +532,10 @@ impl HypercubeLinear {
                 .linear_terms
                 .iter()
                 .map(|term| term.lower_bound_at_trail_position(assignments, trail_position))
-                .sum::<i32>();
+                .sum::<i64>();
 
             for (i, term) in self.linear_terms.iter().enumerate() {
-                let bound = self.linear_rhs
+                let bound = self.linear_rhs as i64
                     - (lower_bound_left_hand_side
                         - term.lower_bound_at_trail_position(assignments, trail_position));
 
@@ -480,8 +562,8 @@ impl HypercubeLinear {
     }
 }
 
-fn view_to_tuple(view: AffineView<DomainId>) -> (NonZero<i32>, DomainId) {
-    (NonZero::new(view.scale).unwrap(), view.inner)
+fn term_to_tuple(term: Term) -> (NonZero<i32>, DomainId) {
+    (term.weight, term.domain)
 }
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
@@ -507,7 +589,19 @@ impl PropagatorConstructor for HypercubeLinearPropagatorArgs {
         }
 
         for (i, x_i) in hypercube_linear.linear_terms.iter().enumerate() {
-            context.register(*x_i, DomainEvents::LOWER_BOUND, LocalId::from(i as u32));
+            if x_i.weight.is_positive() {
+                context.register(
+                    x_i.domain,
+                    DomainEvents::LOWER_BOUND,
+                    LocalId::from(i as u32),
+                );
+            } else {
+                context.register(
+                    x_i.domain,
+                    DomainEvents::UPPER_BOUND,
+                    LocalId::from(i as u32),
+                );
+            }
         }
 
         HypercubeLinearPropagator {
