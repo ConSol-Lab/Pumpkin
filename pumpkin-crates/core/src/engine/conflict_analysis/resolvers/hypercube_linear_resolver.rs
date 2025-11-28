@@ -31,6 +31,7 @@ use crate::variables::TransformableVariable;
 create_statistics_struct!(HypercubeLinearResolutionStatistics {
     average_num_linear_terms_in_learned_hypercube_linear: CumulativeMovingAverage<usize>,
     num_learned_hypercube_linear: usize,
+    num_learned_clauses: usize,
     num_overflow_errors: usize,
 });
 
@@ -104,6 +105,10 @@ impl HypercubeLinearResolver {
             .average_num_linear_terms_in_learned_hypercube_linear
             .add_term(learned_constraint.iter_linear_terms().len());
         self.statistics.num_learned_hypercube_linear += 1;
+
+        if learned_constraint.iter_linear_terms().count() == 0 {
+            self.statistics.num_learned_clauses += 1;
+        }
 
         context.counters.engine_statistics.num_backjumps += 1;
         context
@@ -830,7 +835,9 @@ fn fourier_eliminate(
         .linear_rhs()
         .checked_mul(scale_reason.get())
         .ok_or(FourierError::IntegerOverflow)?;
-    let mut linear_rhs = scaled_conflict_linear_rhs + scaled_reason_linear_rhs;
+    let mut linear_rhs = scaled_conflict_linear_rhs
+        .checked_add(scaled_reason_linear_rhs)
+        .expect("integer overflow");
 
     // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
     // future.
