@@ -1058,7 +1058,10 @@ impl ConstraintSatisfactionSolver {
             );
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
-            trace!("propagating {propagator_id}");
+            trace!(
+                "propagating {propagator_id} (dl = {})",
+                self.assignments.get_decision_level()
+            );
 
             self.solver_statistics
                 .engine_statistics

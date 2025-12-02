@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::num::NonZero;
 
 use crate::basic_types::PropagationStatusCP;
@@ -17,6 +18,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
+use crate::math::num_ext::NumExt;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateConstructor;
@@ -29,6 +31,14 @@ declare_inference_label!(HypercubeLinearInference);
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Hypercube {
     domains: HashMap<DomainId, (i32, i32)>,
+}
+
+impl Hash for Hypercube {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for predicate in self.iter() {
+            predicate.hash(state);
+        }
+    }
 }
 
 impl Hypercube {
@@ -130,7 +140,7 @@ impl Display for Hypercube {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct Term {
     weight: NonZero<i32>,
     domain: DomainId,
@@ -157,32 +167,36 @@ impl Term {
             assignment.get_upper_bound_at_trail_position(self.domain, trail_position)
         };
 
-        self.weight.get() as i64 * unscaled_bound as i64
+        i64::from(self.weight.get())
+            .checked_mul(i64::from(unscaled_bound))
+            .expect("integer overflow")
     }
 }
 
 impl PredicateConstructor for Term {
     type Value = i64;
 
-    fn lower_bound_predicate(&self, scaled_bound: Self::Value) -> Predicate {
-        let bound =
-            i32::try_from(scaled_bound / self.weight.get() as i64).expect("integer overflow");
-
-        if self.weight.is_positive() {
-            predicate![self.domain >= bound]
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        if self.weight.is_negative() {
+            let inverted_bound = <i64 as NumExt>::div_floor(bound, self.weight.get() as i64);
+            let inverted_bound_i32 = i32::try_from(inverted_bound).expect("integer_overflow");
+            predicate![self.domain <= inverted_bound_i32]
         } else {
-            predicate![self.domain <= bound]
+            let inverted_bound = <i64 as NumExt>::div_ceil(bound, self.weight.get() as i64);
+            let inverted_bound_i32 = i32::try_from(inverted_bound).expect("integer_overflow");
+            predicate![self.domain >= inverted_bound_i32]
         }
     }
 
-    fn upper_bound_predicate(&self, scaled_bound: Self::Value) -> Predicate {
-        let bound =
-            i32::try_from(scaled_bound / self.weight.get() as i64).expect("integer overflow");
-
-        if self.weight.is_positive() {
-            predicate![self.domain <= bound]
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        if self.weight.is_negative() {
+            let inverted_bound = <i64 as NumExt>::div_ceil(bound, self.weight.get() as i64);
+            let inverted_bound_i32 = i32::try_from(inverted_bound).expect("integer_overflow");
+            predicate![self.domain >= inverted_bound_i32]
         } else {
-            predicate![self.domain >= bound]
+            let inverted_bound = <i64 as NumExt>::div_floor(bound, self.weight.get() as i64);
+            let inverted_bound_i32 = i32::try_from(inverted_bound).expect("integer_overflow");
+            predicate![self.domain <= inverted_bound_i32]
         }
     }
 
@@ -195,7 +209,7 @@ impl PredicateConstructor for Term {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HypercubeLinear {
     hypercube: Hypercube,
     linear_terms: Vec<Term>,
@@ -400,7 +414,7 @@ impl HypercubeLinear {
 
     pub(crate) fn propagate_at(
         &self,
-        assignments: &mut Assignments,
+        assignments: &Assignments,
         trail_position: usize,
         #[allow(unused, reason = "used for debugging")] propagator_id: Option<PropagatorId>,
     ) -> Vec<(Predicate, PropositionalConjunction)> {
@@ -418,7 +432,7 @@ impl HypercubeLinear {
         let slack = self.compute_slack_at_trail_position(assignments, trail_position);
 
         // if let Some(pid) = propagator_id
-        //     && pid == PropagatorId::create_from_index(10750)
+        //     && pid == PropagatorId::create_from_index(864)
         // {
         //     println!("{}", self);
         //     dbg!(assignments.get_decision_level());
@@ -438,18 +452,18 @@ impl HypercubeLinear {
         //         println!(
         //             "{} in [{}, {}]",
         //             domain,
-        //             assignments.get_lower_bound(domain),
-        //             assignments.get_upper_bound(domain)
+        //             assignments.get_lower_bound_at_trail_position(domain, trail_position),
+        //             assignments.get_upper_bound_at_trail_position(domain, trail_position)
         //         );
         //     }
-        //     for domain in self.linear_terms.iter() {
-        //         use crate::engine::variables::IntegerVariable;
-
+        //     for term in self.linear_terms.iter() {
         //         println!(
-        //             "{:?} in [{}, {}]",
-        //             domain,
-        //             domain.lower_bound(assignments),
-        //             domain.upper_bound(assignments)
+        //             "{:?} >= {} ({} in [{}, {}]",
+        //             term,
+        //             term.lower_bound_at_trail_position(assignments, trail_position),
+        //             term.domain,
+        //             assignments.get_lower_bound_at_trail_position(term.domain, trail_position),
+        //             assignments.get_upper_bound_at_trail_position(term.domain, trail_position)
         //         );
         //     }
         // }
@@ -638,6 +652,10 @@ impl Propagator for HypercubeLinearPropagator {
         );
 
         for (predicate, reason) in propagations {
+            // if context.propagator_id == PropagatorId::create_from_index(864) {
+            //     println!("will propagate {predicate}");
+            // }
+
             context.post(predicate, reason, self.inference_code)?;
         }
 
@@ -838,6 +856,31 @@ mod tests {
 
         solver.assert_bounds(x, 2, 5);
         solver.assert_bounds(y, 0, 5);
+    }
+
+    #[test]
+    fn test_bounds_are_propagated_if_hypercube_satisfied_non_unit_weight() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(2, 5);
+        let y = solver.new_variable(0, 10);
+
+        let constraint_tag = solver.new_constraint_tag();
+
+        let _ = solver
+            .new_propagator(HypercubeLinearPropagatorArgs {
+                hypercube_linear: HypercubeLinear::new(
+                    vec![predicate![x >= 2]],
+                    [(ONE, x), (NonZero::new(2).unwrap(), y)].into(),
+                    7,
+                )
+                .unwrap(),
+                constraint_tag,
+                is_learned: false,
+            })
+            .expect("no empty domains");
+
+        solver.assert_bounds(x, 2, 5);
+        solver.assert_bounds(y, 0, 2);
     }
 
     #[test]

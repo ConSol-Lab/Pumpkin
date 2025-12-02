@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use log::debug;
+
 use super::ConflictResolver;
 use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
@@ -171,6 +173,11 @@ impl ResolutionResolver {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
+
+        debug!(
+            "Resolving conflict (dl = {}) {conflict_nogood:?}",
+            context.assignments.get_decision_level()
+        );
 
         let mut root_explanation_context = if context.proof_log.is_logging_inferences() {
             Some(RootExplanationContext {
