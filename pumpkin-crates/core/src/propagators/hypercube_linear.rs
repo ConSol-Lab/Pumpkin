@@ -141,9 +141,9 @@ impl Display for Hypercube {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Term {
-    weight: NonZero<i32>,
-    domain: DomainId,
+pub struct Term {
+    pub weight: NonZero<i32>,
+    pub domain: DomainId,
 }
 
 impl Debug for Term {
@@ -156,7 +156,7 @@ impl Debug for Term {
 }
 
 impl Term {
-    fn lower_bound_at_trail_position(
+    pub(crate) fn lower_bound_at_trail_position(
         &self,
         assignment: &Assignments,
         trail_position: usize,
@@ -349,10 +349,8 @@ impl HypercubeLinear {
 
     /// Get an iterator over the terms in the linear component of the constraint. Each [`DomainId`]
     /// is guaranteed to be present only once.
-    pub fn iter_linear_terms(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (NonZero<i32>, DomainId)> + '_ {
-        self.linear_terms.iter().copied().map(term_to_tuple)
+    pub fn iter_linear_terms(&self) -> impl ExactSizeIterator<Item = Term> + '_ {
+        self.linear_terms.iter().copied()
     }
 
     pub fn linear_rhs(&self) -> i32 {
@@ -576,10 +574,6 @@ impl HypercubeLinear {
     }
 }
 
-fn term_to_tuple(term: Term) -> (NonZero<i32>, DomainId) {
-    (term.weight, term.domain)
-}
-
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
 pub(crate) struct HypercubeLinearPropagatorArgs {
@@ -788,7 +782,13 @@ mod tests {
         .expect("not trivially satisfiable");
 
         let linear_terms = constraint.iter_linear_terms().collect::<Vec<_>>();
-        assert_eq!(linear_terms, vec![(ONE, y)]);
+        assert_eq!(
+            linear_terms,
+            vec![Term {
+                domain: y,
+                weight: ONE
+            }]
+        );
         assert_eq!(constraint.linear_rhs, 0);
     }
 
@@ -804,7 +804,13 @@ mod tests {
         .expect("not trivially satisfiable");
 
         let linear_terms = constraint.iter_linear_terms().collect::<Vec<_>>();
-        assert_eq!(linear_terms, vec![(ONE, y)]);
+        assert_eq!(
+            linear_terms,
+            vec![Term {
+                weight: ONE,
+                domain: y
+            }]
+        );
         assert_eq!(constraint.linear_rhs, 8);
     }
 

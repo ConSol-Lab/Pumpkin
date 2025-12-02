@@ -26,8 +26,6 @@ use crate::propagators::HypercubeLinear;
 use crate::propagators::HypercubeLinearPropagator;
 use crate::propagators::HypercubeLinearPropagatorArgs;
 use crate::statistics::Statistic;
-use crate::variables::IntegerVariable;
-use crate::variables::TransformableVariable;
 
 create_statistics_struct!(HypercubeLinearResolutionStatistics {
     average_num_linear_terms_in_learned_hypercube_linear: CumulativeMovingAverage<usize>,
@@ -583,22 +581,16 @@ fn explain_initial_conflict(
 ) -> Vec<Predicate> {
     hypercube_linear
         .iter_hypercube()
-        .chain(
-            hypercube_linear
-                .iter_linear_terms()
-                .filter_map(|(weight, domain)| {
-                    let term = domain.scaled(weight.get());
-                    let term_lower_bound =
-                        term.lower_bound_at_trail_position(assignments, trail_position);
-                    let predicate = predicate![term >= term_lower_bound];
+        .chain(hypercube_linear.iter_linear_terms().filter_map(|term| {
+            let term_lower_bound = term.lower_bound_at_trail_position(assignments, trail_position);
+            let predicate = predicate![term >= term_lower_bound];
 
-                    if conflict_trigger.implies(predicate) {
-                        None
-                    } else {
-                        Some(predicate)
-                    }
-                }),
-        )
+            if conflict_trigger.implies(predicate) {
+                None
+            } else {
+                Some(predicate)
+            }
+        }))
         .collect()
 }
 
@@ -609,16 +601,10 @@ fn explain_conflict(
 ) -> HypercubeLinear {
     let hypercube = hypercube_linear
         .iter_hypercube()
-        .chain(
-            hypercube_linear
-                .iter_linear_terms()
-                .map(|(weight, domain)| {
-                    let term = domain.scaled(weight.get());
-                    let term_lower_bound =
-                        term.lower_bound_at_trail_position(assignments, trail_position);
-                    predicate![term >= term_lower_bound]
-                }),
-        )
+        .chain(hypercube_linear.iter_linear_terms().map(|term| {
+            let term_lower_bound = term.lower_bound_at_trail_position(assignments, trail_position);
+            predicate![term >= term_lower_bound]
+        }))
         .collect();
 
     HypercubeLinear::clause(hypercube)
@@ -662,7 +648,10 @@ fn propositional_resolution(
 
     let new_constraint = HypercubeLinear::new(
         hypercube,
-        weakened_conflict.iter_linear_terms().collect(),
+        weakened_conflict
+            .iter_linear_terms()
+            .map(|term| (term.weight, term.domain))
+            .collect(),
         weakened_conflict.linear_rhs(),
     )
     .expect("not trivially satisfiable");
@@ -680,22 +669,16 @@ fn weaken_to_clause(
 ) -> HypercubeLinear {
     let hypercube = hypercube_linear
         .iter_hypercube()
-        .chain(
-            hypercube_linear
-                .iter_linear_terms()
-                .filter_map(|(weight, domain)| {
-                    if domain == propagated_predicate.get_domain() {
-                        return None;
-                    }
+        .chain(hypercube_linear.iter_linear_terms().filter_map(|term| {
+            if term.domain == propagated_predicate.get_domain() {
+                return None;
+            }
 
-                    let term = domain.scaled(weight.get());
-                    let term_lower_bound =
-                        term.lower_bound_at_trail_position(assignments, trail_position);
+            let term_lower_bound = term.lower_bound_at_trail_position(assignments, trail_position);
 
-                    let predicate_in_clause = predicate![term >= term_lower_bound];
-                    Some(predicate_in_clause)
-                }),
-        )
+            let predicate_in_clause = predicate![term >= term_lower_bound];
+            Some(predicate_in_clause)
+        }))
         .chain(std::iter::once(!propagated_predicate))
         .collect::<Vec<_>>();
 
@@ -822,17 +805,17 @@ fn fourier_eliminate(
     // input constraints.
     let mut linear_terms = conflicting_hypercube_linear
         .iter_linear_terms()
-        .map(|(weight, domain)| {
-            weight
+        .map(|term| {
+            term.weight
                 .checked_mul(scale_conflicting)
                 .ok_or(FourierError::IntegerOverflow)
-                .map(|scaled_weight| (scaled_weight, domain))
+                .map(|scaled_weight| (scaled_weight, term.domain))
         })
-        .chain(reason.iter_linear_terms().map(|(weight, domain)| {
-            weight
+        .chain(reason.iter_linear_terms().map(|term| {
+            term.weight
                 .checked_mul(scale_reason)
                 .ok_or(FourierError::IntegerOverflow)
-                .map(|scaled_weight| (scaled_weight, domain))
+                .map(|scaled_weight| (scaled_weight, term.domain))
         }))
         .collect::<Result<Vec<_>, _>>()?;
 
