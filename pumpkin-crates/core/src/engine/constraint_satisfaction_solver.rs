@@ -972,7 +972,6 @@ impl ConstraintSatisfactionSolver {
                     &mut self.trailed_values,
                     &mut self.assignments,
                     &mut self.reason_store,
-                    &mut self.semantic_minimiser,
                     &mut self.notification_engine,
                     propagator_id,
                 );
@@ -1234,7 +1233,6 @@ impl ConstraintSatisfactionSolver {
             &mut self.trailed_values,
             &mut self.assignments,
             &mut self.reason_store,
-            &mut self.semantic_minimiser,
             &mut self.notification_engine,
             self.nogood_propagator_handle.propagator_id(),
         );

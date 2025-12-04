@@ -485,7 +485,6 @@ pub(crate) mod test_propagation_handler {
     use crate::containers::StorageKey;
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
-    use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
@@ -594,7 +593,6 @@ pub(crate) mod test_propagation_handler {
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
-                        &mut SemanticMinimiser::default(),
                         &mut self.notification_engine,
                         PropagatorId(0),
                     ),
@@ -659,7 +657,6 @@ pub(crate) mod test_propagation_handler {
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
-                        &mut SemanticMinimiser::default(),
                         &mut self.notification_engine,
                         PropagatorId(0),
                     ),
@@ -710,7 +707,6 @@ pub(crate) mod test_propagation_handler {
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
-                        &mut SemanticMinimiser::default(),
                         &mut self.notification_engine,
                         PropagatorId(0),
                     ),
@@ -775,7 +771,6 @@ pub(crate) mod test_propagation_handler {
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
-                        &mut SemanticMinimiser::default(),
                         &mut self.notification_engine,
                         PropagatorId(0),
                     ),

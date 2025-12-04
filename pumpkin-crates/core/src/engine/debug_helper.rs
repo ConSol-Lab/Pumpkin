@@ -6,7 +6,6 @@ use log::debug;
 use log::warn;
 
 use super::TrailedValues;
-use super::conflict_analysis::SemanticMinimiser;
 use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
 use super::propagation::ExplanationContext;
@@ -79,12 +78,10 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
-                &mut semantic_minimiser,
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
             );
@@ -260,12 +257,10 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
-                let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
-                    &mut semantic_minimiser,
                     &mut notification_engine_clone,
                     propagator_id,
                 );
@@ -366,7 +361,6 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
-                let mut semantic_minimiser = SemanticMinimiser::default();
 
                 // Note that it might take multiple iterations before the conflict is reached due
                 // to the assumption that some propagators make on that they are not idempotent!
@@ -382,7 +376,6 @@ impl DebugHelper {
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
-                        &mut semantic_minimiser,
                         &mut notification_engine_clone,
                         propagator_id,
                     );
@@ -446,12 +439,10 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
-                &mut semantic_minimiser,
                 &mut notification_engine_clone,
                 propagator_id,
             );
