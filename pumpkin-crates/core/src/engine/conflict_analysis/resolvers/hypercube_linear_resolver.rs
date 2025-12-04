@@ -25,6 +25,7 @@ use crate::predicates::Predicate;
 use crate::propagators::HypercubeLinear;
 use crate::propagators::HypercubeLinearPropagator;
 use crate::propagators::HypercubeLinearPropagatorArgs;
+use crate::propagators::Term;
 use crate::statistics::Statistic;
 
 create_statistics_struct!(HypercubeLinearResolutionStatistics {
@@ -206,31 +207,36 @@ impl HypercubeLinearResolver {
 
                 let new_slack = hypercube_linear
                     .compute_slack_at_trail_position(context.assignments, trail_index);
+
                 trace!("new slack = {new_slack}");
+                assert!(new_slack < 0);
+                conflicting_hypercube_linear = hypercube_linear;
 
-                let new_conflicting = if new_slack >= 0 {
-                    let weakened_conflicting =
-                            conflicting_hypercube_linear.weaken(pivot_predicate).expect("if we could do fourier elimination then the top of trail contributes to the conflict and can therefore be weakened on");
-                    let weakened_conflicting_slack = weakened_conflicting
-                        .compute_slack_at_trail_position(context.assignments, trail_index);
-                    assert!(
-                        weakened_conflicting_slack < 0,
-                        "weakening like this does not affect slack"
-                    );
+                // let new_conflicting = if new_slack >= 0 {
+                //     let weakened_conflicting =
+                //             conflicting_hypercube_linear.weaken(pivot_predicate).expect("if we
+                // could do fourier elimination then the top of trail contributes to the conflict
+                // and can therefore be weakened on");
+                //     let weakened_conflicting_slack = weakened_conflicting
+                //         .compute_slack_at_trail_position(context.assignments, trail_index);
+                //     assert!(
+                //         weakened_conflicting_slack < 0,
+                //         "weakening like this does not affect slack"
+                //     );
 
-                    propositional_resolution(
-                        context.assignments,
-                        trail_index,
-                        weakened_conflicting,
-                        &reason,
-                        pivot_predicate,
-                    )
-                } else {
-                    self.statistics.num_successful_fourier_resolves += 1;
-                    hypercube_linear
-                };
+                //     propositional_resolution(
+                //         context.assignments,
+                //         trail_index,
+                //         weakened_conflicting,
+                //         &reason,
+                //         pivot_predicate,
+                //     )
+                // } else {
+                //     self.statistics.num_successful_fourier_resolves += 1;
+                //     hypercube_linear
+                // };
 
-                conflicting_hypercube_linear = new_conflicting;
+                // conflicting_hypercube_linear = new_conflicting;
                 elimination_happened = true;
             }
             Err(
@@ -792,49 +798,101 @@ fn fourier_eliminate(
         return Err(FourierError::ResultOfEliminationTriviallySatisfiable);
     }
 
-    // Determine by how much to scale both linear terms.
-    let g = gcd(
-        weight_in_conflicting.get().abs(),
-        weight_in_reason.get().abs(),
+    let tightly_propagating_reason = compute_tightly_propagating_reason(
+        assignments,
+        trail_position,
+        reason,
+        Term {
+            weight: weight_in_reason,
+            domain: pivot_predicate.get_domain(),
+        },
     );
-    // We have to remake the non-zero as there is no API for division on NonZero yet.
-    let scale_conflicting = NonZero::new(weight_in_reason.abs().get() / g).unwrap();
-    let scale_reason = NonZero::new(weight_in_conflicting.abs().get() / g).unwrap();
 
-    // The linear terms of the new hypercube linear is the addition of the scaled terms of both
-    // input constraints.
+    trace!("  - tightly propagating: {tightly_propagating_reason}");
+    let tp_slack =
+        tightly_propagating_reason.compute_slack_at_trail_position(assignments, trail_position);
+    trace!("     - slack: {tp_slack}");
+
+    let weight_in_reformulated_reason = tightly_propagating_reason
+        .variable_weight(pivot_predicate.get_domain())
+        .unwrap();
+    assert_eq!(weight_in_reformulated_reason.get().abs(), 1);
+
+    let scale_reason = weight_in_conflicting.abs();
     let mut linear_terms = conflicting_hypercube_linear
         .iter_linear_terms()
-        .map(|term| {
-            term.weight
-                .checked_mul(scale_conflicting)
-                .ok_or(FourierError::IntegerOverflow)
-                .map(|scaled_weight| (scaled_weight, term.domain))
-        })
-        .chain(reason.iter_linear_terms().map(|term| {
-            term.weight
-                .checked_mul(scale_reason)
-                .ok_or(FourierError::IntegerOverflow)
-                .map(|scaled_weight| (scaled_weight, term.domain))
-        }))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|term| Ok((term.weight, term.domain)))
+        .chain(
+            tightly_propagating_reason
+                .iter_linear_terms()
+                .map(|reason_term| {
+                    reason_term
+                        .weight
+                        .checked_mul(scale_reason)
+                        .ok_or(FourierError::IntegerOverflow)
+                        .map(|scaled_weight| (scaled_weight, reason_term.domain))
+                }),
+        )
+        .collect::<Result<Vec<(_, _)>, _>>()?;
 
     let hypercube = conflicting_hypercube_linear
         .iter_hypercube()
-        .chain(reason.iter_hypercube())
+        .chain(tightly_propagating_reason.iter_hypercube())
         .collect();
 
-    let scaled_conflict_linear_rhs = conflicting_hypercube_linear
+    let mut linear_rhs = conflicting_hypercube_linear
         .linear_rhs()
-        .checked_mul(scale_conflicting.get())
+        .checked_add(
+            tightly_propagating_reason
+                .linear_rhs()
+                .checked_mul(scale_reason.get())
+                .ok_or(FourierError::IntegerOverflow)?,
+        )
         .ok_or(FourierError::IntegerOverflow)?;
-    let scaled_reason_linear_rhs = reason
-        .linear_rhs()
-        .checked_mul(scale_reason.get())
-        .ok_or(FourierError::IntegerOverflow)?;
-    let mut linear_rhs = scaled_conflict_linear_rhs
-        .checked_add(scaled_reason_linear_rhs)
-        .ok_or(FourierError::IntegerOverflow)?;
+
+    // // Determine by how much to scale both linear terms.
+    // let g = gcd(
+    //     weight_in_conflicting.get().abs(),
+    //     weight_in_reason.get().abs(),
+    // );
+    // // We have to remake the non-zero as there is no API for division on NonZero yet.
+    // let scale_conflicting = NonZero::new(weight_in_reason.abs().get() / g).unwrap();
+    // let scale_reason = NonZero::new(weight_in_conflicting.abs().get() / g).unwrap();
+
+    // // The linear terms of the new hypercube linear is the addition of the scaled terms of both
+    // // input constraints.
+    // let mut linear_terms = conflicting_hypercube_linear
+    //     .iter_linear_terms()
+    //     .map(|term| {
+    //         term.weight
+    //             .checked_mul(scale_conflicting)
+    //             .ok_or(FourierError::IntegerOverflow)
+    //             .map(|scaled_weight| (scaled_weight, term.domain))
+    //     })
+    //     .chain(reason.iter_linear_terms().map(|term| {
+    //         term.weight
+    //             .checked_mul(scale_reason)
+    //             .ok_or(FourierError::IntegerOverflow)
+    //             .map(|scaled_weight| (scaled_weight, term.domain))
+    //     }))
+    //     .collect::<Result<Vec<_>, _>>()?;
+
+    // let hypercube = conflicting_hypercube_linear
+    //     .iter_hypercube()
+    //     .chain(reason.iter_hypercube())
+    //     .collect();
+
+    // let scaled_conflict_linear_rhs = conflicting_hypercube_linear
+    //     .linear_rhs()
+    //     .checked_mul(scale_conflicting.get())
+    //     .ok_or(FourierError::IntegerOverflow)?;
+    // let scaled_reason_linear_rhs = reason
+    //     .linear_rhs()
+    //     .checked_mul(scale_reason.get())
+    //     .ok_or(FourierError::IntegerOverflow)?;
+    // let mut linear_rhs = scaled_conflict_linear_rhs
+    //     .checked_add(scaled_reason_linear_rhs)
+    //     .ok_or(FourierError::IntegerOverflow)?;
 
     // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
     // future.
@@ -850,17 +908,50 @@ fn fourier_eliminate(
     });
     linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
 
-    let mut new_constraint = HypercubeLinear::new(hypercube, linear_terms, linear_rhs)
+    let new_constraint = HypercubeLinear::new(hypercube, linear_terms, linear_rhs)
         .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)?;
-
-    for bound in reason.iter_hypercube() {
-        if let Some(l) = new_constraint.weaken(bound) {
-            new_constraint = l;
-        }
-    }
 
     trace!("result = {new_constraint}");
     Ok(new_constraint)
+}
+
+/// Use weakening to obtain a hypercube linear that has the term for `pivot_domain` be unit in the
+/// linear part.
+fn compute_tightly_propagating_reason(
+    assignment: &Assignments,
+    trail_position: usize,
+    orignal_reason: &HypercubeLinear,
+    pivot_term: Term,
+) -> HypercubeLinear {
+    let divisor = pivot_term.weight.abs();
+
+    let bounds_to_weaken: Vec<_> = orignal_reason
+        .iter_linear_terms()
+        .filter_map(|term| {
+            // If the weight of the term is divisible by the weight of the pivot term, then we
+            // keep it in the linear part. Otherwise, it is weakened on.
+
+            if term.weight.get() % divisor.get() == 0 {
+                // We can divide this term by the pivot term. So no need to weaken on it.
+                return None;
+            }
+
+            let bound = term.lower_bound_at_trail_position(assignment, trail_position);
+            Some(predicate![term >= bound])
+        })
+        .collect();
+
+    let mut tightly_propagating_reason = orignal_reason.clone();
+
+    for bound in bounds_to_weaken {
+        tightly_propagating_reason = tightly_propagating_reason
+            .weaken(bound)
+            .expect("by construction this bound can be weakened on");
+    }
+
+    tightly_propagating_reason.divide_linear(divisor);
+
+    tightly_propagating_reason
 }
 
 /// Get the hypercube linear reason for the propagation.

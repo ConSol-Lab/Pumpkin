@@ -387,7 +387,11 @@ impl HypercubeLinear {
             && term_to_weaken.weight.is_positive()
             || predicate.is_upper_bound_predicate() && term_to_weaken.weight.is_negative()
         {
-            term_to_weaken.weight.get().checked_mul(value).unwrap()
+            term_to_weaken
+                .weight
+                .get()
+                .checked_mul(value)
+                .expect("integer overflow")
         } else {
             return None;
         };
@@ -571,6 +575,23 @@ impl HypercubeLinear {
         }
 
         propagations
+    }
+
+    /// Divide the linear part by the given weight, rounding down the right-hand side. If any
+    /// coefficients are not divisible by the weight, this crashes.
+    pub(crate) fn divide_linear(&mut self, weight: NonZero<i32>) {
+        for term in self.linear_terms.iter_mut() {
+            assert_eq!(
+                term.weight.get() % weight.get(),
+                0,
+                "can only divide coefficients to integers"
+            );
+
+            term.weight = NonZero::new(term.weight.get() / weight.get())
+                .expect("dividing two non-zero integers");
+        }
+
+        self.linear_rhs = <i32 as NumExt>::div_floor(self.linear_rhs, weight.get());
     }
 }
 
