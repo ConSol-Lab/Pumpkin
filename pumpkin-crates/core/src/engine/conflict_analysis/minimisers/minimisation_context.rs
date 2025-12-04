@@ -37,6 +37,7 @@ impl<'a> MinimisationContext<'a> {
         &mut self,
         predicate: Predicate,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+        current_nogood: CurrentNogood,
     ) {
         if self.assignments.is_initial_bound(predicate) {
             return;
@@ -58,7 +59,7 @@ impl<'a> MinimisationContext<'a> {
 
             let explanation_context = ExplanationContext::new(
                 self.assignments,
-                CurrentNogood::empty(),
+                current_nogood,
                 trail_position,
                 self.notification_engine,
             );

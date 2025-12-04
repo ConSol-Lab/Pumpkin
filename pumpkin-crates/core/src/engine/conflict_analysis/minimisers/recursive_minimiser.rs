@@ -46,7 +46,7 @@ impl NogoodMinimiser for RecursiveMinimiser {
         for i in 0..initial_nogood_size {
             let learned_predicate = nogood[i];
 
-            self.compute_label(learned_predicate, &mut context);
+            self.compute_label(learned_predicate, &mut context, nogood);
 
             let label = self.get_predicate_label(learned_predicate);
             // Keep the predicate in case it was not deemed deemed redundant.
@@ -72,7 +72,12 @@ impl NogoodMinimiser for RecursiveMinimiser {
 }
 
 impl RecursiveMinimiser {
-    fn compute_label(&mut self, input_predicate: Predicate, context: &mut MinimisationContext) {
+    fn compute_label(
+        &mut self,
+        input_predicate: Predicate,
+        context: &mut MinimisationContext,
+        current_nogood: &[Predicate],
+    ) {
         pumpkin_assert_moderate!(context.is_predicate_satisfied(input_predicate));
 
         self.current_depth += 1;
@@ -114,7 +119,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
-        context.get_propagation_reason(input_predicate, &mut reason);
+        context.get_propagation_reason(input_predicate, &mut reason, current_nogood.into());
         for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
             if context
@@ -141,7 +146,7 @@ impl RecursiveMinimiser {
             }
 
             // Compute the label of the antecedent predicate.
-            self.compute_label(antecedent_predicate, context);
+            self.compute_label(antecedent_predicate, context, current_nogood);
 
             // In case one of the antecedents is Poison,
             // the input predicate is not deemed redundant.
