@@ -1,4 +1,3 @@
-use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::conflict_analysis::MinimisationContext;
 use crate::predicates::Predicate;
 

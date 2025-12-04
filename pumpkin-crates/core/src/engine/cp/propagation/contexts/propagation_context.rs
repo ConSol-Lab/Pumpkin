@@ -3,7 +3,6 @@ use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
-use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
@@ -67,7 +66,6 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
-    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
 }
@@ -77,7 +75,6 @@ impl<'a> PropagationContextMut<'a> {
         trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
-        semantic_minimiser: &'a mut SemanticMinimiser,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
     ) -> Self {
@@ -87,7 +84,6 @@ impl<'a> PropagationContextMut<'a> {
             reason_store,
             propagator_id,
             notification_engine,
-            semantic_minimiser,
             reification_literal: None,
         }
     }

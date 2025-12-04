@@ -2,7 +2,6 @@ use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::SolverStatistics;
 use crate::engine::VariableNames;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::ExplanationContext;
@@ -30,27 +29,6 @@ pub(crate) struct MinimisationContext<'a> {
 }
 
 impl<'a> MinimisationContext<'a> {
-    pub(crate) fn new(
-        assignments: &'a Assignments,
-        reason_store: &'a mut ReasonStore,
-        notification_engine: &'a mut NotificationEngine,
-        propagators: &'a mut PropagatorStore,
-        proof_log: &'a mut ProofLog,
-        unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
-        variable_names: &'a VariableNames,
-        counters: &'a mut SolverStatistics,
-    ) -> Self {
-        Self {
-            assignments,
-            reason_store,
-            notification_engine,
-            propagators,
-            proof_log,
-            unit_nogood_inference_codes,
-            variable_names,
-            counters,
-        }
-    }
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///

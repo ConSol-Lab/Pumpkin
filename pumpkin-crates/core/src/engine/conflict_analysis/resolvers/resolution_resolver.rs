@@ -268,7 +268,6 @@ impl ResolutionResolver {
             context.trailed_values,
             context.assignments,
             context.reason_store,
-            context.semantic_minimiser,
             context.notification_engine,
             self.nogood_propagator_handle.propagator_id(),
         );
@@ -426,17 +425,28 @@ impl ResolutionResolver {
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
-        let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
-            &self.processed_nogood_predicates,
-            context.assignments,
-            if !context.should_minimise {
+        context
+            .semantic_minimiser
+            .set_mode(if !context.should_minimise {
                 // If we do not minimise then we do the equality
                 // merging in the first iteration of removing
                 // duplicates
                 Mode::EnableEqualityMerging
             } else {
                 Mode::DisableEqualityMerging
+            });
+        context.semantic_minimiser.minimise(
+            MinimisationContext {
+                assignments: context.assignments,
+                reason_store: context.reason_store,
+                notification_engine: context.notification_engine,
+                propagators: context.propagators,
+                proof_log: context.proof_log,
+                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                variable_names: context.variable_names,
+                counters: context.counters,
             },
+            &mut self.processed_nogood_predicates,
         );
 
         if context.should_minimise {
@@ -452,25 +462,40 @@ impl ResolutionResolver {
                     variable_names: context.variable_names,
                     counters: context.counters,
                 },
-                &mut clean_nogood,
+                &mut self.processed_nogood_predicates,
             );
 
             // We perform a final semantic minimisation call which allows the merging of the
             // equality predicates which remain in the nogood
-            let size_before_semantic_minimisation = clean_nogood.len();
-            clean_nogood = context.semantic_minimiser.minimise(
-                &clean_nogood,
-                context.assignments,
-                Mode::EnableEqualityMerging,
+            let size_before_semantic_minimisation = self.processed_nogood_predicates.len();
+            context
+                .semantic_minimiser
+                .set_mode(Mode::EnableEqualityMerging);
+            context.semantic_minimiser.minimise(
+                MinimisationContext {
+                    assignments: context.assignments,
+                    reason_store: context.reason_store,
+                    notification_engine: context.notification_engine,
+                    propagators: context.propagators,
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    variable_names: context.variable_names,
+                    counters: context.counters,
+                },
+                &mut self.processed_nogood_predicates,
             );
             context
                 .counters
                 .learned_clause_statistics
                 .average_number_of_removed_atomic_constraints_semantic
-                .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
+                .add_term(
+                    (size_before_semantic_minimisation - self.processed_nogood_predicates.len())
+                        as u64,
+                );
         }
 
-        let learned_nogood = LearnedNogood::create_from_vec(clean_nogood, context);
+        let learned_nogood =
+            LearnedNogood::create_from_vec(self.processed_nogood_predicates.clone(), context);
 
         pumpkin_assert_advanced!(
             learned_nogood

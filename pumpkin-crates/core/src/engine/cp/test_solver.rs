@@ -15,7 +15,6 @@ use crate::basic_types::Inconsistency;
 use crate::containers::KeyGenerator;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
-use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContext;
@@ -37,7 +36,6 @@ pub(crate) struct TestSolver {
     pub assignments: Assignments,
     pub propagator_store: PropagatorStore,
     pub reason_store: ReasonStore,
-    pub semantic_minimiser: SemanticMinimiser,
     pub trailed_values: TrailedValues,
     pub notification_engine: NotificationEngine,
     constraint_tags: KeyGenerator<ConstraintTag>,
@@ -50,7 +48,6 @@ impl Default for TestSolver {
             assignments: Default::default(),
             reason_store: Default::default(),
             propagator_store: Default::default(),
-            semantic_minimiser: Default::default(),
             notification_engine: Default::default(),
             trailed_values: Default::default(),
             constraint_tags: Default::default(),
@@ -118,7 +115,6 @@ impl TestSolver {
             &mut self.trailed_values,
             &mut self.assignments,
             &mut self.reason_store,
-            &mut self.semantic_minimiser,
             &mut self.notification_engine,
             PropagatorId(0),
         );
@@ -273,7 +269,6 @@ impl TestSolver {
             &mut self.trailed_values,
             &mut self.assignments,
             &mut self.reason_store,
-            &mut self.semantic_minimiser,
             &mut self.notification_engine,
             PropagatorId(0),
         );
@@ -293,7 +288,6 @@ impl TestSolver {
                     &mut self.trailed_values,
                     &mut self.assignments,
                     &mut self.reason_store,
-                    &mut self.semantic_minimiser,
                     &mut self.notification_engine,
                     PropagatorId(0),
                 );
