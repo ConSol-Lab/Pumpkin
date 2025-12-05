@@ -188,7 +188,7 @@ impl HypercubeLinearResolver {
     fn resolve(
         &mut self,
         mut conflicting_hypercube_linear: HypercubeLinear,
-        reason: HypercubeLinear,
+        reason: HypercubeLinearReason,
         context: &HlResolverContext<'_>,
         trail_index: usize,
         pivot_predicate: Predicate,
@@ -199,7 +199,7 @@ impl HypercubeLinearResolver {
             context.assignments,
             trail_index,
             &conflicting_hypercube_linear,
-            &reason,
+            &reason.original,
             pivot_predicate,
         ) {
             Ok(hypercube_linear) => {
@@ -259,9 +259,8 @@ impl HypercubeLinearResolver {
 
                 conflicting_hypercube_linear = propositional_resolution(
                     context.assignments,
-                    trail_index,
                     weakened_conflicting,
-                    &reason,
+                    &reason.as_clause,
                     pivot_predicate,
                 );
 
@@ -292,9 +291,8 @@ impl HypercubeLinearResolver {
 
             conflicting_hypercube_linear = propositional_resolution(
                 context.assignments,
-                trail_index,
                 conflicting_hypercube_linear,
-                &reason,
+                &reason.as_clause,
                 pivot_predicate,
             );
             elimination_happened = true;
@@ -428,6 +426,7 @@ impl HypercubeLinearResolver {
                     propagators: context.propagators,
                     notification_engine: context.notification_engine,
                 },
+                top_of_trail.predicate,
                 reason_ref,
             );
 
@@ -618,7 +617,6 @@ fn explain_conflict(
 
 fn propositional_resolution(
     assignments: &Assignments,
-    trail_position: usize,
     conflicting_hypercube_linear: HypercubeLinear,
     reason: &HypercubeLinear,
     pivot_predicate: Predicate,
@@ -632,12 +630,15 @@ fn propositional_resolution(
     trace!("    - weakened: {weakened_conflict}");
 
     trace!("  - {reason}");
-    let weakened_reason = weaken_to_clause(assignments, trail_position, reason, pivot_predicate);
-    trace!("     - as clause: {weakened_reason}");
+
+    assert!(
+        reason.iter_linear_terms().next().is_none(),
+        "the reason should be a clause"
+    );
 
     let hypercube = weakened_conflict
         .iter_hypercube()
-        .chain(weakened_reason.iter_hypercube())
+        .chain(reason.iter_hypercube())
         .filter(|&predicate| {
             // Only keep predicates that are not the propagated predicate or its
             // opposite.
@@ -665,53 +666,6 @@ fn propositional_resolution(
     trace!("result = {new_constraint}");
 
     new_constraint
-}
-
-fn weaken_to_clause(
-    assignments: &Assignments,
-    trail_position: usize,
-    hypercube_linear: &HypercubeLinear,
-    propagated_predicate: Predicate,
-) -> HypercubeLinear {
-    let hypercube = hypercube_linear
-        .iter_hypercube()
-        .chain(hypercube_linear.iter_linear_terms().filter_map(|term| {
-            if term.domain == propagated_predicate.get_domain() {
-                return None;
-            }
-
-            let term_lower_bound = term.lower_bound_at_trail_position(assignments, trail_position);
-
-            let predicate_in_clause = predicate![term >= term_lower_bound];
-            Some(predicate_in_clause)
-        }))
-        .chain(std::iter::once(!propagated_predicate))
-        .collect::<Vec<_>>();
-
-    let clause = HypercubeLinear::clause(hypercube);
-
-    if clause.iter_hypercube().next().is_some() {
-        let num_satisfied_predicates = clause
-            .iter_hypercube()
-            .filter(|&p| {
-                assignments.evaluate_predicate_at_trail_position(p, trail_position) == Some(true)
-            })
-            .count();
-        assert_eq!(
-            num_satisfied_predicates,
-            clause.iter_hypercube().count() - 1
-        );
-    }
-
-    let num_falsified_predicates = clause
-        .iter_hypercube()
-        .filter(|&p| {
-            assignments.evaluate_predicate_at_trail_position(p, trail_position) == Some(false)
-        })
-        .count();
-    assert_eq!(num_falsified_predicates, 1);
-
-    clause
 }
 
 fn hypercube_models_bound(hypercube_linear: &HypercubeLinear, predicate: Predicate) -> bool {
@@ -954,11 +908,17 @@ fn compute_tightly_propagating_reason(
     tightly_propagating_reason
 }
 
+struct HypercubeLinearReason {
+    original: HypercubeLinear,
+    as_clause: HypercubeLinear,
+}
+
 /// Get the hypercube linear reason for the propagation.
 fn hypercube_from_reason(
     context: &mut HlResolverContext<'_>,
+    propagated_predicate: Predicate,
     reason: ReasonRef,
-) -> HypercubeLinear {
+) -> HypercubeLinearReason {
     let mut clausal_reason = Vec::new();
     assert!(context.reason_store.get_or_compute(
         reason,
@@ -990,7 +950,16 @@ fn hypercube_from_reason(
     trace!("{}", propagator.hypercube_linear);
     trace!("clausal reason = {clausal_reason:?}",);
 
-    propagator.hypercube_linear.clone()
+    HypercubeLinearReason {
+        original: propagator.hypercube_linear.clone(),
+        as_clause: HypercubeLinear::clause(
+            clausal_reason
+                .iter()
+                .copied()
+                .chain(std::iter::once(!propagated_predicate))
+                .collect(),
+        ),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
