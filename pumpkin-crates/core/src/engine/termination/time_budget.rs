@@ -1,5 +1,5 @@
-use std::time::Duration;
-use std::time::Instant;
+use crate::basic_types::time::Duration;
+use crate::basic_types::time::Instant;
 
 use super::TerminationCondition;
 

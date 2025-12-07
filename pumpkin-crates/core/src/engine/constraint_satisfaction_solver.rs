@@ -3,7 +3,7 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::time::Instant;
+use crate::basic_types::time::Instant;
 
 #[allow(
     clippy::disallowed_types,

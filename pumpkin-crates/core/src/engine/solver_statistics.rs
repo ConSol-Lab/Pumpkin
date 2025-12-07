@@ -1,4 +1,4 @@
-use std::time::Duration;
+use crate::basic_types::time::Duration;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::create_statistics_struct;

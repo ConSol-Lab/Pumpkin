@@ -9,6 +9,7 @@ mod random;
 pub(crate) mod sequence_generators;
 mod solution;
 mod stored_conflict_info;
+pub(crate) mod time;
 mod trail;
 
 pub use constraint_operation_error::ConstraintOperationError;
