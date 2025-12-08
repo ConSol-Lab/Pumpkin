@@ -28,6 +28,20 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
     - run: cargo test --release --no-fail-fast
 
+  wasm-test:
+    name: Test Suite for pumpkin-core in WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - name: Install wasm-pack
+      run: cargo install wasm-pack
+    - name: Run wasm-pack tests
+      run: wasm-pack test --release --node
+      working-directory: pumpkin-crates/core
+
   pumpkin-solver-py:
     strategy:
       matrix:
