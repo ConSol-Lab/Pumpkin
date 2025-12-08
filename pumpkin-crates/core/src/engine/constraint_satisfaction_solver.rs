@@ -3,7 +3,6 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use crate::basic_types::time::Instant;
 
 #[allow(
     clippy::disallowed_types,
@@ -37,6 +36,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;

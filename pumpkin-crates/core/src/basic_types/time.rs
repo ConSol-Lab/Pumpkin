@@ -6,7 +6,11 @@
 //! All code in pumpkin-core should use these types instead of `std::time` directly.
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) use std::time::{Duration, Instant};
+pub(crate) use std::time::Duration;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use std::time::Instant;
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) use web_time::{Duration, Instant};
+pub(crate) use web_time::Duration;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use web_time::Instant;
