@@ -347,10 +347,12 @@ impl Propagator for NogoodPropagator {
     fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
-        self.temp_nogood_reason = self.nogood_predicates[id][1..]
-            .iter()
-            .map(|predicate_id| context.get_predicate(*predicate_id))
-            .collect::<Vec<_>>();
+        self.temp_nogood_reason.clear();
+        self.temp_nogood_reason.extend(
+            self.nogood_predicates[id][1..]
+                .iter()
+                .map(|predicate_id| context.get_predicate(*predicate_id)),
+        );
 
         let info_id = self.nogood_predicates.get_nogood_index(&id);
 

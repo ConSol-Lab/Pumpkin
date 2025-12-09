@@ -22,8 +22,8 @@ pub(crate) struct DeletablePredicateIdGenerator {
 }
 
 impl DeletablePredicateIdGenerator {
-    pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
-        self.predicate_to_id.contains_key(&predicate)
+    pub(crate) fn len(&self) -> usize {
+        self.id_to_predicate.len()
     }
 
     fn get_new_predicate_id(&mut self) -> PredicateId {

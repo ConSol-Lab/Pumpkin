@@ -169,9 +169,10 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     /// Bumps the activity of a predicate by [`Vsids::increment`].
     /// Used when a predicate is encountered during a conflict.
     fn bump_activity(&mut self, predicate: Predicate) {
-        self.statistics.num_predicates_added +=
-            (!self.predicate_id_info.has_id_for_predicate(predicate)) as usize;
+        let previous_num_ids = self.predicate_id_info.len();
         let id = self.predicate_id_info.get_id(predicate);
+        self.statistics.num_predicates_added += self.predicate_id_info.len() - previous_num_ids;
+
         self.resize_heap(id);
         self.heap.restore_key(id);
 
