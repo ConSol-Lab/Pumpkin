@@ -2,12 +2,13 @@ use crate::containers::HashMap;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
+use crate::predicates::PredicateType;
 use crate::variables::DomainId;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct PredicateIdGenerator {
     id_to_predicate: KeyedVec<PredicateId, Predicate>,
-    predicate_to_id: KeyedVec<DomainId, HashMap<i32, PredicateId>>,
+    predicate_to_id: KeyedVec<DomainId, KeyedVec<PredicateType, HashMap<i32, PredicateId>>>,
 }
 
 impl PredicateIdGenerator {
@@ -16,9 +17,11 @@ impl PredicateIdGenerator {
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         let domain = predicate.get_domain();
         let rhs = predicate.get_right_hand_side();
+        let predicate_type = predicate.get_predicate_type();
 
         if domain.index() < self.predicate_to_id.len()
-            && let Some(id) = self.predicate_to_id[domain].get(&rhs)
+            && predicate_type.index() < self.predicate_to_id[domain].len()
+            && let Some(id) = self.predicate_to_id[domain][predicate_type].get(&rhs)
         {
             *id
         } else {
@@ -28,7 +31,12 @@ impl PredicateIdGenerator {
                 self.predicate_to_id
                     .resize(domain.index() + 1, Default::default());
             }
-            let _ = self.predicate_to_id[domain].insert(rhs, id);
+
+            if predicate_type.index() >= self.predicate_to_id[domain].len() {
+                self.predicate_to_id[domain].resize(4, Default::default())
+            }
+
+            let _ = self.predicate_to_id[domain][predicate_type].insert(rhs, id);
             id
         }
     }

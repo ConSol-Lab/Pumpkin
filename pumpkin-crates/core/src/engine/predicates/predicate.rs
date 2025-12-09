@@ -1,3 +1,4 @@
+use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -50,6 +51,17 @@ pub enum PredicateType {
     NotEqual = NOT_EQUAL_CODE,
     Equal = EQUAL_CODE,
 }
+
+impl StorageKey for PredicateType {
+    fn index(&self) -> usize {
+        self.into_bits() as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        PredicateType::from_bits(index as u8)
+    }
+}
+
 impl PredicateType {
     pub(crate) fn is_lower_bound(&self) -> bool {
         matches!(self, PredicateType::LowerBound)
