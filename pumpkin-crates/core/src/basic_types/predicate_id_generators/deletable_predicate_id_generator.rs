@@ -2,8 +2,11 @@
 use super::PredicateIdGenerator;
 use crate::basic_types::predicate_id_generators::PredicateId;
 use crate::containers::HashMap;
+use crate::containers::KeyedVec;
+use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
+use crate::variables::DomainId;
 
 /// A [`PredicateIdGenerator`] which allows the deletion of stored [`PredicateId`]s.
 ///
@@ -18,7 +21,7 @@ pub(crate) struct DeletablePredicateIdGenerator {
     /// Active predicates are stored here.
     /// todo: consider direct hashing.
     id_to_predicate: HashMap<PredicateId, Predicate>,
-    predicate_to_id: HashMap<Predicate, PredicateId>,
+    predicate_to_id: KeyedVec<DomainId, HashMap<i32, PredicateId>>,
 }
 
 impl DeletablePredicateIdGenerator {
@@ -40,12 +43,22 @@ impl DeletablePredicateIdGenerator {
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
-        if let Some(id) = self.predicate_to_id.get(&predicate) {
+        let domain = predicate.get_domain();
+        let rhs = predicate.get_right_hand_side();
+
+        if domain.index() < self.predicate_to_id.len()
+            && let Some(id) = self.predicate_to_id[domain].get(&rhs)
+        {
             *id
         } else {
             let id = self.get_new_predicate_id();
             let a = self.id_to_predicate.insert(id, predicate);
-            let b = self.predicate_to_id.insert(predicate, id);
+
+            if domain.index() >= self.predicate_to_id.len() {
+                self.predicate_to_id
+                    .resize(domain.index() + 1, Default::default());
+            }
+            let b = self.predicate_to_id[domain].insert(rhs, id);
             assert!(a.is_none() && b.is_none());
             id
         }
@@ -65,9 +78,10 @@ impl DeletablePredicateIdGenerator {
             .remove(&id)
             .expect("Id must be present.");
         // Remove the mapping predicate->id.
-        let removed_id = self
-            .predicate_to_id
-            .remove(&predicate)
+        let domain = predicate.get_domain();
+        let rhs = predicate.get_right_hand_side();
+        let removed_id = self.predicate_to_id[domain]
+            .remove(&rhs)
             .expect("Predicate must be present");
         pumpkin_assert_moderate!(removed_id == id);
     }
