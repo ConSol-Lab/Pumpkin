@@ -3,7 +3,6 @@ use std::ops::IndexMut;
 use std::ops::Range;
 
 use crate::basic_types::PredicateId;
-use crate::containers::HashMap;
 use crate::containers::StorageKey;
 use crate::propagators::nogoods::NogoodId;
 
@@ -17,13 +16,10 @@ pub(crate) struct ArenaAllocator {
     /// A list of [`PredicateId`]s representing the nogoods.
     ///
     /// If there is a [`NogoodId`] with value `i`, then the [`PredicateId`] at position `i` will
-    /// contain the length `x` of the nogood. The next `i + 1 + x` elements are then the nogood
-    /// pointed to by the [`NogoodId`] with value `i`.
+    /// contain the length `x` of the nogood and the [`PredicateId`] at position `i + 1` will
+    /// contain the [`NogoodIndex`] of the nogood. The next `i + 2 + x` elements are then the
+    /// nogood pointed to by the [`NogoodId`] with value `i`.
     nogoods: Vec<PredicateId>,
-    /// Maps each [`NogoodId`] to an index; this is to prevent unnecessary allocations for other
-    /// structures such as the [`NogoodInfo`] which use direct hashing for storing information
-    /// about nogoods.
-    nogood_id_to_index: HashMap<NogoodId, NogoodIndex>,
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
@@ -46,7 +42,6 @@ impl ArenaAllocator {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
             nogoods: Vec::with_capacity(capacity),
-            nogood_id_to_index: HashMap::default(),
             current_index: 0,
         }
     }
@@ -56,16 +51,17 @@ impl ArenaAllocator {
     pub(crate) fn insert(&mut self, nogood: Vec<PredicateId>) -> NogoodId {
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
-        // We store the NogoodId with its index.
-        let _ = self
-            .nogood_id_to_index
-            .insert(nogood_id, NogoodIndex(self.current_index));
-        self.current_index += 1;
-
         // We push a PredicateId which stores the length of the nogood
-        self.nogoods
-            .push(PredicateId::create_from_index(nogood.len()));
-        self.nogoods.extend(nogood);
+        self.nogoods.extend(
+            [
+                PredicateId::create_from_index(nogood.len()),
+                PredicateId::create_from_index(self.current_index as usize),
+            ]
+            .into_iter()
+            .chain(nogood),
+        );
+
+        self.current_index += 1;
 
         nogood_id
     }
@@ -75,10 +71,7 @@ impl ArenaAllocator {
     /// In other words, if the nogood with ID [`NogoodId`] was the `n`th nogood to be inserted then
     /// this method will return `n`.
     pub(crate) fn get_nogood_index(&self, nogood_id: &NogoodId) -> NogoodIndex {
-        *self
-            .nogood_id_to_index
-            .get(nogood_id)
-            .expect("Expected nogood predicate to exist")
+        NogoodIndex(self.nogoods[nogood_id.index() + 1].id)
     }
 
     /// Returns a list of all the present [`NogoodId`]s.
@@ -97,7 +90,7 @@ impl ArenaAllocator {
     /// Calculates the range of the nogood spanned by the nogood with ID [`NogoodId`].
     fn calculate_range_of_nogood(&self, nogood_id: NogoodId) -> Range<usize> {
         let len = self.len_of_nogood(nogood_id);
-        nogood_id.index() + 1..nogood_id.index() + 1 + len
+        nogood_id.index() + 2..nogood_id.index() + 2 + len
     }
 }
 
@@ -132,7 +125,7 @@ impl Iterator for NogoodIdIterator<'_> {
             return None;
         }
         let id = NogoodId::create_from_index(self.current_index);
-        self.current_index += self.nogoods[self.current_index].id as usize + 1;
+        self.current_index += self.nogoods[self.current_index].id as usize + 2;
 
         Some(id)
     }
