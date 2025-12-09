@@ -257,17 +257,7 @@ impl NotificationEngine {
             // First we notify the predicate_notifier that a domain has been updated
             self.predicate_notifier
                 .on_update(trailed_values, assignments, event, domain);
-            // Special case: the nogood propagator is notified about each event.
-            Self::notify_nogood_propagator(
-                nogood_propagator_handle,
-                &mut self.predicate_notifier.predicate_id_assignments,
-                event,
-                domain,
-                propagators,
-                propagator_queue,
-                assignments,
-                trailed_values,
-            );
+
             // Now notify other propagators subscribed to this event.
             #[allow(clippy::unnecessary_to_owned, reason = "Not unnecessary?")]
             for propagator_var in self
@@ -300,6 +290,19 @@ impl NotificationEngine {
         self.notify_predicate_id_satisfied(nogood_propagator);
         // At the moment this does nothing yet, but we call it to drain predicates.
         self.notify_predicate_id_falsified();
+
+        // Special case: the nogood propagator is notified at the end to determine when to
+        // propagate.
+        Self::notify_nogood_propagator(
+            nogood_propagator_handle,
+            &mut self.predicate_notifier.predicate_id_assignments,
+            DomainEvent::LowerBound,
+            Predicate::trivially_true().get_domain(),
+            propagators,
+            propagator_queue,
+            assignments,
+            trailed_values,
+        );
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }

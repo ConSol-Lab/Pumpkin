@@ -21,8 +21,11 @@ use crate::engine::SolverStatistics;
 use crate::engine::TrailedValues;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::notifications::NotificationEngine;
+use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
+use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -30,6 +33,7 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::HasAssignments;
+use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
@@ -193,6 +197,19 @@ impl Propagator for NogoodPropagator {
         3
     }
 
+    fn notify(
+        &mut self,
+        _context: PropagationContextWithTrailedValues,
+        _local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if self.updated_predicate_ids.is_empty() {
+            EnqueueDecision::Skip
+        } else {
+            EnqueueDecision::Enqueue
+        }
+    }
+
     fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
         self.updated_predicate_ids.push(predicate_id);
     }
@@ -213,7 +230,6 @@ impl Propagator for NogoodPropagator {
                 .resize(context.num_predicate_ids() + 1, Vec::default());
         }
 
-        // TODO: should drop all elements afterwards
         for predicate_id in self.updated_predicate_ids.drain(..) {
             pumpkin_assert_moderate!(
                 {
