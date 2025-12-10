@@ -26,3 +26,6 @@ pub use solution::Solution;
 pub use solution::SolutionReference;
 pub(crate) use stored_conflict_info::*;
 pub(crate) use trail::Trail;
+
+pub use time::Duration;
+pub use time::Instant;
