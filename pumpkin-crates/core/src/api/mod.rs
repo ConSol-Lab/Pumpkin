@@ -92,11 +92,11 @@ pub mod termination {
     //! the time budget is exceeded.
     #[cfg(doc)]
     use crate::Solver;
+    pub use crate::basic_types::time::*;
     pub use crate::engine::termination::TerminationCondition;
     pub use crate::engine::termination::combinator::*;
     pub use crate::engine::termination::indefinite::*;
     pub use crate::engine::termination::time_budget::*;
-    pub use crate::basic_types::time::*;
 }
 
 pub mod predicates {
