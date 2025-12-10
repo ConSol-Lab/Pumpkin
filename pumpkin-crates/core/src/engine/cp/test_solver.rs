@@ -319,11 +319,7 @@ impl TestSolver {
     }
 
     pub(crate) fn get_reason_empty_domain(&mut self) -> Vec<Predicate> {
-        let (entry_reason, _) = self
-            .assignments
-            .get_last_entry_on_trail()
-            .reason
-            .expect("Cannot cause an empty domain using a decision.");
+        let entry_reason = self.assignments.remove_last_trail_element().1;
         let mut reason_scratch = vec![];
         let _ = self.reason_store.get_or_compute(
             entry_reason,
