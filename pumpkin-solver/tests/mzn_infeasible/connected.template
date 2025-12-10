@@ -1,0 +1,21 @@
+% https://github.com/ConSol-Lab/Pumpkin/issues/321
+int: n = 4;
+
+array [1..n,1..n] of var bool: node_active = [|
+false, true, true, false|
+true, false, false, true|
+true, true, true, true|
+true, false, false, false |];
+
+% check if you can reach every active node from active node
+include "connected.mzn";
+constraint connected(
+  [x + (y-1)*n | x in 1..n-1, y in 1..n] ++ [x + (y-1)*n | x in 1..n, y in 1..n-1],
+  [x + (y-1)*n | x in 2..n, y in 1..n] ++ [x + (y-1)*n | x in 1..n, y in 2..n],
+  [node_active[x, y] | y in 1..n, x in 1..n],
+  % an edge is in the subgraph if from and to are active
+  [(node_active[x, y]) /\ (node_active[x + 1, y]) | x in 1..n-1, y in 1..n] 
+  ++ [(node_active[x, y]) /\ (node_active[x, y + 1]) | x in 1..n, y in 1..n-1], 
+);
+
+solve satisfy;

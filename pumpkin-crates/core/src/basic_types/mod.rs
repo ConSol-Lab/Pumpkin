@@ -9,6 +9,7 @@ mod random;
 pub(crate) mod sequence_generators;
 mod solution;
 mod stored_conflict_info;
+pub(crate) mod time;
 mod trail;
 
 pub use constraint_operation_error::ConstraintOperationError;
@@ -23,5 +24,7 @@ pub use random::*;
 pub use solution::ProblemSolution;
 pub use solution::Solution;
 pub use solution::SolutionReference;
-pub(crate) use stored_conflict_info::StoredConflictInfo;
+pub(crate) use stored_conflict_info::*;
+pub use time::Duration;
+pub use time::Instant;
 pub(crate) use trail::Trail;

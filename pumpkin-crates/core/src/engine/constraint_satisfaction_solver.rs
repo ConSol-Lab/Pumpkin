@@ -3,8 +3,11 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::time::Instant;
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "any rand generator is a valid implementation of Random"
+)]
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -27,12 +30,13 @@ use super::variables::Literal;
 use crate::Solver;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::EmptyDomainConflict;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;
@@ -52,8 +56,6 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::predicate;
-use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
 use crate::proof::InferenceCode;
@@ -234,25 +236,41 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        let conflict = match self.state.get_conflict_info() {
-            StoredConflictInfo::Propagator(conflict) => {
-                let _ = self.internal_parameters.proof_log.log_inference(
-                    conflict.inference_code,
-                    conflict.conjunction.iter().copied(),
-                    None,
-                    &self.variable_names,
-                );
+        struct DummyBrancher;
 
-                conflict.conjunction.clone()
+        impl Brancher for DummyBrancher {
+            fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+                unreachable!()
             }
-            StoredConflictInfo::EmptyDomain { conflict_nogood } => conflict_nogood.clone(),
-            StoredConflictInfo::RootLevelConflict(_) => {
-                unreachable!("There should always be a specified conflicting constraint.")
+
+            fn subscribe_to_events(&self) -> Vec<crate::branching::BrancherEvent> {
+                unreachable!()
             }
+        }
+
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assignments: &mut self.assignments,
+            counters: &mut self.solver_statistics,
+            solver_state: &mut self.state,
+            reason_store: &mut self.reason_store,
+            brancher: &mut DummyBrancher,
+            semantic_minimiser: &mut self.semantic_minimiser,
+            propagators: &mut self.propagators,
+            notification_engine: &mut self.notification_engine,
+            propagator_queue: &mut self.propagator_queue,
+            should_minimise: self.internal_parameters.learning_clause_minimisation,
+            proof_log: &mut self.internal_parameters.proof_log,
+            unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
+            trailed_values: &mut self.trailed_values,
+            variable_names: &self.variable_names,
+            rng: &mut self.internal_parameters.random_generator,
+            restart_strategy: &mut self.restart_strategy,
         };
 
+        let conflict = conflict_analysis_context.get_conflict_nogood();
+
         let context = FinalizingContext {
-            conflict,
+            conflict: conflict.into(),
             propagators: &mut self.propagators,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &self.unit_nogood_inference_codes,
@@ -265,8 +283,8 @@ impl ConstraintSatisfactionSolver {
         finalize_proof(context);
     }
 
-    pub(crate) fn is_logging_full_proof(&self) -> bool {
-        self.internal_parameters.proof_log.is_logging_inferences()
+    pub(crate) fn is_logging_proof(&self) -> bool {
+        self.internal_parameters.proof_log.is_logging_proof()
     }
 }
 
@@ -831,6 +849,8 @@ impl ConstraintSatisfactionSolver {
 
         self.conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
+
+        self.state.declare_solving();
     }
 
     /// Performs a restart during the search process; it is only called when it has been determined
@@ -923,105 +943,6 @@ impl ConstraintSatisfactionSolver {
         notification_engine.update_last_notified_index(assignments);
         // Should be done after the assignments and trailed values have been synchronised
         notification_engine.synchronise(backtrack_level, assignments, trailed_values);
-    }
-
-    pub(crate) fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
-        // The empty domain happened after posting the last predicate on the trail.
-        // The reason for this empty domain is computed as the reason for the bounds before the last
-        // trail predicate was posted, plus the reason for the last trail predicate.
-
-        // The last predicate on the trail reveals the domain id that has resulted
-        // in an empty domain.
-        let entry = self.assignments.get_last_entry_on_trail();
-        let (entry_reason, entry_inference_code) = entry
-            .reason
-            .expect("Cannot cause an empty domain using a decision.");
-        let conflict_domain = entry.predicate.get_domain();
-        assert!(
-            entry.old_lower_bound != self.assignments.get_lower_bound(conflict_domain)
-                || entry.old_upper_bound != self.assignments.get_upper_bound(conflict_domain),
-            "One of the two bounds had to change."
-        );
-
-        // Look up the reason for the bound that changed.
-        // The reason for changing the bound cannot be a decision, so we can safely unwrap.
-        let mut empty_domain_reason: Vec<Predicate> = vec![];
-        let _ = self.reason_store.get_or_compute(
-            entry_reason,
-            ExplanationContext::without_working_nogood(
-                &self.assignments,
-                self.assignments.num_trail_entries() - 1,
-                &mut self.notification_engine,
-            ),
-            &mut self.propagators,
-            &mut empty_domain_reason,
-        );
-
-        // We also need to log this last propagation to the proof log as an inference.
-        let _ = self.internal_parameters.proof_log.log_inference(
-            entry_inference_code,
-            empty_domain_reason.iter().copied(),
-            Some(entry.predicate),
-            &self.variable_names,
-        );
-
-        // Now we get the explanation for the bound which was conflicting with the last trail entry
-        match entry.predicate.get_predicate_type() {
-            PredicateType::LowerBound => {
-                // The last trail entry was a lower-bound propagation meaning that the empty domain
-                // was caused by the upper-bound
-                //
-                // We lift so that it is the most general upper-bound possible while still causing
-                // the empty domain
-                empty_domain_reason.push(predicate!(
-                    conflict_domain <= entry.predicate.get_right_hand_side() - 1
-                ));
-            }
-            PredicateType::UpperBound => {
-                // The last trail entry was an upper-bound propagation meaning that the empty domain
-                // was caused by the lower-bound
-                //
-                // We lift so that it is the most general lower-bound possible while still causing
-                // the empty domain
-                empty_domain_reason.push(predicate!(
-                    conflict_domain >= entry.predicate.get_right_hand_side() + 1
-                ));
-            }
-            PredicateType::NotEqual => {
-                // The last trail entry was a not equals propagation meaning that the empty domain
-                // was due to the domain being assigned to the removed value
-                pumpkin_assert_eq_simple!(entry.old_upper_bound, entry.old_lower_bound);
-
-                empty_domain_reason.push(predicate!(conflict_domain == entry.old_lower_bound));
-            }
-            PredicateType::Equal => {
-                // The last trail entry was an equality propagation; we split into three cases.
-                if entry.predicate.get_right_hand_side() < entry.old_lower_bound {
-                    // 1) The assigned value was lower than the lower-bound
-                    //
-                    // We lift so that it is the most general lower-bound possible while still
-                    // causing the empty domain
-                    empty_domain_reason.push(predicate!(
-                        conflict_domain >= entry.predicate.get_right_hand_side() + 1
-                    ));
-                } else if entry.predicate.get_right_hand_side() > entry.old_upper_bound {
-                    // 2) The assigned value was larger than the upper-bound
-                    //
-                    // We lift so that it is the most general upper-bound possible while still
-                    // causing the empty domain
-                    empty_domain_reason.push(predicate!(
-                        conflict_domain <= entry.predicate.get_right_hand_side() - 1
-                    ));
-                } else {
-                    // 3) The assigned value was equal to a hole in the domain
-                    empty_domain_reason.push(predicate!(
-                        conflict_domain != entry.predicate.get_right_hand_side()
-                    ))
-                }
-            }
-        }
-
-        empty_domain_reason.into()
     }
 
     /// Main propagation loop.
@@ -1355,17 +1276,18 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        let empty_domain_reason = self.compute_reason_for_empty_domain();
-
         // TODO: As a temporary solution, we remove the last trail element.
         // This way we guarantee that the assignment is consistent, which is needed
         // for the conflict analysis data structures. The proper alternative would
         // be to forbid the assignments from getting into an inconsistent state.
-        self.assignments.remove_last_trail_element();
+        let (trigger_predicate, trigger_reason, trigger_inference_code) =
+            self.assignments.remove_last_trail_element();
 
-        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
-            conflict_nogood: empty_domain_reason,
-        };
+        let stored_conflict_info = StoredConflictInfo::EmptyDomain(EmptyDomainConflict {
+            trigger_predicate,
+            trigger_reason,
+            trigger_inference_code,
+        });
         self.state.declare_conflict(stored_conflict_info);
     }
 
@@ -1525,9 +1447,7 @@ impl CSPSolverState {
             CSPSolverStateInternal::Conflict { conflict_info } => conflict_info.clone(),
             CSPSolverStateInternal::InfeasibleUnderAssumptions {
                 violated_assumption,
-            } => StoredConflictInfo::EmptyDomain {
-                conflict_nogood: vec![*violated_assumption, !(*violated_assumption)].into(),
-            },
+            } => StoredConflictInfo::InconsistentAssumptions(*violated_assumption),
             _ => {
                 panic!("Cannot extract conflict clause if solver is not in a conflict.");
             }
