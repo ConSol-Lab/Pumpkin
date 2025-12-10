@@ -43,26 +43,41 @@
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use pumpkin_core::constraints;
 //! # use pumpkin_core::constraints::Constraint;
-//! # use crate::pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_core::constraint_arguments::ArgTask;
 //! let mut solver = Solver::default();
+//!
+//! let constraint_tag = solver.new_constraint_tag();
+//!
+//! let resource_capacity = 2;
+//! let durations = [5, 2, 5];
+//! let resource_requirements = [1, 1, 2];
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
 //! let start_1 = solver.new_bounded_integer(0, 4);
 //! let start_2 = solver.new_bounded_integer(0, 5);
 //!
-//! let start_times = [start_0, start_1, start_2];
-//! let durations = [5, 2, 5];
-//! let resource_requirements = [1, 1, 2];
-//! let resource_capacity = 2;
-//!
-//! let c1 = solver.new_constraint_tag();
 //! solver
 //!     .add_constraint(constraints::cumulative(
-//!         start_times.clone(),
-//!         durations.clone(),
-//!         resource_requirements.clone(),
+//!         [
+//!             ArgTask {
+//!                 start_time: start_0,
+//!                 processing_time: durations[0],
+//!                 resource_usage: resource_requirements[0],
+//!             },
+//!             ArgTask {
+//!                 start_time: start_1,
+//!                 processing_time: durations[1],
+//!                 resource_usage: resource_requirements[1],
+//!             },
+//!             ArgTask {
+//!                 start_time: start_2,
+//!                 processing_time: durations[2],
+//!                 resource_usage: resource_requirements[2],
+//!             },
+//!         ],
 //!         resource_capacity,
-//!         c1,
+//!         constraint_tag,
 //!     ))
 //!     .post();
 //!
@@ -122,4 +137,5 @@ mod options;
 pub use options::*;
 
 mod utils;
+pub use utils::ArgTask;
 pub(crate) use utils::*;

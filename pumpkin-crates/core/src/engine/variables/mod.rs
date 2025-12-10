@@ -3,6 +3,7 @@
 //! constraints.
 
 mod affine_view;
+mod constant;
 mod domain_generator_iterator;
 mod domain_id;
 mod integer_variable;

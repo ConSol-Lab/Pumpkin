@@ -318,6 +318,23 @@ impl TestSolver {
             );
     }
 
+    pub(crate) fn get_reason_empty_domain(&mut self) -> Vec<Predicate> {
+        let entry_reason = self.assignments.remove_last_trail_element().1;
+        let mut reason_scratch = vec![];
+        let _ = self.reason_store.get_or_compute(
+            entry_reason,
+            ExplanationContext::without_working_nogood(
+                &self.assignments,
+                self.assignments.num_trail_entries() - 1,
+                &mut self.notification_engine,
+            ),
+            &mut self.propagator_store,
+            &mut reason_scratch,
+        );
+
+        reason_scratch
+    }
+
     pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> PropositionalConjunction {
         let reason_ref = self
             .assignments

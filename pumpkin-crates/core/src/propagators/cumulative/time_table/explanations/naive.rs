@@ -11,9 +11,15 @@ use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_naive_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    profile: &ResourceProfile<Var, PVar, RVar>,
     context: PropagationContext,
+    capacity: CVar,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -28,20 +34,34 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
                     profile_task.start_variable
                         <= context.upper_bound(&profile_task.start_variable)
                 ),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
+        .chain(std::iter::once(predicate!(
+            capacity <= context.upper_bound(&capacity)
+        )))
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
 /// Creates the conflict explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_conflict_explanation<Var, Context: ReadDomains + Copy>(
-    conflict_profile: &ResourceProfile<Var>,
-    context: Context,
-) -> PropositionalConjunction
-where
+pub(crate) fn create_naive_conflict_explanation<
     Var: IntegerVariable + 'static,
-{
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    Context: ReadDomains + Copy,
+>(
+    conflict_profile: &ResourceProfile<Var, PVar, RVar>,
+    context: Context,
+) -> PropositionalConjunction {
     conflict_profile
         .profile_tasks
         .iter()
@@ -55,36 +75,63 @@ where
                     profile_task.start_variable
                         <= context.upper_bound(&profile_task.start_variable)
                 ),
+                predicate!(
+                    profile_task.processing_time
+                        >= context.lower_bound(&profile_task.processing_time)
+                ),
+                predicate!(
+                    profile_task.resource_usage
+                        >= context.lower_bound(&profile_task.resource_usage)
+                ),
             ]
         })
+        .filter(|&predicate| predicate != Predicate::trivially_true())
         .collect()
 }
 
-pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var>(
+pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-) -> Predicate
+    task: &Rc<Task<Var, PVar, RVar>>,
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable >= context.lower_bound(&task.start_variable))
+    [
+        predicate!(task.start_variable >= context.lower_bound(&task.start_variable)),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
-pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var>(
+pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var, PVar, RVar>(
     context: PropagationContext,
-    task: &Rc<Task<Var>>,
-) -> Predicate
+    task: &Rc<Task<Var, PVar, RVar>>,
+) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable <= context.upper_bound(&task.start_variable))
+    [
+        predicate!(task.start_variable <= context.upper_bound(&task.start_variable)),
+        predicate!(task.processing_time >= context.lower_bound(&task.processing_time)),
+        predicate!(task.resource_usage >= context.lower_bound(&task.resource_usage)),
+    ]
+    .into_iter()
+    .filter(|&predicate| predicate != Predicate::trivially_true())
+    .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 
     #[test]

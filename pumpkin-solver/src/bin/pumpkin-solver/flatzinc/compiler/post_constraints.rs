@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
+use pumpkin_core::constraint_arguments::ArgTask;
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
@@ -343,9 +344,9 @@ pub(crate) fn run(
             }
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
-            "pumpkin_cumulative_var" => todo!(
-                "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
-            ),
+            "pumpkin_cumulative_vars" => {
+                compile_cumulative_vars(context, exprs, options, constraint_tag)?
+            }
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -409,9 +410,52 @@ fn compile_cumulative(
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
     let post_result = constraints::cumulative_with_options(
-        start_times.iter().copied(),
-        durations.iter().copied(),
-        resource_requirements.iter().copied(),
+        start_times
+            .iter()
+            .zip(durations.iter())
+            .zip(resource_requirements.iter())
+            .map(
+                |((&start_time, &processing_time), &resource_usage)| ArgTask {
+                    start_time,
+                    processing_time,
+                    resource_usage,
+                },
+            )
+            .collect::<Vec<_>>(),
+        resource_capacity,
+        options.cumulative_options,
+        constraint_tag,
+    )
+    .post(context.solver);
+    Ok(post_result.is_ok())
+}
+
+fn compile_cumulative_vars(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    options: &FlatZincOptions,
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 4, "pumpkin_cumulative_vars");
+
+    let start_times = context.resolve_integer_variable_array(&exprs[0])?;
+    let durations = context.resolve_integer_variable_array(&exprs[1])?;
+    let resource_requirements = context.resolve_integer_variable_array(&exprs[2])?;
+    let resource_capacity = context.resolve_integer_variable(&exprs[3])?;
+
+    let post_result = constraints::cumulative_with_options(
+        start_times
+            .iter()
+            .zip(durations.iter())
+            .zip(resource_requirements.iter())
+            .map(
+                |((&start_time, &processing_time), &resource_usage)| ArgTask {
+                    start_time,
+                    processing_time,
+                    resource_usage,
+                },
+            )
+            .collect::<Vec<_>>(),
         resource_capacity,
         options.cumulative_options,
         constraint_tag,

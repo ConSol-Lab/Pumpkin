@@ -165,6 +165,10 @@ impl Solver {
     pub fn upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_upper_bound(variable)
     }
+
+    pub(crate) fn is_fixed(&self, variable: &impl IntegerVariable) -> bool {
+        self.lower_bound(variable) == self.upper_bound(variable)
+    }
 }
 
 /// Functions to create and retrieve integer and propositional variables.

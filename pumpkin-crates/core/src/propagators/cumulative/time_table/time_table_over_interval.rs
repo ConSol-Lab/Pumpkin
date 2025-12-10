@@ -7,7 +7,6 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
-use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -19,6 +18,7 @@ use crate::engine::propagation::constructor::PropagatorConstructor;
 use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagators::ArgTask;
@@ -29,7 +29,7 @@ use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_explanation_profile_height;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
 use crate::propagators::util::update_bounds_task;
@@ -39,14 +39,14 @@ use crate::pumpkin_assert_simple;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
 #[derive(Debug)]
-pub(crate) struct Event<Var> {
+pub(crate) struct Event<Var, PVar, RVar> {
     /// The time-point at which the [`Event`] took place
     time_stamp: i32,
     /// Change in resource usage at [time_stamp][Event::time_stamp], positive if it is the start of
     /// a mandatory part and negative otherwise
     change_in_resource_usage: i32,
     /// The [`Task`] which has caused the event to take place
-    task: Rc<Task<Var>>,
+    task: Rc<Task<Var, PVar, RVar>>,
 }
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -60,82 +60,131 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-pub(crate) struct TimeTableOverIntervalPropagator<Var> {
+pub(crate) struct TimeTableOverIntervalPropagator<Var, PVar, RVar, CVar> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
-    parameters: CumulativeParameters<Var>,
+    parameters: CumulativeParameters<Var, PVar, RVar, CVar>,
     /// Stores structures which change during the search; used to store the bounds
-    updatable_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var, PVar, RVar>,
 
-    // TODO: Update with propagator constructor.
+    inference_code: InferenceCode,
+}
+
+pub(crate) struct TimeTableOverIntervalConstructor<Var, PVar, RVar, CVar> {
+    tasks: Vec<ArgTask<Var, PVar, RVar>>,
+    capacity: CVar,
+    cumulative_options: CumulativePropagatorOptions,
     constraint_tag: ConstraintTag,
-    inference_code: Option<InferenceCode>,
+}
+
+impl<Var, PVar, RVar, CVar> TimeTableOverIntervalConstructor<Var, PVar, RVar, CVar> {
+    pub(crate) fn new(
+        arg_tasks: Vec<ArgTask<Var, PVar, RVar>>,
+        capacity: CVar,
+        cumulative_options: CumulativePropagatorOptions,
+        constraint_tag: ConstraintTag,
+    ) -> Self {
+        Self {
+            tasks: arg_tasks,
+            capacity,
+            cumulative_options,
+            constraint_tag,
+        }
+    }
+}
+
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> PropagatorConstructor for TimeTableOverIntervalConstructor<Var, PVar, RVar, CVar>
+{
+    type PropagatorImpl = TimeTableOverIntervalPropagator<Var, PVar, RVar, CVar>;
+
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        let inference_code = context.create_inference_code(self.constraint_tag, TimeTable);
+
+        TimeTableOverIntervalPropagator::new(
+            context,
+            &self.tasks,
+            self.capacity,
+            self.cumulative_options,
+            inference_code,
+        )
+    }
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
 ///
 /// The [ResourceProfile]s are sorted based on start time and they are non-overlapping; each entry
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
-pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
+pub(crate) type OverIntervalTimeTableType<Var, PVar, RVar> = Vec<ResourceProfile<Var, PVar, RVar>>;
 
-impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
-    pub(crate) fn new(
-        arg_tasks: &[ArgTask<Var>],
-        capacity: i32,
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> TimeTableOverIntervalPropagator<Var, PVar, RVar, CVar>
+{
+    fn new(
+        mut context: PropagatorConstructorContext,
+        arg_tasks: &[ArgTask<Var, PVar, RVar>],
+        capacity: CVar,
         cumulative_options: CumulativePropagatorOptions,
-        constraint_tag: ConstraintTag,
-    ) -> TimeTableOverIntervalPropagator<Var> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let updatable_structures = UpdatableStructures::new(&parameters);
+        inference_code: InferenceCode,
+    ) -> TimeTableOverIntervalPropagator<Var, PVar, RVar, CVar> {
+        let tasks = create_tasks(context.as_readonly(), arg_tasks);
+
+        let parameters =
+            CumulativeParameters::new(context.as_readonly(), tasks, capacity, cumulative_options);
+        register_tasks(
+            &parameters.tasks,
+            &parameters.capacity,
+            context.reborrow(),
+            false,
+        );
+
+        let mut updatable_structures = UpdatableStructures::new(&parameters);
+        updatable_structures.initialise_bounds_and_remove_fixed(context.as_readonly(), &parameters);
 
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
             parameters,
             updatable_structures,
-            constraint_tag,
-            inference_code: None,
+            inference_code,
         }
     }
 }
 
-impl<Var: IntegerVariable + 'static> PropagatorConstructor
-    for TimeTableOverIntervalPropagator<Var>
+impl<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+> Propagator for TimeTableOverIntervalPropagator<Var, PVar, RVar, CVar>
 {
-    type PropagatorImpl = Self;
-
-    fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
-        self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context.reborrow(), false);
-
-        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
-
-        self
-    }
-}
-
-impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
             return Err(Inconsistency::Conflict(PropagatorConflict {
                 conjunction: conjunction!(),
-                inference_code: self.inference_code.unwrap(),
+                inference_code: self.inference_code,
             }));
         }
 
         let time_table = create_time_table_over_interval_from_scratch(
-            context.as_readonly(),
+            &mut context,
             &self.parameters,
-            self.inference_code.unwrap(),
+            self.inference_code,
         )?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code,
             time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -151,8 +200,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         &mut self,
         context: PropagationContextWithTrailedValues,
         local_id: LocalId,
-        event: OpaqueDomainEvent,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if local_id.unpack() as usize >= self.parameters.tasks.len() {
+            // The upper-bound of the capacity has been updated; we should enqueue
+            return EnqueueDecision::Enqueue;
+        }
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
         // wasn't updated in `synchronise`; however, `synchronise` will only remove profiles
@@ -173,10 +227,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &updated_task,
         );
 
-        if matches!(
-            updated_task.start_variable.unpack_event(event),
-            DomainEvent::Assign
-        ) {
+        if context.is_fixed(&updated_task.start_variable)
+            && context.is_fixed(&updated_task.processing_time)
+            && context.is_fixed(&updated_task.resource_usage)
+        {
             self.updatable_structures.fix_task(&updated_task)
         }
 
@@ -199,7 +253,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             &self.parameters,
             &self.updatable_structures,
-            self.inference_code.unwrap(),
+            self.inference_code,
         )
     }
 }
@@ -216,14 +270,16 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_over_interval_from_scratch<
     Var: IntegerVariable + 'static,
-    Context: ReadDomains + Copy,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
 >(
-    context: Context,
-    parameters: &CumulativeParameters<Var>,
+    context: &mut PropagationContextMut,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
     inference_code: InferenceCode,
-) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
+) -> Result<OverIntervalTimeTableType<Var, PVar, RVar>, Inconsistency> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
-    let events = create_events(context, parameters);
+    let events = create_events(context.as_readonly(), parameters);
 
     // Then we create a time-table using these events
     create_time_table_from_events(events, context, inference_code, parameters)
@@ -236,17 +292,23 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 /// is resolved by placing the events which signify the ends of mandatory parts first (if the
 /// tie is between events of the same type then the tie-breaking is done on the id in
 /// non-decreasing order).
-fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_events<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+    Context: ReadDomains + Copy,
+>(
     context: Context,
-    parameters: &CumulativeParameters<Var>,
-) -> Vec<Event<Var>> {
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+) -> Vec<Event<Var, PVar, RVar>> {
     // First we create a list of events with which we will create the time-table
-    let mut events: Vec<Event<Var>> = Vec::new();
+    let mut events: Vec<Event<Var, PVar, RVar>> = Vec::new();
     // Then we go over every task
     for task in parameters.tasks.iter() {
         let upper_bound = context.upper_bound(&task.start_variable);
         let lower_bound = context.lower_bound(&task.start_variable);
-        if upper_bound < lower_bound + task.processing_time {
+        if upper_bound < lower_bound + context.lower_bound(&task.processing_time) {
             // The task has a mandatory part, we need to add the appropriate events to the
             // events list
 
@@ -254,15 +316,15 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
             // resource usage)
             events.push(Event {
                 time_stamp: upper_bound,
-                change_in_resource_usage: task.resource_usage,
+                change_in_resource_usage: context.lower_bound(&task.resource_usage),
                 task: Rc::clone(task),
             });
 
             // Then we create an event for the end of a mandatory part (with negative resource
             // usage)
             events.push(Event {
-                time_stamp: lower_bound + task.processing_time,
-                change_in_resource_usage: -task.resource_usage,
+                time_stamp: lower_bound + context.lower_bound(&task.processing_time),
+                change_in_resource_usage: -context.lower_bound(&task.resource_usage),
                 task: Rc::clone(task),
             });
         }
@@ -296,12 +358,17 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
-    events: Vec<Event<Var>>,
-    context: Context,
+fn create_time_table_from_events<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
+    events: Vec<Event<Var, PVar, RVar>>,
+    context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+) -> Result<OverIntervalTimeTableType<Var, PVar, RVar>, Inconsistency> {
     pumpkin_assert_extreme!(
         events.is_empty()
             || (0..events.len() - 1)
@@ -317,16 +384,14 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
         "Events were not ordered in such a way that the ends of mandatory parts occurred first"
     );
 
-    let mut time_table: OverIntervalTimeTableType<Var> = Default::default();
+    let mut time_table: OverIntervalTimeTableType<Var, PVar, RVar> = Default::default();
     // The tasks which are contributing to the current profile under consideration
-    let mut current_profile_tasks: Vec<Rc<Task<Var>>> = Vec::new();
+    let mut current_profile_tasks: Vec<Rc<Task<Var, PVar, RVar>>> = Vec::new();
     // The cumulative resource usage of the tasks which are contributing to the current profile
     // under consideration
     let mut current_resource_usage: i32 = 0;
     // The beginning of the current interval under consideration
     let mut start_of_interval: i32 = -1;
-    // Determines whether a conflict has occurred
-    let mut is_conflicting = false;
 
     // We go over all the events and create the time-table
     for event in events {
@@ -349,12 +414,6 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
         } else {
             // A profile is currently being created
 
-            // We have first traversed all of the ends of mandatory parts, meaning that any
-            // overflow will persist after processing all events at this time-point
-            if current_resource_usage > parameters.capacity {
-                is_conflicting = true;
-            }
-
             // Potentially we need to end the current profile and start a new one due to the
             // addition/removal of the current task
             if start_of_interval != event.time_stamp {
@@ -364,20 +423,24 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                     profile_tasks: current_profile_tasks.clone(),
                     height: current_resource_usage,
                 };
-                if is_conflicting {
-                    // We have found a conflict and the profile has been ended, we can report the
-                    // conflict using the current profile
-                    return Err(create_conflict_explanation(
-                        context,
+
+                // Now we propagate the lower-bound of the capacity
+                if new_profile.height > context.lower_bound(&parameters.capacity) {
+                    context.post(
+                        predicate!(parameters.capacity >= new_profile.height),
+                        create_explanation_profile_height(
+                            context.as_readonly(),
+                            inference_code,
+                            &new_profile,
+                            parameters.options.explanation_type,
+                        )
+                        .conjunction,
                         inference_code,
-                        &new_profile,
-                        parameters.options.explanation_type,
-                    ));
-                } else {
-                    // We end the current profile, creating a profile from [start_of_interval,
-                    // time_stamp)
-                    time_table.push(new_profile);
+                    )?;
                 }
+                // We end the current profile, creating a profile from [start_of_interval,
+                // time_stamp)
+                time_table.push(new_profile);
             }
             // Process the current event, note that `change_in_resource_usage` can be negative
             pumpkin_assert_simple!(
@@ -396,7 +459,6 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                 // We thus need to start a new profile
                 start_of_interval = event.time_stamp;
                 if event.change_in_resource_usage < 0 {
-                    pumpkin_assert_simple!(!is_conflicting);
                     // The mandatory part of a task has ended, we should thus remove it from the
                     // contributing tasks
                     let _ = current_profile_tasks.remove(
@@ -414,24 +476,25 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                         !current_profile_tasks.contains(&event.task),
                         "Task is being added to the profile while it is already part of the contributing tasks"
                     );
-                    if !is_conflicting {
-                        // If the profile is already conflicting then we shouldn't add more tasks.
-                        // This could be changed in the future so that we can pick the tasks which
-                        // are used for the conflict explanation
-                        current_profile_tasks.push(event.task);
-                    }
+                    // If the profile is already conflicting then we shouldn't add more tasks.
+                    // This could be changed in the future so that we can pick the tasks which
+                    // are used for the conflict explanation
+                    current_profile_tasks.push(event.task);
                 }
             }
         }
     }
-    pumpkin_assert_simple!(!is_conflicting);
     Ok(time_table)
 }
 
-fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
-    event: &Event<Var>,
+fn check_starting_new_profile_invariants<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    event: &Event<Var, PVar, RVar>,
     current_resource_usage: i32,
-    current_profile_tasks: &[Rc<Task<Var>>],
+    current_profile_tasks: &[Rc<Task<Var, PVar, RVar>>],
 ) -> bool {
     if event.change_in_resource_usage <= 0 {
         eprintln!(
@@ -449,19 +512,21 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
         && current_profile_tasks.is_empty()
 }
 
-pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn debug_propagate_from_scratch_time_table_interval<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
+>(
     context: &mut PropagationContextMut,
-    parameters: &CumulativeParameters<Var>,
-    updatable_structures: &UpdatableStructures<Var>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
+    updatable_structures: &UpdatableStructures<Var, PVar, RVar>,
     inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_over_interval_from_scratch(
-        context.as_readonly(),
-        parameters,
-        inference_code,
-    )?;
+    let time_table =
+        create_time_table_over_interval_from_scratch(context, parameters, inference_code)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
@@ -474,16 +539,15 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
+    use crate::constraint_arguments::CumulativeExplanationType;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTableOverIntervalPropagator;
+    use crate::propagators::TimeTableOverIntervalConstructor;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -493,8 +557,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -526,8 +590,8 @@ mod tests {
         let s2 = solver.new_variable(1, 1);
         let constraint_tag = solver.new_constraint_tag();
 
-        let result = solver.new_propagator(TimeTableOverIntervalPropagator::new(
-            &[
+        let result = solver.new_propagator(TimeTableOverIntervalConstructor::new(
+            [
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -549,28 +613,20 @@ mod tests {
             constraint_tag,
         ));
 
-        assert!(match result {
-            Err(e) => {
-                match e {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Conflict(x) => {
-                        let expected = [
-                            predicate!(s1 <= 1),
-                            predicate!(s1 >= 1),
-                            predicate!(s2 >= 1),
-                            predicate!(s2 <= 1),
-                        ];
-                        expected.iter().all(|y| {
-                            x.conjunction
-                                .iter()
-                                .collect::<Vec<&Predicate>>()
-                                .contains(&y)
-                        }) && x.conjunction.iter().all(|y| expected.contains(y))
-                    }
-                }
-            }
-            _ => false,
-        });
+        assert!(result.is_err());
+        let reason = solver.get_reason_int(Predicate::trivially_false());
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+        assert!(
+            expected
+                .iter()
+                .all(|y| { reason.iter().collect::<Vec<&Predicate>>().contains(&y) })
+                && reason.iter().all(|y| expected.contains(y))
+        );
     }
 
     #[test]
@@ -581,8 +637,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -619,8 +675,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -670,8 +726,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -716,8 +772,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -760,8 +816,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -837,8 +893,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let propagator = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -911,8 +967,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -952,8 +1008,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -999,8 +1055,8 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalPropagator::new(
-                &[
+            .new_propagator(TimeTableOverIntervalConstructor::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,

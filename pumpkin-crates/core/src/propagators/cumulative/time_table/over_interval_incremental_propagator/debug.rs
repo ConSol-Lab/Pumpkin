@@ -2,7 +2,7 @@
 use std::ops::Range;
 
 use crate::containers::HashSet;
-use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::proof::InferenceCode;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
@@ -12,7 +12,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
-/// Determines whether the provided `time_table` is the same as the one creatd from scratch
+/// Determines whether the provided `time_table` is the same as the one created from scratch
 /// using the following checks:
 /// - The time-tables should contain the same number of profiles
 /// - For each profile it should hold that
@@ -23,12 +23,15 @@ use crate::variables::IntegerVariable;
 ///        same!
 pub(crate) fn time_tables_are_the_same_interval<
     Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+    CVar: IntegerVariable + 'static,
     const SYNCHRONISE: bool,
 >(
-    context: PropagationContext,
+    context: &mut PropagationContextMut,
     inference_code: InferenceCode,
-    time_table: &OverIntervalTimeTableType<Var>,
-    parameters: &CumulativeParameters<Var>,
+    time_table: &OverIntervalTimeTableType<Var, PVar, RVar>,
+    parameters: &CumulativeParameters<Var, PVar, RVar, CVar>,
 ) -> bool {
     let time_table_scratch =
         create_time_table_over_interval_from_scratch(context, parameters, inference_code)
@@ -79,8 +82,12 @@ pub(crate) fn time_tables_are_the_same_interval<
 
 /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
 /// in the provided `time_table`.
-pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn merge_profiles<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    time_table: &mut OverIntervalTimeTableType<Var, PVar, RVar>,
     start_index: usize,
     end_index: usize,
 ) {
@@ -96,7 +103,7 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
     // To avoid needless splicing, we keep track of the range at which insertions will take place
     let mut insertion_range: Option<Range<usize>> = None;
     // And the profiles which need to be added
-    let mut to_add: Option<Vec<ResourceProfile<Var>>> = None;
+    let mut to_add: Option<Vec<ResourceProfile<Var, PVar, RVar>>> = None;
 
     // We go over all pairs of profiles, starting from start index until end index
     while current_index < end {
@@ -178,9 +185,13 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
 /// time-table created from scratch.
 ///
 /// It is assumed that the profile tasks of both profiles do not contain duplicates
-pub(crate) fn are_mergeable<Var: IntegerVariable + 'static>(
-    first_profile: &ResourceProfile<Var>,
-    second_profile: &ResourceProfile<Var>,
+pub(crate) fn are_mergeable<
+    Var: IntegerVariable + 'static,
+    PVar: IntegerVariable + 'static,
+    RVar: IntegerVariable + 'static,
+>(
+    first_profile: &ResourceProfile<Var, PVar, RVar>,
+    second_profile: &ResourceProfile<Var, PVar, RVar>,
 ) -> bool {
     pumpkin_assert_extreme!(
         first_profile
