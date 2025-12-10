@@ -7,9 +7,9 @@ use super::FlatZincConstraint;
 use super::FromAnnotationLiteral;
 use super::FromLiteral;
 use super::VariableExpr;
-use crate::ast;
 use crate::AnnotatedConstraint;
 use crate::InstanceError;
+use crate::ast;
 
 /// A fully typed representation of a FlatZinc instance.
 ///

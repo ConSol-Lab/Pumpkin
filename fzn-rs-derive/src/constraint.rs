@@ -1,7 +1,7 @@
 use quote::quote;
 
-/// Construct a token stream that initialises a value with name `value_type` and the arguments
-/// described in `fields`.
+/// Construct a token stream that initialises a constraint with value name `value_type` and the
+/// arguments described in `fields`.
 pub(crate) fn initialise_value(
     identifier: &syn::Ident,
     fields: &syn::Fields,

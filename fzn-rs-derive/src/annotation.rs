@@ -1,6 +1,6 @@
 use quote::quote;
 
-/// Construct a token stream that initialises a value with name `value_type` and the arguments
+/// Construct a token stream that initialises an annotation with name `value_type` and the arguments
 /// described in `fields`.
 pub(crate) fn initialise_value(
     value_type: &syn::Ident,
@@ -70,7 +70,7 @@ pub(crate) fn variant_to_annotation(variant: &syn::Variant) -> proc_macro2::Toke
         Err(_) => {
             return quote! {
                 compile_error!("Invalid usage of #[name(...)]");
-            }
+            };
         }
     };
 

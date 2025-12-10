@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use chumsky::IterParser;
+use chumsky::Parser;
 use chumsky::error::Rich;
 use chumsky::extra::{self};
 use chumsky::prelude::any;
@@ -7,8 +9,6 @@ use chumsky::prelude::choice;
 use chumsky::prelude::just;
 use chumsky::text::ascii::ident;
 use chumsky::text::int;
-use chumsky::IterParser;
-use chumsky::Parser;
 
 use crate::ast;
 
@@ -55,8 +55,8 @@ impl Display for Token<'_> {
 
 type LexExtra<'src> = extra::Err<Rich<'src, char>>;
 
-pub(super) fn lex<'src>(
-) -> impl Parser<'src, &'src str, Vec<ast::Node<Token<'src>>>, LexExtra<'src>> {
+pub(super) fn lex<'src>()
+-> impl Parser<'src, &'src str, Vec<ast::Node<Token<'src>>>, LexExtra<'src>> {
     token()
         .padded_by(comment().repeated())
         .padded()
@@ -71,8 +71,8 @@ fn comment<'src>() -> impl Parser<'src, &'src str, (), extra::Err<Rich<'src, cha
         .ignored()
 }
 
-fn token<'src>(
-) -> impl Parser<'src, &'src str, ast::Node<Token<'src>>, extra::Err<Rich<'src, char>>> {
+fn token<'src>()
+-> impl Parser<'src, &'src str, ast::Node<Token<'src>>, extra::Err<Rich<'src, char>>> {
     choice((
         // Punctuation
         just(";").to(Token::SemiColon),

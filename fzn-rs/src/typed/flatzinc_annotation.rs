@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use super::FromLiteral;
-use crate::ast;
 use crate::InstanceError;
 use crate::Token;
+use crate::ast;
 
 /// Parse an [`ast::Annotation`] into a specific annotation type.
 ///

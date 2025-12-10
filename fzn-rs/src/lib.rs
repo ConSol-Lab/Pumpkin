@@ -3,6 +3,11 @@
 //! `fzn-rs` is a crate that allows for easy parsing of FlatZinc instances in Rust. It facilitates
 //! type-driven parsing of a FlatZinc file using derive macros.
 //!
+//! ## Features
+//! - `fzn-parser`: Include the parser for fzn files in the traditional `.fzn` format. In the
+//!   future, a parser for the JSON format will be included as well, behind a separate feature.
+//! - `derive`: Include the derive macro's to parse the AST into a strongly-typed model.
+//!
 //! ## Example
 //! ```
 //! use fzn_rs::ArrayExpr;
@@ -45,13 +50,13 @@
 //! }
 //!
 //! /// The `TypedInstance` is parameterized by the constraint type, as well as any annotations you
-//! /// may need to parse.
+//! /// may need to parse. It uses `i64` to represent integers.
 //! type MyInstance = TypedInstance<i64, MyConstraints>;
 //!
 //! fn parse_flatzinc(source: &str) -> MyInstance {
 //!     // First, the source string is parsed into a structured representation.
 //!     //
-//!     // Note: the `fzn_rs::fzn` module is only available with the `fzn` feature enabled.
+//!     // Note: the `fzn_rs::fzn` module is only available with the `fzn-parser` feature enabled.
 //!     let ast = fzn_rs::fzn::parse(source).expect("source is valid flatzinc");
 //!
 //!     // Then, the strongly-typed instance is created from the AST
@@ -109,7 +114,7 @@ mod error;
 mod typed;
 
 pub mod ast;
-#[cfg(feature = "fzn")]
+#[cfg(feature = "fzn-parser")]
 pub mod fzn;
 
 pub use error::*;

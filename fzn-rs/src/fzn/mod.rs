@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use chumsky::IterParser;
+use chumsky::Parser;
 use chumsky::error::Rich;
 use chumsky::extra;
 use chumsky::input::Input;
@@ -13,8 +15,6 @@ use chumsky::prelude::just;
 use chumsky::prelude::recursive;
 use chumsky::select;
 use chumsky::span::SimpleSpan;
-use chumsky::IterParser;
-use chumsky::Parser;
 
 use crate::ast;
 
@@ -158,8 +158,8 @@ where
     parameter().repeated().collect::<Vec<_>>().ignored()
 }
 
-fn parameter_type<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
+fn parameter_type<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, (), FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -194,7 +194,7 @@ where
                     return Err(Rich::custom(
                         value.span,
                         format!("parameter '{identifier}' is undefined"),
-                    ))
+                    ));
                 }
             };
 
@@ -219,8 +219,8 @@ where
         .map(|arrays| arrays.into_iter().collect())
 }
 
-fn array<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Array<ast::Annotation>>), FznExtra<'tokens, 'src>>
+fn array<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Array<ast::Annotation>>), FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -270,8 +270,8 @@ where
         .map(|variables| variables.into_iter().collect())
 }
 
-fn variable<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Variable<ast::Annotation>>), FznExtra<'tokens, 'src>>
+fn variable<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, (Rc<str>, ast::Node<ast::Variable<ast::Annotation>>), FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -305,8 +305,8 @@ where
         })
 }
 
-fn domain<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Domain>, FznExtra<'tokens, 'src>>
+fn domain<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Domain>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -318,16 +318,16 @@ where
     .map_with(to_node)
 }
 
-fn constraints<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<ast::Node<ast::Constraint>>, FznExtra<'tokens, 'src>>
+fn constraints<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Vec<ast::Node<ast::Constraint>>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     constraint().repeated().collect::<Vec<_>>()
 }
 
-fn constraint<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Constraint>, FznExtra<'tokens, 'src>>
+fn constraint<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Constraint>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -349,8 +349,8 @@ where
         .map_with(to_node)
 }
 
-fn argument<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Argument>, FznExtra<'tokens, 'src>>
+fn argument<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Argument>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -365,8 +365,8 @@ where
     .map_with(to_node)
 }
 
-fn solve_item<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::SolveItem<ast::Annotation>, FznExtra<'tokens, 'src>>
+fn solve_item<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::SolveItem<ast::Annotation>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -380,8 +380,8 @@ where
         })
 }
 
-fn solve_method<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Method>, FznExtra<'tokens, 'src>>
+fn solve_method<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Method>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -403,16 +403,16 @@ where
     .map_with(to_node)
 }
 
-fn annotations<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<ast::Node<ast::Annotation>>, FznExtra<'tokens, 'src>>
+fn annotations<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Vec<ast::Node<ast::Annotation>>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
     annotation().repeated().collect()
 }
 
-fn annotation<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Annotation>, FznExtra<'tokens, 'src>>
+fn annotation<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Annotation>, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -424,8 +424,8 @@ where
         .map_with(to_node)
 }
 
-fn annotation_call<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>>
+fn annotation_call<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::AnnotationCall, FznExtra<'tokens, 'src>>
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -488,8 +488,8 @@ where
     }
 }
 
-fn literal<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ast::Node<ast::Literal>, FznExtra<'tokens, 'src>> + Clone
+fn literal<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, ast::Node<ast::Literal>, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -538,8 +538,8 @@ where
         .then(value_parser)
 }
 
-fn integer<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, i64, FznExtra<'tokens, 'src>> + Clone
+fn integer<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, i64, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -548,8 +548,8 @@ where
     }
 }
 
-fn boolean<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, bool, FznExtra<'tokens, 'src>> + Clone
+fn boolean<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, bool, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {
@@ -558,8 +558,8 @@ where
     }
 }
 
-fn identifier<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Rc<str>, FznExtra<'tokens, 'src>> + Clone
+fn identifier<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Rc<str>, FznExtra<'tokens, 'src>> + Clone
 where
     I: ValueInput<'tokens, Span = ast::Span, Token = Token<'src>>,
 {

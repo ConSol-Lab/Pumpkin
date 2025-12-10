@@ -302,7 +302,7 @@ impl Display for Span {
     }
 }
 
-#[cfg(feature = "fzn")]
+#[cfg(feature = "fzn-parser")]
 impl chumsky::span::Span for Span {
     type Context = ();
 
@@ -326,7 +326,7 @@ impl chumsky::span::Span for Span {
     }
 }
 
-#[cfg(feature = "fzn")]
+#[cfg(feature = "fzn-parser")]
 impl From<chumsky::span::SimpleSpan> for Span {
     fn from(value: chumsky::span::SimpleSpan) -> Self {
         Span {
@@ -336,7 +336,7 @@ impl From<chumsky::span::SimpleSpan> for Span {
     }
 }
 
-#[cfg(feature = "fzn")]
+#[cfg(feature = "fzn-parser")]
 impl From<Span> for chumsky::span::SimpleSpan {
     fn from(value: Span) -> Self {
         chumsky::span::SimpleSpan::from(value.start..value.end)

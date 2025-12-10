@@ -1,7 +1,7 @@
 use super::FromLiteral;
-use crate::ast;
 use crate::InstanceError;
 use crate::Token;
+use crate::ast;
 
 /// Parse a constraint from the given [`ast::Constraint`].
 pub trait FlatZincConstraint: Sized {

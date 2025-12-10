@@ -7,9 +7,9 @@ use super::FromAnnotationLiteral;
 use super::FromArgument;
 use super::FromLiteral;
 use super::VariableExpr;
-use crate::ast;
 use crate::InstanceError;
 use crate::Token;
+use crate::ast;
 
 /// Models an array in a constraint argument.
 ///

@@ -4,15 +4,15 @@ mod utils;
 
 use std::collections::BTreeMap;
 
+use fzn_rs::ArrayExpr;
+use fzn_rs::InstanceError;
+use fzn_rs::TypedInstance;
+use fzn_rs::VariableExpr;
 use fzn_rs::ast::Argument;
 use fzn_rs::ast::Array;
 use fzn_rs::ast::Ast;
 use fzn_rs::ast::Literal;
 use fzn_rs::ast::Span;
-use fzn_rs::ArrayExpr;
-use fzn_rs::InstanceError;
-use fzn_rs::TypedInstance;
-use fzn_rs::VariableExpr;
 use fzn_rs_derive::FlatZincConstraint;
 use utils::*;
 
@@ -215,6 +215,7 @@ fn constraint_referencing_arrays() {
             (
                 "array1".into(),
                 test_node(Array {
+                    domain: test_node(fzn_rs::ast::Domain::UnboundedInt),
                     contents: vec![
                         test_node(Literal::Int(2)),
                         test_node(Literal::Int(3)),
@@ -226,6 +227,7 @@ fn constraint_referencing_arrays() {
             (
                 "array2".into(),
                 test_node(Array {
+                    domain: test_node(fzn_rs::ast::Domain::UnboundedInt),
                     contents: vec![
                         test_node(Literal::Identifier("x1".into())),
                         test_node(Literal::Identifier("x2".into())),
@@ -302,6 +304,7 @@ fn constraint_as_struct_args() {
             (
                 "array1".into(),
                 test_node(Array {
+                    domain: test_node(fzn_rs::ast::Domain::UnboundedInt),
                     contents: vec![
                         test_node(Literal::Int(2)),
                         test_node(Literal::Int(3)),
@@ -313,6 +316,7 @@ fn constraint_as_struct_args() {
             (
                 "array2".into(),
                 test_node(Array {
+                    domain: test_node(fzn_rs::ast::Domain::UnboundedInt),
                     contents: vec![
                         test_node(Literal::Identifier("x1".into())),
                         test_node(Literal::Identifier("x2".into())),
