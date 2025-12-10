@@ -325,7 +325,11 @@ impl ProofLog {
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "there will only every be one per solver"
+    reason = "there will only ever be one per solver"
+)]
+#[allow(
+    variant_size_differences,
+    reason = "there will only ever be one per solver"
 )]
 enum ProofImpl {
     CpProof {

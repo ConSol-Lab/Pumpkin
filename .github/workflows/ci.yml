@@ -31,12 +31,6 @@ jobs:
   wasm-test:
     name: Test Suite for pumpkin-core in WebAssembly
     runs-on: ubuntu-latest
-    env:
-      # Allow variant_size_differences: on wasm32, pointer sizes are smaller (32-bit
-      # vs 64-bit), which changes the size ratio between enum variants enough to
-      # trigger this lint in ProofImpl (proof/mod.rs). The warning is still useful
-      # locally, but we don't want CI to fail on it.
-      RUSTFLAGS: -Dwarnings -Avariant_size_differences
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
