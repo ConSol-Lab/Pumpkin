@@ -22,3 +22,11 @@ mzn_optimization_test!(minimise_1);
 mzn_optimization_test!(maximise_1);
 mzn_optimization_test!(unconstrained_objective_minimise);
 mzn_optimization_test!(unconstrained_objective_maximise);
+
+mzn_optimization_test!(rcpsp_00);
+mzn_optimization_test!(rcpsp_01);
+mzn_optimization_test!(rcpsp_st27_14);
+mzn_optimization_test!(rcpsp_bl2006);
+mzn_optimization_test!(rcpsp_j60_1_6);
+
+mzn_optimization_test!(ghoulomb_3_5_11);
