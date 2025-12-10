@@ -3,8 +3,11 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::time::Instant;
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "any rand generator is a valid implementation of Random"
+)]
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
@@ -26,6 +29,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::HashMap;
@@ -243,8 +247,8 @@ impl ConstraintSatisfactionSolver {
         finalize_proof(context);
     }
 
-    pub(crate) fn is_logging_full_proof(&self) -> bool {
-        self.internal_parameters.proof_log.is_logging_inferences()
+    pub(crate) fn is_logging_proof(&self) -> bool {
+        self.internal_parameters.proof_log.is_logging_proof()
     }
 }
 

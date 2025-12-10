@@ -207,7 +207,9 @@ impl ConflictAnalysisContext<'_> {
             conflict.trigger_reason,
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
-                self.state.assignments.num_trail_entries() - 1,
+                self.state.assignments.num_trail_entries(), // Note that we do not do a
+                // `-1` here; the `Assignments` automatically undoes the last trail entry when an
+                // empty domain is created meaning that the `-1` has already been applied.
                 &mut self.state.notification_engine,
             ),
             &mut self.state.propagators,

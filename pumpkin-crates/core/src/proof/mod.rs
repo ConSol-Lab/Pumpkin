@@ -298,12 +298,20 @@ impl ProofLog {
             _ => ConstraintTag::create_from_index(0),
         }
     }
+
+    pub(crate) fn is_logging_proof(&self) -> bool {
+        self.internal_proof.is_some()
+    }
 }
 
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "there will only every be one per solver"
+    reason = "there will only ever be one per solver"
+)]
+#[allow(
+    variant_size_differences,
+    reason = "there will only ever be one per solver"
 )]
 enum ProofImpl {
     CpProof {
