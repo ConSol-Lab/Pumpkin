@@ -114,10 +114,8 @@ mod error;
 mod typed;
 
 pub mod ast;
-#[cfg(feature = "fzn-parser")]
 pub mod fzn;
 
 pub use error::*;
-#[cfg(feature = "derive")]
 pub use fzn_rs_derive::*;
 pub use typed::*;
