@@ -1,7 +1,6 @@
-use std::time::Duration;
-use std::time::Instant;
-
 use super::TerminationCondition;
+use crate::basic_types::time::Duration;
+use crate::basic_types::time::Instant;
 
 /// A [`TerminationCondition`] which triggers when the specified time budget has been exceeded.
 #[derive(Clone, Copy, Debug)]
