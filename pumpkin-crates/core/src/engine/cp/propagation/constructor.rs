@@ -11,6 +11,7 @@ use crate::engine::DomainEvents;
 use crate::engine::State;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::Watchers;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
@@ -89,6 +90,14 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all(&mut watchers, domain_events.get_int_events());
+    }
+
+    /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
+    #[allow(unused, reason = "will become public API")]
+    pub(crate) fn register_predicate(&mut self, predicate: Predicate) {
+        self.state
+            .notification_engine
+            .watch_predicate(predicate, self.propagator_id);
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during

@@ -117,6 +117,10 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
+    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
+        self.elements.resize(key.index() + 1, default_value)
+    }
+
     pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
     }

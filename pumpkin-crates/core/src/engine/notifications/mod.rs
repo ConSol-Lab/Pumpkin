@@ -138,6 +138,14 @@ impl NotificationEngine {
         }
     }
 
+    pub(crate) fn watch_predicate(&mut self, predicate: Predicate, propagator_id: PropagatorId) {
+        let predicate_id = self.get_id(predicate);
+
+        self.watch_list_predicate_id
+            .accomodate(predicate_id, vec![]);
+        self.watch_list_predicate_id[predicate_id].push(propagator_id);
+    }
+
     pub(crate) fn watch_all_backtrack(
         &mut self,
         domain: DomainId,
