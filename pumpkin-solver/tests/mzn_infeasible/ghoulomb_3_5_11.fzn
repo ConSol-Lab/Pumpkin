@@ -7753,5 +7753,5 @@ constraint int_lin_eq([1,-1,-1],[X_INTRODUCED_48_,X_INTRODUCED_45_,X_INTRODUCED_
 constraint int_lin_eq([1,-1,-1],[X_INTRODUCED_47_,X_INTRODUCED_46_,X_INTRODUCED_101_],0):: defines_var(X_INTRODUCED_101_);
 constraint int_lin_eq([1,-1,-1],[X_INTRODUCED_48_,X_INTRODUCED_46_,X_INTRODUCED_102_],0):: defines_var(X_INTRODUCED_102_);
 constraint int_lin_eq([1,-1,-1],[X_INTRODUCED_48_,X_INTRODUCED_47_,X_INTRODUCED_103_],0):: defines_var(X_INTRODUCED_103_);
-solve :: int_search(X_INTRODUCED_15055_,input_order,indomain_min,complete) minimize X_INTRODUCED_27_;
+solve :: int_search(X_INTRODUCED_15055_,input_order,indomain_min,complete) satisfy;
 
