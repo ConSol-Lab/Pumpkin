@@ -57,67 +57,63 @@ pub(crate) fn verify_inference(
         consequent: inference.consequent.clone(),
     };
 
-    match inference.label.as_ref().map(|label| label.as_ref()) {
-        Some("linear_bounds") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
+    let label = inference
+        .label
+        .as_ref()
+        .map(|label| label.as_ref())
+        .ok_or(InvalidInference::MissingLabel)?;
 
-            linear::verify_linear_bounds(model, &fact, generated_by)?;
+    // The initial domain inference is handled separately since it is the only inference that
+    // does not expect a constraint hint.
+    if label == "initial_domain" {
+        let Some(atomic) = inference.consequent.clone() else {
+            // The initial domain inference requires a consequent.
+            return Err(InvalidInference::Unsound);
+        };
+
+        if !model.is_trivially_true(atomic.clone()) {
+            // If the consequent is not trivially true in the model then the inference
+            // is unsound.
+            return Err(InvalidInference::Unsound);
         }
 
-        Some("nogood") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
+        return Ok(fact);
+    }
 
-            nogood::verify_nogood(model, &fact, generated_by)?;
+    // Get the constraint that generated the inference from the model.
+    let generated_by_constraint_id = inference
+        .generated_by
+        .ok_or(InvalidInference::MissingConstraint)?;
+    let generated_by = model
+        .get_constraint(generated_by_constraint_id)
+        .ok_or(InvalidInference::MissingConstraint)?;
+
+    match label {
+        "linear_bounds" => {
+            linear::verify_linear_bounds(&fact, generated_by)?;
         }
 
-        Some("initial_domain") => {
-            let Some(atomic) = inference.consequent.clone() else {
-                return Err(InvalidInference::Unsound);
-            };
-
-            if !model.is_trivially_true(atomic.clone()) {
-                return Err(InvalidInference::Unsound);
-            }
+        "nogood" => {
+            nogood::verify_nogood(&fact, generated_by)?;
         }
 
-        Some("time_table") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
-
-            time_table::verify_time_table(model, &fact, generated_by)?;
+        "time_table" => {
+            time_table::verify_time_table(&fact, generated_by)?;
         }
 
-        Some("all_different") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
-
-            all_different::verify_all_different(model, &fact, generated_by)?;
+        "all_different" => {
+            all_different::verify_all_different(&fact, generated_by)?;
         }
 
-        Some("binary_equals") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
-
-            arithmetic::verify_binary_equals(model, &fact, generated_by)?;
+        "binary_equals" => {
+            arithmetic::verify_binary_equals(&fact, generated_by)?;
         }
 
-        Some("binary_not_equals") => {
-            let generated_by = inference
-                .generated_by
-                .ok_or(InvalidInference::MissingConstraint)?;
-
-            arithmetic::verify_binary_not_equals(model, &fact, generated_by)?;
+        "binary_not_equals" => {
+            arithmetic::verify_binary_not_equals(&fact, generated_by)?;
         }
 
-        None => return Err(InvalidInference::MissingLabel),
-        Some(_) => return Err(InvalidInference::UnsupportedLabel),
+        _ => return Err(InvalidInference::UnsupportedLabel),
     }
 
     Ok(fact)

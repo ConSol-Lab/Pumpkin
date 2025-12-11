@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use drcp_format::ConstraintId;
 use drcp_format::IntComparison;
 use fzn_rs::VariableExpr;
 
@@ -10,7 +9,6 @@ use crate::inferences::InvalidInference;
 use crate::model::AllDifferent;
 use crate::model::Atomic;
 use crate::model::Constraint;
-use crate::model::Model;
 use crate::state::I32Ext;
 use crate::state::VariableState;
 
@@ -20,14 +18,9 @@ use crate::state::VariableState;
 /// `linear_bounds` inference is that in the binary case, we can certify holes in the domain as
 /// well.
 pub(crate) fn verify_binary_equals(
-    model: &Model,
     fact: &Fact,
-    generated_by: ConstraintId,
+    constraint: &Constraint,
 ) -> Result<(), InvalidInference> {
-    let Some(constraint) = model.get_constraint(generated_by) else {
-        return Err(InvalidInference::UndefinedConstraint);
-    };
-
     let Constraint::LinearEq(linear) = constraint else {
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
@@ -97,14 +90,9 @@ pub(crate) fn verify_binary_equals(
 /// Tests that the premise of the inference and the negation of the conclusion force the linear sum
 /// to equal the right-hand side of the not equals constraint.
 pub(crate) fn verify_binary_not_equals(
-    model: &Model,
     fact: &Fact,
-    generated_by: ConstraintId,
+    constraint: &Constraint,
 ) -> Result<(), InvalidInference> {
-    let Some(constraint) = model.get_constraint(generated_by) else {
-        return Err(InvalidInference::UndefinedConstraint);
-    };
-
     let Constraint::AllDifferent(AllDifferent { variables }) = constraint else {
         return Err(InvalidInference::ConstraintLabelMismatch);
     };

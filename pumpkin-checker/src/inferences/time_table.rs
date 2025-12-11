@@ -1,11 +1,8 @@
 use std::collections::BTreeMap;
 
-use drcp_format::ConstraintId;
-
 use super::Fact;
 use crate::inferences::InvalidInference;
 use crate::model::Constraint;
-use crate::model::Model;
 use crate::state::VariableState;
 
 /// Verifies a `time_table` inference for the cumulative constraint.
@@ -13,14 +10,9 @@ use crate::state::VariableState;
 /// The premises and negation of the conclusion should lead to an overflow of the resource
 /// capacity.
 pub(crate) fn verify_time_table(
-    model: &Model,
     fact: &Fact,
-    generated_by: ConstraintId,
+    constraint: &Constraint,
 ) -> Result<(), InvalidInference> {
-    let Some(constraint) = model.get_constraint(generated_by) else {
-        return Err(InvalidInference::UndefinedConstraint);
-    };
-
     let Constraint::Cumulative(cumulative) = constraint else {
         return Err(InvalidInference::ConstraintLabelMismatch);
     };

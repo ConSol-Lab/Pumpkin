@@ -1,10 +1,7 @@
-use drcp_format::ConstraintId;
-
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
 use crate::model::Constraint;
 use crate::model::Linear;
-use crate::model::Model;
 use crate::state::I32Ext;
 use crate::state::VariableState;
 
@@ -12,14 +9,13 @@ use crate::state::VariableState;
 ///
 /// The inference is sound for linear inequalites and linear equalities.
 pub(super) fn verify_linear_bounds(
-    model: &Model,
     fact: &Fact,
-    generated_by: ConstraintId,
+    generated_by: &Constraint,
 ) -> Result<(), InvalidInference> {
-    match model.get_constraint(generated_by) {
-        Some(Constraint::LinearLeq(linear)) => verify_linear_inference(linear, fact),
+    match generated_by {
+        Constraint::LinearLeq(linear) => verify_linear_inference(linear, fact),
 
-        Some(Constraint::LinearEq(linear)) => {
+        Constraint::LinearEq(linear) => {
             let try_upper_bound = verify_linear_inference(linear, fact);
 
             let inverted_linear = Linear {
@@ -39,9 +35,7 @@ pub(super) fn verify_linear_bounds(
             }
         }
 
-        Some(_) => Err(InvalidInference::ConstraintLabelMismatch),
-
-        None => Err(InvalidInference::UndefinedConstraint),
+        _ => Err(InvalidInference::ConstraintLabelMismatch),
     }
 }
 

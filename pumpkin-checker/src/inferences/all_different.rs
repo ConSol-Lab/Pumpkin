@@ -1,11 +1,8 @@
 use std::collections::HashSet;
 
-use drcp_format::ConstraintId;
-
 use super::Fact;
 use crate::inferences::InvalidInference;
 use crate::model::Constraint;
-use crate::model::Model;
 use crate::state::VariableState;
 
 /// Verify an `all_different` inference.
@@ -15,14 +12,9 @@ use crate::state::VariableState;
 ///
 /// The checker will reject inferences with redundant atomic constraints.
 pub(crate) fn verify_all_different(
-    model: &Model,
     fact: &Fact,
-    generated_by: ConstraintId,
+    constraint: &Constraint,
 ) -> Result<(), InvalidInference> {
-    let Some(constraint) = model.get_constraint(generated_by) else {
-        return Err(InvalidInference::UndefinedConstraint);
-    };
-
     let Constraint::AllDifferent(all_different) = constraint else {
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
