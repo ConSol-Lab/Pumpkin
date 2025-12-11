@@ -189,9 +189,9 @@ impl State {
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
     ///
-    /// Creation of new [`Literal`]s is not influenced by the current decision level of the state.
-    /// If a [`Literal`] is created at a non-zero decision level, then it will _not_ 'disappear'
-    /// when backtracking past the decision level where the domain was created.
+    /// Creation of new [`Literal`]s is not influenced by the current checkpoint of the state.
+    /// If a [`Literal`] is created at a non-zero checkpoint, then it will _not_ 'disappear'
+    /// when backtracking past the checkpoint where the domain was created.
     pub fn new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
         let domain_id = self.new_interval_variable(0, 1, name);
         Literal::new(domain_id)
@@ -203,9 +203,9 @@ impl State {
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
     ///
-    /// Creation of new domains is not influenced by the current decision level of the state. If
-    /// a domain is created at a non-zero decision level, then it will _not_ 'disappear' when
-    /// backtracking past the decision level where the domain was created.)
+    /// Creation of new domains is not influenced by the current checkpoint of the state. If
+    /// a domain is created at a non-zero checkpoint, then it will _not_ 'disappear' when
+    /// backtracking past the checkpoint where the domain was created.)
     pub fn new_interval_variable(
         &mut self,
         lower_bound: i32,
@@ -274,8 +274,8 @@ impl State {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    /// If the provided [`Predicate`] is satisfied then it returns [`Some`] containing the decision
-    /// level at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
+    /// If the provided [`Predicate`] is satisfied then it returns [`Some`] containing the
+    /// checkpoint at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
     pub fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments.get_checkpoint_for_predicate(&predicate)
     }
@@ -288,7 +288,7 @@ impl State {
         self.truth_value(literal.get_true_predicate())
     }
 
-    /// Returns the number of created decision levels.
+    /// Returns the number of created checkpoints.
     pub fn get_checkpoint(&self) -> usize {
         self.assignments.get_checkpoint()
     }
@@ -416,7 +416,7 @@ impl State {
     /// [`State::fixed_point_propagate`] is required. This allows the
     /// posting of multiple predicates before the entire propagation engine is invoked.
     ///
-    /// A call to [`State::restore_to`] that goes past the decision level at which a [`Predicate`]
+    /// A call to [`State::restore_to`] that goes past the checkpoint at which a [`Predicate`]
     /// was posted will undo the effect of that [`Predicate`]. See the documentation of
     /// [`State::new_checkpoint`] and
     /// [`State::restore_to`] for more information.
@@ -671,16 +671,16 @@ impl State {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
-        // predicates. Furthermore only predicate from the current decision level will be
+        // predicates. Furthermore only predicate from the current checkpoint will be
         // considered. This is due to how the 1uip conflict analysis works: it scans the
         // predicates in reverse order of assignment, and stops as soon as there is only one
-        // predicate from the current decision level in the learned nogood.
+        // predicate from the current checkpoint in the learned nogood.
 
         // This means that the procedure would never ask for the reason of the decision predicate
-        // from the current decision level, because that would mean that all other predicates from
-        // the current decision level have been removed from the nogood, and the decision
+        // from the current checkpoint, because that would mean that all other predicates from
+        // the current checkpoint have been removed from the nogood, and the decision
         // predicate is the only one left, but in that case, the 1uip would terminate since
-        // there would be only one predicate from the current decision level. For this
+        // there would be only one predicate from the current checkpoint. For this
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
         if self.assignments.is_initial_bound(predicate) {
