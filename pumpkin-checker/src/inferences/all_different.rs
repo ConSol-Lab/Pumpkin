@@ -7,7 +7,7 @@ use crate::state::VariableState;
 
 /// Verify an `all_different` inference.
 ///
-/// The checker tests that the premises and the negation of the conclusion form a hall-set. If that
+/// The checker tests that the premises and the negation of the consequent form a hall-set. If that
 /// is the case, the inference is accepted. Otherwise, the inference is rejected.
 ///
 /// The checker will reject inferences with redundant atomic constraints.

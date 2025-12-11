@@ -87,7 +87,7 @@ pub(crate) fn verify_binary_equals(
 
 /// Verify a `binary_not_equals` inference.
 ///
-/// Tests that the premise of the inference and the negation of the conclusion force the linear sum
+/// Tests that the premise of the inference and the negation of the consequent force the linear sum
 /// to equal the right-hand side of the not equals constraint.
 pub(crate) fn verify_binary_not_equals(
     fact: &Fact,

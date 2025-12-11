@@ -7,7 +7,7 @@ use crate::state::VariableState;
 
 /// Verifies a `time_table` inference for the cumulative constraint.
 ///
-/// The premises and negation of the conclusion should lead to an overflow of the resource
+/// The premises and negation of the consequent should lead to an overflow of the resource
 /// capacity.
 pub(crate) fn verify_time_table(
     fact: &Fact,
