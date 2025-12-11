@@ -109,7 +109,7 @@ pub struct EmptyDomainConflict {
     /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
     pub(crate) trigger_reason: ReasonRef,
     /// The [`InferenceCode`] that accompanies [`EmptyDomainConflict::trigger_reason`].
-    pub trigger_inference_code: InferenceCode,
+    pub(crate) trigger_inference_code: InferenceCode,
 }
 
 impl EmptyDomainConflict {
