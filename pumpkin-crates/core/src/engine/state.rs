@@ -297,7 +297,7 @@ impl State {
 /// Operations for retrieving information about trail
 impl State {
     /// Returns the length of the trail.
-    pub fn trail_len(&self) -> usize {
+    pub(crate) fn trail_len(&self) -> usize {
         self.assignments.num_trail_entries()
     }
 
