@@ -71,7 +71,11 @@ pub(crate) fn run_solver_with_options(
     let mut command = Command::new(solver);
 
     if with_proof {
-        let _ = command.arg("--proof-path").arg(&proof_file_path);
+        let _ = command
+            .arg("--proof-path")
+            .arg(&proof_file_path)
+            .arg("--proof-type")
+            .arg("full");
     }
 
     for arg in args {
@@ -187,9 +191,17 @@ pub(crate) fn verify_proof(files: Files, checker_output: &Output) -> std::io::Re
 pub(crate) fn run_mzn_test<const ORDERED: bool>(
     instance_name: &str,
     folder_name: &str,
+    with_proof: bool,
     test_type: TestType,
 ) -> String {
-    run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, test_type, vec![], "")
+    run_mzn_test_with_options::<ORDERED>(
+        instance_name,
+        folder_name,
+        with_proof,
+        test_type,
+        vec![],
+        "",
+    )
 }
 
 pub(crate) fn check_statistic_equality(
@@ -268,6 +280,7 @@ pub(crate) enum TestType {
 pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
     instance_name: &str,
     folder_name: &str,
+    with_proof: bool,
     test_type: TestType,
     mut options: Vec<String>,
     prefix: &str,
@@ -290,12 +303,7 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
         options.push("-a".to_owned());
     }
 
-    let files = run_solver_with_options(
-        instance_path,
-        matches!(test_type, TestType::Unsatisfiable | TestType::Optimality),
-        options,
-        Some(prefix),
-    );
+    let files = run_solver_with_options(instance_path, with_proof, options, Some(prefix));
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
 

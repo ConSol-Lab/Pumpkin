@@ -6,16 +6,25 @@ use helpers::TestType;
 use helpers::run_mzn_test;
 
 macro_rules! mzn_infeasible_test {
-    ($name:ident) => {
+    ($name:ident, with_proof: $with_proof:literal) => {
         #[test]
         fn $name() {
-            run_mzn_infeasible_test(stringify!($name), "mzn_infeasible");
+            run_mzn_infeasible_test(stringify!($name), "mzn_infeasible", $with_proof);
         }
+    };
+
+    ($name:ident) => {
+        mzn_infeasible_test!($name, with_proof: false);
     };
 }
 mzn_infeasible_test!(prop_stress);
 mzn_infeasible_test!(connected);
 
-pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str) {
-    let _ = run_mzn_test::<false>(instance_name, folder_name, TestType::Unsatisfiable);
+pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str, with_proof: bool) {
+    let _ = run_mzn_test::<false>(
+        instance_name,
+        folder_name,
+        with_proof,
+        TestType::Unsatisfiable,
+    );
 }

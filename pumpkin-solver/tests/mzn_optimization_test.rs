@@ -9,8 +9,12 @@ macro_rules! mzn_optimization_test {
     ($name:ident) => {
         #[test]
         fn $name() {
-            let output =
-                run_mzn_test::<false>(stringify!($name), "mzn_optimization", TestType::Optimality);
+            let output = run_mzn_test::<false>(
+                stringify!($name),
+                "mzn_optimization",
+                false,
+                TestType::Optimality,
+            );
             assert!(output.ends_with("==========\n"));
         }
     };
