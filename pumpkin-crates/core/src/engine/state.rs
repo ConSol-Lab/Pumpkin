@@ -385,11 +385,7 @@ impl State {
 
     /// Get an exclusive reference to the propagator identified by the given handle and a context
     /// which can be used for propagation.
-    #[allow(
-        private_bounds,
-        reason = "Propagator will be part of public interface in the future"
-    )]
-    pub fn get_propagator_mut_with_context<P: Propagator>(
+    pub(crate) fn get_propagator_mut_with_context<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,
     ) -> (Option<&mut P>, PropagationContextMut<'_>) {

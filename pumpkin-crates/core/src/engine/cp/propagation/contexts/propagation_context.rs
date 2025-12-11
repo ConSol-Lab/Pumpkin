@@ -62,7 +62,7 @@ impl<'a> PropagationContext<'a> {
 }
 
 #[derive(Debug)]
-pub struct PropagationContextMut<'a> {
+pub(crate) struct PropagationContextMut<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
