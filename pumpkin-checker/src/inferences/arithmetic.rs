@@ -21,10 +21,9 @@ use crate::state::VariableState;
 /// well.
 pub(crate) fn verify_binary_equals(
     model: &Model,
-    premises: &[Atomic],
-    consequent: Option<Atomic>,
+    fact: &Fact,
     generated_by: ConstraintId,
-) -> Result<Fact, InvalidInference> {
+) -> Result<(), InvalidInference> {
     let Some(constraint) = model.get_constraint(generated_by) else {
         return Err(InvalidInference::UndefinedConstraint);
     };
@@ -37,9 +36,8 @@ pub(crate) fn verify_binary_equals(
         return Err(InvalidInference::Unsound);
     }
 
-    let mut variable_state =
-        VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
-            .ok_or(InvalidInference::InconsistentPremises)?;
+    let mut variable_state = VariableState::prepare_for_conflict_check(fact)
+        .ok_or(InvalidInference::InconsistentPremises)?;
 
     let var_expr1 = &linear.terms[0].1;
     let var_expr2 = &linear.terms[1].1;
@@ -91,10 +89,7 @@ pub(crate) fn verify_binary_equals(
         return Err(InvalidInference::Unsound);
     }
 
-    Ok(Fact {
-        premises: premises.to_vec(),
-        consequent,
-    })
+    Ok(())
 }
 
 /// Verify a `binary_not_equals` inference.
@@ -103,10 +98,9 @@ pub(crate) fn verify_binary_equals(
 /// to equal the right-hand side of the not equals constraint.
 pub(crate) fn verify_binary_not_equals(
     model: &Model,
-    premises: &[Atomic],
-    consequent: Option<Atomic>,
+    fact: &Fact,
     generated_by: ConstraintId,
-) -> Result<Fact, InvalidInference> {
+) -> Result<(), InvalidInference> {
     let Some(constraint) = model.get_constraint(generated_by) else {
         return Err(InvalidInference::UndefinedConstraint);
     };
@@ -115,7 +109,7 @@ pub(crate) fn verify_binary_not_equals(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+    let variable_state = VariableState::prepare_for_conflict_check(fact)
         .ok_or(InvalidInference::InconsistentPremises)?;
 
     let mut values = BTreeSet::new();
@@ -125,10 +119,7 @@ pub(crate) fn verify_binary_not_equals(
         };
 
         if !values.insert(value) {
-            return Ok(Fact {
-                premises: premises.to_vec(),
-                consequent,
-            });
+            return Ok(());
         }
     }
 

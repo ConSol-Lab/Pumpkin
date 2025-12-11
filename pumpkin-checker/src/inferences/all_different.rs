@@ -4,7 +4,6 @@ use drcp_format::ConstraintId;
 
 use super::Fact;
 use crate::inferences::InvalidInference;
-use crate::model::Atomic;
 use crate::model::Constraint;
 use crate::model::Model;
 use crate::state::VariableState;
@@ -17,10 +16,9 @@ use crate::state::VariableState;
 /// The checker will reject inferences with redundant atomic constraints.
 pub(crate) fn verify_all_different(
     model: &Model,
-    premises: &[Atomic],
-    consequent: Option<Atomic>,
+    fact: &Fact,
     generated_by: ConstraintId,
-) -> Result<Fact, InvalidInference> {
+) -> Result<(), InvalidInference> {
     let Some(constraint) = model.get_constraint(generated_by) else {
         return Err(InvalidInference::UndefinedConstraint);
     };
@@ -29,7 +27,7 @@ pub(crate) fn verify_all_different(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+    let variable_state = VariableState::prepare_for_conflict_check(fact)
         .ok_or(InvalidInference::InconsistentPremises)?;
 
     let union_of_domains = all_different
@@ -46,10 +44,7 @@ pub(crate) fn verify_all_different(
         .collect::<Vec<_>>();
 
     if union_of_domains.len() < variables.len() {
-        Ok(Fact {
-            premises: premises.to_vec(),
-            consequent,
-        })
+        Ok(())
     } else {
         Err(InvalidInference::Unsound)
     }

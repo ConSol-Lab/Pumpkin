@@ -49,8 +49,9 @@ pub fn verify_deduction(
     // At some point, this should either reach a fact without a consequent or derive an
     // inconsistent domain.
 
-    let mut variable_state = VariableState::prepare_for_conflict_check(&deduction.premises, None)
-        .ok_or(InvalidDeduction::InconsistentPremises)?;
+    let mut variable_state =
+        VariableState::prepare_for_conflict_check(&Fact::nogood(deduction.premises.clone()))
+            .ok_or(InvalidDeduction::InconsistentPremises)?;
 
     let mut unused_inferences = Vec::new();
 

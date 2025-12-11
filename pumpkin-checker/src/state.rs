@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::ops::Add;
 use std::rc::Rc;
 
+use crate::inferences::Fact;
 use crate::model::Atomic;
 
 /// The domains of all variables in the problem.
@@ -20,16 +21,17 @@ impl VariableState {
     /// consequent.
     ///
     /// Used by inference checkers if they want to identify a conflict by negating the consequent.
-    pub(crate) fn prepare_for_conflict_check(
-        premises: &[Atomic],
-        consequent: Option<&Atomic>,
-    ) -> Option<Self> {
+    pub(crate) fn prepare_for_conflict_check(fact: &Fact) -> Option<Self> {
         let mut variable_state = VariableState::default();
 
-        let negated_consequent = consequent.map(|consequent| !consequent.clone());
+        let negated_consequent = fact
+            .consequent
+            .as_ref()
+            .map(|consequent| !consequent.clone());
 
         // Apply all the premises and the negation of the consequent to the state.
-        if !premises
+        if !fact
+            .premises
             .iter()
             .chain(negated_consequent.as_ref())
             .all(|premise| variable_state.apply(premise))

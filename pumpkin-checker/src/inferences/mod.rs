@@ -52,18 +52,18 @@ pub(crate) fn verify_inference(
     model: &Model,
     inference: &drcp_format::Inference<std::rc::Rc<str>, i32, std::rc::Rc<str>>,
 ) -> Result<Fact, InvalidInference> {
+    let fact = Fact {
+        premises: inference.premises.clone(),
+        consequent: inference.consequent.clone(),
+    };
+
     match inference.label.as_ref().map(|label| label.as_ref()) {
         Some("linear_bounds") => {
             let generated_by = inference
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            linear::verify_linear_bounds(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            linear::verify_linear_bounds(model, &fact, generated_by)?;
         }
 
         Some("nogood") => {
@@ -71,12 +71,7 @@ pub(crate) fn verify_inference(
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            nogood::verify_nogood(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            nogood::verify_nogood(model, &fact, generated_by)?;
         }
 
         Some("initial_domain") => {
@@ -84,13 +79,8 @@ pub(crate) fn verify_inference(
                 return Err(InvalidInference::Unsound);
             };
 
-            if model.is_trivially_true(atomic.clone()) {
-                Ok(Fact {
-                    premises: vec![],
-                    consequent: Some(atomic),
-                })
-            } else {
-                Err(InvalidInference::Unsound)
+            if !model.is_trivially_true(atomic.clone()) {
+                return Err(InvalidInference::Unsound);
             }
         }
 
@@ -99,12 +89,7 @@ pub(crate) fn verify_inference(
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            time_table::verify_time_table(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            time_table::verify_time_table(model, &fact, generated_by)?;
         }
 
         Some("all_different") => {
@@ -112,12 +97,7 @@ pub(crate) fn verify_inference(
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            all_different::verify_all_different(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            all_different::verify_all_different(model, &fact, generated_by)?;
         }
 
         Some("binary_equals") => {
@@ -125,12 +105,7 @@ pub(crate) fn verify_inference(
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            arithmetic::verify_binary_equals(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            arithmetic::verify_binary_equals(model, &fact, generated_by)?;
         }
 
         Some("binary_not_equals") => {
@@ -138,15 +113,12 @@ pub(crate) fn verify_inference(
                 .generated_by
                 .ok_or(InvalidInference::MissingConstraint)?;
 
-            arithmetic::verify_binary_not_equals(
-                model,
-                &inference.premises,
-                inference.consequent.clone(),
-                generated_by,
-            )
+            arithmetic::verify_binary_not_equals(model, &fact, generated_by)?;
         }
 
-        None => Err(InvalidInference::MissingLabel),
-        Some(_) => Err(InvalidInference::UnsupportedLabel),
+        None => return Err(InvalidInference::MissingLabel),
+        Some(_) => return Err(InvalidInference::UnsupportedLabel),
     }
+
+    Ok(fact)
 }

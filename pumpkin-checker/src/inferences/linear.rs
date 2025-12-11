@@ -2,7 +2,6 @@ use drcp_format::ConstraintId;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
-use crate::model::Atomic;
 use crate::model::Constraint;
 use crate::model::Linear;
 use crate::model::Model;
@@ -14,17 +13,14 @@ use crate::state::VariableState;
 /// The inference is sound for linear inequalites and linear equalities.
 pub(super) fn verify_linear_bounds(
     model: &Model,
-    premises: &[Atomic],
-    consequent: Option<Atomic>,
+    fact: &Fact,
     generated_by: ConstraintId,
-) -> Result<Fact, InvalidInference> {
+) -> Result<(), InvalidInference> {
     match model.get_constraint(generated_by) {
-        Some(Constraint::LinearLeq(linear)) => {
-            verify_linear_inference(linear, premises, consequent)
-        }
+        Some(Constraint::LinearLeq(linear)) => verify_linear_inference(linear, fact),
 
         Some(Constraint::LinearEq(linear)) => {
-            let try_upper_bound = verify_linear_inference(linear, premises, consequent.clone());
+            let try_upper_bound = verify_linear_inference(linear, fact);
 
             let inverted_linear = Linear {
                 terms: linear
@@ -34,7 +30,7 @@ pub(super) fn verify_linear_bounds(
                     .collect(),
                 bound: -linear.bound,
             };
-            let try_lower_bound = verify_linear_inference(&inverted_linear, premises, consequent);
+            let try_lower_bound = verify_linear_inference(&inverted_linear, fact);
 
             match (try_lower_bound, try_upper_bound) {
                 (Ok(_), Ok(_)) => panic!("This should not happen."),
@@ -49,12 +45,8 @@ pub(super) fn verify_linear_bounds(
     }
 }
 
-fn verify_linear_inference(
-    linear: &Linear,
-    premises: &[Atomic],
-    consequent: Option<Atomic>,
-) -> Result<Fact, InvalidInference> {
-    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+fn verify_linear_inference(linear: &Linear, fact: &Fact) -> Result<(), InvalidInference> {
+    let variable_state = VariableState::prepare_for_conflict_check(fact)
         .ok_or(InvalidInference::InconsistentPremises)?;
 
     // Next, we evaluate the linear inequality. The lower bound of the
@@ -82,10 +74,7 @@ fn verify_linear_inference(
     });
 
     if left_hand_side.is_some_and(|value| value > linear.bound) {
-        Ok(Fact {
-            premises: premises.to_vec(),
-            consequent: consequent.clone(),
-        })
+        Ok(())
     } else {
         Err(InvalidInference::Unsound)
     }
@@ -97,6 +86,7 @@ mod tests {
     use fzn_rs::VariableExpr::*;
 
     use super::*;
+    use crate::model::Atomic;
 
     #[test]
     fn linear_1() {
@@ -118,6 +108,13 @@ mod tests {
             value: 30,
         });
 
-        let _ = verify_linear_inference(&linear, &premises, consequent).expect("valid inference");
+        verify_linear_inference(
+            &linear,
+            &Fact {
+                premises,
+                consequent,
+            },
+        )
+        .expect("valid inference");
     }
 }
