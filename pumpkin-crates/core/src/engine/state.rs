@@ -466,21 +466,26 @@ impl State {
         self.reason_store.new_checkpoint();
     }
 
-    /// Return to the given level.
+    /// Restore to the given checkpoint and return the [`DomainId`]s which were fixed before
+    /// restoring, with their assigned values.
     ///
-    /// If the provided level is equal to the current level, this is a no-op. If
-    /// the provided level is larger than the current level, this method will
+    /// If the provided checkpoint is equal to the current checkpoint, this is a no-op. If
+    /// the provided checkpoint is larger than the current checkpoint, this method will
     /// panic.
     ///
     /// See [`State::new_checkpoint`] for an example.
-    pub fn restore_to(&mut self, backtrack_level: usize) -> Vec<(DomainId, i32)> {
-        pumpkin_assert_simple!(backtrack_level < self.get_checkpoint());
+    pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
+        pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
+
+        if checkpoint == self.get_checkpoint() {
+            return vec![];
+        }
 
         let unfixed_after_backtracking = self
             .assignments
-            .synchronise(backtrack_level, &mut self.notification_engine);
-        self.trailed_values.synchronise(backtrack_level);
-        self.reason_store.synchronise(backtrack_level);
+            .synchronise(checkpoint, &mut self.notification_engine);
+        self.trailed_values.synchronise(checkpoint);
+        self.reason_store.synchronise(checkpoint);
 
         self.propagator_queue.clear();
         // For now all propagators are called to synchronise, in the future this will be improved in
@@ -501,7 +506,7 @@ impl State {
             .update_last_notified_index(&mut self.assignments);
         // Should be done after the assignments and trailed values have been synchronised
         self.notification_engine.synchronise(
-            backtrack_level,
+            checkpoint,
             &self.assignments,
             &mut self.trailed_values,
         );
