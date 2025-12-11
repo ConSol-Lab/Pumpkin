@@ -259,15 +259,10 @@ impl State {
         variable.contains(&self.assignments, value)
     }
 
-    /// Returns whether the given `variable` is fixed.
-    pub fn is_fixed<Var: IntegerVariable>(&self, variable: Var) -> bool {
-        self.lower_bound(variable.clone()) == self.upper_bound(variable)
-    }
-
     /// If the given `variable` is fixed, then [`Some`] containing the assigned value is
     /// returned. Otherwise, [`None`] is returned.
     pub fn fixed_value<Var: IntegerVariable>(&self, variable: Var) -> Option<i32> {
-        self.is_fixed(variable.clone())
+        (self.lower_bound(variable.clone()) == self.upper_bound(variable.clone()))
             .then(|| self.lower_bound(variable))
     }
 
