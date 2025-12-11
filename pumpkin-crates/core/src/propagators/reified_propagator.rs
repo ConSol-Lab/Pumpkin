@@ -173,7 +173,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
         if let Err(Conflict::Propagator(ref mut conflict)) = status {
             conflict
                 .conjunction
-                .add(self.reification_literal.get_true_predicate());
+                .push(self.reification_literal.get_true_predicate());
         }
         status
     }

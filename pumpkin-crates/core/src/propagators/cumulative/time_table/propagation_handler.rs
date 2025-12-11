@@ -250,7 +250,7 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
-                reason.add(lower_bound_predicate_propagating_task);
+                reason.push(lower_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
@@ -305,7 +305,7 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
-                reason.add(upper_bound_predicate_propagating_task);
+                reason.push(upper_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
