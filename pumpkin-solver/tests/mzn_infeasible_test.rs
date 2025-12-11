@@ -20,6 +20,14 @@ macro_rules! mzn_infeasible_test {
 mzn_infeasible_test!(prop_stress);
 mzn_infeasible_test!(connected);
 
+mzn_infeasible_test!(rcpsp_00_unsat);
+mzn_infeasible_test!(rcpsp_01_unsat);
+mzn_infeasible_test!(rcpsp_st27_14);
+mzn_infeasible_test!(rcpsp_bl2006);
+mzn_infeasible_test!(rcpsp_j60_1_6);
+
+mzn_infeasible_test!(ghoulomb_3_5_11);
+
 pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str, with_proof: bool) {
     let _ = run_mzn_test::<false>(
         instance_name,
