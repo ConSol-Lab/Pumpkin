@@ -298,8 +298,6 @@ impl NotificationEngine {
             .get_propagator_mut(nogood_propagator_handle)
             .expect("nogood propagator handle refers to a nogood propagator");
         self.notify_predicate_id_satisfied(nogood_propagator);
-        // At the moment this does nothing yet, but we call it to drain predicates.
-        self.notify_predicate_id_falsified();
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -332,15 +330,6 @@ impl NotificationEngine {
             }
         }
         true
-    }
-
-    /// Notifies propagators that certain [`Predicate`]s have been falsified.
-    ///
-    /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self) {
-        for _predicate_id in self.predicate_notifier.drain_falsified_predicates() {
-            // At the moment this does nothing
-        }
     }
 
     /// Notifies the propagator that certain [`Predicate`]s have been satisfied.
@@ -486,8 +475,6 @@ impl NotificationEngine {
                 .get_propagator_mut(handle)
                 .expect("nogood propagator handle refers to a nogood propagator");
             self.notify_predicate_id_satisfied(nogood_propagator);
-            // At the moment this does nothing yet, but we call it to drain predicates.
-            self.notify_predicate_id_falsified();
         }
 
         self.last_notified_trail_index = assignments.num_trail_entries();

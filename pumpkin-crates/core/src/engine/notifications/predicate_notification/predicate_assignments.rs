@@ -68,12 +68,6 @@ impl PredicateIdAssignments {
         self.predicate_values.keys()
     }
 
-    /// Returns the falsified predicates; note that this structure will be cleared once it is
-    /// dropped.
-    pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.falsified_predicates.drain(..)
-    }
-
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
