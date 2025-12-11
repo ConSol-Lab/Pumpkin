@@ -787,7 +787,7 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn propagate(&mut self) {
         let num_trail_entries_prev = self.state.trail_len();
 
-        let result = self.state.fixed_point_propagate();
+        let result = self.state.propagate_to_fixed_point();
 
         if self.state.get_checkpoint() == 0 {
             self.handle_root_propagation(num_trail_entries_prev);
@@ -910,7 +910,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let handle = self.state.add_propagator(constructor);
-        let result = self.state.fixed_point_propagate();
+        let result = self.state.propagate_to_fixed_point();
 
         if let Err(conflict) = result {
             self.solver_state.declare_conflict(conflict.into());
@@ -971,7 +971,7 @@ impl ConstraintSatisfactionSolver {
         self.handle_root_propagation(num_trail_entries);
 
         self.state.enqueue_propagator(self.nogood_propagator_handle);
-        let result = self.state.fixed_point_propagate();
+        let result = self.state.propagate_to_fixed_point();
         if let Err(conflict) = result {
             self.solver_state.declare_conflict(conflict.into());
         }

@@ -76,7 +76,7 @@ create_statistics_struct!(StateStatistics {
     num_conflicts: usize,
 });
 
-/// Information concerning the conflict returned by [`State::fixed_point_propagate`].
+/// Information concerning the conflict returned by [`State::propagate_to_fixed_point`].
 ///
 /// Two (related) conflicts can happen:
 /// 1) a propagator explicitly detects a conflict.
@@ -322,7 +322,7 @@ impl State {
     /// necessary.
     ///
     /// While the propagator is added to the queue for propagation, this function does _not_
-    /// trigger a round of propagation. An explicit call to [`State::fixed_point_propagate`] is
+    /// trigger a round of propagation. An explicit call to [`State::propagate_to_fixed_point`] is
     /// necessary to run the new propagator for the first time.
     #[allow(private_bounds, reason = "Propagator will be part of public API")]
     #[allow(private_interfaces, reason = "Constructor will be part of public API")]
@@ -413,7 +413,7 @@ impl State {
     /// If a domain becomes empty due to this operation, an [`EmptyDomain`] [`Err`] is returned.
     ///
     /// This method does _not_ perform any propagation. For that, an explicit call to
-    /// [`State::fixed_point_propagate`] is required. This allows the
+    /// [`State::propagate_to_fixed_point`] is required. This allows the
     /// posting of multiple predicates before the entire propagation engine is invoked.
     ///
     /// A call to [`State::restore_to`] that goes past the checkpoint at which a [`Predicate`]
@@ -510,7 +510,7 @@ impl State {
     /// [`PropagatorId`].
     ///
     /// Other propagators could be enqueued as a result of the changes made by the propagated
-    /// propagator but a call to [`State::fixed_point_propagate`] is
+    /// propagator but a call to [`State::propagate_to_fixed_point`] is
     /// required for further propagation to occur.
     ///
     /// It could be that the current [`State`] implies a conflict by propagation. In that case, an
@@ -591,7 +591,7 @@ impl State {
     ///
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
-    pub fn fixed_point_propagate(&mut self) -> Result<(), Conflict> {
+    pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(
