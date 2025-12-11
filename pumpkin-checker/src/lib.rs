@@ -3,55 +3,40 @@ use std::io::BufRead;
 use std::rc::Rc;
 
 use drcp_format::ConstraintId;
-use drcp_format::IntAtomic;
 use drcp_format::reader::ProofReader;
 
-mod inferences;
+pub mod deductions;
+pub mod inferences;
 mod state;
 
 pub mod model;
 
 use model::*;
 
-use crate::inferences::Fact;
-use crate::state::VariableState;
-
+/// The errors that can be returned by the checker.
 #[derive(Debug, thiserror::Error)]
 pub enum CheckError {
+    /// The inference with the given [`ConstraintId`] is invalid due to
+    /// [`inferences::InvalidInference`].
     #[error("inference {0} is invalid: {1}")]
     InvalidInference(ConstraintId, inferences::InvalidInference),
 
+    /// The inference with the given [`ConstraintId`] is invalid due to
+    /// [`deductions::InvalidDeduction`].
     #[error("deduction {0} is invalid: {1}")]
-    InvalidDeduction(ConstraintId, InvalidDeduction),
+    InvalidDeduction(ConstraintId, deductions::InvalidDeduction),
 
+    /// The proof did not contain a conclusion line.
     #[error("the proof was not terminated with a conclusion")]
     MissingConclusion,
 
+    /// The conclusion does not follow from any deduction in the proof.
     #[error("the conclusion is not present as a proof step")]
     InvalidConclusion,
 
+    /// An I/O error prevented us from reading all the input.
     #[error("failed to read next proof line: {0}")]
     ProofReadError(#[from] drcp_format::reader::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error("invalid deduction")]
-#[allow(
-    variant_size_differences,
-    reason = "this is the error path, so no need to worry about variant sizes"
-)]
-pub enum InvalidDeduction {
-    #[error("constraint id {0} already in use")]
-    DuplicateConstraintId(ConstraintId),
-
-    #[error("inference {0} does not exist")]
-    UnknownInference(ConstraintId),
-
-    #[error("no conflict was derived after applying all inferences")]
-    NoConflict(Vec<(ConstraintId, Vec<IntAtomic<String, i32>>)>),
-
-    #[error("the deduction contains inconsistent premises")]
-    InconsistentPremises,
 }
 
 /// Verify whether the given proof is valid w.r.t. the model.
@@ -59,12 +44,22 @@ pub fn verify_proof<Source: BufRead>(
     mut model: Model,
     mut proof: ProofReader<Source, i32>,
 ) -> Result<(), CheckError> {
+    // To check a proof we iterate over every step.
+    // - If the step is an inference, it is checked. If it is valid, then the inference is stored in
+    //   the fact database to be used in the next deduction. Otherwise, an error is returned
+    //   indicating that the step is invalid.
+    // - If the step is a deduction, it is checked with respect to all the inferences in the fact
+    //   database. If the deduction is valid, the fact database is cleared and the deduction is
+    //   added to the model to be used in future inferences.
+
     let mut fact_database = BTreeMap::new();
 
     loop {
         let next_step = proof.next_step()?;
 
         let Some(step) = next_step else {
+            // The loop stops when a conclusion is found, so at this point we know the proof does
+            // not contain a conclusion.
             return Err(CheckError::MissingConclusion);
         };
 
@@ -77,8 +72,10 @@ pub fn verify_proof<Source: BufRead>(
             }
 
             drcp_format::Step::Deduction(deduction) => {
-                let derived_constraint = verify_deduction(&deduction, &fact_database)
-                    .map_err(|err| CheckError::InvalidDeduction(deduction.constraint_id, err))?;
+                let derived_constraint = deductions::verify_deduction(&deduction, &fact_database)
+                    .map_err(|err| {
+                    CheckError::InvalidDeduction(deduction.constraint_id, err)
+                })?;
 
                 let new_constraint_added = model.add_constraint(
                     deduction.constraint_id,
@@ -88,10 +85,13 @@ pub fn verify_proof<Source: BufRead>(
                 if !new_constraint_added {
                     return Err(CheckError::InvalidDeduction(
                         deduction.constraint_id,
-                        InvalidDeduction::DuplicateConstraintId(deduction.constraint_id),
+                        deductions::InvalidDeduction::DuplicateConstraintId(
+                            deduction.constraint_id,
+                        ),
                     ));
                 }
 
+                // Forget the stored inferences.
                 fact_database.clear();
             }
 
@@ -127,56 +127,4 @@ fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>
             drcp_format::Conclusion::DualBound(atomic) => nogood.as_ref() == [!atomic.clone()],
         }
     })
-}
-
-fn verify_deduction(
-    deduction: &drcp_format::Deduction<Rc<str>, i32>,
-    facts: &BTreeMap<ConstraintId, Fact>,
-) -> Result<Nogood, InvalidDeduction> {
-    let mut variable_state = VariableState::default();
-    let mut unused_inferences = Vec::new();
-
-    for atomic in deduction.premises.iter() {
-        if !variable_state.apply(atomic.clone()) {
-            return Err(InvalidDeduction::InconsistentPremises);
-        }
-    }
-
-    for constraint_id in deduction.sequence.iter() {
-        let fact = facts
-            .get(constraint_id)
-            .ok_or(InvalidDeduction::UnknownInference(*constraint_id))?;
-
-        let unsatisfied_premises = fact
-            .premises
-            .iter()
-            .filter_map(|premise| {
-                if variable_state.is_true(premise.clone()) {
-                    None
-                } else {
-                    Some(IntAtomic {
-                        name: premise.name.as_ref().to_owned(),
-                        comparison: premise.comparison,
-                        value: premise.value,
-                    })
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if !unsatisfied_premises.is_empty() {
-            unused_inferences.push((*constraint_id, unsatisfied_premises));
-            continue;
-        }
-
-        match &fact.consequent {
-            Some(consequent) => {
-                if !variable_state.apply(consequent.clone()) {
-                    return Ok(Nogood::from(deduction.premises.clone()));
-                }
-            }
-            None => return Ok(Nogood::from(deduction.premises.clone())),
-        }
-    }
-
-    Err(InvalidDeduction::NoConflict(unused_inferences))
 }

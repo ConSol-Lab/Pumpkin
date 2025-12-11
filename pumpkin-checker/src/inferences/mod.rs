@@ -7,9 +7,20 @@ mod time_table;
 use crate::model::Atomic;
 use crate::model::Model;
 
-pub(crate) struct Fact {
-    pub(crate) premises: Vec<Atomic>,
-    pub(crate) consequent: Option<Atomic>,
+#[derive(Clone, Debug)]
+pub struct Fact {
+    pub premises: Vec<Atomic>,
+    pub consequent: Option<Atomic>,
+}
+
+impl Fact {
+    /// Create a fact `premises -> false`.
+    pub fn nogood(premises: Vec<Atomic>) -> Self {
+        Fact {
+            premises,
+            consequent: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, thiserror::Error, Debug)]

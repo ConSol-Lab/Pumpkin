@@ -54,21 +54,8 @@ fn verify_linear_inference(
     premises: &[Atomic],
     consequent: Option<Atomic>,
 ) -> Result<Fact, InvalidInference> {
-    // First, we apply all the premises and the negation of the consequent to a
-    // variable state.
-    let mut variable_state = VariableState::default();
-
-    for premise in premises {
-        if !variable_state.apply(premise.clone()) {
-            return Err(InvalidInference::InconsistentPremises);
-        }
-    }
-
-    if let Some(consequent) = consequent.clone()
-        && !variable_state.apply(!consequent.clone())
-    {
-        return Err(InvalidInference::InconsistentPremises);
-    }
+    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+        .ok_or(InvalidInference::InconsistentPremises)?;
 
     // Next, we evaluate the linear inequality. The lower bound of the
     // left-hand side must exceed the bound in the constraint.

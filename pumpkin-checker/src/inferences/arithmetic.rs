@@ -37,19 +37,9 @@ pub(crate) fn verify_binary_equals(
         return Err(InvalidInference::Unsound);
     }
 
-    let mut variable_state = VariableState::default();
-
-    for premise in premises {
-        if !variable_state.apply(premise.clone()) {
-            return Err(InvalidInference::InconsistentPremises);
-        }
-    }
-
-    if let Some(consequent) = consequent.clone()
-        && !variable_state.apply(!consequent.clone())
-    {
-        return Err(InvalidInference::InconsistentPremises);
-    }
+    let mut variable_state =
+        VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+            .ok_or(InvalidInference::InconsistentPremises)?;
 
     let var_expr1 = &linear.terms[0].1;
     let var_expr2 = &linear.terms[1].1;
@@ -61,7 +51,7 @@ pub(crate) fn verify_binary_equals(
             let mut consistent = true;
 
             if let I32Ext::I32(value) = variable_state.upper_bound(var_expr2) {
-                consistent &= variable_state.apply(Atomic {
+                consistent &= variable_state.apply(&Atomic {
                     name: Rc::clone(var1),
                     comparison: IntComparison::LessEqual,
                     value: linear.bound + value,
@@ -69,7 +59,7 @@ pub(crate) fn verify_binary_equals(
             }
 
             if let I32Ext::I32(value) = variable_state.lower_bound(var_expr2) {
-                consistent &= variable_state.apply(Atomic {
+                consistent &= variable_state.apply(&Atomic {
                     name: Rc::clone(var1),
                     comparison: IntComparison::GreaterEqual,
                     value: linear.bound + value,
@@ -77,7 +67,7 @@ pub(crate) fn verify_binary_equals(
             }
 
             for value in variable_state.holes(var_expr2).collect::<Vec<_>>() {
-                consistent &= variable_state.apply(Atomic {
+                consistent &= variable_state.apply(&Atomic {
                     name: Rc::clone(var1),
                     comparison: IntComparison::NotEqual,
                     value: linear.bound + value,
@@ -88,7 +78,7 @@ pub(crate) fn verify_binary_equals(
         }
 
         VariableExpr::Constant(value) => match var_expr2 {
-            VariableExpr::Identifier(var2) => variable_state.apply(Atomic {
+            VariableExpr::Identifier(var2) => variable_state.apply(&Atomic {
                 name: Rc::clone(var2),
                 comparison: IntComparison::NotEqual,
                 value: linear.bound + *value,
@@ -125,19 +115,8 @@ pub(crate) fn verify_binary_not_equals(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let mut variable_state = VariableState::default();
-
-    for premise in premises {
-        if !variable_state.apply(premise.clone()) {
-            return Err(InvalidInference::InconsistentPremises);
-        }
-    }
-
-    if let Some(consequent) = consequent.clone()
-        && !variable_state.apply(!consequent.clone())
-    {
-        return Err(InvalidInference::InconsistentPremises);
-    }
+    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+        .ok_or(InvalidInference::InconsistentPremises)?;
 
     let mut values = BTreeSet::new();
     for variable in variables {

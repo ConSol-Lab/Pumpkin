@@ -8,14 +8,39 @@ use crate::model::Atomic;
 
 /// The domains of all variables in the problem.
 ///
-/// Domains can be reduced by applying an [`Atomic`]. Variables that have not had any atomic
-/// constraints applied have infinite domains.
+/// Domains can be reduced through [`VariableState::apply`]. By default, the domain of every
+/// variable is infinite.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct VariableState {
     domains: BTreeMap<Rc<str>, Domain>,
 }
 
 impl VariableState {
+    /// Create a variable state that applies all the premises and, if present, the negation of the
+    /// consequent.
+    ///
+    /// Used by inference checkers if they want to identify a conflict by negating the consequent.
+    pub(crate) fn prepare_for_conflict_check(
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> Option<Self> {
+        let mut variable_state = VariableState::default();
+
+        let negated_consequent = consequent.map(|consequent| !consequent.clone());
+
+        // Apply all the premises and the negation of the consequent to the state.
+        if !premises
+            .iter()
+            .chain(negated_consequent.as_ref())
+            .all(|premise| variable_state.apply(premise))
+        {
+            return None;
+        }
+
+        Some(variable_state)
+    }
+
+    /// Get the lower bound of a variable.
     pub(crate) fn lower_bound(&self, variable: &fzn_rs::VariableExpr<i32>) -> I32Ext {
         let name = match variable {
             fzn_rs::VariableExpr::Identifier(name) => name,
@@ -28,6 +53,7 @@ impl VariableState {
             .unwrap_or(I32Ext::NegativeInf)
     }
 
+    /// Get the upper bound of a variable.
     pub(crate) fn upper_bound(&self, variable: &fzn_rs::VariableExpr<i32>) -> I32Ext {
         let name = match variable {
             fzn_rs::VariableExpr::Identifier(name) => name,
@@ -122,8 +148,11 @@ impl VariableState {
     ///
     /// Returns true if the state remains consistent, or false if the atomic cannot be true in
     /// conjunction with previously applied atomics.
-    pub(crate) fn apply(&mut self, atomic: Atomic) -> bool {
-        let domain = self.domains.entry(atomic.name).or_insert(Domain::new());
+    pub(crate) fn apply(&mut self, atomic: &Atomic) -> bool {
+        let domain = self
+            .domains
+            .entry(Rc::clone(&atomic.name))
+            .or_insert(Domain::new());
 
         match atomic.comparison {
             drcp_format::IntComparison::GreaterEqual => {
@@ -158,7 +187,7 @@ impl VariableState {
     }
 
     /// Is the given atomic true in the current state.
-    pub(crate) fn is_true(&self, atomic: Atomic) -> bool {
+    pub(crate) fn is_true(&self, atomic: &Atomic) -> bool {
         let Some(domain) = self.domains.get(&atomic.name) else {
             return false;
         };
@@ -392,7 +421,7 @@ mod tests {
         let variable_name = Rc::from("x1");
         let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: variable_name,
             comparison: IntComparison::LessEqual,
             value: 5,
@@ -410,7 +439,7 @@ mod tests {
         let variable_name = Rc::from("x1");
         let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: variable_name,
             comparison: IntComparison::GreaterEqual,
             value: 5,
@@ -428,13 +457,13 @@ mod tests {
         let variable_name = Rc::from("x1");
         let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: Rc::clone(&variable_name),
             comparison: IntComparison::GreaterEqual,
             value: 5,
         });
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: variable_name,
             comparison: IntComparison::LessEqual,
             value: 10,
@@ -455,19 +484,19 @@ mod tests {
         let variable_name = Rc::from("x1");
         let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: Rc::clone(&variable_name),
             comparison: IntComparison::GreaterEqual,
             value: 5,
         });
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: Rc::clone(&variable_name),
             comparison: IntComparison::NotEqual,
             value: 7,
         });
 
-        let _ = state.apply(IntAtomic {
+        let _ = state.apply(&IntAtomic {
             name: variable_name,
             comparison: IntComparison::LessEqual,
             value: 10,

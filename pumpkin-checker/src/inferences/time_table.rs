@@ -27,20 +27,8 @@ pub(crate) fn verify_time_table(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    // First, we apply all the premises of the constraint that generated the inference.
-    let mut variable_state = VariableState::default();
-
-    for premise in premises {
-        if !variable_state.apply(premise.clone()) {
-            return Err(InvalidInference::InconsistentPremises);
-        }
-    }
-
-    if let Some(consequent) = consequent.clone()
-        && !variable_state.apply(!consequent.clone())
-    {
-        return Err(InvalidInference::InconsistentPremises);
-    }
+    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+        .ok_or(InvalidInference::InconsistentPremises)?;
 
     // The profile is a key-value store. The keys correspond to time-points, and the values to the
     // relative change in resource consumption. A BTreeMap is used to maintain a sorted order of

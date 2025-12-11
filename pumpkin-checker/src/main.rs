@@ -10,7 +10,8 @@ use std::time::Instant;
 use clap::Parser;
 use drcp_format::reader::ProofReader;
 use pumpkin_checker::CheckError;
-use pumpkin_checker::InvalidDeduction;
+use pumpkin_checker::deductions::IgnoredInference;
+use pumpkin_checker::deductions::InvalidDeduction;
 use pumpkin_checker::model::Model;
 use pumpkin_checker::model::Objective;
 use pumpkin_checker::model::Task;
@@ -38,40 +39,56 @@ fn main() -> anyhow::Result<()> {
     println!("parse-proof: 0s");
 
     let verify_start = Instant::now();
-    let verification_result = pumpkin_checker::verify_proof(model, proof_reader);
+
+    pumpkin_checker::verify_proof(model, proof_reader).inspect_err(|err| {
+        print_check_error_info(err);
+        println!("validate: {}s", verify_start.elapsed().as_secs_f32());
+    })?;
+
     println!("validate: {}s", verify_start.elapsed().as_secs_f32());
-
-    if let Err(CheckError::InvalidDeduction(
-        constraint_id,
-        InvalidDeduction::NoConflict(ref unused_inferences),
-    )) = verification_result
-    {
-        eprintln!("Deduction {constraint_id} is invalid.");
-
-        if unused_inferences.is_empty() {
-            eprintln!("  Failed to derive conflict after applying all inferences.");
-        } else {
-            eprintln!("  Could not apply the following inferences:");
-
-            for (inference_id, premises) in unused_inferences {
-                eprint!("  - {inference_id}:");
-
-                for premise in premises {
-                    eprint!(" {premise}");
-                }
-
-                eprintln!();
-            }
-        }
-    }
-
-    verification_result?;
 
     println!("Proof is valid!");
 
     Ok(())
 }
 
+/// If the error is an invalid deduction, here we print additional info why the deduction is
+/// invalid. In particular, it prints any inferences which were ignored because the premise was not
+/// satisfied.
+fn print_check_error_info(error: &CheckError) {
+    let CheckError::InvalidDeduction(
+        constraint_id,
+        InvalidDeduction::NoConflict(unused_inferences),
+    ) = error
+    else {
+        return;
+    };
+
+    eprintln!("Deduction {constraint_id} is invalid.");
+
+    if unused_inferences.is_empty() {
+        eprintln!("  Failed to derive conflict after applying all inferences.");
+    } else {
+        eprintln!("  Could not apply the following inferences:");
+
+        for unused_inference in unused_inferences {
+            let IgnoredInference {
+                constraint_id,
+                unsatisfied_premises,
+            } = unused_inference;
+
+            eprint!("  - {constraint_id}:");
+
+            for premise in unsatisfied_premises {
+                eprint!(" {premise}");
+            }
+
+            eprintln!();
+        }
+    }
+}
+
+/// The constraints supported by the checker.
 #[derive(Debug, fzn_rs::FlatZincConstraint)]
 enum FlatZincConstraints {
     #[name("int_lin_le")]

@@ -24,25 +24,10 @@ pub(crate) fn verify_nogood(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    // First, we apply all the premises of the constraint that generated the inference.
-    let mut variable_state = VariableState::default();
+    let variable_state = VariableState::prepare_for_conflict_check(premises, consequent.as_ref())
+        .ok_or(InvalidInference::InconsistentPremises)?;
 
-    for premise in premises {
-        if !variable_state.apply(premise.clone()) {
-            return Err(InvalidInference::InconsistentPremises);
-        }
-    }
-
-    if let Some(consequent) = consequent.clone()
-        && !variable_state.apply(!consequent.clone())
-    {
-        return Err(InvalidInference::InconsistentPremises);
-    }
-
-    let is_implied_by_nogood = nogood
-        .iter()
-        .cloned()
-        .all(|atomic| variable_state.is_true(atomic));
+    let is_implied_by_nogood = nogood.iter().all(|atomic| variable_state.is_true(atomic));
 
     if is_implied_by_nogood {
         Ok(Fact {
