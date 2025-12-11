@@ -6,11 +6,17 @@ use crate::containers::HashSet;
 use crate::engine::cp::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,
     present_propagators: HashSet<PropagatorId>,
     present_priorities: BinaryHeap<Reverse<u32>>,
+}
+
+impl Default for PropagatorQueue {
+    fn default() -> Self {
+        Self::new(5)
+    }
 }
 
 impl PropagatorQueue {
@@ -20,6 +26,10 @@ impl PropagatorQueue {
             present_propagators: HashSet::default(),
             present_priorities: BinaryHeap::new(),
         }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.present_propagators.is_empty()
     }
 
     #[cfg(test)]

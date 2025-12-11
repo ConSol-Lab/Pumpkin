@@ -8,13 +8,12 @@ use super::PropagatorId;
 use super::PropagatorVarId;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
+use crate::engine::State;
 use crate::engine::TrailedValues;
-use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::Watchers;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
-use crate::proof::ProofLog;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
@@ -24,7 +23,7 @@ use crate::variables::IntegerVariable;
 /// of the solver.
 pub(crate) trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
-    type PropagatorImpl: Propagator;
+    type PropagatorImpl: Propagator + Clone;
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
@@ -37,42 +36,31 @@ pub(crate) trait PropagatorConstructor {
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
 pub(crate) struct PropagatorConstructorContext<'a> {
-    notification_engine: &'a mut NotificationEngine,
-    trailed_values: &'a mut TrailedValues,
-    propagator_id: PropagatorId,
+    state: &'a mut State,
+    pub(crate) propagator_id: PropagatorId,
 
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
     next_local_id: RefOrOwned<'a, LocalId>,
-
-    /// The proof log for which [`InferenceCode`]s can be created.
-    proof_log: &'a mut ProofLog,
-
-    pub assignments: &'a mut Assignments,
 }
 
 impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
-        notification_engine: &'a mut NotificationEngine,
-        trailed_values: &'a mut TrailedValues,
-        proof_log: &'a mut ProofLog,
         propagator_id: PropagatorId,
-        assignments: &'a mut Assignments,
+        state: &'a mut State,
     ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
-            notification_engine,
-            trailed_values,
-            propagator_id,
             next_local_id: RefOrOwned::Owned(LocalId::from(0)),
-            proof_log,
-
-            assignments,
+            propagator_id,
+            state,
         }
     }
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext::new(self.assignments)
+        PropagationContext {
+            assignments: &self.state.assignments,
+        }
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -99,7 +87,7 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all(&mut watchers, domain_events.get_int_events());
     }
 
@@ -129,7 +117,7 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
     }
 
@@ -140,7 +128,7 @@ impl PropagatorConstructorContext<'_> {
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
     ) -> InferenceCode {
-        self.proof_log
+        self.state
             .create_inference_code(constraint_tag, inference_label)
     }
 
@@ -154,15 +142,12 @@ impl PropagatorConstructorContext<'_> {
     /// afterwards.
     pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
-            notification_engine: self.notification_engine,
-            trailed_values: self.trailed_values,
             propagator_id: self.propagator_id,
-            proof_log: self.proof_log,
             next_local_id: match &mut self.next_local_id {
                 RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
                 RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
             },
-            assignments: self.assignments,
+            state: self.state,
         }
     }
 
@@ -213,17 +198,17 @@ mod private {
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {
-            self.assignments
+            &self.state.assignments
         }
     }
 
     impl HasTrailedValues for PropagatorConstructorContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
-            self.trailed_values
+            &self.state.trailed_values
         }
 
         fn trailed_values_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_values
+            &mut self.state.trailed_values
         }
     }
 }
@@ -236,20 +221,10 @@ mod tests {
 
     #[test]
     fn reborrowing_remembers_next_local_id() {
-        let mut notification_engine = NotificationEngine::default();
-        notification_engine.grow();
-        let mut trailed_values = TrailedValues::default();
-        let mut proof_log = ProofLog::default();
-        let propagator_id = PropagatorId(0);
-        let mut assignments = Assignments::default();
+        let mut state = State::default();
+        state.notification_engine.grow();
 
-        let mut c1 = PropagatorConstructorContext::new(
-            &mut notification_engine,
-            &mut trailed_values,
-            &mut proof_log,
-            propagator_id,
-            &mut assignments,
-        );
+        let mut c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
 
         let mut c2 = c1.reborrow();
         c2.register(DomainId::new(0), DomainEvents::ANY_INT, LocalId::from(1));

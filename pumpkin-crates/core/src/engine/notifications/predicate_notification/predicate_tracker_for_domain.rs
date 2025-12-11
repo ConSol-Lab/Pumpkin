@@ -108,7 +108,7 @@ impl PredicateTrackerForDomain {
                     return;
                 }
 
-                for removed_value in assignments.get_holes_on_current_decision_level(domain) {
+                for removed_value in assignments.get_holes_at_current_checkpoint(domain) {
                     let predicate =
                         predicate_type.into_predicate(domain, assignments, Some(removed_value));
                     if !self.disequality.is_empty() && !disequality_is_fixed {

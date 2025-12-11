@@ -84,11 +84,11 @@ impl IntegerVariable for DomainId {
         event.unwrap()
     }
 
-    fn get_holes_on_current_decision_level(
+    fn get_holes_at_current_checkpoint(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
-        assignments.get_holes_on_current_decision_level(*self)
+        assignments.get_holes_at_current_checkpoint(*self)
     }
 
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {

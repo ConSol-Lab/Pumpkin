@@ -1,9 +1,9 @@
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
-use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
@@ -67,7 +67,6 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
-    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
 }
@@ -77,7 +76,6 @@ impl<'a> PropagationContextMut<'a> {
         trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
-        semantic_minimiser: &'a mut SemanticMinimiser,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
     ) -> Self {
@@ -87,7 +85,6 @@ impl<'a> PropagationContextMut<'a> {
             reason_store,
             propagator_id,
             notification_engine,
-            semantic_minimiser,
             reification_literal: None,
         }
     }
@@ -124,8 +121,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.assignments.get_decision_level()
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.assignments.get_checkpoint()
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
@@ -255,11 +252,11 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     /// Returns the holes which were created on the current decision level.
-    fn get_holes_on_current_decision_level<Var: IntegerVariable>(
+    fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
         &self,
         var: &Var,
     ) -> impl Iterator<Item = i32> {
-        var.get_holes_on_current_decision_level(self.assignments())
+        var.get_holes_at_current_checkpoint(self.assignments())
     }
 
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were
@@ -335,7 +332,7 @@ impl PropagationContextMut<'_> {
         predicate: Predicate,
         reason: impl Into<Reason>,
         inference_code: InferenceCode,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         let slot = self.reason_store.new_slot();
 
         let modification_result = self.assignments.post_predicate(
@@ -353,12 +350,19 @@ impl PropagationContextMut<'_> {
                 );
                 Ok(())
             }
-            Err(e) => {
+            Err(EmptyDomain) => {
                 let _ = slot.populate(
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),
                 );
-                Err(e)
+                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                    self.assignments.remove_last_trail_element();
+
+                Err(EmptyDomainConflict {
+                    trigger_predicate,
+                    trigger_reason,
+                    trigger_inference_code,
+                })
             }
         }
     }

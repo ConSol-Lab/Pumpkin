@@ -95,7 +95,8 @@ static EMPTY_PREDICATE_IDS: LazyLock<PredicateIdGenerator> =
 
 static EMPTY_PREDICATES: [Predicate; 0] = [];
 
-pub(crate) struct CurrentNogood<'a> {
+#[derive(Debug)]
+pub struct CurrentNogood<'a> {
     heap: &'a KeyValueHeap<PredicateId, u32>,
     visited: &'a [Predicate],
     ids: &'a PredicateIdGenerator,
@@ -110,7 +111,7 @@ impl<'a> CurrentNogood<'a> {
         Self { heap, visited, ids }
     }
 
-    pub(crate) fn empty() -> CurrentNogood<'a> {
+    pub fn empty() -> CurrentNogood<'a> {
         // The variable here is necessary for lifetime coersion.
         let reference: &[Predicate] = &EMPTY_PREDICATES;
         Self::from(reference)

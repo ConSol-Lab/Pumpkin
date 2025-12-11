@@ -419,13 +419,16 @@ mod tests {
         let mut tree = ThetaLambdaTree::new(&tasks);
 
         tree.update(PropagationContext {
-            assignments: &solver.assignments,
+            assignments: &solver.state.assignments,
         });
         for task in tasks.iter() {
-            tree.add_to_theta(task, PropagationContext::new(&solver.assignments));
+            tree.add_to_theta(task, PropagationContext::new(&solver.state.assignments));
         }
         tree.remove_from_theta(&tasks[2]);
-        tree.add_to_lambda(&tasks[2], PropagationContext::new(&solver.assignments));
+        tree.add_to_lambda(
+            &tasks[2],
+            PropagationContext::new(&solver.state.assignments),
+        );
 
         assert_eq!(
             tree.nodes[6],
