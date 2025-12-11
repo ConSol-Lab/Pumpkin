@@ -406,7 +406,10 @@ impl State {
 impl State {
     /// Apply a [`Predicate`] to the [`State`].
     ///
-    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] [`Err`] is returned.
+    /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
+    /// already true.
+    ///
+    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] error is returned.
     ///
     /// This method does _not_ perform any propagation. For that, an explicit call to
     /// [`State::propagate_to_fixed_point`] is required. This allows the
