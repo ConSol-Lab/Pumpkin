@@ -1,4 +1,4 @@
 *.log
 *.err
-*.proof
+*.drcp.gz
 *.lits

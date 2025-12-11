@@ -25,6 +25,7 @@ stringcase = "0.3.0"
 wait-timeout = "0.2.0"
 pumpkin-macros = { version = "0.1.0", path = "../pumpkin-macros"}
 pumpkin-checker = { version = "0.1.0", path = "../pumpkin-checker"}
+assert_cmd = "2.1.1"
 
 [lints]
 workspace = true
