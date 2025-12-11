@@ -28,6 +28,10 @@ impl PropagatorQueue {
         }
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.present_propagators.is_empty()
+    }
+
     #[cfg(test)]
     pub(crate) fn is_propagator_present(&self, propagator_id: PropagatorId) -> bool {
         self.present_propagators.contains(&propagator_id)

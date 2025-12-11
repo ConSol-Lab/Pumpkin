@@ -429,7 +429,7 @@ impl State {
     ///
     /// The current checkpoint can be retrieved using the method [`State::get_checkpoint`].
     ///
-    /// This method should only be called if nothing can be propagated anymore.
+    /// If the state is not at fixed-point, then this method will panic.
     ///
     /// # Example
     /// ```
@@ -456,6 +456,10 @@ impl State {
     /// assert_eq!(state.upper_bound(variable), 10);
     /// ```
     pub fn new_checkpoint(&mut self) {
+        pumpkin_assert_simple!(
+            self.propagator_queue.is_empty(),
+            "Can only create a new checkpoint when all propagation has occurred"
+        );
         self.assignments.new_checkpoint();
         self.notification_engine.new_checkpoint();
         self.trailed_values.new_checkpoint();
