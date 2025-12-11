@@ -24,14 +24,13 @@ regex = "1.11.0"
 stringcase = "0.3.0"
 wait-timeout = "0.2.0"
 pumpkin-macros = { version = "0.1.0", path = "../pumpkin-macros"}
+pumpkin-checker = { version = "0.1.0", path = "../pumpkin-checker"}
 
 [lints]
 workspace = true
 
 [features]
-default = ["gzipped-proofs"]
 debug-checks = ["pumpkin-core/debug-checks"]
-gzipped-proofs = ["pumpkin-core/gzipped-proofs"]
 
 [build-dependencies]
 cc = "1.1.30"

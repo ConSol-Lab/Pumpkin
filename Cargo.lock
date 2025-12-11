@@ -775,6 +775,7 @@ dependencies = [
  "env_logger",
  "flatzinc",
  "log",
+ "pumpkin-checker",
  "pumpkin-core",
  "pumpkin-macros",
  "regex",

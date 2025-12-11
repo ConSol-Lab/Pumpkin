@@ -74,6 +74,9 @@ struct Args {
     ///
     /// When solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP
     /// proof is logged.
+    ///
+    /// In case of a DRCP proof, if the file extension ends with `.gz`, a gzipped proof will be
+    /// produced.
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 

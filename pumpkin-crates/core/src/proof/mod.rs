@@ -10,6 +10,7 @@ mod inference_code;
 mod proof_atomics;
 
 use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -47,14 +48,16 @@ impl ProofLog {
     pub fn cp(file_path: &Path, log_hints: bool) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
-        #[cfg(feature = "gzipped-proofs")]
-        let writer = {
-            let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
-            ProofWriter::new(encoder)
+        let sink = if file_path.extension().is_some_and(|ext| ext == ".gz") {
+            Sink::GzippedFile(flate2::write::GzEncoder::new(
+                file,
+                flate2::Compression::fast(),
+            ))
+        } else {
+            Sink::File(file)
         };
 
-        #[cfg(not(feature = "gzipped-proofs"))]
-        let writer = ProofWriter::new(file);
+        let writer = ProofWriter::new(sink);
 
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::CpProof {
@@ -322,6 +325,32 @@ impl ProofLog {
     }
 }
 
+/// A wrapper around either a file or a gzipped file.
+///
+/// Whether or not we will gzip on the fly is a runtime decision, and this wrapper is the [`Write`]
+/// implementation that [`ProofWriter`] will write to.
+#[derive(Debug)]
+enum Sink {
+    File(File),
+    GzippedFile(flate2::write::GzEncoder<File>),
+}
+
+impl Write for Sink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Sink::File(file) => file.write(buf),
+            Sink::GzippedFile(gz_encoder) => gz_encoder.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Sink::File(file) => file.flush(),
+            Sink::GzippedFile(gz_encoder) => gz_encoder.flush(),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
@@ -333,10 +362,7 @@ impl ProofLog {
 )]
 enum ProofImpl {
     CpProof {
-        #[cfg(feature = "gzipped-proofs")]
-        writer: ProofWriter<flate2::write::GzEncoder<File>, i32>,
-        #[cfg(not(feature = "gzipped-proofs"))]
-        writer: ProofWriter<File, i32>,
+        writer: ProofWriter<Sink, i32>,
         inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         /// The [`ConstraintTag`]s generated for this proof.
         constraint_tags: KeyGenerator<ConstraintTag>,
