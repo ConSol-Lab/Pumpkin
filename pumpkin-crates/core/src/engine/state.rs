@@ -331,7 +331,7 @@ impl State {
 /// Operations for adding constraints.
 impl State {
     /// Enqueues the propagator with [`PropagatorHandle`] `handle` for propagation.
-    #[allow(private_bounds, reason = "Propagator will be part of public API")]
+    #[deprecated]
     pub(crate) fn enqueue_propagator<P: Propagator>(&mut self, handle: PropagatorHandle<P>) {
         let priority = self.propagators[handle.propagator_id()].priority();
         self.propagator_queue
@@ -373,6 +373,7 @@ impl State {
 
         pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
 
+        #[allow(deprecated, reason = "Will be refactored")]
         self.enqueue_propagator(handle);
 
         handle

@@ -970,6 +970,7 @@ impl ConstraintSatisfactionSolver {
 
         self.handle_root_propagation(num_trail_entries);
 
+        #[allow(deprecated, reason = "Will be refactored")]
         self.state.enqueue_propagator(self.nogood_propagator_handle);
         let result = self.state.propagate_to_fixed_point();
         if let Err(conflict) = result {
