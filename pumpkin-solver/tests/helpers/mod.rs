@@ -66,7 +66,7 @@ pub(crate) fn run_solver_with_options(
 
     let log_file_path = add_extension("log");
     let err_file_path = add_extension("err");
-    let proof_file_path = add_extension("drcp.gz");
+    let proof_file_path = add_extension("drcp");
 
     let mut command = Command::new(solver);
 
@@ -339,4 +339,23 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
     }
 
     output
+}
+
+pub(crate) fn check_mzn_proof(instance_name: &str, folder_name: &str) {
+    let instance_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let proof_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.drcp",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    #[allow(deprecated, reason = "don't know a better way to do it")]
+    let mut command = assert_cmd::Command::cargo_bin("pumpkin-checker").unwrap();
+    let _ = command.arg(instance_path);
+    let _ = command.arg(proof_path);
+
+    let _ = command.assert().success();
 }

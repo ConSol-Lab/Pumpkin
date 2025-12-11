@@ -5,6 +5,8 @@ mod helpers;
 use helpers::TestType;
 use helpers::run_mzn_test;
 
+use crate::helpers::check_mzn_proof;
+
 macro_rules! mzn_infeasible_test {
     ($name:ident, with_proof: $with_proof:literal) => {
         #[test]
@@ -36,24 +38,7 @@ pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str, with_proo
         TestType::Unsatisfiable,
     );
 
-    if !with_proof {
-        return;
+    if with_proof {
+        check_mzn_proof(instance_name, folder_name);
     }
-
-    let instance_path = format!(
-        "{}/tests/{folder_name}/{instance_name}.fzn",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    let proof_path = format!(
-        "{}/tests/{folder_name}/{instance_name}.drcp.gz",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    #[allow(deprecated, reason = "don't know a better way to do it")]
-    let mut command = assert_cmd::Command::cargo_bin("pumpkin-checker").unwrap();
-    let _ = command.arg(instance_path);
-    let _ = command.arg(proof_path);
-
-    let _ = command.assert().success();
 }

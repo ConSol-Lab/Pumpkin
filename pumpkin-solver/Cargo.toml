@@ -31,9 +31,7 @@ assert_cmd = "2.1.1"
 workspace = true
 
 [features]
-default = ["gzipped-proofs"]
 debug-checks = ["pumpkin-core/debug-checks"]
-gzipped-proofs = ["pumpkin-core/gzipped-proofs"]
 
 [build-dependencies]
 cc = "1.1.30"
