@@ -56,6 +56,22 @@ fn create_array_from_string(s: &str) -> Result<Value, ArrayError> {
         ));
     }
 
+    let int_captures = Regex::new(r"\[(-?[0-9]+(\s*,\s*-?[0-9]+)*)\]")
+        .unwrap()
+        .captures_iter(s)
+        .next();
+    if let Some(int_captures) = int_captures {
+        return Ok(Value::IntArray(
+            int_captures
+                .get(1)
+                .unwrap()
+                .as_str()
+                .split(", ")
+                .map(|integer| integer.parse::<i32>().unwrap())
+                .collect::<Vec<_>>(),
+        ));
+    }
+
     let bool_captures = Regex::new(
         r"array1d\([0-9]+\.\.[0-9]+,\s*\[((true|false)(?:,\s(true|false))*(true|false)*)\]\)",
     )
