@@ -595,10 +595,10 @@ impl State {
     /// propagators leads to no more domain changes.
     ///
     /// It could be that the current [`State`] implies a conflict by propagation. In that case, an
-    /// [`Err`] with [`Conflict`] is returned.
+    /// error with [`Conflict`] is returned.
     ///
     /// Once the [`State`] is conflicting, then the only operation that is defined is
-    /// [`State::restore_to`]. All other operations and queries on the state are undetermined.
+    /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
         // The initial domain events are due to the decision predicate.
         self.notification_engine
