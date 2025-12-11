@@ -225,12 +225,11 @@ impl State {
 
     /// Creates a new sparse domain with the given values.
     ///
+    /// Note that this is implemented as an interval domain with explicit holes in the domain. For
+    /// very sparse domains, this can result in a high memory overhead.
+    ///
     /// For more information on creation of domains, see [`State::new_interval_variable`].
-    pub(crate) fn new_sparse_variable(
-        &mut self,
-        values: Vec<i32>,
-        name: Option<String>,
-    ) -> DomainId {
+    pub fn new_sparse_variable(&mut self, values: Vec<i32>, name: Option<String>) -> DomainId {
         let domain_id = self.assignments.create_new_integer_variable_sparse(values);
 
         if let Some(name) = name {
