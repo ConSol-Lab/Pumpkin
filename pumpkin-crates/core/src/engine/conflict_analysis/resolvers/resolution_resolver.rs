@@ -477,7 +477,7 @@ impl ResolutionResolver {
             clean_nogood
                 .iter()
                 .skip(1)
-                .all(|p| context.state.is_predicate_satisfied(*p))
+                .all(|p| context.state.truth_value(*p) == Some(true))
         );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.

@@ -274,16 +274,6 @@ impl State {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    /// Returns whether the provided [`Predicate`] is satisfied in the current [`State`].
-    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
-        self.assignments.is_predicate_satisfied(predicate)
-    }
-
-    /// Returns whether the provided [`Predicate`] is falsified in the current [`State`].
-    pub fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
-        self.assignments.is_predicate_falsified(predicate)
-    }
-
     /// If the provided [`Predicate`] is satisfied then it returns [`Some`] containing the decision
     /// level at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
     pub fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {

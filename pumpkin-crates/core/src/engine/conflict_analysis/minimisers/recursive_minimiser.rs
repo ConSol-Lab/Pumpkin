@@ -7,6 +7,7 @@ use crate::engine::propagation::CurrentNogood;
 use crate::predicates::Predicate;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
+use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -78,7 +79,7 @@ impl RecursiveMinimiser {
         context: &mut ConflictAnalysisContext,
         current_nogood: &[Predicate],
     ) {
-        pumpkin_assert_moderate!(context.state.is_predicate_satisfied(input_predicate));
+        pumpkin_assert_eq_moderate!(context.state.truth_value(input_predicate), Some(true));
 
         self.current_depth += 1;
 

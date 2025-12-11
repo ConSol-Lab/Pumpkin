@@ -54,6 +54,7 @@ use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_ne_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
@@ -668,8 +669,9 @@ impl ConstraintSatisfactionSolver {
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of
         // `Assignments::post_predicate`.
-        pumpkin_assert_moderate!(
-            !self.state.is_predicate_satisfied(decision_predicate),
+        pumpkin_assert_ne_moderate!(
+            self.state.truth_value(decision_predicate),
+            Some(true),
             "Decision should not already be assigned; double check the brancher"
         );
 
@@ -1011,7 +1013,7 @@ impl ConstraintSatisfactionSolver {
         let predicates = predicates
             .into_iter()
             .map(|predicate| {
-                are_all_falsified_at_root &= self.state.is_predicate_falsified(predicate);
+                are_all_falsified_at_root &= self.state.truth_value(predicate) == Some(false);
                 !predicate
             })
             .collect::<Vec<_>>();
