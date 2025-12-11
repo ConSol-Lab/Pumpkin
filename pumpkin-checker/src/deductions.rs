@@ -22,6 +22,7 @@ pub struct IgnoredInference {
 #[derive(thiserror::Error, Debug)]
 #[error("invalid deduction")]
 pub enum InvalidDeduction {
+    /// The constraint ID of the deduction is already used by an existing constraint.
     #[error("constraint id {0} already in use")]
     DuplicateConstraintId(ConstraintId),
 

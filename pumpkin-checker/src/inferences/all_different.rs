@@ -37,13 +37,13 @@ pub(crate) fn verify_all_different(
     // Collect the variables mentioned in the fact. Here we ignore variables with a domain
     // equal to all integers, as they are not mentioned in the fact. Therefore they do not
     // contribute in the hall-set reasoning.
-    let variables = all_different
+    let num_variables = all_different
         .variables
         .iter()
         .filter(|variable| variable_state.iter_domain(variable).is_some())
-        .collect::<Vec<_>>();
+        .count();
 
-    if union_of_domains.len() < variables.len() {
+    if union_of_domains.len() < num_variables {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)
