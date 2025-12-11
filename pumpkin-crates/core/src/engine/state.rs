@@ -319,7 +319,7 @@ impl State {
 
     /// Add a new propagator to the [`State`]. The constructor for that propagator should
     /// subscribe to the appropriate domain events so that the propagator is called when
-    /// necessary (using `PropagatorConstructorContext::register`).
+    /// necessary.
     ///
     /// While the propagator is added to the queue for propagation, this function does _not_
     /// trigger a round of propagation. An explicit call to [`State::fixed_point_propagate`] is
