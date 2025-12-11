@@ -18,25 +18,35 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::options::LearningOptions;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::state::Conflict;
+use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
 pub(crate) struct TestSolver {
     pub(crate) state: State,
     constraint_tags: KeyGenerator<ConstraintTag>,
+    pub(crate) nogood_handle: PropagatorHandle<NogoodPropagator>,
 }
 
 impl Default for TestSolver {
     fn default() -> Self {
-        let state = State::default();
+        let mut state = State::default();
+        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            0,
+            LearningOptions::default(),
+        ));
         let mut solver = Self {
             state,
             constraint_tags: Default::default(),
+            nogood_handle: handle,
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.state.notification_engine.grow();
@@ -67,15 +77,8 @@ impl TestSolver {
         Constructor::PropagatorImpl: 'static,
     {
         let handle = self.state.add_propagator(constructor);
-        let context = PropagationContextMut::new(
-            &mut self.state.trailed_values,
-            &mut self.state.assignments,
-            &mut self.state.reason_store,
-            &mut self.state.notification_engine,
-            handle.propagator_id(),
-        );
-        self.state.propagators[handle.propagator_id()]
-            .propagate(context)
+        self.state
+            .propagate_to_fixed_point()
             .map(|_| handle.propagator_id())
     }
 

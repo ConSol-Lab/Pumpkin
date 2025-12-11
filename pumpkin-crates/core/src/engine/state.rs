@@ -58,7 +58,7 @@ pub struct State {
     /// The names of the variables in the solver.
     variable_names: VariableNames,
     /// Dictates the order in which propagators will be called to propagate.
-    propagator_queue: PropagatorQueue,
+    pub(crate) propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis.
     pub(crate) reason_store: ReasonStore,
@@ -458,7 +458,7 @@ impl State {
     /// use pumpkin_core::state::State;
     ///
     /// let mut state = State::default();
-    /// let variable = state.new_interval_variable(1, 10, Some("x1".to_string()));
+    /// let variable = state.new_interval_variable(1, 10, Some("x1".into()));
     ///
     /// assert_eq!(state.get_checkpoint(), 0);
     ///

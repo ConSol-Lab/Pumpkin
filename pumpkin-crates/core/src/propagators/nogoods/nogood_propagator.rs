@@ -1288,10 +1288,7 @@ mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
-    use crate::options::LearningOptions;
     use crate::predicate;
-    use crate::propagators::nogoods::NogoodPropagatorConstructor;
-    use crate::state::PropagatorHandle;
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -1302,12 +1299,7 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let id = solver
-            .new_propagator(NogoodPropagatorConstructor::new(
-                10,
-                LearningOptions::default(),
-            ))
-            .expect("No empty domains");
+        let id = solver.nogood_handle.propagator_id();
 
         let _ = solver.increase_lower_bound_and_notify(id, dummy.id(), dummy, 1);
 
@@ -1315,7 +1307,7 @@ mod tests {
         {
             let (nogood_propagator, mut context) = solver
                 .state
-                .get_propagator_mut_with_context(PropagatorHandle::new(id));
+                .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
@@ -1346,18 +1338,13 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let id = solver
-            .new_propagator(NogoodPropagatorConstructor::new(
-                10,
-                LearningOptions::default(),
-            ))
-            .expect("No empty domains");
+        let id = solver.nogood_handle.propagator_id();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let (nogood_propagator, mut context) = solver
                 .state
-                .get_propagator_mut_with_context(PropagatorHandle::new(id));
+                .get_propagator_mut_with_context(solver.nogood_handle);
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
