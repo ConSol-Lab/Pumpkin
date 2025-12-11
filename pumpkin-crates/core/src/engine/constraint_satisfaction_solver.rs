@@ -3,6 +3,7 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 #[allow(
     clippy::disallowed_types,
@@ -336,14 +337,14 @@ impl ConstraintSatisfactionSolver {
         self.internal_parameters.proof_log.new_constraint_tag()
     }
 
-    pub fn create_new_literal(&mut self, name: Option<String>) -> Literal {
+    pub fn create_new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
         self.state.new_literal(name)
     }
 
     pub fn create_new_literal_for_predicate(
         &mut self,
         predicate: Predicate,
-        name: Option<String>,
+        name: Option<Arc<str>>,
         constraint_tag: ConstraintTag,
     ) -> Literal {
         let literal = self.state.new_literal(name);
@@ -372,7 +373,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
-        name: Option<String>,
+        name: Option<Arc<str>>,
     ) -> DomainId {
         assert!(
             !self.solver_state.is_inconsistent(),

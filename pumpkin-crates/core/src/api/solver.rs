@@ -223,6 +223,7 @@ impl Solver {
     /// let named_literal = solver.new_named_literal("z");
     /// ```
     pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
+        let name = name.into();
         self.satisfaction_solver
             .create_new_literal(Some(name.into()))
     }
@@ -268,6 +269,7 @@ impl Solver {
         upper_bound: i32,
         name: impl Into<String>,
     ) -> DomainId {
+        let name = name.into();
         self.satisfaction_solver.create_new_integer_variable(
             lower_bound,
             upper_bound,

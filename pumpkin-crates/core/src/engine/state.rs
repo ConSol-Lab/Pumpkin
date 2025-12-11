@@ -137,9 +137,7 @@ impl Default for State {
         // trivially true. We need to adjust other data structures to take this into account.
         let dummy_id = Predicate::trivially_true().get_domain();
 
-        result
-            .variable_names
-            .add_integer(dummy_id, "Dummy".to_owned());
+        result.variable_names.add_integer(dummy_id, "Dummy".into());
         assert!(dummy_id.id() == 0);
         assert!(result.assignments.get_lower_bound(dummy_id) == 1);
         assert!(result.assignments.get_upper_bound(dummy_id) == 1);
@@ -194,7 +192,7 @@ impl State {
     /// Creation of new [`Literal`]s is not influenced by the current decision level of the state.
     /// If a [`Literal`] is created at a non-zero decision level, then it will _not_ 'disappear'
     /// when backtracking past the decision level where the domain was created.
-    pub fn new_literal(&mut self, name: Option<String>) -> Literal {
+    pub fn new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
         let domain_id = self.new_interval_variable(0, 1, name);
         Literal::new(domain_id)
     }
@@ -212,15 +210,12 @@ impl State {
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
-        name: Option<String>,
+        name: Option<Arc<str>>,
     ) -> DomainId {
         let domain_id = self.assignments.grow(lower_bound, upper_bound);
 
         if let Some(name) = name {
             self.variable_names.add_integer(domain_id, name);
-        } else {
-            self.variable_names
-                .add_integer(domain_id, format!("internal{}", domain_id.id()));
         }
 
         self.notification_engine.grow();
@@ -239,10 +234,7 @@ impl State {
         let domain_id = self.assignments.create_new_integer_variable_sparse(values);
 
         if let Some(name) = name {
-            self.variable_names.add_integer(domain_id, name);
-        } else {
-            self.variable_names
-                .add_integer(domain_id, format!("internal{}", domain_id.id()));
+            self.variable_names.add_integer(domain_id, name.into());
         }
 
         self.notification_engine.grow();
