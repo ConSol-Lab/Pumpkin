@@ -325,6 +325,10 @@ impl ProofLog {
     }
 }
 
+/// A wrapper around either a file or a gzipped file.
+///
+/// Whether or not we will gzip on the fly is a runtime decision, and this wrapper is the [`Write`]
+/// implementation that [`ProofWriter`] will write to.
 #[derive(Debug)]
 enum Sink {
     File(File),
