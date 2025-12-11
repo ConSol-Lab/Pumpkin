@@ -117,6 +117,27 @@ impl EmptyDomainConflict {
     pub fn domain(&self) -> DomainId {
         self.trigger_predicate.get_domain()
     }
+
+    /// Returns the reason for the [`EmptyDomainConflict::trigger_predicate`] being propagated to
+    /// true while it is already false in the [`State`].
+    pub fn get_reason(
+        &self,
+        state: &mut State,
+        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+        current_nogood: CurrentNogood,
+    ) {
+        let _ = state.reason_store.get_or_compute(
+            self.trigger_reason,
+            ExplanationContext::new(
+                &state.assignments,
+                current_nogood,
+                state.trail_len(),
+                &mut state.notification_engine,
+            ),
+            &mut state.propagators,
+            reason_buffer,
+        );
+    }
 }
 
 impl Default for State {
