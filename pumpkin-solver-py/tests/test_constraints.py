@@ -182,7 +182,7 @@ def label(model, cons, name, scaled, bool):
     )
 
 
-LINEAR = list(generate_operators())
+LINEAR = list(generate_linear())
 
 
 @pytest.mark.parametrize(
@@ -222,9 +222,7 @@ def test_global(model, cons, name, scaled, bool):
     assert isinstance(res, pumpkin_solver.SatisfactionResult.Satisfiable)
 
 
-ALL_EXPR = (
-    list(generate_operators()) + list(generate_linear()) + list(generate_globals())
-)
+ALL_EXPR = LINEAR + OPERATORS + GLOBALS
 
 
 @pytest.mark.parametrize(

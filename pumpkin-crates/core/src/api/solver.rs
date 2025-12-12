@@ -219,7 +219,7 @@ impl Solver {
     ) -> Literal {
         self.satisfaction_solver.create_new_literal_for_predicate(
             predicate,
-            Some(name.into()),
+            Some(name.into().into()),
             constraint_tag,
         )
     }
