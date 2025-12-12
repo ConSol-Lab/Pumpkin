@@ -128,12 +128,6 @@ pub(crate) trait Propagator: Downcast + DynClone {
     /// By default, the propagator does nothing when this method is called.
     fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
 
-    /// Called when a [`PredicateId`] has been falsified.
-    ///
-    /// By default, the propagator does nothing when this method is called.
-    #[allow(dead_code, reason = "Will be part of the public API")]
-    fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
-
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.
     ///

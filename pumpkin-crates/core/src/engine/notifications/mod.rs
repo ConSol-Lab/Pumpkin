@@ -14,12 +14,12 @@ pub(crate) use predicate_notification::PredicateNotifier;
 use super::propagation::PropagationContext;
 use super::propagation::PropagatorVarId;
 use crate::basic_types::PredicateId;
+use crate::containers::KeyedVec;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::propagation::store::PropagatorStore;
@@ -39,6 +39,8 @@ pub(crate) struct NotificationEngine {
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_domain_events: WatchListDomainEvents,
+    /// The watch list from predicates to propagators.
+    watch_list_predicate_id: KeyedVec<PredicateId, Vec<PropagatorId>>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
@@ -51,6 +53,7 @@ impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
             watch_list_domain_events: Default::default(),
+            watch_list_predicate_id: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
             events: Default::default(),
@@ -73,6 +76,7 @@ impl Default for NotificationEngine {
 
         let mut result = Self {
             watch_list_domain_events,
+            watch_list_predicate_id: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
@@ -132,6 +136,20 @@ impl NotificationEngine {
                 event_watcher.push(propagator_var);
             }
         }
+    }
+
+    pub(crate) fn watch_predicate(
+        &mut self,
+        predicate: Predicate,
+        propagator_id: PropagatorId,
+    ) -> PredicateId {
+        let predicate_id = self.get_id(predicate);
+
+        self.watch_list_predicate_id
+            .accomodate(predicate_id, vec![]);
+        self.watch_list_predicate_id[predicate_id].push(propagator_id);
+
+        predicate_id
     }
 
     pub(crate) fn watch_all_backtrack(
@@ -292,14 +310,7 @@ impl NotificationEngine {
         self.events = events;
 
         // Then we notify the propagators that a predicate has been satisfied.
-        //
-        // Currently, only the nogood propagator is notified.
-        let nogood_propagator = propagators
-            .get_propagator_mut(nogood_propagator_handle)
-            .expect("nogood propagator handle refers to a nogood propagator");
-        self.notify_predicate_id_satisfied(nogood_propagator);
-        // At the moment this does nothing yet, but we call it to drain predicates.
-        self.notify_predicate_id_falsified();
+        self.notify_predicate_id_satisfied(nogood_propagator_handle, propagators);
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -334,19 +345,23 @@ impl NotificationEngine {
         true
     }
 
-    /// Notifies propagators that certain [`Predicate`]s have been falsified.
-    ///
-    /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self) {
-        for _predicate_id in self.predicate_notifier.drain_falsified_predicates() {
-            // At the moment this does nothing
-        }
-    }
-
     /// Notifies the propagator that certain [`Predicate`]s have been satisfied.
-    fn notify_predicate_id_satisfied(&mut self, propagator: &mut dyn Propagator) {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+        propagators: &mut PropagatorStore,
+    ) {
         for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
-            propagator.notify_predicate_id_satisfied(predicate_id);
+            if let Some(watch_list) = self.watch_list_predicate_id.get(predicate_id) {
+                let propagators_to_notify = watch_list.iter().copied();
+
+                for propagator_id in propagators_to_notify {
+                    propagators[propagator_id].notify_predicate_id_satisfied(predicate_id);
+                }
+            }
+
+            propagators[nogood_propagator_handle.propagator_id()]
+                .notify_predicate_id_satisfied(predicate_id);
         }
     }
 
@@ -480,14 +495,7 @@ impl NotificationEngine {
 
         if let Some(handle) = nogood_propagator_handle {
             // Then we notify the propagators that a predicate has been satisfied.
-            //
-            // Currently, only the nogood propagator is notified.
-            let nogood_propagator = propagators
-                .get_propagator_mut(handle)
-                .expect("nogood propagator handle refers to a nogood propagator");
-            self.notify_predicate_id_satisfied(nogood_propagator);
-            // At the moment this does nothing yet, but we call it to drain predicates.
-            self.notify_predicate_id_falsified();
+            self.notify_predicate_id_satisfied(handle, propagators);
         }
 
         self.last_notified_trail_index = assignments.num_trail_entries();
