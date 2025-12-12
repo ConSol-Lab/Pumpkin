@@ -6,7 +6,7 @@ pub(crate) use domain_event_notification::EventSink;
 pub(crate) use domain_event_notification::WatchListDomainEvents;
 pub(crate) use domain_event_notification::Watchers;
 pub use domain_event_notification::domain_events::DomainEvents;
-pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+pub use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;

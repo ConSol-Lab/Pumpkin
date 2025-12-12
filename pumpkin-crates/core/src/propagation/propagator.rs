@@ -44,7 +44,9 @@ clone_trait_object!(Propagator);
 ///
 /// See the [`crate::propagation`] documentation for more details.
 pub trait Propagator: Downcast + DynClone {
-    /// Return the name of the propagator, this is a convenience method that is used for printing.
+    /// Return the name of the propagator.
+    ///
+    /// This is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
     /// A propagation method that is used to help debugging.
@@ -64,7 +66,7 @@ pub trait Propagator: Downcast + DynClone {
     /// This method extends the current partial
     /// assignments with inferred domain changes found by the
     /// [`Propagator`]. In case no conflict has been detected it should return
-    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Conflict`] which
+    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with a [`Conflict`] which
     /// contains the reason for the failure; either because a propagation caused an
     /// an empty domain ([`Conflict::EmptyDomain`]) or because the logic of the propagator
     /// found the current state to be inconsistent ([`Conflict::Propagator`]).

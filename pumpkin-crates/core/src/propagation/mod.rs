@@ -79,10 +79,16 @@ pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
-// BEGIN: Re-exports of types not in this module according to the file tree.
-// These will probably be be moved at some point, but for now they are simply re-exported here to
-// make the propagator API public.
-// END
+mod reexports {
+    // Re-exports of types not in this module according to the file tree.
+    // These will probably be be moved at some point, but for now they are simply re-exported here
+    // to make the propagator API public.
+    pub use crate::basic_types::PredicateId;
+    pub use crate::engine::cp::TrailedInteger;
+    pub use crate::engine::notifications::DomainEvent;
+    pub use crate::engine::notifications::DomainEvents;
+    pub use crate::engine::notifications::OpaqueDomainEvent;
+}
 pub use constructor::*;
 pub use contexts::*;
 pub use domains::*;
@@ -90,13 +96,10 @@ pub use local_id::*;
 pub use propagator::*;
 pub use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
+pub use reexports::*;
 
 #[cfg(doc)]
 use crate::Solver;
-pub use crate::basic_types::PredicateId;
-pub use crate::engine::cp::TrailedInteger;
-pub use crate::engine::notifications::DomainEvent;
-pub use crate::engine::notifications::DomainEvents;
 #[cfg(doc)]
 use crate::engine::test_solver::TestSolver;
 #[cfg(doc)]
