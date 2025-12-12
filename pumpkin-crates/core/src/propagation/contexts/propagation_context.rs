@@ -148,10 +148,8 @@ impl<'a> PropagationContextMut<'a> {
     }
 }
 
-/// A trait which defines common methods for retrieving the [`Assignments`] and
-/// [`AssignmentsPropositional`] from the structure which implements this trait.
+/// A helper-trait for implementing [`ReadDomains`], which exposes the assignment.
 pub(crate) trait HasAssignments {
-    /// Returns the stored [`Assignments`].
     fn assignments(&self) -> &Assignments;
 }
 
