@@ -67,9 +67,7 @@ impl PropagatorConstructorContext<'_> {
 
     /// Get domain information.
     pub fn as_readonly(&self) -> Domains<'_> {
-        Domains {
-            assignments: &self.state.assignments,
-        }
+        Domains::new(&self.state.assignments, &self.state.trailed_values)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].

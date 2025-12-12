@@ -46,9 +46,7 @@ impl<'a> NotificationContext<'a> {
 
     /// Get the current domains.
     pub fn domains(&self) -> Domains<'_> {
-        Domains {
-            assignments: self.assignments,
-        }
+        Domains::new(self.assignments, self.trailed_values)
     }
 }
 
@@ -119,19 +117,9 @@ impl<'a> PropagationContext<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> NotificationContext<'_> {
-        NotificationContext {
-            trailed_values: self.trailed_values,
-            assignments: self.assignments,
-            predicate_id_assignments: self.notification_engine.predicate_id_assignments(),
-        }
-    }
-
     /// Get the current domain information.
     pub fn domains(&self) -> Domains<'_> {
-        Domains {
-            assignments: self.assignments,
-        }
+        Domains::new(self.assignments, self.trailed_values)
     }
 
     pub(crate) fn get_checkpoint(&self) -> usize {

@@ -126,7 +126,7 @@ pub trait Propagator: Downcast + DynClone {
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
-    fn synchronise(&mut self, _context: Domains) {}
+    fn synchronise(&mut self, _domains: Domains) {}
 
     /// Returns the priority of the propagator represented as an integer. Lower values mean higher
     /// priority and the priority determines the order in which propagators will be asked to
@@ -145,7 +145,7 @@ pub trait Propagator: Downcast + DynClone {
     /// reification literal based on the detected inconsistency. Yet, an implementation is not
     /// needed for correctness, as [`Propagator::propagate`] should still check for
     /// inconsistency as well.
-    fn detect_inconsistency(&self, _context: NotificationContext) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, _domains: Domains) -> Option<PropagatorConflict> {
         None
     }
 

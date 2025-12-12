@@ -548,7 +548,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                Domains::new(&self.assignments),
+                Domains::new(&self.assignments, &self.trailed_values),
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,

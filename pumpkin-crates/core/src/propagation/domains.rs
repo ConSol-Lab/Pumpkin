@@ -1,4 +1,6 @@
 use crate::engine::Assignments;
+use crate::engine::TrailedInteger;
+use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -10,11 +12,20 @@ use crate::variables::Literal;
 #[derive(Clone, Copy, Debug)]
 pub struct Domains<'a> {
     pub(crate) assignments: &'a Assignments,
+    trailed_values: &'a TrailedValues,
 }
 
 impl<'a> Domains<'a> {
-    pub(crate) fn new(assignments: &'a Assignments) -> Self {
-        Domains { assignments }
+    pub(crate) fn new(assignments: &'a Assignments, trailed_values: &'a TrailedValues) -> Self {
+        Domains {
+            assignments,
+            trailed_values,
+        }
+    }
+
+    /// Read the value of a [`TrailedInteger`].
+    pub fn value(&self, trailed_integer: TrailedInteger) -> i64 {
+        self.trailed_values.read(trailed_integer)
     }
 }
 

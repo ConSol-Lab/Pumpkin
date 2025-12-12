@@ -1,7 +1,7 @@
 use crate::containers::StorageKey;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct TrailedInteger {
+pub struct TrailedInteger {
     id: u32,
 }
 

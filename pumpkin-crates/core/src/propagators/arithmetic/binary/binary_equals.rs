@@ -152,12 +152,12 @@ where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
-        let a_lb = context.lower_bound(&self.a);
-        let a_ub = context.upper_bound(&self.a);
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+        let a_lb = domains.lower_bound(&self.a);
+        let a_ub = domains.upper_bound(&self.a);
 
-        let b_lb = context.lower_bound(&self.b);
-        let b_ub = context.upper_bound(&self.b);
+        let b_lb = domains.lower_bound(&self.b);
+        let b_ub = domains.upper_bound(&self.b);
 
         if a_ub < b_lb {
             // If `a` is fully before `b` then we report a conflict
@@ -229,7 +229,7 @@ where
             return self.debug_propagate_from_scratch(context);
         }
 
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 

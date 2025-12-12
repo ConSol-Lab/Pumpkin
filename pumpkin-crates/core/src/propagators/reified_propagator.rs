@@ -178,10 +178,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             return Ok(());
         }
 
-        if let Some(conflict) = self
-            .propagator
-            .detect_inconsistency(context.as_trailed_readonly())
-        {
+        if let Some(conflict) = self.propagator.detect_inconsistency(context.domains()) {
             context.post(
                 self.reification_literal.get_false_predicate(),
                 conflict.conjunction,
@@ -209,7 +206,10 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
         }
 
         if context.evaluate_literal(self.reification_literal) != Some(false)
-            && self.propagator.detect_inconsistency(context).is_some()
+            && self
+                .propagator
+                .detect_inconsistency(context.domains())
+                .is_some()
         {
             // Or the literal is not false already and there the propagator has found an
             // inconsistency (i.e. we should and can propagate the reification variable)
@@ -256,7 +256,7 @@ mod tests {
                         }
                         .into())
                     },
-                    move |_: NotificationContext| {
+                    move |_: Domains| {
                         Some(PropagatorConflict {
                             conjunction: t2.clone(),
                             inference_code,
@@ -291,7 +291,7 @@ mod tests {
                         )?;
                         Ok(())
                     },
-                    |_: NotificationContext| None,
+                    |_: Domains| None,
                 ),
                 reification_literal,
             })
@@ -330,7 +330,7 @@ mod tests {
                         }
                         .into())
                     },
-                    |_: NotificationContext| None,
+                    |_: Domains| None,
                 ),
                 reification_literal,
             })
@@ -364,7 +364,7 @@ mod tests {
             .new_propagator(ReifiedPropagatorArgs {
                 propagator: GenericPropagator::new(
                     |_: PropagationContext| Ok(()),
-                    move |context: NotificationContext| {
+                    move |context: Domains| {
                         if context.is_fixed(&var) {
                             Some(PropagatorConflict {
                                 conjunction: conjunction!([var == 5]),
@@ -395,7 +395,7 @@ mod tests {
         for GenericPropagator<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(PropagationContext) -> PropagationStatusCP + 'static + Clone,
-        ConsistencyCheck: Fn(NotificationContext) -> Option<PropagatorConflict> + 'static + Clone,
+        ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
     {
         type PropagatorImpl = Self;
 
@@ -415,7 +415,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(PropagationContext) -> PropagationStatusCP + 'static + Clone,
-        ConsistencyCheck: Fn(NotificationContext) -> Option<PropagatorConflict> + 'static + Clone,
+        ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict> + 'static + Clone,
     {
         fn name(&self) -> &str {
             "Generic Propagator"
@@ -425,15 +425,15 @@ mod tests {
             (self.propagation)(context)
         }
 
-        fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
-            (self.consistency_check)(context)
+        fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+            (self.consistency_check)(domains)
         }
     }
 
     impl<Propagation, ConsistencyCheck> GenericPropagator<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(PropagationContext) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(NotificationContext) -> Option<PropagatorConflict>,
+        ConsistencyCheck: Fn(Domains) -> Option<PropagatorConflict>,
     {
         pub(crate) fn new(propagation: Propagation, consistency_check: ConsistencyCheck) -> Self {
             GenericPropagator {

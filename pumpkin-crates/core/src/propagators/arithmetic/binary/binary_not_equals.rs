@@ -7,8 +7,8 @@ use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::LocalId;
-use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -66,11 +66,11 @@ where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         // We first check whether they are both fixed
-        if context.is_fixed(&self.a) && context.is_fixed(&self.b) {
-            let lb_a = context.lower_bound(&self.a);
-            let lb_b = context.lower_bound(&self.b);
+        if domains.is_fixed(&self.a) && domains.is_fixed(&self.b) {
+            let lb_a = domains.lower_bound(&self.a);
+            let lb_b = domains.lower_bound(&self.b);
 
             // If they are, then we check whether they are assigned to the same value
             if lb_a == lb_b {
@@ -96,7 +96,7 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
@@ -133,7 +133,7 @@ where
     }
 
     fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 

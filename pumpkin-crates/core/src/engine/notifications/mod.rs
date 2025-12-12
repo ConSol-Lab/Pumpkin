@@ -309,6 +309,7 @@ impl NotificationEngine {
     pub(crate) fn process_backtrack_events(
         &mut self,
         assignments: &mut Assignments,
+        trailed_values: &TrailedValues,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
@@ -327,7 +328,7 @@ impl NotificationEngine {
                     .get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut propagators[propagator_var.propagator];
-                    let context = Domains::new(assignments);
+                    let context = Domains::new(assignments, trailed_values);
 
                     propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
@@ -512,10 +513,6 @@ impl NotificationEngine {
         );
 
         result
-    }
-
-    pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
-        &self.predicate_notifier.predicate_id_assignments
     }
 
     pub(crate) fn synchronise(

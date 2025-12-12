@@ -773,6 +773,7 @@ mod tests {
 
     use super::find_profiles_which_propagate_lower_bound;
     use crate::engine::Assignments;
+    use crate::engine::TrailedValues;
     use crate::propagation::Domains;
     use crate::propagation::LocalId;
     use crate::propagators::ResourceProfile;
@@ -782,6 +783,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_lower_bound() {
         let mut assignments = Assignments::default();
+        let trailed_values = TrailedValues::default();
 
         let x = assignments.grow(0, 10);
         let y = assignments.grow(5, 5);
@@ -816,7 +818,7 @@ mod tests {
         find_profiles_which_propagate_lower_bound(
             0,
             &time_table,
-            Domains::new(&assignments),
+            Domains::new(&assignments, &trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,
@@ -832,6 +834,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_upper_bound() {
         let mut assignments = Assignments::default();
+        let trailed_values = TrailedValues::default();
 
         let x = assignments.grow(7, 7);
         let y = assignments.grow(5, 5);
@@ -866,7 +869,7 @@ mod tests {
         find_profiles_which_propagate_upper_bound(
             1,
             &time_table,
-            Domains::new(&assignments),
+            Domains::new(&assignments, &trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,

@@ -108,9 +108,9 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
-        if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
-            Some(self.create_conflict(context.domains()))
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+        if (self.c as i64) < domains.value(self.lower_bound_left_hand_side) {
+            Some(self.create_conflict(domains))
         } else {
             None
         }
@@ -168,7 +168,7 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
