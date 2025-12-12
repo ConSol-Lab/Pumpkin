@@ -1,5 +1,4 @@
 mod assignments;
-pub(crate) mod propagation;
 mod propagator_queue;
 pub(crate) mod reason;
 pub(crate) mod test_solver;
@@ -20,11 +19,11 @@ mod tests {
     use crate::engine::TrailedValues;
     use crate::engine::cp::assignments;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::propagation::PropagationContextMut;
-    use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
     use crate::predicate;
     use crate::proof::InferenceCode;
+    use crate::propagation::PropagationContextMut;
+    use crate::propagation::PropagatorId;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {

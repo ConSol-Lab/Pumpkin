@@ -11,15 +11,6 @@ use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
@@ -30,6 +21,15 @@ use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
+use crate::propagation::CurrentNogood;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagationContextMut;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
@@ -345,8 +345,6 @@ impl State {
     /// While the propagator is added to the queue for propagation, this function does _not_
     /// trigger a round of propagation. An explicit call to [`State::propagate_to_fixed_point`] is
     /// necessary to run the new propagator for the first time.
-    #[allow(private_bounds, reason = "Propagator will be part of public API")]
-    #[allow(private_interfaces, reason = "Constructor will be part of public API")]
     pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
@@ -385,19 +383,11 @@ impl State {
     /// Get a reference to the propagator identified by the given handle.
     ///
     /// For an exclusive reference, use [`State::get_propagator_mut`].
-    #[allow(
-        private_bounds,
-        reason = "Propagator will be part of public interface in the future"
-    )]
     pub fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
         self.propagators.get_propagator(handle)
     }
 
     /// Get an exclusive reference to the propagator identified by the given handle.
-    #[allow(
-        private_bounds,
-        reason = "Propagator will be part of public interface in the future"
-    )]
     pub fn get_propagator_mut<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,

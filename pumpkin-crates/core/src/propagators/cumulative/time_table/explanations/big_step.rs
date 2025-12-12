@@ -1,11 +1,11 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;

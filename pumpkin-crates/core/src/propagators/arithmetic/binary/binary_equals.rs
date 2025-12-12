@@ -9,20 +9,9 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
 use crate::engine::EmptyDomainConflict;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -30,6 +19,17 @@ use crate::predicates::PredicateConstructor;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_advanced;
 
 declare_inference_label!(BinaryEquals);
@@ -390,8 +390,8 @@ struct BinaryEqualsPropagation {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::binary::BinaryEqualsPropagatorArgs;
 
     #[test]

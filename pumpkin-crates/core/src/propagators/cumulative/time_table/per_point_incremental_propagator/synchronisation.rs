@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
+use crate::propagation::PropagationContext;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -165,8 +165,8 @@ mod tests {
     use std::rc::Rc;
 
     use super::find_synchronised_conflict;
-    use crate::engine::propagation::LocalId;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::LocalId;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::PerPointTimeTableType;

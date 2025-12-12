@@ -3,10 +3,10 @@ use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
 use crate::engine::state::Conflict;
 use crate::predicates::Predicate;
+#[cfg(doc)]
+use crate::propagation::Propagator;
 
 /// a conflict info which can be stored in the solver.
 /// two (related) conflicts can happen:

@@ -15,8 +15,10 @@ use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::local_id::LocalId;
 use crate::predicates::Predicate;
+#[cfg(doc)]
+use crate::propagation::ReadDomains;
+use crate::propagation::local_id::LocalId;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
@@ -32,16 +34,16 @@ impl_downcast!(Propagator);
 // To allow the State object to be cloneable, we need to allow `Box<dyn Propagator>` to be cloned.
 clone_trait_object!(Propagator);
 
-/// All propagators implement the [`Propagator`] trait, which defines the main propagator logic with
-/// regards to propagation, detecting conflicts, and providing explanations.
+/// A propagator removes values from domains which will never be in any solution, or raises
+/// explicit conflicts.
 ///
 /// The only required functions are [`Propagator::name`],
-/// [`Propagator::initialise_at_root`], and [`Propagator::debug_propagate_from_scratch`]; all other
+///  and [`Propagator::debug_propagate_from_scratch`]; all other
 /// functions have default implementations. For initial development, the required functions are
 /// enough, but a more mature implementation considers all functions in most cases.
 ///
-/// See the [`crate::engine::cp::propagation`] documentation for more details.
-pub(crate) trait Propagator: Downcast + DynClone {
+/// See the [`crate::propagation`] documentation for more details.
+pub trait Propagator: Downcast + DynClone {
     /// Return the name of the propagator, this is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
@@ -49,17 +51,15 @@ pub(crate) trait Propagator: Downcast + DynClone {
     ///
     /// This method propagates without relying on internal data structures, hence the immutable
     /// &self parameter. It is usually best to implement this propagation method in the simplest
-    /// but correct way. When the assert level is set to [`PUMPKIN_ASSERT_ADVANCED`] or
-    /// [`PUMPKIN_ASSERT_EXTREME`] (see [`crate::pumpkin_asserts`]) this method will be called
-    /// to double check the reasons for failures and propagations that have been reported by
-    /// this propagator.
+    /// but correct way. When this crate is compiled with the `debug-checks` feature, this method
+    /// will be called to double check the reasons for failures and propagations that have been
+    /// reported by this propagator.
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called again by
     /// the solver until no further propagations happen.
     fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP;
 
-    /// Propagate method that will be called during search (e.g. in
-    /// [`ConstraintSatisfactionSolver::solve`]).
+    /// Performs stateful propagation.
     ///
     /// This method extends the current partial
     /// assignments with inferred domain changes found by the
@@ -87,12 +87,8 @@ pub(crate) trait Propagator: Downcast + DynClone {
     /// should only be used for computationally cheap logic. Expensive computation should be
     /// performed in the [`Propagator::propagate()`] method.
     ///
-    /// By default the propagator is always enqueued for every event. Not all propagators will
-    /// benefit from implementing this, so it is not required to do so.
-    ///
-    /// Note that the variables and events to which the propagator is subscribed to are determined
-    /// upon propagator initialisation via [`Propagator::initialise_at_root`] by calling
-    /// [`PropagatorInitialisationContext::register()`].
+    /// By default the propagator is always enqueued for every event it is subscribed to. Not all
+    /// propagators will benefit from implementing this, so it is not required to do so.
     fn notify(
         &mut self,
         _context: PropagationContextWithTrailedValues,
@@ -111,10 +107,6 @@ pub(crate) trait Propagator: Downcast + DynClone {
     ///
     /// By default the propagator does nothing when this method is called. Not all propagators will
     /// benefit from implementing this, so it is not required to do so.
-    ///
-    /// Note that the variables and events to which the propagator is subscribed to are determined
-    /// upon propagator initialisation via [`Propagator::initialise_at_root`] by calling
-    /// [`PropagatorInitialisationContext::register()`].
     fn notify_backtrack(
         &mut self,
         _context: PropagationContext,
@@ -130,7 +122,7 @@ pub(crate) trait Propagator: Downcast + DynClone {
         EnqueueDecision::Enqueue
     }
 
-    /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
+    /// Called after backtracking, allowing the propagator to
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
@@ -163,13 +155,13 @@ pub(crate) trait Propagator: Downcast + DynClone {
     /// Hook which is called when a propagated [`Predicate`] should be explained using a lazy
     /// reason.
     ///
-    /// The code which was attached to the propagation through [`Reason::DynamicLazy`] is given, as
+    /// The code which was attached to the propagation is given, as
     /// well as a context object which defines what can be inspected from the solver to build the
     /// explanation.
     ///
     /// *Note:* The context which is provided contains the _current_ state (i.e. the state when the
     /// explanation is generated); the bounds at the time of the propagation can be retrieved using
-    /// methods such as [`ExplanationContext::get_lower_bound_at_trail_position`] in combination
+    /// methods such as [`ReadDomains::lower_bound_at_trail_position`] in combination
     /// with [`ExplanationContext::get_trail_position`].
     fn lazy_explanation(&mut self, _code: u64, _context: ExplanationContext) -> &[Predicate] {
         panic!(
@@ -188,7 +180,7 @@ pub(crate) trait Propagator: Downcast + DynClone {
 
 /// Indicator of what to do when a propagator is notified.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum EnqueueDecision {
+pub enum EnqueueDecision {
     /// The propagator should be enqueued.
     Enqueue,
     /// The propagator should not be enqueued.

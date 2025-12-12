@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::engine::propagation::LocalId;
+use crate::propagation::LocalId;
 
 #[derive(Debug, Clone)]
 pub struct ArgDisjunctiveTask<Var> {

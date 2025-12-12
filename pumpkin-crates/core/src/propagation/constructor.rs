@@ -6,16 +6,22 @@ use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+#[cfg(doc)]
+use crate::Solver;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
-use crate::engine::DomainEvents;
 use crate::engine::State;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::Watchers;
+#[cfg(doc)]
+use crate::engine::variables::AffineView;
+#[cfg(doc)]
+use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+use crate::propagation::DomainEvents;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
@@ -23,7 +29,7 @@ use crate::variables::IntegerVariable;
 /// The constructor is responsible for indicating on which events the propagator should be
 /// enqueued. Additionally, the propagator can be initialized with values that come from the state
 /// of the solver.
-pub(crate) trait PropagatorConstructor {
+pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
@@ -37,7 +43,7 @@ pub(crate) trait PropagatorConstructor {
 /// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
-pub(crate) struct PropagatorConstructorContext<'a> {
+pub struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
@@ -59,7 +65,8 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+    /// Get domain information.
+    pub fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext {
             assignments: &self.state.assignments,
         }
@@ -73,10 +80,7 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
-    ///
-    /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
-    /// [`AffineView`]s.
-    pub(crate) fn register(
+    pub fn register(
         &mut self,
         var: impl IntegerVariable,
         domain_events: DomainEvents,
@@ -95,8 +99,7 @@ impl PropagatorConstructorContext<'_> {
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
-    #[allow(unused, reason = "will become public API")]
-    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+    pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
         self.state.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
@@ -207,8 +210,8 @@ impl<T> DerefMut for RefOrOwned<'_, T> {
 
 mod private {
     use super::*;
-    use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasTrailedValues;
+    use crate::propagation::HasAssignments;
+    use crate::propagation::HasTrailedValues;
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {

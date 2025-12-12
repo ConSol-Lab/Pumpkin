@@ -3,9 +3,9 @@ use std::cmp::max;
 use super::disjunctive_task::DisjunctiveTask;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
@@ -379,9 +379,9 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::propagation::LocalId;
-    use crate::engine::propagation::PropagationContext;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::LocalId;
+    use crate::propagation::PropagationContext;
     use crate::propagators::disjunctive::theta_lambda_tree::Node;
     use crate::propagators::disjunctive::theta_lambda_tree::ThetaLambdaTree;
     use crate::propagators::disjunctive_task::DisjunctiveTask;

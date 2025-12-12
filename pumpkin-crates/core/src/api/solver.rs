@@ -19,8 +19,6 @@ use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-pub use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -35,6 +33,8 @@ use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
 use crate::proof::ConstraintTag;
+use crate::propagation::PropagatorConstructor;
+pub use crate::propagation::store::PropagatorHandle;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::StatisticLogger;
@@ -495,7 +495,7 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
     ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>

@@ -4,8 +4,8 @@ use super::CumulativeParameters;
 use super::Task;
 use super::UpdatedTaskInfo;
 use crate::containers::SparseSet;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 

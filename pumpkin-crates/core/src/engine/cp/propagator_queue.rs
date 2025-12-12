@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 
 use crate::containers::KeyedVec;
-use crate::engine::cp::propagation::PropagatorId;
+use crate::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Clone)]

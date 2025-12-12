@@ -1,13 +1,13 @@
 use std::fmt::Debug;
 
-use super::propagation::ExplanationContext;
-use super::propagation::PropagatorId;
-use super::propagation::store::PropagatorStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 #[cfg(doc)]
 use crate::containers::KeyedVec;
 use crate::predicates::Predicate;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.

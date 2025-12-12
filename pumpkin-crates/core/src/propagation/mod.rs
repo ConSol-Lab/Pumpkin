@@ -25,7 +25,7 @@
 //! # Practical
 //!
 //! Each concrete propagator is associated with one trait: [`Propagator`]. The main function to
-//! implement for this trait is [`Proagator::propagate`], which performs the domain reduction.
+//! implement for this trait is [`Propagator::propagate`], which performs the domain reduction.
 //!
 //! A propagator is created by a [`PropagatorConstructor`]. The constructor is responsible for
 //! registering to domain events, and setting up the state of the propagator. The constructor is
@@ -44,26 +44,21 @@
 //! 1. Implement a propagator struct that implements the [`Propagator`] trait. For now only
 //!    implement the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
 //!    [`Propagator::name`].
-//! 2. Implement the [`Propagator::initialise_at_root`] function which detects root-level
-//!    inconsistencies and is also responsible for registering the variables and corresponding
-//!    [`DomainEvents`] with the solver, so that the solver can notify the propagator once an event
-//!    happens that relates to one of the variables of the propagator.
 //! 2. Create an implementation of the [`PropagatorConstructor`] trait, to register for domain
 //!    events and set up the propagator state.
 //! 3. Following the procedure above gives an initial version of the propagator that is likely not
-//!    efficient, but has an important role for testing. Now is a good time to write tests which use
-//!    the [`TestSolver`]. **We strongly discourage skipping this step**.
-//!     * For example, see the tests in [`crate::propagators::arithmetic::absolute_value`].
-//! 4. Implement [`Propagator::notify`]. Depending on the concrete propagator, this may only make
-//!    sense when done together with the next step.
-//! 5. Implement the remaining functions, i.e., [`Propagator::propagate`],
-//!    [`Propagator::synchronise`], and [`Propagator::initialise_at_root`]. These are all
-//!    interdependent.
+//!    efficient, but has an important role for testing. Now is a good time to write tests using the
+//!    [`State`] API. **We strongly discourage skipping this step**.
+//! 4. Implement [`Propagator::notify`] and/or [`Propagator::notify_predicate_id_satisfied`] for
+//!    more control on when the propagator is enqueued. Depending on the concrete propagator, this
+//!    may only make sense when done together with the next step.
+//! 5. Implement the remaining hooks, i.e., [`Propagator::propagate`], and
+//!    [`Propagator::synchronise`] to exploit incrementality. These are all interdependent.
 //! 6. Decide on the priortiy of the propagator, i.e., implement [`Propagator::priority`].
 //! 7. Make sure to write new tests and run all tests throughout the process.
 //! 8. The propagator implementation is now done!
 //!
-//! The propagator is added to the solver through [`ConstraintSatisfactionSolver::add_propagator`].
+//! The propagator is added to the solver through [`Solver::add_propagator`].
 //!
 //! # Bibliography
 //!
@@ -74,29 +69,27 @@
 //! International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
 //! 118–132.
 
-pub(crate) mod constructor;
-pub(crate) mod contexts;
-pub(crate) mod local_id;
-pub(crate) mod propagator;
+mod constructor;
+mod contexts;
+mod local_id;
+mod propagator;
+
 pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
-pub use contexts::explanation_context::CurrentNogood;
-pub(crate) use contexts::explanation_context::ExplanationContext;
-pub(crate) use contexts::propagation_context::PropagationContext;
-pub(crate) use contexts::propagation_context::PropagationContextMut;
-pub(crate) use contexts::propagation_context::ReadDomains;
-pub(crate) use local_id::LocalId;
-pub(crate) use propagator::EnqueueDecision;
-pub(crate) use propagator::Propagator;
+pub use constructor::*;
+pub use contexts::*;
+pub use local_id::*;
+pub use propagator::*;
 pub use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 
 #[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::engine::DomainEvents;
+use crate::Solver;
+pub use crate::basic_types::PredicateId;
+pub use crate::engine::notifications::DomainEvent;
+pub use crate::engine::notifications::DomainEvents;
 #[cfg(doc)]
 use crate::engine::test_solver::TestSolver;
 #[cfg(doc)]
@@ -105,3 +98,5 @@ use crate::engine::variables::IntegerVariable;
 use crate::propagators;
 #[cfg(doc)]
 use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
+#[cfg(doc)]
+use crate::state::State;

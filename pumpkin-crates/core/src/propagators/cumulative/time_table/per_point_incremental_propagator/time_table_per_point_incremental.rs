@@ -8,17 +8,17 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -553,8 +553,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 /// Contains functions related to debugging
 mod debug {
 
-    use crate::engine::propagation::PropagationContext;
     use crate::proof::InferenceCode;
+    use crate::propagation::PropagationContext;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
     use crate::propagators::create_time_table_per_point_from_scratch;
@@ -623,10 +623,10 @@ mod debug {
 mod tests {
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PredicateConstructor;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;

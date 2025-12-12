@@ -15,6 +15,7 @@ use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
+use crate::propagation::ReadDomains;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;

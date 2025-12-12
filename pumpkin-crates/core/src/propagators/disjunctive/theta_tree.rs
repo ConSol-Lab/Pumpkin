@@ -3,9 +3,9 @@ use std::cmp::max;
 use super::disjunctive_task::DisjunctiveTask;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 

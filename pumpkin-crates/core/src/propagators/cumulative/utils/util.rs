@@ -5,13 +5,13 @@ use std::rc::Rc;
 
 use enumset::enum_set;
 
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
+use crate::propagation::DomainEvents;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 

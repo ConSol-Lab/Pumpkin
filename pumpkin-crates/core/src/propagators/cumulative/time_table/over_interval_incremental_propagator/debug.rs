@@ -2,8 +2,8 @@
 use std::ops::Range;
 
 use crate::containers::HashSet;
-use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
+use crate::propagation::PropagationContext;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;

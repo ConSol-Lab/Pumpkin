@@ -5,20 +5,20 @@ use bitfield_struct::bitfield;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContextMut;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ElementArgs<VX, VI, VE> {

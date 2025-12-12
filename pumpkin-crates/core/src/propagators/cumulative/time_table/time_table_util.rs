@@ -6,14 +6,14 @@ use std::cmp::min;
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::InferenceCode;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagationContextMut;
+#[cfg(doc)]
+use crate::propagation::Propagator;
+use crate::propagation::ReadDomains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -782,8 +782,8 @@ mod tests {
 
     use super::find_profiles_which_propagate_lower_bound;
     use crate::engine::Assignments;
-    use crate::engine::propagation::LocalId;
-    use crate::engine::propagation::PropagationContext;
+    use crate::propagation::LocalId;
+    use crate::propagation::PropagationContext;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;

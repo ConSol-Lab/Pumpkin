@@ -7,18 +7,19 @@ use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
+#[cfg(doc)]
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
 use crate::pumpkin_assert_simple;
 
-pub(crate) struct PropagationContextWithTrailedValues<'a> {
+#[derive(Debug)]
+pub struct PropagationContextWithTrailedValues<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
     pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
@@ -53,8 +54,8 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
 /// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PropagationContext<'a> {
-    pub assignments: &'a Assignments,
+pub struct PropagationContext<'a> {
+    pub(crate) assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContext<'a> {
@@ -64,7 +65,7 @@ impl<'a> PropagationContext<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct PropagationContextMut<'a> {
+pub struct PropagationContextMut<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
@@ -91,25 +92,29 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
-        self.notification_engine.get_predicate(predicate_id)
-    }
-
-    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
-        self.notification_engine.get_id(predicate)
-    }
-
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
     ///
     /// Returns the [`PredicateId`] assigned to the provided predicate, which will be provided
-    /// to [`Propagator::notify_predicate_satisfied`].
-    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+    /// to [`Propagator::notify_predicate_id_satisfied`].
+    pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
         self.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
             self.trailed_values,
             self.assignments,
         )
+    }
+
+    /// Get the [`Predicate`] for a given [`PredicateId`].
+    pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
+    }
+
+    /// Get a [`PredicateId`] for the given [`Predicate`].
+    ///
+    /// If no ID exists, one will be created.
+    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.get_id(predicate)
     }
 
     /// Apply a reification literal to all the explanations that are passed to the context.
@@ -130,7 +135,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+    /// Get the current domain information.
+    pub fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext {
             assignments: self.assignments,
         }
@@ -162,7 +168,7 @@ impl<'a> PropagationContextMut<'a> {
 
 /// A trait which defines common methods for retrieving the [`Assignments`] and
 /// [`AssignmentsPropositional`] from the structure which implements this trait.
-pub trait HasAssignments {
+pub(crate) trait HasAssignments {
     /// Returns the stored [`Assignments`].
     fn assignments(&self) -> &Assignments;
 }
@@ -235,7 +241,59 @@ pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
 
 impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
-pub(crate) trait ReadDomains: HasAssignments {
+pub trait ReadDomains {
+    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool;
+
+    fn is_predicate_falsified(&self, predicate: Predicate) -> bool;
+
+    fn is_literal_true(&self, literal: &Literal) -> bool;
+
+    fn is_literal_false(&self, literal: &Literal) -> bool;
+
+    fn is_literal_fixed(&self, literal: &Literal) -> bool;
+
+    /// Returns the holes which were created on the current decision level.
+    fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+    ) -> impl Iterator<Item = i32>;
+
+    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
+    /// created at previous decision levels).
+    fn get_holes<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32>;
+
+    /// Returns `true` if the domain of the given variable is singleton.
+    fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool;
+
+    fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32;
+
+    fn lower_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32;
+
+    fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32;
+
+    fn upper_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32;
+
+    fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool;
+
+    fn contains_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        value: i32,
+        trail_position: usize,
+    ) -> bool;
+
+    fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32>;
+}
+
+impl<T: HasAssignments> ReadDomains for T {
     fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.assignments()
             .evaluate_predicate(predicate)
@@ -297,7 +355,6 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
-    #[allow(unused, reason = "Will be part of the API")]
     fn lower_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,
@@ -310,7 +367,6 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.upper_bound(self.assignments())
     }
 
-    #[allow(unused, reason = "Will be part of the API")]
     fn upper_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,
@@ -336,8 +392,6 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.iterate_domain(self.assignments())
     }
 }
-
-impl<T: HasAssignments> ReadDomains for T {}
 
 impl PropagationContextMut<'_> {
     pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
