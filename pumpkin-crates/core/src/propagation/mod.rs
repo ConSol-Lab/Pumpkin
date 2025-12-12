@@ -71,6 +71,7 @@
 
 mod constructor;
 mod contexts;
+mod domains;
 mod local_id;
 mod propagator;
 
@@ -80,6 +81,7 @@ pub(crate) mod store;
 
 pub use constructor::*;
 pub use contexts::*;
+pub use domains::*;
 pub use local_id::*;
 pub use propagator::*;
 pub use propagator_id::PropagatorId;
