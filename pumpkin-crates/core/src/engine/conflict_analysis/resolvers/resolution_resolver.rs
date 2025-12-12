@@ -502,7 +502,7 @@ pub(crate) struct LearnedNogood {
 }
 
 impl Deref for LearnedNogood {
-    type Target = Vec<Predicate>;
+    type Target = [Predicate];
 
     fn deref(&self) -> &Self::Target {
         &self.predicates
