@@ -97,9 +97,12 @@ impl PropagatorConstructorContext<'_> {
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
     #[allow(unused, reason = "will become public API")]
     pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
-        self.state
-            .notification_engine
-            .watch_predicate(predicate, self.propagator_id)
+        self.state.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_id,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        )
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during

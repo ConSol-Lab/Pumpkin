@@ -110,7 +110,7 @@ impl TestSolver {
                 &mut self.state.propagators,
                 &mut propagator_queue,
             );
-        if propagator_queue.is_propagator_present(propagator) {
+        if propagator_queue.is_propagator_enqueued(propagator) {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -138,7 +138,7 @@ impl TestSolver {
                 &mut self.state.propagators,
                 &mut propagator_queue,
             );
-        if propagator_queue.is_propagator_present(propagator) {
+        if propagator_queue.is_propagator_enqueued(propagator) {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -166,7 +166,7 @@ impl TestSolver {
                 &mut self.state.propagators,
                 &mut propagator_queue,
             );
-        if propagator_queue.is_propagator_present(propagator) {
+        if propagator_queue.is_propagator_enqueued(propagator) {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
