@@ -6,6 +6,7 @@ use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::State;
@@ -93,11 +94,12 @@ impl PropagatorConstructorContext<'_> {
     }
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
+    /// Returns the [`PredicateId`] used by the solver to track the predicate.
     #[allow(unused, reason = "will become public API")]
-    pub(crate) fn register_predicate(&mut self, predicate: Predicate) {
+    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
         self.state
             .notification_engine
-            .watch_predicate(predicate, self.propagator_id);
+            .watch_predicate(predicate, self.propagator_id)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during
