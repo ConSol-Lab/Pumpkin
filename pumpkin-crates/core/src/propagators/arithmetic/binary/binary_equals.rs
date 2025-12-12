@@ -252,17 +252,19 @@ where
         // re-evaluate the values which have been removed
         if self.has_backtracked {
             self.has_backtracked = false;
-            self.a_removed_values
-                .retain(|element| context.is_predicate_satisfied(predicate!(self.a != *element)));
-            self.b_removed_values
-                .retain(|element| context.is_predicate_satisfied(predicate!(self.b != *element)));
+            self.a_removed_values.retain(|element| {
+                context.evaluate_predicate(predicate!(self.a != *element)) == Some(true)
+            });
+            self.b_removed_values.retain(|element| {
+                context.evaluate_predicate(predicate!(self.b != *element)) == Some(true)
+            });
         }
 
         // Then we remove all of the values which have been removed from `a` from `b`
         let mut a_removed_values = std::mem::take(&mut self.a_removed_values);
         for removed_value_a in a_removed_values.drain() {
             pumpkin_assert_advanced!(
-                context.is_predicate_satisfied(predicate!(self.a != removed_value_a))
+                context.evaluate_predicate(predicate!(self.a != removed_value_a)) == Some(true)
             );
             self.post(
                 &mut context,
@@ -277,7 +279,7 @@ where
         let mut b_removed_values = std::mem::take(&mut self.b_removed_values);
         for removed_value_b in b_removed_values.drain() {
             pumpkin_assert_advanced!(
-                context.is_predicate_satisfied(predicate!(self.b != removed_value_b))
+                context.evaluate_predicate(predicate!(self.b != removed_value_b)) == Some(true)
             );
             self.post(
                 &mut context,

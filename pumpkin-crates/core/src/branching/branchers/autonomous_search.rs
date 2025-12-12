@@ -240,7 +240,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                 return predicate;
             }
             // Match the truth value according to the best solution.
-            if solution.is_predicate_satisfied(predicate) {
+            if solution.evaluate_predicate(predicate) == Some(true) {
                 predicate
             } else {
                 !predicate

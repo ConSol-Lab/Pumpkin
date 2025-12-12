@@ -32,15 +32,9 @@ impl HasAssignments for Domains<'_> {
 pub trait ReadDomains {
     fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool>;
 
-    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool;
-
-    fn is_predicate_falsified(&self, predicate: Predicate) -> bool;
-
-    fn is_literal_true(&self, literal: &Literal) -> bool;
-
-    fn is_literal_false(&self, literal: &Literal) -> bool;
-
-    fn is_literal_fixed(&self, literal: &Literal) -> bool;
+    fn evaluate_literal(&self, literal: Literal) -> Option<bool> {
+        self.evaluate_predicate(literal.get_true_predicate())
+    }
 
     /// Returns the holes which were created on the current decision level.
     fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
@@ -86,36 +80,6 @@ pub trait ReadDomains {
 impl<T: HasAssignments> ReadDomains for T {
     fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.assignments().evaluate_predicate(predicate)
-    }
-
-    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
-        self.assignments()
-            .evaluate_predicate(predicate)
-            .is_some_and(|truth_value| truth_value)
-    }
-
-    fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
-        self.assignments()
-            .evaluate_predicate(predicate)
-            .is_some_and(|truth_value| !truth_value)
-    }
-
-    fn is_literal_true(&self, literal: &Literal) -> bool {
-        literal
-            .get_integer_variable()
-            .lower_bound(self.assignments())
-            == 1
-    }
-
-    fn is_literal_false(&self, literal: &Literal) -> bool {
-        literal
-            .get_integer_variable()
-            .upper_bound(self.assignments())
-            == 0
-    }
-
-    fn is_literal_fixed(&self, literal: &Literal) -> bool {
-        self.is_fixed(literal)
     }
 
     /// Returns the holes which were created on the current decision level.

@@ -121,7 +121,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
-        if context.is_literal_true(&self.reification_literal) {
+        if context.evaluate_literal(self.reification_literal) == Some(true) {
             context.with_reification(self.reification_literal);
 
             let result = self.propagator.propagate(context);
@@ -142,7 +142,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
     ) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
-        if context.is_literal_true(&self.reification_literal) {
+        if context.evaluate_literal(self.reification_literal) == Some(true) {
             context.with_reification(self.reification_literal);
 
             let result = self.propagator.debug_propagate_from_scratch(context);
@@ -177,7 +177,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if context.is_literal_fixed(&self.reification_literal) {
+        if context.evaluate_literal(self.reification_literal) == Some(true) {
             return Ok(());
         }
 
@@ -205,13 +205,13 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             return EnqueueDecision::Skip;
         }
 
-        if context.is_literal_true(&self.reification_literal) {
+        if context.evaluate_literal(self.reification_literal) == Some(true) {
             // If the propagator would have enqueued and the literal is true then the reified
             // propagator is also enqueued
             return EnqueueDecision::Enqueue;
         }
 
-        if !context.is_literal_false(&self.reification_literal)
+        if context.evaluate_literal(self.reification_literal) != Some(false)
             && self.propagator.detect_inconsistency(context).is_some()
         {
             // Or the literal is not false already and there the propagator has found an

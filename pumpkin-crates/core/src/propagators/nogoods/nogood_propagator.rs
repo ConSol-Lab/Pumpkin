@@ -229,7 +229,7 @@ impl Propagator for NogoodPropagator {
             pumpkin_assert_moderate!(
                 {
                     let predicate = context.get_predicate(predicate_id);
-                    context.is_predicate_satisfied(predicate)
+                    context.evaluate_predicate(predicate) == Some(true)
                 },
                 "The predicate {} with id {predicate_id:?} should be satisfied but was not",
                 context.get_predicate(predicate_id),
@@ -301,7 +301,7 @@ impl Propagator for NogoodPropagator {
                 // At this point, nonwatched predicates and nogood[1] are falsified.
                 pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| {
                     let predicate = context.get_predicate(*p);
-                    context.is_predicate_satisfied(predicate)
+                    context.evaluate_predicate(predicate) == Some(true)
                 }));
 
                 // There are two scenarios:
@@ -1122,13 +1122,17 @@ impl NogoodPropagator {
         // We assume that duplicate predicates have been removed
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
-        if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
+        if nogood.is_empty()
+            || nogood
+                .iter()
+                .any(|p| context.evaluate_predicate(*p) == Some(false))
+        {
             *nogood = vec![Predicate::trivially_false()];
             return;
         }
 
         // Remove predicates that are satisfied at the root level.
-        nogood.retain(|p| !context.is_predicate_satisfied(*p));
+        nogood.retain(|p| context.evaluate_predicate(*p) != Some(true));
 
         // If the nogood is violating at the root, the previous retain would leave an empty nogood.
         // Return a violating nogood.
@@ -1162,7 +1166,7 @@ impl NogoodPropagator {
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood.iter().any(|predicate| {
             let predicate = context.get_predicate(*predicate);
-            context.is_predicate_falsified(predicate)
+            context.evaluate_predicate(predicate) == Some(false)
         });
 
         // If at least one predicate is false, then the nogood can be skipped
@@ -1174,7 +1178,7 @@ impl NogoodPropagator {
             .iter()
             .filter(|predicate| {
                 let predicate = context.get_predicate(**predicate);
-                context.is_predicate_satisfied(predicate)
+                context.evaluate_predicate(predicate) == Some(true)
             })
             .count();
 
