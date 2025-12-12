@@ -56,7 +56,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks.iter().for_each(|task| {
         context.register(
             task.start_variable.clone(),
-            DomainEvents::create_with_int_events(enum_set!(
+            DomainEvents::new(enum_set!(
                 DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign
             )),
             task.id,
@@ -64,7 +64,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
         if register_backtrack {
             context.register_for_backtrack_events(
                 task.start_variable.clone(),
-                DomainEvents::create_with_int_events(enum_set!(
+                DomainEvents::new(enum_set!(
                     DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign
                 )),
                 task.id,

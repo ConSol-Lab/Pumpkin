@@ -56,9 +56,7 @@ where
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
             context.register_for_backtrack_events(
                 x_i.clone(),
-                DomainEvents::create_with_int_events(enum_set!(
-                    DomainEvent::Assign | DomainEvent::Removal
-                )),
+                DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
                 LocalId::from(i as u32),
             );
         }

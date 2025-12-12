@@ -92,7 +92,7 @@ impl PropagatorConstructorContext<'_> {
         self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
-        var.watch_all(&mut watchers, domain_events.get_int_events());
+        var.watch_all(&mut watchers, domain_events.events());
     }
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
@@ -133,7 +133,7 @@ impl PropagatorConstructorContext<'_> {
         self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
-        var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
+        var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
