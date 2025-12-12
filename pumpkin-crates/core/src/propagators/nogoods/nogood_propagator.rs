@@ -1119,6 +1119,8 @@ impl NogoodPropagator {
         // change since the initial time the semantic minimiser recorded it, so it would not know
         // that a previously nonroot bound is now actually a root bound.
 
+        // We assume that duplicate predicates have been removed
+
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
             *nogood = vec![Predicate::trivially_false()];

@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use super::ConflictResolver;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
@@ -7,7 +9,9 @@ use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::engine::Lbd;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::conflict_analysis::MinimisationContext;
 use crate::engine::conflict_analysis::Mode;
+use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::conflict_analysis::RecursiveMinimiser;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::propagation::CurrentNogood;
@@ -405,39 +409,115 @@ impl ResolutionResolver {
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
-        let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
-            &self.processed_nogood_predicates,
-            &context.state.assignments,
-            if !context.should_minimise {
+        context
+            .semantic_minimiser
+            .set_mode(if !context.should_minimise {
                 // If we do not minimise then we do the equality
                 // merging in the first iteration of removing
                 // duplicates
                 Mode::EnableEqualityMerging
             } else {
                 Mode::DisableEqualityMerging
+            });
+        context.semantic_minimiser.minimise(
+            MinimisationContext {
+                proof_log: context.proof_log,
+                unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                counters: context.counters,
+                state: context.state,
             },
+            &mut self.processed_nogood_predicates,
         );
 
         if context.should_minimise {
             // Then we perform recursive minimisation to remove the dominated predicates
-            self.recursive_minimiser
-                .remove_dominated_predicates(&mut clean_nogood, context);
+            self.recursive_minimiser.minimise(
+                MinimisationContext {
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    counters: context.counters,
+                    state: context.state,
+                },
+                &mut self.processed_nogood_predicates,
+            );
 
             // We perform a final semantic minimisation call which allows the merging of the
             // equality predicates which remain in the nogood
-            let size_before_semantic_minimisation = clean_nogood.len();
-            clean_nogood = context.semantic_minimiser.minimise(
-                &clean_nogood,
-                &context.state.assignments,
-                Mode::EnableEqualityMerging,
+            let size_before_semantic_minimisation = self.processed_nogood_predicates.len();
+            context
+                .semantic_minimiser
+                .set_mode(Mode::EnableEqualityMerging);
+            context.semantic_minimiser.minimise(
+                MinimisationContext {
+                    proof_log: context.proof_log,
+                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+                    counters: context.counters,
+                    state: context.state,
+                },
+                &mut self.processed_nogood_predicates,
             );
             context
                 .counters
                 .learned_clause_statistics
                 .average_number_of_removed_atomic_constraints_semantic
-                .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
+                .add_term(
+                    (size_before_semantic_minimisation - self.processed_nogood_predicates.len())
+                        as u64,
+                );
         }
 
+        let learned_nogood =
+            LearnedNogood::create_from_vec(self.processed_nogood_predicates.clone(), context);
+
+        pumpkin_assert_advanced!(
+            learned_nogood
+                .predicates
+                .iter()
+                .skip(1)
+                .all(|p| context.state.assignments.is_predicate_satisfied(*p))
+        );
+
+        // TODO: asserting predicate may be bumped twice, probably not a problem.
+        for predicate in learned_nogood.predicates.iter() {
+            context
+                .brancher
+                .on_appearance_in_conflict_predicate(*predicate);
+        }
+
+        learned_nogood
+    }
+}
+
+/// A structure which stores a learned nogood
+///
+/// There are two assumptions:
+/// - The asserting literal (i.e. the literal of the current decision level) is placed at the `0`th
+///   index of [`LearnedNogood::literals`].
+/// - A literal from the second-highest decision level is placed at the `1`st index of
+///   [`LearnedNogood::literals`].
+#[derive(Clone, Debug)]
+pub(crate) struct LearnedNogood {
+    pub(crate) predicates: Vec<Predicate>,
+    pub(crate) backjump_level: usize,
+}
+
+impl Deref for LearnedNogood {
+    type Target = [Predicate];
+
+    fn deref(&self) -> &Self::Target {
+        &self.predicates
+    }
+}
+
+impl LearnedNogood {
+    /// Creates a [`LearnedNogood`] from the provided [`Vec`].
+    ///
+    /// This method automatically ensures that the invariants of nogoods hold; see [`LearnedNogood`]
+    /// for more details on these invariants.
+    pub(crate) fn create_from_vec(
+        mut clean_nogood: Vec<Predicate>,
+        context: &ConflictAnalysisContext,
+    ) -> Self {
         // We perform a linear scan to maintain the two invariants:
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
@@ -473,36 +553,9 @@ impl ResolutionResolver {
             0
         };
 
-        pumpkin_assert_advanced!(
-            clean_nogood
-                .iter()
-                .skip(1)
-                .all(|p| context.state.truth_value(*p) == Some(true))
-        );
-
-        // TODO: asserting predicate may be bumped twice, probably not a problem.
-        for predicate in clean_nogood.iter() {
-            context
-                .brancher
-                .on_appearance_in_conflict_predicate(*predicate);
-        }
-
-        LearnedNogood {
-            backjump_level,
+        Self {
             predicates: clean_nogood,
+            backjump_level,
         }
     }
-}
-
-/// A structure which stores a learned nogood
-///
-/// There are two assumptions:
-/// - The asserting literal (i.e. the literal of the current decision level) is placed at the `0`th
-///   index of [`LearnedNogood::literals`].
-/// - A literal from the second-highest decision level is placed at the `1`st index of
-///   [`LearnedNogood::literals`].
-#[derive(Clone, Debug)]
-pub(crate) struct LearnedNogood {
-    pub(crate) predicates: Vec<Predicate>,
-    pub(crate) backjump_level: usize,
 }

@@ -1,10 +1,12 @@
 use std::cmp;
 
+use super::MinimisationContext;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
-use crate::engine::Assignments;
+use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::predicates::predicate::PredicateType;
+use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -15,6 +17,8 @@ pub(crate) struct SemanticMinimiser {
     domains: KeyedVec<DomainId, SimpleIntegerDomain>,
     present_ids: SparseSet<DomainId>,
     helper: Vec<Predicate>,
+
+    mode: Mode,
 }
 
 impl Default for SemanticMinimiser {
@@ -25,6 +29,7 @@ impl Default for SemanticMinimiser {
             domains: Default::default(),
             present_ids: SparseSet::new(vec![], mapping),
             helper: Vec::default(),
+            mode: Mode::EnableEqualityMerging,
         }
     }
 }
@@ -35,14 +40,9 @@ pub(crate) enum Mode {
     DisableEqualityMerging,
 }
 
-impl SemanticMinimiser {
-    pub(crate) fn minimise(
-        &mut self,
-        nogood: &Vec<Predicate>,
-        assignments: &Assignments,
-        mode: Mode,
-    ) -> Vec<Predicate> {
-        self.accommodate(assignments);
+impl NogoodMinimiser for SemanticMinimiser {
+    fn minimise(&mut self, context: MinimisationContext, nogood: &mut Vec<Predicate>) {
+        self.accommodate(&context);
         self.clean_up();
         self.apply_predicates(nogood);
 
@@ -51,16 +51,23 @@ impl SemanticMinimiser {
         for domain_id in self.present_ids.iter() {
             // If at least one domain is inconsistent, we can stop.
             if self.domains[domain_id].inconsistent {
-                return vec![Predicate::trivially_false()];
+                *nogood = vec![Predicate::trivially_false()];
+                return;
             }
             self.domains[domain_id].add_domain_description_to_vector(
                 *domain_id,
                 &self.original_domains[domain_id],
                 &mut self.helper,
-                mode,
+                self.mode,
             );
         }
-        self.helper.clone()
+        *nogood = self.helper.clone();
+    }
+}
+
+impl SemanticMinimiser {
+    pub(crate) fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode
     }
 
     fn apply_predicates(&mut self, nogood: &Vec<Predicate>) {
@@ -95,14 +102,14 @@ impl SemanticMinimiser {
         }
     }
 
-    fn accommodate(&mut self, assignments: &Assignments) {
+    fn accommodate(&mut self, context: &MinimisationContext) {
         assert!(self.domains.len() == self.original_domains.len());
 
-        while (self.domains.len() as u32) < assignments.num_domains() {
+        while (self.domains.len() as u32) < context.assignments().num_domains() {
             let domain_id = DomainId::new(self.domains.len() as u32);
-            let lower_bound = assignments.get_initial_lower_bound(domain_id);
-            let upper_bound = assignments.get_initial_upper_bound(domain_id);
-            let holes = assignments.get_initial_holes(domain_id);
+            let lower_bound = context.assignments().get_initial_lower_bound(domain_id);
+            let upper_bound = context.assignments().get_initial_upper_bound(domain_id);
+            let holes = context.assignments().get_initial_holes(domain_id);
             self.grow(lower_bound, upper_bound, holes);
         }
     }
@@ -254,98 +261,156 @@ impl SimpleIntegerDomain {
 #[cfg(test)]
 mod tests {
     use crate::conjunction;
-    use crate::engine::Assignments;
+    use crate::containers::HashMap;
+    use crate::engine::SolverStatistics;
+    use crate::engine::conflict_analysis::MinimisationContext;
     use crate::engine::conflict_analysis::Mode;
+    use crate::engine::conflict_analysis::NogoodMinimiser;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::proof::ProofLog;
+    use crate::state::State;
 
     #[test]
     fn trivial_nogood() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_id = assignments.grow(0, 10);
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id >= 0), predicate!(domain_id <= 10)];
+        let mut state = State::default();
+        let domain_id = state.new_interval_variable(0, 10, None);
+        let mut nogood: Vec<Predicate> =
+            vec![predicate!(domain_id >= 0), predicate!(domain_id <= 10)];
 
-        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert!(p.is_empty());
+        assert!(nogood.is_empty());
     }
 
     #[test]
     fn trivial_conflict_bounds() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_id = assignments.grow(0, 10);
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
+        let mut state = State::default();
+        let domain_id = state.new_interval_variable(0, 10, None);
+        let mut nogood: Vec<Predicate> =
+            vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
 
-        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], Predicate::trivially_false());
+        assert_eq!(nogood.len(), 1);
+        assert_eq!(nogood[0], Predicate::trivially_false());
     }
 
     #[test]
     fn trivial_conflict_holes() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_id = assignments.grow(0, 10);
-        let nogood: Vec<Predicate> = vec![
+        let mut state = State::default();
+        let domain_id = state.new_interval_variable(0, 10, None);
+        let mut nogood: Vec<Predicate> = vec![
             predicate!(domain_id != 5),
             predicate!(domain_id >= 5),
             predicate!(domain_id <= 5),
         ];
 
-        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], Predicate::trivially_false());
+        assert_eq!(nogood.len(), 1);
+        assert_eq!(nogood[0], Predicate::trivially_false());
     }
 
     #[test]
     fn trivial_conflict_assignment() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_id = assignments.grow(0, 10);
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
+        let mut state = State::default();
+        let domain_id = state.new_interval_variable(0, 10, None);
+        let mut nogood: Vec<Predicate> =
+            vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], Predicate::trivially_false());
+        assert_eq!(nogood.len(), 1);
+        assert_eq!(nogood[0], Predicate::trivially_false());
     }
 
     #[test]
     fn trivial_conflict_bounds_reset() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_id = assignments.grow(0, 10);
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
+        let mut state = State::default();
+        let domain_id = state.new_interval_variable(0, 10, None);
+        let mut nogood: Vec<Predicate> =
+            vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        let _ = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        let p = p.minimise(&vec![], &assignments, Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        let mut other = Vec::default();
+        p.minimise(context, &mut other);
 
-        assert!(p.is_empty());
+        assert!(other.is_empty());
     }
 
     #[test]
     fn simple_bound1() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
-        let domain_1 = assignments.grow(0, 5);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
+        let domain_1 = state.new_interval_variable(0, 5, None);
 
-        let nogood: Vec<Predicate> =
+        let mut nogood: Vec<Predicate> =
             conjunction!([domain_0 >= 5] & [domain_0 <= 9] & [domain_1 >= 0] & [domain_1 <= 4])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 3);
+        assert_eq!(nogood.len(), 3);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!([domain_0 >= 5] & [domain_0 <= 9] & [domain_1 <= 4])
         );
     }
@@ -353,20 +418,27 @@ mod tests {
     #[test]
     fn simple_bound2() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
-        let domain_1 = assignments.grow(0, 5);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
+        let domain_1 = state.new_interval_variable(0, 5, None);
 
-        let nogood = conjunction!(
+        let mut nogood = conjunction!(
             [domain_0 >= 5] & [domain_0 <= 9] & [domain_1 >= 0] & [domain_1 <= 4] & [domain_0 != 7]
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 4);
+        assert_eq!(nogood.len(), 4);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!([domain_0 >= 5] & [domain_0 <= 9] & [domain_1 <= 4] & [domain_0 != 7])
         );
     }
@@ -374,11 +446,11 @@ mod tests {
     #[test]
     fn simple_bound3() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
-        let domain_1 = assignments.grow(0, 5);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
+        let domain_1 = state.new_interval_variable(0, 5, None);
 
-        let nogood = conjunction!(
+        let mut nogood = conjunction!(
             [domain_0 >= 5]
                 & [domain_0 <= 9]
                 & [domain_1 >= 0]
@@ -390,11 +462,18 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 6);
+        assert_eq!(nogood.len(), 6);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!(
                 [domain_0 >= 5]
                     & [domain_0 <= 9]
@@ -409,11 +488,11 @@ mod tests {
     #[test]
     fn simple_assign() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
-        let domain_1 = assignments.grow(0, 5);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
+        let domain_1 = state.new_interval_variable(0, 5, None);
 
-        let nogood = conjunction!(
+        let mut nogood = conjunction!(
             [domain_0 >= 5]
                 & [domain_0 <= 9]
                 & [domain_1 >= 0]
@@ -426,11 +505,18 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 2);
+        assert_eq!(nogood.len(), 2);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!([domain_0 == 5] & [domain_1 <= 4])
         );
     }
@@ -438,11 +524,11 @@ mod tests {
     #[test]
     fn simple_assign_no_equality() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
-        let domain_1 = assignments.grow(0, 5);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
+        let domain_1 = state.new_interval_variable(0, 5, None);
 
-        let nogood = conjunction!(
+        let mut nogood = conjunction!(
             [domain_0 >= 5]
                 & [domain_0 <= 9]
                 & [domain_1 >= 0]
@@ -455,11 +541,18 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::DisableEqualityMerging);
+        p.set_mode(Mode::DisableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 3);
+        assert_eq!(nogood.len(), 3);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!([domain_0 >= 5] & [domain_0 <= 5] & [domain_1 <= 4])
         );
     }
@@ -467,32 +560,46 @@ mod tests {
     #[test]
     fn simple_lb_override1() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
 
-        let nogood = conjunction!([domain_0 >= 2] & [domain_0 >= 1] & [domain_0 >= 5]).into();
+        let mut nogood = conjunction!([domain_0 >= 2] & [domain_0 >= 1] & [domain_0 >= 5]).into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 1);
-        assert_eq!(predicates[0], predicate!(domain_0 >= 5));
+        assert_eq!(nogood.len(), 1);
+        assert_eq!(nogood[0], predicate!(domain_0 >= 5));
     }
 
     #[test]
     fn hole_lb_override() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
 
-        let nogood =
+        let mut nogood =
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 5] & [domain_0 >= 1])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 1);
+        assert_eq!(nogood.len(), 1);
         assert_eq!(
-            PropositionalConjunction::from(predicates),
+            PropositionalConjunction::from(nogood),
             conjunction!([domain_0 >= 5])
         );
     }
@@ -500,16 +607,23 @@ mod tests {
     #[test]
     fn hole_push_lb() {
         let mut p = SemanticMinimiser::default();
-        let mut assignments = Assignments::default();
-        let domain_0 = assignments.grow(0, 10);
+        let mut state = State::default();
+        let domain_0 = state.new_interval_variable(0, 10, None);
 
-        let nogood =
+        let mut nogood =
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 1] & [domain_0 != 1])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
+        p.set_mode(Mode::EnableEqualityMerging);
+        let context = MinimisationContext {
+            proof_log: &mut ProofLog::default(),
+            unit_nogood_inference_codes: &mut HashMap::default(),
+            counters: &mut SolverStatistics::default(),
+            state: &mut state,
+        };
+        p.minimise(context, &mut nogood);
 
-        assert_eq!(predicates.len(), 1);
-        assert_eq!(predicates[0], predicate![domain_0 >= 4]);
+        assert_eq!(nogood.len(), 1);
+        assert_eq!(nogood[0], predicate![domain_0 >= 4]);
     }
 }
