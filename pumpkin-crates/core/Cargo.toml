@@ -27,10 +27,16 @@ num = "0.4.3"
 enum-map = "2.7.3"
 clap = { version = "4.5.40", optional = true }
 indexmap = "2.10.0"
-flate2 = { version = "1.1.2", optional = true }
+dyn-clone = "1.0.20"
+flate2 = { version = "1.1.2" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1.1"
+getrandom = { version = "0.2", features = ["js"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [features]
-default = ["gzipped-proofs"]
 debug-checks = []
 clap = ["dep:clap"]
-gzipped-proofs = ["dep:flate2"]

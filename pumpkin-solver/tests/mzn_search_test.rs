@@ -12,6 +12,7 @@ macro_rules! mzn_search_ordered {
             let _ = run_mzn_test::<true>(
                 stringify!($name),
                 "mzn_search",
+                false,
                 TestType::SolutionEnumeration,
             );
         }
@@ -25,6 +26,7 @@ macro_rules! mzn_search_unordered {
             let _ = run_mzn_test::<false>(
                 stringify!($name),
                 "mzn_search",
+                false,
                 TestType::SolutionEnumeration,
             );
         }

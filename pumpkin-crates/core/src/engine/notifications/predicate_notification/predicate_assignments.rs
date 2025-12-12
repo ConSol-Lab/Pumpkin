@@ -24,11 +24,6 @@ pub(crate) struct PredicateIdAssignments {
     trail: Trail<PredicateId>,
     /// The known value for each [`Predicate`] (represented by a [`PredicateId`]).
     predicate_values: KeyedVec<PredicateId, PredicateValue>,
-    /// The [`Predicate`]s which are currently known to be falsified used for notification.
-    ///
-    /// Note that this structure does not contain _all_ of the falsified [`Predicate`]s but rather
-    /// the one which have been falsified since the last round of notifications.
-    falsified_predicates: Vec<PredicateId>,
     /// The [`Predicate`]s which are currently known to be satisfied used for notification.
     ///
     /// Note that this structure does not contain _all_ of the satisfied [`Predicate`]s but rather
@@ -68,20 +63,14 @@ impl PredicateIdAssignments {
         self.predicate_values.keys()
     }
 
-    /// Returns the falsified predicates; note that this structure will be cleared once it is
-    /// dropped.
-    pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.falsified_predicates.drain(..)
-    }
-
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.satisfied_predicates.drain(..)
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     /// Stores a predicate in the [`PredicateIdAssignments`] with its corresponding
@@ -104,10 +93,8 @@ impl PredicateIdAssignments {
         if self.predicate_values[predicate_id] != value {
             // If it is not the same as what is already in the cache then we need to store it and
             // (potentially) update the predicates which should be notified
-            match value {
-                PredicateValue::AssignedTrue => self.satisfied_predicates.push(predicate_id),
-                PredicateValue::AssignedFalse => self.falsified_predicates.push(predicate_id),
-                _ => {}
+            if value == PredicateValue::AssignedTrue {
+                self.satisfied_predicates.push(predicate_id)
             }
             self.predicate_values[predicate_id] = value;
             self.trail.push(predicate_id)
@@ -175,14 +162,13 @@ impl PredicateIdAssignments {
         self.predicate_values[predicate_id].is_falsified()
     }
 
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) {
+    pub(crate) fn synchronise(&mut self, new_checkpoint: usize) {
         // We also need to clear the stored updated predicates; if this is not done, then it can be
         // the case that a predicate is erroneously said to be satisfied/falsified while it is not
         self.satisfied_predicates.clear();
-        self.falsified_predicates.clear();
 
         self.trail
-            .synchronise(new_decision_level)
+            .synchronise(new_checkpoint)
             .for_each(|predicate_id| {
                 // If the predicate id is unassigned then backtracking will not change anything;
                 // this is more of a sanity check since it should not be on the trail if it is

@@ -92,6 +92,7 @@ pub mod termination {
     //! the time budget is exceeded.
     #[cfg(doc)]
     use crate::Solver;
+    pub use crate::basic_types::time::*;
     pub use crate::engine::termination::TerminationCondition;
     pub use crate::engine::termination::combinator::*;
     pub use crate::engine::termination::indefinite::*;
@@ -115,6 +116,20 @@ pub mod predicates {
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
     #[cfg(doc)]
     use crate::variables::Literal;
+}
+
+pub mod state {
+    //! Contains structures for the state containing the propagators and variables.
+    //!
+    //! See [`State`] for more information.
+    pub use crate::api::solver::PropagatorHandle;
+    pub use crate::basic_types::PropagatorConflict;
+    pub use crate::engine::Conflict;
+    pub use crate::engine::EmptyDomain;
+    pub use crate::engine::EmptyDomainConflict;
+    pub use crate::engine::State;
+    pub use crate::engine::propagation::CurrentNogood;
+    pub use crate::engine::propagation::PropagatorId;
 }
 
 pub use crate::basic_types::Function;

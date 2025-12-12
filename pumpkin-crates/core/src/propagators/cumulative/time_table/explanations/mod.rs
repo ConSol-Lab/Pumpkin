@@ -100,7 +100,7 @@ pub(crate) fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
-    explanation.add(create_predicate_propagating_task_lower_bound_propagation(
+    explanation.push(create_predicate_propagating_task_lower_bound_propagation(
         explanation_type,
         context,
         task,
@@ -144,7 +144,7 @@ pub(crate) fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
-    explanation.add(create_predicate_propagating_task_upper_bound_propagation(
+    explanation.push(create_predicate_propagating_task_upper_bound_propagation(
         explanation_type,
         context,
         task,

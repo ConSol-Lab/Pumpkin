@@ -18,6 +18,7 @@ macro_rules! mzn_test {
             let output = run_mzn_test_with_options::<false>(
                 $file,
                 "mzn_constraints",
+                false,
                 TestType::SolutionEnumeration,
                 $options,
                 stringify!($name),

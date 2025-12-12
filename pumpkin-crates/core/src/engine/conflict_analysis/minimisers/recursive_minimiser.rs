@@ -3,14 +3,15 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::engine::Assignments;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::NogoodMinimiser;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicates::Predicate;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
+use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::CurrentNogood;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RecursiveMinimiser {
@@ -38,7 +39,7 @@ impl NogoodMinimiser for RecursiveMinimiser {
     fn minimise(&mut self, mut context: MinimisationContext, nogood: &mut Vec<Predicate>) {
         let num_literals_before_minimisation = nogood.len();
 
-        self.initialise_minimisation_data_structures(nogood, context.assignments());
+        self.initialise_minimisation_data_structures(nogood, &context.state.assignments);
 
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
@@ -78,7 +79,7 @@ impl RecursiveMinimiser {
         context: &mut MinimisationContext,
         current_nogood: &[Predicate],
     ) {
-        pumpkin_assert_moderate!(context.is_predicate_satisfied(input_predicate));
+        pumpkin_assert_eq_moderate!(context.state.truth_value(input_predicate), Some(true));
 
         self.current_depth += 1;
 
@@ -98,7 +99,11 @@ impl RecursiveMinimiser {
         // If the predicate is a decision predicate, it cannot be a predicate from the original
         // learned nogood since those are labelled as part of initialisation.
         // Therefore the decision literal is labelled as poison and then return.
-        if context.is_decision_predicate(&input_predicate) {
+        if context
+            .state
+            .assignments
+            .is_decision_predicate(&input_predicate)
+        {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
@@ -108,7 +113,8 @@ impl RecursiveMinimiser {
         // (levels from the original learned clause) cannot be removed.
         if !self.is_decision_level_allowed(
             context
-                .get_decision_level_for_predicate(&input_predicate)
+                .state
+                .get_checkpoint_for_predicate(input_predicate)
                 .unwrap(),
         ) {
             self.assign_predicate_label(input_predicate, Label::Poison);
@@ -119,11 +125,20 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
-        context.get_propagation_reason(input_predicate, &mut reason, current_nogood.into());
+        ConflictAnalysisContext::get_propagation_reason(
+            input_predicate,
+            CurrentNogood::from(current_nogood),
+            context.proof_log,
+            context.unit_nogood_inference_codes,
+            &mut reason,
+            context.state,
+        );
+
         for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
             if context
-                .get_decision_level_for_predicate(&antecedent_predicate)
+                .state
+                .get_checkpoint_for_predicate(antecedent_predicate)
                 .unwrap()
                 == 0
             {
@@ -132,13 +147,9 @@ impl RecursiveMinimiser {
                 // the proof is aware that that root-level assignment is used.
                 explain_root_assignment(
                     &mut RootExplanationContext {
-                        propagators: context.propagators,
                         proof_log: context.proof_log,
                         unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                        assignments: context.assignments,
-                        reason_store: context.reason_store,
-                        notification_engine: context.notification_engine,
-                        variable_names: context.variable_names,
+                        state: context.state,
                     },
                     antecedent_predicate,
                 );
@@ -230,9 +241,9 @@ impl RecursiveMinimiser {
             // Predicates from the current decision level are always kept.
             // This is the analogue of asserting literals.
             if assignments
-                .get_decision_level_for_predicate(&predicate)
+                .get_checkpoint_for_predicate(&predicate)
                 .unwrap()
-                == assignments.get_decision_level()
+                == assignments.get_checkpoint()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;
@@ -247,7 +258,7 @@ impl RecursiveMinimiser {
 
             self.mark_decision_level_as_allowed(
                 assignments
-                    .get_decision_level_for_predicate(&predicate)
+                    .get_checkpoint_for_predicate(&predicate)
                     .unwrap(),
             );
         }

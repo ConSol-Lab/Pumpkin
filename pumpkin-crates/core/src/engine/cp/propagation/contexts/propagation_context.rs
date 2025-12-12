@@ -1,11 +1,14 @@
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -96,6 +99,19 @@ impl<'a> PropagationContextMut<'a> {
         self.notification_engine.get_id(predicate)
     }
 
+    /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
+    ///
+    /// Returns the [`PredicateId`] assigned to the provided predicate, which will be provided
+    /// to [`Propagator::notify_predicate_satisfied`].
+    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_id,
+            self.trailed_values,
+            self.assignments,
+        )
+    }
+
     /// Apply a reification literal to all the explanations that are passed to the context.
     pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
         pumpkin_assert_simple!(
@@ -120,8 +136,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn get_decision_level(&self) -> usize {
-        self.assignments.get_decision_level()
+    pub(crate) fn get_checkpoint(&self) -> usize {
+        self.assignments.get_checkpoint()
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
@@ -232,15 +248,6 @@ pub(crate) trait ReadDomains: HasAssignments {
             .is_some_and(|truth_value| !truth_value)
     }
 
-    fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
-        self.assignments().is_decision_predicate(predicate)
-    }
-
-    fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
-        self.assignments()
-            .get_decision_level_for_predicate(predicate)
-    }
-
     fn is_literal_true(&self, literal: &Literal) -> bool {
         literal
             .get_integer_variable()
@@ -260,11 +267,11 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     /// Returns the holes which were created on the current decision level.
-    fn get_holes_on_current_decision_level<Var: IntegerVariable>(
+    fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
         &self,
         var: &Var,
     ) -> impl Iterator<Item = i32> {
-        var.get_holes_on_current_decision_level(self.assignments())
+        var.get_holes_at_current_checkpoint(self.assignments())
     }
 
     /// Returns all of the holes (currently) in the domain of `var` (including ones which were
@@ -340,7 +347,7 @@ impl PropagationContextMut<'_> {
         predicate: Predicate,
         reason: impl Into<Reason>,
         inference_code: InferenceCode,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         let slot = self.reason_store.new_slot();
 
         let modification_result = self.assignments.post_predicate(
@@ -358,12 +365,19 @@ impl PropagationContextMut<'_> {
                 );
                 Ok(())
             }
-            Err(e) => {
+            Err(EmptyDomain) => {
                 let _ = slot.populate(
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),
                 );
-                Err(e)
+                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                    self.assignments.remove_last_trail_element();
+
+                Err(EmptyDomainConflict {
+                    trigger_predicate,
+                    trigger_reason,
+                    trigger_inference_code,
+                })
             }
         }
     }

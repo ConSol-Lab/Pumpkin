@@ -1,12 +1,12 @@
 use downcast_rs::Downcast;
 use downcast_rs::impl_downcast;
+use dyn_clone::DynClone;
+use dyn_clone::clone_trait_object;
 
 use super::ExplanationContext;
 use super::PropagationContext;
 use super::PropagationContextMut;
 use super::contexts::PropagationContextWithTrailedValues;
-#[cfg(doc)]
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -21,11 +21,16 @@ use crate::predicates::Predicate;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+#[cfg(doc)]
+use crate::state::Conflict;
 use crate::statistics::statistic_logger::StatisticLogger;
 
 // We need to use this to cast from `Box<dyn Propagator>` to `NogoodPropagator`; rust inherently
 // does not allow downcasting from the trait definition to its concrete type.
 impl_downcast!(Propagator);
+
+// To allow the State object to be cloneable, we need to allow `Box<dyn Propagator>` to be cloned.
+clone_trait_object!(Propagator);
 
 /// All propagators implement the [`Propagator`] trait, which defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
@@ -36,7 +41,7 @@ impl_downcast!(Propagator);
 /// enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
-pub(crate) trait Propagator: Downcast {
+pub(crate) trait Propagator: Downcast + DynClone {
     /// Return the name of the propagator, this is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
@@ -59,10 +64,10 @@ pub(crate) trait Propagator: Downcast {
     /// This method extends the current partial
     /// assignments with inferred domain changes found by the
     /// [`Propagator`]. In case no conflict has been detected it should return
-    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Inconsistency`] which
+    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Conflict`] which
     /// contains the reason for the failure; either because a propagation caused an
-    /// an empty domain ([`Inconsistency::EmptyDomain`]) or because the logic of the propagator
-    /// found the current state to be inconsistent ([`Inconsistency::Conflict`]).
+    /// an empty domain ([`Conflict::EmptyDomain`]) or because the logic of the propagator
+    /// found the current state to be inconsistent ([`Conflict::Propagator`]).
     ///
     /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
     /// failure
@@ -120,14 +125,10 @@ pub(crate) trait Propagator: Downcast {
 
     /// Called when a [`PredicateId`] has been satisfied.
     ///
-    /// By default, the propagator does nothing when this method is called.
-    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
-
-    /// Called when a [`PredicateId`] has been falsified.
-    ///
-    /// By default, the propagator does nothing when this method is called.
-    #[allow(dead_code, reason = "Will be part of the public API")]
-    fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
+    /// By default, the propagator will be enqueued.
+    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {
+        EnqueueDecision::Enqueue
+    }
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.

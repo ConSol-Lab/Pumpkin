@@ -1,4 +1,3 @@
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::DomainEvents;
 use crate::engine::notifications::OpaqueDomainEvent;
@@ -14,6 +13,7 @@ use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the [`ReifiedPropagator`].
@@ -26,7 +26,7 @@ pub(crate) struct ReifiedPropagatorArgs<WrappedArgs> {
 impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
 where
     WrappedArgs: PropagatorConstructor<PropagatorImpl = WrappedPropagator>,
-    WrappedPropagator: Propagator,
+    WrappedPropagator: Propagator + Clone,
 {
     type PropagatorImpl = ReifiedPropagator<WrappedPropagator>;
 
@@ -78,7 +78,7 @@ pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     reason_buffer: Vec<Predicate>,
 }
 
-impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
+impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
         context: PropagationContextWithTrailedValues,
@@ -168,12 +168,12 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     }
 }
 
-impl<Prop: Propagator> ReifiedPropagator<Prop> {
+impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
-        if let Err(Inconsistency::Conflict(ref mut conflict)) = status {
+        if let Err(Conflict::Propagator(ref mut conflict)) = status {
             conflict
                 .conjunction
-                .add(self.reification_literal.get_true_predicate());
+                .push(self.reification_literal.get_true_predicate());
         }
         status
     }
@@ -231,7 +231,6 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
     use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
     use crate::containers::StorageKey;
@@ -346,7 +345,7 @@ mod tests {
             .expect_err("eagerly triggered the conflict");
 
         match inconsistency {
-            Inconsistency::Conflict(conflict_nogood) => {
+            Conflict::Propagator(conflict_nogood) => {
                 assert_eq!(
                     conflict_nogood.conjunction,
                     PropositionalConjunction::from(vec![
@@ -393,6 +392,7 @@ mod tests {
         assert!(matches!(enqueue, EnqueueDecision::Enqueue))
     }
 
+    #[derive(Clone)]
     struct GenericPropagator<Propagation, ConsistencyCheck> {
         propagation: Propagation,
         consistency_check: ConsistencyCheck,
@@ -402,9 +402,9 @@ mod tests {
     impl<Propagation, ConsistencyCheck> PropagatorConstructor
         for GenericPropagator<Propagation, ConsistencyCheck>
     where
-        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static + Clone,
         ConsistencyCheck:
-            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static,
+            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static + Clone,
     {
         type PropagatorImpl = Self;
 
@@ -423,9 +423,9 @@ mod tests {
 
     impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
     where
-        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static + Clone,
         ConsistencyCheck:
-            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static,
+            Fn(PropagationContextWithTrailedValues) -> Option<PropagatorConflict> + 'static + Clone,
     {
         fn name(&self) -> &str {
             "Generic Propagator"

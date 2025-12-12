@@ -10,7 +10,7 @@ use crate::containers::Slot;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
 }
@@ -24,6 +24,13 @@ pub struct PropagatorHandle<P> {
 }
 
 impl<P> PropagatorHandle<P> {
+    pub(crate) fn new(propagator_id: PropagatorId) -> PropagatorHandle<P> {
+        Self {
+            id: propagator_id,
+            propagator: PhantomData,
+        }
+    }
+
     /// Get the type-erased [`PropagatorId`] of the propagator.
     pub(crate) fn propagator_id(self) -> PropagatorId {
         self.id
@@ -63,6 +70,13 @@ impl PropagatorStore {
     /// Get an exclusive reference to the propagator identified by the given handle.
     ///
     /// For more info, see [`Self::get_propagator`].
+    pub(crate) fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
+        self[handle.id].downcast_ref()
+    }
+
+    /// Get an exclusive reference to the propagator identified by the given handle.
+    ///
+    /// For more info, see [`Self::get_propagator`].
     pub(crate) fn get_propagator_mut<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,
@@ -83,11 +97,6 @@ impl PropagatorStore {
         } else {
             None
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn keys(&self) -> impl Iterator<Item = PropagatorId> + '_ {
-        self.propagators.keys()
     }
 }
 

@@ -15,7 +15,7 @@ use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use crate::basic_types::PropagatorConflict;
-use crate::engine::EmptyDomain;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::ReadDomains;
@@ -57,9 +57,9 @@ fn check_explanation(
     let at_least_one_element_from_current_level = explanation.iter().any(|&predicate| {
         context
             .assignments()
-            .get_decision_level_for_predicate(&predicate)
+            .get_checkpoint_for_predicate(&predicate)
             .unwrap()
-            == context.assignments().get_decision_level()
+            == context.assignments().get_checkpoint()
     });
     if !at_least_one_element_from_current_level {
         eprintln!(
@@ -89,7 +89,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -154,7 +154,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -219,7 +219,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -250,7 +250,7 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
-                reason.add(lower_bound_predicate_propagating_task);
+                reason.push(lower_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
@@ -270,7 +270,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {
@@ -305,7 +305,7 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
-                reason.add(upper_bound_predicate_propagating_task);
+                reason.push(upper_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
@@ -326,7 +326,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain>
+    ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
     {

@@ -149,7 +149,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                     break;
                 }
             } else {
-                propagation_reason.add(predicate![var <= rhs_lb - 1]);
+                propagation_reason.push(predicate![var <= rhs_lb - 1]);
             }
         }
         // If there is exactly one variable UB(a_i) >= LB(rhs, constraint_tag }, then the
@@ -159,7 +159,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         if let Some(propagating_variable) = propagating_variable {
             let var_lb = context.lower_bound(propagating_variable);
             if var_lb < rhs_lb {
-                propagation_reason.add(predicate![self.rhs >= rhs_lb]);
+                propagation_reason.push(predicate![self.rhs >= rhs_lb]);
                 context.post(
                     predicate![propagating_variable >= rhs_lb],
                     propagation_reason,
