@@ -125,8 +125,10 @@ pub(crate) trait Propagator: Downcast + DynClone {
 
     /// Called when a [`PredicateId`] has been satisfied.
     ///
-    /// By default, the propagator does nothing when this method is called.
-    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
+    /// By default, the propagator will be enqueued.
+    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {
+        EnqueueDecision::Enqueue
+    }
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.

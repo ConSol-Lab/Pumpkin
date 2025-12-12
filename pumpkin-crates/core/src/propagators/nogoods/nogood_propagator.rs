@@ -16,9 +16,9 @@ use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
-use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -34,6 +34,7 @@ use crate::proof::InferenceCode;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -202,8 +203,9 @@ impl Propagator for NogoodPropagator {
         0
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
+    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
         self.updated_predicate_ids.push(predicate_id);
+        EnqueueDecision::Enqueue
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Conflict> {
@@ -279,12 +281,10 @@ impl Propagator for NogoodPropagator {
                         nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
+                            &mut context,
                             nogood_predicates[1],
                             watcher,
-                            context.notification_engine,
-                            context.trailed_values,
                             &mut self.watch_lists,
-                            context.assignments,
                         );
 
                         // No propagation is taking place, go to the next nogood.
@@ -475,20 +475,16 @@ impl NogoodPropagator {
 
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
+            context,
             self.nogood_predicates[nogood_id][0],
             watcher,
-            context.notification_engine,
-            context.trailed_values,
             &mut self.watch_lists,
-            context.assignments,
         );
         NogoodPropagator::add_watcher(
+            context,
             self.nogood_predicates[nogood_id][1],
             watcher,
-            context.notification_engine,
-            context.trailed_values,
             &mut self.watch_lists,
-            context.assignments,
         );
 
         // Then we propagate the asserting predicate and as the reason we give the index to the
@@ -647,20 +643,16 @@ impl NogoodPropagator {
             };
 
             NogoodPropagator::add_watcher(
+                context,
                 self.nogood_predicates[nogood_id][0],
                 watcher,
-                context.notification_engine,
-                context.trailed_values,
                 &mut self.watch_lists,
-                context.assignments,
             );
             NogoodPropagator::add_watcher(
+                context,
                 self.nogood_predicates[nogood_id][1],
                 watcher,
-                context.notification_engine,
-                context.trailed_values,
                 &mut self.watch_lists,
-                context.assignments,
             );
 
             Ok(())
@@ -672,12 +664,10 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate.
     fn add_watcher(
+        context: &mut PropagationContextMut,
         predicate: PredicateId,
         watcher: Watcher,
-        notification_engine: &mut NotificationEngine,
-        trailed_values: &mut TrailedValues,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
-        assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
         if predicate.id as usize >= watch_lists.len() {
@@ -685,7 +675,9 @@ impl NogoodPropagator {
         }
 
         if watch_lists[predicate].is_empty() {
-            notification_engine.track_predicate(predicate, trailed_values, assignments);
+            let actual_predicate = context.get_predicate(predicate);
+            let other_id = context.register_predicate(actual_predicate);
+            pumpkin_assert_eq_simple!(predicate, other_id);
         }
 
         watch_lists[predicate].push(watcher);

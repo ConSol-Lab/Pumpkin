@@ -7,6 +7,8 @@ use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -95,6 +97,19 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         self.notification_engine.get_id(predicate)
+    }
+
+    /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
+    ///
+    /// Returns the [`PredicateId`] assigned to the provided predicate, which will be provided
+    /// to [`Propagator::notify_predicate_satisfied`].
+    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_id,
+            self.trailed_values,
+            self.assignments,
+        )
     }
 
     /// Apply a reification literal to all the explanations that are passed to the context.

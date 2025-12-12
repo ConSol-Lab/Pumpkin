@@ -98,11 +98,6 @@ impl PropagatorStore {
             None
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn keys(&self) -> impl Iterator<Item = PropagatorId> + '_ {
-        self.propagators.keys()
-    }
 }
 
 impl Index<PropagatorId> for PropagatorStore {
