@@ -5,8 +5,8 @@ use enumset::EnumSetType;
 
 use crate::containers::KeyedVec;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
+use crate::propagation::PropagatorVarId;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct WatchListDomainEvents {

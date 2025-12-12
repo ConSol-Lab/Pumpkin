@@ -4,7 +4,6 @@ pub(crate) mod basic_types;
 pub mod containers;
 pub(crate) mod engine;
 pub(crate) mod math;
-pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
 
 #[cfg(doc)]
@@ -16,6 +15,8 @@ pub mod branching;
 pub mod constraints;
 pub mod optimisation;
 pub mod proof;
+pub mod propagation;
+pub mod propagators;
 pub mod statistics;
 
 pub use convert_case;

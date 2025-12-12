@@ -7,14 +7,14 @@ use log::debug;
 use super::TrailedValues;
 use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
-use super::propagation::ExplanationContext;
-use super::propagation::store::PropagatorStore;
 use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::state::Conflict;
 
@@ -77,7 +77,7 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
@@ -255,7 +255,7 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
@@ -370,7 +370,7 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let context = PropagationContextMut::new(
+                    let context = PropagationContext::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
@@ -437,7 +437,7 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,

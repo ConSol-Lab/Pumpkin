@@ -2,25 +2,25 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
 use crate::engine::TrailedInteger;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::ManipulateTrailedValues;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::ManipulateTrailedValues;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
 declare_inference_label!(LinearBounds);
@@ -92,7 +92,7 @@ impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
+    fn create_conflict(&self, context: Domains) -> PropagatorConflict {
         PropagatorConflict {
             conjunction: self
                 .x
@@ -108,12 +108,9 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
-        if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
-            Some(self.create_conflict(context.as_readonly()))
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+        if (self.c as i64) < domains.value(self.lower_bound_left_hand_side) {
+            Some(self.create_conflict(domains))
         } else {
             None
         }
@@ -121,7 +118,7 @@ where
 
     fn notify(
         &mut self,
-        mut context: PropagationContextWithTrailedValues,
+        mut context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -170,8 +167,8 @@ where
         &self.reason_buffer
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
@@ -186,7 +183,7 @@ where
                     // This means that the lower-bounds of the current variables will always be
                     // higher than the right-hand side (with a maximum value of i32). We thus
                     // return a conflict
-                    return Err(self.create_conflict(context.as_readonly()).into());
+                    return Err(self.create_conflict(context.domains()).into());
                 }
                 Err(_) => {
                     // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
@@ -208,10 +205,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let lower_bound_left_hand_side = self
             .x
             .iter()
@@ -229,7 +223,7 @@ where
                 // This means that the lower-bounds of the current variables will always be
                 // higher than the right-hand side (with a maximum value of i32). We thus
                 // return a conflict
-                return Err(self.create_conflict(context.as_readonly()).into());
+                return Err(self.create_conflict(context.domains()).into());
             }
             Err(_) => {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an

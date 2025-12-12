@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use super::statistic_logging::log_statistic;
 #[cfg(doc)]
-use crate::engine::propagation::Propagator;
+use crate::propagation::Propagator;
 
 /// Responsible for logging the statistics with the provided prefix; currently used when logging
 /// the statistics of propagators.

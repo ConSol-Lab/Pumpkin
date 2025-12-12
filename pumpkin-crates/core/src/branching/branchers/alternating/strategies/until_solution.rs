@@ -143,7 +143,7 @@ mod tests {
         ));
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),
@@ -164,7 +164,7 @@ mod tests {
         ));
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),
@@ -198,7 +198,7 @@ mod tests {
         ));
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),
@@ -219,7 +219,7 @@ mod tests {
         ));
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::new(assignments.clone()).as_reference());
+        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
         let _ = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom::default(),

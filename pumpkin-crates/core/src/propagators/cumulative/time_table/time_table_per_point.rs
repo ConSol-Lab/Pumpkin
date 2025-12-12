@@ -11,20 +11,20 @@ use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -98,7 +98,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
         self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
@@ -108,7 +108,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
@@ -117,7 +117,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         }
 
         let time_table = create_time_table_per_point_from_scratch(
-            context.as_readonly(),
+            context.domains(),
             self.inference_code.unwrap(),
             &self.parameters,
         )?;
@@ -133,14 +133,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         )
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -154,14 +154,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -184,10 +184,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         debug_propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
@@ -254,25 +251,22 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 }
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(
-        context.as_readonly(),
-        inference_code,
-        parameters,
-    )?;
+    let time_table =
+        create_time_table_per_point_from_scratch(context.domains(), inference_code, parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
         inference_code,
         time_table.values(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
+        &mut updatable_structures.recreate_from_context(context.domains(), parameters),
     )
 }
 
@@ -280,9 +274,9 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable
 mod tests {
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;

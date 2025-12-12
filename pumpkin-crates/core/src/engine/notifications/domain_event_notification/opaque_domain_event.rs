@@ -1,7 +1,10 @@
 use super::DomainEvent;
+#[cfg(doc)]
+use crate::engine::variables::IntegerVariable;
 
-/// A wrapper for a domain event, which forces the propagator implementation to map the event
-/// through the variable view.
+/// A [`DomainEvent`] that happened in the solver.
+///
+/// Obtain the event from the perspective of a variable through [`IntegerVariable::unpack_event`].
 #[derive(Clone, Debug, Copy)]
 pub struct OpaqueDomainEvent(DomainEvent);
 

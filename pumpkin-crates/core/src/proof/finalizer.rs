@@ -7,9 +7,9 @@ use super::ProofLog;
 use crate::containers::HashMap;
 use crate::engine::State;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::propagation::CurrentNogood;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagation::CurrentNogood;
 
 pub(crate) struct FinalizingContext<'a> {
     pub(crate) conflict: PropositionalConjunction,

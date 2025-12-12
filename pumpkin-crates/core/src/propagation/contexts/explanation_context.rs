@@ -1,17 +1,20 @@
 use std::sync::LazyLock;
 
-use super::HasAssignments;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
 use crate::engine::Assignments;
 use crate::engine::notifications::NotificationEngine;
 use crate::predicates::Predicate;
+use crate::propagation::HasAssignments;
+#[cfg(doc)]
+use crate::propagation::Propagator;
 
 /// The context that is available when lazily explaining propagations.
 ///
-/// See [`pumpkin_solver::engine::propagation::Propagator`] for more information.
-pub(crate) struct ExplanationContext<'a> {
+/// See [`Propagator`] for more information.
+#[derive(Debug)]
+pub struct ExplanationContext<'a> {
     assignments: &'a Assignments,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     current_nogood: CurrentNogood<'a>,
@@ -46,10 +49,6 @@ impl<'a> ExplanationContext<'a> {
         }
     }
 
-    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
-        self.notification_engine.get_predicate(predicate_id)
-    }
-
     pub(crate) fn without_working_nogood(
         assignments: &'a Assignments,
         trail_position: usize,
@@ -63,13 +62,16 @@ impl<'a> ExplanationContext<'a> {
         }
     }
 
+    pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
+    }
+
     /// Get the current working nogood.
     ///
     /// The working nogood does not necessarily contain the predicate that is being explained.
     /// However, the explanation will be used to either resolve with the working nogood or minimize
     /// it some other way.
-    #[allow(unused, reason = "it will be part of the public API at some point")]
-    pub(crate) fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
+    pub fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.current_nogood.iter()
     }
 
@@ -77,7 +79,7 @@ impl<'a> ExplanationContext<'a> {
     ///
     /// For example, if the context is created for explaining a predicate `[x >= v]` at trail
     /// position i, then this method will return `i - 1`
-    pub(crate) fn get_trail_position(&self) -> usize {
+    pub fn get_trail_position(&self) -> usize {
         self.trail_position - 1
     }
 }
@@ -95,6 +97,9 @@ static EMPTY_PREDICATE_IDS: LazyLock<PredicateIdGenerator> =
 
 static EMPTY_PREDICATES: [Predicate; 0] = [];
 
+/// The current nogood that is being analyzed.
+///
+/// Can be used by propagators to guide how they explain their propagations.
 #[derive(Debug)]
 pub struct CurrentNogood<'a> {
     heap: &'a KeyValueHeap<PredicateId, u32>,

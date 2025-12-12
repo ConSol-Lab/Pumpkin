@@ -128,8 +128,8 @@ pub mod state {
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::EmptyDomainConflict;
     pub use crate::engine::State;
-    pub use crate::engine::propagation::CurrentNogood;
-    pub use crate::engine::propagation::PropagatorId;
+    pub use crate::propagation::CurrentNogood;
+    pub use crate::propagation::PropagatorId;
 }
 
 pub use crate::basic_types::Function;

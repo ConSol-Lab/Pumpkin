@@ -2,18 +2,18 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 
 declare_inference_label!(BinaryNotEquals);
 
@@ -66,14 +66,11 @@ where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         // We first check whether they are both fixed
-        if context.is_fixed(&self.a) && context.is_fixed(&self.b) {
-            let lb_a = context.lower_bound(&self.a);
-            let lb_b = context.lower_bound(&self.b);
+        if domains.is_fixed(&self.a) && domains.is_fixed(&self.b) {
+            let lb_a = domains.lower_bound(&self.a);
+            let lb_b = domains.lower_bound(&self.b);
 
             // If they are, then we check whether they are assigned to the same value
             if lb_a == lb_b {
@@ -98,8 +95,8 @@ where
         "BinaryNotEq"
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
@@ -135,11 +132,8 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
@@ -175,8 +169,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
 
     #[test]

@@ -15,6 +15,7 @@ use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
+use crate::propagation::ReadDomains;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -239,7 +240,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                 return predicate;
             }
             // Match the truth value according to the best solution.
-            if solution.is_predicate_satisfied(predicate) {
+            if solution.evaluate_predicate(predicate) == Some(true) {
                 predicate
             } else {
                 !predicate

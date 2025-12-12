@@ -3,9 +3,9 @@ use std::cmp::max;
 use super::disjunctive_task::DisjunctiveTask;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
+use crate::propagation::Domains;
+use crate::propagation::LocalId;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -57,7 +57,7 @@ pub(super) struct ThetaTree {
 impl ThetaTree {
     pub(super) fn new<Var: IntegerVariable>(
         tasks: &[DisjunctiveTask<Var>],
-        context: PropagationContext,
+        context: Domains,
     ) -> Self {
         // First we sort the tasks by lower-bound
         let mut sorted_tasks = tasks.to_vec();
@@ -97,7 +97,7 @@ impl ThetaTree {
     pub(super) fn add<Var: IntegerVariable>(
         &mut self,
         task: &DisjunctiveTask<Var>,
-        context: PropagationContext,
+        context: Domains,
     ) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];

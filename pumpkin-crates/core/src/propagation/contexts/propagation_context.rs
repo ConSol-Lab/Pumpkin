@@ -7,24 +7,31 @@ use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
 use crate::engine::predicates::predicate::Predicate;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
-use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+#[cfg(doc)]
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
+#[cfg(doc)]
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
-pub(crate) struct PropagationContextWithTrailedValues<'a> {
+/// Provided to the propagator when it is notified of a domain event.
+///
+/// The difference with [`PropagationContext`] is that it is not possible to perform a propagation
+/// in the notify callback.
+#[derive(Debug)]
+pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
     pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
 }
 
-impl<'a> PropagationContextWithTrailedValues<'a> {
+impl<'a> NotificationContext<'a> {
     pub(crate) fn new(
         trailed_values: &'a mut TrailedValues,
         assignments: &'a Assignments,
@@ -37,34 +44,18 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
-            assignments: self.assignments,
-        }
+    /// Get the current domains.
+    pub fn domains(&self) -> Domains<'_> {
+        Domains::new(self.assignments, self.trailed_values)
     }
 }
 
-/// [`PropagationContext`] is passed to propagators during propagation.
-/// It may be queried to retrieve information about the current variable domains such as the
-/// lower-bound of a particular variable, or used to apply changes to the domain of a variable
-/// e.g. set `[x >= 5]`.
+/// Provides information about the state of the solver to a propagator.
 ///
-///
-/// Note that the [`PropagationContext`] is the only point of communication beween
-/// the propagations and the solver during propagation.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct PropagationContext<'a> {
-    pub assignments: &'a Assignments,
-}
-
-impl<'a> PropagationContext<'a> {
-    pub(crate) fn new(assignments: &'a Assignments) -> Self {
-        PropagationContext { assignments }
-    }
-}
-
+/// Domains can be read through the implementation of [`ReadDomains`], and changes to the state can
+/// be made via [`Self::post`].
 #[derive(Debug)]
-pub(crate) struct PropagationContextMut<'a> {
+pub struct PropagationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
@@ -73,7 +64,7 @@ pub(crate) struct PropagationContextMut<'a> {
     reification_literal: Option<Literal>,
 }
 
-impl<'a> PropagationContextMut<'a> {
+impl<'a> PropagationContext<'a> {
     pub(crate) fn new(
         trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
@@ -81,7 +72,7 @@ impl<'a> PropagationContextMut<'a> {
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
     ) -> Self {
-        PropagationContextMut {
+        PropagationContext {
             trailed_values,
             assignments,
             reason_store,
@@ -91,25 +82,29 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
-        self.notification_engine.get_predicate(predicate_id)
-    }
-
-    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
-        self.notification_engine.get_id(predicate)
-    }
-
     /// Register the propagator to be enqueued when the provided [`Predicate`] becomes true.
     ///
     /// Returns the [`PredicateId`] assigned to the provided predicate, which will be provided
-    /// to [`Propagator::notify_predicate_satisfied`].
-    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+    /// to [`Propagator::notify_predicate_id_satisfied`].
+    pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
         self.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
             self.trailed_values,
             self.assignments,
         )
+    }
+
+    /// Get the [`Predicate`] for a given [`PredicateId`].
+    pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
+        self.notification_engine.get_predicate(predicate_id)
+    }
+
+    /// Get a [`PredicateId`] for the given [`Predicate`].
+    ///
+    /// If no ID exists, one will be created.
+    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+        self.notification_engine.get_id(predicate)
     }
 
     /// Apply a reification literal to all the explanations that are passed to the context.
@@ -122,18 +117,9 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues<'_> {
-        PropagationContextWithTrailedValues {
-            trailed_values: self.trailed_values,
-            assignments: self.assignments,
-            predicate_id_assignments: self.notification_engine.predicate_id_assignments(),
-        }
-    }
-
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
-            assignments: self.assignments,
-        }
+    /// Get the current domain information.
+    pub fn domains(&self) -> Domains<'_> {
+        Domains::new(self.assignments, self.trailed_values)
     }
 
     pub(crate) fn get_checkpoint(&self) -> usize {
@@ -160,13 +146,6 @@ impl<'a> PropagationContextMut<'a> {
     }
 }
 
-/// A trait which defines common methods for retrieving the [`Assignments`] and
-/// [`AssignmentsPropositional`] from the structure which implements this trait.
-pub trait HasAssignments {
-    /// Returns the stored [`Assignments`].
-    fn assignments(&self) -> &Assignments;
-}
-
 pub(crate) trait HasTrailedValues {
     fn trailed_values(&self) -> &TrailedValues;
     fn trailed_values_mut(&mut self) -> &mut TrailedValues;
@@ -174,8 +153,9 @@ pub(crate) trait HasTrailedValues {
 
 mod private {
     use super::*;
+    use crate::propagation::HasAssignments;
 
-    impl HasTrailedValues for PropagationContextWithTrailedValues<'_> {
+    impl HasTrailedValues for NotificationContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -185,7 +165,7 @@ mod private {
         }
     }
 
-    impl HasTrailedValues for PropagationContextMut<'_> {
+    impl HasTrailedValues for PropagationContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -201,13 +181,7 @@ mod private {
         }
     }
 
-    impl HasAssignments for PropagationContextMut<'_> {
-        fn assignments(&self) -> &Assignments {
-            self.assignments
-        }
-    }
-
-    impl HasAssignments for PropagationContextWithTrailedValues<'_> {
+    impl HasAssignments for NotificationContext<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }
@@ -235,122 +209,14 @@ pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
 
 impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
-pub(crate) trait ReadDomains: HasAssignments {
-    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
-        self.assignments()
-            .evaluate_predicate(predicate)
-            .is_some_and(|truth_value| truth_value)
-    }
-
-    fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
-        self.assignments()
-            .evaluate_predicate(predicate)
-            .is_some_and(|truth_value| !truth_value)
-    }
-
-    fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
-        self.assignments().is_decision_predicate(predicate)
-    }
-
-    fn get_checkpoint_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
-        self.assignments().get_checkpoint_for_predicate(predicate)
-    }
-
-    fn is_literal_true(&self, literal: &Literal) -> bool {
-        literal
-            .get_integer_variable()
-            .lower_bound(self.assignments())
-            == 1
-    }
-
-    fn is_literal_false(&self, literal: &Literal) -> bool {
-        literal
-            .get_integer_variable()
-            .upper_bound(self.assignments())
-            == 0
-    }
-
-    fn is_literal_fixed(&self, literal: &Literal) -> bool {
-        self.is_fixed(literal)
-    }
-
-    /// Returns the holes which were created on the current decision level.
-    fn get_holes_at_current_checkpoint<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-    ) -> impl Iterator<Item = i32> {
-        var.get_holes_at_current_checkpoint(self.assignments())
-    }
-
-    /// Returns all of the holes (currently) in the domain of `var` (including ones which were
-    /// created at previous decision levels).
-    fn get_holes<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
-        var.get_holes(self.assignments())
-    }
-
-    /// Returns `true` if the domain of the given variable is singleton.
-    fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool {
-        self.lower_bound(var) == self.upper_bound(var)
-    }
-
-    fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.lower_bound(self.assignments())
-    }
-
-    #[allow(unused, reason = "Will be part of the API")]
-    fn lower_bound_at_trail_position<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-        trail_position: usize,
-    ) -> i32 {
-        var.lower_bound_at_trail_position(self.assignments(), trail_position)
-    }
-
-    fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.upper_bound(self.assignments())
-    }
-
-    #[allow(unused, reason = "Will be part of the API")]
-    fn upper_bound_at_trail_position<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-        trail_position: usize,
-    ) -> i32 {
-        var.upper_bound_at_trail_position(self.assignments(), trail_position)
-    }
-
-    fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {
-        var.contains(self.assignments(), value)
-    }
-
-    fn contains_at_trail_position<Var: IntegerVariable>(
-        &self,
-        var: &Var,
-        value: i32,
-        trail_position: usize,
-    ) -> bool {
-        var.contains_at_trail_position(self.assignments(), value, trail_position)
-    }
-
-    fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
-        var.iterate_domain(self.assignments())
-    }
-}
-
-impl<T: HasAssignments> ReadDomains for T {}
-
-impl PropagationContextMut<'_> {
-    pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
-        self.assignments.evaluate_predicate(predicate)
-    }
-
+impl PropagationContext<'_> {
     /// Assign the truth-value of the given [`Predicate`] to `true` in the current partial
     /// assignment.
     ///
     /// If the truth-value is already `true`, then this is a no-op. Alternatively, if the
     /// truth-value is `false`, then a conflict is triggered and the [`EmptyDomain`] error is
     /// returned. At that point, no-more propagation should happen.
-    pub(crate) fn post(
+    pub fn post(
         &mut self,
         predicate: Predicate,
         reason: impl Into<Reason>,
