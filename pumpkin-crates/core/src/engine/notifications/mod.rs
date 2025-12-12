@@ -346,14 +346,16 @@ impl NotificationEngine {
         propagators: &mut PropagatorStore,
     ) {
         for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
-            let propagators_to_notify = self.watch_list_predicate_id[predicate_id]
-                .iter()
-                .copied()
-                .chain(std::iter::once(nogood_propagator_handle.propagator_id()));
+            if let Some(watch_list) = self.watch_list_predicate_id.get(predicate_id) {
+                let propagators_to_notify = watch_list.iter().copied();
 
-            for propagator_id in propagators_to_notify {
-                propagators[propagator_id].notify_predicate_id_satisfied(predicate_id);
+                for propagator_id in propagators_to_notify {
+                    propagators[propagator_id].notify_predicate_id_satisfied(predicate_id);
+                }
             }
+
+            propagators[nogood_propagator_handle.propagator_id()]
+                .notify_predicate_id_satisfied(predicate_id);
         }
     }
 

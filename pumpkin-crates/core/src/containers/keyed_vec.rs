@@ -42,6 +42,10 @@ impl<Key, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
+    pub(crate) fn get(&self, key: Key) -> Option<&Value> {
+        self.elements.get(key.index())
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }
