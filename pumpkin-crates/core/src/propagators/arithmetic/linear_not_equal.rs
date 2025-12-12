@@ -16,8 +16,8 @@ use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -118,7 +118,7 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -173,7 +173,7 @@ where
         }
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
@@ -223,10 +223,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let num_fixed = self
             .terms
             .iter()

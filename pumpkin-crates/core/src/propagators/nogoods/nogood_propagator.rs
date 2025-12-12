@@ -26,7 +26,7 @@ use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -208,7 +208,7 @@ impl Propagator for NogoodPropagator {
         EnqueueDecision::Enqueue
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Conflict> {
+    fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -335,7 +335,7 @@ impl Propagator for NogoodPropagator {
 
     fn debug_propagate_from_scratch(
         &self,
-        mut context: PropagationContextMut,
+        mut context: PropagationContext,
     ) -> Result<(), Conflict> {
         // Very inefficient version!
 
@@ -428,7 +428,7 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
@@ -516,7 +516,7 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> PropagationStatusCP {
         self.add_permanent_nogood(nogood, inference_code, context)
     }
@@ -526,7 +526,7 @@ impl NogoodPropagator {
         &mut self,
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
             context.get_checkpoint() == 0,
@@ -664,7 +664,7 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate.
     fn add_watcher(
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         predicate: PredicateId,
         watcher: Watcher,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
@@ -1110,7 +1110,7 @@ impl NogoodPropagator {
     ///     3. Detecting predicates falsified at the root. In that case, the nogood is preprocessed
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
-    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContextMut) {
+    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContext) {
         pumpkin_assert_simple!(context.get_checkpoint() == 0);
         // The code below is broken down into several parts
 
@@ -1149,7 +1149,7 @@ impl NogoodPropagator {
     fn debug_propagate_nogood_from_scratch(
         &self,
         nogood_id: NogoodId,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> Result<(), Conflict> {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];

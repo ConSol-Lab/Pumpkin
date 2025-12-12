@@ -20,7 +20,7 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorId;
 use crate::propagators::nogoods::NogoodPropagator;
@@ -212,7 +212,7 @@ impl TestSolver {
     }
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
-        let context = PropagationContextMut::new(
+        let context = PropagationContext::new(
             &mut self.state.trailed_values,
             &mut self.state.assignments,
             &mut self.state.reason_store,
@@ -231,7 +231,7 @@ impl TestSolver {
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut self.state.trailed_values,
                     &mut self.state.assignments,
                     &mut self.state.reason_store,

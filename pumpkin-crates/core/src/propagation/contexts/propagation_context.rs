@@ -20,14 +20,18 @@ use crate::propagation::PropagatorId;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
+/// Provided to the propagator when it is notified of a domain event.
+///
+/// The difference with [`PropagationContext`] is that it is not possible to perform a propagation
+/// in the notify callback.
 #[derive(Debug)]
-pub struct PropagationContextWithTrailedValues<'a> {
+pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
     pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
 }
 
-impl<'a> PropagationContextWithTrailedValues<'a> {
+impl<'a> NotificationContext<'a> {
     pub(crate) fn new(
         trailed_values: &'a mut TrailedValues,
         assignments: &'a Assignments,
@@ -40,7 +44,8 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
         }
     }
 
-    pub(crate) fn domains(&self) -> Domains<'_> {
+    /// Get the current domains.
+    pub fn domains(&self) -> Domains<'_> {
         Domains {
             assignments: self.assignments,
         }
@@ -50,9 +55,9 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
 /// Provides information about the state of the solver to a propagator.
 ///
 /// Domains can be read through the implementation of [`ReadDomains`], and changes to the state can
-/// be made via [`PropagationContextMut::post`].
+/// be made via [`Self::post`].
 #[derive(Debug)]
-pub struct PropagationContextMut<'a> {
+pub struct PropagationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
@@ -61,7 +66,7 @@ pub struct PropagationContextMut<'a> {
     reification_literal: Option<Literal>,
 }
 
-impl<'a> PropagationContextMut<'a> {
+impl<'a> PropagationContext<'a> {
     pub(crate) fn new(
         trailed_values: &'a mut TrailedValues,
         assignments: &'a mut Assignments,
@@ -69,7 +74,7 @@ impl<'a> PropagationContextMut<'a> {
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
     ) -> Self {
-        PropagationContextMut {
+        PropagationContext {
             trailed_values,
             assignments,
             reason_store,
@@ -114,8 +119,8 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    pub(crate) fn as_trailed_readonly(&mut self) -> PropagationContextWithTrailedValues<'_> {
-        PropagationContextWithTrailedValues {
+    pub(crate) fn as_trailed_readonly(&mut self) -> NotificationContext<'_> {
+        NotificationContext {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
             predicate_id_assignments: self.notification_engine.predicate_id_assignments(),
@@ -162,7 +167,7 @@ mod private {
     use super::*;
     use crate::propagation::HasAssignments;
 
-    impl HasTrailedValues for PropagationContextWithTrailedValues<'_> {
+    impl HasTrailedValues for NotificationContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -172,7 +177,7 @@ mod private {
         }
     }
 
-    impl HasTrailedValues for PropagationContextMut<'_> {
+    impl HasTrailedValues for PropagationContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             self.trailed_values
         }
@@ -182,13 +187,13 @@ mod private {
         }
     }
 
-    impl HasAssignments for PropagationContextMut<'_> {
+    impl HasAssignments for PropagationContext<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }
     }
 
-    impl HasAssignments for PropagationContextWithTrailedValues<'_> {
+    impl HasAssignments for NotificationContext<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }
@@ -216,7 +221,7 @@ pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
 
 impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
-impl PropagationContextMut<'_> {
+impl PropagationContext<'_> {
     /// Assign the truth-value of the given [`Predicate`] to `true` in the current partial
     /// assignment.
     ///

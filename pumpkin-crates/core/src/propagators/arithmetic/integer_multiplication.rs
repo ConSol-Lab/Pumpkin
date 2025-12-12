@@ -8,7 +8,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -85,13 +85,13 @@ where
         "IntTimes"
     }
 
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c, self.inference_code)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    mut context: PropagationContextMut,
+    mut context: PropagationContext,
     a: &VA,
     b: &VB,
     c: &VC,
@@ -214,7 +214,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 /// Note that this method does not propagate a value if 0 is in the domain as, for example, 0 * -3 =
 /// 0 and 0 * 3 = 0 are both equally valid.
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     a: &VA,
     b: &VB,
     c: &VC,

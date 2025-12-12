@@ -22,7 +22,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -86,7 +86,7 @@ impl CumulativePropagationHandler {
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -151,7 +151,7 @@ impl CumulativePropagationHandler {
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -216,7 +216,7 @@ impl CumulativePropagationHandler {
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_lower_bound_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -267,7 +267,7 @@ impl CumulativePropagationHandler {
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_upper_bound_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -323,7 +323,7 @@ impl CumulativePropagationHandler {
     /// bounds of `propagating_task`.
     pub(crate) fn propagate_holes_in_domain<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -422,7 +422,7 @@ impl CumulativePropagationHandler {
     /// Either we get the stored stored profile explanation or we initialize it.
     fn get_stored_profile_explanation_or_init<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
     ) -> Rc<PropositionalConjunction>
     where
@@ -494,7 +494,7 @@ pub(crate) mod test_propagation_handler {
     use crate::propagation::Domains;
     use crate::propagation::ExplanationContext;
     use crate::propagation::LocalId;
-    use crate::propagation::PropagationContextMut;
+    use crate::propagation::PropagationContext;
     use crate::propagation::PropagatorId;
     use crate::propagation::store::PropagatorStore;
     use crate::propagators::ResourceProfile;
@@ -589,7 +589,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -653,7 +653,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -703,7 +703,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -767,7 +767,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,

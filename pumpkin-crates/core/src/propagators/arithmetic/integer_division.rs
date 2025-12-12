@@ -7,7 +7,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -93,7 +93,7 @@ where
         "Division"
     }
 
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(
             context,
             &self.numerator,
@@ -105,7 +105,7 @@ where
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    mut context: PropagationContextMut,
+    mut context: PropagationContext,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
@@ -189,7 +189,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 /// - The denominator is at least as large as the ratio between the largest ceiled ratio between
 ///   `numerator + 1` and `rhs + 1`
 fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
@@ -279,7 +279,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
 /// - The maximum value of the numerator is smaller than `(ub(rhs) + 1) * denominator - 1`, note
 ///   that this might not be the most constrictive bound
 fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
@@ -325,7 +325,7 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
 /// - If the numerator is non-positive then the right-hand side must be non-positive as well
 /// - If the right-hand is negative then the numerator must be negative as well
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,

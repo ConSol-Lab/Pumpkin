@@ -10,12 +10,12 @@ use crate::conjunction;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::DomainEvent;
 use crate::propagation::PropagatorConstructorContext;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
 use crate::propagation::Domains;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
@@ -235,7 +235,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     /// [`TimeTableOverIntervalIncrementalPropagator::is_time_table_outdated`] is true.
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
-    fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn update_time_table(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_over_interval_from_scratch(
@@ -375,7 +375,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
                 context.domains(),
@@ -419,7 +419,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -506,10 +506,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         "CumulativeTimeTableOverIntervalIncremental"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTableOverInterval`
         debug_propagate_from_scratch_time_table_interval(
             &mut context,

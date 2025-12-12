@@ -5,8 +5,8 @@ use dyn_clone::clone_trait_object;
 
 use super::Domains;
 use super::ExplanationContext;
-use super::PropagationContextMut;
-use super::contexts::PropagationContextWithTrailedValues;
+use super::PropagationContext;
+use super::contexts::NotificationContext;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
@@ -57,7 +57,7 @@ pub trait Propagator: Downcast + DynClone {
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called again by
     /// the solver until no further propagations happen.
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP;
+    fn debug_propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
 
     /// Performs stateful propagation.
     ///
@@ -76,7 +76,7 @@ pub trait Propagator: Downcast + DynClone {
     /// again by the solver until no further propagations happen.
     ///
     /// By default, this function calls [`Propagator::debug_propagate_from_scratch`].
-    fn propagate(&mut self, context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
 
@@ -91,7 +91,7 @@ pub trait Propagator: Downcast + DynClone {
     /// propagators will benefit from implementing this, so it is not required to do so.
     fn notify(
         &mut self,
-        _context: PropagationContextWithTrailedValues,
+        _context: NotificationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -145,10 +145,7 @@ pub trait Propagator: Downcast + DynClone {
     /// reification literal based on the detected inconsistency. Yet, an implementation is not
     /// needed for correctness, as [`Propagator::propagate`] should still check for
     /// inconsistency as well.
-    fn detect_inconsistency(
-        &self,
-        _context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, _context: NotificationContext) -> Option<PropagatorConflict> {
         None
     }
 

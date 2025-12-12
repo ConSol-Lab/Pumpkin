@@ -14,7 +14,7 @@ use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -103,10 +103,7 @@ where
         "Element"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_index_bounds_within_array(&mut context)?;
 
         self.propagate_rhs_bounds_based_on_array(&mut context)?;
@@ -154,7 +151,7 @@ where
     /// Propagate the bounds of `self.index` to be in the range `[0, self.array.len())`.
     fn propagate_index_bounds_within_array(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         context.post(
             predicate![self.index >= 0],
@@ -173,7 +170,7 @@ where
     /// bound (res. maximum upper bound) of the elements.
     fn propagate_rhs_bounds_based_on_array(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         let (rhs_lb, rhs_ub) = self
             .array
@@ -215,7 +212,7 @@ where
     /// right-hand side, remove it from index.
     fn propagate_index_based_on_domain_intersection_with_rhs(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);
         let rhs_ub = context.upper_bound(&self.rhs);
@@ -248,7 +245,7 @@ where
     /// tightened to the bounds of lhs, through a previous propagation rule.
     fn propagate_equality(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
         index: i32,
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);

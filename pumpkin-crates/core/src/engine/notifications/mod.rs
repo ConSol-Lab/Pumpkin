@@ -20,7 +20,7 @@ use crate::predicates::Predicate;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagatorId;
 use crate::propagation::PropagatorVarId;
 use crate::propagation::store::PropagatorStore;
@@ -369,11 +369,8 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        let context = PropagationContextWithTrailedValues::new(
-            trailed_values,
-            assignments,
-            predicate_id_assignments,
-        );
+        let context =
+            NotificationContext::new(trailed_values, assignments, predicate_id_assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 

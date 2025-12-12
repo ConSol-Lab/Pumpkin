@@ -13,7 +13,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -111,7 +111,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         "DisjunctiveStrict"
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         edge_finding(
             &mut self.theta_lambda_tree,
             &mut context,
@@ -121,10 +121,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         )
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let mut sorted_tasks = self.sorted_tasks.clone();
         let mut theta_lambda_tree = self.theta_lambda_tree.clone();
         edge_finding(
@@ -141,7 +138,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
 /// this implementation is based).
 fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     tasks: &[DisjunctiveTask<Var>],
     sorted_tasks: &mut [DisjunctiveTask<SortedTaskVar>],
     inference_code: InferenceCode,
@@ -242,7 +239,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 ///   Edge-Finding Propagator’.
 fn create_conflict_explanation<Var: IntegerVariable>(
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     lct: i32,
 ) -> PropositionalConjunction {
     // We get the set of tasks currently in theta
@@ -307,7 +304,7 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &'a PropagationContextMut,
+    context: &'a PropagationContext,
     new_bound: i32,
     lct_j: i32,
 ) -> PropositionalConjunction {

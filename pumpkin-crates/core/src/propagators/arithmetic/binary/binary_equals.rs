@@ -24,8 +24,8 @@ use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -116,7 +116,7 @@ where
 {
     fn post(
         &self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         variable: Variable,
         predicate_type: PredicateType,
         value: i32,
@@ -152,10 +152,7 @@ where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 
@@ -185,7 +182,7 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -225,7 +222,7 @@ where
         "BinaryEq"
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.first_propagation_loop {
             // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
@@ -316,10 +313,7 @@ where
         slice::from_ref(&self.reason)
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 

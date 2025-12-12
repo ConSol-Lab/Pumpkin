@@ -6,7 +6,7 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -17,7 +17,7 @@ use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
 pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,
@@ -126,7 +126,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     Ok(())
 }
 pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,

@@ -24,7 +24,7 @@ use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -400,10 +400,10 @@ impl State {
     pub(crate) fn get_propagator_mut_with_context<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,
-    ) -> (Option<&mut P>, PropagationContextMut<'_>) {
+    ) -> (Option<&mut P>, PropagationContext<'_>) {
         (
             self.propagators.get_propagator_mut(handle),
-            PropagationContextMut::new(
+            PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
                 &mut self.reason_store,
@@ -545,7 +545,7 @@ impl State {
 
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
                 &mut self.reason_store,

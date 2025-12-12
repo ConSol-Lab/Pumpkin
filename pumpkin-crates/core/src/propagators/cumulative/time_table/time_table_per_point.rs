@@ -19,8 +19,8 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContextMut;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -108,7 +108,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
@@ -140,7 +140,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -184,10 +184,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         debug_propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
@@ -254,7 +251,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 }
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,

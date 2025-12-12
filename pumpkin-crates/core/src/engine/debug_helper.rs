@@ -11,7 +11,7 @@ use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
 use crate::propagation::ExplanationContext;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorId;
 use crate::propagation::store::PropagatorStore;
@@ -77,7 +77,7 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
@@ -255,7 +255,7 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
@@ -370,7 +370,7 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let context = PropagationContextMut::new(
+                    let context = PropagationContext::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
@@ -437,7 +437,7 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,

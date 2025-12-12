@@ -10,7 +10,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
-use crate::propagation::PropagationContextMut;
+use crate::propagation::PropagationContext;
 #[cfg(doc)]
 use crate::propagation::Propagator;
 use crate::propagation::ReadDomains;
@@ -200,7 +200,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// [`ResourceProfile`] is maximal (i.e. the [`ResourceProfile::start`] and [`ResourceProfile::end`]
 /// cannot be increased or decreased, respectively).
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
@@ -255,7 +255,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// This type of propagation is likely to be less beneficial for the explanation
 /// [`CumulativeExplanationType::Pointwise`].
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -358,7 +358,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 /// Especially in the case of [`CumulativeExplanationType::Pointwise`] this is likely to be
 /// beneficial.
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -437,7 +437,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 fn sweep_forward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     propagation_handler: &mut CumulativePropagationHandler,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -501,7 +501,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 fn sweep_backward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     propagation_handler: &mut CumulativePropagationHandler,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,

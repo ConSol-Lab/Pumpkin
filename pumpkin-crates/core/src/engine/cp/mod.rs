@@ -22,7 +22,7 @@ mod tests {
     use crate::engine::reason::ReasonStore;
     use crate::predicate;
     use crate::proof::InferenceCode;
-    use crate::propagation::PropagationContextMut;
+    use crate::propagation::PropagationContext;
     use crate::propagation::PropagatorId;
 
     #[test]
@@ -35,7 +35,7 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
-            let mut context = PropagationContextMut::new(
+            let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
-            let mut context = PropagationContextMut::new(
+            let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,
@@ -93,7 +93,7 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut notification_engine = NotificationEngine::default();
-            let mut context = PropagationContextMut::new(
+            let mut context = PropagationContext::new(
                 &mut trailed_values,
                 &mut assignments,
                 &mut reason_store,

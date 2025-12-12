@@ -15,8 +15,8 @@ use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
 use crate::propagation::ManipulateTrailedValues;
-use crate::propagation::PropagationContextMut;
-use crate::propagation::PropagationContextWithTrailedValues;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
@@ -108,10 +108,7 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
+    fn detect_inconsistency(&self, context: NotificationContext) -> Option<PropagatorConflict> {
         if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
             Some(self.create_conflict(context.domains()))
         } else {
@@ -121,7 +118,7 @@ where
 
     fn notify(
         &mut self,
-        mut context: PropagationContextWithTrailedValues,
+        mut context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -170,7 +167,7 @@ where
         &self.reason_buffer
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
             return Err(conflict.into());
         }
@@ -208,10 +205,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let lower_bound_left_hand_side = self
             .x
             .iter()
