@@ -106,7 +106,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
         // Then we do normal propagation
         self.is_time_table_outdated = true;

@@ -66,7 +66,7 @@ impl PropagatorConstructorContext<'_> {
     }
 
     /// Get domain information.
-    pub fn as_readonly(&self) -> Domains<'_> {
+    pub fn domains(&self) -> Domains<'_> {
         Domains::new(&self.state.assignments, &self.state.trailed_values)
     }
 

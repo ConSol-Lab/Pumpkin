@@ -98,7 +98,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPoint
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
         self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));

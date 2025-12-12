@@ -117,7 +117,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         // First we store the bounds in the parameters
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
         self.is_time_table_outdated = true;
 

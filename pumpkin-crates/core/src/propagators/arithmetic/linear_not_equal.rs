@@ -73,7 +73,7 @@ where
             inference_code: context.create_inference_code(constraint_tag, LinearNotEquals),
         };
 
-        propagator.recalculate_fixed_variables(context.as_readonly());
+        propagator.recalculate_fixed_variables(context.domains());
 
         propagator
     }
