@@ -97,6 +97,9 @@ static EMPTY_PREDICATE_IDS: LazyLock<PredicateIdGenerator> =
 
 static EMPTY_PREDICATES: [Predicate; 0] = [];
 
+/// The current nogood that is being analyzed.
+///
+/// Can be used by propagators to guide how they explain their propagations.
 #[derive(Debug)]
 pub struct CurrentNogood<'a> {
     heap: &'a KeyValueHeap<PredicateId, u32>,
