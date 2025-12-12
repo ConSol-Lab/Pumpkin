@@ -88,7 +88,7 @@ pub(crate) struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
 #[derive(Debug)]
-pub(crate) enum Reason {
+pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate.
     Eager(PropositionalConjunction),
