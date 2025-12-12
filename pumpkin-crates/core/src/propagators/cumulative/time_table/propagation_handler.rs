@@ -101,7 +101,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.domains())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -120,7 +120,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_lower_bound(
                     full_explanation,
                     self.explanation_type,
-                    context.as_readonly(),
+                    context.domains(),
                     propagating_task,
                     profiles[0],
                     None,
@@ -132,7 +132,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &full_explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
                 context.post(predicate, full_explanation, self.inference_code)
             }
@@ -167,7 +167,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.domains())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -186,7 +186,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_upper_bound(
                     full_explanation,
                     self.explanation_type,
-                    context.as_readonly(),
+                    context.domains(),
                     propagating_task,
                     profiles[profiles.len() - 1],
                     None,
@@ -198,7 +198,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &full_explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
                 context.post(predicate, full_explanation, self.inference_code)
             }
@@ -237,7 +237,7 @@ impl CumulativePropagationHandler {
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
-                        context.as_readonly(),
+                        context.domains(),
                         propagating_task,
                         profile,
                         None,
@@ -246,7 +246,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
 
                 let mut reason = (*explanation).clone();
@@ -289,7 +289,7 @@ impl CumulativePropagationHandler {
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
-                        context.as_readonly(),
+                        context.domains(),
                         propagating_task,
                         profile,
                         None,
@@ -301,7 +301,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
 
                 let mut reason = (*explanation).clone();
@@ -370,7 +370,7 @@ impl CumulativePropagationHandler {
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
                         &explanation,
-                        context.as_readonly()
+                        context.domains()
                     ));
                     context.post(predicate, (*explanation).clone(), self.inference_code)?;
                 }
@@ -403,7 +403,7 @@ impl CumulativePropagationHandler {
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
                         &explanation,
-                        context.as_readonly()
+                        context.domains()
                     ));
                     context.post(predicate, explanation, self.inference_code)?;
                 }
@@ -432,7 +432,7 @@ impl CumulativePropagationHandler {
             Rc::new(
                 match self.explanation_type {
                     CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, context.as_readonly())
+                        create_naive_propagation_explanation(profile, context.domains())
                     },
                     CumulativeExplanationType::BigStep => {
                         create_big_step_propagation_explanation(profile)

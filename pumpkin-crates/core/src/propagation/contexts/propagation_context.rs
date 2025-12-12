@@ -39,7 +39,7 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> Domains<'_> {
+    pub(crate) fn domains(&self) -> Domains<'_> {
         Domains {
             assignments: self.assignments,
         }
@@ -118,7 +118,7 @@ impl<'a> PropagationContextMut<'a> {
     }
 
     /// Get the current domain information.
-    pub fn as_readonly(&self) -> Domains<'_> {
+    pub fn domains(&self) -> Domains<'_> {
         Domains {
             assignments: self.assignments,
         }

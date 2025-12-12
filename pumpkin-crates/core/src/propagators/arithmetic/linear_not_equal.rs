@@ -177,10 +177,10 @@ where
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
-            self.recalculate_fixed_variables(context.as_readonly());
+            self.recalculate_fixed_variables(context.domains());
             self.should_recalculate_lhs = false;
         }
-        pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
+        pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.domains()));
 
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms == self.terms.len() - 1 {
@@ -217,7 +217,7 @@ where
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(context.as_readonly())?;
+            self.check_for_conflict(context.domains())?;
         }
 
         Ok(())

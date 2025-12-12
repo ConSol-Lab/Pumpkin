@@ -126,7 +126,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         }
 
         let time_table = create_time_table_over_interval_from_scratch(
-            context.as_readonly(),
+            context.domains(),
             &self.parameters,
             self.inference_code.unwrap(),
         )?;
@@ -163,12 +163,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.is_time_table_empty,
         );
 
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -458,7 +458,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
     let time_table = create_time_table_over_interval_from_scratch(
-        context.as_readonly(),
+        context.domains(),
         parameters,
         inference_code,
     )?;
@@ -468,7 +468,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
         inference_code,
         time_table.iter(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
+        &mut updatable_structures.recreate_from_context(context.domains(), parameters),
     )
 }
 

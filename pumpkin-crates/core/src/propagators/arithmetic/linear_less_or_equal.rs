@@ -113,7 +113,7 @@ where
         context: PropagationContextWithTrailedValues,
     ) -> Option<PropagatorConflict> {
         if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
-            Some(self.create_conflict(context.as_readonly()))
+            Some(self.create_conflict(context.domains()))
         } else {
             None
         }
@@ -186,7 +186,7 @@ where
                     // This means that the lower-bounds of the current variables will always be
                     // higher than the right-hand side (with a maximum value of i32). We thus
                     // return a conflict
-                    return Err(self.create_conflict(context.as_readonly()).into());
+                    return Err(self.create_conflict(context.domains()).into());
                 }
                 Err(_) => {
                     // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
@@ -229,7 +229,7 @@ where
                 // This means that the lower-bounds of the current variables will always be
                 // higher than the right-hand side (with a maximum value of i32). We thus
                 // return a conflict
-                return Err(self.create_conflict(context.as_readonly()).into());
+                return Err(self.create_conflict(context.domains()).into());
             }
             Err(_) => {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an

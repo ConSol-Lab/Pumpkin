@@ -307,7 +307,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
             // update or a hole in the domain)
             if lower_bound_can_be_propagated_by_profile(
-                context.as_readonly(),
+                context.domains(),
                 &task,
                 profile,
                 parameters.capacity,
@@ -320,7 +320,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
             }
             if upper_bound_can_be_propagated_by_profile(
-                context.as_readonly(),
+                context.domains(),
                 &task,
                 profile,
                 parameters.capacity,
@@ -333,12 +333,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
             }
             if parameters.options.allow_holes_in_domain
-                && can_be_updated_by_profile(
-                    context.as_readonly(),
-                    &task,
-                    profile,
-                    parameters.capacity,
-                )
+                && can_be_updated_by_profile(context.domains(), &task, profile, parameters.capacity)
             {
                 let result = propagation_handler.propagate_holes_in_domain(context, profile, &task);
 
@@ -424,12 +419,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             });
             for profile in &time_table[lower_bound_index..upper_bound_index] {
                 // Check whether this profile can cause an update
-                if can_be_updated_by_profile(
-                    context.as_readonly(),
-                    task,
-                    profile,
-                    parameters.capacity,
-                ) {
+                if can_be_updated_by_profile(context.domains(), task, profile, parameters.capacity)
+                {
                     // If we allow the propagation of holes in the domain then we simply let the
                     // propagation handler handle it
                     propagation_handler.propagate_holes_in_domain(context, profile, task)?;
@@ -471,7 +462,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 
         // We check whether a lower-bound propagation can be performed using this profile
         if lower_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
+            context.domains(),
             task,
             profile,
             parameters.capacity,
@@ -481,7 +472,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
             find_profiles_which_propagate_lower_bound(
                 profile_index,
                 time_table,
-                context.as_readonly(),
+                context.domains(),
                 task,
                 parameters.capacity,
                 profile_buffer,
@@ -539,7 +530,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
 
         // We check whether an upper-bound propagation can be performed using this profile
         if upper_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
+            context.domains(),
             task,
             profile,
             parameters.capacity,
@@ -549,7 +540,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
             find_profiles_which_propagate_upper_bound(
                 profile_index,
                 time_table,
-                context.as_readonly(),
+                context.domains(),
                 task,
                 parameters.capacity,
                 profile_buffer,

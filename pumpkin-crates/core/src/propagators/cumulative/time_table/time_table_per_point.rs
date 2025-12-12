@@ -117,7 +117,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         }
 
         let time_table = create_time_table_per_point_from_scratch(
-            context.as_readonly(),
+            context.domains(),
             self.inference_code.unwrap(),
             &self.parameters,
         )?;
@@ -154,14 +154,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -261,18 +261,15 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(
-        context.as_readonly(),
-        inference_code,
-        parameters,
-    )?;
+    let time_table =
+        create_time_table_per_point_from_scratch(context.domains(), inference_code, parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
         inference_code,
         time_table.values(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
+        &mut updatable_structures.recreate_from_context(context.domains(), parameters),
     )
 }
 

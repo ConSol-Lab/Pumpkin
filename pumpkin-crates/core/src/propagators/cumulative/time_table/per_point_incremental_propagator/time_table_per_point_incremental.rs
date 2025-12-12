@@ -257,7 +257,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_per_point_from_scratch(
-                context.as_readonly(),
+                context.domains(),
                 self.inference_code.unwrap(),
                 &self.parameters,
             )?;
@@ -267,7 +267,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
             // And we clear all of the updates since they have now necessarily been processed
             self.updatable_structures
-                .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+                .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
             return Ok(());
         }
@@ -293,7 +293,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
             let result = self.add_to_time_table(
-                context.as_readonly(),
+                context.domains(),
                 &mandatory_part_adjustments,
                 &updated_task,
             );
@@ -325,7 +325,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         .expect("Expected to find a conflicting profile");
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             conflicting_profile,
                             &self.parameters,
@@ -334,7 +334,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     pumpkin_assert_extreme!(
                         check_synchronisation_conflict_explanation_per_point(
                             &synchronised_conflict_explanation,
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             &self.parameters,
                         ),
@@ -360,7 +360,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
                         create_time_table_per_point_from_scratch(
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             &self.parameters
                         )
@@ -371,7 +371,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     self.found_previous_conflict = true;
 
                     return Err(create_conflict_explanation(
-                        context.as_readonly(),
+                        context.domains(),
                         self.inference_code.unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
@@ -407,7 +407,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                context.as_readonly(),
+                context.domains(),
                 &self.parameters.tasks,
                 self.updatable_structures.get_stored_bounds(),
             ),
@@ -425,7 +425,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
-            context.as_readonly(),
+            context.domains(),
             self.inference_code.unwrap(),
             &self.time_table,
             &self.parameters
@@ -462,7 +462,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.time_table.is_empty(),
         );
 
@@ -471,7 +471,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         insert_update(&updated_task, &mut self.updatable_structures, result.update);
 
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );

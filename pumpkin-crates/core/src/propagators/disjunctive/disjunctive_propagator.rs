@@ -148,9 +148,9 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 ) -> PropagationStatusCP {
     // First we create our Theta-Lambda tree and add all of the tasks to Theta (Lambda is empty at
     // this point)
-    theta_lambda_tree.update(context.as_readonly());
+    theta_lambda_tree.update(context.domains());
     for task in tasks.iter() {
-        theta_lambda_tree.add_to_theta(task, context.as_readonly());
+        theta_lambda_tree.add_to_theta(task, context.domains());
     }
 
     // Then sort in non-increasing order of latest completion time (LCT)
@@ -181,7 +181,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         theta_lambda_tree.remove_from_theta(j);
         // And then add it to Lambda (i.e. we are checking whether we can find a task i in Lambda
         // such that the element in Theta would cause an overflow)
-        theta_lambda_tree.add_to_lambda(j, context.as_readonly());
+        theta_lambda_tree.add_to_lambda(j, context.domains());
 
         // Then we go to the next task which represents the latest completion time of the set Theta
         index += 1;
