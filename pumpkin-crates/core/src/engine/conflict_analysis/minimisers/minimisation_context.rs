@@ -1,10 +1,12 @@
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::SolverStatistics;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
+use crate::state::CurrentNogood;
 use crate::state::State;
 
 pub(crate) struct MinimisationContext<'a> {
@@ -14,6 +16,23 @@ pub(crate) struct MinimisationContext<'a> {
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
 
     pub(crate) counters: &'a mut SolverStatistics,
+}
+impl<'a> MinimisationContext<'a> {
+    pub(crate) fn get_propagation_reason(
+        &mut self,
+        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+        input_predicate: Predicate,
+        current_nogood: CurrentNogood<'_>,
+    ) {
+        ConflictAnalysisContext::get_propagation_reason(
+            input_predicate,
+            current_nogood,
+            self.proof_log,
+            self.unit_nogood_inference_codes,
+            reason_buffer,
+            self.state,
+        );
+    }
 }
 
 impl<'a> HasAssignments for MinimisationContext<'a> {
