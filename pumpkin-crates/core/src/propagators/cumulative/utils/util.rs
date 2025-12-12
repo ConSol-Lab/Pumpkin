@@ -8,8 +8,8 @@ use enumset::enum_set;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::variables::IntegerVariable;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::propagators::ArgTask;
@@ -76,7 +76,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
 pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     bounds: &mut [(i32, i32)],
     task: &Rc<Task<Var>>,
 ) {
@@ -88,7 +88,7 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
 
 /// Determines whether the stored bounds are equal when propagation occurs
 pub(crate) fn check_bounds_equal_at_propagation<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     tasks: &[Rc<Task<Var>>],
     bounds: &[(i32, i32)],
 ) -> bool {

@@ -2,10 +2,10 @@ use crate::basic_types::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -102,12 +102,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         }
     }
 
-    fn notify_backtrack(
-        &mut self,
-        context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) {
+    fn notify_backtrack(&mut self, context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
         if local_id < self.reification_literal_id {
             self.propagator.notify_backtrack(context, local_id, event)
         } else {
@@ -119,7 +114,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         self.propagator.priority()
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         self.propagator.synchronise(context);
     }
 

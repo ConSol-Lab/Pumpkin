@@ -3,8 +3,8 @@ use std::cmp::max;
 use super::disjunctive_task::DisjunctiveTask;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::propagation::Domains;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -112,7 +112,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     /// Update the theta-lambda tree based on the provided `context`.
     ///
     /// It resets theta and lambda to be the empty set.
-    pub(super) fn update(&mut self, context: PropagationContext) {
+    pub(super) fn update(&mut self, context: Domains) {
         // First we sort the tasks by lower-bound/earliest start time.
         self.sorted_tasks
             .sort_by_key(|task| context.lower_bound(&task.start_time));
@@ -228,7 +228,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     pub(super) fn add_to_lambda<OtherVar: IntegerVariable>(
         &mut self,
         task: &DisjunctiveTask<OtherVar>,
-        context: PropagationContext,
+        context: Domains,
     ) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
@@ -249,11 +249,7 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     }
 
     /// Add the provided task to Theta
-    pub(super) fn add_to_theta(
-        &mut self,
-        task: &DisjunctiveTask<Var>,
-        context: PropagationContext,
-    ) {
+    pub(super) fn add_to_theta(&mut self, task: &DisjunctiveTask<Var>, context: Domains) {
         // We need to find the leaf node index; note that there are |nodes| / 2 leaves
         let position = self.nodes.len() / 2 + self.mapping[task.id];
         let ect = context.lower_bound(&task.start_time) + task.processing_time;
@@ -380,8 +376,8 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
 #[cfg(test)]
 mod tests {
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::Domains;
     use crate::propagation::LocalId;
-    use crate::propagation::PropagationContext;
     use crate::propagators::disjunctive::theta_lambda_tree::Node;
     use crate::propagators::disjunctive::theta_lambda_tree::ThetaLambdaTree;
     use crate::propagators::disjunctive_task::DisjunctiveTask;
@@ -418,17 +414,14 @@ mod tests {
 
         let mut tree = ThetaLambdaTree::new(&tasks);
 
-        tree.update(PropagationContext {
+        tree.update(Domains {
             assignments: &solver.state.assignments,
         });
         for task in tasks.iter() {
-            tree.add_to_theta(task, PropagationContext::new(&solver.state.assignments));
+            tree.add_to_theta(task, Domains::new(&solver.state.assignments));
         }
         tree.remove_from_theta(&tasks[2]);
-        tree.add_to_lambda(
-            &tasks[2],
-            PropagationContext::new(&solver.state.assignments),
-        );
+        tree.add_to_lambda(&tasks[2], Domains::new(&solver.state.assignments));
 
         assert_eq!(
             tree.nodes[6],

@@ -1,20 +1,25 @@
 use crate::engine::Assignments;
+use crate::propagation::HasAssignments;
+#[cfg(doc)]
+use crate::propagation::ReadDomains;
 
-/// [`PropagationContext`] is passed to propagators during propagation.
-/// It may be queried to retrieve information about the current variable domains such as the
-/// lower-bound of a particular variable, or used to apply changes to the domain of a variable
-/// e.g. set `[x >= 5]`.
+/// Provides access to domain information to propagators.
 ///
-///
-/// Note that the [`PropagationContext`] is the only point of communication beween
-/// the propagations and the solver during propagation.
+/// Implements [`ReadDomains`] to expose information about the current variable domains such as the
+/// lower-bound of a particular variable.
 #[derive(Clone, Copy, Debug)]
-pub struct PropagationContext<'a> {
+pub struct Domains<'a> {
     pub(crate) assignments: &'a Assignments,
 }
 
-impl<'a> PropagationContext<'a> {
+impl<'a> Domains<'a> {
     pub(crate) fn new(assignments: &'a Assignments) -> Self {
-        PropagationContext { assignments }
+        Domains { assignments }
+    }
+}
+
+impl HasAssignments for Domains<'_> {
+    fn assignments(&self) -> &Assignments {
+        self.assignments
     }
 }

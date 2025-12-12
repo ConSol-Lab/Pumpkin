@@ -13,9 +13,9 @@ use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -145,12 +145,7 @@ where
         }
     }
 
-    fn notify_backtrack(
-        &mut self,
-        _context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) {
+    fn notify_backtrack(&mut self, _context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
         if matches!(
             self.terms[local_id.unpack() as usize].unpack_event(event),
             DomainEvent::Assign
@@ -304,7 +299,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
+    fn recalculate_fixed_variables(&mut self, context: Domains) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -322,7 +317,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict(&self, context: PropagationContext) -> Result<(), PropagatorConflict> {
+    fn check_for_conflict(&self, context: Domains) -> Result<(), PropagatorConflict> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
             let conjunction = self
@@ -342,7 +337,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Checks whether the number of fixed terms is equal to the number of fixed terms in the
     /// provided [`PropagationContext`] and whether the value of the fixed lhs is the same as in the
     /// provided [`PropagationContext`].
-    fn is_propagator_state_consistent(&self, context: PropagationContext) -> bool {
+    fn is_propagator_state_consistent(&self, context: Domains) -> bool {
         let expected_number_of_fixed_terms = self
             .terms
             .iter()

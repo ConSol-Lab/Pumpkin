@@ -22,8 +22,8 @@ use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
+use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -505,7 +505,7 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let context = PropagationContext::new(&self.assignments);
+            let context = Domains::new(&self.assignments);
             propagator.synchronise(context);
         }
 

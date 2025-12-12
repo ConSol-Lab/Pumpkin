@@ -17,9 +17,9 @@ use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::PropagatorId;
 use crate::propagation::PropagatorVarId;
@@ -327,7 +327,7 @@ impl NotificationEngine {
                     .get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(assignments);
+                    let context = Domains::new(assignments);
 
                     propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }

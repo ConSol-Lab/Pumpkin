@@ -1,8 +1,8 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use super::Domains;
 use super::LocalId;
-use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
@@ -66,8 +66,8 @@ impl PropagatorConstructorContext<'_> {
     }
 
     /// Get domain information.
-    pub fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
+    pub fn as_readonly(&self) -> Domains<'_> {
+        Domains {
             assignments: &self.state.assignments,
         }
     }

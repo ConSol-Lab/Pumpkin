@@ -22,10 +22,10 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -329,7 +329,7 @@ impl Propagator for NogoodPropagator {
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: PropagationContext) {
+    fn synchronise(&mut self, _context: Domains) {
         self.updated_predicate_ids.clear()
     }
 

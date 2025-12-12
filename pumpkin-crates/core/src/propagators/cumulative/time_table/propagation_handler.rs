@@ -20,8 +20,8 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
@@ -46,7 +46,7 @@ pub(crate) struct CumulativePropagationHandler {
 fn check_explanation(
     explained_predicate: Predicate,
     explanation: &PropositionalConjunction,
-    context: PropagationContext,
+    context: Domains,
 ) -> bool {
     let all_predicates_hold = explanation
         .iter()
@@ -491,9 +491,9 @@ pub(crate) mod test_propagation_handler {
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::proof::InferenceCode;
+    use crate::propagation::Domains;
     use crate::propagation::ExplanationContext;
     use crate::propagation::LocalId;
-    use crate::propagation::PropagationContext;
     use crate::propagation::PropagationContextMut;
     use crate::propagation::PropagatorId;
     use crate::propagation::store::PropagatorStore;
@@ -548,7 +548,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                PropagationContext::new(&self.assignments),
+                Domains::new(&self.assignments),
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,

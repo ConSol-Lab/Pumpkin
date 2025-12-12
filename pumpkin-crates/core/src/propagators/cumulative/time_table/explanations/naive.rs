@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -13,7 +13,7 @@ use crate::variables::IntegerVariable;
 /// [`CumulativeExplanationType::Naive`])
 pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
-    context: PropagationContext,
+    context: Domains,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -61,7 +61,7 @@ where
 }
 
 pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
 ) -> Predicate
 where
@@ -71,7 +71,7 @@ where
 }
 
 pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
 ) -> Predicate
 where

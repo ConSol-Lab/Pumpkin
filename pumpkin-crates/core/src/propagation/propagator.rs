@@ -3,8 +3,8 @@ use downcast_rs::impl_downcast;
 use dyn_clone::DynClone;
 use dyn_clone::clone_trait_object;
 
+use super::Domains;
 use super::ExplanationContext;
-use super::PropagationContext;
 use super::PropagationContextMut;
 use super::contexts::PropagationContextWithTrailedValues;
 use crate::basic_types::PredicateId;
@@ -109,7 +109,7 @@ pub trait Propagator: Downcast + DynClone {
     /// benefit from implementing this, so it is not required to do so.
     fn notify_backtrack(
         &mut self,
-        _context: PropagationContext,
+        _context: Domains,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) {
@@ -126,7 +126,7 @@ pub trait Propagator: Downcast + DynClone {
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
-    fn synchronise(&mut self, _context: PropagationContext) {}
+    fn synchronise(&mut self, _context: Domains) {}
 
     /// Returns the priority of the propagator represented as an integer. Lower values mean higher
     /// priority and the priority determines the order in which propagators will be asked to

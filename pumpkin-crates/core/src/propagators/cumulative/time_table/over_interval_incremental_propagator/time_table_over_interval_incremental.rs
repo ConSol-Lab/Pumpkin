@@ -14,7 +14,7 @@ use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::Propagator;
 use crate::engine::variables::IntegerVariable;
@@ -155,7 +155,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: PropagationContext,
+        context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -459,12 +459,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         result.decision
     }
 
-    fn notify_backtrack(
-        &mut self,
-        context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) {
+    fn notify_backtrack(&mut self, context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
         pumpkin_assert_simple!(self.parameters.options.incremental_backtracking);
 
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
@@ -486,7 +481,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {

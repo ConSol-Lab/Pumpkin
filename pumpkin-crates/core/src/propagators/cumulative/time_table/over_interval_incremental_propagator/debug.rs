@@ -3,7 +3,7 @@ use std::ops::Range;
 
 use crate::containers::HashSet;
 use crate::proof::InferenceCode;
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -25,7 +25,7 @@ pub(crate) fn time_tables_are_the_same_interval<
     Var: IntegerVariable + 'static,
     const SYNCHRONISE: bool,
 >(
-    context: PropagationContext,
+    context: Domains,
     inference_code: InferenceCode,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,

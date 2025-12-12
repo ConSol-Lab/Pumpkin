@@ -20,10 +20,10 @@ use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -212,7 +212,7 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn synchronise(&mut self, _context: PropagationContext) {
+    fn synchronise(&mut self, _context: Domains) {
         // Recall that we need to ensure that the stored removed values could now be inaccurate
         self.has_backtracked = true;
     }

@@ -12,7 +12,7 @@ use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 #[cfg(doc)]
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 
 /// The context provided to the [`Brancher`],
 /// it allows the retrieval of domain values of variables and access to methods from a [`Random`]

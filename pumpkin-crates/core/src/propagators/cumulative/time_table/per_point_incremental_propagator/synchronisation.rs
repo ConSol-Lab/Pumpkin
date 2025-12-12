@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::proof::InferenceCode;
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -20,7 +20,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
     Var: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
-    context: PropagationContext,
+    context: Domains,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
@@ -110,7 +110,7 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
 /// reported by [`TimeTablePerPointPropagator`] by finding the tasks which should be included in the
 /// profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     inference_code: InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,

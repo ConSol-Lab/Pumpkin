@@ -16,9 +16,9 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -133,7 +133,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         )
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }

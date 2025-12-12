@@ -13,7 +13,7 @@ use crate::engine::reason::StoredReason;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
-use crate::propagation::PropagationContext;
+use crate::propagation::Domains;
 #[cfg(doc)]
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorId;
@@ -39,8 +39,8 @@ impl<'a> PropagationContextWithTrailedValues<'a> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
+    pub(crate) fn as_readonly(&self) -> Domains<'_> {
+        Domains {
             assignments: self.assignments,
         }
     }
@@ -118,8 +118,8 @@ impl<'a> PropagationContextMut<'a> {
     }
 
     /// Get the current domain information.
-    pub fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
+    pub fn as_readonly(&self) -> Domains<'_> {
+        Domains {
             assignments: self.assignments,
         }
     }
@@ -180,12 +180,6 @@ mod private {
 
         fn trailed_values_mut(&mut self) -> &mut TrailedValues {
             self.trailed_values
-        }
-    }
-
-    impl HasAssignments for PropagationContext<'_> {
-        fn assignments(&self) -> &Assignments {
-            self.assignments
         }
     }
 

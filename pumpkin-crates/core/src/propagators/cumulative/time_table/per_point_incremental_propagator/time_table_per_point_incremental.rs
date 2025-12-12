@@ -11,9 +11,9 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -144,7 +144,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: PropagationContext,
+        context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -486,12 +486,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         result.decision
     }
 
-    fn notify_backtrack(
-        &mut self,
-        context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) {
+    fn notify_backtrack(&mut self, context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
         backtrack_update(context, &mut self.updatable_structures, &updated_task);
@@ -511,7 +506,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {
@@ -554,7 +549,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 mod debug {
 
     use crate::proof::InferenceCode;
-    use crate::propagation::PropagationContext;
+    use crate::propagation::Domains;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
     use crate::propagators::create_time_table_per_point_from_scratch;
@@ -573,7 +568,7 @@ mod debug {
         Var: IntegerVariable + 'static,
         const SYNCHRONISE: bool,
     >(
-        context: PropagationContext,
+        context: Domains,
         inference_code: InferenceCode,
         time_table: &PerPointTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,

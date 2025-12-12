@@ -10,11 +10,11 @@ use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
 use crate::propagation::ManipulateTrailedValues;
-use crate::propagation::PropagationContext;
 use crate::propagation::PropagationContextMut;
 use crate::propagation::PropagationContextWithTrailedValues;
 use crate::propagation::Propagator;
@@ -92,7 +92,7 @@ impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
+    fn create_conflict(&self, context: Domains) -> PropagatorConflict {
         PropagatorConflict {
             conjunction: self
                 .x
