@@ -30,6 +30,13 @@ impl IntExpression {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BoolExpression(pub Literal);
 
+#[pymethods]
+impl BoolExpression {
+    fn negate(&self) -> BoolExpression {
+        BoolExpression(!self.0)
+    }
+}
+
 impl From<Literal> for BoolExpression {
     fn from(literal: Literal) -> BoolExpression {
         BoolExpression(literal)
