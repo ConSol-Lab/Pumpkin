@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.3](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.2.3) (2025-12-12)
+
+
+### Features
+
+* Add interface for nogood minimiser ([#326](https://github.com/ConSol-Lab/Pumpkin/issues/326)) ([911ba41](https://github.com/ConSol-Lab/Pumpkin/commit/911ba41bafdbbf84cc6d276d66c9e79abbef1dcb))
+* Implement State API ([#319](https://github.com/ConSol-Lab/Pumpkin/issues/319)) ([301551a](https://github.com/ConSol-Lab/Pumpkin/commit/301551ae21fee585448a696e89ed13ec2b7c8156))
+* **pumpkin-core:** WebAssembly support for pumpkin-core ([#327](https://github.com/ConSol-Lab/Pumpkin/issues/327)) ([48182a2](https://github.com/ConSol-Lab/Pumpkin/commit/48182a223d611209e214afbeb2ea2f7d87c2c5ca))
+* **pumpkin-core:** WebAssembly support for pumpkin-core ([#327](https://github.com/ConSol-Lab/Pumpkin/issues/327)) ([1d2e411](https://github.com/ConSol-Lab/Pumpkin/commit/1d2e4114d0e06b50516cdb69f38f924ab2f078c8))
+
+
+### Bug Fixes
+
+* Off-by-one error when explaining empty domain conflict ([#322](https://github.com/ConSol-Lab/Pumpkin/issues/322)) ([c3739c4](https://github.com/ConSol-Lab/Pumpkin/commit/c3739c427406f8f46a743c35233664028318f73f)), closes [#321](https://github.com/ConSol-Lab/Pumpkin/issues/321)
+* **pumpkin-core:** Allow propagators to register for predicates becoming true ([#331](https://github.com/ConSol-Lab/Pumpkin/issues/331)) ([0f63882](https://github.com/ConSol-Lab/Pumpkin/commit/0f6388260695ad923856819f2e2728669b6d870b))
+* **pumpkin-core:** Declare solving after conflict resolution ([#317](https://github.com/ConSol-Lab/Pumpkin/issues/317)) ([4824567](https://github.com/ConSol-Lab/Pumpkin/commit/48245670d15bceeea843194213949da83a6509ab))
+* **pumpkin-core:** Don't use binary equality when logging proof ([#320](https://github.com/ConSol-Lab/Pumpkin/issues/320)) ([f528527](https://github.com/ConSol-Lab/Pumpkin/commit/f528527bf51f73c8dcf05d77d308ff6b16e6a53b))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.1...pumpkin-core-v0.2.2) (2025-11-10)
 
 
