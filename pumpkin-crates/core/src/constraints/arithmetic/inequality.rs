@@ -40,7 +40,7 @@ pub fn greater_than<Var: IntegerVariable + 'static>(
     rhs: i32,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    greater_than_or_equals(terms, rhs - 1, constraint_tag)
+    greater_than_or_equals(terms, rhs + 1, constraint_tag)
 }
 
 /// Create the [`NegatableConstraint`] `\sum terms_i >= rhs`.

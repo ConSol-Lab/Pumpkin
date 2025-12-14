@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use pumpkin_solver::ConstraintOperationError;
 use pumpkin_solver::Solver;
 use pumpkin_solver::constraints;
 use pumpkin_solver::options::SolverOptions;
@@ -62,4 +63,19 @@ fn proof_with_equality_unit_nogood_step() {
     let mut brancher = solver.default_brancher();
     let result = solver.satisfy(&mut brancher, &mut Indefinite);
     assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+}
+
+#[test]
+fn greater_than_bug() {
+    let mut solver = Solver::default();
+
+    let constraint_tag = solver.new_constraint_tag();
+    let x = solver.new_named_bounded_integer(0, 0, "x");
+    let gt = solver.add_constraint(constraints::greater_than([x], 0, constraint_tag));
+
+    match gt.post() {
+        Err(ConstraintOperationError::InfeasiblePropagator) => {}
+        Ok(()) => panic!("expected InfeasiblePropagator when posting x > 0 for x fixed to 0"),
+        Err(e) => panic!("unexpected error: {e:?}"),
+    }
 }
