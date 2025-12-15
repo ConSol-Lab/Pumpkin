@@ -2,8 +2,8 @@
 use std::ops::Range;
 
 use crate::containers::HashSet;
-use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -25,14 +25,17 @@ pub(crate) fn time_tables_are_the_same_interval<
     Var: IntegerVariable + 'static,
     const SYNCHRONISE: bool,
 >(
-    context: PropagationContext,
+    mut context: Domains,
     inference_code: InferenceCode,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let time_table_scratch =
-        create_time_table_over_interval_from_scratch(context, parameters, inference_code)
-            .expect("Expected no error");
+    let time_table_scratch = create_time_table_over_interval_from_scratch(
+        context.reborrow(),
+        parameters,
+        inference_code,
+    )
+    .expect("Expected no error");
 
     if time_table.is_empty() {
         return time_table_scratch.is_empty();

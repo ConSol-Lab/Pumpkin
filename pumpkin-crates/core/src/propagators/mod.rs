@@ -1,6 +1,8 @@
 //! Contains propagator implementations that are used in Pumpkin.
 //!
-//! See the [`crate::engine::cp::propagation`] for info on propagators.
+//! See the [`propagation`] for info on propagators.
+#[cfg(doc)]
+use crate::propagation;
 
 pub(crate) mod arithmetic;
 mod cumulative;

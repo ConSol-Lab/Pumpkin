@@ -5,20 +5,21 @@ use bitfield_struct::bitfield;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ElementArgs<VX, VI, VE> {
@@ -95,18 +96,15 @@ where
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
 {
-    fn priority(&self) -> u32 {
-        2
+    fn priority(&self) -> Priority {
+        Priority::Low
     }
 
     fn name(&self) -> &str {
         "Element"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_index_bounds_within_array(&mut context)?;
 
         self.propagate_rhs_bounds_based_on_array(&mut context)?;
@@ -154,7 +152,7 @@ where
     /// Propagate the bounds of `self.index` to be in the range `[0, self.array.len())`.
     fn propagate_index_bounds_within_array(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         context.post(
             predicate![self.index >= 0],
@@ -173,7 +171,7 @@ where
     /// bound (res. maximum upper bound) of the elements.
     fn propagate_rhs_bounds_based_on_array(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         let (rhs_lb, rhs_ub) = self
             .array
@@ -215,7 +213,7 @@ where
     /// right-hand side, remove it from index.
     fn propagate_index_based_on_domain_intersection_with_rhs(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);
         let rhs_ub = context.upper_bound(&self.rhs);
@@ -248,7 +246,7 @@ where
     /// tightened to the bounds of lhs, through a previous propagation rule.
     fn propagate_equality(
         &self,
-        context: &mut PropagationContextMut<'_>,
+        context: &mut PropagationContext<'_>,
         index: i32,
     ) -> PropagationStatusCP {
         let rhs_lb = context.lower_bound(&self.rhs);

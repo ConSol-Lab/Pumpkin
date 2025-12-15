@@ -1,29 +1,29 @@
 mod domain_event_notification;
 mod predicate_notification;
 
-pub(crate) use domain_event_notification::DomainEvent;
+pub use domain_event_notification::DomainEvent;
 pub(crate) use domain_event_notification::EventSink;
 pub(crate) use domain_event_notification::WatchListDomainEvents;
 pub(crate) use domain_event_notification::Watchers;
-pub(crate) use domain_event_notification::domain_events::DomainEvents;
-pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+pub use domain_event_notification::domain_events::DomainEvents;
+pub use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;
 
-use super::propagation::PropagationContext;
-use super::propagation::PropagatorVarId;
 use crate::basic_types::PredicateId;
 use crate::containers::KeyedVec;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagatorId;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::predicates::Predicate;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -309,6 +309,7 @@ impl NotificationEngine {
     pub(crate) fn process_backtrack_events(
         &mut self,
         assignments: &mut Assignments,
+        trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
@@ -327,7 +328,7 @@ impl NotificationEngine {
                     .get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(assignments);
+                    let context = Domains::new(assignments, trailed_values);
 
                     propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
@@ -369,11 +370,8 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        let context = PropagationContextWithTrailedValues::new(
-            trailed_values,
-            assignments,
-            predicate_id_assignments,
-        );
+        let context =
+            NotificationContext::new(trailed_values, assignments, predicate_id_assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
@@ -515,10 +513,6 @@ impl NotificationEngine {
         );
 
         result
-    }
-
-    pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
-        &self.predicate_notifier.predicate_id_assignments
     }
 
     pub(crate) fn synchronise(

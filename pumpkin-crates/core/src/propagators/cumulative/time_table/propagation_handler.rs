@@ -16,14 +16,14 @@ use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use crate::basic_types::PropagatorConflict;
 use crate::engine::EmptyDomainConflict;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::HasAssignments;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
@@ -46,7 +46,7 @@ pub(crate) struct CumulativePropagationHandler {
 fn check_explanation(
     explained_predicate: Predicate,
     explanation: &PropositionalConjunction,
-    context: PropagationContext,
+    context: Domains,
 ) -> bool {
     let all_predicates_hold = explanation
         .iter()
@@ -86,7 +86,7 @@ impl CumulativePropagationHandler {
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -101,7 +101,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.domains())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -120,7 +120,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_lower_bound(
                     full_explanation,
                     self.explanation_type,
-                    context.as_readonly(),
+                    context.domains(),
                     propagating_task,
                     profiles[0],
                     None,
@@ -132,7 +132,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &full_explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
                 context.post(predicate, full_explanation, self.inference_code)
             }
@@ -151,7 +151,7 @@ impl CumulativePropagationHandler {
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -167,7 +167,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.domains())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -186,7 +186,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_upper_bound(
                     full_explanation,
                     self.explanation_type,
-                    context.as_readonly(),
+                    context.domains(),
                     propagating_task,
                     profiles[profiles.len() - 1],
                     None,
@@ -198,7 +198,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &full_explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
                 context.post(predicate, full_explanation, self.inference_code)
             }
@@ -216,7 +216,7 @@ impl CumulativePropagationHandler {
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_lower_bound_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -237,7 +237,7 @@ impl CumulativePropagationHandler {
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
-                        context.as_readonly(),
+                        context.domains(),
                         propagating_task,
                         profile,
                         None,
@@ -246,7 +246,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
 
                 let mut reason = (*explanation).clone();
@@ -267,7 +267,7 @@ impl CumulativePropagationHandler {
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_upper_bound_with_explanations<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -289,7 +289,7 @@ impl CumulativePropagationHandler {
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
-                        context.as_readonly(),
+                        context.domains(),
                         propagating_task,
                         profile,
                         None,
@@ -301,7 +301,7 @@ impl CumulativePropagationHandler {
                 pumpkin_assert_extreme!(check_explanation(
                     predicate,
                     &explanation,
-                    context.as_readonly()
+                    context.domains()
                 ));
 
                 let mut reason = (*explanation).clone();
@@ -323,7 +323,7 @@ impl CumulativePropagationHandler {
     /// bounds of `propagating_task`.
     pub(crate) fn propagate_holes_in_domain<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomainConflict>
@@ -370,7 +370,7 @@ impl CumulativePropagationHandler {
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
                         &explanation,
-                        context.as_readonly()
+                        context.domains()
                     ));
                     context.post(predicate, (*explanation).clone(), self.inference_code)?;
                 }
@@ -403,7 +403,7 @@ impl CumulativePropagationHandler {
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
                         &explanation,
-                        context.as_readonly()
+                        context.domains()
                     ));
                     context.post(predicate, explanation, self.inference_code)?;
                 }
@@ -422,7 +422,7 @@ impl CumulativePropagationHandler {
     /// Either we get the stored stored profile explanation or we initialize it.
     fn get_stored_profile_explanation_or_init<Var>(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
     ) -> Rc<PropositionalConjunction>
     where
@@ -432,7 +432,7 @@ impl CumulativePropagationHandler {
             Rc::new(
                 match self.explanation_type {
                     CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, context.as_readonly())
+                        create_naive_propagation_explanation(profile, context.domains())
                     },
                     CumulativeExplanationType::BigStep => {
                         create_big_step_propagation_explanation(profile)
@@ -448,7 +448,7 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
     context: Context,
     inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
@@ -486,17 +486,17 @@ pub(crate) mod test_propagation_handler {
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::propagation::ExplanationContext;
-    use crate::engine::propagation::LocalId;
-    use crate::engine::propagation::PropagationContext;
-    use crate::engine::propagation::PropagationContextMut;
-    use crate::engine::propagation::PropagatorId;
-    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::reason::ReasonStore;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::proof::InferenceCode;
+    use crate::propagation::Domains;
+    use crate::propagation::ExplanationContext;
+    use crate::propagation::LocalId;
+    use crate::propagation::PropagationContext;
+    use crate::propagation::PropagatorId;
+    use crate::propagation::store::PropagatorStore;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::variables::DomainId;
@@ -548,7 +548,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                PropagationContext::new(&self.assignments),
+                Domains::new(&self.assignments, &mut self.trailed_values),
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
@@ -589,7 +589,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -653,7 +653,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -703,7 +703,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,
@@ -767,7 +767,7 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
-                    &mut PropagationContextMut::new(
+                    &mut PropagationContext::new(
                         &mut self.trailed_values,
                         &mut self.assignments,
                         &mut self.reason_store,

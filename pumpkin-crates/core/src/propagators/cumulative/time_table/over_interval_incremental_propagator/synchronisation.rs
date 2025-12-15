@@ -3,9 +3,9 @@ use std::rc::Rc;
 use super::debug::are_mergeable;
 use super::debug::merge_profiles;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::ReadDomains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -57,7 +57,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
     Var: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
-    context: PropagationContext,
+    context: Domains,
     parameters: &CumulativeParameters<Var>,
     inference_code: InferenceCode,
 ) -> bool {
@@ -81,7 +81,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 /// been reported by [`TimeTableOverIntervalPropagator`] by finding the tasks which should be
 /// included in the profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    mut context: Domains,
     inference_code: InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
@@ -93,7 +93,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     // First we sort based on the upper-bound of the task and then we sort based on
     // the ID if there is a tie
-    sort_profile_based_on_upper_bound_and_id(conflicting_profile, context);
+    sort_profile_based_on_upper_bound_and_id(conflicting_profile, context.reborrow());
 
     let mut resource_usage = 0;
     let mut index = 0;
@@ -127,7 +127,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 ///    [`TimeTableOverIntervalPropagator`] would have found them
 pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
     time_table: &mut OverIntervalTimeTableType<Var>,
-    context: PropagationContext,
+    mut context: Domains,
 ) {
     if !time_table.is_empty() {
         // If the time-table is not empty then we merge all the profiles in the range
@@ -138,14 +138,14 @@ pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
     // And then we sort each profile according to upper-bound and then ID
     time_table
         .iter_mut()
-        .for_each(|profile| sort_profile_based_on_upper_bound_and_id(profile, context))
+        .for_each(|profile| sort_profile_based_on_upper_bound_and_id(profile, context.reborrow()))
 }
 
 /// Sorts the provided `profile` on non-decreasing order of upper-bound while tie-breaking in
 /// non-decreasing order of ID
 fn sort_profile_based_on_upper_bound_and_id<Var: IntegerVariable + 'static>(
     profile: &mut ResourceProfile<Var>,
-    context: PropagationContext,
+    context: Domains,
 ) {
     profile.profile_tasks.sort_by(|a, b| {
         // First match on the upper-bound of the variable

@@ -5,16 +5,10 @@ use std::fmt::Debug;
 use std::num::NonZero;
 
 use super::PropagatorQueue;
-use super::propagation::EnqueueDecision;
-use super::propagation::ExplanationContext;
-use super::propagation::constructor::PropagatorConstructor;
 use crate::containers::KeyGenerator;
 use crate::engine::EmptyDomain;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
@@ -23,6 +17,12 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorId;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::state::Conflict;
@@ -212,7 +212,7 @@ impl TestSolver {
     }
 
     pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
-        let context = PropagationContextMut::new(
+        let context = PropagationContext::new(
             &mut self.state.trailed_values,
             &mut self.state.assignments,
             &mut self.state.reason_store,
@@ -231,7 +231,7 @@ impl TestSolver {
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut self.state.trailed_values,
                     &mut self.state.assignments,
                     &mut self.state.reason_store,
@@ -339,7 +339,10 @@ impl TestSolver {
             .propagators
             .iter_propagators_mut()
             .for_each(|propagator| {
-                propagator.synchronise(PropagationContext::new(&self.state.assignments))
+                propagator.synchronise(Domains::new(
+                    &self.state.assignments,
+                    &mut self.state.trailed_values,
+                ))
             })
     }
 }

@@ -1,17 +1,18 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::LocalId;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 
 declare_inference_label!(AbsoluteValue);
 
@@ -65,18 +66,15 @@ where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
 {
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
         "IntAbs"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.post(

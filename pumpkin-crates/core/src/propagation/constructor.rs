@@ -1,29 +1,38 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use super::Domains;
 use super::LocalId;
-use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+#[cfg(doc)]
+use crate::Solver;
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
-use crate::engine::DomainEvents;
 use crate::engine::State;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::Watchers;
+#[cfg(doc)]
+use crate::engine::variables::AffineView;
+#[cfg(doc)]
+use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+#[cfg(doc)]
+use crate::propagation::DomainEvent;
+use crate::propagation::DomainEvents;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
-/// The constructor is responsible for indicating on which events the propagator should be
-/// enqueued. Additionally, the propagator can be initialized with values that come from the state
-/// of the solver.
-pub(crate) trait PropagatorConstructor {
+/// The constructor is responsible for:
+/// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
+///    [`PropagatorConstructorContext`]).
+/// 2) Initialising the [`PropagatorConstructor::PropagatorImpl`] and its structures.
+pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
@@ -37,7 +46,7 @@ pub(crate) trait PropagatorConstructor {
 /// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
-pub(crate) struct PropagatorConstructorContext<'a> {
+pub struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
@@ -59,10 +68,9 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext {
-            assignments: &self.state.assignments,
-        }
+    /// Get domain information.
+    pub fn domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.state.assignments, &mut self.state.trailed_values)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -73,10 +81,7 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
-    ///
-    /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
-    /// [`AffineView`]s.
-    pub(crate) fn register(
+    pub fn register(
         &mut self,
         var: impl IntegerVariable,
         domain_events: DomainEvents,
@@ -90,13 +95,12 @@ impl PropagatorConstructorContext<'_> {
         self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
-        var.watch_all(&mut watchers, domain_events.get_int_events());
+        var.watch_all(&mut watchers, domain_events.events());
     }
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
-    #[allow(unused, reason = "will become public API")]
-    pub(crate) fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+    pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
         self.state.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
@@ -118,7 +122,7 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
     /// [`AffineView`]s.
-    pub(crate) fn register_for_backtrack_events<Var: IntegerVariable>(
+    pub fn register_backtrack<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,
@@ -132,7 +136,7 @@ impl PropagatorConstructorContext<'_> {
         self.update_next_local_id(local_id);
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
-        var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
+        var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
@@ -207,16 +211,13 @@ impl<T> DerefMut for RefOrOwned<'_, T> {
 
 mod private {
     use super::*;
-    use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasTrailedValues;
+    use crate::propagation::HasAssignments;
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {
             &self.state.assignments
         }
-    }
 
-    impl HasTrailedValues for PropagatorConstructorContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             &self.state.trailed_values
         }

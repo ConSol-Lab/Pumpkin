@@ -6,14 +6,14 @@ use std::cmp::min;
 use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-#[cfg(doc)]
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::PropagationContext;
+#[cfg(doc)]
+use crate::propagation::Propagator;
+use crate::propagation::ReadDomains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -44,7 +44,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: PropagationContext,
+    mut context: Domains,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -70,7 +70,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     }
 
     // We check whether a mandatory part was extended/introduced
-    if has_mandatory_part(context, updated_task) {
+    if has_mandatory_part(context.reborrow(), updated_task) {
         result.update = Some(UpdatedTaskInfo {
             task: Rc::clone(updated_task),
             old_lower_bound,
@@ -106,7 +106,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 }
 
 pub(crate) fn has_mandatory_part<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
 ) -> bool {
     context.upper_bound(&task.start_variable)
@@ -116,7 +116,7 @@ pub(crate) fn has_mandatory_part<Var: IntegerVariable + 'static>(
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
 pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -133,7 +133,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
 pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -200,7 +200,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// [`ResourceProfile`] is maximal (i.e. the [`ResourceProfile::start`] and [`ResourceProfile::end`]
 /// cannot be increased or decreased, respectively).
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
@@ -255,7 +255,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// This type of propagation is likely to be less beneficial for the explanation
 /// [`CumulativeExplanationType::Pointwise`].
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -307,7 +307,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
             // update or a hole in the domain)
             if lower_bound_can_be_propagated_by_profile(
-                context.as_readonly(),
+                context.domains(),
                 &task,
                 profile,
                 parameters.capacity,
@@ -320,7 +320,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
             }
             if upper_bound_can_be_propagated_by_profile(
-                context.as_readonly(),
+                context.domains(),
                 &task,
                 profile,
                 parameters.capacity,
@@ -333,12 +333,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
             }
             if parameters.options.allow_holes_in_domain
-                && can_be_updated_by_profile(
-                    context.as_readonly(),
-                    &task,
-                    profile,
-                    parameters.capacity,
-                )
+                && can_be_updated_by_profile(context.domains(), &task, profile, parameters.capacity)
             {
                 let result = propagation_handler.propagate_holes_in_domain(context, profile, &task);
 
@@ -363,7 +358,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 /// Especially in the case of [`CumulativeExplanationType::Pointwise`] this is likely to be
 /// beneficial.
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -424,12 +419,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             });
             for profile in &time_table[lower_bound_index..upper_bound_index] {
                 // Check whether this profile can cause an update
-                if can_be_updated_by_profile(
-                    context.as_readonly(),
-                    task,
-                    profile,
-                    parameters.capacity,
-                ) {
+                if can_be_updated_by_profile(context.domains(), task, profile, parameters.capacity)
+                {
                     // If we allow the propagation of holes in the domain then we simply let the
                     // propagation handler handle it
                     propagation_handler.propagate_holes_in_domain(context, profile, task)?;
@@ -446,7 +437,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 fn sweep_forward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     propagation_handler: &mut CumulativePropagationHandler,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -471,7 +462,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 
         // We check whether a lower-bound propagation can be performed using this profile
         if lower_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
+            context.domains(),
             task,
             profile,
             parameters.capacity,
@@ -481,7 +472,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
             find_profiles_which_propagate_lower_bound(
                 profile_index,
                 time_table,
-                context.as_readonly(),
+                context.domains(),
                 task,
                 parameters.capacity,
                 profile_buffer,
@@ -510,7 +501,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
 fn sweep_backward<'a, Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     propagation_handler: &mut CumulativePropagationHandler,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     time_table: &[&'a ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -539,7 +530,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
 
         // We check whether an upper-bound propagation can be performed using this profile
         if upper_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
+            context.domains(),
             task,
             profile,
             parameters.capacity,
@@ -549,7 +540,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
             find_profiles_which_propagate_upper_bound(
                 profile_index,
                 time_table,
-                context.as_readonly(),
+                context.domains(),
                 task,
                 parameters.capacity,
                 profile_buffer,
@@ -585,7 +576,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
 fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&'a ResourceProfile<Var>],
-    context: PropagationContext,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     capacity: i32,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -603,7 +594,12 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
             break;
         }
 
-        if overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity) {
+        if overflows_capacity_and_is_not_part_of_profile(
+            context.reborrow(),
+            task,
+            next_profile,
+            capacity,
+        ) {
             last_propagating_index = current_index;
             profile_buffer.push(time_table[current_index])
         }
@@ -618,7 +614,7 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
 fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&'a ResourceProfile<Var>],
-    context: PropagationContext,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     capacity: i32,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -638,8 +634,12 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
             break;
         }
 
-        if overflows_capacity_and_is_not_part_of_profile(context, task, previous_profile, capacity)
-        {
+        if overflows_capacity_and_is_not_part_of_profile(
+            context.reborrow(),
+            task,
+            previous_profile,
+            capacity,
+        ) {
             last_propagating = current_index;
             profile_buffer.push(time_table[current_index]);
         }
@@ -663,12 +663,12 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    can_be_updated_by_profile(context, task, profile, capacity)
+    can_be_updated_by_profile(context.reborrow(), task, profile, capacity)
         && (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.lower_bound(&task.start_variable) <= profile.end
 }
@@ -680,12 +680,12 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
 fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    can_be_updated_by_profile(context, task, profile, capacity)
+    can_be_updated_by_profile(context.reborrow(), task, profile, capacity)
         && (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.upper_bound(&task.start_variable) <= profile.end
 }
@@ -698,13 +698,13 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 /// If the first condition is true, the second false and the third true then this method returns
 /// true (otherwise it returns false)
 fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    overflows_capacity_and_is_not_part_of_profile(context, task, profile, capacity)
-        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+    overflows_capacity_and_is_not_part_of_profile(context.reborrow(), task, profile, capacity)
+        && task_has_overlap_with_interval(context.reborrow(), task, profile.start, profile.end)
 }
 
 /// Returns whether the provided `task` passes the following checks:
@@ -714,7 +714,7 @@ fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
 /// If the first condition is true, and the second false then this method returns
 /// true (otherwise it returns false)
 fn overflows_capacity_and_is_not_part_of_profile<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -735,7 +735,7 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
 }
 
 pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     updatable_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
@@ -782,8 +782,9 @@ mod tests {
 
     use super::find_profiles_which_propagate_lower_bound;
     use crate::engine::Assignments;
-    use crate::engine::propagation::LocalId;
-    use crate::engine::propagation::PropagationContext;
+    use crate::engine::TrailedValues;
+    use crate::propagation::Domains;
+    use crate::propagation::LocalId;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
@@ -791,6 +792,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_lower_bound() {
         let mut assignments = Assignments::default();
+        let mut trailed_values = TrailedValues::default();
 
         let x = assignments.grow(0, 10);
         let y = assignments.grow(5, 5);
@@ -825,7 +827,7 @@ mod tests {
         find_profiles_which_propagate_lower_bound(
             0,
             &time_table,
-            PropagationContext::new(&assignments),
+            Domains::new(&assignments, &mut trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,
@@ -841,6 +843,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_upper_bound() {
         let mut assignments = Assignments::default();
+        let mut trailed_values = TrailedValues::default();
 
         let x = assignments.grow(7, 7);
         let y = assignments.grow(5, 5);
@@ -875,7 +878,7 @@ mod tests {
         find_profiles_which_propagate_upper_bound(
             1,
             &time_table,
-            PropagationContext::new(&assignments),
+            Domains::new(&assignments, &mut trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,

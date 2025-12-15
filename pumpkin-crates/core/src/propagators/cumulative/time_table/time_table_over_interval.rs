@@ -8,18 +8,19 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -107,7 +108,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures
-            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
         self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
@@ -117,7 +118,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
@@ -126,7 +127,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         }
 
         let time_table = create_time_table_over_interval_from_scratch(
-            context.as_readonly(),
+            context.domains(),
             &self.parameters,
             self.inference_code.unwrap(),
         )?;
@@ -142,14 +143,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         )
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
     }
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -163,12 +164,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.is_time_table_empty,
         );
 
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -183,19 +184,16 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         result.decision
     }
 
-    fn priority(&self) -> u32 {
-        3
+    fn priority(&self) -> Priority {
+        Priority::VeryLow
     }
 
     fn name(&self) -> &str {
         "CumulativeTimeTableOverInterval"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_interval(
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        propagate_from_scratch_time_table_interval(
             &mut context,
             &self.parameters,
             &self.updatable_structures,
@@ -214,16 +212,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// The result of this method is either the time-table of type
 /// [`OverIntervalTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`PropagatorConflict`].
-pub(crate) fn create_time_table_over_interval_from_scratch<
-    Var: IntegerVariable + 'static,
-    Context: ReadDomains + Copy,
->(
-    context: Context,
+pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
+    mut context: Domains,
     parameters: &CumulativeParameters<Var>,
     inference_code: InferenceCode,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
-    let events = create_events(context, parameters);
+    let events = create_events(context.reborrow(), parameters);
 
     // Then we create a time-table using these events
     create_time_table_from_events(events, context, inference_code, parameters)
@@ -236,7 +231,7 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 /// is resolved by placing the events which signify the ends of mandatory parts first (if the
 /// tie is between events of the same type then the tie-breaking is done on the id in
 /// non-decreasing order).
-fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<Event<Var>> {
@@ -296,7 +291,7 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     events: Vec<Event<Var>>,
     context: Context,
     inference_code: InferenceCode,
@@ -449,8 +444,8 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
         && current_profile_tasks.is_empty()
 }
 
-pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
+    context: &mut PropagationContext,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     inference_code: InferenceCode,
@@ -458,17 +453,19 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
     let time_table = create_time_table_over_interval_from_scratch(
-        context.as_readonly(),
+        context.domains(),
         parameters,
         inference_code,
     )?;
     // Then we check whether propagation can take place
+    let mut updatable_structures_clone =
+        updatable_structures.recreate_from_context(context.domains(), parameters);
     propagate_based_on_timetable(
         context,
         inference_code,
         time_table.iter(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
+        &mut updatable_structures_clone,
     )
 }
 
@@ -476,9 +473,9 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 mod tests {
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;

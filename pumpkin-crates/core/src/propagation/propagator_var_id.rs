@@ -1,5 +1,5 @@
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagatorId;
+use crate::propagation::LocalId;
+use crate::propagation::PropagatorId;
 
 /// A handle to a variable registered to a propagator.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
