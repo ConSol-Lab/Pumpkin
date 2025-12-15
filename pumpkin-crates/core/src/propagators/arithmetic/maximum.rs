@@ -8,6 +8,7 @@ use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::LocalId;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -69,8 +70,8 @@ pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::HighPriority
     }
 
     fn name(&self) -> &str {

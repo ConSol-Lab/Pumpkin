@@ -15,6 +15,7 @@ use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -523,8 +524,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn priority(&self) -> u32 {
-        3
+    fn priority(&self) -> Priority {
+        Priority::VeryLowPriority
     }
 
     fn name(&self) -> &str {

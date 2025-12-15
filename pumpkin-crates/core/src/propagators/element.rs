@@ -14,6 +14,7 @@ use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -95,8 +96,8 @@ where
     VI: IntegerVariable + 'static,
     VE: IntegerVariable + 'static,
 {
-    fn priority(&self) -> u32 {
-        2
+    fn priority(&self) -> Priority {
+        Priority::LowPriority
     }
 
     fn name(&self) -> &str {

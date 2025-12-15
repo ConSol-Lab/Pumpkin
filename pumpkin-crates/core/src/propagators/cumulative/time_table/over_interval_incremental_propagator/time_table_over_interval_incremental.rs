@@ -9,6 +9,7 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::DomainEvent;
+use crate::propagation::Priority;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagatorConstructor;
@@ -498,8 +499,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn priority(&self) -> u32 {
-        3
+    fn priority(&self) -> Priority {
+        Priority::VeryLowPriority
     }
 
     fn name(&self) -> &str {

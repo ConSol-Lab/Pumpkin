@@ -7,6 +7,7 @@ use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -110,7 +111,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         }
     }
 
-    fn priority(&self) -> u32 {
+    fn priority(&self) -> Priority {
         self.propagator.priority()
     }
 

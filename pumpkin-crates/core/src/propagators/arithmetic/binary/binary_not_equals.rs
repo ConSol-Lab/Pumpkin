@@ -9,6 +9,7 @@ use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::LocalId;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -87,8 +88,8 @@ where
         }
     }
 
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::HighPriority
     }
 
     fn name(&self) -> &str {

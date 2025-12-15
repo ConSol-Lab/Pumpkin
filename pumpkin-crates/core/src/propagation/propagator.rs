@@ -158,15 +158,16 @@ pub trait Propagator: Downcast + DynClone {
     /// By default this function does nothing.
     fn synchronise(&mut self, _domains: Domains) {}
 
-    /// Returns the priority of the propagator represented as an integer. Lower values mean higher
-    /// priority and the priority determines the order in which propagators will be asked to
-    /// propagate. It is custom for simpler propagators to have lower priority values.
+    /// Returns the [`Priority`] of the propagator, used for determining the order in which
+    /// propagators are called.
     ///
-    /// By default the priority is set to 3. It is expected that propagator implementations would
-    /// set this value to some appropriate value.
-    fn priority(&self) -> u32 {
-        // setting an arbitrary priority by default
-        3
+    /// The intuition is that propagators with low computational complexity should be assigned a
+    /// high priority (i.e., should be propagated before computationally expensive propagators).
+    ///
+    /// By default the priority is set to [`Priority::VeryLowPriority`]. It is expected that
+    /// propagator implementations would set this value to some appropriate value.
+    fn priority(&self) -> Priority {
+        Priority::VeryLowPriority
     }
 
     /// A function which returns [`Some`] with a [`PropagatorConflict`] when this propagator can
@@ -214,4 +215,25 @@ pub enum EnqueueDecision {
     Enqueue,
     /// The propagator should not be enqueued.
     Skip,
+}
+
+/// The priority of a propagator, used for determining the order in which propagators will be
+/// called.
+///
+/// The intuition is that propagators with low computational complexity should be assigned a high
+/// priority (i.e., should be propagated before computationally expensive propagators).
+#[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Priority {
+    HighPriority = 0,
+    MediumPriority = 1,
+    LowPriority = 2,
+    #[default]
+    VeryLowPriority = 3,
+}
+
+impl PartialOrd for Priority {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        ((*self) as u8).partial_cmp(&((*other) as u8))
+    }
 }

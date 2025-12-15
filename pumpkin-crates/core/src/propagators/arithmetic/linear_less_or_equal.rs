@@ -16,6 +16,7 @@ use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
 use crate::propagation::ManipulateTrailedValues;
 use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -139,8 +140,8 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::HighPriority
     }
 
     fn name(&self) -> &str {
