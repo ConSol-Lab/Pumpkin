@@ -21,14 +21,17 @@ use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
+#[cfg(doc)]
+use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
-/// The constructor is responsible for indicating on which events the propagator should be
-/// enqueued. Additionally, the propagator can be initialized with values that come from the state
-/// of the solver.
+/// The constructor is responsible for:
+/// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
+///    [`PropagatorConstructorContext`]).
+/// 2) Initialising the [`PropagatorConstructor::PropagatorImpl`] and its structures.
 pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
