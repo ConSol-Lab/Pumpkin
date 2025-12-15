@@ -205,7 +205,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let lower_bound_left_hand_side = self
             .x
             .iter()

@@ -191,8 +191,8 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         "CumulativeTimeTableOverInterval"
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_interval(
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        propagate_from_scratch_time_table_interval(
             &mut context,
             &self.parameters,
             &self.updatable_structures,
@@ -446,7 +446,7 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
         && current_profile_tasks.is_empty()
 }
 
-pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,

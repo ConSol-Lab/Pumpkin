@@ -38,7 +38,7 @@ clone_trait_object!(Propagator);
 /// explicit conflicts.
 ///
 /// The only required functions are [`Propagator::name`],
-///  and [`Propagator::debug_propagate_from_scratch`]; all other
+///  and [`Propagator::propagate_from_scratch`]; all other
 /// functions have default implementations. For initial development, the required functions are
 /// enough, but a more mature implementation considers all functions in most cases.
 ///
@@ -49,7 +49,8 @@ pub trait Propagator: Downcast + DynClone {
     /// This is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
-    /// A propagation method that is used to help debugging.
+    /// A propagation method that propagates from scratch (i.e., without relying on updating
+    /// internal data structures).
     ///
     /// This method propagates without relying on internal data structures, hence the immutable
     /// &self parameter. It is usually best to implement this propagation method in the simplest
@@ -59,7 +60,7 @@ pub trait Propagator: Downcast + DynClone {
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called again by
     /// the solver until no further propagations happen.
-    fn debug_propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
+    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
 
     /// Performs stateful propagation.
     ///
@@ -77,9 +78,9 @@ pub trait Propagator: Downcast + DynClone {
     /// Propagators are not required to propagate until a fixed point. It will be called
     /// again by the solver until no further propagations happen.
     ///
-    /// By default, this function calls [`Propagator::debug_propagate_from_scratch`].
+    /// By default, this function calls [`Propagator::propagate_from_scratch`].
     fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
-        self.debug_propagate_from_scratch(context)
+        self.propagate_from_scratch(context)
     }
 
     /// Called when an event happens to one of the variables the propagator is subscribed to. It

@@ -333,10 +333,7 @@ impl Propagator for NogoodPropagator {
         self.updated_predicate_ids.clear()
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContext,
-    ) -> Result<(), Conflict> {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict> {
         // Very inefficient version!
 
         // The algorithm goes through every nogood explicitly

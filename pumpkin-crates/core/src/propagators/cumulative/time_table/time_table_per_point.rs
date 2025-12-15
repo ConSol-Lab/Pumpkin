@@ -184,8 +184,8 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_point(
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
             &self.parameters,
@@ -250,7 +250,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     Ok(time_table)
 }
 
-pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,

@@ -121,7 +121,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         )
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let mut sorted_tasks = self.sorted_tasks.clone();
         let mut theta_lambda_tree = self.theta_lambda_tree.clone();
         edge_finding(

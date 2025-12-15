@@ -73,7 +73,7 @@ where
         "IntAbs"
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.post(

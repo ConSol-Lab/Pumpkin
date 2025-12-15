@@ -136,13 +136,13 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         &self.name
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
         if context.evaluate_literal(self.reification_literal) == Some(true) {
             context.with_reification(self.reification_literal);
 
-            let result = self.propagator.debug_propagate_from_scratch(context);
+            let result = self.propagator.propagate_from_scratch(context);
 
             self.map_propagation_status(result)?;
         }
@@ -421,7 +421,7 @@ mod tests {
             "Generic Propagator"
         }
 
-        fn debug_propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+        fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
             (self.propagation)(context)
         }
 

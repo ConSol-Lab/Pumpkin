@@ -221,7 +221,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let num_fixed = self
             .terms
             .iter()

@@ -44,7 +44,7 @@
 //!
 //! We recommend the following workflow:
 //! 1. Implement a propagator struct that implements the [`Propagator`] trait. For now only
-//!    implement the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
+//!    implement the required functions, i.e., [`Propagator::propagate_from_scratch`] and
 //!    [`Propagator::name`].
 //! 2. Create an implementation of the [`PropagatorConstructor`] trait, to register for domain
 //!    events and set up the propagator state.

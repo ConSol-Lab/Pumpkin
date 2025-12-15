@@ -40,7 +40,7 @@ use crate::propagators::cumulative::time_table::time_table_util::backtrack_updat
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
-use crate::propagators::debug_propagate_from_scratch_time_table_point;
+use crate::propagators::propagate_from_scratch_time_table_point;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -531,9 +531,9 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
-        debug_propagate_from_scratch_time_table_point(
+        propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
             &self.parameters,

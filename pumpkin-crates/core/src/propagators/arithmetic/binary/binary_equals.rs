@@ -226,7 +226,7 @@ where
         if self.first_propagation_loop {
             // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
-            return self.debug_propagate_from_scratch(context);
+            return self.propagate_from_scratch(context);
         }
 
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
@@ -313,7 +313,7 @@ where
         slice::from_ref(&self.reason)
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 

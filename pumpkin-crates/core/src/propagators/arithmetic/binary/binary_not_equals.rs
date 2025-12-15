@@ -132,7 +132,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }

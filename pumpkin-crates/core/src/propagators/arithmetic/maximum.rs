@@ -77,7 +77,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         "Maximum"
     }
 
-    fn debug_propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // This is the constraint that is being propagated:
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 

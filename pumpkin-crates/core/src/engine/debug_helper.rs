@@ -84,7 +84,7 @@ impl DebugHelper {
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
             );
-            let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let propagation_status_cp = propagator.propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
                 panic!(
@@ -262,7 +262,7 @@ impl DebugHelper {
                     &mut notification_engine_clone,
                     propagator_id,
                 );
-                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+                let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
@@ -377,8 +377,7 @@ impl DebugHelper {
                         &mut notification_engine_clone,
                         propagator_id,
                     );
-                    let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(context);
+                    let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                     // We break if an error was found or if there were no more propagations (i.e.
                     // fixpoint was reached)
@@ -444,7 +443,7 @@ impl DebugHelper {
                 &mut notification_engine_clone,
                 propagator_id,
             );
-            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(
                 debug_propagation_status_cp.is_err(),
                 "Debug propagation could not reproduce the conflict reported
