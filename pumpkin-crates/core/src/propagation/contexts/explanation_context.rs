@@ -4,6 +4,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyValueHeap;
 use crate::engine::Assignments;
+use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::predicates::Predicate;
 use crate::propagation::HasAssignments;
@@ -89,11 +90,11 @@ impl HasAssignments for ExplanationContext<'_> {
         self.assignments
     }
 
-    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+    fn trailed_values(&self) -> &TrailedValues {
         unimplemented!("Currently, this information cannot be retrieved using this structure")
     }
 
-    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+    fn trailed_values_mut(&mut self) -> &mut TrailedValues {
         unimplemented!("Currently, this information cannot be retrieved using this structure")
     }
 }
