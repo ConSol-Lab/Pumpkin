@@ -1,4 +1,6 @@
 use super::CumulativeExplanationType;
+#[cfg(doc)]
+use crate::constraints;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct CumulativePropagatorOptions {
@@ -15,6 +17,7 @@ pub(crate) struct CumulativePropagatorOptions {
     pub(crate) incremental_backtracking: bool,
 }
 
+/// The options provided to the [`constraints::cumulative`] constraints.
 #[derive(Debug, Copy, Clone, Default)]
 pub struct CumulativeOptions {
     /// The propagation method which is used for the cumulative constraints; currently all of them
@@ -45,6 +48,7 @@ impl CumulativeOptions {
     }
 }
 
+/// The approach used for propagating the [`constraints::cumulative`] constraint.
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum CumulativePropagationMethod {
