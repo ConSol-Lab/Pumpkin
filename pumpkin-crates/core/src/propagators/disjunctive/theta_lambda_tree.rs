@@ -416,18 +416,18 @@ mod tests {
 
         tree.update(Domains::new(
             &solver.state.assignments,
-            &solver.state.trailed_values,
+            &mut solver.state.trailed_values,
         ));
         for task in tasks.iter() {
             tree.add_to_theta(
                 task,
-                Domains::new(&solver.state.assignments, &solver.state.trailed_values),
+                Domains::new(&solver.state.assignments, &mut solver.state.trailed_values),
             );
         }
         tree.remove_from_theta(&tasks[2]);
         tree.add_to_lambda(
             &tasks[2],
-            Domains::new(&solver.state.assignments, &solver.state.trailed_values),
+            Domains::new(&solver.state.assignments, &mut solver.state.trailed_values),
         );
 
         assert_eq!(

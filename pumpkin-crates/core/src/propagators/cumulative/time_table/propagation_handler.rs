@@ -448,7 +448,7 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
     context: Context,
     inference_code: InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
@@ -548,7 +548,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                Domains::new(&self.assignments, &self.trailed_values),
+                Domains::new(&self.assignments, &mut self.trailed_values),
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,

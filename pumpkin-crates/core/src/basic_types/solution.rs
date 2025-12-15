@@ -94,10 +94,26 @@ impl<'a> HasAssignments for SolutionReference<'a> {
     fn assignments(&self) -> &'a Assignments {
         self.assignments
     }
+
+    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
+    }
 }
 
 impl HasAssignments for Solution {
     fn assignments(&self) -> &Assignments {
         &self.assignments
+    }
+
+    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
     }
 }

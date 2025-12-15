@@ -50,4 +50,12 @@ impl<'a> HasAssignments for MinimisationContext<'a> {
     fn assignments(&self) -> &Assignments {
         &self.state.assignments
     }
+
+    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+        &self.state.trailed_values
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+        &mut self.state.trailed_values
+    }
 }

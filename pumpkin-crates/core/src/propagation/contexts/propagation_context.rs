@@ -2,7 +2,6 @@ use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
-use crate::engine::TrailedInteger;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateIdAssignments;
@@ -13,6 +12,7 @@ use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
 use crate::propagation::Domains;
+use crate::propagation::HasAssignments;
 #[cfg(doc)]
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorId;
@@ -21,6 +21,8 @@ use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
 /// Provided to the propagator when it is notified of a domain event.
+///
+/// Domains can be read through the implementation of [`ReadDomains`].
 ///
 /// The difference with [`PropagationContext`] is that it is not possible to perform a propagation
 /// in the notify callback.
@@ -45,8 +47,22 @@ impl<'a> NotificationContext<'a> {
     }
 
     /// Get the current domains.
-    pub fn domains(&self) -> Domains<'_> {
+    pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
+    }
+}
+
+impl<'a> HasAssignments for NotificationContext<'a> {
+    fn assignments(&self) -> &Assignments {
+        self.assignments
+    }
+
+    fn trailed_values(&self) -> &TrailedValues {
+        self.trailed_values
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+        self.trailed_values
     }
 }
 
@@ -62,6 +78,20 @@ pub struct PropagationContext<'a> {
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
     reification_literal: Option<Literal>,
+}
+
+impl<'a> HasAssignments for PropagationContext<'a> {
+    fn assignments(&self) -> &Assignments {
+        self.assignments
+    }
+
+    fn trailed_values(&self) -> &TrailedValues {
+        self.trailed_values
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut TrailedValues {
+        self.trailed_values
+    }
 }
 
 impl<'a> PropagationContext<'a> {
@@ -118,7 +148,7 @@ impl<'a> PropagationContext<'a> {
     }
 
     /// Get the current domain information.
-    pub fn domains(&self) -> Domains<'_> {
+    pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
     }
 
@@ -145,69 +175,6 @@ impl<'a> PropagationContext<'a> {
         self.notification_engine.num_predicate_ids()
     }
 }
-
-pub(crate) trait HasTrailedValues {
-    fn trailed_values(&self) -> &TrailedValues;
-    fn trailed_values_mut(&mut self) -> &mut TrailedValues;
-}
-
-mod private {
-    use super::*;
-    use crate::propagation::HasAssignments;
-
-    impl HasTrailedValues for NotificationContext<'_> {
-        fn trailed_values(&self) -> &TrailedValues {
-            self.trailed_values
-        }
-
-        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_values
-        }
-    }
-
-    impl HasTrailedValues for PropagationContext<'_> {
-        fn trailed_values(&self) -> &TrailedValues {
-            self.trailed_values
-        }
-
-        fn trailed_values_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_values
-        }
-    }
-
-    impl HasAssignments for PropagationContext<'_> {
-        fn assignments(&self) -> &Assignments {
-            self.assignments
-        }
-    }
-
-    impl HasAssignments for NotificationContext<'_> {
-        fn assignments(&self) -> &Assignments {
-            self.assignments
-        }
-    }
-}
-
-pub(crate) trait ManipulateTrailedValues: HasTrailedValues {
-    fn new_trailed_integer(&mut self, initial_value: i64) -> TrailedInteger {
-        self.trailed_values_mut().grow(initial_value)
-    }
-
-    fn value(&self, trailed_integer: TrailedInteger) -> i64 {
-        self.trailed_values().read(trailed_integer)
-    }
-
-    fn add_assign(&mut self, trailed_integer: TrailedInteger, addition: i64) {
-        self.trailed_values_mut()
-            .add_assign(trailed_integer, addition);
-    }
-
-    fn assign(&mut self, trailed_integer: TrailedInteger, value: i64) {
-        self.trailed_values_mut().assign(trailed_integer, value);
-    }
-}
-
-impl<T: HasTrailedValues> ManipulateTrailedValues for T {}
 
 impl PropagationContext<'_> {
     /// Assign the truth-value of the given [`Predicate`] to `true` in the current partial

@@ -192,7 +192,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
 
     fn filter_enqueue_decision(
         &mut self,
-        context: NotificationContext<'_>,
+        mut context: NotificationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
         if decision == EnqueueDecision::Skip {

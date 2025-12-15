@@ -505,13 +505,13 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let context = Domains::new(&self.assignments, &self.trailed_values);
+            let context = Domains::new(&self.assignments, &mut self.trailed_values);
             propagator.synchronise(context);
         }
 
         let _ = self.notification_engine.process_backtrack_events(
             &mut self.assignments,
-            &self.trailed_values,
+            &mut self.trailed_values,
             &mut self.propagators,
         );
         self.notification_engine.clear_event_drain();

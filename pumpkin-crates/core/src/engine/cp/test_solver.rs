@@ -341,7 +341,7 @@ impl TestSolver {
             .for_each(|propagator| {
                 propagator.synchronise(Domains::new(
                     &self.state.assignments,
-                    &self.state.trailed_values,
+                    &mut self.state.trailed_values,
                 ))
             })
     }

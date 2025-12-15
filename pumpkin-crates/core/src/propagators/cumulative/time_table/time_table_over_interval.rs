@@ -150,7 +150,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -212,16 +212,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// The result of this method is either the time-table of type
 /// [`OverIntervalTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`PropagatorConflict`].
-pub(crate) fn create_time_table_over_interval_from_scratch<
-    Var: IntegerVariable + 'static,
-    Context: ReadDomains + Copy,
->(
-    context: Context,
+pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
+    mut context: Domains,
     parameters: &CumulativeParameters<Var>,
     inference_code: InferenceCode,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
-    let events = create_events(context, parameters);
+    let events = create_events(context.reborrow(), parameters);
 
     // Then we create a time-table using these events
     create_time_table_from_events(events, context, inference_code, parameters)
@@ -234,7 +231,7 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 /// is resolved by placing the events which signify the ends of mandatory parts first (if the
 /// tie is between events of the same type then the tie-breaking is done on the id in
 /// non-decreasing order).
-fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<Event<Var>> {
@@ -294,7 +291,7 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     events: Vec<Event<Var>>,
     context: Context,
     inference_code: InferenceCode,
@@ -461,12 +458,14 @@ pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 
         inference_code,
     )?;
     // Then we check whether propagation can take place
+    let mut updatable_structures_clone =
+        updatable_structures.recreate_from_context(context.domains(), parameters);
     propagate_based_on_timetable(
         context,
         inference_code,
         time_table.iter(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.domains(), parameters),
+        &mut updatable_structures_clone,
     )
 }
 

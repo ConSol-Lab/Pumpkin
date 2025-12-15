@@ -1,7 +1,7 @@
 use crate::containers::StorageKey;
 
-/// An integer whose value is trailed by the solver. Backtracking automatically restores the
-/// integer to previous values.
+/// An integer whose value is automatically restored upon backtracking to its previous value at the
+/// checkpoint to which backtracking occurred.
 #[derive(Debug, Clone, Copy)]
 pub struct TrailedInteger {
     id: u32,

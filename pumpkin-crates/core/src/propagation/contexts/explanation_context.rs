@@ -88,6 +88,14 @@ impl HasAssignments for ExplanationContext<'_> {
     fn assignments(&self) -> &Assignments {
         self.assignments
     }
+
+    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+        unimplemented!("Currently, this information cannot be retrieved using this structure")
+    }
 }
 
 static EMPTY_HEAP: KeyValueHeap<PredicateId, u32> = KeyValueHeap::new();

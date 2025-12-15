@@ -156,7 +156,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: Domains,
+        mut context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -180,7 +180,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         && conflict.is_none()
                     {
                         conflict = Some(Err(create_conflict_explanation(
-                            context,
+                            context.reborrow(),
                             self.inference_code.unwrap(),
                             &conflict_tasks,
                             self.parameters.options.explanation_type,
@@ -420,7 +420,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -460,12 +460,21 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         result.decision
     }
 
-    fn notify_backtrack(&mut self, context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
+    fn notify_backtrack(
+        &mut self,
+        mut context: Domains,
+        local_id: LocalId,
+        event: OpaqueDomainEvent,
+    ) {
         pumpkin_assert_simple!(self.parameters.options.incremental_backtracking);
 
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        backtrack_update(context, &mut self.updatable_structures, &updated_task);
+        backtrack_update(
+            context.reborrow(),
+            &mut self.updatable_structures,
+            &updated_task,
+        );
 
         update_bounds_task(
             context,

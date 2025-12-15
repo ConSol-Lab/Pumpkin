@@ -143,9 +143,9 @@ pub trait Propagator: Downcast + DynClone {
     }
 
     /// Returns whether the propagator should be enqueued for propagation when a [`Predicate`] (with
-    /// corresponding [`PredicateId`]) which the propagator is subscribed to (as registered during
-    /// creation with [`PropagatorConstructor`] using
-    /// [`PropagatorConstructorContext::register_predicate`]).
+    /// corresponding [`PredicateId`]) which the propagator is subscribed to (as registered either
+    /// during using [`PropagationContext::register_predicate`] or during creation with
+    /// [`PropagatorConstructor`] using [`PropagatorConstructorContext::register_predicate`]).
     ///
     /// By default, the propagator will be enqueued.
     fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {

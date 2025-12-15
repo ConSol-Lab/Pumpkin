@@ -141,7 +141,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -205,7 +205,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// conflict in the form of an [`PropagatorConflict`].
 pub(crate) fn create_time_table_per_point_from_scratch<
     Var: IntegerVariable + 'static,
-    Context: ReadDomains + Copy,
+    Context: ReadDomains,
 >(
     context: Context,
     inference_code: InferenceCode,
@@ -262,12 +262,14 @@ pub(crate) fn propagate_from_scratch_time_table_point<Var: IntegerVariable + 'st
     let time_table =
         create_time_table_per_point_from_scratch(context.domains(), inference_code, parameters)?;
     // Then we check whether propagation can take place
+    let mut updatable_structures_clone =
+        updatable_structures.recreate_from_context(context.domains(), parameters);
     propagate_based_on_timetable(
         context,
         inference_code,
         time_table.values(),
         parameters,
-        &mut updatable_structures.recreate_from_context(context.domains(), parameters),
+        &mut updatable_structures_clone,
     )
 }
 

@@ -44,7 +44,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: Domains,
+    mut context: Domains,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -70,7 +70,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     }
 
     // We check whether a mandatory part was extended/introduced
-    if has_mandatory_part(context, updated_task) {
+    if has_mandatory_part(context.reborrow(), updated_task) {
         result.update = Some(UpdatedTaskInfo {
             task: Rc::clone(updated_task),
             old_lower_bound,
@@ -576,7 +576,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
 fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&'a ResourceProfile<Var>],
-    context: Domains,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     capacity: i32,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -594,7 +594,12 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
             break;
         }
 
-        if overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity) {
+        if overflows_capacity_and_is_not_part_of_profile(
+            context.reborrow(),
+            task,
+            next_profile,
+            capacity,
+        ) {
             last_propagating_index = current_index;
             profile_buffer.push(time_table[current_index])
         }
@@ -609,7 +614,7 @@ fn find_profiles_which_propagate_lower_bound<'a, Var: IntegerVariable + 'static>
 fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&'a ResourceProfile<Var>],
-    context: Domains,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     capacity: i32,
     profile_buffer: &mut Vec<&'a ResourceProfile<Var>>,
@@ -629,8 +634,12 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
             break;
         }
 
-        if overflows_capacity_and_is_not_part_of_profile(context, task, previous_profile, capacity)
-        {
+        if overflows_capacity_and_is_not_part_of_profile(
+            context.reborrow(),
+            task,
+            previous_profile,
+            capacity,
+        ) {
             last_propagating = current_index;
             profile_buffer.push(time_table[current_index]);
         }
@@ -654,12 +663,12 @@ fn find_profiles_which_propagate_upper_bound<'a, Var: IntegerVariable + 'static>
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: Domains,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    can_be_updated_by_profile(context, task, profile, capacity)
+    can_be_updated_by_profile(context.reborrow(), task, profile, capacity)
         && (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.lower_bound(&task.start_variable) <= profile.end
 }
@@ -671,12 +680,12 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
 fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: Domains,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    can_be_updated_by_profile(context, task, profile, capacity)
+    can_be_updated_by_profile(context.reborrow(), task, profile, capacity)
         && (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.upper_bound(&task.start_variable) <= profile.end
 }
@@ -689,13 +698,13 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 /// If the first condition is true, the second false and the third true then this method returns
 /// true (otherwise it returns false)
 fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
-    context: Domains,
+    mut context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    overflows_capacity_and_is_not_part_of_profile(context, task, profile, capacity)
-        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+    overflows_capacity_and_is_not_part_of_profile(context.reborrow(), task, profile, capacity)
+        && task_has_overlap_with_interval(context.reborrow(), task, profile.start, profile.end)
 }
 
 /// Returns whether the provided `task` passes the following checks:
@@ -783,7 +792,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_lower_bound() {
         let mut assignments = Assignments::default();
-        let trailed_values = TrailedValues::default();
+        let mut trailed_values = TrailedValues::default();
 
         let x = assignments.grow(0, 10);
         let y = assignments.grow(5, 5);
@@ -818,7 +827,7 @@ mod tests {
         find_profiles_which_propagate_lower_bound(
             0,
             &time_table,
-            Domains::new(&assignments, &trailed_values),
+            Domains::new(&assignments, &mut trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,
@@ -834,7 +843,7 @@ mod tests {
     #[test]
     fn test_finding_last_index_upper_bound() {
         let mut assignments = Assignments::default();
-        let trailed_values = TrailedValues::default();
+        let mut trailed_values = TrailedValues::default();
 
         let x = assignments.grow(7, 7);
         let y = assignments.grow(5, 5);
@@ -869,7 +878,7 @@ mod tests {
         find_profiles_which_propagate_upper_bound(
             1,
             &time_table,
-            Domains::new(&assignments, &trailed_values),
+            Domains::new(&assignments, &mut trailed_values),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,

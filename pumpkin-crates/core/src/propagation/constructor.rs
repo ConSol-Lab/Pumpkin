@@ -66,8 +66,8 @@ impl PropagatorConstructorContext<'_> {
     }
 
     /// Get domain information.
-    pub fn domains(&self) -> Domains<'_> {
-        Domains::new(&self.state.assignments, &self.state.trailed_values)
+    pub fn domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.state.assignments, &mut self.state.trailed_values)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -209,15 +209,12 @@ impl<T> DerefMut for RefOrOwned<'_, T> {
 mod private {
     use super::*;
     use crate::propagation::HasAssignments;
-    use crate::propagation::HasTrailedValues;
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {
             &self.state.assignments
         }
-    }
 
-    impl HasTrailedValues for PropagatorConstructorContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
             &self.state.trailed_values
         }

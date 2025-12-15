@@ -309,7 +309,7 @@ impl NotificationEngine {
     pub(crate) fn process_backtrack_events(
         &mut self,
         assignments: &mut Assignments,
-        trailed_values: &TrailedValues,
+        trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these

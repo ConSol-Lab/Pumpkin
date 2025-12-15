@@ -14,7 +14,6 @@ use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::LocalId;
-use crate::propagation::ManipulateTrailedValues;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
@@ -110,7 +109,7 @@ where
     Var: IntegerVariable,
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
-        if (self.c as i64) < domains.value(self.lower_bound_left_hand_side) {
+        if (self.c as i64) < domains.value_trailed_integer(self.lower_bound_left_hand_side) {
             Some(self.create_conflict(domains))
         } else {
             None
@@ -126,7 +125,7 @@ where
         let index = local_id.unpack() as usize;
         let x_i = &self.x[index];
 
-        let old_bound = context.value(self.current_bounds[index]);
+        let old_bound = context.value_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
         pumpkin_assert_simple!(
@@ -134,8 +133,8 @@ where
             "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
         );
 
-        context.add_assign(self.lower_bound_left_hand_side, new_bound - old_bound);
-        context.assign(self.current_bounds[index], new_bound);
+        context.add_assign_trailed_integer(self.lower_bound_left_hand_side, new_bound - old_bound);
+        context.assign_trailed_integer(self.current_bounds[index], new_bound);
 
         EnqueueDecision::Enqueue
     }
@@ -173,27 +172,32 @@ where
             return Err(conflict.into());
         }
 
-        let lower_bound_left_hand_side =
-            match TryInto::<i32>::try_into(context.value(self.lower_bound_left_hand_side)) {
-                Ok(bound) => bound,
-                Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // overflow (hence the check that the lower-bound on the left-hand side is
-                    // positive)
-                    //
-                    // This means that the lower-bounds of the current variables will always be
-                    // higher than the right-hand side (with a maximum value of i32). We thus
-                    // return a conflict
-                    return Err(self.create_conflict(context.domains()).into());
-                }
-                Err(_) => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // underflow
-                    //
-                    // This means that the constraint is always satisfied
-                    return Ok(());
-                }
-            };
+        let lower_bound_left_hand_side = match TryInto::<i32>::try_into(
+            context.value_trailed_integer(self.lower_bound_left_hand_side),
+        ) {
+            Ok(bound) => bound,
+            Err(_)
+                if context
+                    .value_trailed_integer(self.lower_bound_left_hand_side)
+                    .is_positive() =>
+            {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // overflow (hence the check that the lower-bound on the left-hand side is
+                // positive)
+                //
+                // This means that the lower-bounds of the current variables will always be
+                // higher than the right-hand side (with a maximum value of i32). We thus
+                // return a conflict
+                return Err(self.create_conflict(context.domains()).into());
+            }
+            Err(_) => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // underflow
+                //
+                // This means that the constraint is always satisfied
+                return Ok(());
+            }
+        };
 
         for (i, x_i) in self.x.iter().enumerate() {
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
@@ -216,7 +220,11 @@ where
         let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
         {
             Ok(bound) => bound,
-            Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
+            Err(_)
+                if context
+                    .value_trailed_integer(self.lower_bound_left_hand_side)
+                    .is_positive() =>
+            {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
                 // overflow (hence the check that the lower-bound on the left-hand side is
                 // positive)
