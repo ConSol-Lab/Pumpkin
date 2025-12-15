@@ -140,3 +140,38 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn less_than_conflict() {
+        let mut solver = Solver::default();
+
+        let constraint_tag = solver.new_constraint_tag();
+        let x = solver.new_named_bounded_integer(0, 0, "x");
+
+        let result = less_than([x], 0, constraint_tag).post(&mut solver);
+        assert_eq!(
+            result,
+            Err(ConstraintOperationError::InfeasiblePropagator),
+            "Expected {result:?} to be an `InfeasiblePropagator` error"
+        );
+    }
+
+    #[test]
+    fn greater_than_conflict() {
+        let mut solver = Solver::default();
+
+        let constraint_tag = solver.new_constraint_tag();
+        let x = solver.new_named_bounded_integer(0, 0, "x");
+
+        let result = greater_than([x], 0, constraint_tag).post(&mut solver);
+        assert_eq!(
+            result,
+            Err(ConstraintOperationError::InfeasiblePropagator),
+            "Expected {result:?} to be an `InfeasiblePropagator` error"
+        );
+    }
+}
