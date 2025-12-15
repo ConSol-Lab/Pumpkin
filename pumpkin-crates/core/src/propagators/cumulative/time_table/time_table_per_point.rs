@@ -178,7 +178,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     }
 
     fn priority(&self) -> Priority {
-        Priority::VeryLowPriority
+        Priority::VeryLow
     }
 
     fn name(&self) -> &str {

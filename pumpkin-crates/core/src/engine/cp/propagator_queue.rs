@@ -106,15 +106,15 @@ mod tests {
     fn test_ordering() {
         let mut queue = PropagatorQueue::default();
 
-        queue.enqueue_propagator(PropagatorId(1), Priority::HighPriority);
-        queue.enqueue_propagator(PropagatorId(0), Priority::MediumPriority);
-        queue.enqueue_propagator(PropagatorId(3), Priority::VeryLowPriority);
-        queue.enqueue_propagator(PropagatorId(4), Priority::LowPriority);
+        queue.enqueue_propagator(PropagatorId(1), Priority::High);
+        queue.enqueue_propagator(PropagatorId(0), Priority::Medium);
+        queue.enqueue_propagator(PropagatorId(3), Priority::VeryLow);
+        queue.enqueue_propagator(PropagatorId(4), Priority::Low);
 
         assert_eq!(PropagatorId(1), queue.pop().unwrap());
         assert_eq!(PropagatorId(0), queue.pop().unwrap());
-        assert_eq!(PropagatorId(4), queue.pop().unwrap());
         assert_eq!(PropagatorId(3), queue.pop().unwrap());
+        assert_eq!(PropagatorId(4), queue.pop().unwrap());
         assert_eq!(None, queue.pop());
     }
 }

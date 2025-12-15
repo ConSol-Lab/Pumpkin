@@ -71,7 +71,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
     for MaximumPropagator<ElementVar, Rhs>
 {
     fn priority(&self) -> Priority {
-        Priority::HighPriority
+        Priority::High
     }
 
     fn name(&self) -> &str {

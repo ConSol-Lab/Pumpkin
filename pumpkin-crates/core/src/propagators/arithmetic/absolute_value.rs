@@ -67,7 +67,7 @@ where
     VB: IntegerVariable + 'static,
 {
     fn priority(&self) -> Priority {
-        Priority::HighPriority
+        Priority::High
     }
 
     fn name(&self) -> &str {

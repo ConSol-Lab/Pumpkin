@@ -97,7 +97,7 @@ where
     VE: IntegerVariable + 'static,
 {
     fn priority(&self) -> Priority {
-        Priority::LowPriority
+        Priority::Low
     }
 
     fn name(&self) -> &str {

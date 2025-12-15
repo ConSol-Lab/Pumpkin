@@ -79,7 +79,7 @@ where
     VC: IntegerVariable,
 {
     fn priority(&self) -> Priority {
-        Priority::HighPriority
+        Priority::High
     }
 
     fn name(&self) -> &str {

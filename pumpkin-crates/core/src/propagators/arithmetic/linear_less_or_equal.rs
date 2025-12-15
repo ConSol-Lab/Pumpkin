@@ -140,7 +140,7 @@ where
     }
 
     fn priority(&self) -> Priority {
-        Priority::HighPriority
+        Priority::High
     }
 
     fn name(&self) -> &str {

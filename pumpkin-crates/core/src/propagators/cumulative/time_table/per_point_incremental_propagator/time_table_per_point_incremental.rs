@@ -534,7 +534,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     }
 
     fn priority(&self) -> Priority {
-        Priority::VeryLowPriority
+        Priority::VeryLow
     }
 
     fn name(&self) -> &str {

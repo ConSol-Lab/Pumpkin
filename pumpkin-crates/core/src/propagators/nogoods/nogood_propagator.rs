@@ -201,7 +201,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn priority(&self) -> Priority {
-        Priority::HighPriority
+        Priority::High
     }
 
     fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {

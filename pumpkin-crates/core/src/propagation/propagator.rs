@@ -163,10 +163,10 @@ pub trait Propagator: Downcast + DynClone {
     ///
     /// See [`Priority`] documentation for more explanation.
     ///
-    /// By default the priority is set to [`Priority::VeryLowPriority`]. It is expected that
+    /// By default the priority is set to [`Priority::VeryLow`]. It is expected that
     /// propagator implementations would set this value to some appropriate value.
     fn priority(&self) -> Priority {
-        Priority::VeryLowPriority
+        Priority::VeryLow
     }
 
     /// A function which returns [`Some`] with a [`PropagatorConflict`] when this propagator can
@@ -227,11 +227,11 @@ pub enum EnqueueDecision {
 #[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Priority {
-    HighPriority = 0,
-    MediumPriority = 1,
-    LowPriority = 2,
+    High = 0,
+    Medium = 1,
+    Low = 2,
     #[default]
-    VeryLowPriority = 3,
+    VeryLow = 3,
 }
 
 impl PartialOrd for Priority {
