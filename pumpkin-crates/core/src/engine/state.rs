@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::basic_types::PropagatorConflict;
+use crate::containers::KeyGenerator;
 use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -56,7 +57,7 @@ pub struct State {
     /// Keep track of trailed values (i.e. values which automatically backtrack).
     pub(crate) trailed_values: TrailedValues,
     /// The names of the variables in the solver.
-    variable_names: VariableNames,
+    pub(crate) variable_names: VariableNames,
     /// Dictates the order in which propagators will be called to propagate.
     pub(crate) propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -65,7 +66,10 @@ pub struct State {
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
+
     pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
+    /// The [`ConstraintTag`]s generated for this proof.
+    pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
     statistics: StateStatistics,
 }
@@ -152,6 +156,7 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
+            constraint_tags: KeyGenerator::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -202,6 +207,11 @@ impl State {
     ) -> InferenceCode {
         self.inference_codes
             .push((constraint_tag, inference_label.to_str()))
+    }
+
+    /// Create a new [`ConstraintTag`].
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.constraint_tags.next_key()
     }
 
     /// Creates a new Boolean (0-1) variable.

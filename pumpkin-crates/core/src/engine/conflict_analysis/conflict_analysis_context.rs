@@ -87,10 +87,11 @@ impl ConflictAnalysisContext<'_> {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
                     &self.state.inference_codes,
+                    &mut self.state.constraint_tags,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
-                    self.state.variable_names(),
+                    &self.state.variable_names,
                 );
 
                 conflict.conjunction
@@ -176,19 +177,21 @@ impl ConflictAnalysisContext<'_> {
 
                 let _ = proof_log.log_inference(
                     &state.inference_codes,
+                    &mut state.constraint_tags,
                     *inference_code,
                     [],
                     Some(predicate),
-                    state.variable_names(),
+                    &state.variable_names,
                 );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     &state.inference_codes,
+                    &mut state.constraint_tags,
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
-                    state.variable_names(),
+                    &state.variable_names,
                 );
             }
         }
@@ -219,10 +222,11 @@ impl ConflictAnalysisContext<'_> {
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &self.state.inference_codes,
+            &mut self.state.constraint_tags,
             conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
-            self.state.variable_names(),
+            &self.state.variable_names,
         );
 
         let old_lower_bound = self.state.lower_bound(conflict_domain);
