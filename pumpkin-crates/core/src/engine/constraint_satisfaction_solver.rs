@@ -335,7 +335,7 @@ impl ConstraintSatisfactionSolver {
 
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
-        self.internal_parameters.proof_log.new_constraint_tag()
+        self.state.new_constraint_tag()
     }
 
     pub fn create_new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
@@ -834,10 +834,11 @@ impl ConstraintSatisfactionSolver {
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
             let _ = self.internal_parameters.proof_log.log_inference(
                 &self.state.inference_codes,
+                &mut self.state.constraint_tags,
                 inference_code,
                 inference_premises,
                 None,
-                self.state.variable_names(),
+                &self.state.variable_names,
             );
 
             // Since inference steps are only related to the nogood they directly precede,
@@ -869,10 +870,11 @@ impl ConstraintSatisfactionSolver {
             }
 
             // Log the nogood which adds the root-level knowledge to the proof.
-            let constraint_tag = self
-                .internal_parameters
-                .proof_log
-                .log_deduction([!propagated], self.state.variable_names());
+            let constraint_tag = self.internal_parameters.proof_log.log_deduction(
+                [!propagated],
+                &self.state.variable_names,
+                &mut self.state.constraint_tags,
+            );
 
             if let Ok(constraint_tag) = constraint_tag {
                 let inference_code = self
