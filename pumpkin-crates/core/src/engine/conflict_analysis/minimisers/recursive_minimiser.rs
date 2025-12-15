@@ -1,17 +1,18 @@
-use super::MinimisationContext;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::engine::Assignments;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::predicates::Predicate;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
 use crate::propagation::CurrentNogood;
+use crate::propagation::HasAssignments;
+use crate::propagation::MinimisationContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::state::CurrentNogood;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RecursiveMinimiser {
@@ -99,7 +100,7 @@ impl RecursiveMinimiser {
         // If the predicate is a decision predicate, it cannot be a predicate from the original
         // learned nogood since those are labelled as part of initialisation.
         // Therefore the decision literal is labelled as poison and then return.
-        if context.is_decision_predicate(&input_predicate) {
+        if context.is_decision_predicate(input_predicate) {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
@@ -109,7 +110,7 @@ impl RecursiveMinimiser {
         // (levels from the original learned clause) cannot be removed.
         if !self.is_decision_level_allowed(
             context
-                .get_checkpoint_for_predicate(&input_predicate)
+                .get_checkpoint_for_predicate(input_predicate)
                 .unwrap(),
         ) {
             self.assign_predicate_label(input_predicate, Label::Poison);
@@ -129,7 +130,7 @@ impl RecursiveMinimiser {
         for antecedent_predicate in reason.iter().copied() {
             // Root assignments can be safely ignored.
             if context
-                .get_checkpoint_for_predicate(&antecedent_predicate)
+                .get_checkpoint_for_predicate(antecedent_predicate)
                 .unwrap()
                 == 0
             {

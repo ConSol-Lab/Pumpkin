@@ -1,14 +1,14 @@
 use std::cmp;
 
-use super::MinimisationContext;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
 use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::predicates::predicate::PredicateType;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::propagation::HasAssignments;
+use crate::propagation::MinimisationContext;
 use crate::variables::DomainId;
 
 #[derive(Clone, Debug)]
@@ -263,7 +263,6 @@ mod tests {
     use crate::conjunction;
     use crate::containers::HashMap;
     use crate::engine::SolverStatistics;
-    use crate::engine::conflict_analysis::MinimisationContext;
     use crate::engine::conflict_analysis::Mode;
     use crate::engine::conflict_analysis::NogoodMinimiser;
     use crate::engine::conflict_analysis::SemanticMinimiser;
@@ -271,6 +270,7 @@ mod tests {
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::proof::ProofLog;
+    use crate::propagation::MinimisationContext;
     use crate::state::State;
 
     #[test]

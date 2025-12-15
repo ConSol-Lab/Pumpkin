@@ -86,6 +86,10 @@ pub trait ReadDomains {
     ) -> bool;
 
     fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32>;
+
+    fn is_decision_predicate(&self, predicate: Predicate) -> bool;
+
+    fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize>;
 }
 
 impl<T: HasAssignments> ReadDomains for T {
@@ -151,5 +155,17 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
         var.iterate_domain(self.assignments())
+    }
+
+    /// Returns whether the provided [`Predicate`] was posted as a decision (i.e., it was posted as
+    /// a [`Predicate`] without a reason).
+    fn is_decision_predicate(&self, predicate: Predicate) -> bool {
+        self.assignments().is_decision_predicate(&predicate)
+    }
+
+    /// If the provided [`Predicate`] is true, then this method returns the checkpoint at which it
+    /// first become true; otherwise, it returns [`None`].
+    fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
+        self.assignments().get_checkpoint_for_predicate(&predicate)
     }
 }
