@@ -1,5 +1,5 @@
+use crate::engine::conflict_analysis::MinimisationContext;
 use crate::predicates::Predicate;
-use crate::propagation::MinimisationContext;
 
 /// A trait for the behaviour of nogood minimisation approaches.
 pub(crate) trait NogoodMinimiser: Default {
