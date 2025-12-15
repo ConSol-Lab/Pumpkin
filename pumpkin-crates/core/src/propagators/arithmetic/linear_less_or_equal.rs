@@ -1,3 +1,10 @@
+use pumpkin_checking::CheckerDomains;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::ConstraintId;
+use pumpkin_checking::Fact;
+use pumpkin_checking::I32Ext;
+use pumpkin_checking::InferenceChecker;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
@@ -268,6 +275,23 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<Domains, Var> InferenceChecker<Domains> for LinearLessOrEqualPropagator<Var>
+where
+    Domains: CheckerDomains,
+    Var: CheckerVariable<Domains>,
+{
+    fn check(&self, domains: Domains, _: &Fact, _: ConstraintId) -> bool {
+        // Evaluate the linear inequality. The lower bound of the left-hand side must exceed the
+        // bound in the constraint for the inference to be sound.
+        let left_hand_side = self.x.iter().fold(I32Ext::NegativeInf, |acc, term| {
+            let lower_bound = term.lower_bound(&domains);
+            lower_bound + acc
+        });
+
+        matches!(left_hand_side, I32Ext::I32(value) if value > self.c)
     }
 }
 
