@@ -129,16 +129,13 @@ pub trait ReadDomains {
     fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize>;
 
     /// Returns the current value of the provided [`TrailedInteger`].
-    fn value_trailed_integer(&self, trailed_integer: TrailedInteger) -> i64;
+    fn read_trailed_integer(&self, trailed_integer: TrailedInteger) -> i64;
 
     /// Creates a new [`TrailedInteger`] assigned to the provided `initial_value`.
     fn new_trailed_integer(&mut self, initial_value: i64) -> TrailedInteger;
 
-    /// Adds `addition` to the value of the provided [`TrailedInteger`].
-    fn add_assign_trailed_integer(&mut self, trailed_integer: TrailedInteger, addition: i64);
-
     /// Assigns the provided [`TrailedInteger`] to the provided `value`.
-    fn assign_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64);
+    fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64);
 }
 
 impl<T: HasAssignments> ReadDomains for T {
@@ -214,7 +211,7 @@ impl<T: HasAssignments> ReadDomains for T {
         self.assignments().get_checkpoint_for_predicate(&predicate)
     }
 
-    fn value_trailed_integer(&self, trailed_integer: TrailedInteger) -> i64 {
+    fn read_trailed_integer(&self, trailed_integer: TrailedInteger) -> i64 {
         self.trailed_values().read(trailed_integer)
     }
 
@@ -222,12 +219,7 @@ impl<T: HasAssignments> ReadDomains for T {
         self.trailed_values_mut().grow(initial_value)
     }
 
-    fn add_assign_trailed_integer(&mut self, trailed_integer: TrailedInteger, addition: i64) {
-        self.trailed_values_mut()
-            .add_assign(trailed_integer, addition);
-    }
-
-    fn assign_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64) {
+    fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64) {
         self.trailed_values_mut().assign(trailed_integer, value);
     }
 }

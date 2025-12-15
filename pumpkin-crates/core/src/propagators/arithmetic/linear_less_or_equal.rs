@@ -109,7 +109,7 @@ where
     Var: IntegerVariable,
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
-        if (self.c as i64) < domains.value_trailed_integer(self.lower_bound_left_hand_side) {
+        if (self.c as i64) < domains.read_trailed_integer(self.lower_bound_left_hand_side) {
             Some(self.create_conflict(domains))
         } else {
             None
@@ -125,7 +125,7 @@ where
         let index = local_id.unpack() as usize;
         let x_i = &self.x[index];
 
-        let old_bound = context.value_trailed_integer(self.current_bounds[index]);
+        let old_bound = context.read_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
         pumpkin_assert_simple!(
@@ -133,8 +133,11 @@ where
             "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
         );
 
-        context.add_assign_trailed_integer(self.lower_bound_left_hand_side, new_bound - old_bound);
-        context.assign_trailed_integer(self.current_bounds[index], new_bound);
+        context.write_trailed_integer(
+            self.lower_bound_left_hand_side,
+            context.read_trailed_integer(self.lower_bound_left_hand_side) + (new_bound - old_bound),
+        );
+        context.write_trailed_integer(self.current_bounds[index], new_bound);
 
         EnqueueDecision::Enqueue
     }
@@ -173,12 +176,12 @@ where
         }
 
         let lower_bound_left_hand_side = match TryInto::<i32>::try_into(
-            context.value_trailed_integer(self.lower_bound_left_hand_side),
+            context.read_trailed_integer(self.lower_bound_left_hand_side),
         ) {
             Ok(bound) => bound,
             Err(_)
                 if context
-                    .value_trailed_integer(self.lower_bound_left_hand_side)
+                    .read_trailed_integer(self.lower_bound_left_hand_side)
                     .is_positive() =>
             {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
@@ -222,7 +225,7 @@ where
             Ok(bound) => bound,
             Err(_)
                 if context
-                    .value_trailed_integer(self.lower_bound_left_hand_side)
+                    .read_trailed_integer(self.lower_bound_left_hand_side)
                     .is_positive() =>
             {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
