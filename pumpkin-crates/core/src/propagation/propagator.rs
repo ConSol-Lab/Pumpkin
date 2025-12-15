@@ -161,8 +161,7 @@ pub trait Propagator: Downcast + DynClone {
     /// Returns the [`Priority`] of the propagator, used for determining the order in which
     /// propagators are called.
     ///
-    /// The intuition is that propagators with low computational complexity should be assigned a
-    /// high priority (i.e., should be propagated before computationally expensive propagators).
+    /// See [`Priority`] documentation for more explanation.
     ///
     /// By default the priority is set to [`Priority::VeryLowPriority`]. It is expected that
     /// propagator implementations would set this value to some appropriate value.
@@ -220,7 +219,10 @@ pub enum EnqueueDecision {
 /// The priority of a propagator, used for determining the order in which propagators will be
 /// called.
 ///
-/// The intuition is that propagators with low computational complexity should be assigned a high
+/// Propagators with high priority are propagated before propagators with low(er) priority. If two
+/// propagators have the same priority, then the order in which they are propagated is unspecified.
+///
+/// Typically, propagators with low computational complexity should be assigned a high
 /// priority (i.e., should be propagated before computationally expensive propagators).
 #[derive(Default, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(u8)]
