@@ -113,8 +113,8 @@ mod tests {
 
         assert_eq!(PropagatorId(1), queue.pop().unwrap());
         assert_eq!(PropagatorId(0), queue.pop().unwrap());
-        assert_eq!(PropagatorId(3), queue.pop().unwrap());
         assert_eq!(PropagatorId(4), queue.pop().unwrap());
+        assert_eq!(PropagatorId(3), queue.pop().unwrap());
         assert_eq!(None, queue.pop());
     }
 }
