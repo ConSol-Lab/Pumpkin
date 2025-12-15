@@ -62,7 +62,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
             task.id,
         );
         if register_backtrack {
-            context.register_for_backtrack_events(
+            context.register_backtrack(
                 task.start_variable.clone(),
                 DomainEvents::new(enum_set!(
                     DomainEvent::LowerBound | DomainEvent::UpperBound | DomainEvent::Assign

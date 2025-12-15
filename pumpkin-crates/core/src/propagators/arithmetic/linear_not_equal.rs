@@ -54,7 +54,7 @@ where
 
         for (i, x_i) in terms.iter().enumerate() {
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
-            context.register_for_backtrack_events(
+            context.register_backtrack(
                 x_i.clone(),
                 DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
                 LocalId::from(i as u32),

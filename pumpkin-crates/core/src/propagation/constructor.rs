@@ -119,7 +119,7 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
     /// [`AffineView`]s.
-    pub(crate) fn register_for_backtrack_events<Var: IntegerVariable>(
+    pub fn register_backtrack<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,

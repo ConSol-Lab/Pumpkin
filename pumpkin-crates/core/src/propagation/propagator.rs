@@ -17,6 +17,12 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 #[cfg(doc)]
+use crate::propagation::DomainEvent;
+#[cfg(doc)]
+use crate::propagation::PropagatorConstructor;
+#[cfg(doc)]
+use crate::propagation::PropagatorConstructorContext;
+#[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::propagation::local_id::LocalId;
 #[cfg(doc)]
@@ -49,11 +55,21 @@ pub trait Propagator: Downcast + DynClone {
     /// This is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
-    /// A propagation method that propagates from scratch (i.e., without relying on updating
-    /// internal data structures).
+    /// Performs propagation from scratch (i.e., without relying on updating
+    /// internal data structures, as opposed to [`Propagator::propagate`]).
     ///
-    /// This method propagates without relying on internal data structures, hence the immutable
-    /// &self parameter. It is usually best to implement this propagation method in the simplest
+    /// The main aims of this method are to remove values from the domains of variables (using
+    /// [`PropagationContext::post`]) which cannot be part of any solution given the current
+    /// domains and to detect conflicts.
+    ///
+    /// In case no conflict has been detected this function should
+    /// return [`Result::Ok`], otherwise it should return a [`Result::Err`] with a [`Conflict`]
+    /// which contains the reason for the failure; either because a propagation caused an
+    /// an empty domain ([`Conflict::EmptyDomain`] as a result of [`PropagationContext::post`]) or
+    /// because the logic of the propagator found the current state to be inconsistent
+    /// ([`Conflict::Propagator`] ).
+    ///
+    /// It is usually best to implement this propagation method in the simplest
     /// but correct way. When this crate is compiled with the `debug-checks` feature, this method
     /// will be called to double check the reasons for failures and propagations that have been
     /// reported by this propagator.
@@ -62,18 +78,19 @@ pub trait Propagator: Downcast + DynClone {
     /// the solver until no further propagations happen.
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP;
 
-    /// Performs stateful propagation.
+    /// Performs propagation with state (i.e., with being able to mutate internal data structures,
+    /// as opposed to [`Propagator::propagate_from_scratch`]).
     ///
-    /// This method extends the current partial
-    /// assignments with inferred domain changes found by the
-    /// [`Propagator`]. In case no conflict has been detected it should return
-    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with a [`Conflict`] which
-    /// contains the reason for the failure; either because a propagation caused an
-    /// an empty domain ([`Conflict::EmptyDomain`]) or because the logic of the propagator
-    /// found the current state to be inconsistent ([`Conflict::Propagator`]).
+    /// The main aims of this method are to remove values from the domains of variables (using
+    /// [`PropagationContext::post`]) which cannot be part of any solution given the current
+    /// domains and to detect conflicts.
     ///
-    /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
-    /// failure
+    /// In case no conflict has been detected this function should
+    /// return [`Result::Ok`], otherwise it should return a [`Result::Err`] with a [`Conflict`]
+    /// which contains the reason for the failure; either because a propagation caused an
+    /// an empty domain ([`Conflict::EmptyDomain`] as a result of [`PropagationContext::post`]) or
+    /// because the logic of the propagator found the current state to be inconsistent
+    /// ([`Conflict::Propagator`] ).
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called
     /// again by the solver until no further propagations happen.
@@ -83,12 +100,13 @@ pub trait Propagator: Downcast + DynClone {
         self.propagate_from_scratch(context)
     }
 
-    /// Called when an event happens to one of the variables the propagator is subscribed to. It
-    /// indicates whether the provided event should cause the propagator to be enqueued.
+    /// Returns whether the propagator should be enqueued for propagation when a [`DomainEvent`]
+    /// happens to one of the variables the propagator is subscribed to (as registered during
+    /// creation with [`PropagatorConstructor`] using [`PropagatorConstructorContext::register`]).
     ///
     /// This can be used to incrementally maintain data structures or perform propagations, and
     /// should only be used for computationally cheap logic. Expensive computation should be
-    /// performed in the [`Propagator::propagate()`] method.
+    /// performed in the [`Propagator::propagate`] method.
     ///
     /// By default the propagator is always enqueued for every event it is subscribed to. Not all
     /// propagators will benefit from implementing this, so it is not required to do so.
@@ -101,12 +119,18 @@ pub trait Propagator: Downcast + DynClone {
         EnqueueDecision::Enqueue
     }
 
-    /// Called when an event happens to one of the variables the propagator is subscribed to. This
-    /// method is called during backtrack when the domain of a variable has been undone.
+    /// This function is called when the effect of a [`DomainEvent`] is undone during backtracking
+    /// of one of the variables the propagator is subscribed to (as registered during creation with
+    /// [`PropagatorConstructor`] using [`PropagatorConstructorContext::register_backtrack`]).
     ///
     /// This can be used to incrementally maintain data structures or perform propagations, and
     /// should only be used for computationally cheap logic. Expensive computation should be
     /// performed in the [`Propagator::propagate`] method.
+    ///
+    /// *Note*: This method is only called for [`DomainEvent`]s for which [`Propagator::notify`]
+    /// was called. This means that if the propagator itself made a change, but was not notified of
+    /// it (e.g., due to a conflict being detected), then this method will also not be called for
+    /// that [`DomainEvent`].
     ///
     /// By default the propagator does nothing when this method is called. Not all propagators will
     /// benefit from implementing this, so it is not required to do so.
@@ -118,7 +142,10 @@ pub trait Propagator: Downcast + DynClone {
     ) {
     }
 
-    /// Called when a [`PredicateId`] has been satisfied.
+    /// Returns whether the propagator should be enqueued for propagation when a [`Predicate`] (with
+    /// corresponding [`PredicateId`]) which the propagator is subscribed to (as registered during
+    /// creation with [`PropagatorConstructor`] using
+    /// [`PropagatorConstructorContext::register_predicate`]).
     ///
     /// By default, the propagator will be enqueued.
     fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {
@@ -142,7 +169,8 @@ pub trait Propagator: Downcast + DynClone {
         3
     }
 
-    /// A check whether this propagator can detect an inconsistency.
+    /// A function which returns [`Some`] with a [`PropagatorConflict`] when this propagator can
+    /// detect an inconsistency (and [`None`] otherwise).
     ///
     /// By implementing this function, if the propagator is reified, it can propagate the
     /// reification literal based on the detected inconsistency. Yet, an implementation is not
@@ -172,6 +200,7 @@ pub trait Propagator: Downcast + DynClone {
             )
         );
     }
+
     /// Logs statistics of the propagator using the provided [`StatisticLogger`].
     ///
     /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
