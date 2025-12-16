@@ -477,35 +477,28 @@ where
 pub(crate) mod test_propagation_handler {
     use std::rc::Rc;
 
+    use pumpkin_core::containers::StorageKey;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::proof::InferenceCode;
     use pumpkin_core::propagation::Domains;
     use pumpkin_core::propagation::LocalId;
+    use pumpkin_core::state::CurrentNogood;
+    use pumpkin_core::state::PropagatorId;
+    use pumpkin_core::state::State;
+    use pumpkin_core::variables::DomainId;
 
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use super::create_conflict_explanation;
-    use crate::containers::StorageKey;
-    use crate::engine::Assignments;
-    use crate::engine::TrailedValues;
-    use crate::engine::notifications::NotificationEngine;
-    use crate::engine::reason::ReasonStore;
-    use crate::predicate;
-    use crate::predicates::Predicate;
-    use crate::predicates::PropositionalConjunction;
-    use crate::proof::InferenceCode;
-    use crate::propagation::ExplanationContext;
-    use crate::propagation::PropagationContext;
-    use crate::propagation::PropagatorId;
-    use crate::propagation::store::PropagatorStore;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
-    use crate::variables::DomainId;
 
     pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,
-        notification_engine: NotificationEngine,
-        reason_store: ReasonStore,
-        assignments: Assignments,
-        trailed_values: TrailedValues,
+        state: State,
+        reason_buffer: Vec<Predicate>,
     }
 
     impl TestPropagationHandler {
@@ -515,22 +508,16 @@ pub(crate) mod test_propagation_handler {
                 InferenceCode::create_from_index(0),
             );
 
-            let reason_store = ReasonStore::default();
-            let assignments = Assignments::default();
-            let trailed_values = TrailedValues::default();
-            let notification_engine = NotificationEngine::default();
+            let state = State::default();
             Self {
                 propagation_handler,
-                notification_engine,
-                reason_store,
-                assignments,
-                trailed_values,
+                state,
+                reason_buffer: Default::default(),
             }
         }
 
         pub(crate) fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
-            let y = self.assignments.grow(15, 16);
-            self.notification_engine.grow();
+            let y = self.state.new_interval_variable(15, 16, None);
 
             let profile_task = Task {
                 start_variable: y,
@@ -547,7 +534,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                Domains::new(&self.assignments, &mut self.trailed_values),
+                self.state.get_domains(),
                 self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
@@ -559,10 +546,8 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_lower_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId) {
-            let x = self.assignments.grow(11, 20);
-            let y = self.assignments.grow(15, 16);
-            self.notification_engine.grow();
-            self.notification_engine.grow();
+            let x = self.state.new_interval_variable(11, 20, None);
+            let y = self.state.new_interval_variable(15, 16, None);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -588,18 +573,12 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
-                    &mut PropagationContext::new(
-                        &mut self.trailed_values,
-                        &mut self.assignments,
-                        &mut self.reason_store,
-                        &mut self.notification_engine,
-                        PropagatorId(0),
-                    ),
+                    &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments.get_lower_bound(x), 19);
+            assert_eq!(self.state.lower_bound(x), 19);
 
             let reason = self.get_reason_for(predicate!(x >= 19));
 
@@ -609,12 +588,9 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_sequence_lower_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
-            let x = self.assignments.grow(11, 25);
-            let y = self.assignments.grow(15, 16);
-            let z = self.assignments.grow(15, 19);
-            self.notification_engine.grow();
-            self.notification_engine.grow();
-            self.notification_engine.grow();
+            let x = self.state.new_interval_variable(11, 25, None);
+            let y = self.state.new_interval_variable(15, 16, None);
+            let z = self.state.new_interval_variable(15, 19, None);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -652,18 +628,12 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
-                    &mut PropagationContext::new(
-                        &mut self.trailed_values,
-                        &mut self.assignments,
-                        &mut self.reason_store,
-                        &mut self.notification_engine,
-                        PropagatorId(0),
-                    ),
+                    &mut self.state.get_propagation_context(),
                     &[&profile_y, &profile_z],
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments.get_lower_bound(x), 22);
+            assert_eq!(self.state.lower_bound(x), 22);
 
             let reason = self.get_reason_for(predicate!(x >= 22));
 
@@ -673,10 +643,8 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_upper_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId) {
-            let x = self.assignments.grow(5, 16);
-            let y = self.assignments.grow(15, 16);
-            self.notification_engine.grow();
-            self.notification_engine.grow();
+            let x = self.state.new_interval_variable(5, 16, None);
+            let y = self.state.new_interval_variable(15, 16, None);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -702,18 +670,12 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
-                    &mut PropagationContext::new(
-                        &mut self.trailed_values,
-                        &mut self.assignments,
-                        &mut self.reason_store,
-                        &mut self.notification_engine,
-                        PropagatorId(0),
-                    ),
+                    &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments.get_upper_bound(x), 10);
+            assert_eq!(self.state.upper_bound(x), 10);
 
             let reason = self.get_reason_for(predicate!(x <= 10));
 
@@ -723,12 +685,9 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_sequence_upper_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
-            let x = self.assignments.grow(0, 16);
-            let y = self.assignments.grow(15, 16);
-            let z = self.assignments.grow(7, 9);
-            self.notification_engine.grow();
-            self.notification_engine.grow();
-            self.notification_engine.grow();
+            let x = self.state.new_interval_variable(0, 16, None);
+            let y = self.state.new_interval_variable(15, 16, None);
+            let z = self.state.new_interval_variable(7, 9, None);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -766,18 +725,12 @@ pub(crate) mod test_propagation_handler {
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
-                    &mut PropagationContext::new(
-                        &mut self.trailed_values,
-                        &mut self.assignments,
-                        &mut self.reason_store,
-                        &mut self.notification_engine,
-                        PropagatorId(0),
-                    ),
+                    &mut self.state.get_propagation_context(),
                     &[&profile_z, &profile_y],
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments.get_upper_bound(x), 3);
+            assert_eq!(self.state.upper_bound(x), 3);
 
             let reason = self.get_reason_for(predicate!(x <= 3));
 
@@ -785,23 +738,15 @@ pub(crate) mod test_propagation_handler {
         }
 
         pub(crate) fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
-            let reason_ref = self
-                .assignments
-                .get_reason_for_predicate_brute_force(predicate);
-            let mut propagator_store = PropagatorStore::default();
-            let mut reason = vec![];
-            let _ = self.reason_store.get_or_compute(
-                reason_ref,
-                ExplanationContext::without_working_nogood(
-                    &self.assignments,
-                    self.assignments.get_trail_position(&predicate).unwrap(),
-                    &mut self.notification_engine,
-                ),
-                &mut propagator_store,
-                &mut reason,
+            let _ = self.state.get_propagation_reason(
+                predicate,
+                &mut self.reason_buffer,
+                CurrentNogood::empty(),
             );
 
-            reason.into()
+            let result = self.reason_buffer.clone().into();
+            self.reason_buffer.clear();
+            result
         }
     }
 }

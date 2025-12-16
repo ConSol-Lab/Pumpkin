@@ -61,7 +61,10 @@ fn main() {
         .collect::<Vec<_>>();
 
     let _ = solver
-        .add_constraint(constraints::all_different(variables.clone(), c1_tag))
+        .add_constraint(pumpkin_constraints::all_different(
+            variables.clone(),
+            c1_tag,
+        ))
         .post();
 
     let diag1 = variables
@@ -78,10 +81,10 @@ fn main() {
         .collect::<Vec<_>>();
 
     let _ = solver
-        .add_constraint(constraints::all_different(diag1, c2_tag))
+        .add_constraint(pumpkin_constraints::all_different(diag1, c2_tag))
         .post();
     let _ = solver
-        .add_constraint(constraints::all_different(diag2, c3_tag))
+        .add_constraint(pumpkin_constraints::all_different(diag2, c3_tag))
         .post();
 
     let mut brancher = solver.default_brancher();

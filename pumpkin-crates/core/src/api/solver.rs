@@ -453,7 +453,6 @@ impl Solver {
     ///
     /// # Example
     /// ```
-    /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
@@ -463,7 +462,7 @@ impl Solver {
     /// let constraint_tag = solver.new_constraint_tag();
     ///
     /// solver
-    ///     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+    ///     .add_constraint(pumpkin_constraints::equals([a, b], 0, constraint_tag))
     ///     .post();
     /// ```
     pub fn add_constraint<Constraint>(

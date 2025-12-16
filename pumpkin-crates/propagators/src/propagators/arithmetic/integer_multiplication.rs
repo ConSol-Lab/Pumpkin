@@ -359,10 +359,9 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+
     use super::*;
-    use crate::conjunction;
-    use crate::engine::test_solver::TestSolver;
-    use crate::predicate;
 
     #[test]
     fn bounds_of_a_and_b_propagate_bounds_c() {

@@ -472,16 +472,17 @@ pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 
 
 #[cfg(test)]
 mod tests {
-    use crate::conjunction;
-    use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::test_solver::TestSolver;
-    use crate::predicate;
-    use crate::propagation::EnqueueDecision;
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::Conflict;
+
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalPropagator;
-    use crate::state::Conflict;
 
     #[test]
     fn propagator_propagates_from_profile() {

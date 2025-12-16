@@ -43,7 +43,7 @@
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use pumpkin_core::constraints;
 //! # use pumpkin_core::constraints::Constraint;
-//! # use crate::pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_core::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
@@ -57,7 +57,7 @@
 //!
 //! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::cumulative(
+//!     .add_constraint(pumpkin_constraints::cumulative(
 //!         start_times.clone(),
 //!         durations.clone(),
 //!         resource_requirements.clone(),

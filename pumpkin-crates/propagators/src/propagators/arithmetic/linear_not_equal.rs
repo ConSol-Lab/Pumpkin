@@ -360,11 +360,12 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::state::Conflict;
+    use pumpkin_core::variables::TransformableVariable;
+
     use super::*;
-    use crate::conjunction;
-    use crate::engine::test_solver::TestSolver;
-    use crate::engine::variables::TransformableVariable;
-    use crate::state::Conflict;
 
     #[test]
     fn test_value_is_removed() {

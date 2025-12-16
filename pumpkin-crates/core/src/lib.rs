@@ -39,3 +39,4 @@ pub use crate::basic_types::ConstraintOperationError;
 pub use crate::basic_types::Duration;
 pub use crate::basic_types::Instant;
 pub use crate::basic_types::Random;
+pub use crate::engine::test_solver::TestSolver;

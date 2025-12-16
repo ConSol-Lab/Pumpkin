@@ -55,7 +55,7 @@
 //! // x + y + z = 17
 //! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::equals(vec![x, y, z], 17, c1))
+//!     .add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1))
 //!     .post();
 //! ```
 //!
@@ -87,7 +87,7 @@
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let c1 = solver.new_constraint_tag();
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we find a solution to the problem
@@ -124,7 +124,7 @@
 //! // We add a constraint which specifies the value of the objective
 //! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::maximum(vec![x, y, z], objective, c1))
+//!     .add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1))
 //!     .post();
 //! ```
 //!
@@ -148,8 +148,8 @@
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let objective = solver.new_bounded_integer(-10, 30);
 //! # let c1 = solver.new_constraint_tag();
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
-//! # solver.add_constraint(constraints::maximum(vec![x, y, z], objective, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
@@ -203,7 +203,7 @@
 //!
 //! // We create the all-different constraint
 //! let c1 = solver.new_constraint_tag();
-//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
+//! solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -269,7 +269,7 @@
 //!
 //! // We create the all-different constraint
 //! let c1 = solver.new_constraint_tag();
-//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
+//! solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;

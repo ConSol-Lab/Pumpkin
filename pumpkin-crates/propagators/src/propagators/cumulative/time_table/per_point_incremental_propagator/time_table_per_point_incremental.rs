@@ -624,19 +624,19 @@ mod debug {
 
 #[cfg(test)]
 mod tests {
-    use crate::conjunction;
-    use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::test_solver::TestSolver;
-    use crate::predicate;
-    use crate::predicates::PredicateConstructor;
-    use crate::propagation::EnqueueDecision;
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::Conflict;
+    use pumpkin_core::variables::DomainId;
+
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTablePerPointIncrementalPropagator;
     use crate::propagators::TimeTablePerPointPropagator;
-    use crate::state::Conflict;
-    use crate::variables::DomainId;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -1599,8 +1599,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
-        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
+        let reason_scratch = solver_scratch.get_reason_int(predicate!(s3_scratch >= 7));
+        let reason = solver.get_reason_int(predicate!(s3 >= 7));
         assert_eq!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1695,8 +1695,8 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
 
-        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
+        let reason_scratch = solver_scratch.get_reason_int(predicate!(s3_scratch >= 7));
+        let reason = solver.get_reason_int(predicate!(s3 >= 7));
         assert_ne!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1811,8 +1811,8 @@ mod tests {
             println!("{explanation_vec:?}");
             println!("{explanation_scratch_vec:?}");
 
-            assert!(explanation_vec.contains(&s2.lower_bound_predicate(5)));
-            assert!(!explanation_scratch_vec.contains(&s2.lower_bound_predicate(5)));
+            assert!(explanation_vec.contains(&predicate!(s2 >= 5)));
+            assert!(!explanation_scratch_vec.contains(&predicate!(s2 >= 5)));
         } else {
             panic!("Incorrect result")
         }

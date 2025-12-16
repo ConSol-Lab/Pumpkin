@@ -106,6 +106,4 @@ use crate::engine::variables::IntegerVariable;
 #[cfg(doc)]
 use crate::propagators;
 #[cfg(doc)]
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
-#[cfg(doc)]
 use crate::state::State;

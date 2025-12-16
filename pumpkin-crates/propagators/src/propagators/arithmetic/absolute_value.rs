@@ -148,6 +148,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+
     use super::*;
 
     #[test]

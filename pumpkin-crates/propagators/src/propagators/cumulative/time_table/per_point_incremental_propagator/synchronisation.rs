@@ -168,7 +168,7 @@ mod tests {
     use pumpkin_core::propagation::LocalId;
 
     use super::find_synchronised_conflict;
-    use crate::engine::test_solver::TestSolver;
+    use pumpkin_core::TestSolver;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::PerPointTimeTableType;

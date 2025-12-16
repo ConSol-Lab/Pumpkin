@@ -402,7 +402,7 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::test_solver::TestSolver;
+    use pumpkin_core::TestSolver;
     use crate::propagators::disjunctive_propagator::DisjunctiveConstructor;
     use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
 

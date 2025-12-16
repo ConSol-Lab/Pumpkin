@@ -627,17 +627,18 @@ fn find_overlapping_profile<Var: IntegerVariable + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use crate::conjunction;
-    use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::test_solver::TestSolver;
-    use crate::predicate;
-    use crate::propagation::EnqueueDecision;
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::Conflict;
+    use pumpkin_core::variables::DomainId;
+
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
-    use crate::state::Conflict;
-    use crate::variables::DomainId;
 
     #[test]
     fn propagator_propagates_from_profile() {

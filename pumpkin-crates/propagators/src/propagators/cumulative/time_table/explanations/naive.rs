@@ -83,8 +83,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::predicate;
-    use crate::predicates::PropositionalConjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 

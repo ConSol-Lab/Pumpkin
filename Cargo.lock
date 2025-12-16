@@ -765,6 +765,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-constraints",
  "rand",
  "thiserror",
  "wasm-bindgen-test",
@@ -790,6 +791,7 @@ dependencies = [
  "clap",
  "convert_case 0.6.0",
  "enumset",
+ "pumpkin-constraints",
  "pumpkin-core",
 ]
 

@@ -1,10 +1,8 @@
 use std::fmt::Debug;
 
-#[cfg(doc)]
-use crate::constraints;
 use pumpkin_core::propagation::LocalId;
 
-/// Defines the input of the [`constraints::disjunctive_strict`] constraint.
+/// Defines the input of the Disjunctive constraint.
 ///
 /// Each task has a variable starting time and a constant processing time.
 #[derive(Debug, Clone)]

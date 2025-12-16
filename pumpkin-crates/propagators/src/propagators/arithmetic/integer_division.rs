@@ -380,7 +380,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_solver::TestSolver;
+    use pumpkin_core::TestSolver;
 
     #[test]
     fn detects_conflicts() {

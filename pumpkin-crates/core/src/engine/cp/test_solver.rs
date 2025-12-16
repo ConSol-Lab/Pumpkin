@@ -1,4 +1,3 @@
-#![cfg(any(test, doc))]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
@@ -30,10 +29,11 @@ use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
-pub(crate) struct TestSolver {
-    pub(crate) state: State,
+#[deprecated]
+pub struct TestSolver {
+    pub state: State,
     constraint_tags: KeyGenerator<ConstraintTag>,
-    pub(crate) nogood_handle: PropagatorHandle<NogoodPropagator>,
+    pub nogood_handle: PropagatorHandle<NogoodPropagator>,
 }
 
 impl Default for TestSolver {
@@ -55,20 +55,20 @@ impl Default for TestSolver {
 }
 
 impl TestSolver {
-    pub(crate) fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
+    pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.state.new_interval_variable(lb, ub, None)
     }
 
-    pub(crate) fn new_sparse_variable(&mut self, values: Vec<i32>) -> DomainId {
+    pub fn new_sparse_variable(&mut self, values: Vec<i32>) -> DomainId {
         self.state.new_sparse_variable(values, None)
     }
 
-    pub(crate) fn new_literal(&mut self) -> Literal {
+    pub fn new_literal(&mut self) -> Literal {
         let domain_id = self.new_variable(0, 1);
         Literal::new(domain_id)
     }
 
-    pub(crate) fn new_propagator<Constructor>(
+    pub fn new_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
     ) -> Result<PropagatorId, Conflict>
@@ -82,15 +82,15 @@ impl TestSolver {
             .map(|_| handle.propagator_id())
     }
 
-    pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
+    pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(&self.state.assignments, value)
     }
 
-    pub(crate) fn lower_bound(&self, var: DomainId) -> i32 {
+    pub fn lower_bound(&self, var: DomainId) -> i32 {
         self.state.assignments.get_lower_bound(var)
     }
 
-    pub(crate) fn remove_and_notify(
+    pub fn remove_and_notify(
         &mut self,
         propagator: PropagatorId,
         var: DomainId,
@@ -117,7 +117,7 @@ impl TestSolver {
         }
     }
 
-    pub(crate) fn increase_lower_bound_and_notify(
+    pub fn increase_lower_bound_and_notify(
         &mut self,
         propagator: PropagatorId,
         _local_id: u32,
@@ -145,7 +145,7 @@ impl TestSolver {
         }
     }
 
-    pub(crate) fn decrease_upper_bound_and_notify(
+    pub fn decrease_upper_bound_and_notify(
         &mut self,
         propagator: PropagatorId,
         _local_id: u32,
@@ -173,28 +173,24 @@ impl TestSolver {
         }
     }
 
-    pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
+    pub fn is_literal_false(&self, literal: Literal) -> bool {
         self.state
             .assignments
             .evaluate_predicate(literal.get_true_predicate())
             .is_some_and(|truth_value| !truth_value)
     }
 
-    pub(crate) fn upper_bound(&self, var: DomainId) -> i32 {
+    pub fn upper_bound(&self, var: DomainId) -> i32 {
         self.state.assignments.get_upper_bound(var)
     }
 
-    pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
+    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
         let _ = self.state.post(predicate!(var != value))?;
 
         Ok(())
     }
 
-    pub(crate) fn set_literal(
-        &mut self,
-        literal: Literal,
-        truth_value: bool,
-    ) -> Result<(), EmptyDomain> {
+    pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
         let _ = match truth_value {
             true => self.state.assignments.post_predicate(
                 literal.get_true_predicate(),
@@ -211,7 +207,7 @@ impl TestSolver {
         Ok(())
     }
 
-    pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
+    pub fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
         let context = PropagationContext::new(
             &mut self.state.trailed_values,
             &mut self.state.assignments,
@@ -222,7 +218,7 @@ impl TestSolver {
         self.state.propagators[propagator].propagate(context)
     }
 
-    pub(crate) fn propagate_until_fixed_point(
+    pub fn propagate_until_fixed_point(
         &mut self,
         propagator: PropagatorId,
     ) -> Result<(), Conflict> {
@@ -249,7 +245,7 @@ impl TestSolver {
         Ok(())
     }
 
-    pub(crate) fn notify_propagator(&mut self, _propagator: PropagatorId) {
+    pub fn notify_propagator(&mut self, _propagator: PropagatorId) {
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
@@ -260,7 +256,7 @@ impl TestSolver {
             );
     }
 
-    pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> PropositionalConjunction {
+    pub fn get_reason_int(&mut self, predicate: Predicate) -> PropositionalConjunction {
         let reason_ref = self
             .state
             .assignments
@@ -283,7 +279,7 @@ impl TestSolver {
         PropositionalConjunction::from(predicates)
     }
 
-    pub(crate) fn get_reason_bool(
+    pub fn get_reason_bool(
         &mut self,
         literal: Literal,
         truth_value: bool,
@@ -295,7 +291,7 @@ impl TestSolver {
         self.get_reason_int(predicate)
     }
 
-    pub(crate) fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {
+    pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {
         let actual_lb = self.lower_bound(var);
         let actual_ub = self.upper_bound(var);
 
@@ -306,11 +302,11 @@ impl TestSolver {
         );
     }
 
-    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
     }
 
-    pub(crate) fn new_inference_code(&mut self) -> InferenceCode {
+    pub fn new_inference_code(&mut self) -> InferenceCode {
         self.state.inference_codes.push((
             ConstraintTag::from_non_zero(
                 NonZero::try_from(1 + self.state.inference_codes.len() as u32).unwrap(),
@@ -319,11 +315,11 @@ impl TestSolver {
         ))
     }
 
-    pub(crate) fn new_checkpoint(&mut self) {
+    pub fn new_checkpoint(&mut self) {
         self.state.new_checkpoint();
     }
 
-    pub(crate) fn synchronise(&mut self, level: usize) {
+    pub fn synchronise(&mut self, level: usize) {
         let _ = self
             .state
             .assignments

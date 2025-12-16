@@ -1,6 +1,4 @@
 use super::CumulativeExplanationType;
-#[cfg(doc)]
-use crate::constraints;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CumulativePropagatorOptions {
@@ -48,7 +46,7 @@ impl CumulativeOptions {
     }
 }
 
-/// The approach used for propagating the [`constraints::cumulative`] constraint.
+/// The approach used for propagating the Cumulative constraint.
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum CumulativePropagationMethod {

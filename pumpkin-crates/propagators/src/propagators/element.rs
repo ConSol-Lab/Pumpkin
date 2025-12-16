@@ -295,10 +295,9 @@ struct RightHandSideReason {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+
     use super::*;
-    use crate::conjunction;
-    use crate::engine::test_solver::TestSolver;
-    use crate::predicate;
 
     #[test]
     fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {

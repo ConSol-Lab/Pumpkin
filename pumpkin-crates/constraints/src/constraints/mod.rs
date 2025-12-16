@@ -17,7 +17,7 @@
 //! let constraint_tag = solver.new_constraint_tag();
 //!
 //! solver
-//!     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+//!     .add_constraint(pumpkin_constraints::equals([a, b], 0, constraint_tag))
 //!     .post();
 //! ```
 //!

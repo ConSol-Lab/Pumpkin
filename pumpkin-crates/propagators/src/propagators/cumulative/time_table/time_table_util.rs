@@ -1,4 +1,4 @@
-//! Defines common methods for [`Propagator`]s which make use of time-table
+//! Defines common methods for propagators which make use of time-table
 //! reasoning (see [`crate::propagators::cumulative::time_table`] for more information) such as
 //! [`should_enqueue`] or [`propagate_based_on_timetable`].
 
@@ -14,8 +14,6 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
-#[cfg(doc)]
-use crate::propagation::Propagator;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -783,22 +781,19 @@ mod tests {
 
     use pumpkin_core::propagation::Domains;
     use pumpkin_core::propagation::LocalId;
+    use pumpkin_core::state::State;
 
     use super::find_profiles_which_propagate_lower_bound;
-    use crate::engine::Assignments;
-    use crate::engine::TrailedValues;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
 
     #[test]
     fn test_finding_last_index_lower_bound() {
-        let mut assignments = Assignments::default();
-        let mut trailed_values = TrailedValues::default();
-
-        let x = assignments.grow(0, 10);
-        let y = assignments.grow(5, 5);
-        let z = assignments.grow(8, 8);
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(5, 5, None);
+        let z = state.new_interval_variable(8, 8, None);
 
         let time_table = [
             &ResourceProfile {
@@ -829,7 +824,7 @@ mod tests {
         find_profiles_which_propagate_lower_bound(
             0,
             &time_table,
-            Domains::new(&assignments, &mut trailed_values),
+            state.get_domains(),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,
@@ -844,12 +839,11 @@ mod tests {
 
     #[test]
     fn test_finding_last_index_upper_bound() {
-        let mut assignments = Assignments::default();
-        let mut trailed_values = TrailedValues::default();
+        let mut state = State::default();
 
-        let x = assignments.grow(7, 7);
-        let y = assignments.grow(5, 5);
-        let z = assignments.grow(8, 8);
+        let x = state.new_interval_variable(7, 7, None);
+        let y = state.new_interval_variable(5, 5, None);
+        let z = state.new_interval_variable(8, 8, None);
 
         let time_table = [
             &ResourceProfile {
@@ -880,7 +874,7 @@ mod tests {
         find_profiles_which_propagate_upper_bound(
             1,
             &time_table,
-            Domains::new(&assignments, &mut trailed_values),
+            state.get_domains(),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,

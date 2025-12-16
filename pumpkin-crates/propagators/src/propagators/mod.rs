@@ -2,7 +2,7 @@
 //!
 //! See the [`propagation`] for info on propagators.
 #[cfg(doc)]
-use crate::propagation;
+use pumpkin_core::propagation;
 
 pub(crate) mod arithmetic;
 mod cumulative;

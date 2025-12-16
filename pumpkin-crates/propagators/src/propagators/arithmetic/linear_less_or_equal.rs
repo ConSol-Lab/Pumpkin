@@ -273,9 +273,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::conjunction;
+
     use super::*;
-    use crate::conjunction;
-    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn test_bounds_are_propagated() {

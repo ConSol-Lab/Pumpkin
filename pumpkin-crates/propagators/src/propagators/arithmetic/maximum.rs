@@ -173,7 +173,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_solver::TestSolver;
+    use pumpkin_core::TestSolver;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {

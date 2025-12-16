@@ -20,7 +20,10 @@ fn iterator_finds_all_solutions() {
 
     // We create the all-different constraint
     let _ = solver
-        .add_constraint(constraints::all_different(vec![x, y, z], constraint_tag))
+        .add_constraint(pumpkin_constraints::all_different(
+            vec![x, y, z],
+            constraint_tag,
+        ))
         .post();
 
     // We create a termination condition which allows the solver to run indefinitely

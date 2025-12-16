@@ -43,7 +43,7 @@ use pumpkin_propagators::propagators::TimeTablePerPointPropagator;
 /// # use pumpkin_core::results::SatisfactionResult;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;
-/// # use crate::pumpkin_core::results::ProblemSolution;
+/// # use pumpkin_core::results::ProblemSolution;
 /// let solver = Solver::default();
 ///
 /// let mut solver = Solver::default();
@@ -60,7 +60,7 @@ use pumpkin_propagators::propagators::TimeTablePerPointPropagator;
 /// let resource_capacity = 2;
 ///
 /// solver
-///     .add_constraint(constraints::cumulative(
+///     .add_constraint(pumpkin_constraints::cumulative(
 ///         start_times.clone(),
 ///         durations.clone(),
 ///         resource_requirements.clone(),

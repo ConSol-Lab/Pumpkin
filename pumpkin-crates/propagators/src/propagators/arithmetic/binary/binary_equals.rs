@@ -385,8 +385,9 @@ struct BinaryEqualsPropagation {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::test_solver::TestSolver;
-    use crate::propagation::EnqueueDecision;
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::propagation::EnqueueDecision;
+
     use crate::propagators::binary::BinaryEqualsPropagatorArgs;
 
     #[test]

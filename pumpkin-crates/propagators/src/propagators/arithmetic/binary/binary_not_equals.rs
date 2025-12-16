@@ -170,6 +170,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
+    use pumpkin_core::propagation::EnqueueDecision;
+
     use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
 
     #[test]

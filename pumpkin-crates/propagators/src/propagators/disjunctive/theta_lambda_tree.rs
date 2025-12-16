@@ -376,10 +376,10 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::Domains;
     use pumpkin_core::propagation::LocalId;
 
-    use crate::engine::test_solver::TestSolver;
     use crate::propagators::disjunctive::theta_lambda_tree::Node;
     use crate::propagators::disjunctive::theta_lambda_tree::ThetaLambdaTree;
     use crate::propagators::disjunctive_task::DisjunctiveTask;
@@ -416,21 +416,12 @@ mod tests {
 
         let mut tree = ThetaLambdaTree::new(&tasks);
 
-        tree.update(Domains::new(
-            &solver.state.assignments,
-            &mut solver.state.trailed_values,
-        ));
+        tree.update(solver.state.get_domains());
         for task in tasks.iter() {
-            tree.add_to_theta(
-                task,
-                Domains::new(&solver.state.assignments, &mut solver.state.trailed_values),
-            );
+            tree.add_to_theta(task, solver.state.get_domains());
         }
         tree.remove_from_theta(&tasks[2]);
-        tree.add_to_lambda(
-            &tasks[2],
-            Domains::new(&solver.state.assignments, &mut solver.state.trailed_values),
-        );
+        tree.add_to_lambda(&tasks[2], solver.state.get_domains());
 
         assert_eq!(
             tree.nodes[6],
