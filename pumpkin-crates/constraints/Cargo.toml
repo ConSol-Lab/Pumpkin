@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 pumpkin-core = { version = "0.2.2", path = "../core" }
 pumpkin-propagators = {version = "0.2.2", path="../propagators"}
+implementation = {version = "0.2.2", path="../implementation"}
 
 [features]
 clap = ["pumpkin-core/clap", "pumpkin-propagators/clap"]

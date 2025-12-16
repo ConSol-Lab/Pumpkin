@@ -1,3 +1,4 @@
+use implementation::linear_propagator::LinearConstructor;
 use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
@@ -5,7 +6,6 @@ use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
-use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
 
 /// Create the [`NegatableConstraint`] `\sum terms_i <= rhs`.
 ///
@@ -108,7 +108,7 @@ struct Inequality<Var> {
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagatorArgs {
+        LinearConstructor {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
@@ -121,7 +121,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagatorArgs {
+        LinearConstructor {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,

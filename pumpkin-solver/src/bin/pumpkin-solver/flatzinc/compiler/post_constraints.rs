@@ -303,6 +303,7 @@ pub(crate) fn run(
             "pumpkin_all_different" => {
                 compile_all_different(context, exprs, annos, constraint_tag)?
             }
+            "pumpkin_circuit" => compile_circuit(context, exprs, annos, constraint_tag)?,
             "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
             "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
 
@@ -950,6 +951,20 @@ fn compile_all_different(
             .post(context.solver)
             .is_ok(),
     )
+}
+
+fn compile_circuit(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 1, "fzn_circuit");
+
+    let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+    Ok(pumpkin_constraints::circuit(variables, constraint_tag)
+        .post(context.solver)
+        .is_ok())
 }
 
 fn compile_table(

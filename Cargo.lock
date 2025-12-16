@@ -470,6 +470,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "implementation"
+version = "0.2.2"
+dependencies = [
+ "bitfield-struct",
+ "clap",
+ "convert_case 0.6.0",
+ "enumset",
+ "pumpkin-constraints",
+ "pumpkin-core",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -739,6 +751,7 @@ dependencies = [
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
+ "implementation",
  "pumpkin-core",
  "pumpkin-propagators",
 ]

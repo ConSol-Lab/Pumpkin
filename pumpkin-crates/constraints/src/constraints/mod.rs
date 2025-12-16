@@ -30,6 +30,7 @@
 mod all_different;
 mod arithmetic;
 mod boolean;
+mod circuit;
 mod clause;
 mod cumulative;
 mod disjunctive_strict;
@@ -39,6 +40,7 @@ mod table;
 pub use all_different::*;
 pub use arithmetic::*;
 pub use boolean::*;
+pub use circuit::*;
 pub use clause::*;
 pub use cumulative::*;
 pub use disjunctive_strict::*;
