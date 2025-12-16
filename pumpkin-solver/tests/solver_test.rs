@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::ProofLog;
@@ -23,12 +22,16 @@ fn proof_with_reified_literals() {
     let literal = solver.new_literal_for_predicate(predicate![variable == 5], constraint_tag);
 
     solver
-        .add_constraint(constraints::clause(vec![literal], constraint_tag))
+        .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))
         .post()
         .expect("no error");
 
     let _ = solver
-        .add_constraint(constraints::not_equals([variable], 5, constraint_tag))
+        .add_constraint(pumpkin_constraints::not_equals(
+            [variable],
+            5,
+            constraint_tag,
+        ))
         .post()
         .expect_err("unsat");
 
@@ -50,12 +53,20 @@ fn proof_with_equality_unit_nogood_step() {
     let x1 = solver.new_named_bounded_integer(1, 2, "x1");
     let x2 = solver.new_named_bounded_integer(1, 1, "x2");
     solver
-        .add_constraint(constraints::binary_not_equals(x1, x2, constraint_tag))
+        .add_constraint(pumpkin_constraints::binary_not_equals(
+            x1,
+            x2,
+            constraint_tag,
+        ))
         .post()
         .expect("no conflict");
 
     let _ = solver
-        .add_constraint(constraints::less_than_or_equals([x1], 1, constraint_tag))
+        .add_constraint(pumpkin_constraints::less_than_or_equals(
+            [x1],
+            1,
+            constraint_tag,
+        ))
         .post()
         .expect_err("conflict");
 

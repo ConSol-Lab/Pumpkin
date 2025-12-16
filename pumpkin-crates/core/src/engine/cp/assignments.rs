@@ -797,8 +797,8 @@ impl Assignments {
     }
 }
 
-#[cfg(test)]
 impl Assignments {
+    #[deprecated]
     pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
         self.trail
             .iter()
@@ -1424,7 +1424,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1452,7 +1452,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_assign_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1490,7 +1490,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_upper_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1520,7 +1520,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_lower_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();

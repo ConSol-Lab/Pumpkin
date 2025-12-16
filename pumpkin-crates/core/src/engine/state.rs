@@ -982,3 +982,19 @@ impl State {
         }
     }
 }
+
+impl State {
+    pub fn get_domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.assignments, &mut self.trailed_values)
+    }
+
+    pub fn get_propagation_context(&mut self) -> PropagationContext<'_> {
+        PropagationContext::new(
+            &mut self.trailed_values,
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.notification_engine,
+            PropagatorId(0),
+        )
+    }
+}

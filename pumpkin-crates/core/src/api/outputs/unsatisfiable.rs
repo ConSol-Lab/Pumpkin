@@ -64,7 +64,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// let constraint_tag = solver.new_constraint_tag();
     ///
     /// // We create the all-different constraint
-    /// solver.add_constraint(constraints::all_different(vec![x, y, z], constraint_tag)).post();
+    /// solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], constraint_tag)).post();
     ///
     /// // We create a termination condition which allows the solver to run indefinitely
     /// let mut termination = Indefinite;

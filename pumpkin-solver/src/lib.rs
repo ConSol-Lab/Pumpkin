@@ -8,12 +8,13 @@
 //! A unique feature of Pumpkin is that it can produce a _certificate of unsatisfiability_. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
 //!
 //! The solver currently supports integer variables and a number of (global) constraints:
-//! * [Cumulative global constraint][crate::constraints::cumulative].
-//! * [Element global constraint][crate::constraints::element].
-//! * Arithmetic constraints: [linear integer
-//!   (in)equalities][crate::constraints::less_than_or_equals], [integer
-//!   division][crate::constraints::division], [integer multiplication][crate::constraints::times],
-//!   [maximum][crate::constraints::maximum], [absolute value][crate::constraints::absolute].
+//! * [Cumulative global constraint][pumpkin_constraints::cumulative].
+//! * [Element global constraint][pumpkin_constraints::element].
+//! * Arithmetic constraints:
+//!   [linearinteger(in)equalities][pumpkin_constraints::less_than_or_equals],
+//!   [integerdivision][pumpkin_constraints::division],
+//!   [integermultiplication][pumpkin_constraints::times], [maximum][pumpkin_constraints::maximum],
+//!   [absolute value][pumpkin_constraints::absolute].
 //! * [Clausal constraints][Solver::add_clause].
 //!
 //! We are actively developing Pumpkin and would be happy to hear from you should you have any
@@ -55,7 +56,7 @@
 //! // x + y + z = 17
 //! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::equals(vec![x, y, z], 17, c1))
+//!     .add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1))
 //!     .post();
 //! ```
 //!
@@ -87,7 +88,7 @@
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let c1 = solver.new_constraint_tag();
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we find a solution to the problem
@@ -124,7 +125,7 @@
 //! // We add a constraint which specifies the value of the objective
 //! let c1 = solver.new_constraint_tag();
 //! solver
-//!     .add_constraint(constraints::maximum(vec![x, y, z], objective, c1))
+//!     .add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1))
 //!     .post();
 //! ```
 //!
@@ -148,8 +149,8 @@
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let objective = solver.new_bounded_integer(-10, 30);
 //! # let c1 = solver.new_constraint_tag();
-//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17, c1)).post();
-//! # solver.add_constraint(constraints::maximum(vec![x, y, z], objective, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
+//! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! // Then we solve to optimality
@@ -203,7 +204,7 @@
 //!
 //! // We create the all-different constraint
 //! let c1 = solver.new_constraint_tag();
-//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
+//! solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -269,7 +270,7 @@
 //!
 //! // We create the all-different constraint
 //! let c1 = solver.new_constraint_tag();
-//! solver.add_constraint(constraints::all_different(vec![x, y, z], c1)).post();
+//! solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1)).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;

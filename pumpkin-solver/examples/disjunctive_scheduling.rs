@@ -9,9 +9,8 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
+use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
-use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;
@@ -69,7 +68,7 @@ fn main() {
             // equivelent to literal <=> (s_x - s_y <= -p_x)
             // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = constraints::less_than_or_equals(
+            let _ = pumpkin_constraints::less_than_or_equals(
                 variables,
                 -(processing_times[x] as i32),
                 constraint_tag,

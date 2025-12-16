@@ -31,7 +31,7 @@ impl DomainEvents {
 }
 
 impl DomainEvents {
-    pub(crate) const fn new(int_events: EnumSet<DomainEvent>) -> DomainEvents {
+    pub const fn new(int_events: EnumSet<DomainEvent>) -> DomainEvents {
         DomainEvents {
             events: Some(int_events),
         }

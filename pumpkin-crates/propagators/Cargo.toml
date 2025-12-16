@@ -1,0 +1,24 @@
+[package]
+name = "pumpkin-propagators"
+version = "0.2.2"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The propagators of the Pumpkin constraint programming solver."
+
+[lints]
+workspace = true
+
+[dependencies]
+pumpkin-core = { version = "0.2.2", path = "../core" }
+enumset = "1.1.2"
+bitfield-struct = "0.9.2"
+convert_case = "0.6.0"
+clap = { version = "4.5.40", optional = true, features=["derive"]}
+
+[dev-dependencies]
+pumpkin-constraints = { version = "0.2.2", path = "../constraints" }
+
+[features]
+clap = ["dep:clap", "pumpkin-core/clap"]

@@ -736,6 +736,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-constraints"
+version = "0.2.2"
+dependencies = [
+ "pumpkin-core",
+ "pumpkin-propagators",
+]
+
+[[package]]
 name = "pumpkin-core"
 version = "0.2.2"
 dependencies = [
@@ -756,6 +764,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-constraints",
  "rand",
  "thiserror",
  "wasm-bindgen-test",
@@ -774,6 +783,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-propagators"
+version = "0.2.2"
+dependencies = [
+ "bitfield-struct",
+ "clap",
+ "convert_case 0.6.0",
+ "enumset",
+ "pumpkin-constraints",
+ "pumpkin-core",
+]
+
+[[package]]
 name = "pumpkin-solver"
 version = "0.2.2"
 dependencies = [
@@ -783,8 +804,10 @@ dependencies = [
  "flatzinc",
  "log",
  "pumpkin-checker",
+ "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-macros",
+ "pumpkin-propagators",
  "regex",
  "signal-hook",
  "stringcase",
@@ -796,6 +819,7 @@ dependencies = [
 name = "pumpkin-solver-py"
 version = "0.2.2"
 dependencies = [
+ "pumpkin-constraints",
  "pumpkin-solver",
  "pyo3",
  "pyo3-build-config",
