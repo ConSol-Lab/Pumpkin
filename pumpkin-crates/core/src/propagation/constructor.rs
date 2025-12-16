@@ -269,6 +269,36 @@ mod tests {
     use crate::variables::DomainId;
 
     #[test]
+    #[should_panic]
+    fn panic_when_no_registration_happened() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let _c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+    }
+
+    #[test]
+    fn do_not_panic_if_told_no_registration_will_happen() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let mut ctx = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        ctx.will_not_register_any_events();
+    }
+
+    #[test]
+    fn do_not_panic_if_no_registration_happens_in_reborrowed() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let mut ctx = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        let ctx2 = ctx.reborrow();
+        drop(ctx2);
+
+        ctx.will_not_register_any_events();
+    }
+
+    #[test]
     fn reborrowing_remembers_next_local_id() {
         let mut state = State::default();
         state.notification_engine.grow();
