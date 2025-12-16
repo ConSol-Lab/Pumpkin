@@ -54,6 +54,10 @@ pub struct PropagatorConstructorContext<'a> {
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
     next_local_id: RefOrOwned<'a, LocalId>,
+
+    /// Marker to indicate whether the constructor registered for at least one domain event or
+    /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
+    did_register: RefOrOwned<'a, bool>,
 }
 
 impl PropagatorConstructorContext<'_> {
@@ -65,7 +69,17 @@ impl PropagatorConstructorContext<'_> {
             next_local_id: RefOrOwned::Owned(LocalId::from(0)),
             propagator_id,
             state,
+            did_register: RefOrOwned::Owned(false),
         }
+    }
+
+    /// Indicate that the constructor is deliberately not registering the propagator to be enqueued
+    /// at any time.
+    ///
+    /// If this is called and later a registration happens, then the registration will still go
+    /// through. Calling this function only prevents the crash if no registration happens.
+    pub fn will_not_register_any_events(&mut self) {
+        *self.did_register.deref_mut() = true;
     }
 
     /// Get domain information.
@@ -87,6 +101,8 @@ impl PropagatorConstructorContext<'_> {
         domain_events: DomainEvents,
         local_id: LocalId,
     ) {
+        self.will_not_register_any_events();
+
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -101,6 +117,8 @@ impl PropagatorConstructorContext<'_> {
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
     pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.will_not_register_any_events();
+
         self.state.notification_engine.watch_predicate(
             predicate,
             self.propagator_id,
@@ -165,6 +183,10 @@ impl PropagatorConstructorContext<'_> {
                 RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
                 RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
             },
+            did_register: match &mut self.did_register {
+                RefOrOwned::Ref(did_register) => RefOrOwned::Ref(did_register),
+                RefOrOwned::Owned(did_register) => RefOrOwned::Ref(did_register),
+            },
             state: self.state,
         }
     }
@@ -174,6 +196,16 @@ impl PropagatorConstructorContext<'_> {
         let next_local_id = (*self.next_local_id.deref()).max(LocalId::from(local_id.unpack() + 1));
 
         *self.next_local_id.deref_mut() = next_local_id;
+    }
+}
+
+impl Drop for PropagatorConstructorContext<'_> {
+    fn drop(&mut self) {
+        if !self.did_register.deref() {
+            panic!(
+                "Propagator did not register to be enqueued. If this is intential, call PropagatorConstructorContext::will_not_register_any_events()."
+            );
+        }
     }
 }
 
@@ -240,9 +272,11 @@ mod tests {
         state.notification_engine.grow();
 
         let mut c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        c1.will_not_register_any_events();
 
         let mut c2 = c1.reborrow();
         c2.register(DomainId::new(0), DomainEvents::ANY_INT, LocalId::from(1));
+        drop(c2);
 
         assert_eq!(LocalId::from(2), c1.get_next_local_id());
     }
