@@ -103,7 +103,9 @@ impl NogoodPropagatorConstructor {
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type PropagatorImpl = NogoodPropagator;
 
-    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.will_not_register_any_events();
+
         NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,
