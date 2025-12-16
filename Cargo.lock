@@ -739,7 +739,6 @@ dependencies = [
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
- "clap",
  "pumpkin-core",
  "pumpkin-propagators",
 ]
