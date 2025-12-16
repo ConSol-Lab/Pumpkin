@@ -38,8 +38,6 @@
 //! definition) and it can be assumed that if a propagator is not at fix-point after propagating,
 //! that it will be called again by the solver until no further propagations happen.
 //!
-//! See the [`propagators`] folder for concrete propagator implementations.
-//!
 //! # How to implement a new propagator?
 //!
 //! We recommend the following workflow:

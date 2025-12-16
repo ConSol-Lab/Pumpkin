@@ -389,7 +389,7 @@ mod tests {
     use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::EnqueueDecision;
 
-    use crate::propagators::binary::BinaryEqualsPropagatorArgs;
+    use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     #[test]
     fn test_propagation_of_bounds() {

@@ -8,8 +8,8 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
 
 /// Creates the propagation explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
@@ -76,7 +76,7 @@ mod tests {
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
 
-    use crate::propagators::CumulativeExplanationType;
+    use crate::cumulative::time_table::CumulativeExplanationType;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 
     #[test]

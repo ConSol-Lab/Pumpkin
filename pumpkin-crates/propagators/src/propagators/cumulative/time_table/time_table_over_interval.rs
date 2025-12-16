@@ -26,18 +26,18 @@ use pumpkin_core::variables::IntegerVariable;
 use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
-use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ArgTask;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::UpdatableStructures;
+use crate::cumulative::options::CumulativePropagatorOptions;
 #[cfg(doc)]
-use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdatableStructures;
+use crate::cumulative::time_table::TimeTablePerPointPropagator;
+use crate::cumulative::util::create_tasks;
+use crate::cumulative::util::register_tasks;
+use crate::cumulative::util::update_bounds_task;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
 #[derive(Debug)]
@@ -480,10 +480,10 @@ mod tests {
     use pumpkin_core::propagation::EnqueueDecision;
     use pumpkin_core::state::Conflict;
 
-    use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTableOverIntervalPropagator;
+    use crate::cumulative::ArgTask;
+    use crate::cumulative::options::CumulativePropagatorOptions;
+    use crate::cumulative::time_table::CumulativeExplanationType;
+    use crate::cumulative::time_table::TimeTableOverIntervalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {

@@ -29,15 +29,15 @@ use pumpkin_core::variables::IntegerVariable;
 use super::TimeTable;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
-use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::ResourceProfile;
-use crate::propagators::UpdatableStructures;
+use crate::cumulative::ArgTask;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::UpdatableStructures;
+use crate::cumulative::options::CumulativePropagatorOptions;
+use crate::cumulative::util::create_tasks;
+use crate::cumulative::util::register_tasks;
+use crate::cumulative::util::update_bounds_task;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -284,10 +284,10 @@ mod tests {
     use pumpkin_core::propagation::EnqueueDecision;
     use pumpkin_core::state::Conflict;
 
-    use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTablePerPointPropagator;
+    use crate::cumulative::ArgTask;
+    use crate::cumulative::options::CumulativePropagatorOptions;
+    use crate::cumulative::time_table::CumulativeExplanationType;
+    use crate::cumulative::time_table::TimeTablePerPointPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {

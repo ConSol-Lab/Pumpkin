@@ -405,8 +405,8 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
 mod tests {
     use pumpkin_core::TestSolver;
 
-    use crate::propagators::disjunctive_propagator::DisjunctiveConstructor;
-    use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
+    use crate::disjunctive::ArgDisjunctiveTask;
+    use crate::disjunctive::DisjunctiveConstructor;
 
     #[test]
     fn propagator_propagates_lower_bound() {

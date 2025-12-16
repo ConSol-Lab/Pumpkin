@@ -7,13 +7,13 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
-use pumpkin_propagators::propagators::ArgTask;
-use pumpkin_propagators::propagators::CumulativeOptions;
-use pumpkin_propagators::propagators::CumulativePropagationMethod;
-use pumpkin_propagators::propagators::TimeTableOverIntervalIncrementalPropagator;
-use pumpkin_propagators::propagators::TimeTableOverIntervalPropagator;
-use pumpkin_propagators::propagators::TimeTablePerPointIncrementalPropagator;
-use pumpkin_propagators::propagators::TimeTablePerPointPropagator;
+use pumpkin_propagators::cumulative::ArgTask;
+use pumpkin_propagators::cumulative::options::CumulativeOptions;
+use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
+use pumpkin_propagators::cumulative::time_table::TimeTableOverIntervalIncrementalPropagator;
+use pumpkin_propagators::cumulative::time_table::TimeTableOverIntervalPropagator;
+use pumpkin_propagators::cumulative::time_table::TimeTablePerPointIncrementalPropagator;
+use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
 ///

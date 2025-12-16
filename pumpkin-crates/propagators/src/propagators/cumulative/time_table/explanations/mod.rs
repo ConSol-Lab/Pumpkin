@@ -15,8 +15,8 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
 
 /// Determines what type of explanation is used for the cumulative constraint based on the
 /// explanations described in Section 4.5.1 and 4.5.2 of \[1\].

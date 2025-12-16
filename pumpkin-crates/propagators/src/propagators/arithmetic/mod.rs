@@ -1,3 +1,4 @@
+//! Contains a number of propagators for a variety of arithmetic constraints.
 pub(crate) mod absolute_value;
 pub(crate) mod binary;
 pub(crate) mod integer_division;

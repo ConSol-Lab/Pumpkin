@@ -28,8 +28,8 @@ use super::explanations::naive::create_naive_conflict_explanation;
 use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
 
 /// Structure for handling the creation of propagations and their explanations.
@@ -490,8 +490,8 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use super::create_conflict_explanation;
-    use crate::propagators::ResourceProfile;
-    use crate::propagators::Task;
+    use crate::cumulative::ResourceProfile;
+    use crate::cumulative::Task;
 
     pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,

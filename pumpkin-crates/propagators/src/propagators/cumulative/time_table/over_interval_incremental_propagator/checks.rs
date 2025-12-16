@@ -7,9 +7,9 @@ use std::rc::Rc;
 
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
 
 /// Determines whether the added mandatory part causes a new profile before the first overapping
 /// profile.

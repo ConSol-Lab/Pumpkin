@@ -380,9 +380,9 @@ mod tests {
     use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::LocalId;
 
+    use crate::disjunctive::theta_lambda_tree::DisjunctiveTask;
     use crate::propagators::disjunctive::theta_lambda_tree::Node;
     use crate::propagators::disjunctive::theta_lambda_tree::ThetaLambdaTree;
-    use crate::propagators::disjunctive_task::DisjunctiveTask;
 
     #[test]
     fn tree_built_correctly() {

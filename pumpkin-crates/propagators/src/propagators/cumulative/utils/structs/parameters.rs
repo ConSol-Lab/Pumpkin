@@ -3,7 +3,7 @@ use std::rc::Rc;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::Task;
-use crate::propagators::CumulativePropagatorOptions;
+use crate::cumulative::options::CumulativePropagatorOptions;
 
 /// Holds the data for the cumulative constraint; more specifically it holds:
 /// - The tasks

@@ -9,13 +9,11 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::debug::are_mergeable;
 use super::debug::merge_profiles;
-use crate::propagators::CumulativeParameters;
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
-#[cfg(doc)]
-use crate::propagators::TimeTableOverIntervalPropagator;
-use crate::propagators::create_time_table_over_interval_from_scratch;
-use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
+use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
+use crate::cumulative::time_table::propagation_handler::create_conflict_explanation;
 
 /// Finds the conflicting profile which would have been found by the
 /// [`TimeTableOverIntervalPropagator`]; this is the first conflicting profile in terms of start

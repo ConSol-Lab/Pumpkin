@@ -7,9 +7,9 @@ use std::rc::Rc;
 
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
 
 /// The reduced mandatory part of `updated_task` (spanning `update_range`) overlaps with the
 /// profiles in `[start_index, end_index]`. This function calculates the added, and updated

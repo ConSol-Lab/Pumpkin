@@ -7,9 +7,9 @@ use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 
 /// The new mandatory part added by `updated_task` (spanning `update_range`) overlaps with the

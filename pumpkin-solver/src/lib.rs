@@ -10,10 +10,10 @@
 //! The solver currently supports integer variables and a number of (global) constraints:
 //! * [Cumulative global constraint][pumpkin_constraints::cumulative].
 //! * [Element global constraint][pumpkin_constraints::element].
-//! * Arithmetic constraints: [linear integer
-//!   (in)equalities][pumpkin_constraints::less_than_or_equals], [integer
-//!   division][pumpkin_constraints::division], [integer
-//!   multiplication][pumpkin_constraints::times], [maximum][pumpkin_constraints::maximum],
+//! * Arithmetic constraints:
+//!   [linearinteger(in)equalities][pumpkin_constraints::less_than_or_equals],
+//!   [integerdivision][pumpkin_constraints::division],
+//!   [integermultiplication][pumpkin_constraints::times], [maximum][pumpkin_constraints::maximum],
 //!   [absolute value][pumpkin_constraints::absolute].
 //! * [Clausal constraints][Solver::add_clause].
 //!

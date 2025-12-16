@@ -1,15 +1,17 @@
 //! Contains the propagators for the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html)
-//! constraint, currently it contains solely time-tabling propagators (see
-//! [`crate::propagators::cumulative::time_table`] for an explanation).
+//! constraint.
+//!
+//! Currently it contains solely time-tabling propagators (see
+//! [`crate::cumulative::time_table`] for an explanation).
 //!
 //! # Theoretical
 //!
-//! The cumulative constraint reasons over a set of [`Task`]s over a single resource
-//! with a capacity. Each [`Task`] consists of the following parameters:
-//! - A variable `s_i` representing the start time of the [`Task`]
-//! - The duration of the [`Task`] `p_i` (which is the same for all resources) which cannot be
+//! The cumulative constraint reasons over a set of tasks over a single resource
+//! with a capacity. Each task consists of the following parameters:
+//! - A variable `s_i` representing the start time of the task
+//! - The duration of the task `p_i` (which is the same for all resources) which cannot be
 //!   interruped
-//! - The constant resource usage `r_i` of the [`Task`] (which can differ for different resources)
+//! - The constant resource usage `r_i` of the task (which can differ for different resources)
 //!
 //! Oftentimes the following notation is used to denote certain significant time points:
 //! - `EST_i` - The earliest starting time, equal to `lb(s_i)`
@@ -17,10 +19,10 @@
 //! - `LST_i` - The latest start time, equal to `ub(s_i)`
 //! - `LCT_i` - The latest completion time, equal to `ub(s_i) + p_i`
 //!
-//! A [`Task`] is said to execute at time point *t* if it holds that `s_i <= t < s_i + p_i`. The
+//! A task is said to execute at time point *t* if it holds that `s_i <= t < s_i + p_i`. The
 //! constraint then ensures that at no time point *t* in the horizon (the latest time at which
-//! any [`Task`] can execute) there is an overflow of the resource capacity by the cumulative
-//! resource usage of the [`Task`]s which are being processed at point *t*.
+//! any task can execute) there is an overflow of the resource capacity by the cumulative
+//! resource usage of the tasks which are being processed at point *t*.
 //!
 //! A common problem which makes use of the Cumulative constraint is the [RCPSP](https://www.projectmanagement.ugent.be/research/project_scheduling/rcpsp)
 //! problem. Which uses a combination of [Precedence](https://sofdem.github.io/gccat/gccat/Cprecedence.html)
@@ -28,8 +30,8 @@
 //!
 //! # Practical
 //!
-//! The following example shows how one of the propagators for the Cumulative constraint
-//! ([`TimeTablePerPointPropagator`]) can be used:
+//! The following example shows how one of the propagators for the Cumulative constraint can be
+//! used:
 //!
 //! ```rust
 //! // We construct three tasks for a resource with capacity 2:
@@ -115,15 +117,8 @@
 //!     );
 //! }
 //! ```
-mod time_table;
-pub use time_table::CumulativeExplanationType;
-mod options;
-pub use options::*;
-pub use time_table::TimeTableOverIntervalIncrementalPropagator;
-pub use time_table::TimeTableOverIntervalPropagator;
-pub use time_table::TimeTablePerPointIncrementalPropagator;
-pub use time_table::TimeTablePerPointPropagator;
-pub(crate) use time_table::*;
+pub mod options;
+pub mod time_table;
 pub use utils::ArgTask;
 
 mod utils;

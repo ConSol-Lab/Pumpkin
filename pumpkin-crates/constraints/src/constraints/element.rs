@@ -1,7 +1,7 @@
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_propagators::propagators::ElementArgs;
+use pumpkin_propagators::element::ElementArgs;
 
 /// Creates the [element](https://sofdem.github.io/gccat/gccat/Celement.html) [`Constraint`] which states that `array[index] = rhs`.
 pub fn element<ElementVar: IntegerVariable + 'static>(

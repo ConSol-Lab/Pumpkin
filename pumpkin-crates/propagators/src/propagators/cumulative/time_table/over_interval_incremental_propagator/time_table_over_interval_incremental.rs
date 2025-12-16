@@ -26,7 +26,16 @@ use pumpkin_core::variables::IntegerVariable;
 
 use super::insertion;
 use super::removal;
-use crate::propagators::create_time_table_over_interval_from_scratch;
+use crate::cumulative::options::CumulativePropagatorOptions;
+use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
+use crate::cumulative::time_table::propagate_from_scratch_time_table_interval;
+use crate::cumulative::util::check_bounds_equal_at_propagation;
+use crate::cumulative::util::create_tasks;
+use crate::cumulative::util::register_tasks;
+use crate::cumulative::util::update_bounds_task;
+use crate::cumulative::ArgTask;
+use crate::cumulative::MandatoryPartAdjustments;
+use crate::cumulative::UpdatableStructures;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
@@ -39,22 +48,13 @@ use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 use crate::propagators::cumulative::time_table::TimeTable;
-use crate::propagators::propagate_from_scratch_time_table_interval;
-use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
-use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
-use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::MandatoryPartAdjustments;
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::Task;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
+use crate::cumulative::Task;
 #[cfg(doc)]
-use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::cumulative::time_table::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
-use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdatableStructures;
+use crate::cumulative::time_table::TimeTablePerPointPropagator;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -636,10 +636,10 @@ mod tests {
     use pumpkin_core::state::Conflict;
     use pumpkin_core::variables::DomainId;
 
-    use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
+    use crate::cumulative::ArgTask;
+    use crate::cumulative::options::CumulativePropagatorOptions;
+    use crate::cumulative::time_table::CumulativeExplanationType;
+    use crate::cumulative::time_table::TimeTableOverIntervalIncrementalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {

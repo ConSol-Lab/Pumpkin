@@ -1,4 +1,4 @@
-use super::CumulativeExplanationType;
+use crate::cumulative::time_table::CumulativeExplanationType;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CumulativePropagatorOptions {

@@ -7,11 +7,11 @@ use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::CumulativeParameters;
-use crate::propagators::PerPointTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
-use crate::propagators::create_time_table_per_point_from_scratch;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::time_table::PerPointTimeTableType;
+use crate::cumulative::time_table::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 
 /// Returns whether the synchronised conflict explanation created by
@@ -170,11 +170,11 @@ mod tests {
     use pumpkin_core::propagation::LocalId;
 
     use super::find_synchronised_conflict;
-    use crate::propagators::CumulativeParameters;
-    use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::PerPointTimeTableType;
-    use crate::propagators::ResourceProfile;
-    use crate::propagators::Task;
+    use crate::cumulative::CumulativeParameters;
+    use crate::cumulative::ResourceProfile;
+    use crate::cumulative::Task;
+    use crate::cumulative::options::CumulativePropagatorOptions;
+    use crate::cumulative::time_table::PerPointTimeTableType;
 
     #[test]
     fn test_correct_conflict_returned() {

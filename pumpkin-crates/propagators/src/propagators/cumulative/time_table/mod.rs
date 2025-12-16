@@ -3,31 +3,30 @@
 //!
 //! # Theoretical
 //!
-//! These time-table propagators reason about something called the **mandatory part** of a [`Task`];
-//! informally, the mandatory part of a [`Task`] is the time points in which a [`Task`] *has* to
+//! These time-table propagators reason about something called the **mandatory part** of a task;
+//! informally, the mandatory part of a task is the time points in which a task *has* to
 //! execute given its current bounds. Mathematically (see [`crate::propagators::cumulative`] for
-//! notation details), the mandatory part of a [`Task`] *i* is the interval `[LST_i, ECT_i)`
+//! notation details), the mandatory part of a task *i* is the interval `[LST_i, ECT_i)`
 //! (i.e. the time points between the latest start time of a task and its earliest completion time).
 //!
 //! The so-called **time-table** is a data-structure which are used to track the cumulative
-//! mandatory parts at different time-points. Our time-tables consist of [`ResourceProfile`]s which
-//! represent the cumulative resource usage ([`height`][ResourceProfile::height]) across an interval
-//! (\[[`start`][ResourceProfile::start], [`end`][ResourceProfile::end]\]) of a set of [`Task`]s
-//! ([`profile_tasks`][ResourceProfile::profile_tasks]).
+//! mandatory parts at different time-points. Our time-tables consist of resource profiles which
+//! represent the cumulative resource usage across an interval
+//! (\[start, end\]) of a set of tasks.
 //!
-//! Propagation oftentimes uses these time-tables to either update the bounds of the [`Task`]s or to
-//! remove values from the domain. If a time-table has been built then for any [`Task`] which
-//! overflows the resource capacity if it overlaps with a [`ResourceProfile`] (and is not part of
-//! it) all start times which cause this task to overlap with any part of the [`ResourceProfile`]
+//! Propagation oftentimes uses these time-tables to either update the bounds of the tasks or to
+//! remove values from the domain. If a time-table has been built then for any task which
+//! overflows the resource capacity if it overlaps with a resource profile (and is not part of
+//! it) all start times which cause this task to overlap with any part of the resource profile
 //! can be removed from the domain.
 //!
 //! The simplest example of this is if we have a resource with capacity 1 and we have the following
-//! two [`Task`]s:
+//! two tasks:
 //! - Task 1: Start times: [0, 5], Processing time: 4, Resource usage: 1
 //! - Task 2: Start times: [3, 3], Processing time: 2, Resource usage: 1
 //!
-//! In this case the time-table would consist of a single [`ResourceProfile`] with
-//! [`start`][ResourceProfile::start] 3 and [`end`][ResourceProfile::end] 4 signifying that Task 2
+//! In this case the time-table would consist of a single resource profile with
+//! `start` 3 and `end` 4 signifying that Task 2
 //! executes in the interval `[3, 4]` for 2 units of time. It can be seen that if Task 1 is
 //! scheduled at the earliest possible starting time of 0 that there would be an overflow of the
 //! resource, we could thus propagate the lower-bound on the start time of Task 1 to be 5.
@@ -39,18 +38,6 @@
 //! For more information about explanations for this type of reasoning see
 //! [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
 //! for more information about time-table reasoning
-//!
-//! # Practical
-//!
-//! Certain common functions are stored in
-//! [`crate::propagators::cumulative::time_table::time_table_util`] such as
-//! [`should_enqueue`] which determines whether a time-table propagator has seen sufficient changes
-//! to warrant being scheduled once more or [`propagate_based_on_timetable`] which goes over all
-//! profiles and tasks and determines whether a propagation can take place and performs it if this
-//! is the case. It should be noted that these methods assume that the provided [`ResourceProfile`]s
-//! are maximal (i.e. there is no [`ResourceProfile`] adjacent to it with the same
-//! [`ResourceProfile::profile_tasks`]) and that they are sorted in increasing order of start time;
-//! not adhering to these guidelines could result in missed propagations.
 //!
 //! # Bibliography
 //!
@@ -84,7 +71,7 @@ pub use time_table_over_interval::*;
 pub use time_table_per_point::*;
 
 #[cfg(doc)]
-use crate::propagators::Task;
+use crate::cumulative::Task;
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;
 

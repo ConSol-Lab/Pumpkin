@@ -174,7 +174,7 @@ mod tests {
     use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::EnqueueDecision;
 
-    use crate::propagators::binary::BinaryNotEqualsPropagatorArgs;
+    use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
     #[test]
     fn detects_conflict() {

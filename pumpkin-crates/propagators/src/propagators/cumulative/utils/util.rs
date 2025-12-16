@@ -12,8 +12,8 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::ArgTask;
-use crate::propagators::Task;
+use crate::cumulative::ArgTask;
+use crate::cumulative::Task;
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
 /// registered for [`DomainEvents`].

@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use pumpkin_propagators::propagators::ArgDisjunctiveTask;
+use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::predicate;

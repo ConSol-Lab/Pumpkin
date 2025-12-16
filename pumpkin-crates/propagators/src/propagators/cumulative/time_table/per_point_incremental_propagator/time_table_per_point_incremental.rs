@@ -24,17 +24,22 @@ use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
-use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::MandatoryPartAdjustments;
-use crate::propagators::PerPointTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ArgTask;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::MandatoryPartAdjustments;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::UpdatableStructures;
+use crate::cumulative::options::CumulativePropagatorOptions;
+use crate::cumulative::time_table::PerPointTimeTableType;
 #[cfg(doc)]
-use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdatableStructures;
-use crate::propagators::create_time_table_per_point_from_scratch;
+use crate::cumulative::time_table::TimeTablePerPointPropagator;
+use crate::cumulative::time_table::create_time_table_per_point_from_scratch;
+use crate::cumulative::time_table::propagate_from_scratch_time_table_point;
+use crate::cumulative::util::check_bounds_equal_at_propagation;
+use crate::cumulative::util::create_tasks;
+use crate::cumulative::util::register_tasks;
+use crate::cumulative::util::update_bounds_task;
 use crate::propagators::cumulative::time_table::TimeTable;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_per_point;
 use crate::propagators::cumulative::time_table::per_point_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
@@ -45,11 +50,6 @@ use crate::propagators::cumulative::time_table::time_table_util::backtrack_updat
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
-use crate::propagators::propagate_from_scratch_time_table_point;
-use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_tasks;
-use crate::propagators::util::register_tasks;
-use crate::propagators::util::update_bounds_task;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -559,9 +559,9 @@ mod debug {
     use pumpkin_core::propagation::Domains;
     use pumpkin_core::variables::IntegerVariable;
 
-    use crate::propagators::CumulativeParameters;
-    use crate::propagators::PerPointTimeTableType;
-    use crate::propagators::create_time_table_per_point_from_scratch;
+    use crate::cumulative::CumulativeParameters;
+    use crate::cumulative::time_table::PerPointTimeTableType;
+    use crate::cumulative::time_table::create_time_table_per_point_from_scratch;
 
     /// Determines whether the provided `time_table` is the same as the one creatd from scratch
     /// using the following checks:
@@ -633,11 +633,11 @@ mod tests {
     use pumpkin_core::state::Conflict;
     use pumpkin_core::variables::DomainId;
 
-    use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativePropagatorOptions;
-    use crate::propagators::TimeTablePerPointIncrementalPropagator;
-    use crate::propagators::TimeTablePerPointPropagator;
+    use crate::cumulative::ArgTask;
+    use crate::cumulative::options::CumulativePropagatorOptions;
+    use crate::cumulative::time_table::CumulativeExplanationType;
+    use crate::cumulative::time_table::TimeTablePerPointIncrementalPropagator;
+    use crate::cumulative::time_table::TimeTablePerPointPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {

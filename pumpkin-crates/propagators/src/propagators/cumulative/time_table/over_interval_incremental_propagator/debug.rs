@@ -8,10 +8,10 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::CumulativeParameters;
-use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::create_time_table_over_interval_from_scratch;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::time_table::OverIntervalTimeTableType;
+use crate::cumulative::time_table::create_time_table_over_interval_from_scratch;
 
 /// Determines whether the provided `time_table` is the same as the one creatd from scratch
 /// using the following checks:

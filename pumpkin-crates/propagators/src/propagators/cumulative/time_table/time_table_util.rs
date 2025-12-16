@@ -14,11 +14,11 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::CumulativeParameters;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
-use crate::propagators::UpdatableStructures;
-use crate::propagators::UpdatedTaskInfo;
+use crate::cumulative::CumulativeParameters;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::UpdatableStructures;
+use crate::cumulative::UpdatedTaskInfo;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
@@ -783,8 +783,8 @@ mod tests {
     use pumpkin_core::state::State;
 
     use super::find_profiles_which_propagate_lower_bound;
-    use crate::propagators::ResourceProfile;
-    use crate::propagators::Task;
+    use crate::cumulative::ResourceProfile;
+    use crate::cumulative::Task;
     use crate::propagators::cumulative::time_table::time_table_util::find_profiles_which_propagate_upper_bound;
 
     #[test]

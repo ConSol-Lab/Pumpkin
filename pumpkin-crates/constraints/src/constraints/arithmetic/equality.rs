@@ -7,9 +7,9 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
-use pumpkin_propagators::propagators::BinaryEqualsPropagatorArgs;
-use pumpkin_propagators::propagators::BinaryNotEqualsPropagatorArgs;
-use pumpkin_propagators::propagators::LinearNotEqualPropagatorArgs;
+use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
+use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
+use pumpkin_propagators::arithmetic::LinearNotEqualPropagatorArgs;
 
 use super::less_than_or_equals;
 

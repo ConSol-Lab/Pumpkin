@@ -5,8 +5,8 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
-use pumpkin_propagators::propagators::ArgDisjunctiveTask;
-use pumpkin_propagators::propagators::DisjunctiveConstructor;
+use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
+use pumpkin_propagators::disjunctive::DisjunctiveConstructor;
 
 /// Creates the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) [`Constraint`] (also called the `NoOverlap` Constraint or the `Unary Resource` Constraint).
 ///

@@ -6,10 +6,10 @@ pub use inequality::*;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_propagators::propagators::AbsoluteValueArgs;
-use pumpkin_propagators::propagators::DivisionArgs;
-use pumpkin_propagators::propagators::IntegerMultiplicationArgs;
-use pumpkin_propagators::propagators::MaximumArgs;
+use pumpkin_propagators::arithmetic::AbsoluteValueArgs;
+use pumpkin_propagators::arithmetic::DivisionArgs;
+use pumpkin_propagators::arithmetic::IntegerMultiplicationArgs;
+use pumpkin_propagators::arithmetic::MaximumArgs;
 
 /// Creates the [`Constraint`] `a + b = c`.
 pub fn plus<Var: IntegerVariable + 'static>(

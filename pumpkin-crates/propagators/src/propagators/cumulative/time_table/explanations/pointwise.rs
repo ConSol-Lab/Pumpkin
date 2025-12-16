@@ -11,9 +11,9 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::propagators::CumulativeExplanationType;
-use crate::propagators::ResourceProfile;
-use crate::propagators::Task;
+use crate::cumulative::ResourceProfile;
+use crate::cumulative::Task;
+use crate::cumulative::time_table::CumulativeExplanationType;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
 
@@ -314,7 +314,7 @@ mod tests {
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
 
-    use crate::propagators::CumulativeExplanationType;
+    use crate::cumulative::time_table::CumulativeExplanationType;
     use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
 
     #[test]

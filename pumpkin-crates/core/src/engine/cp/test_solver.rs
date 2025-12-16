@@ -53,7 +53,7 @@ impl Default for TestSolver {
     }
 }
 
-#[deprecated]
+#[deprecated = "Will be replaced by the state API"]
 impl TestSolver {
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.state.new_interval_variable(lb, ub, None)
