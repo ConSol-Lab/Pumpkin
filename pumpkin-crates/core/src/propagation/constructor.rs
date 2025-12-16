@@ -79,7 +79,7 @@ impl PropagatorConstructorContext<'_> {
     /// If this is called and later a registration happens, then the registration will still go
     /// through. Calling this function only prevents the crash if no registration happens.
     pub fn will_not_register_any_events(&mut self) {
-        *self.did_register.deref_mut() = true;
+        *self.did_register = true;
     }
 
     /// Get domain information.
@@ -201,9 +201,11 @@ impl PropagatorConstructorContext<'_> {
 
 impl Drop for PropagatorConstructorContext<'_> {
     fn drop(&mut self) {
-        if !self.did_register.deref() {
+        if let RefOrOwned::Owned(did_register) = self.did_register
+            && !did_register
+        {
             panic!(
-                "Propagator did not register to be enqueued. If this is intential, call PropagatorConstructorContext::will_not_register_any_events()."
+                "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
         }
     }
