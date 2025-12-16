@@ -14,10 +14,10 @@ use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_core::statistics::log_statistic;
+use pumpkin_propagators::propagators::CumulativeOptions;
 use pumpkin_solver::Solver;
 use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::constraint_arguments::CumulativeOptions;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::optimisation::OptimisationDirection;

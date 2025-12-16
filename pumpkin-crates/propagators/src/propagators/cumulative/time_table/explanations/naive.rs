@@ -1,0 +1,155 @@
+use std::rc::Rc;
+
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PropositionalConjunction;
+use pumpkin_core::propagation::Domains;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::variables::IntegerVariable;
+
+use crate::propagators::ResourceProfile;
+use crate::propagators::Task;
+
+/// Creates the propagation explanation using the naive approach (see
+/// [`CumulativeExplanationType::Naive`])
+pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
+    profile: &ResourceProfile<Var>,
+    context: Domains,
+) -> PropositionalConjunction {
+    profile
+        .profile_tasks
+        .iter()
+        .flat_map(|profile_task| {
+            [
+                predicate!(
+                    profile_task.start_variable
+                        >= context.lower_bound(&profile_task.start_variable)
+                ),
+                predicate!(
+                    profile_task.start_variable
+                        <= context.upper_bound(&profile_task.start_variable)
+                ),
+            ]
+        })
+        .collect()
+}
+
+/// Creates the conflict explanation using the naive approach (see
+/// [`CumulativeExplanationType::Naive`])
+pub(crate) fn create_naive_conflict_explanation<Var, Context: ReadDomains>(
+    conflict_profile: &ResourceProfile<Var>,
+    context: Context,
+) -> PropositionalConjunction
+where
+    Var: IntegerVariable + 'static,
+{
+    conflict_profile
+        .profile_tasks
+        .iter()
+        .flat_map(|profile_task| {
+            [
+                predicate!(
+                    profile_task.start_variable
+                        >= context.lower_bound(&profile_task.start_variable)
+                ),
+                predicate!(
+                    profile_task.start_variable
+                        <= context.upper_bound(&profile_task.start_variable)
+                ),
+            ]
+        })
+        .collect()
+}
+
+pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var>(
+    context: Domains,
+    task: &Rc<Task<Var>>,
+) -> Predicate
+where
+    Var: IntegerVariable + 'static,
+{
+    predicate!(task.start_variable >= context.lower_bound(&task.start_variable))
+}
+
+pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var>(
+    context: Domains,
+    task: &Rc<Task<Var>>,
+) -> Predicate
+where
+    Var: IntegerVariable + 'static,
+{
+    predicate!(task.start_variable <= context.upper_bound(&task.start_variable))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::predicate;
+    use crate::predicates::PropositionalConjunction;
+    use crate::propagators::CumulativeExplanationType;
+    use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
+
+    #[test]
+    fn test_naive_explanation_lower_bound() {
+        let mut propagation_handler = TestPropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, x, y) = propagation_handler.set_up_example_lower_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 11),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_naive_explanation_lower_bound_sequence() {
+        let mut propagation_handler = TestPropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, x, y, z) = propagation_handler.set_up_example_sequence_lower_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 11),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
+            predicate!(z >= 15),
+            predicate!(z <= 19),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_naive_explanation_upper_bound() {
+        let mut propagation_handler = TestPropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, x, y) = propagation_handler.set_up_example_upper_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x <= 16),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_naive_explanation_upper_bound_sequence() {
+        let mut propagation_handler = TestPropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, x, y, z) = propagation_handler.set_up_example_sequence_upper_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x <= 16),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
+            predicate!(z >= 7),
+            predicate!(z <= 9),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_conflict_naive() {
+        let mut propagation_handler = TestPropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, y) = propagation_handler.set_up_conflict_example();
+        let expected_reason: PropositionalConjunction =
+            vec![predicate!(y >= 15), predicate!(y <= 16)].into();
+        assert_eq!(reason, expected_reason);
+    }
+}

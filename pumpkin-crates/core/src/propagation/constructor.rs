@@ -141,7 +141,7 @@ impl PropagatorConstructorContext<'_> {
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
     /// in the solver and the proof.
-    pub(crate) fn create_inference_code(
+    pub fn create_inference_code(
         &mut self,
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
@@ -158,7 +158,7 @@ impl PropagatorConstructorContext<'_> {
     /// Reborrow the current context to a new value with a shorter lifetime. Should be used when
     /// passing `Self` to another function that takes ownership, but the value is still needed
     /// afterwards.
-    pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
+    pub fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             propagator_id: self.propagator_id,
             next_local_id: match &mut self.next_local_id {

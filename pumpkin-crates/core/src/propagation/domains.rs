@@ -136,6 +136,9 @@ pub trait ReadDomains {
 
     /// Assigns the provided [`TrailedInteger`] to the provided `value`.
     fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64);
+
+    /// Returns the current checkpoint.
+    fn get_checkpoint(&self) -> usize;
 }
 
 impl<T: HasAssignments> ReadDomains for T {
@@ -221,5 +224,9 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64) {
         self.trailed_values_mut().assign(trailed_integer, value);
+    }
+
+    fn get_checkpoint(&self) -> usize {
+        self.assignments().get_checkpoint()
     }
 }

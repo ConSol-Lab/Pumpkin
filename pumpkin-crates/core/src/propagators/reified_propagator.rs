@@ -19,9 +19,9 @@ use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the [`ReifiedPropagator`].
 #[derive(Clone, Debug)]
-pub(crate) struct ReifiedPropagatorArgs<WrappedArgs> {
-    pub(crate) propagator: WrappedArgs,
-    pub(crate) reification_literal: Literal,
+pub struct ReifiedPropagatorArgs<WrappedArgs> {
+    pub propagator: WrappedArgs,
+    pub reification_literal: Literal,
 }
 
 impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
@@ -66,7 +66,7 @@ where
 /// be used to propagate `r` to false. If that method is not implemented, `r` will never be
 /// propagated to false.
 #[derive(Clone, Debug)]
-pub(crate) struct ReifiedPropagator<WrappedPropagator> {
+pub struct ReifiedPropagator<WrappedPropagator> {
     propagator: WrappedPropagator,
     reification_literal: Literal,
     /// The formatted name of the propagator.

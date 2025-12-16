@@ -143,7 +143,7 @@ impl Solver {
         self.satisfaction_solver.get_solution_reference()
     }
 
-    pub(crate) fn is_logging_proof(&self) -> bool {
+    pub fn is_logging_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_proof()
     }
 }

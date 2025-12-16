@@ -42,7 +42,7 @@ use crate::pumpkin_assert_simple;
 /// implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 /// (TRICS), 2013, pp. 1–10.
 #[derive(Debug, Clone)]
-pub(crate) struct SparseSet<T> {
+pub struct SparseSet<T> {
     /// The number of elements which are currently in the domain
     size: usize,
     /// The current state of the domain, this structure guarantees that the first
@@ -61,7 +61,7 @@ impl<T> SparseSet<T> {
     /// Assumption: It is assumed that `mapping` is a bijective function which
     /// will return an index which is in the range [0, |D_{original}|) (where D_{original} is
     /// the initial domain before any operations have been performed).
-    pub(crate) fn new(input: Vec<T>, mapping: fn(&T) -> usize) -> Self {
+    pub fn new(input: Vec<T>, mapping: fn(&T) -> usize) -> Self {
         let input_len = input.len();
         SparseSet {
             size: input_len,
@@ -71,25 +71,29 @@ impl<T> SparseSet<T> {
         }
     }
 
-    pub(crate) fn set_to_empty(&mut self) {
+    pub fn set_to_empty(&mut self) {
         self.indices = vec![usize::MAX; self.indices.len()];
         self.domain.clear();
         self.size = 0;
     }
 
+    pub fn restore_temporarily_removed(&mut self) {
+        self.size = self.domain.len();
+    }
+
     /// Determines whether the domain represented by the [`SparseSet`] is empty
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.size == 0
     }
 
     /// Returns how many elements are part of the domain
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.size
     }
 
     /// Returns the `index`th element in the domain; if `index` is larger than or equal to
     /// [`SparseSet::len`] then this method will panic.
-    pub(crate) fn get(&self, index: usize) -> &T {
+    pub fn get(&self, index: usize) -> &T {
         pumpkin_assert_simple!(index < self.size);
         &self.domain[index]
     }
@@ -104,7 +108,7 @@ impl<T> SparseSet<T> {
 
     /// Remove the value of `to_remove` from the domain; if the value is not in the domain then this
     /// method does not perform any operations.
-    pub(crate) fn remove(&mut self, to_remove: &T) {
+    pub fn remove(&mut self, to_remove: &T) {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;
@@ -130,7 +134,7 @@ impl<T> SparseSet<T> {
         }
     }
 
-    pub(crate) fn remove_temporarily(&mut self, to_remove: &T) {
+    pub fn remove_temporarily(&mut self, to_remove: &T) {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;
@@ -138,18 +142,14 @@ impl<T> SparseSet<T> {
         }
     }
 
-    pub(crate) fn restore_temporarily_removed(&mut self) {
-        self.size = self.domain.len();
-    }
-
     /// Determines whehter the `element` is contained in the domain of the sparse-set.
-    pub(crate) fn contains(&self, element: &T) -> bool {
+    pub fn contains(&self, element: &T) -> bool {
         (self.mapping)(element) < self.indices.len()
             && self.indices[(self.mapping)(element)] < self.size
     }
 
     /// Accomodates the `element`.
-    pub(crate) fn accommodate(&mut self, element: &T) {
+    pub fn accommodate(&mut self, element: &T) {
         let index = (self.mapping)(element);
         if self.indices.len() <= index {
             self.indices.resize(index + 1, usize::MAX);
@@ -157,7 +157,7 @@ impl<T> SparseSet<T> {
     }
 
     /// Inserts the element if it is not already contained in the sparse set.
-    pub(crate) fn insert(&mut self, element: T) {
+    pub fn insert(&mut self, element: T) {
         if !self.contains(&element) {
             self.accommodate(&element);
 
@@ -169,11 +169,11 @@ impl<T> SparseSet<T> {
     }
 
     /// Returns an iterator which goes over the values in the domain of the sparse-set
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.domain[..self.size].iter()
     }
 
-    pub(crate) fn out_of_domain(&self) -> impl Iterator<Item = &T> {
+    pub fn out_of_domain(&self) -> impl Iterator<Item = &T> {
         self.domain[self.size..].iter()
     }
 }
