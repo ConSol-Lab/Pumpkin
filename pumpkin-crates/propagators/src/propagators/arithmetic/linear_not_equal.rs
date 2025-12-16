@@ -358,6 +358,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;

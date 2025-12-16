@@ -59,7 +59,7 @@ where
 }
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
-/// [`MaximumConstructor`].
+/// [`MaximumArgs`].
 #[derive(Clone, Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[ElementVar]>,
@@ -170,10 +170,12 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pumpkin_core::TestSolver;
+
+    use super::*;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {

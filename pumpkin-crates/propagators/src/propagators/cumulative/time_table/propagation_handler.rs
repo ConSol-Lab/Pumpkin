@@ -482,10 +482,8 @@ pub(crate) mod test_propagation_handler {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
     use pumpkin_core::proof::InferenceCode;
-    use pumpkin_core::propagation::Domains;
     use pumpkin_core::propagation::LocalId;
     use pumpkin_core::state::CurrentNogood;
-    use pumpkin_core::state::PropagatorId;
     use pumpkin_core::state::State;
     use pumpkin_core::variables::DomainId;
 

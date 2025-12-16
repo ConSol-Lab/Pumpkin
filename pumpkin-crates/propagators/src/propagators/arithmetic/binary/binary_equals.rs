@@ -383,6 +383,7 @@ struct BinaryEqualsPropagation {
     __: u16,
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;

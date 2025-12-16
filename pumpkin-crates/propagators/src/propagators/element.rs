@@ -293,6 +293,7 @@ struct RightHandSideReason {
     value: i32,
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;

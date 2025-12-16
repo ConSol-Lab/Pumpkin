@@ -779,7 +779,6 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
 mod tests {
     use std::rc::Rc;
 
-    use pumpkin_core::propagation::Domains;
     use pumpkin_core::propagation::LocalId;
     use pumpkin_core::state::State;
 

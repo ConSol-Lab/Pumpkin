@@ -17,7 +17,7 @@ use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
 
-/// A [`PropagatorConstructor`] for the [`ReifiedPropagator`].
+/// A [`PropagatorConstructor`] for the reified propagator.
 #[derive(Clone, Debug)]
 pub struct ReifiedPropagatorArgs<WrappedArgs> {
     pub propagator: WrappedArgs,
@@ -221,6 +221,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use super::*;

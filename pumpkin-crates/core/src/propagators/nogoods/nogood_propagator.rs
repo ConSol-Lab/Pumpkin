@@ -51,7 +51,7 @@ use crate::state::PropagatorHandle;
 /// The idea for propagation is the two-watcher scheme; this is achieved by internally keeping
 /// track of watch lists.
 #[derive(Clone, Debug)]
-pub(crate) struct NogoodPropagator {
+pub struct NogoodPropagator {
     /// The [`PredicateId`]s of the nogoods.
     nogood_predicates: ArenaAllocator,
     /// The information corresponding to each nogood; including activity, and LBD.
@@ -1279,6 +1279,7 @@ impl NogoodPropagator {
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;

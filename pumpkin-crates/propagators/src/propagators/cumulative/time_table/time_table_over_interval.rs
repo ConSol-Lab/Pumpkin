@@ -470,6 +470,7 @@ pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 
     )
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;

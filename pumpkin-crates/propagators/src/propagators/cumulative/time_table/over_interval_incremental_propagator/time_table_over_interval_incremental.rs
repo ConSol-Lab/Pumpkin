@@ -625,6 +625,7 @@ fn find_overlapping_profile<Var: IntegerVariable + 'static>(
     })
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;

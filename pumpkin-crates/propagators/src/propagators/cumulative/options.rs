@@ -15,7 +15,7 @@ pub struct CumulativePropagatorOptions {
     pub incremental_backtracking: bool,
 }
 
-/// The options provided to the [`constraints::cumulative`] constraints.
+/// The options provided to the Cumulative constraint.
 #[derive(Debug, Copy, Clone, Default)]
 pub struct CumulativeOptions {
     /// The propagation method which is used for the cumulative constraints; currently all of them

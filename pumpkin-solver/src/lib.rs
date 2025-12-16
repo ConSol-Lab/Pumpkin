@@ -8,12 +8,13 @@
 //! A unique feature of Pumpkin is that it can produce a _certificate of unsatisfiability_. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
 //!
 //! The solver currently supports integer variables and a number of (global) constraints:
-//! * [Cumulative global constraint][crate::constraints::cumulative].
-//! * [Element global constraint][crate::constraints::element].
+//! * [Cumulative global constraint][pumpkin_constraints::cumulative].
+//! * [Element global constraint][pumpkin_constraints::element].
 //! * Arithmetic constraints: [linear integer
-//!   (in)equalities][crate::constraints::less_than_or_equals], [integer
-//!   division][crate::constraints::division], [integer multiplication][crate::constraints::times],
-//!   [maximum][crate::constraints::maximum], [absolute value][crate::constraints::absolute].
+//!   (in)equalities][pumpkin_constraints::less_than_or_equals], [integer
+//!   division][pumpkin_constraints::division], [integer
+//!   multiplication][pumpkin_constraints::times], [maximum][pumpkin_constraints::maximum],
+//!   [absolute value][pumpkin_constraints::absolute].
 //! * [Clausal constraints][Solver::add_clause].
 //!
 //! We are actively developing Pumpkin and would be happy to hear from you should you have any

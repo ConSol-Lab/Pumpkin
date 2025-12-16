@@ -29,7 +29,6 @@ use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
-#[deprecated]
 pub struct TestSolver {
     pub state: State,
     constraint_tags: KeyGenerator<ConstraintTag>,
@@ -54,6 +53,7 @@ impl Default for TestSolver {
     }
 }
 
+#[deprecated]
 impl TestSolver {
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.state.new_interval_variable(lb, ub, None)
@@ -102,6 +102,7 @@ impl TestSolver {
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
         let mut propagator_queue = PropagatorQueue::new(4);
+        #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
@@ -130,6 +131,7 @@ impl TestSolver {
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
         let mut propagator_queue = PropagatorQueue::new(4);
+        #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
@@ -158,6 +160,7 @@ impl TestSolver {
             "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!"
         );
         let mut propagator_queue = PropagatorQueue::new(4);
+        #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
@@ -246,6 +249,7 @@ impl TestSolver {
     }
 
     pub fn notify_propagator(&mut self, _propagator: PropagatorId) {
+        #[allow(deprecated, reason = "Will be refactored in the future")]
         self.state
             .notification_engine
             .notify_propagators_about_domain_events_test(
@@ -257,6 +261,7 @@ impl TestSolver {
     }
 
     pub fn get_reason_int(&mut self, predicate: Predicate) -> PropositionalConjunction {
+        #[allow(deprecated, reason = "Will be refactored in the future")]
         let reason_ref = self
             .state
             .assignments

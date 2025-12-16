@@ -386,14 +386,14 @@ impl NotificationEngine {
         let _ = self.events.drain();
     }
 
-    #[deprecated]
+    #[cfg(test)]
     pub(crate) fn drain_backtrack_domain_events(
         &mut self,
     ) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
         self.backtrack_events.drain()
     }
 
-    #[deprecated]
+    #[cfg(test)]
     pub(crate) fn drain_domain_events(
         &mut self,
     ) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {

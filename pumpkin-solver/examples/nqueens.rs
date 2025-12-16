@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::ProblemSolution;

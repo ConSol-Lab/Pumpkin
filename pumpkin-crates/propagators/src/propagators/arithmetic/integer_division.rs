@@ -377,10 +377,12 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     Ok(())
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pumpkin_core::TestSolver;
+
+    use super::*;
 
     #[test]
     fn detects_conflicts() {

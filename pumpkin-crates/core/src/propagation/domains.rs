@@ -18,7 +18,7 @@ pub struct Domains<'a> {
 }
 
 impl<'a> Domains<'a> {
-    pub fn new(assignments: &'a Assignments, trailed_values: &'a mut TrailedValues) -> Self {
+    pub(crate) fn new(assignments: &'a Assignments, trailed_values: &'a mut TrailedValues) -> Self {
         Domains {
             assignments,
             trailed_values,

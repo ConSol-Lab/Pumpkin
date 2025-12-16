@@ -161,14 +161,15 @@ fn sort_profile_based_on_id<Var: IntegerVariable + 'static>(profile: &mut Resour
         .sort_by(|a, b| a.id.unpack().cmp(&b.id.unpack()));
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
 
+    use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::LocalId;
 
     use super::find_synchronised_conflict;
-    use pumpkin_core::TestSolver;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::PerPointTimeTableType;

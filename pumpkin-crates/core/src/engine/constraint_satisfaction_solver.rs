@@ -1205,7 +1205,6 @@ mod tests {
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::termination::Indefinite;
-    use crate::variables::TransformableVariable;
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))

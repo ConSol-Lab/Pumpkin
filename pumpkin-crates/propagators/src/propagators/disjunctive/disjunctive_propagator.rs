@@ -400,9 +400,11 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     explanation.into()
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;
+
     use crate::propagators::disjunctive_propagator::DisjunctiveConstructor;
     use crate::propagators::disjunctive_task::ArgDisjunctiveTask;
 

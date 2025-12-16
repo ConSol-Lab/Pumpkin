@@ -357,6 +357,7 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
     numerator / denominator + (numerator % denominator).signum()
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_core::TestSolver;
