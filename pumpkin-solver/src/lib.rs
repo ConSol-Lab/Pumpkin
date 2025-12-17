@@ -13,8 +13,8 @@
 //! * Arithmetic constraints:
 //!   [linearinteger(in)equalities][pumpkin_constraints::less_than_or_equals],
 //!   [integerdivision][pumpkin_constraints::division],
-//!   [integermultiplication][pumpkin_constraints::times], [maximum], [absolute
-//!   value][pumpkin_constraints::absolute].
+//!   [integermultiplication][pumpkin_constraints::times], [maximum][pumpkin_constraints::maximum],
+//!   [absolute value][pumpkin_constraints::absolute].
 //! * [Clausal constraints][Solver::add_clause].
 //!
 //! We are actively developing Pumpkin and would be happy to hear from you should you have any
@@ -302,6 +302,8 @@
 //! - `gzipped-proofs` (default): Write proofs to a gzipped file.
 //! - `debug-checks`: Enable expensive assertions in the solver. Turning this on slows down the
 //!   solver by several orders of magnitude, so it is turned off by default.
-pub use pumpkin_constraints::*;
+#[doc(inline)]
+pub use pumpkin_constraints;
 pub use pumpkin_core::*;
-pub use pumpkin_propagators::*;
+#[doc(inline)]
+pub use pumpkin_propagators;
