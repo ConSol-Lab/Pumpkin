@@ -1,5 +1,4 @@
 use log::debug;
-use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
 use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::results::SatisfactionResult;
@@ -9,6 +8,7 @@ use pumpkin_solver::termination::TerminationCondition;
 use super::linear_search::LinearSearch;
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;
+use crate::maxsat::Function;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.

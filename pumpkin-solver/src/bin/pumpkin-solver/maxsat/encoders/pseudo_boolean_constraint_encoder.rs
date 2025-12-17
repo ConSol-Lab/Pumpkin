@@ -4,7 +4,6 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use log::debug;
-use pumpkin_solver::Function;
 use pumpkin_solver::pumpkin_assert_simple;
 use thiserror::Error;
 
@@ -12,6 +11,7 @@ use super::CardinalityNetworkEncoder;
 use super::GeneralisedTotaliserEncoder;
 use super::WeightedLiteral;
 use crate::Solver;
+use crate::maxsat::Function;
 
 #[derive(Copy, Clone)]
 pub(crate) struct DebugDyn<'a> {

@@ -1,6 +1,5 @@
 mod constraint_operation_error;
 mod csp_solver_execution_flag;
-mod function;
 pub(crate) mod moving_averages;
 mod predicate_id_generators;
 mod propagation_status_cp;
@@ -14,7 +13,6 @@ mod trail;
 
 pub use constraint_operation_error::ConstraintOperationError;
 pub(crate) use csp_solver_execution_flag::CSPSolverExecutionFlag;
-pub use function::Function;
 pub(crate) use predicate_id_generators::DeletablePredicateIdGenerator;
 pub use predicate_id_generators::PredicateId;
 pub(crate) use predicate_id_generators::PredicateIdGenerator;

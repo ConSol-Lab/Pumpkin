@@ -3,8 +3,10 @@ use std::path::Path;
 use std::time::Duration;
 
 pub(crate) mod encoders;
+mod function;
 pub(crate) mod optimisation;
 pub(crate) use encoders::PseudoBooleanEncoding;
+pub(crate) use function::Function;
 use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;

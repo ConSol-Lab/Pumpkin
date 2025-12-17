@@ -126,8 +126,6 @@ pub mod state {
     pub use crate::propagation::PropagatorId;
 }
 
-pub use crate::basic_types::Function;
-
 #[doc(hidden)]
 pub mod asserts {
     pub use crate::pumpkin_assert_advanced;
