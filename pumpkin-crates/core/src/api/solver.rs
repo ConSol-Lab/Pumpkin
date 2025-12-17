@@ -89,7 +89,7 @@ use crate::statistics::log_statistic_postfix;
 /// ```
 ///
 /// # Using the Solver
-/// For examples on how to use the solver, see the [root-level crate documentation](crate) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/master/pumpkin-lib/examples).
+/// For examples on how to use the solver, see [pumpkin-solver](https://docs.rs/pumpkin-solver/latest/pumpkin_solver/) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples).
 #[derive(Debug)]
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
