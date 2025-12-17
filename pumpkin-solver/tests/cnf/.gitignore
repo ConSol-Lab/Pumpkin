@@ -1,5 +1,6 @@
 # Ignore test artefacts
 *.proof
+*.drcp
 *.err
 *.log
 *.drcp

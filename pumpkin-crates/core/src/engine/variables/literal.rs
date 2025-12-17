@@ -123,12 +123,12 @@ impl IntegerVariable for Literal {
         self.integer_variable.watch_all_backtrack(watchers, events)
     }
 
-    fn get_holes_on_current_decision_level(
+    fn get_holes_at_current_checkpoint(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
         self.integer_variable
-            .get_holes_on_current_decision_level(assignments)
+            .get_holes_at_current_checkpoint(assignments)
     }
 
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {

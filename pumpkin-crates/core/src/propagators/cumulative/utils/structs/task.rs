@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 
-use crate::engine::propagation::LocalId;
+use crate::propagation::LocalId;
 use crate::variables::IntegerVariable;
 
 /// Structure which stores the variables related to a task; for now, only the start times are

@@ -1,30 +1,40 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use super::Domains;
 use super::LocalId;
-use super::PropagationContext;
 use super::Propagator;
 use super::PropagatorId;
 use super::PropagatorVarId;
+#[cfg(doc)]
+use crate::Solver;
+use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
-use crate::engine::DomainEvents;
+use crate::engine::State;
 use crate::engine::TrailedValues;
-use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::Watchers;
+#[cfg(doc)]
+use crate::engine::variables::AffineView;
+#[cfg(doc)]
+use crate::engine::variables::DomainId;
+use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::proof::InferenceLabel;
-use crate::proof::ProofLog;
+#[cfg(doc)]
+use crate::propagation::DomainEvent;
+use crate::propagation::DomainEvents;
 use crate::variables::IntegerVariable;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
-/// The constructor is responsible for indicating on which events the propagator should be
-/// enqueued. Additionally, the propagator can be initialized with values that come from the state
-/// of the solver.
-pub(crate) trait PropagatorConstructor {
+/// The constructor is responsible for:
+/// 1) Indicating on which [`DomainEvent`]s the propagator should be enqueued (via the
+///    [`PropagatorConstructorContext`]).
+/// 2) Initialising the [`PropagatorConstructor::PropagatorImpl`] and its structures.
+pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
-    type PropagatorImpl: Propagator;
+    type PropagatorImpl: Propagator + Clone;
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
@@ -36,43 +46,45 @@ pub(crate) trait PropagatorConstructor {
 /// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
 /// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
-pub(crate) struct PropagatorConstructorContext<'a> {
-    notification_engine: &'a mut NotificationEngine,
-    trailed_values: &'a mut TrailedValues,
-    propagator_id: PropagatorId,
+pub struct PropagatorConstructorContext<'a> {
+    state: &'a mut State,
+    pub(crate) propagator_id: PropagatorId,
 
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
     next_local_id: RefOrOwned<'a, LocalId>,
 
-    /// The proof log for which [`InferenceCode`]s can be created.
-    proof_log: &'a mut ProofLog,
-
-    pub assignments: &'a mut Assignments,
+    /// Marker to indicate whether the constructor registered for at least one domain event or
+    /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
+    did_register: RefOrOwned<'a, bool>,
 }
 
 impl PropagatorConstructorContext<'_> {
     pub(crate) fn new<'a>(
-        notification_engine: &'a mut NotificationEngine,
-        trailed_values: &'a mut TrailedValues,
-        proof_log: &'a mut ProofLog,
         propagator_id: PropagatorId,
-        assignments: &'a mut Assignments,
+        state: &'a mut State,
     ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
-            notification_engine,
-            trailed_values,
-            propagator_id,
             next_local_id: RefOrOwned::Owned(LocalId::from(0)),
-            proof_log,
-
-            assignments,
+            propagator_id,
+            state,
+            did_register: RefOrOwned::Owned(false),
         }
     }
 
-    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
-        PropagationContext::new(self.assignments)
+    /// Indicate that the constructor is deliberately not registering the propagator to be enqueued
+    /// at any time.
+    ///
+    /// If this is called and later a registration happens, then the registration will still go
+    /// through. Calling this function only prevents the crash if no registration happens.
+    pub fn will_not_register_any_events(&mut self) {
+        *self.did_register = true;
+    }
+
+    /// Get domain information.
+    pub fn domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.state.assignments, &mut self.state.trailed_values)
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -83,15 +95,14 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
-    ///
-    /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
-    /// [`AffineView`]s.
-    pub(crate) fn register(
+    pub fn register(
         &mut self,
         var: impl IntegerVariable,
         domain_events: DomainEvents,
         local_id: LocalId,
     ) {
+        self.will_not_register_any_events();
+
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -99,8 +110,21 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
-        var.watch_all(&mut watchers, domain_events.get_int_events());
+        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        var.watch_all(&mut watchers, domain_events.events());
+    }
+
+    /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
+    /// Returns the [`PredicateId`] used by the solver to track the predicate.
+    pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        self.will_not_register_any_events();
+
+        self.state.notification_engine.watch_predicate(
+            predicate,
+            self.propagator_id,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        )
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during
@@ -116,7 +140,7 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
     /// [`AffineView`]s.
-    pub(crate) fn register_for_backtrack_events<Var: IntegerVariable>(
+    pub fn register_backtrack<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,
@@ -129,8 +153,8 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
-        var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
+        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
@@ -140,7 +164,7 @@ impl PropagatorConstructorContext<'_> {
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
     ) -> InferenceCode {
-        self.proof_log
+        self.state
             .create_inference_code(constraint_tag, inference_label)
     }
 
@@ -154,15 +178,16 @@ impl PropagatorConstructorContext<'_> {
     /// afterwards.
     pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
-            notification_engine: self.notification_engine,
-            trailed_values: self.trailed_values,
             propagator_id: self.propagator_id,
-            proof_log: self.proof_log,
             next_local_id: match &mut self.next_local_id {
                 RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
                 RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
             },
-            assignments: self.assignments,
+            did_register: match &mut self.did_register {
+                RefOrOwned::Ref(did_register) => RefOrOwned::Ref(did_register),
+                RefOrOwned::Owned(did_register) => RefOrOwned::Ref(did_register),
+            },
+            state: self.state,
         }
     }
 
@@ -171,6 +196,18 @@ impl PropagatorConstructorContext<'_> {
         let next_local_id = (*self.next_local_id.deref()).max(LocalId::from(local_id.unpack() + 1));
 
         *self.next_local_id.deref_mut() = next_local_id;
+    }
+}
+
+impl Drop for PropagatorConstructorContext<'_> {
+    fn drop(&mut self) {
+        if let RefOrOwned::Owned(did_register) = self.did_register
+            && !did_register
+        {
+            panic!(
+                "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
+            );
+        }
     }
 }
 
@@ -208,22 +245,19 @@ impl<T> DerefMut for RefOrOwned<'_, T> {
 
 mod private {
     use super::*;
-    use crate::engine::propagation::contexts::HasAssignments;
-    use crate::engine::propagation::contexts::HasTrailedValues;
+    use crate::propagation::HasAssignments;
 
     impl HasAssignments for PropagatorConstructorContext<'_> {
         fn assignments(&self) -> &Assignments {
-            self.assignments
+            &self.state.assignments
         }
-    }
 
-    impl HasTrailedValues for PropagatorConstructorContext<'_> {
         fn trailed_values(&self) -> &TrailedValues {
-            self.trailed_values
+            &self.state.trailed_values
         }
 
         fn trailed_values_mut(&mut self) -> &mut TrailedValues {
-            self.trailed_values
+            &mut self.state.trailed_values
         }
     }
 }
@@ -235,24 +269,46 @@ mod tests {
     use crate::variables::DomainId;
 
     #[test]
-    fn reborrowing_remembers_next_local_id() {
-        let mut notification_engine = NotificationEngine::default();
-        notification_engine.grow();
-        let mut trailed_values = TrailedValues::default();
-        let mut proof_log = ProofLog::default();
-        let propagator_id = PropagatorId(0);
-        let mut assignments = Assignments::default();
+    #[should_panic]
+    fn panic_when_no_registration_happened() {
+        let mut state = State::default();
+        state.notification_engine.grow();
 
-        let mut c1 = PropagatorConstructorContext::new(
-            &mut notification_engine,
-            &mut trailed_values,
-            &mut proof_log,
-            propagator_id,
-            &mut assignments,
-        );
+        let _c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+    }
+
+    #[test]
+    fn do_not_panic_if_told_no_registration_will_happen() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let mut ctx = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        ctx.will_not_register_any_events();
+    }
+
+    #[test]
+    fn do_not_panic_if_no_registration_happens_in_reborrowed() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let mut ctx = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        let ctx2 = ctx.reborrow();
+        drop(ctx2);
+
+        ctx.will_not_register_any_events();
+    }
+
+    #[test]
+    fn reborrowing_remembers_next_local_id() {
+        let mut state = State::default();
+        state.notification_engine.grow();
+
+        let mut c1 = PropagatorConstructorContext::new(PropagatorId(0), &mut state);
+        c1.will_not_register_any_events();
 
         let mut c2 = c1.reborrow();
         c2.register(DomainId::new(0), DomainEvents::ANY_INT, LocalId::from(1));
+        drop(c2);
 
         assert_eq!(LocalId::from(2), c1.get_next_local_id());
     }

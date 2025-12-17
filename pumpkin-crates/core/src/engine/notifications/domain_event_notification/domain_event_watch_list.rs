@@ -5,10 +5,10 @@ use enumset::EnumSetType;
 
 use crate::containers::KeyedVec;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
+use crate::propagation::PropagatorVarId;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct WatchListDomainEvents {
     /// Contains propagator ids of propagators that watch domain changes of the i-th integer
     /// variable
@@ -113,14 +113,14 @@ impl<'a> Watchers<'a> {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct WatcherDomainEvents {
     // FIXME measure performance of these vectors, they are treated as sets
     pub(crate) forward_watcher: Watcher,
     pub(crate) backtrack_watcher: Watcher,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct Watcher {
     pub(crate) lower_bound_watchers: Vec<PropagatorVarId>,
     pub(crate) upper_bound_watchers: Vec<PropagatorVarId>,

@@ -9,20 +9,9 @@ use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::EmptyDomain;
-use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::EmptyDomainConflict;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -30,6 +19,18 @@ use crate::predicates::PredicateConstructor;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_advanced;
 
 declare_inference_label!(BinaryEquals);
@@ -116,11 +117,11 @@ where
 {
     fn post(
         &self,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         variable: Variable,
         predicate_type: PredicateType,
         value: i32,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomainConflict> {
         use PredicateType::*;
         use Variable::*;
 
@@ -152,15 +153,12 @@ where
     AVar: IntegerVariable + 'static,
     BVar: IntegerVariable + 'static,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
-        let a_lb = context.lower_bound(&self.a);
-        let a_ub = context.upper_bound(&self.a);
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+        let a_lb = domains.lower_bound(&self.a);
+        let a_ub = domains.upper_bound(&self.a);
 
-        let b_lb = context.lower_bound(&self.b);
-        let b_ub = context.upper_bound(&self.b);
+        let b_lb = domains.lower_bound(&self.b);
+        let b_ub = domains.upper_bound(&self.b);
 
         if a_ub < b_lb {
             // If `a` is fully before `b` then we report a conflict
@@ -185,7 +183,7 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -195,7 +193,7 @@ where
                     // If it is a removal then we need to make sure that all of the removed values
                     // from `a` are also removed from `b`
                     self.a_removed_values
-                        .extend(context.get_holes_on_current_decision_level(&self.a));
+                        .extend(context.get_holes_at_current_checkpoint(&self.a));
                 }
             }
             1 => {
@@ -203,7 +201,7 @@ where
                     // If it is a removal then we need to make sure that all of the removed values
                     // from `b` are also removed from `a`
                     self.b_removed_values
-                        .extend(context.get_holes_on_current_decision_level(&self.b));
+                        .extend(context.get_holes_at_current_checkpoint(&self.b));
                 }
             }
             _ => panic!("Unexpected local id {local_id:?}"),
@@ -212,27 +210,27 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn synchronise(&mut self, _context: PropagationContext) {
+    fn synchronise(&mut self, _context: Domains) {
         // Recall that we need to ensure that the stored removed values could now be inaccurate
         self.has_backtracked = true;
     }
 
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
         "BinaryEq"
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.first_propagation_loop {
             // If it is the first propagation loop then we do full propagation
             self.first_propagation_loop = false;
-            return self.debug_propagate_from_scratch(context);
+            return self.propagate_from_scratch(context);
         }
 
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
@@ -252,17 +250,19 @@ where
         // re-evaluate the values which have been removed
         if self.has_backtracked {
             self.has_backtracked = false;
-            self.a_removed_values
-                .retain(|element| context.is_predicate_satisfied(predicate!(self.a != *element)));
-            self.b_removed_values
-                .retain(|element| context.is_predicate_satisfied(predicate!(self.b != *element)));
+            self.a_removed_values.retain(|element| {
+                context.evaluate_predicate(predicate!(self.a != *element)) == Some(true)
+            });
+            self.b_removed_values.retain(|element| {
+                context.evaluate_predicate(predicate!(self.b != *element)) == Some(true)
+            });
         }
 
         // Then we remove all of the values which have been removed from `a` from `b`
         let mut a_removed_values = std::mem::take(&mut self.a_removed_values);
         for removed_value_a in a_removed_values.drain() {
             pumpkin_assert_advanced!(
-                context.is_predicate_satisfied(predicate!(self.a != removed_value_a))
+                context.evaluate_predicate(predicate!(self.a != removed_value_a)) == Some(true)
             );
             self.post(
                 &mut context,
@@ -277,7 +277,7 @@ where
         let mut b_removed_values = std::mem::take(&mut self.b_removed_values);
         for removed_value_b in b_removed_values.drain() {
             pumpkin_assert_advanced!(
-                context.is_predicate_satisfied(predicate!(self.b != removed_value_b))
+                context.evaluate_predicate(predicate!(self.b != removed_value_b)) == Some(true)
             );
             self.post(
                 &mut context,
@@ -314,10 +314,7 @@ where
         slice::from_ref(&self.reason)
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let a_lb = context.lower_bound(&self.a);
         let a_ub = context.upper_bound(&self.a);
 
@@ -390,8 +387,8 @@ struct BinaryEqualsPropagation {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::binary::BinaryEqualsPropagatorArgs;
 
     #[test]

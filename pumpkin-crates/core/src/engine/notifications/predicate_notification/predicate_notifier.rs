@@ -21,7 +21,7 @@ use crate::variables::DomainId;
 ///
 /// It also contains the [`PredicateIdAssignments`] which serves as a (lazy) structure for
 /// retrieving the polarity of [`Predicate`]s (represented by [`PredicateId`]s).
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct PredicateNotifier {
     /// Maps a [`Predicate`] to a [`PredicateId`]
     pub(crate) predicate_to_id: PredicateIdGenerator,
@@ -44,12 +44,6 @@ impl PredicateNotifier {
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
         self.predicate_id_assignments
             .debug_create_from_assignments(assignments, &mut self.predicate_to_id);
-    }
-
-    /// Returns the falsified predicates; note that this structure will be cleared once it is
-    /// dropped.
-    pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.predicate_id_assignments.drain_falsified_predicates()
     }
 
     /// Returns the satisfied predicates; note that this structure will be cleared once it is

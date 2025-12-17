@@ -3,23 +3,23 @@ use std::collections::btree_map::Entry;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
@@ -41,13 +41,14 @@ use crate::propagators::cumulative::time_table::time_table_util::backtrack_updat
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
-use crate::propagators::debug_propagate_from_scratch_time_table_point;
+use crate::propagators::propagate_from_scratch_time_table_point;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
 use crate::propagators::util::update_bounds_task;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
+use crate::state::Conflict;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -68,7 +69,7 @@ use crate::pumpkin_assert_extreme;
 ///
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
@@ -106,7 +107,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         register_tasks(&self.parameters.tasks, context.reborrow(), true);
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
         // Then we do normal propagation
         self.is_time_table_outdated = true;
@@ -144,7 +145,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: PropagationContext,
+        mut context: Domains,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -180,7 +181,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             if current_profile.height > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
                 conflict = Some(Err(create_conflict_explanation(
-                    context,
+                    context.reborrow(),
                     self.inference_code.unwrap(),
                     current_profile,
                     self.parameters.options.explanation_type,
@@ -253,11 +254,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     /// [`DynamicStructures::updated`].
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
-    fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn update_time_table(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_per_point_from_scratch(
-                context.as_readonly(),
+                context.domains(),
                 self.inference_code.unwrap(),
                 &self.parameters,
             )?;
@@ -267,7 +268,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
             // And we clear all of the updates since they have now necessarily been processed
             self.updatable_structures
-                .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+                .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
 
             return Ok(());
         }
@@ -293,7 +294,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
             let result = self.add_to_time_table(
-                context.as_readonly(),
+                context.domains(),
                 &mandatory_part_adjustments,
                 &updated_task,
             );
@@ -325,7 +326,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         .expect("Expected to find a conflicting profile");
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             conflicting_profile,
                             &self.parameters,
@@ -334,7 +335,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     pumpkin_assert_extreme!(
                         check_synchronisation_conflict_explanation_per_point(
                             &synchronised_conflict_explanation,
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             &self.parameters,
                         ),
@@ -360,7 +361,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
                         create_time_table_per_point_from_scratch(
-                            context.as_readonly(),
+                            context.domains(),
                             self.inference_code.unwrap(),
                             &self.parameters
                         )
@@ -371,7 +372,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     self.found_previous_conflict = true;
 
                     return Err(create_conflict_explanation(
-                        context.as_readonly(),
+                        context.domains(),
                         self.inference_code.unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
@@ -404,10 +405,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     for TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE>
 {
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                context.as_readonly(),
+                context.domains(),
                 &self.parameters.tasks,
                 self.updatable_structures.get_stored_bounds(),
             ),
@@ -415,7 +416,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         );
 
         if self.parameters.is_infeasible {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
                 inference_code: self.inference_code.unwrap(),
             }));
@@ -425,7 +426,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
-            context.as_readonly(),
+            context.domains(),
             self.inference_code.unwrap(),
             &self.time_table,
             &self.parameters
@@ -446,7 +447,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -462,7 +463,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context.as_readonly(),
+            context.domains(),
             self.time_table.is_empty(),
         );
 
@@ -471,7 +472,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         insert_update(&updated_task, &mut self.updatable_structures, result.update);
 
         update_bounds_task(
-            context.as_readonly(),
+            context.domains(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -488,13 +489,17 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
     fn notify_backtrack(
         &mut self,
-        context: PropagationContext,
+        mut context: Domains,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        backtrack_update(context, &mut self.updatable_structures, &updated_task);
+        backtrack_update(
+            context.reborrow(),
+            &mut self.updatable_structures,
+            &updated_task,
+        );
 
         update_bounds_task(
             context,
@@ -511,7 +516,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn synchronise(&mut self, context: PropagationContext) {
+    fn synchronise(&mut self, context: Domains) {
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {
@@ -528,20 +533,17 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn priority(&self) -> u32 {
-        3
+    fn priority(&self) -> Priority {
+        Priority::VeryLow
     }
 
     fn name(&self) -> &str {
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
-        debug_propagate_from_scratch_time_table_point(
+        propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
             &self.parameters,
@@ -553,8 +555,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 /// Contains functions related to debugging
 mod debug {
 
-    use crate::engine::propagation::PropagationContext;
     use crate::proof::InferenceCode;
+    use crate::propagation::Domains;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
     use crate::propagators::create_time_table_per_point_from_scratch;
@@ -573,7 +575,7 @@ mod debug {
         Var: IntegerVariable + 'static,
         const SYNCHRONISE: bool,
     >(
-        context: PropagationContext,
+        context: Domains,
         inference_code: InferenceCode,
         time_table: &PerPointTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
@@ -621,18 +623,18 @@ mod debug {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PredicateConstructor;
+    use crate::propagation::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTablePerPointIncrementalPropagator;
     use crate::propagators::TimeTablePerPointPropagator;
+    use crate::state::Conflict;
     use crate::variables::DomainId;
 
     #[test]
@@ -703,7 +705,7 @@ mod tests {
             ),
         );
         assert!(match result {
-            Err(Inconsistency::Conflict(x)) => {
+            Err(Conflict::Propagator(x)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -1302,8 +1304,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(
             {
-                if let Err(Inconsistency::Conflict(conflict)) = &result {
-                    if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+                if let Err(Conflict::Propagator(conflict)) = &result {
+                    if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                         conflict.conjunction.iter().collect::<Vec<_>>()
                             == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                     } else {
@@ -1401,8 +1403,8 @@ mod tests {
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+            if let Err(Conflict::Propagator(explanation)) = &result {
+                if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         == explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
@@ -1496,8 +1498,8 @@ mod tests {
         let result = solver.propagate(propagator);
         let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!({
-            if let Err(Inconsistency::Conflict(explanation)) = &result {
-                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
+            if let Err(Conflict::Propagator(explanation)) = &result {
+                if let Err(Conflict::Propagator(explanation_scratch)) = &result_scratch {
                     explanation.conjunction.iter().collect::<Vec<_>>()
                         != explanation_scratch.conjunction.iter().collect::<Vec<_>>()
                 } else {
@@ -1793,8 +1795,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
+            Err(Conflict::Propagator(explanation)),
+            Err(Conflict::Propagator(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
@@ -1907,8 +1909,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict(explanation)),
-            Err(Inconsistency::Conflict(explanation_scratch)),
+            Err(Conflict::Propagator(explanation)),
+            Err(Conflict::Propagator(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_eq!(

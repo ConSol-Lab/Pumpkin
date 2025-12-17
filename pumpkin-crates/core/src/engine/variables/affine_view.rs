@@ -166,12 +166,12 @@ where
         }
     }
 
-    fn get_holes_on_current_decision_level(
+    fn get_holes_at_current_checkpoint(
         &self,
         assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
         self.inner
-            .get_holes_on_current_decision_level(assignments)
+            .get_holes_at_current_checkpoint(assignments)
             .map(|value| self.map(value))
     }
 

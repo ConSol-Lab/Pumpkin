@@ -6,22 +6,23 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -54,11 +55,9 @@ where
 
         for (i, x_i) in terms.iter().enumerate() {
             context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
-            context.register_for_backtrack_events(
+            context.register_backtrack(
                 x_i.clone(),
-                DomainEvents::create_with_int_events(enum_set!(
-                    DomainEvent::Assign | DomainEvent::Removal
-                )),
+                DomainEvents::new(enum_set!(DomainEvent::Assign | DomainEvent::Removal)),
                 LocalId::from(i as u32),
             );
         }
@@ -73,7 +72,7 @@ where
             inference_code: context.create_inference_code(constraint_tag, LinearNotEquals),
         };
 
-        propagator.recalculate_fixed_variables(context.as_readonly());
+        propagator.recalculate_fixed_variables(context.domains());
 
         propagator
     }
@@ -108,8 +107,8 @@ impl<Var> Propagator for LinearNotEqualPropagator<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
@@ -118,7 +117,7 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContextWithTrailedValues,
+        context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -145,12 +144,7 @@ where
         }
     }
 
-    fn notify_backtrack(
-        &mut self,
-        _context: PropagationContext,
-        local_id: LocalId,
-        event: OpaqueDomainEvent,
-    ) {
+    fn notify_backtrack(&mut self, _context: Domains, local_id: LocalId, event: OpaqueDomainEvent) {
         if matches!(
             self.terms[local_id.unpack() as usize].unpack_event(event),
             DomainEvent::Assign
@@ -178,14 +172,14 @@ where
         }
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
-            self.recalculate_fixed_variables(context.as_readonly());
+            self.recalculate_fixed_variables(context.domains());
             self.should_recalculate_lhs = false;
         }
-        pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
+        pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.domains()));
 
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms == self.terms.len() - 1 {
@@ -222,16 +216,13 @@ where
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(context.as_readonly())?;
+            self.check_for_conflict(context.domains())?;
         }
 
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let num_fixed = self
             .terms
             .iter()
@@ -304,7 +295,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
+    fn recalculate_fixed_variables(&mut self, context: Domains) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -322,7 +313,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict(&self, context: PropagationContext) -> Result<(), PropagatorConflict> {
+    fn check_for_conflict(&self, context: Domains) -> Result<(), PropagatorConflict> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
             let conjunction = self
@@ -342,7 +333,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Checks whether the number of fixed terms is equal to the number of fixed terms in the
     /// provided [`PropagationContext`] and whether the value of the fixed lhs is the same as in the
     /// provided [`PropagationContext`].
-    fn is_propagator_state_consistent(&self, context: PropagationContext) -> bool {
+    fn is_propagator_state_consistent(&self, context: Domains) -> bool {
         let expected_number_of_fixed_terms = self
             .terms
             .iter()
@@ -372,10 +363,10 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
     use crate::engine::variables::TransformableVariable;
+    use crate::state::Conflict;
 
     #[test]
     fn test_value_is_removed() {
@@ -419,8 +410,8 @@ mod tests {
         let expected = conjunction!([x == 2] & [y == 2]);
 
         match err {
-            Inconsistency::EmptyDomain => panic!("expected an explicit conflict"),
-            Inconsistency::Conflict(conflict) => assert_eq!(expected, conflict.conjunction),
+            Conflict::EmptyDomain(_) => panic!("expected an explicit conflict"),
+            Conflict::Propagator(conflict) => assert_eq!(expected, conflict.conjunction),
         }
     }
 

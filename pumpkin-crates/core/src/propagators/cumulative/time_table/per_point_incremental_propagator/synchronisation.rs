@@ -1,9 +1,8 @@
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::propagation::PropagationContext;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
@@ -11,6 +10,7 @@ use crate::propagators::Task;
 use crate::propagators::create_time_table_per_point_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::pumpkin_assert_moderate;
+use crate::state::Conflict;
 use crate::variables::IntegerVariable;
 
 /// Returns whether the synchronised conflict explanation created by
@@ -20,14 +20,14 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
     Var: IntegerVariable + 'static,
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
-    context: PropagationContext,
+    context: Domains,
     inference_code: InferenceCode,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
     let error_from_scratch =
         create_time_table_per_point_from_scratch(context, inference_code, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
-        if let Err(Inconsistency::Conflict(conflict)) = &synchronised_conflict_explanation {
+        if let Err(Conflict::Propagator(conflict)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
             conflict.conjunction == explanation_scratch.conjunction
@@ -110,7 +110,7 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
 /// reported by [`TimeTablePerPointPropagator`] by finding the tasks which should be included in the
 /// profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: Domains,
     inference_code: InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
@@ -165,8 +165,8 @@ mod tests {
     use std::rc::Rc;
 
     use super::find_synchronised_conflict;
-    use crate::engine::propagation::LocalId;
     use crate::engine::test_solver::TestSolver;
+    use crate::propagation::LocalId;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::PerPointTimeTableType;

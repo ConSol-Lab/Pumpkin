@@ -2,17 +2,18 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::LocalId;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 
 #[derive(Clone, Debug)]
 pub(crate) struct MaximumArgs<ElementVar, Rhs> {
@@ -69,18 +70,15 @@ pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
         "Maximum"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // This is the constraint that is being propagated:
         // max(a_0, a_1, ..., a_{n-1}) = rhs
 
@@ -149,7 +147,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                     break;
                 }
             } else {
-                propagation_reason.add(predicate![var <= rhs_lb - 1]);
+                propagation_reason.push(predicate![var <= rhs_lb - 1]);
             }
         }
         // If there is exactly one variable UB(a_i) >= LB(rhs, constraint_tag }, then the
@@ -159,7 +157,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         if let Some(propagating_variable) = propagating_variable {
             let var_lb = context.lower_bound(propagating_variable);
             if var_lb < rhs_lb {
-                propagation_reason.add(predicate![self.rhs >= rhs_lb]);
+                propagation_reason.push(predicate![self.rhs >= rhs_lb]);
                 context.post(
                     predicate![propagating_variable >= rhs_lb],
                     propagation_reason,

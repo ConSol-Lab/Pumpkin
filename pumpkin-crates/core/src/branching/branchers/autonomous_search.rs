@@ -15,6 +15,7 @@ use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
+use crate::propagation::ReadDomains;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -239,7 +240,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                 return predicate;
             }
             // Match the truth value according to the best solution.
-            if solution.is_predicate_satisfied(predicate) {
+            if solution.evaluate_predicate(predicate) == Some(true) {
                 predicate
             } else {
                 !predicate
@@ -389,19 +390,19 @@ mod tests {
         ));
         assert_eq!(decision, Some(predicate));
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 1
         let _ = assignments.post_predicate(predicate!(x >= 5), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 2
         let _ = assignments.post_predicate(predicate!(x >= 7), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // Decision Level 3
         let _ = assignments.post_predicate(predicate!(x >= 10), None, &mut notification_engine);
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         // We end at decision level 4
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
@@ -461,7 +462,7 @@ mod tests {
         let x = assignments.grow(0, 10);
         notification_engine.grow();
 
-        assignments.increase_decision_level();
+        assignments.new_checkpoint();
         let _ = assignments.post_predicate(predicate!(x == 7), None, &mut notification_engine);
 
         let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);

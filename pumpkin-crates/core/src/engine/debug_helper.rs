@@ -3,22 +3,20 @@ use std::fmt::Formatter;
 use std::iter::once;
 
 use log::debug;
-use log::warn;
 
 use super::TrailedValues;
-use super::conflict_analysis::SemanticMinimiser;
 use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
-use super::propagation::ExplanationContext;
-use super::propagation::store::PropagatorStore;
 use super::reason::ReasonStore;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::state::Conflict;
 
 #[derive(Copy, Clone)]
 pub(crate) struct DebugDyn<'a> {
@@ -79,24 +77,21 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let mut semantic_minimiser = SemanticMinimiser::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
-                &mut semantic_minimiser,
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
             );
-            let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let propagation_status_cp = propagator.propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!(
+                panic!(
                     "Propagator '{}' with id '{propagator_id}' seems to have missed a conflict in its regular propagation algorithms!
                      Aborting!\n
                      Expected reason: {failure_reason:?}", propagator.name()
                 );
-                panic!();
             }
 
             let num_missed_propagations =
@@ -260,16 +255,14 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
-                let mut semantic_minimiser = SemanticMinimiser::default();
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
-                    &mut semantic_minimiser,
                     &mut notification_engine_clone,
                     propagator_id,
                 );
-                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+                let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
@@ -285,7 +278,7 @@ impl DebugHelper {
 
                     assert!(
                         {
-                            let is_empty_domain = matches!(conflict, Inconsistency::EmptyDomain);
+                            let is_empty_domain = matches!(conflict, Conflict::EmptyDomain(_));
                             let has_propagated_predicate =
                                 assignments.is_predicate_satisfied(propagated_predicate);
                             if is_empty_domain && has_propagated_predicate {
@@ -297,13 +290,13 @@ impl DebugHelper {
 
                             // If this is not the case then we check whether the explanation is a
                             // subset of the premises
-                            if let Inconsistency::Conflict(ref found_inconsistency) = conflict {
+                            if let Conflict::Propagator(ref found_inconsistency) = conflict {
                                 found_inconsistency
                                     .conjunction
                                     .iter()
                                     .all(|predicate| reason.contains(predicate))
                                     || reason.iter().all(|predicate| {
-                                        found_inconsistency.conjunction.contains(*predicate)
+                                        found_inconsistency.conjunction.contains(predicate)
                                     })
                             } else {
                                 false
@@ -366,7 +359,6 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
-                let mut semantic_minimiser = SemanticMinimiser::default();
 
                 // Note that it might take multiple iterations before the conflict is reached due
                 // to the assumption that some propagators make on that they are not idempotent!
@@ -378,16 +370,14 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let context = PropagationContextMut::new(
+                    let context = PropagationContext::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
-                        &mut semantic_minimiser,
                         &mut notification_engine_clone,
                         propagator_id,
                     );
-                    let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(context);
+                    let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                     // We break if an error was found or if there were no more propagations (i.e.
                     // fixpoint was reached)
@@ -446,16 +436,14 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let mut semantic_minimiser = SemanticMinimiser::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
-                &mut semantic_minimiser,
                 &mut notification_engine_clone,
                 propagator_id,
             );
-            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(
                 debug_propagation_status_cp.is_err(),
                 "Debug propagation could not reproduce the conflict reported

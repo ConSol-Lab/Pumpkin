@@ -10,6 +10,7 @@ mod inference_code;
 mod proof_atomics;
 
 use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -47,23 +48,23 @@ impl ProofLog {
     pub fn cp(file_path: &Path, log_hints: bool) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
-        #[cfg(feature = "gzipped-proofs")]
-        let writer = {
-            let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
-            ProofWriter::new(encoder)
+        let sink = if file_path.extension().is_some_and(|ext| ext == ".gz") {
+            Sink::GzippedFile(flate2::write::GzEncoder::new(
+                file,
+                flate2::Compression::fast(),
+            ))
+        } else {
+            Sink::File(file)
         };
 
-        #[cfg(not(feature = "gzipped-proofs"))]
-        let writer = ProofWriter::new(file);
+        let writer = ProofWriter::new(sink);
 
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 logged_domain_inferences: HashMap::default(),
-                inference_codes: KeyedVec::default(),
                 proof_atomics: ProofAtomics::default(),
-                constraint_tags: KeyGenerator::default(),
             }),
         })
     }
@@ -79,6 +80,8 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
+        inference_codes: &KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
@@ -87,8 +90,6 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
-            inference_codes,
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
@@ -125,12 +126,12 @@ impl ProofLog {
         &mut self,
         predicate: Predicate,
         variable_names: &VariableNames,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
             logged_domain_inferences,
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
@@ -178,12 +179,12 @@ impl ProofLog {
         &mut self,
         premises: impl IntoIterator<Item = Predicate>,
         variable_names: &VariableNames,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint,
-                constraint_tags,
                 proof_atomics,
                 logged_domain_inferences,
                 ..
@@ -289,36 +290,34 @@ impl ProofLog {
         proof_atomics.reify_predicate(literal, predicate);
     }
 
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    /// The inference codes are required to log inferences with [`Self::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        match &mut self.internal_proof {
-            Some(ProofImpl::CpProof {
-                inference_codes, ..
-            }) => inference_codes.push((constraint_tag, inference_label.to_str())),
-
-            // If we are not logging a CP proof, then we do not care about this value.
-            _ => InferenceCode::create_from_index(0),
-        }
-    }
-
-    /// Create a new constraint tag.
-    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
-        match self.internal_proof {
-            Some(ProofImpl::CpProof {
-                ref mut constraint_tags,
-                ..
-            }) => constraint_tags.next_key(),
-            _ => ConstraintTag::create_from_index(0),
-        }
-    }
-
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_proof.is_some()
+    }
+}
+
+/// A wrapper around either a file or a gzipped file.
+///
+/// Whether or not we will gzip on the fly is a runtime decision, and this wrapper is the [`Write`]
+/// implementation that [`ProofWriter`] will write to.
+#[derive(Debug)]
+enum Sink {
+    File(File),
+    GzippedFile(flate2::write::GzEncoder<File>),
+}
+
+impl Write for Sink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Sink::File(file) => file.write(buf),
+            Sink::GzippedFile(gz_encoder) => gz_encoder.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Sink::File(file) => file.flush(),
+            Sink::GzippedFile(gz_encoder) => gz_encoder.flush(),
+        }
     }
 }
 
@@ -333,13 +332,7 @@ impl ProofLog {
 )]
 enum ProofImpl {
     CpProof {
-        #[cfg(feature = "gzipped-proofs")]
-        writer: ProofWriter<flate2::write::GzEncoder<File>, i32>,
-        #[cfg(not(feature = "gzipped-proofs"))]
-        writer: ProofWriter<File, i32>,
-        inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
-        /// The [`ConstraintTag`]s generated for this proof.
-        constraint_tags: KeyGenerator<ConstraintTag>,
+        writer: ProofWriter<Sink, i32>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the
         // order they can be applied to derive the next nogood.
         //

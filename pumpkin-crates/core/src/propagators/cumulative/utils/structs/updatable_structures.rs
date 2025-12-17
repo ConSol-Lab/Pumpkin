@@ -4,8 +4,8 @@ use super::CumulativeParameters;
 use super::Task;
 use super::UpdatedTaskInfo;
 use crate::containers::SparseSet;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::ReadDomains;
+use crate::propagation::Domains;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 
@@ -107,7 +107,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     /// Removes the fixed tasks from the internal structure(s).
     pub(crate) fn remove_fixed(
         &mut self,
-        context: PropagationContext,
+        context: Domains,
         parameters: &CumulativeParameters<Var>,
     ) {
         for task in parameters.tasks.iter() {
@@ -124,7 +124,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     /// tasks from the internal structure(s).
     pub(crate) fn reset_all_bounds_and_remove_fixed(
         &mut self,
-        context: PropagationContext,
+        context: Domains,
         parameters: &CumulativeParameters<Var>,
     ) {
         for task in parameters.tasks.iter() {
@@ -174,7 +174,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     // Initialises all stored bounds to their current values and removes any tasks which are fixed
     pub(crate) fn initialise_bounds_and_remove_fixed(
         &mut self,
-        context: PropagationContext,
+        context: Domains,
         parameters: &CumulativeParameters<Var>,
     ) {
         for task in parameters.tasks.iter() {
@@ -244,7 +244,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     /// Used for creating the dynamic structures from the provided context
     pub(crate) fn recreate_from_context(
         &self,
-        context: PropagationContext,
+        context: Domains,
         parameters: &CumulativeParameters<Var>,
     ) -> Self {
         let mut other = self.clone();

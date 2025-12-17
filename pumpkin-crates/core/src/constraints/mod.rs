@@ -49,7 +49,7 @@ pub use table::*;
 
 use crate::ConstraintOperationError;
 use crate::Solver;
-use crate::engine::propagation::constructor::PropagatorConstructor;
+use crate::propagation::PropagatorConstructor;
 use crate::propagators::ReifiedPropagatorArgs;
 use crate::variables::Literal;
 

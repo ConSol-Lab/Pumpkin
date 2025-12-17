@@ -4,23 +4,23 @@ use std::cmp::min;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::StorageKey;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 use crate::pumpkin_assert_simple;
+use crate::state::Conflict;
 use crate::variables::IntegerVariable;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
@@ -41,6 +41,7 @@ use crate::variables::IntegerVariable;
 ///   Sciences, vol. 18, no. 2, pp. 159–202, 2008.
 /// - \[2\] R. A. Vasile, ‘Evaluating the Impact of Explanations on the Performance of an
 ///   Edge-Finding Propagator’.
+#[derive(Debug, Clone)]
 pub(crate) struct DisjunctivePropagator<Var: IntegerVariable> {
     /// The tasks which serve as the input to the disjunctive constraint
     tasks: Box<[DisjunctiveTask<Var>]>,
@@ -110,7 +111,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         "DisjunctiveStrict"
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         edge_finding(
             &mut self.theta_lambda_tree,
             &mut context,
@@ -120,10 +121,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
         )
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let mut sorted_tasks = self.sorted_tasks.clone();
         let mut theta_lambda_tree = self.theta_lambda_tree.clone();
         edge_finding(
@@ -140,16 +138,16 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
 /// this implementation is based).
 fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     tasks: &[DisjunctiveTask<Var>],
     sorted_tasks: &mut [DisjunctiveTask<SortedTaskVar>],
     inference_code: InferenceCode,
 ) -> PropagationStatusCP {
     // First we create our Theta-Lambda tree and add all of the tasks to Theta (Lambda is empty at
     // this point)
-    theta_lambda_tree.update(context.as_readonly());
+    theta_lambda_tree.update(context.domains());
     for task in tasks.iter() {
-        theta_lambda_tree.add_to_theta(task, context.as_readonly());
+        theta_lambda_tree.add_to_theta(task, context.domains());
     }
 
     // Then sort in non-increasing order of latest completion time (LCT)
@@ -167,7 +165,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // (which takes into account `j`) is larger than the LCT of `j` then we can report an
         // overflow
         if theta_lambda_tree.ect() > lct_j {
-            return Err(Inconsistency::Conflict(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: create_conflict_explanation(theta_lambda_tree, context, lct_j),
                 inference_code,
             }));
@@ -180,7 +178,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         theta_lambda_tree.remove_from_theta(j);
         // And then add it to Lambda (i.e. we are checking whether we can find a task i in Lambda
         // such that the element in Theta would cause an overflow)
-        theta_lambda_tree.add_to_lambda(j, context.as_readonly());
+        theta_lambda_tree.add_to_lambda(j, context.domains());
 
         // Then we go to the next task which represents the latest completion time of the set Theta
         index += 1;
@@ -241,7 +239,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
 ///   Edge-Finding Propagator’.
 fn create_conflict_explanation<Var: IntegerVariable>(
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     lct: i32,
 ) -> PropositionalConjunction {
     // We get the set of tasks currently in theta
@@ -306,7 +304,7 @@ fn create_propagation_explanation<'a, Var: IntegerVariable>(
     original_tasks: &'a [DisjunctiveTask<Var>],
     propagated_task_id: LocalId,
     theta_lambda_tree: &mut ThetaLambdaTree<Var>,
-    context: &'a PropagationContextMut,
+    context: &'a PropagationContext,
     new_bound: i32,
     lct_j: i32,
 ) -> PropositionalConjunction {

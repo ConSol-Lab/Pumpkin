@@ -19,8 +19,6 @@ use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-pub use crate::engine::propagation::store::PropagatorHandle;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -35,6 +33,8 @@ use crate::options::SolverOptions;
 #[cfg(doc)]
 use crate::predicates;
 use crate::proof::ConstraintTag;
+use crate::propagation::PropagatorConstructor;
+pub use crate::propagation::store::PropagatorHandle;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::StatisticLogger;
@@ -223,6 +223,7 @@ impl Solver {
     /// let named_literal = solver.new_named_literal("z");
     /// ```
     pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
+        let name = name.into();
         self.satisfaction_solver
             .create_new_literal(Some(name.into()))
     }
@@ -268,6 +269,7 @@ impl Solver {
         upper_bound: i32,
         name: impl Into<String>,
     ) -> DomainId {
+        let name = name.into();
         self.satisfaction_solver.create_new_integer_variable(
             lower_bound,
             upper_bound,
@@ -388,7 +390,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 if self
                     .satisfaction_solver
-                    .state
+                    .solver_state
                     .is_infeasible_under_assumptions()
                 {
                     // The state is automatically reset when we return this result
@@ -493,7 +495,7 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
     ) -> Result<PropagatorHandle<Constructor::PropagatorImpl>, ConstraintOperationError>
@@ -509,7 +511,7 @@ impl Solver {
 impl Solver {
     /// Creates an instance of the [`DefaultBrancher`].
     pub fn default_brancher(&self) -> DefaultBrancher {
-        DefaultBrancher::default_over_all_variables(&self.satisfaction_solver.assignments)
+        DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
     }
 }
 

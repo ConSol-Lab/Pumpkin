@@ -1,17 +1,17 @@
 use std::fmt::Debug;
 
-use super::propagation::ExplanationContext;
-use super::propagation::PropagatorId;
-use super::propagation::store::PropagatorStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 #[cfg(doc)]
 use crate::containers::KeyedVec;
 use crate::predicates::Predicate;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ReasonStore {
     trail: Trail<(PropagatorId, StoredReason)>,
 }
@@ -63,8 +63,8 @@ impl ReasonStore {
         }
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
-        self.trail.increase_decision_level()
+    pub(crate) fn new_checkpoint(&mut self) {
+        self.trail.new_checkpoint()
     }
 
     pub(crate) fn synchronise(&mut self, level: usize) {
@@ -88,7 +88,7 @@ pub(crate) struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
 #[derive(Debug)]
-pub(crate) enum Reason {
+pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate.
     Eager(PropositionalConjunction),
@@ -102,7 +102,7 @@ pub(crate) enum Reason {
 }
 
 /// A reason for CP propagator to make a change
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum StoredReason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate.

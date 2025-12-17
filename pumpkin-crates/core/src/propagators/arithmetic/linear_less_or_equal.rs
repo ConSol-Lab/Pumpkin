@@ -2,25 +2,25 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
 use crate::engine::TrailedInteger;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::notifications::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::ManipulateTrailedValues;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
 declare_inference_label!(LinearBounds);
@@ -92,7 +92,7 @@ impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn create_conflict(&self, context: PropagationContext) -> PropagatorConflict {
+    fn create_conflict(&self, context: Domains) -> PropagatorConflict {
         PropagatorConflict {
             conjunction: self
                 .x
@@ -108,12 +108,9 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    fn detect_inconsistency(
-        &self,
-        context: PropagationContextWithTrailedValues,
-    ) -> Option<PropagatorConflict> {
-        if (self.c as i64) < context.value(self.lower_bound_left_hand_side) {
-            Some(self.create_conflict(context.as_readonly()))
+    fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
+        if (self.c as i64) < domains.read_trailed_integer(self.lower_bound_left_hand_side) {
+            Some(self.create_conflict(domains))
         } else {
             None
         }
@@ -121,14 +118,14 @@ where
 
     fn notify(
         &mut self,
-        mut context: PropagationContextWithTrailedValues,
+        mut context: NotificationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let index = local_id.unpack() as usize;
         let x_i = &self.x[index];
 
-        let old_bound = context.value(self.current_bounds[index]);
+        let old_bound = context.read_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
         pumpkin_assert_simple!(
@@ -136,14 +133,17 @@ where
             "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
         );
 
-        context.add_assign(self.lower_bound_left_hand_side, new_bound - old_bound);
-        context.assign(self.current_bounds[index], new_bound);
+        context.write_trailed_integer(
+            self.lower_bound_left_hand_side,
+            context.read_trailed_integer(self.lower_bound_left_hand_side) + (new_bound - old_bound),
+        );
+        context.write_trailed_integer(self.current_bounds[index], new_bound);
 
         EnqueueDecision::Enqueue
     }
 
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
@@ -170,32 +170,37 @@ where
         &self.reason_buffer
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conflict) = self.detect_inconsistency(context.as_trailed_readonly()) {
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        if let Some(conflict) = self.detect_inconsistency(context.domains()) {
             return Err(conflict.into());
         }
 
-        let lower_bound_left_hand_side =
-            match TryInto::<i32>::try_into(context.value(self.lower_bound_left_hand_side)) {
-                Ok(bound) => bound,
-                Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // overflow (hence the check that the lower-bound on the left-hand side is
-                    // positive)
-                    //
-                    // This means that the lower-bounds of the current variables will always be
-                    // higher than the right-hand side (with a maximum value of i32). We thus
-                    // return a conflict
-                    return Err(self.create_conflict(context.as_readonly()).into());
-                }
-                Err(_) => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // underflow
-                    //
-                    // This means that the constraint is always satisfied
-                    return Ok(());
-                }
-            };
+        let lower_bound_left_hand_side = match TryInto::<i32>::try_into(
+            context.read_trailed_integer(self.lower_bound_left_hand_side),
+        ) {
+            Ok(bound) => bound,
+            Err(_)
+                if context
+                    .read_trailed_integer(self.lower_bound_left_hand_side)
+                    .is_positive() =>
+            {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // overflow (hence the check that the lower-bound on the left-hand side is
+                // positive)
+                //
+                // This means that the lower-bounds of the current variables will always be
+                // higher than the right-hand side (with a maximum value of i32). We thus
+                // return a conflict
+                return Err(self.create_conflict(context.domains()).into());
+            }
+            Err(_) => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // underflow
+                //
+                // This means that the constraint is always satisfied
+                return Ok(());
+            }
+        };
 
         for (i, x_i) in self.x.iter().enumerate() {
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
@@ -208,10 +213,7 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         let lower_bound_left_hand_side = self
             .x
             .iter()
@@ -221,7 +223,11 @@ where
         let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
         {
             Ok(bound) => bound,
-            Err(_) if context.value(self.lower_bound_left_hand_side).is_positive() => {
+            Err(_)
+                if context
+                    .read_trailed_integer(self.lower_bound_left_hand_side)
+                    .is_positive() =>
+            {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
                 // overflow (hence the check that the lower-bound on the left-hand side is
                 // positive)
@@ -229,7 +235,7 @@ where
                 // This means that the lower-bounds of the current variables will always be
                 // higher than the right-hand side (with a maximum value of i32). We thus
                 // return a conflict
-                return Err(self.create_conflict(context.as_readonly()).into());
+                return Err(self.create_conflict(context.domains()).into());
             }
             Err(_) => {
                 // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an

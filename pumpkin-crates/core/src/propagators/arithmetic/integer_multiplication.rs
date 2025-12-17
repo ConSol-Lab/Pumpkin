@@ -2,17 +2,18 @@ use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::conjunction;
 use crate::declare_inference_label;
-use crate::engine::DomainEvents;
-use crate::engine::cp::propagation::ReadDomains;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
+use crate::propagation::LocalId;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 
 declare_inference_label!(IntegerMultiplication);
@@ -77,21 +78,21 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn name(&self) -> &str {
         "IntTimes"
     }
 
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c, self.inference_code)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    mut context: PropagationContextMut,
+    mut context: PropagationContext,
     a: &VA,
     b: &VB,
     c: &VC,
@@ -214,7 +215,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 /// Note that this method does not propagate a value if 0 is in the domain as, for example, 0 * -3 =
 /// 0 and 0 * 3 = 0 are both equally valid.
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     a: &VA,
     b: &VB,
     c: &VC,

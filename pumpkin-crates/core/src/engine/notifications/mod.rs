@@ -1,36 +1,34 @@
 mod domain_event_notification;
 mod predicate_notification;
 
-pub(crate) use domain_event_notification::DomainEvent;
+pub use domain_event_notification::DomainEvent;
 pub(crate) use domain_event_notification::EventSink;
 pub(crate) use domain_event_notification::WatchListDomainEvents;
 pub(crate) use domain_event_notification::Watchers;
-pub(crate) use domain_event_notification::domain_events::DomainEvents;
-pub(crate) use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
+pub use domain_event_notification::domain_events::DomainEvents;
+pub use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateIdAssignments;
 pub(crate) use predicate_notification::PredicateNotifier;
 
-use super::propagation::PropagationContext;
-use super::propagation::PropagatorVarId;
-use crate::PropagatorHandle;
 use crate::basic_types::PredicateId;
+use crate::containers::KeyedVec;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
-use crate::engine::propagation::contexts::PropagationContextWithTrailedValues;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::predicates::Predicate;
-use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::LocalId;
+use crate::propagation::NotificationContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
     predicate_notifier: PredicateNotifier,
@@ -39,6 +37,8 @@ pub(crate) struct NotificationEngine {
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_domain_events: WatchListDomainEvents,
+    /// The watch list from predicates to propagators.
+    watch_list_predicate_id: KeyedVec<PredicateId, Vec<PropagatorId>>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
@@ -51,6 +51,7 @@ impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
             watch_list_domain_events: Default::default(),
+            watch_list_predicate_id: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
             events: Default::default(),
@@ -73,6 +74,7 @@ impl Default for NotificationEngine {
 
         let mut result = Self {
             watch_list_domain_events,
+            watch_list_predicate_id: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
@@ -132,6 +134,25 @@ impl NotificationEngine {
                 event_watcher.push(propagator_var);
             }
         }
+    }
+
+    pub(crate) fn watch_predicate(
+        &mut self,
+        predicate: Predicate,
+        propagator_id: PropagatorId,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) -> PredicateId {
+        let predicate_id = self.get_id(predicate);
+
+        self.watch_list_predicate_id
+            .accomodate(predicate_id, vec![]);
+        self.watch_list_predicate_id[predicate_id].push(propagator_id);
+
+        self.predicate_notifier
+            .track_predicate(predicate_id, trailed_values, assignments);
+
+        predicate_id
     }
 
     pub(crate) fn watch_all_backtrack(
@@ -246,7 +267,6 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
-        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
         propagator_queue: &mut PropagatorQueue,
     ) {
         // We first take the events because otherwise we get mutability issues when calling methods
@@ -257,17 +277,6 @@ impl NotificationEngine {
             // First we notify the predicate_notifier that a domain has been updated
             self.predicate_notifier
                 .on_update(trailed_values, assignments, event, domain);
-            // Special case: the nogood propagator is notified about each event.
-            Self::notify_nogood_propagator(
-                nogood_propagator_handle,
-                &mut self.predicate_notifier.predicate_id_assignments,
-                event,
-                domain,
-                propagators,
-                propagator_queue,
-                assignments,
-                trailed_values,
-            );
             // Now notify other propagators subscribed to this event.
             #[allow(clippy::unnecessary_to_owned, reason = "Not unnecessary?")]
             for propagator_var in self
@@ -292,14 +301,7 @@ impl NotificationEngine {
         self.events = events;
 
         // Then we notify the propagators that a predicate has been satisfied.
-        //
-        // Currently, only the nogood propagator is notified.
-        let nogood_propagator = propagators
-            .get_propagator_mut(nogood_propagator_handle)
-            .expect("nogood propagator handle refers to a nogood propagator");
-        self.notify_predicate_id_satisfied(nogood_propagator);
-        // At the moment this does nothing yet, but we call it to drain predicates.
-        self.notify_predicate_id_falsified();
+        self.notify_predicate_id_satisfied(propagators, propagator_queue);
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -307,6 +309,7 @@ impl NotificationEngine {
     pub(crate) fn process_backtrack_events(
         &mut self,
         assignments: &mut Assignments,
+        trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
@@ -325,7 +328,7 @@ impl NotificationEngine {
                     .get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(assignments);
+                    let context = Domains::new(assignments, trailed_values);
 
                     propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
@@ -334,47 +337,26 @@ impl NotificationEngine {
         true
     }
 
-    /// Notifies propagators that certain [`Predicate`]s have been falsified.
-    ///
-    /// Currently, no propagators are informed of this information.
-    fn notify_predicate_id_falsified(&mut self) {
-        for _predicate_id in self.predicate_notifier.drain_falsified_predicates() {
-            // At the moment this does nothing
-        }
-    }
-
     /// Notifies the propagator that certain [`Predicate`]s have been satisfied.
-    fn notify_predicate_id_satisfied(&mut self, propagator: &mut dyn Propagator) {
-        for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
-            propagator.notify_predicate_id_satisfied(predicate_id);
-        }
-    }
-
-    #[allow(clippy::too_many_arguments, reason = "to be refactored later")]
-    fn notify_nogood_propagator(
-        nogood_propagator_id: PropagatorHandle<NogoodPropagator>,
-        predicate_id_assignments: &mut PredicateIdAssignments,
-        event: DomainEvent,
-        domain: DomainId,
+    fn notify_predicate_id_satisfied(
+        &mut self,
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
-        assignments: &mut Assignments,
-        trailed_values: &mut TrailedValues,
     ) {
-        // The nogood propagator is implicitly subscribed to every domain event for every variable.
-        // For this reason, its local id matches the domain id.
-        // This is special only for the nogood propagator.
-        let local_id = LocalId::from(domain.id());
-        Self::notify_propagator(
-            predicate_id_assignments,
-            nogood_propagator_id.propagator_id(),
-            local_id,
-            event,
-            propagators,
-            propagator_queue,
-            assignments,
-            trailed_values,
-        );
+        for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
+            if let Some(watch_list) = self.watch_list_predicate_id.get(predicate_id) {
+                let propagators_to_notify = watch_list.iter().copied();
+
+                for propagator_id in propagators_to_notify {
+                    let propagator = &mut propagators[propagator_id];
+                    let enqueue_decision = propagator.notify_predicate_id_satisfied(predicate_id);
+
+                    if enqueue_decision == EnqueueDecision::Enqueue {
+                        propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
+                    }
+                }
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
@@ -388,11 +370,8 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        let context = PropagationContextWithTrailedValues::new(
-            trailed_values,
-            assignments,
-            predicate_id_assignments,
-        );
+        let context =
+            NotificationContext::new(trailed_values, assignments, predicate_id_assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
@@ -408,16 +387,6 @@ impl NotificationEngine {
 
     pub(crate) fn clear_event_drain(&mut self) {
         let _ = self.events.drain();
-    }
-
-    pub(crate) fn track_predicate(
-        &mut self,
-        predicate: PredicateId,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
-        self.predicate_notifier
-            .track_predicate(predicate, trailed_values, assignments)
     }
 
     #[cfg(test)]
@@ -444,12 +413,6 @@ impl NotificationEngine {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
     ) {
-        // There may be a nogood propagator in the store. In that case we need to always
-        // notify it.
-        let nogood_propagator_handle = propagators
-            .keys()
-            .find_map(|id| propagators.as_propagator_handle::<NogoodPropagator>(id));
-
         // Collect so that we can pass the assignments to the methods within the loop
         for (event, domain) in self.events.drain().collect::<Vec<_>>() {
             // First we notify the predicate_notifier that a domain has been updated
@@ -478,17 +441,7 @@ impl NotificationEngine {
             }
         }
 
-        if let Some(handle) = nogood_propagator_handle {
-            // Then we notify the propagators that a predicate has been satisfied.
-            //
-            // Currently, only the nogood propagator is notified.
-            let nogood_propagator = propagators
-                .get_propagator_mut(handle)
-                .expect("nogood propagator handle refers to a nogood propagator");
-            self.notify_predicate_id_satisfied(nogood_propagator);
-            // At the moment this does nothing yet, but we call it to drain predicates.
-            self.notify_predicate_id_falsified();
-        }
+        self.notify_predicate_id_satisfied(propagators, propagator_queue);
 
         self.last_notified_trail_index = assignments.num_trail_entries();
     }
@@ -497,10 +450,10 @@ impl NotificationEngine {
         self.predicate_notifier.predicate_to_id.num_predicate_ids()
     }
 
-    pub(crate) fn increase_decision_level(&mut self) {
+    pub(crate) fn new_checkpoint(&mut self) {
         self.predicate_notifier
             .predicate_id_assignments
-            .increase_decision_level();
+            .new_checkpoint();
     }
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
@@ -562,10 +515,6 @@ impl NotificationEngine {
         result
     }
 
-    pub(crate) fn predicate_id_assignments(&self) -> &PredicateIdAssignments {
-        &self.predicate_notifier.predicate_id_assignments
-    }
-
     pub(crate) fn synchronise(
         &mut self,
         backtrack_level: usize,
@@ -573,7 +522,7 @@ impl NotificationEngine {
         _trailed_values: &mut TrailedValues,
     ) {
         pumpkin_assert_simple!(
-            assignments.get_decision_level() == backtrack_level,
+            assignments.get_checkpoint() == backtrack_level,
             "Expected the assignments to have been backtracked previously"
         );
         self.predicate_notifier

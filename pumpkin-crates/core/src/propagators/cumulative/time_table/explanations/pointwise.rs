@@ -1,14 +1,13 @@
 use std::rc::Rc;
 
 use crate::constraint_arguments::CumulativeExplanationType;
-use crate::engine::EmptyDomain;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::contexts::propagation_context::HasAssignments;
+use crate::engine::EmptyDomainConflict;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::InferenceCode;
+use crate::propagation::PropagationContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
@@ -18,11 +17,11 @@ use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
 pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,
-) -> Result<(), EmptyDomain> {
+) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = lb(s)`
@@ -64,7 +63,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                     profiles[current_profile_index],
                 ),
                 CumulativeExplanationType::Pointwise,
-                context.as_readonly(),
+                context.domains(),
                 propagating_task,
                 profiles[current_profile_index],
                 Some(time_point),
@@ -72,7 +71,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
             pumpkin_assert_extreme!(
                 explanation
                     .iter()
-                    .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
+                    .all(|predicate| context.evaluate_predicate(*predicate) == Some(true)),
                 "All of the predicates in the reason should hold"
             );
             context.post(
@@ -127,11 +126,11 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     Ok(())
 }
 pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: InferenceCode,
-) -> Result<(), EmptyDomain> {
+) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = ub(s) + p`
@@ -173,7 +172,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                     profiles[current_profile_index],
                 ),
                 CumulativeExplanationType::Pointwise,
-                context.as_readonly(),
+                context.domains(),
                 propagating_task,
                 profiles[current_profile_index],
                 Some(time_point),
@@ -181,7 +180,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
             pumpkin_assert_extreme!(
                 explanation
                     .iter()
-                    .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
+                    .all(|predicate| context.evaluate_predicate(*predicate) == Some(true)),
                 "All of the predicates in the reason should hold"
             );
             context.post(
