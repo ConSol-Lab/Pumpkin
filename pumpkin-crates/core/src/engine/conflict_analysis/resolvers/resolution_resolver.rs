@@ -1,5 +1,8 @@
 use std::ops::Deref;
 
+use itertools::Itertools;
+use log::info;
+
 use super::ConflictResolver;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
@@ -21,6 +24,8 @@ use crate::proof::explain_root_assignment;
 use crate::propagation::CurrentNogood;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_moderate;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorHandle;
@@ -67,6 +72,9 @@ pub(crate) enum AnalysisMode {
     /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
     /// predicates.
     AllDecision,
+    /// Extended conflict analysis which propagates when all predicates in the nogood concern one
+    /// literal (i.e. when all other predicates are satisfied).
+    ExtendedUIP,
 }
 
 impl ConflictResolver for ResolutionResolver {
@@ -193,6 +201,18 @@ impl ResolutionResolver {
             match self.mode {
                 AnalysisMode::OneUIP => self.to_process_heap.num_nonremoved_elements() > 1,
                 AnalysisMode::AllDecision => self.to_process_heap.num_nonremoved_elements() > 0,
+                AnalysisMode::ExtendedUIP => {
+                    self.to_process_heap
+                        .keys()
+                        .map(|predicate_id| {
+                            self.predicate_id_generator
+                                .get_predicate(predicate_id)
+                                .get_domain()
+                        })
+                        .unique()
+                        .count()
+                        > 1
+                }
             }
         } {
             // Replace the predicate from the nogood that has been assigned last on the trail.
@@ -306,7 +326,9 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP => dec_level == context.state.assignments.get_checkpoint(),
+            AnalysisMode::OneUIP | AnalysisMode::ExtendedUIP => {
+                dec_level == context.state.assignments.get_checkpoint()
+            }
             AnalysisMode::AllDecision => {
                 !context.state.assignments.is_decision_predicate(&predicate)
             }
@@ -397,7 +419,31 @@ impl ResolutionResolver {
         // First we obtain a semantically minimised nogood.
         //
         // We reuse the vector with lower decision levels for simplicity.
-        if self.to_process_heap.num_nonremoved_elements() > 0 {
+        if matches!(self.mode, AnalysisMode::ExtendedUIP) {
+            pumpkin_assert_simple!(self.to_process_heap.num_nonremoved_elements() > 0);
+            pumpkin_assert_eq_moderate!(
+                self.to_process_heap
+                    .keys()
+                    .map(|predicate_id| self
+                        .predicate_id_generator
+                        .get_predicate(predicate_id)
+                        .get_domain())
+                    .unique()
+                    .count(),
+                1
+            );
+            // We need to add all of the remaining predicates to the nogood; due to the way in
+            // which the extended UIP is calculated, this could be multiple elements.
+            let propagating_domain = self
+                .predicate_id_generator
+                .get_predicate(*self.to_process_heap.peek_max().unwrap().0)
+                .get_domain();
+            while self.to_process_heap.num_nonremoved_elements() > 0 {
+                let predicate = self.pop_predicate_from_conflict_nogood();
+                pumpkin_assert_eq_simple!(predicate.get_domain(), propagating_domain);
+                self.processed_nogood_predicates.push(predicate);
+            }
+        } else if self.to_process_heap.num_nonremoved_elements() > 0 {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
             self.processed_nogood_predicates.push(last_predicate);
         } else {
@@ -467,8 +513,39 @@ impl ResolutionResolver {
                 );
         }
 
-        let learned_nogood =
-            LearnedNogood::create_from_vec(self.processed_nogood_predicates.clone(), context);
+        let learned_nogood = LearnedNogood::create_from_vec(
+            self.processed_nogood_predicates.clone(),
+            context,
+            self.mode,
+        );
+
+        if !learned_nogood.is_empty() && matches!(self.mode, AnalysisMode::ExtendedUIP) {
+            let propagating_predicate = learned_nogood[0].get_domain();
+            context
+                .counters
+                .learned_clause_statistics
+                .average_number_of_predicates_describing_domain_when_extended
+                .add_term(
+                    learned_nogood
+                        .iter()
+                        .filter(|predicate| predicate.get_domain() == propagating_predicate)
+                        .count(),
+                );
+        }
+        info!(
+            "Adding nogood of length {} with {} predicates from the current decision level which backtracks to {}",
+            learned_nogood.len(),
+            learned_nogood
+                .predicates
+                .iter()
+                .filter(|predicate| context
+                    .state
+                    .get_checkpoint_for_predicate(**predicate)
+                    .unwrap()
+                    == context.state.get_checkpoint())
+                .count(),
+            learned_nogood.backjump_level
+        );
 
         pumpkin_assert_advanced!(
             learned_nogood
@@ -518,7 +595,15 @@ impl LearnedNogood {
     pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
+        analysis_mode: AnalysisMode,
     ) -> Self {
+        if clean_nogood.is_empty() {
+            return Self {
+                predicates: vec![],
+                backjump_level: 0,
+            };
+        }
+
         // We perform a linear scan to maintain the two invariants:
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
@@ -534,6 +619,9 @@ impl LearnedNogood {
             if dl == context.state.get_checkpoint() {
                 clean_nogood.swap(0, index);
                 index -= 1;
+                if matches!(analysis_mode, AnalysisMode::ExtendedUIP) {
+                    break;
+                }
             } else if dl > highest_level_below_current {
                 highest_level_below_current = dl;
                 clean_nogood.swap(1, index);
@@ -544,7 +632,7 @@ impl LearnedNogood {
 
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
-        let backjump_level = if clean_nogood.len() > 1 {
+        let mut backjump_level = if clean_nogood.len() > 1 {
             context
                 .state
                 .get_checkpoint_for_predicate(clean_nogood[1])
@@ -553,6 +641,26 @@ impl LearnedNogood {
             // For unit nogoods, the solver backtracks to the root level.
             0
         };
+
+        if clean_nogood.len() > 1 && matches!(analysis_mode, AnalysisMode::ExtendedUIP) {
+            // In this case, the order of the predicates is irrelevant (for now)
+            //
+            // We first find the propagating domain
+            let propagating_domain = clean_nogood[0].get_domain();
+            // Then we calculate the backjump level as the level of the highest present predicate
+            // in the nogood which is not concerning the propagating domain
+            backjump_level = clean_nogood
+                .iter()
+                .filter(|predicate| predicate.get_domain() != propagating_domain)
+                .map(|predicate| {
+                    context
+                        .state
+                        .get_checkpoint_for_predicate(*predicate)
+                        .unwrap()
+                })
+                .max()
+                .unwrap_or(0);
+        }
 
         Self {
             predicates: clean_nogood,

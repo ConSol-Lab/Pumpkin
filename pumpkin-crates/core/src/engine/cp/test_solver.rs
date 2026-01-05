@@ -42,6 +42,7 @@ impl Default for TestSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
+            false,
         ));
         let mut solver = Self {
             state,

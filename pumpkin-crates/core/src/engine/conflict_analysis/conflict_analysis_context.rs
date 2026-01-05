@@ -162,9 +162,10 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                let inference_code = unit_nogood_inference_codes
-                    .get(&predicate)
-                    .or_else(|| {
+                // TODO: does not work with extended nogoods since they can have empty reasons even
+                // if it is not a "unit" nogood (I think)
+                if let Some(inference_code) =
+                    unit_nogood_inference_codes.get(&predicate).or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
                         // [x >= v] but that the corresponding unit nogood idea is the one for the
                         // predicate [x == v]
@@ -173,16 +174,16 @@ impl ConflictAnalysisContext<'_> {
 
                         unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
                     })
-                    .expect("Expected to be able to retrieve step id for unit nogood");
-
-                let _ = proof_log.log_inference(
-                    &state.inference_codes,
-                    &mut state.constraint_tags,
-                    *inference_code,
-                    [],
-                    Some(predicate),
-                    &state.variable_names,
-                );
+                {
+                    let _ = proof_log.log_inference(
+                        &state.inference_codes,
+                        &mut state.constraint_tags,
+                        *inference_code,
+                        [],
+                        Some(predicate),
+                        &state.variable_names,
+                    );
+                }
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(

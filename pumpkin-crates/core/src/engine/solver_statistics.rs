@@ -16,7 +16,7 @@ pub(crate) struct SolverStatistics {
 }
 
 impl SolverStatistics {
-    pub(crate) fn log(&self, statistic_logger: StatisticLogger, verbose: bool) {
+    pub(crate) fn log(&self, statistic_logger: StatisticLogger, _verbose: bool) {
         log_statistic("nodes", self.engine_statistics.num_decisions);
         log_statistic("restarts", self.engine_statistics.num_restarts);
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
@@ -25,7 +25,7 @@ impl SolverStatistics {
             "solveTime",
             self.engine_statistics.time_spent_in_solver.as_secs_f64(),
         );
-        if verbose {
+        if true {
             log_statistic("numberOfBackjumps", self.engine_statistics.num_backjumps);
             self.learned_clause_statistics.log(statistic_logger)
         }
@@ -71,4 +71,5 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
+        average_number_of_predicates_describing_domain_when_extended: CumulativeMovingAverage<usize>,
 });

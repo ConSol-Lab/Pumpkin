@@ -147,8 +147,9 @@ pub enum CoreExtractionResult {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolver {
     NoLearning,
-    #[default]
     UIP,
+    #[default]
+    ExtendedUIP,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -261,6 +262,10 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
+            matches!(
+                solver_options.conflict_resolver,
+                ConflictResolver::ExtendedUIP
+            ),
         ));
 
         ConstraintSatisfactionSolver {
@@ -275,6 +280,9 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::NoLearning => Box::new(NoLearningResolver),
                 ConflictResolver::UIP => {
                     Box::new(ResolutionResolver::new(handle, AnalysisMode::OneUIP))
+                }
+                ConflictResolver::ExtendedUIP => {
+                    Box::new(ResolutionResolver::new(handle, AnalysisMode::ExtendedUIP))
                 }
             },
             internal_parameters: solver_options,
