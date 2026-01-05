@@ -90,6 +90,7 @@ pub(crate) struct NogoodPropagator {
     /// Used during nogood cleanup. A nogood can only be removed if it is not propagated in the
     /// current subtree. To test for that, we compare this handle with the propagator ID of a
     /// proapgated literal to see if this propagator propagated a predicate.
+    #[allow(unused, reason = "Will be reintroduced with database management")]
     handle: PropagatorHandle<NogoodPropagator>,
 
     analysis_mode: AnalysisMode,
@@ -193,6 +194,7 @@ impl NogoodPropagator {
     /// - The predicate at position 0 is falsified; this is one of the conventions of the nogood
     ///   propagator
     /// - The reason for the predicate is the nogood propagator
+    #[allow(unused, reason = "Will be reintroduced with database management")]
     fn is_nogood_propagating(
         handle: PropagatorHandle<NogoodPropagator>,
         nogood: &[PredicateId],
@@ -252,7 +254,21 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
+        // TODO: cannot do learned nogood management easily when using extended UIP, disabled for
+        // everything for now
         if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
+            // First we clean up the nogood database
+            // self.clean_up_learned_nogoods_if_needed(
+            //     context.assignments,
+            //     context.reason_store,
+            //     context.notification_engine,
+            // );
+
+            // Currently, in the case of extended UIP, we iterate over all of the nogoods in the
+            // database and propagate them individually.
+            //
+            // TODO: Do not go over all nogoods but only the ones which need to be checked
+            // TODO: Bring back nogood management
             info!("Starting propagation");
             for nogood_id in self.nogood_predicates.nogoods_ids() {
                 let nogood_predicates = &self.nogood_predicates[nogood_id];
@@ -322,11 +338,11 @@ impl Propagator for NogoodPropagator {
 
             // First we perform nogood management to ensure that the database does not grow
             // excessively large with "bad" nogoods
-            self.clean_up_learned_nogoods_if_needed(
-                context.assignments,
-                context.reason_store,
-                context.notification_engine,
-            );
+            // self.clean_up_learned_nogoods_if_needed(
+            //     context.assignments,
+            //     context.reason_store,
+            //     context.notification_engine,
+            // );
 
             if self.watch_lists.len() <= context.num_predicate_ids() {
                 self.watch_lists
@@ -863,6 +879,7 @@ impl NogoodPropagator {
         }
 
         if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
+            // If we are using extended UIP then we (currently) do not add watchers.
             info!("Adding nogood: {nogood:?}");
             let lbd = self.lbd_helper.compute_lbd(
                 &nogood
@@ -878,6 +895,8 @@ impl NogoodPropagator {
                 .average_lbd
                 .add_term(lbd as u64);
 
+            // We register for all predicates since otherwise the nogood propagator is not notified
+            // of any events
             let nogood = nogood
                 .iter()
                 .map(|predicate| context.register_predicate(*predicate))
@@ -885,11 +904,11 @@ impl NogoodPropagator {
 
             let propagated_predicate = context.get_predicate(nogood[0]);
             let propagated_domain = propagated_predicate.get_domain();
-
             #[allow(
                 clippy::filter_map_bool_then,
                 reason = "Would otherwise run into issues with borrowing"
             )]
+            // We calculate the reason as all of the predicates which are currently satisfied
             let reason = nogood
                 .iter()
                 .filter_map(|predicate_id| {
@@ -910,11 +929,11 @@ impl NogoodPropagator {
             // Note that we do not allocate watchers at this point since we propagate from scratch
             // every iteration (for now)
 
-            // Then we propagate the asserting predicate and as the reason we give the index to the
-            // asserting nogood such that we can re-create the reason when asked for it
             let inference_code =
                 self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
+            // Then we perform propagation; note that due to the nature of extended UIP, it could
+            // be the case that none of the predicates are assigned as a result of this propagation
             let result = Self::propagate_extended_nogood(
                 context,
                 &self.nogood_predicates[nogood_id],
@@ -924,6 +943,15 @@ impl NogoodPropagator {
                 &mut self.statistics,
             );
             pumpkin_assert_simple!(result.is_ok());
+
+            // We then assign the nogood to the correct tier based on its LBD
+            if lbd >= self.parameters.lbd_threshold_high {
+                self.learned_nogood_ids.high_lbd.push(nogood_id);
+            } else if lbd <= self.parameters.lbd_threshold_low {
+                self.learned_nogood_ids.low_lbd.push(nogood_id);
+            } else {
+                self.learned_nogood_ids.mid_lbd.push(nogood_id);
+            }
         } else {
             // Skip the zero-th predicate since it is unassigned,
             // but will be assigned at the level of the predicate at index one.
@@ -1104,6 +1132,10 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
+            // We do not add watchers when using extended UIP
+            // AND
+            // We register for all predicates since otherwise the nogood propagator is not notified
+            // of any events
             let nogood = nogood
                 .iter()
                 .map(|predicate| context.register_predicate(*predicate))
@@ -1207,6 +1239,7 @@ impl NogoodPropagator {
     /// - \[2\] Kochemazov, S. (2020). Improving implementation of SAT competitions 2017--2019
     ///   winners. International Conference on Theory and Applications of Satisfiability Testing,
     ///   139–148. Springer.
+    #[allow(unused, reason = "Will be reintroduced with database management")]
     fn clean_up_learned_nogoods_if_needed(
         &mut self,
         assignments: &Assignments,

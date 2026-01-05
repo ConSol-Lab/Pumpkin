@@ -526,6 +526,7 @@ impl ResolutionResolver {
                 );
         }
 
+        // Note that the invariants are slightly different when using extended UIP
         let learned_nogood = LearnedNogood::create_from_vec(
             self.processed_nogood_predicates.clone(),
             context,
@@ -606,6 +607,10 @@ impl LearnedNogood {
     ///
     /// This method automatically ensures that the invariants of nogoods hold; see [`LearnedNogood`]
     /// for more details on these invariants.
+    ///
+    /// When using [`AnalysisMode::ExtendedUIP`], it is ensured that the [`Predicate`] at the the
+    /// 1-st position is the one with the highest decision level concerning a different domain than
+    /// the propagating domain
     pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,

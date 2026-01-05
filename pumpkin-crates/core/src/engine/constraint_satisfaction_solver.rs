@@ -153,6 +153,7 @@ pub enum ConflictResolver {
     HalfExtendedUIP,
 }
 
+#[allow(clippy::from_over_into, reason = "Easier with imports")]
 impl Into<AnalysisMode> for ConflictResolver {
     fn into(self) -> AnalysisMode {
         match self {
