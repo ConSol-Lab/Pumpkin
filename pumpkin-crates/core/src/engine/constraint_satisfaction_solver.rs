@@ -147,9 +147,24 @@ pub enum CoreExtractionResult {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolver {
     NoLearning,
-    UIP,
     #[default]
+    UIP,
     ExtendedUIP,
+    HalfExtendedUIP,
+}
+
+impl Into<AnalysisMode> for ConflictResolver {
+    fn into(self) -> AnalysisMode {
+        match self {
+            ConflictResolver::NoLearning => {
+                // Does not matter since it will not be used anyways
+                AnalysisMode::OneUIP
+            }
+            ConflictResolver::UIP => AnalysisMode::OneUIP,
+            ConflictResolver::ExtendedUIP => AnalysisMode::ExtendedUIP,
+            ConflictResolver::HalfExtendedUIP => AnalysisMode::HalfExtendedUIP,
+        }
+    }
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -262,10 +277,7 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
-            matches!(
-                solver_options.conflict_resolver,
-                ConflictResolver::ExtendedUIP
-            ),
+            solver_options.conflict_resolver.into(),
         ));
 
         ConstraintSatisfactionSolver {
@@ -284,6 +296,10 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::ExtendedUIP => {
                     Box::new(ResolutionResolver::new(handle, AnalysisMode::ExtendedUIP))
                 }
+                ConflictResolver::HalfExtendedUIP => Box::new(ResolutionResolver::new(
+                    handle,
+                    AnalysisMode::HalfExtendedUIP,
+                )),
             },
             internal_parameters: solver_options,
             state,

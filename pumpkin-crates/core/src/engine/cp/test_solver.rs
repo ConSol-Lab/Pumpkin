@@ -42,7 +42,7 @@ impl Default for TestSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             0,
             LearningOptions::default(),
-            false,
+            crate::engine::conflict_analysis::AnalysisMode::OneUIP,
         ));
         let mut solver = Self {
             state,

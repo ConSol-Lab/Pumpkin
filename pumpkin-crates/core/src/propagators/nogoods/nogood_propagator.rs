@@ -20,6 +20,7 @@ use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
+use crate::engine::conflict_analysis::AnalysisMode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -91,7 +92,7 @@ pub(crate) struct NogoodPropagator {
     /// proapgated literal to see if this propagator propagated a predicate.
     handle: PropagatorHandle<NogoodPropagator>,
 
-    extended_propagation: bool,
+    analysis_mode: AnalysisMode,
     statistics: NogoodPropagatorStatistics,
 }
 
@@ -107,19 +108,19 @@ pub(crate) struct NogoodPropagatorConstructor {
     /// How many [`PredicateId`]s to preallocate to the [`ArenaAllocator`].
     capacity: usize,
     parameters: LearningOptions,
-    extended_propagation: bool,
+    analysis_mode: AnalysisMode,
 }
 
 impl NogoodPropagatorConstructor {
     pub(crate) fn new(
         capacity: usize,
         parameters: LearningOptions,
-        extended_propagation: bool,
+        analysis_mode: AnalysisMode,
     ) -> Self {
         Self {
             capacity,
             parameters,
-            extended_propagation,
+            analysis_mode,
         }
     }
 }
@@ -144,7 +145,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
-            extended_propagation: self.extended_propagation,
+            analysis_mode: self.analysis_mode,
         }
     }
 }
@@ -233,12 +234,8 @@ impl Propagator for NogoodPropagator {
     }
 
     fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
-        if self.extended_propagation {
-            EnqueueDecision::Enqueue
-        } else {
-            self.updated_predicate_ids.push(predicate_id);
-            EnqueueDecision::Enqueue
-        }
+        self.updated_predicate_ids.push(predicate_id);
+        EnqueueDecision::Enqueue
     }
 
     fn notify(
@@ -255,8 +252,8 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
-        info!("Starting propagation");
-        if self.extended_propagation {
+        if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
+            info!("Starting propagation");
             for nogood_id in self.nogood_predicates.nogoods_ids() {
                 let nogood_predicates = &self.nogood_predicates[nogood_id];
                 // We find all of the unasssigned predicates and get their domains
@@ -409,47 +406,52 @@ impl Propagator for NogoodPropagator {
                         }
                     } // end iterating through the nogood
 
-                    // We find all of the unasssigned predicates and get their domains
-                    //
-                    // If there is a falsified predicate then we do not propagate; also, if the
-                    // nogood can be unit propagated, then we do not propagate
-                    let mut is_falsified = false;
-                    let mut num_unassigned = 0;
-                    let unassigned_predicate_ids = nogood_predicates
-                        .iter()
-                        .filter_map(|predicate_id| {
-                            if context.is_predicate_id_falsified(*predicate_id) {
-                                is_falsified = true;
-                                None
-                            } else if context.is_predicate_id_satisfied(*predicate_id) {
-                                None
-                            } else {
-                                num_unassigned += 1;
-                                let predicate = context.get_predicate(*predicate_id);
-                                Some(predicate.get_domain())
-                            }
-                        })
-                        .collect::<HashSet<_>>();
-                    if num_unassigned > 1 && !is_falsified && unassigned_predicate_ids.len() == 1 {
-                        #[allow(
-                            clippy::filter_map_bool_then,
-                            reason = "Will run into borrow issues otherwise"
-                        )]
-                        let reason = nogood_predicates
+                    if matches!(self.analysis_mode, AnalysisMode::HalfExtendedUIP) {
+                        // We find all of the unasssigned predicates and get their domains
+                        //
+                        // If there is a falsified predicate then we do not propagate; also, if the
+                        // nogood can be unit propagated, then we do not propagate
+                        let mut is_falsified = false;
+                        let mut num_unassigned = 0;
+                        let unassigned_predicate_ids = nogood_predicates
                             .iter()
                             .filter_map(|predicate_id| {
-                                (context.is_predicate_id_satisfied(*predicate_id))
-                                    .then(|| context.get_predicate(*predicate_id))
+                                if context.is_predicate_id_falsified(*predicate_id) {
+                                    is_falsified = true;
+                                    None
+                                } else if context.is_predicate_id_satisfied(*predicate_id) {
+                                    None
+                                } else {
+                                    num_unassigned += 1;
+                                    let predicate = context.get_predicate(*predicate_id);
+                                    Some(predicate.get_domain())
+                                }
                             })
-                            .collect::<PropositionalConjunction>();
-                        NogoodPropagator::propagate_extended_nogood(
-                            &mut context,
-                            nogood_predicates,
-                            *unassigned_predicate_ids.iter().next().unwrap(),
-                            reason,
-                            inference_code,
-                            &mut self.statistics,
-                        )?;
+                            .collect::<HashSet<_>>();
+                        if num_unassigned > 1
+                            && !is_falsified
+                            && unassigned_predicate_ids.len() == 1
+                        {
+                            #[allow(
+                                clippy::filter_map_bool_then,
+                                reason = "Will run into borrow issues otherwise"
+                            )]
+                            let reason = nogood_predicates
+                                .iter()
+                                .filter_map(|predicate_id| {
+                                    (context.is_predicate_id_satisfied(*predicate_id))
+                                        .then(|| context.get_predicate(*predicate_id))
+                                })
+                                .collect::<PropositionalConjunction>();
+                            NogoodPropagator::propagate_extended_nogood(
+                                &mut context,
+                                nogood_predicates,
+                                *unassigned_predicate_ids.iter().next().unwrap(),
+                                reason,
+                                inference_code,
+                                &mut self.statistics,
+                            )?;
+                        }
                     }
 
                     if found_new_watch {
@@ -860,7 +862,7 @@ impl NogoodPropagator {
             return;
         }
 
-        if self.extended_propagation {
+        if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
             info!("Adding nogood: {nogood:?}");
             let lbd = self.lbd_helper.compute_lbd(
                 &nogood
@@ -1101,7 +1103,7 @@ impl NogoodPropagator {
         // Standard case, nogood is of size at least two.
         //
         // The preprocessing ensures that all predicates are unassigned.
-        else if self.extended_propagation {
+        else if matches!(self.analysis_mode, AnalysisMode::ExtendedUIP) {
             let nogood = nogood
                 .iter()
                 .map(|predicate| context.register_predicate(*predicate))
