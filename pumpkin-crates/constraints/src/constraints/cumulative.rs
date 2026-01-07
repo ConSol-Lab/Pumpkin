@@ -149,7 +149,7 @@ where
     )
 }
 
-/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`]
 /// with the provided [`CumulativeOptions`].
 ///
 /// See the documentation of [`cumulative`] for more information about the constraint.

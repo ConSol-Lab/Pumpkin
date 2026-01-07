@@ -7,9 +7,9 @@ use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
 
-/// Create the [`NegatableConstraint`] `\sum terms_i <= rhs`.
+/// Create the [`NegatableConstraint`] `∑ terms_i <= rhs`.
 ///
-/// Its negation is `\sum terms_i > rhs`
+/// Its negation is `∑ terms_i > rhs`
 pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -22,9 +22,9 @@ pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
     }
 }
 
-/// Create the [`NegatableConstraint`] `\sum terms_i < rhs`.
+/// Create the [`NegatableConstraint`] `∑ terms_i < rhs`.
 ///
-/// Its negation is `\sum terms_i <= rhs`
+/// Its negation is `∑ terms_i <= rhs`
 pub fn less_than<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -33,9 +33,9 @@ pub fn less_than<Var: IntegerVariable + 'static>(
     less_than_or_equals(terms, rhs - 1, constraint_tag)
 }
 
-/// Create the [`NegatableConstraint`] `\sum terms_i > rhs`.
+/// Create the [`NegatableConstraint`] `∑ terms_i > rhs`.
 ///
-/// Its negation is `\sum terms_i <= rhs`
+/// Its negation is `∑ terms_i <= rhs`
 pub fn greater_than<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -44,9 +44,9 @@ pub fn greater_than<Var: IntegerVariable + 'static>(
     greater_than_or_equals(terms, rhs + 1, constraint_tag)
 }
 
-/// Create the [`NegatableConstraint`] `\sum terms_i >= rhs`.
+/// Create the [`NegatableConstraint`] `∑ terms_i >= rhs`.
 ///
-/// Its negation is `\sum terms_i < rhs`
+/// Its negation is `∑ terms_i < rhs`
 pub fn greater_than_or_equals<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
