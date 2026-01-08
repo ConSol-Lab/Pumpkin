@@ -1,5 +1,4 @@
 use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 
@@ -32,7 +31,7 @@ macro_rules! python_constraint {
                 solver: &mut pumpkin_solver::Solver,
                 variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-                constraints::$constraint_func(
+                pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
                     self.constraint_tag.0,
                 ).post(solver)
@@ -44,7 +43,7 @@ macro_rules! python_constraint {
                 reification_literal: pumpkin_solver::variables::Literal,
                 variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-                constraints::$constraint_func(
+                pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
                     self.constraint_tag.0,
                 ).implied_by(solver, reification_literal)

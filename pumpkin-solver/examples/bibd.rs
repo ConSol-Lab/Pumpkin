@@ -14,7 +14,6 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;
@@ -97,7 +96,7 @@ fn main() {
     // Enforce the row sum.
     for row in matrix.iter() {
         let _ = solver
-            .add_constraint(constraints::equals(
+            .add_constraint(pumpkin_constraints::equals(
                 row.clone(),
                 bibd.row_sum as i32,
                 constraint_tag,
@@ -108,7 +107,7 @@ fn main() {
     // Enforce the column sum.
     for row in transpose(&matrix) {
         let _ = solver
-            .add_constraint(constraints::equals(
+            .add_constraint(pumpkin_constraints::equals(
                 row,
                 bibd.column_sum as i32,
                 constraint_tag,
@@ -126,7 +125,7 @@ fn main() {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
                 let _ = solver
-                    .add_constraint(constraints::times(
+                    .add_constraint(pumpkin_constraints::times(
                         matrix[r1][col],
                         matrix[r2][col],
                         pairwise_product[r1][r2][col],
@@ -136,7 +135,7 @@ fn main() {
             }
 
             let _ = solver
-                .add_constraint(constraints::less_than_or_equals(
+                .add_constraint(pumpkin_constraints::less_than_or_equals(
                     pairwise_product[r1][r2].clone(),
                     bibd.max_dot_product as i32,
                     constraint_tag,

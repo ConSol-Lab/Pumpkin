@@ -8,7 +8,7 @@ use fnv::FnvBuildHasher;
 pub use key_generator::*;
 pub use key_value_heap::*;
 pub use keyed_vec::*;
-pub(crate) use sparse_set::*;
+pub use sparse_set::*;
 
 /// [`std::collections::HashMap`] that defaults to a deterministic hasher.
 #[allow(clippy::disallowed_types, reason = "this is how we define our HashMap")]

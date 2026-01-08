@@ -46,7 +46,6 @@ pub(crate) struct NotificationEngine {
     backtrack_events: EventSink,
 }
 
-#[cfg(not(test))]
 impl Default for NotificationEngine {
     fn default() -> Self {
         let mut result = Self {
@@ -63,9 +62,9 @@ impl Default for NotificationEngine {
     }
 }
 
-#[cfg(test)]
-impl Default for NotificationEngine {
-    fn default() -> Self {
+impl NotificationEngine {
+    #[cfg(test)]
+    pub(crate) fn test_default() -> Self {
         let watch_list_domain_events = WatchListDomainEvents {
             watchers: Default::default(),
             is_watching_anything: true,
@@ -84,9 +83,7 @@ impl Default for NotificationEngine {
         result.grow();
         result
     }
-}
 
-impl NotificationEngine {
     pub(crate) fn debug_empty_clone(&self, capacity: usize) -> Self {
         let mut result = Self {
             predicate_notifier: self.predicate_notifier.debug_empty_clone(),
@@ -403,7 +400,7 @@ impl NotificationEngine {
         self.events.drain()
     }
 
-    #[cfg(test)]
+    #[deprecated]
     /// Process the stored domain events that happens as a result of decision/propagation predicates
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
     pub(crate) fn notify_propagators_about_domain_events_test(

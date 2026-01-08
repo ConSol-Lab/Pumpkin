@@ -1,7 +1,6 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::termination::Indefinite;
@@ -20,7 +19,10 @@ fn iterator_finds_all_solutions() {
 
     // We create the all-different constraint
     let _ = solver
-        .add_constraint(constraints::all_different(vec![x, y, z], constraint_tag))
+        .add_constraint(pumpkin_constraints::all_different(
+            vec![x, y, z],
+            constraint_tag,
+        ))
         .post();
 
     // We create a termination condition which allows the solver to run indefinitely
