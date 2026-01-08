@@ -21,7 +21,7 @@ use crate::flatzinc::compiler::context::Set;
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    _options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
@@ -342,7 +342,7 @@ pub(crate) fn run(
                 true
             }
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, constraint_tag)?,
             "pumpkin_cumulative_var" => todo!(
                 "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
             ),
@@ -398,7 +398,6 @@ fn compile_disjunctive_strict(
 fn compile_cumulative(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
-    options: &FlatZincOptions,
     constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, "pumpkin_cumulative");
@@ -408,12 +407,11 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    let post_result = pumpkin_constraints::cumulative_with_options(
+    let post_result = pumpkin_constraints::cumulative(
         start_times.iter().copied(),
         durations.iter().copied(),
         resource_requirements.iter().copied(),
         resource_capacity,
-        options.cumulative_options,
         constraint_tag,
     )
     .post(context.solver);

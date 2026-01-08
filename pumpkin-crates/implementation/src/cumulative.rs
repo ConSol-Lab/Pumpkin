@@ -14,21 +14,24 @@ use pumpkin_core::variables::IntegerVariable;
 declare_inference_label!(AllDifferentSimple);
 
 #[derive(Clone, Debug)]
-pub struct AllDifferentConstructor<Var> {
-    pub x: Box<[Var]>,
+pub struct CumulativeConstructor<Var> {
+    pub start_times: Box<[Var]>,
+    pub durations: Box<[u32]>,
+    pub resource_usages: Box<[u32]>,
+    pub capacity: u32,
     pub constraint_tag: ConstraintTag,
 }
 
-impl<Var> PropagatorConstructor for AllDifferentConstructor<Var>
+impl<Var> PropagatorConstructor for CumulativeConstructor<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type PropagatorImpl = AllDifferentPropagator<Var>;
+    type PropagatorImpl = CumulativeTimeTablePropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         // Register for events
 
-        AllDifferentPropagator {
+        CumulativeTimeTablePropagator {
             // TODO
             _inference_code: context.create_inference_code(self.constraint_tag, AllDifferentSimple),
             phantom_data: PhantomData,
@@ -36,16 +39,16 @@ where
     }
 }
 
-/// Propagator for the Circuit constraint.
+/// Propagator for the Cumulative constraint using time-tabling.
 #[derive(Clone, Debug)]
-pub struct AllDifferentPropagator<Var> {
+pub struct CumulativeTimeTablePropagator<Var> {
     // TODO
     _inference_code: InferenceCode,
     /// Here to avoid build warnings
     phantom_data: PhantomData<Var>,
 }
 
-impl<Var: 'static> Propagator for AllDifferentPropagator<Var>
+impl<Var: 'static> Propagator for CumulativeTimeTablePropagator<Var>
 where
     Var: IntegerVariable,
 {

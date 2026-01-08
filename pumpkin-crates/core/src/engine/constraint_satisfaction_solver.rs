@@ -146,8 +146,8 @@ pub enum CoreExtractionResult {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum ConflictResolver {
-    NoLearning,
     #[default]
+    NoLearning,
     UIP,
 }
 

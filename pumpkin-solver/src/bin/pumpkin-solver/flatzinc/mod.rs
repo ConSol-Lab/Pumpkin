@@ -14,7 +14,6 @@ use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_core::statistics::log_statistic;
-use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
 use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
@@ -62,9 +61,6 @@ pub(crate) struct FlatZincOptions {
     /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
-
-    /// Options used for the cumulative constraint (see [`cumulative`]).
-    pub(crate) cumulative_options: CumulativeOptions,
 
     /// Determines which type of search is performed by the solver
     pub(crate) optimisation_strategy: OptimisationStrategy,
