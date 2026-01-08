@@ -130,7 +130,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &mut context,
             self.inference_code.unwrap(),
             time_table.values(),
-            &self.parameters,
+            &mut self.parameters,
             &mut self.updatable_structures,
         )
     }
@@ -187,10 +187,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        let mut parameters = self.parameters.clone();
         propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
-            &self.parameters,
+            &mut parameters,
             &self.updatable_structures,
         )
     }
@@ -255,7 +256,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 pub(crate) fn propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was

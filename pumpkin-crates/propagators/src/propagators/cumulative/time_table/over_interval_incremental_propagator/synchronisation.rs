@@ -57,7 +57,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: Domains,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     inference_code: InferenceCode,
 ) -> bool {
     let error_from_scratch =

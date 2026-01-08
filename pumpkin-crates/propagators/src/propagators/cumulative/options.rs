@@ -13,6 +13,9 @@ pub struct CumulativePropagatorOptions {
     pub generate_sequence: bool,
     /// Determines whether to incrementally backtrack or to calculate from scratch
     pub incremental_backtracking: bool,
+
+    pub log_test_cases: bool,
+    pub num_test_cases_generated: usize,
 }
 
 /// The options provided to the Cumulative constraint.
@@ -33,6 +36,7 @@ impl CumulativeOptions {
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
         incremental_backtracking: bool,
+        log_test_cases: bool,
     ) -> Self {
         Self {
             propagation_method,
@@ -41,6 +45,8 @@ impl CumulativeOptions {
                 explanation_type,
                 generate_sequence,
                 incremental_backtracking,
+                log_test_cases,
+                num_test_cases_generated: 0,
             },
         }
     }

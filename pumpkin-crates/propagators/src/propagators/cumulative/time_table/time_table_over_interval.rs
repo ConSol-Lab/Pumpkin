@@ -4,6 +4,7 @@ use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
+use pumpkin_core::containers::HashMap;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
@@ -21,6 +22,7 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTable;
@@ -127,11 +129,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             }));
         }
 
-        let time_table = create_time_table_over_interval_from_scratch(
+        let time_table_result = create_time_table_over_interval_from_scratch(
             context.domains(),
-            &self.parameters,
+            &mut self.parameters,
             self.inference_code.unwrap(),
-        )?;
+        );
+
+        let time_table = time_table_result?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
@@ -139,7 +143,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             self.inference_code.unwrap(),
             time_table.iter(),
-            &self.parameters,
+            &mut self.parameters,
             &mut self.updatable_structures,
         )
     }
@@ -194,9 +198,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        let mut parameters = self.parameters.clone();
         propagate_from_scratch_time_table_interval(
             &mut context,
-            &self.parameters,
+            &mut parameters,
             &self.updatable_structures,
             self.inference_code.unwrap(),
         )
@@ -215,7 +220,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// conflict in the form of an [`PropagatorConflict`].
 pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
     mut context: Domains,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     inference_code: InferenceCode,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
@@ -296,7 +301,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
     events: Vec<Event<Var>>,
     context: Context,
     inference_code: InferenceCode,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     pumpkin_assert_extreme!(
         events.is_empty()
@@ -363,12 +368,50 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                 if is_conflicting {
                     // We have found a conflict and the profile has been ended, we can report the
                     // conflict using the current profile
-                    return Err(create_conflict_explanation(
+                    let reason = create_conflict_explanation(
                         context,
                         inference_code,
                         &new_profile,
                         parameters.options.explanation_type,
-                    ));
+                    );
+                    if parameters.options.log_test_cases
+                    // && SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.5
+                    {
+                        let mut bounds: HashMap<DomainId, Vec<i32>> = HashMap::default();
+                        for element in reason.conjunction.iter() {
+                            let entry = bounds.entry(element.get_domain()).or_default();
+                            entry.push(element.get_right_hand_side());
+                            entry.sort();
+                        }
+                        println!(
+                            "
+                #[test]
+                fn cumulative_time_table_conflict_{}(){{
+                    let (_, result, _) = set_up_cumulative_state(&{:?}, {});
+                    assert!(result.is_err(), \"Expected an error to occur but was {{result:?}}\")
+                }}
+                ",
+                            parameters.options.num_test_cases_generated,
+                            new_profile
+                                .profile_tasks
+                                .iter()
+                                .map(|task| {
+                                    let domain =
+                                        task.start_variable.lower_bound_predicate(0).get_domain();
+                                    let current_bounds = &bounds[&domain];
+                                    assert_eq!(current_bounds.len(), 2);
+                                    (
+                                        (current_bounds[0], current_bounds[1]),
+                                        task.processing_time,
+                                        task.resource_usage,
+                                    )
+                                })
+                                .collect::<Vec<_>>(),
+                            parameters.capacity
+                        );
+                        parameters.options.num_test_cases_generated += 1;
+                    }
+                    return Err(reason);
                 } else {
                     // We end the current profile, creating a profile from [start_of_interval,
                     // time_stamp)
@@ -447,7 +490,7 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
 
 pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     inference_code: InferenceCode,
 ) -> PropagationStatusCP {

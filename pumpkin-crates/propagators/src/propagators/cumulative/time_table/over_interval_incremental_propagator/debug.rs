@@ -29,7 +29,7 @@ pub(crate) fn time_tables_are_the_same_interval<
     mut context: Domains,
     inference_code: InferenceCode,
     time_table: &OverIntervalTimeTableType<Var>,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
 ) -> bool {
     let time_table_scratch = create_time_table_over_interval_from_scratch(
         context.reborrow(),

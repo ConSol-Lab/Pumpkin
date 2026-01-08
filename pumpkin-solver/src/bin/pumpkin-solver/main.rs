@@ -391,6 +391,9 @@ struct Args {
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
 
+    #[arg(long, long = "cumulative-log-tests")]
+    cumulative_log_tests: bool,
+
     /// Determine what type of optimisation strategy is used by the solver
     #[arg(long = "optimisation-strategy", value_enum, default_value_t)]
     optimisation_strategy: OptimisationStrategy,
@@ -607,6 +610,7 @@ fn run() -> PumpkinResult<()> {
                     !args.cumulative_single_profiles,
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
+                    args.cumulative_log_tests,
                 ),
                 optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),

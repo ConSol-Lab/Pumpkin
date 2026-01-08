@@ -242,7 +242,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // We create the time-table from scratch (and return an error if it overflows)
             self.time_table = create_time_table_over_interval_from_scratch(
                 context.domains(),
-                &self.parameters,
+                &mut self.parameters,
                 self.inference_code.unwrap(),
             )?;
 
@@ -312,7 +312,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         check_synchronisation_conflict_explanation_over_interval(
                             &synchronised_conflict_explanation,
                             context.domains(),
-                            &self.parameters,
+                            &mut self.parameters,
                             self.inference_code.unwrap(),
                         ),
                         "The conflict explanation was not the same as the conflict explanation from scratch!"
@@ -334,7 +334,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     pumpkin_assert_extreme!(
                         create_time_table_over_interval_from_scratch(
                             context.domains(),
-                            &self.parameters,
+                            &mut self.parameters,
                             self.inference_code.unwrap(),
                         )
                         .is_err(),
@@ -401,7 +401,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
                 context.domains(),
                 self.inference_code.unwrap(),
                 &self.time_table,
-                &self.parameters,
+                &mut self.parameters,
             ),
             "The profiles were not the same between the incremental and the non-incremental version"
         );
@@ -414,7 +414,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             &mut context,
             self.inference_code.unwrap(),
             self.time_table.iter(),
-            &self.parameters,
+            &mut self.parameters,
             &mut self.updatable_structures,
         )
     }
@@ -519,9 +519,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTableOverInterval`
+        let mut parameters = self.parameters.clone();
         propagate_from_scratch_time_table_interval(
             &mut context,
-            &self.parameters,
+            &mut parameters,
             &self.updatable_structures,
             self.inference_code.unwrap(),
         )

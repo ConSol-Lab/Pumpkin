@@ -6,6 +6,7 @@ use std::rc::Rc;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::containers::HashMap;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -15,6 +16,7 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::CumulativeExplanationType;
@@ -28,6 +30,7 @@ use super::explanations::naive::create_naive_conflict_explanation;
 use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
+use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
@@ -217,6 +220,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
+        parameters: &mut CumulativeParameters<Var>,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -248,6 +252,57 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
+
+                if parameters.options.log_test_cases
+                    && context.evaluate_predicate(predicate).is_none()
+                // && SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.025
+                {
+                    let mut bounds: HashMap<DomainId, Vec<i32>> = HashMap::default();
+                    for element in reason.iter() {
+                        let entry = bounds.entry(element.get_domain()).or_default();
+                        entry.push(element.get_right_hand_side());
+                        entry.sort();
+                    }
+                    println!(
+                        "
+                #[test]
+                fn cumulative_time_table_lower_bound_{}(){{
+                    let (solver, _, variables) = set_up_cumulative_state(&{:?}, {}); // It could be the case that a conflict is returned
+
+                    assert!(solver.lower_bound(*variables.last().unwrap()) >= {})
+                }}
+                ",
+                        parameters.options.num_test_cases_generated,
+                        profile
+                            .profile_tasks
+                            .iter()
+                            .map(|task| {
+                                let domain = task.start_variable.lower_bound_predicate(0).get_domain();
+                                let current_bounds = &bounds[&domain];
+                                assert_eq!(current_bounds.len(), 2);
+                                (
+                                    (
+                                        current_bounds[0],
+                                        current_bounds[1]
+                                    ),
+                                    task.processing_time,
+                                    task.resource_usage,
+                                )
+                            })
+                            .chain(std::iter::once((
+                                (
+                                    lower_bound_predicate_propagating_task.get_right_hand_side(),
+                                    context.upper_bound(&propagating_task.start_variable)
+                                ),
+                                propagating_task.processing_time,
+                                propagating_task.resource_usage
+                            )))
+                            .collect::<Vec<_>>(),
+                        parameters.capacity,
+                        profile.end + 1
+                    );
+                    parameters.options.num_test_cases_generated += 1;
+                }
                 reason.push(lower_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
@@ -268,6 +323,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
+        parameters: &mut CumulativeParameters<Var>,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -303,6 +359,56 @@ impl CumulativePropagationHandler {
                 ));
 
                 let mut reason = (*explanation).clone();
+                if parameters.options.log_test_cases
+                    && context.evaluate_predicate(predicate).is_none()
+                // && SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.025
+                {
+                    let mut bounds: HashMap<DomainId, Vec<i32>> = HashMap::default();
+                    for element in reason.iter() {
+                        let entry = bounds.entry(element.get_domain()).or_default();
+                        entry.push(element.get_right_hand_side());
+                        entry.sort();
+                    }
+                    println!(
+                        "
+                #[test]
+                fn cumulative_time_table_upper_bound_{}(){{
+                    let (solver, _, variables) = set_up_cumulative_state(&{:?}, {}); // It could be the case that a conflict is returned
+
+                    assert!(solver.upper_bound(*variables.last().unwrap()) <= {})
+                }}
+                ",
+                        parameters.options.num_test_cases_generated,
+                        profile
+                            .profile_tasks
+                            .iter()
+                            .map(|task| {
+                                let domain = task.start_variable.lower_bound_predicate(0).get_domain();
+                                let current_bounds = &bounds[&domain];
+                                assert_eq!(current_bounds.len(), 2);
+                                (
+                                    (
+                                        current_bounds[0],
+                                        current_bounds[1]
+                                    ),
+                                    task.processing_time,
+                                    task.resource_usage,
+                                )
+                            })
+                            .chain(std::iter::once((
+                                (
+                                    context.lower_bound(&propagating_task.start_variable),
+                                    upper_bound_predicate_propagating_task.get_right_hand_side()
+                                ),
+                                propagating_task.processing_time,
+                                propagating_task.resource_usage
+                            )))
+                            .collect::<Vec<_>>(),
+                        parameters.capacity,
+                        profile.start - propagating_task.processing_time
+                    );
+                    parameters.options.num_test_cases_generated += 1;
+                }
                 reason.push(upper_bound_predicate_propagating_task);
                 context.post(predicate, reason, self.inference_code)
             }
@@ -490,8 +596,10 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use super::create_conflict_explanation;
+    use crate::cumulative::CumulativeParameters;
     use crate::cumulative::ResourceProfile;
     use crate::cumulative::Task;
+    use crate::cumulative::options::CumulativePropagatorOptions;
 
     pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,
@@ -574,6 +682,11 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
+                    &mut CumulativeParameters::new(
+                        vec![],
+                        0,
+                        CumulativePropagatorOptions::default(),
+                    ),
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 19);
@@ -671,6 +784,11 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
+                    &mut CumulativeParameters::new(
+                        vec![],
+                        0,
+                        CumulativePropagatorOptions::default(),
+                    ),
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 10);

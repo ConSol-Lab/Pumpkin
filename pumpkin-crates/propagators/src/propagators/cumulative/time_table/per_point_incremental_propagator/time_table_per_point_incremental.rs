@@ -441,7 +441,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             &mut context,
             self.inference_code.unwrap(),
             self.time_table.values(),
-            &self.parameters,
+            &mut self.parameters,
             &mut self.updatable_structures,
         )
     }
@@ -544,10 +544,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
+        let mut parameters = self.parameters.clone();
         propagate_from_scratch_time_table_point(
             &mut context,
             self.inference_code.unwrap(),
-            &self.parameters,
+            &mut parameters,
             &self.updatable_structures,
         )
     }

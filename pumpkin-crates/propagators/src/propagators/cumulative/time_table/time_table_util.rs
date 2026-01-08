@@ -202,7 +202,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContext,
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
@@ -258,7 +258,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     inference_code: InferenceCode,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
-    parameters: &CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
@@ -312,7 +312,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 parameters.capacity,
             ) {
                 let result = propagation_handler
-                    .propagate_lower_bound_with_explanations(context, profile, &task);
+                    .propagate_lower_bound_with_explanations(context, profile, &task, parameters);
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
                     result?;
@@ -325,7 +325,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 parameters.capacity,
             ) {
                 let result = propagation_handler
-                    .propagate_upper_bound_with_explanations(context, profile, &task);
+                    .propagate_upper_bound_with_explanations(context, profile, &task, parameters);
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
                     result?;
