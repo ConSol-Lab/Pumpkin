@@ -1,4 +1,4 @@
-use implementation::all_different::AllDifferentConstructor;
+use implementation::propagators::all_different::AllDifferentConstructor;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use implementation::cumulative::CumulativeConstructor;
+use implementation::propagators::cumulative::CumulativeConstructor;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
