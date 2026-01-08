@@ -9,7 +9,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 
-/// Create a table constraint over the variables `xs`.
+/// Create the [table](https://sofdem.github.io/gccat/gccat/Cin_relation.html#uid22830) [`NegatableConstraint`].
 ///
 /// A table constraint constrains a tuple of variables to have pre-defined values. For example:
 /// ```ignore
@@ -32,7 +32,7 @@ pub fn table<Var: IntegerVariable + 'static>(
     }
 }
 
-/// Create a negative table constraint over the variables `xs`.
+/// Create the negative [table](https://sofdem.github.io/gccat/gccat/Cin_relation.html#uid22830) [`NegatableConstraint`].
 ///
 /// A negative table is essentially a set of conflicts over the given variables. For example:
 /// ```ignore

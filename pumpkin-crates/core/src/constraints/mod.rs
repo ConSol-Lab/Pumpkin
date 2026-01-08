@@ -1,4 +1,4 @@
-//! Contains the description of how consraints are posted to the [`Solver`].
+//! Contains the description of how constraints are posted to the [`Solver`].
 use crate::ConstraintOperationError;
 use crate::Solver;
 use crate::propagation::PropagatorConstructor;

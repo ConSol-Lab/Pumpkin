@@ -19,7 +19,7 @@ struct EqualConstraint<Var> {
     constraint_tag: ConstraintTag,
 }
 
-/// Creates the [`NegatableConstraint`] `\sum terms_i = rhs`.
+/// Creates the [`NegatableConstraint`] `∑ terms_i = rhs`.
 ///
 /// Its negation is [`not_equals`].
 pub fn equals<Var: IntegerVariable + Clone + 'static>(
@@ -55,7 +55,7 @@ struct NotEqualConstraint<Var> {
     constraint_tag: ConstraintTag,
 }
 
-/// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
+/// Create the [`NegatableConstraint`] `∑ terms_i != rhs`.
 ///
 /// Its negation is [`equals`].
 pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
