@@ -1,3 +1,4 @@
+use pumpkin_core::Random;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -19,6 +20,9 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::TrailedInteger;
+use pumpkin_core::rand::Rng;
+use pumpkin_core::rand::SeedableRng;
+use pumpkin_core::rand::rngs::SmallRng;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -172,6 +176,33 @@ where
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if let Some(conflict) = self.detect_inconsistency(context.domains()) {
+            // if SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.035 {
+            //     let random_test_number =
+            //         SmallRng::from_entropy().generate_usize_in_range(0..500000);
+            //     println!(
+            //         "
+            //     #[test]
+            //     fn linear_leq_conflict_{}(){{
+            //         let (_, result, _) = set_up_linear_leq_state(&{:?}, {});
+            //         assert!(result.is_err(), \"Expected an error to occur but was {{result:?}}\")
+            //     }}
+            //     ",
+            //         random_test_number,
+            //         (0..self.x.len())
+            //             .filter(|index| !context.is_fixed(&self.x[*index])
+            //                 || context.lower_bound(&self.x[*index]) != 0)
+            //             .map(|index| {
+            //                 let domain = self.x[index].lower_bound_predicate(0).get_domain();
+            //                 (
+            //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
+            //                     self.x[index].get_scale(),
+            //                     self.x[index].get_offset(),
+            //                 )
+            //             })
+            //             .collect::<Vec<_>>(),
+            //         self.c
+            //     );
+            // }
             return Err(conflict.into());
         }
 
@@ -206,7 +237,54 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(predicate![x_i <= bound], i, self.inference_code)?;
+                let predicate = predicate![x_i <= bound];
+                let mut entered = false;
+                // if SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.0001
+                //     && !context.evaluate_predicate(predicate).is_some()
+                // {
+                //     entered = true;
+                //     let random_test_number =
+                //         SmallRng::from_entropy().generate_usize_in_range(0..500000);
+                //     println!(
+                //         "
+                // #[test]
+                // fn linear_leq_propagation_{}(){{
+                //     let (solver, _, variables) = set_up_linear_leq_state(&{:?}, {});
+                //     assert!(solver.upper_bound(*variables.last().unwrap()) <={})
+                // }}
+                // ",
+                //         random_test_number,
+                //         (0..self.x.len())
+                //             .filter(|index| (!context.is_fixed(&self.x[*index])
+                //                 || context.lower_bound(&self.x[*index]) != 0)
+                //                 && *index != i)
+                //             .map(|index| {
+                //                 let domain = self.x[index].lower_bound_predicate(0).get_domain();
+                //                 (
+                //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
+                //                     self.x[index].get_scale(),
+                //                     self.x[index].get_offset(),
+                //                 )
+                //             })
+                //             .chain(std::iter::once({
+                //                 let domain = x_i.lower_bound_predicate(0).get_domain();
+                //                 (
+                //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
+                //                     self.x[i].get_scale(),
+                //                     self.x[i].get_offset(),
+                //                 )
+                //             }))
+                //             .collect::<Vec<_>>(),
+                //         self.c,
+                //         bound
+                //     );
+                // }
+                let result = context.post(predicate, i, self.inference_code);
+
+                if entered && result.is_err() {
+                    panic!();
+                }
+                result?
             }
         }
 
@@ -263,7 +341,8 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
+                let predicate = predicate![x_i <= bound];
+                context.post(predicate, reason, self.inference_code)?;
             }
         }
 
@@ -276,6 +355,11 @@ where
 mod tests {
     use pumpkin_core::TestSolver;
     use pumpkin_core::conjunction;
+    use pumpkin_core::state::Conflict;
+    use pumpkin_core::state::PropagatorId;
+    use pumpkin_core::variables::AffineView;
+    use pumpkin_core::variables::DomainId;
+    use pumpkin_core::variables::TransformableVariable;
 
     use super::*;
 

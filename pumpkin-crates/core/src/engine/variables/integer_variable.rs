@@ -60,4 +60,12 @@ pub trait IntegerVariable:
 
     /// Returns all of the holes in the domain
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32>;
+
+    fn get_scale(&self) -> i32 {
+        1
+    }
+
+    fn get_offset(&self) -> i32 {
+        0
+    }
 }

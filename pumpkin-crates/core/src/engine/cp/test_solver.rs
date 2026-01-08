@@ -86,8 +86,8 @@ impl TestSolver {
         var.contains(&self.state.assignments, value)
     }
 
-    pub fn lower_bound(&self, var: DomainId) -> i32 {
-        self.state.assignments.get_lower_bound(var)
+    pub fn lower_bound<Var: IntegerVariable>(&self, var: Var) -> i32 {
+        var.lower_bound(&self.state.assignments)
     }
 
     pub fn remove_and_notify(
@@ -183,8 +183,8 @@ impl TestSolver {
             .is_some_and(|truth_value| !truth_value)
     }
 
-    pub fn upper_bound(&self, var: DomainId) -> i32 {
-        self.state.assignments.get_upper_bound(var)
+    pub fn upper_bound<Var: IntegerVariable>(&self, var: Var) -> i32 {
+        var.upper_bound(&self.state.assignments)
     }
 
     pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
