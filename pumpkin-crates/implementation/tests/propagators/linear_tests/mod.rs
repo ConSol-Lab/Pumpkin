@@ -10,6 +10,7 @@ use pumpkin_core::variables::AffineView;
 use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::TransformableVariable;
 
+mod linear_checker_tests;
 mod linear_conflict_tests;
 mod linear_propagation_tests;
 
