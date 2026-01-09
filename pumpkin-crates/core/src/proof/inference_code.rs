@@ -141,5 +141,4 @@ pub trait InferenceLabel {
     fn to_str(&self) -> Arc<str>;
 }
 
-/// An inference label used when no more specific label is known.
 declare_inference_label!(pub Unknown);
