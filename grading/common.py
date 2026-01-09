@@ -1,5 +1,4 @@
 import json
-import re
 import subprocess
 
 OKGREEN = "\033[92m"
