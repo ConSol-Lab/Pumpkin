@@ -18,9 +18,6 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
-use crate::proof::ConstraintTag;
-use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
@@ -155,17 +152,6 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all_backtrack(&mut watchers, domain_events.events());
-    }
-
-    /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
-    /// in the solver and the proof.
-    #[deprecated = "construct inference codes with InferenceCode::new"]
-    pub fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        InferenceCode::new(constraint_tag, inference_label)
     }
 
     /// Get a new [`LocalId`] which is guaranteed to be unused.
