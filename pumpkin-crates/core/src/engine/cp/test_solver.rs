@@ -1,7 +1,6 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
-use std::num::NonZero;
 
 use super::PropagatorQueue;
 use crate::containers::KeyGenerator;
@@ -15,7 +14,6 @@ use crate::options::LearningOptions;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
-use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
@@ -309,15 +307,6 @@ impl TestSolver {
 
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
-    }
-
-    pub fn new_inference_code(&mut self) -> InferenceCode {
-        self.state.inference_codes.push((
-            ConstraintTag::from_non_zero(
-                NonZero::try_from(1 + self.state.inference_codes.len() as u32).unwrap(),
-            ),
-            "label".into(),
-        ))
     }
 
     pub fn new_checkpoint(&mut self) {

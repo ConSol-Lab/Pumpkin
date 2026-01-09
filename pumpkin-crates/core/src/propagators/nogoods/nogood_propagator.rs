@@ -317,7 +317,8 @@ impl Propagator for NogoodPropagator {
                     predicate,
                     reason,
                     self.inference_codes
-                        [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)],
+                        [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)]
+                    .clone(),
                 );
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
@@ -491,7 +492,7 @@ impl NogoodPropagator {
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(nogood_id.id as u64);
         let inference_code =
-            self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+            self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)].clone();
 
         let predicate = !context
             .notification_engine
@@ -1154,7 +1155,7 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = self.inference_codes[info_id];
+        let inference_code = self.inference_codes[info_id].clone();
 
         if self.nogood_info[info_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to

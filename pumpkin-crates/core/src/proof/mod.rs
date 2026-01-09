@@ -80,7 +80,6 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        inference_codes: &KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
@@ -97,8 +96,6 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        let (tag, label) = inference_codes[inference_code].clone();
-
         let inference_tag = constraint_tags.next_key();
 
         let inference = Inference {
@@ -110,8 +107,8 @@ impl ProofLog {
             consequent: propagated.map(|predicate| {
                 proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
             }),
-            generated_by: Some(tag.into()),
-            label: Some(label),
+            generated_by: Some(inference_code.tag().into()),
+            label: Some(inference_code.label()),
         };
 
         writer.log_inference(inference)?;

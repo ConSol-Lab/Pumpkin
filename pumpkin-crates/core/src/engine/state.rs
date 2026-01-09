@@ -67,7 +67,6 @@ pub struct State {
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
 
-    pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
     /// The [`ConstraintTag`]s generated for this proof.
     pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
@@ -106,7 +105,7 @@ impl From<PropagatorConflict> for Conflict {
 }
 
 /// A conflict because a domain became empty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
@@ -154,7 +153,6 @@ impl Default for State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
         };
@@ -197,18 +195,6 @@ impl State {
 
 /// Operations to create .
 impl State {
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    ///
-    /// The inference codes are required to log inferences with [`ProofLog::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.inference_codes
-            .push((constraint_tag, inference_label.to_str()))
-    }
-
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()

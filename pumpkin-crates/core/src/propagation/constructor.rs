@@ -159,13 +159,13 @@ impl PropagatorConstructorContext<'_> {
 
     /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
     /// in the solver and the proof.
+    #[deprecated = "construct inference codes with InferenceCode::new"]
     pub fn create_inference_code(
         &mut self,
         constraint_tag: ConstraintTag,
         inference_label: impl InferenceLabel,
     ) -> InferenceCode {
-        self.state
-            .create_inference_code(constraint_tag, inference_label)
+        InferenceCode::new(constraint_tag, inference_label)
     }
 
     /// Get a new [`LocalId`] which is guaranteed to be unused.
