@@ -183,7 +183,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             context.post(
                 self.reification_literal.get_false_predicate(),
                 conflict.conjunction,
-                conflict.inference_code,
+                &conflict.inference_code,
             )?;
         }
 
@@ -231,6 +231,7 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
     use crate::variables::DomainId;
 
@@ -246,7 +247,9 @@ mod tests {
         let t1 = triggered_conflict.clone();
         let t2 = triggered_conflict.clone();
 
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        let i1 = inference_code.clone();
+        let i2 = inference_code.clone();
 
         let _ = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -254,14 +257,14 @@ mod tests {
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: t1.clone(),
-                            inference_code,
+                            inference_code: i1.clone(),
                         }
                         .into())
                     },
                     move |_: Domains| {
                         Some(PropagatorConflict {
                             conjunction: t2.clone(),
-                            inference_code,
+                            inference_code: i2.clone(),
                         })
                     },
                 ),
@@ -289,7 +292,7 @@ mod tests {
                         ctx.post(
                             predicate![var >= 3],
                             conjunction!(),
-                            InferenceCode::create_from_index(0),
+                            &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
                         )?;
                         Ok(())
                     },
@@ -320,7 +323,7 @@ mod tests {
         let _ = solver.set_literal(reification_literal, true);
 
         let var = solver.new_variable(1, 1);
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
 
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -328,7 +331,7 @@ mod tests {
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: conjunction!([var >= 1]),
-                            inference_code,
+                            inference_code: inference_code.clone(),
                         }
                         .into())
                     },
@@ -360,7 +363,7 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
 
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -370,7 +373,7 @@ mod tests {
                         if context.is_fixed(&var) {
                             Some(PropagatorConflict {
                                 conjunction: conjunction!([var == 5]),
-                                inference_code,
+                                inference_code: inference_code.clone(),
                             })
                         } else {
                             None

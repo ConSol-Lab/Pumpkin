@@ -67,7 +67,7 @@ where
             fixed_lhs: 0,
             unfixed_variable_has_been_updated: false,
             should_recalculate_lhs: false,
-            inference_code: context.create_inference_code(constraint_tag, LinearNotEquals),
+            inference_code: InferenceCode::new(constraint_tag, LinearNotEquals),
         };
 
         propagator.recalculate_fixed_variables(context.domains());
@@ -208,7 +208,7 @@ where
                         .filter(|&(i, _)| i != unfixed_x_i)
                         .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
                         .collect::<PropositionalConjunction>(),
-                    self.inference_code,
+                    &self.inference_code,
                 )?;
             }
         } else if self.number_of_fixed_terms == self.terms.len() {
@@ -266,7 +266,7 @@ where
                             .expect("Expected to be able to fit i64 into i32")
                 ],
                 reason,
-                self.inference_code,
+                &self.inference_code,
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
             let conjunction = self
@@ -277,7 +277,7 @@ where
 
             return Err(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code,
+                inference_code: self.inference_code.clone(),
             }
             .into());
         }
@@ -322,7 +322,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
 
             return Err(PropagatorConflict {
                 conjunction,
-                inference_code: self.inference_code,
+                inference_code: self.inference_code.clone(),
             });
         }
         Ok(())

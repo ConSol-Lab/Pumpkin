@@ -82,7 +82,7 @@ impl Assignments {
         } else {
             let values_at_current_checkpoint =
                 self.trail.values_at_checkpoint(self.get_checkpoint());
-            let entry = values_at_current_checkpoint[0];
+            let entry = &values_at_current_checkpoint[0];
             pumpkin_assert_eq_simple!(None, entry.reason);
 
             Some(entry.predicate)
@@ -108,7 +108,9 @@ impl Assignments {
     }
 
     pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
-        self.trail[index]
+        // The clone is required because of InferenceCode is not copy. However, it is a
+        // reference-counted type, so cloning is cheap.
+        self.trail[index].clone()
     }
 
     // registers the domain of a new integer variable
@@ -804,7 +806,7 @@ impl Assignments {
             .iter()
             .find_map(|entry| {
                 if entry.predicate == predicate {
-                    entry.reason.map(|(reason_ref, _)| reason_ref)
+                    entry.reason.as_ref().map(|(reason_ref, _)| *reason_ref)
                 } else {
                     None
                 }
@@ -813,7 +815,7 @@ impl Assignments {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on

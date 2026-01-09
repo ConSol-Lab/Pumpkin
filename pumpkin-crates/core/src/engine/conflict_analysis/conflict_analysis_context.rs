@@ -86,7 +86,6 @@ impl ConflictAnalysisContext<'_> {
         let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
-                    &self.state.inference_codes,
                     &mut self.state.constraint_tags,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
@@ -176,9 +175,8 @@ impl ConflictAnalysisContext<'_> {
                     .expect("Expected to be able to retrieve step id for unit nogood");
 
                 let _ = proof_log.log_inference(
-                    &state.inference_codes,
                     &mut state.constraint_tags,
-                    *inference_code,
+                    inference_code.clone(),
                     [],
                     Some(predicate),
                     &state.variable_names,
@@ -186,7 +184,6 @@ impl ConflictAnalysisContext<'_> {
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
-                    &state.inference_codes,
                     &mut state.constraint_tags,
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
@@ -221,7 +218,6 @@ impl ConflictAnalysisContext<'_> {
 
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
-            &self.state.inference_codes,
             &mut self.state.constraint_tags,
             conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),

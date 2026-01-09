@@ -22,7 +22,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 >(
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: Domains,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
     let error_from_scratch =
@@ -112,7 +112,7 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
 /// profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
     context: Domains,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {

@@ -112,7 +112,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
             .initialise_bounds_and_remove_fixed(context.domains(), &self.parameters);
         register_tasks(&self.parameters.tasks, context.reborrow(), false);
 
-        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
 
         self
     }
@@ -123,21 +123,21 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         if self.parameters.is_infeasible {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
-                inference_code: self.inference_code.unwrap(),
+                inference_code: self.inference_code.clone().unwrap(),
             }));
         }
 
         let time_table = create_time_table_over_interval_from_scratch(
             context.domains(),
             &self.parameters,
-            self.inference_code.unwrap(),
+            self.inference_code.as_ref().unwrap(),
         )?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code.as_ref().unwrap(),
             time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -198,7 +198,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             &self.parameters,
             &self.updatable_structures,
-            self.inference_code.unwrap(),
+            self.inference_code.as_ref().unwrap(),
         )
     }
 }
@@ -216,7 +216,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
     mut context: Domains,
     parameters: &CumulativeParameters<Var>,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
     let events = create_events(context.reborrow(), parameters);
@@ -295,7 +295,7 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
 fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     events: Vec<Event<Var>>,
     context: Context,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropagatorConflict> {
     pumpkin_assert_extreme!(
@@ -449,7 +449,7 @@ pub(crate) fn propagate_from_scratch_time_table_interval<Var: IntegerVariable + 
     context: &mut PropagationContext,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
