@@ -9,13 +9,25 @@ ENDC = "\033[0m"
 IMPLEMENTATION_GRADE_CONTRIBUTION = 5.0
 
 
-def passed_all_test_cases(test_name: str, timeout=60) -> bool:
+def passed_all_test_cases(test_name: str, timeout=60, crate="implementation") -> bool:
     print(f"Running test cases {test_name}...")
     try:
         result = subprocess.run(
-            ["cargo", "test", "--tests", test_name],
+            [
+                "cargo",
+                "+nightly",
+                "test",
+                "-p",
+                crate,
+                test_name,
+                "--",
+                "-Z",
+                "unstable-options",
+                "--format",
+                "json",
+            ],
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             timeout=timeout,
             text=True,
         )
@@ -25,34 +37,29 @@ def passed_all_test_cases(test_name: str, timeout=60) -> bool:
         return False
 
     num_matched = 0
-    passed_all = True
+    passed_all = False
     total_passed = None
     total_failed = None
 
     for line in result.stdout.splitlines():
-        if line.startswith("test result"):
-            regex = (
-                r"test result: ([a-zA-Z]+). ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored; ([0-9]+) measured;"
-                r" ([0-9]+)"
-                r" filtered out"
-            )
-            compiled_regex = re.compile(regex)
-            result = compiled_regex.match(line)
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
 
-            if result is not None:
-                _status = result.group(1)
-                passed = int(result.group(2))
-                failed = int(result.group(3))
-                _ignored = int(result.group(4))
-                _measured = int(result.group(5))
+    if "type" in msg and msg["type"] == "suite":
+        assert "passed" in msg
+        assert "failed" in msg
 
-                if passed + failed == 0:
-                    continue
-                else:
-                    num_matched += 1
-                    passed_all = failed == 0
-                    total_passed = passed
-                    total_failed = failed
+        num_matched += 1
+
+        passed = msg["passed"]
+        failed = msg["failed"]
+
+        passed_all = failed == 0
+
+        total_passed = passed
+        total_failed = failed
 
     if num_matched == 0:
         raise Exception(f"No test cases ran for {test_name}")
@@ -68,3 +75,14 @@ def passed_all_test_cases(test_name: str, timeout=60) -> bool:
     print()
 
     return passed_all
+
+
+def check_nightly_installed():
+    print("Installing nightly toolchain if necessary...")
+    result = subprocess.run(
+        ["rustc", "+nightly", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True
+    )
+    if len(result.stderr) > 0:
+        print(f"\tInstalled {result.stdout}")
+    else:
+        print(f"\tAlready installed {result.stdout}")
