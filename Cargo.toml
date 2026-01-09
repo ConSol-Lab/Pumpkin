@@ -1,6 +1,18 @@
 [workspace]
-members = ["./pumpkin-solver", "./pumpkin-checker", "./drcp-format", "./pumpkin-solver-py", "./pumpkin-macros", "./drcp-debugger", "./pumpkin-crates/*", "./fzn-rs", "./fzn-rs-derive"]
 resolver = "2"
+members = [
+    # Libraries used by Pumpkin but in principle are independent
+    "./drcp-format", 
+    "./drcp-debugger", 
+    "./fzn-rs", 
+    "./fzn-rs-derive",
+
+    "./pumpkin-crates/*", # Core libraries of the solver
+    "./pumpkin-solver", # The solver binary
+    "./pumpkin-checker", # The uncertified proof checker
+    "./pumpkin-solver-py", # The python interface
+    "./pumpkin-macros", # Proc-macros used by the pumpkin source (unpublished)
+]
 
 [workspace.package]
 repository = "https://github.com/consol-lab/pumpkin"
