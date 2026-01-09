@@ -12,7 +12,6 @@ mod proof_atomics;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
 
 use dimacs::DimacsProof;
 use drcp_format::Deduction;
@@ -26,7 +25,6 @@ use proof_atomics::ProofAtomics;
 use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;

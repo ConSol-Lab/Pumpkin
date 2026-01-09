@@ -132,14 +132,14 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.domains()
                 ));
-                context.post(predicate, full_explanation, self.inference_code)
+                context.post(predicate, full_explanation, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
                     context,
                     profiles,
                     propagating_task,
-                    self.inference_code,
+                    &self.inference_code,
                 )
             }
         }
@@ -198,14 +198,14 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.domains()
                 ));
-                context.post(predicate, full_explanation, self.inference_code)
+                context.post(predicate, full_explanation, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
                     context,
                     profiles,
                     propagating_task,
-                    self.inference_code,
+                    &self.inference_code,
                 )
             }
         }
@@ -249,14 +249,14 @@ impl CumulativePropagationHandler {
 
                 let mut reason = (*explanation).clone();
                 reason.push(lower_bound_predicate_propagating_task);
-                context.post(predicate, reason, self.inference_code)
+                context.post(predicate, reason, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
                     context,
                     &[profile],
                     propagating_task,
-                    self.inference_code,
+                    &self.inference_code,
                 )
             }
         }
@@ -304,14 +304,14 @@ impl CumulativePropagationHandler {
 
                 let mut reason = (*explanation).clone();
                 reason.push(upper_bound_predicate_propagating_task);
-                context.post(predicate, reason, self.inference_code)
+                context.post(predicate, reason, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
                     context,
                     &[profile],
                     propagating_task,
-                    self.inference_code,
+                    &self.inference_code,
                 )
             }
         }
@@ -370,7 +370,7 @@ impl CumulativePropagationHandler {
                         &explanation,
                         context.domains()
                     ));
-                    context.post(predicate, (*explanation).clone(), self.inference_code)?;
+                    context.post(predicate, (*explanation).clone(), &self.inference_code)?;
                 }
                 CumulativeExplanationType::Pointwise => {
                     // We split into two cases when determining the explanation of the profile
@@ -403,7 +403,7 @@ impl CumulativePropagationHandler {
                         &explanation,
                         context.domains()
                     ));
-                    context.post(predicate, explanation, self.inference_code)?;
+                    context.post(predicate, explanation, &self.inference_code)?;
                 }
             }
         }
@@ -448,7 +448,7 @@ impl CumulativePropagationHandler {
 /// `explanation_type`.
 pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
     context: Context,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
 ) -> PropagatorConflict
@@ -469,7 +469,7 @@ where
 
     PropagatorConflict {
         conjunction,
-        inference_code,
+        inference_code: inference_code.clone(),
     }
 }
 
@@ -481,6 +481,7 @@ pub(crate) mod test_propagation_handler {
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::proof::ConstraintTag;
     use pumpkin_core::proof::InferenceCode;
     use pumpkin_core::propagation::LocalId;
     use pumpkin_core::state::CurrentNogood;
@@ -503,7 +504,7 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
             let propagation_handler = CumulativePropagationHandler::new(
                 explanation_type,
-                InferenceCode::create_from_index(0),
+                InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
             );
 
             let state = State::default();
@@ -533,7 +534,7 @@ pub(crate) mod test_propagation_handler {
 
             let reason = create_conflict_explanation(
                 self.state.get_domains(),
-                self.propagation_handler.inference_code,
+                &self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
             );

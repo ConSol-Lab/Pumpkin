@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::basic_types::PropagatorConflict;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -19,7 +18,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;

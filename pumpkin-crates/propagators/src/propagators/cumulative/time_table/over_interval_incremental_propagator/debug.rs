@@ -27,7 +27,7 @@ pub(crate) fn time_tables_are_the_same_interval<
     const SYNCHRONISE: bool,
 >(
     mut context: Domains,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {

@@ -21,7 +21,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
@@ -130,7 +130,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
     context: &mut PropagationContext,
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):

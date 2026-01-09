@@ -146,8 +146,7 @@ impl ConflictAnalysisContext<'_> {
             let trail_entry = state.assignments.get_trail_entry(trail_index);
             let (reason_ref, inference_code) = trail_entry
                 .reason
-                .expect("Cannot be a null reason for propagation.")
-                .clone();
+                .expect("Cannot be a null reason for propagation.");
 
             let propagator_id = state.reason_store.get_propagator(reason_ref);
 

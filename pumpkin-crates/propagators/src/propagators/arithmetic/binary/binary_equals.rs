@@ -65,7 +65,7 @@ where
             a_removed_values: HashSet::default(),
             b_removed_values: HashSet::default(),
 
-            inference_code: context.create_inference_code(constraint_tag, BinaryEquals),
+            inference_code: InferenceCode::new(constraint_tag, BinaryEquals),
 
             has_backtracked: false,
             first_propagation_loop: true,
@@ -141,7 +141,7 @@ where
                 .with_predicate_type(predicate_type)
                 .with_value(value)
                 .into_bits(),
-            self.inference_code,
+            &self.inference_code,
         )
     }
 }
@@ -164,7 +164,7 @@ where
             // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.a <= b_lb - 1] & [self.b >= b_lb]),
-                inference_code: self.inference_code,
+                inference_code: self.inference_code.clone(),
             })
         } else if b_ub < a_lb {
             // If `b` is fully before `a` then we report a conflict
@@ -172,7 +172,7 @@ where
             // Note that we lift the conflict
             Some(PropagatorConflict {
                 conjunction: conjunction!([self.b <= a_lb - 1] & [self.a >= a_lb]),
-                inference_code: self.inference_code,
+                inference_code: self.inference_code.clone(),
             })
         } else {
             None

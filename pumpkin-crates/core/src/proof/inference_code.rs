@@ -55,6 +55,14 @@ impl InferenceCode {
         InferenceCode(tag, label.to_str())
     }
 
+    /// Create an inference label with the [`Unknown`] inference label.
+    ///
+    /// This should be avoided as much as possible. This is likely only useful for writing unit
+    /// tests.
+    pub fn unknown_label(tag: ConstraintTag) -> Self {
+        InferenceCode::new(tag, Unknown)
+    }
+
     /// Get the constraint tag.
     pub fn tag(&self) -> ConstraintTag {
         self.0
@@ -82,8 +90,8 @@ impl InferenceCode {
 /// case.
 #[macro_export]
 macro_rules! declare_inference_label {
-    ($name:ident) => {
-        declare_inference_label!($name, {
+    ($v:vis $name:ident) => {
+        declare_inference_label!($v $name, {
             let ident_str = stringify!($name);
             <&str as convert_case::Casing<&str>>::to_case(
                 &ident_str,
@@ -132,3 +140,6 @@ pub trait InferenceLabel {
     /// `Arc<str>`.
     fn to_str(&self) -> Arc<str>;
 }
+
+/// An inference label used when no more specific label is known.
+declare_inference_label!(pub Unknown);
