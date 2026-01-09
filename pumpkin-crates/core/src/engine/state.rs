@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::InferenceChecker;
+
 use crate::basic_types::PropagatorConflict;
+#[cfg(feature = "check-propagations")]
+use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
@@ -69,6 +74,9 @@ pub struct State {
     pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
     statistics: StateStatistics,
+
+    #[cfg(feature = "check-propagations")]
+    checkers: HashMap<InferenceCode, Box<dyn InferenceChecker>>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -153,6 +161,8 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
+            #[cfg(feature = "check-propagations")]
+            checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -551,6 +561,8 @@ impl State {
             propagator.propagate(context)
         };
 
+        self.check_propagations(num_trail_entries_before);
+
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -591,6 +603,33 @@ impl State {
             }
         }
         Ok(())
+    }
+
+    #[cfg(not(feature = "check-propagations"))]
+    fn check_propagations(&self, _: usize) {
+        // If the feature is disabled, nothing happens here. The compiler will remove the method
+        // call.
+    }
+
+    /// For every propagation on the trail, run the inference checker for it.
+    ///
+    /// If the checker rejects the inference, this method panics.
+    #[cfg(feature = "check-propagations")]
+    fn check_propagations(&self, first_propagation_index: usize) {
+        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_index);
+
+            let (_, inference_code) = entry
+                .reason
+                .expect("propagations should only be checked after propagations");
+
+            let checker = self
+                .checkers
+                .get(&inference_code)
+                .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
+
+            assert!(checker.check());
+        }
     }
 
     /// Performs fixed-point propagation using the propagators defined in the [`State`].

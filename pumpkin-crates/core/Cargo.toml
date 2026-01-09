@@ -11,6 +11,7 @@ description = "The core of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
+pumpkin-checking = { version = "0.2.2", path = "../checking", optional = true }
 thiserror = "2.0.12"
 log = "0.4.17"
 bitfield = "0.14.0"
@@ -30,6 +31,7 @@ indexmap = "2.10.0"
 dyn-clone = "1.0.20"
 flate2 = { version = "1.1.2" }
 
+
 [dev-dependencies]
 pumpkin-constraints = { version = "0.2.2", path = "../constraints", features=["clap"] }
 
@@ -41,5 +43,6 @@ getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen-test = "0.3"
 
 [features]
+check-propagations = ["dep:pumpkin-checking"]
 debug-checks = []
 clap = ["dep:clap"]

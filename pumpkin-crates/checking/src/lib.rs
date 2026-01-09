@@ -1,14 +1,11 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use std::fmt::Debug;
+
+use dyn_clone::DynClone;
+use dyn_clone::clone_trait_object;
+
+pub trait InferenceChecker: Debug + DynClone {
+    fn check(&self) -> bool;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Allow Box<dyn InferenceChecker> to be cloned
+clone_trait_object!(InferenceChecker);

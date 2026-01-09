@@ -737,7 +737,10 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-checking"
-version = "0.1.0"
+version = "0.2.2"
+dependencies = [
+ "dyn-clone",
+]
 
 [[package]]
 name = "pumpkin-constraints"
@@ -768,6 +771,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-checking",
  "pumpkin-constraints",
  "rand",
  "thiserror",
