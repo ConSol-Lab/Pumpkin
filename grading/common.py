@@ -75,14 +75,3 @@ def passed_all_test_cases(test_name: str, timeout=60, crate="implementation") ->
     print()
 
     return passed_all
-
-
-def check_nightly_installed():
-    print("Installing nightly toolchain if necessary...")
-    result = subprocess.run(
-        ["rustc", "+nightly", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True
-    )
-    if len(result.stderr) > 0:
-        print(f"\tInstalled {result.stdout}")
-    else:
-        print(f"\tAlready installed {result.stdout}")

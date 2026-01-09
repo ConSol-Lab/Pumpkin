@@ -11,8 +11,6 @@ TEST_CASES_WITH_PERCENTAGE = {
 assert sum(TEST_CASES_WITH_PERCENTAGE.values()) == IMPLEMENTATION_GRADE_CONTRIBUTION
 
 if __name__ == "__main__":
-    check_nightly_installed()
-
     result = 0.0
     for test_name, grade_contribution in TEST_CASES_WITH_PERCENTAGE.items():
         if passed_all_test_cases(test_name):
