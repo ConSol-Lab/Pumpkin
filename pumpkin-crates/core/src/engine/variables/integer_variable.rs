@@ -1,6 +1,16 @@
 use std::fmt::Debug;
 
 use enumset::EnumSet;
+// When the `check-propagations` feature is enabled, all variables should be `CheckerVariable`.
+// However, it is not possible to conditionally impose a supertrait bound. So we define a trait
+// `CheckerVariable` that does nothing if the feature is disabled, and implement that trait for
+// every type.
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::CheckerVariable;
+#[cfg(not(feature = "check-propagations"))]
+pub trait CheckerVariable<T> {}
+#[cfg(not(feature = "check-propagations"))]
+impl<T, U> CheckerVariable<U> for T {}
 
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -8,11 +18,16 @@ use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
+use crate::predicates::Predicate;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
 pub trait IntegerVariable:
-    Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView> + Debug
+    Clone
+    + PredicateConstructor<Value = i32>
+    + TransformableVariable<Self::AffineView>
+    + Debug
+    + CheckerVariable<Predicate>
 {
     type AffineView: IntegerVariable;
 

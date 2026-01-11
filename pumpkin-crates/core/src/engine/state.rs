@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::InferenceChecker;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::VariableState;
 
 use crate::basic_types::PropagatorConflict;
 #[cfg(feature = "check-propagations")]
@@ -28,6 +30,7 @@ use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
+use crate::propagation::InferenceCheckers;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -76,7 +79,26 @@ pub struct State {
     statistics: StateStatistics,
 
     #[cfg(feature = "check-propagations")]
-    checkers: HashMap<InferenceCode, Box<dyn InferenceChecker>>,
+    checkers: HashMap<InferenceCode, BoxedChecker>,
+}
+
+/// Wrapper around `Box<dyn InferenceChecker<Predicate>>` that implements [`Clone`].
+#[cfg(feature = "check-propagations")]
+#[derive(Debug)]
+struct BoxedChecker(Box<dyn InferenceChecker<Predicate>>);
+
+#[cfg(feature = "check-propagations")]
+impl Clone for BoxedChecker {
+    fn clone(&self) -> Self {
+        BoxedChecker(dyn_clone::clone_box(&*self.0))
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl BoxedChecker {
+    fn check(&self, variable_state: VariableState<Predicate>) -> bool {
+        self.0.check(variable_state)
+    }
 }
 
 create_statistics_struct!(StateStatistics {
@@ -357,6 +379,8 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        constructor.add_inference_checkers(InferenceCheckers::new(self));
+
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
         let constructor_context =
@@ -379,6 +403,28 @@ impl State {
         self.enqueue_propagator(handle);
 
         handle
+    }
+
+    /// Add an inference checker to the state.
+    ///
+    /// The inference checker will be used to check propagations performed during
+    /// [`Self::propagate_to_fixed_point`].
+    ///
+    /// If an inference checker already exists for the given inference code, a panic is triggered.
+    #[cfg(feature = "check-propagations")]
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: impl Into<Box<dyn InferenceChecker<Predicate>>>,
+    ) {
+        let previous_checker = self
+            .checkers
+            .insert(inference_code, BoxedChecker(checker.into()));
+
+        assert!(
+            previous_checker.is_none(),
+            "cannot add multiple checkers for the same inference code"
+        );
     }
 }
 
@@ -589,6 +635,29 @@ impl State {
             Err(conflict) => {
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
+                    #[cfg(feature = "check-propagations")]
+                    {
+                        let checker =
+                            self.checkers.get(&inner.inference_code).unwrap_or_else(|| {
+                                panic!(
+                                    "missing checker for inference code {:?}",
+                                    inner.inference_code
+                                )
+                            });
+
+                        let variable_state = VariableState::prepare_for_conflict_check(
+                            inner.conjunction.clone(),
+                            None,
+                        )
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "inconsistent atomics in inference by {:?}",
+                                inner.inference_code,
+                            )
+                        });
+
+                        assert!(checker.check(variable_state));
+                    }
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
@@ -606,7 +675,7 @@ impl State {
     }
 
     #[cfg(not(feature = "check-propagations"))]
-    fn check_propagations(&self, _: usize) {
+    fn check_propagations(&mut self, _: usize) {
         // If the feature is disabled, nothing happens here. The compiler will remove the method
         // call.
     }
@@ -615,20 +684,43 @@ impl State {
     ///
     /// If the checker rejects the inference, this method panics.
     #[cfg(feature = "check-propagations")]
-    fn check_propagations(&self, first_propagation_index: usize) {
+    fn check_propagations(&mut self, first_propagation_index: usize) {
+        let mut reason_buffer = vec![];
+
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            use pumpkin_checking::VariableState;
+
             let entry = self.assignments.get_trail_entry(trail_index);
 
-            let (_, inference_code) = entry
+            let (reason_ref, inference_code) = entry
                 .reason
                 .expect("propagations should only be checked after propagations");
+
+            reason_buffer.clear();
+            let reason_exists = self.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    trail_index,
+                    &mut self.notification_engine,
+                ),
+                &mut self.propagators,
+                &mut reason_buffer,
+            );
+            assert!(reason_exists, "all propagations have reasons");
 
             let checker = self
                 .checkers
                 .get(&inference_code)
                 .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
 
-            assert!(checker.check());
+            let variable_state = VariableState::prepare_for_conflict_check(
+                reason_buffer.drain(..),
+                Some(entry.predicate),
+            )
+            .unwrap_or_else(|| panic!("inconsistent atomics in inference by {inference_code:?}"));
+
+            assert!(checker.check(variable_state));
         }
     }
 

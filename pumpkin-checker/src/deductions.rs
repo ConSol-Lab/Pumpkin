@@ -3,10 +3,11 @@ use std::rc::Rc;
 
 use drcp_format::ConstraintId;
 use drcp_format::IntAtomic;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::VariableState;
 
 use crate::inferences::Fact;
 use crate::model::Nogood;
-use crate::state::VariableState;
 
 /// An inference that was ignored when checking a deduction.
 #[derive(Clone, Debug)]
@@ -50,9 +51,11 @@ pub fn verify_deduction(
     // At some point, this should either reach a fact without a consequent or derive an
     // inconsistent domain.
 
-    let mut variable_state =
-        VariableState::prepare_for_conflict_check(&Fact::nogood(deduction.premises.clone()))
-            .ok_or(InvalidDeduction::InconsistentPremises)?;
+    let mut variable_state = VariableState::prepare_for_conflict_check(
+        deduction.premises.iter().cloned().map(Into::into),
+        None,
+    )
+    .ok_or(InvalidDeduction::InconsistentPremises)?;
 
     let mut unused_inferences = Vec::new();
 
@@ -75,9 +78,22 @@ pub fn verify_deduction(
                     // `String`. The former does not implement `Send`, but that is
                     // required for our error type to be used with anyhow.
                     Some(IntAtomic {
-                        name: String::from(premise.name.as_ref()),
-                        comparison: premise.comparison,
-                        value: premise.value,
+                        name: String::from(premise.identifier().as_ref()),
+                        comparison: match premise.comparison() {
+                            pumpkin_checking::Comparison::GreaterEqual => {
+                                drcp_format::IntComparison::GreaterEqual
+                            }
+                            pumpkin_checking::Comparison::LessEqual => {
+                                drcp_format::IntComparison::LessEqual
+                            }
+                            pumpkin_checking::Comparison::Equal => {
+                                drcp_format::IntComparison::Equal
+                            }
+                            pumpkin_checking::Comparison::NotEqual => {
+                                drcp_format::IntComparison::NotEqual
+                            }
+                        },
+                        value: premise.value(),
                     })
                 }
             })

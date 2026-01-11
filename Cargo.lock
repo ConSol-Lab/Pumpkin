@@ -732,6 +732,8 @@ dependencies = [
  "drcp-format",
  "flate2",
  "fzn-rs",
+ "pumpkin-checking",
+ "pumpkin-propagators",
  "thiserror",
 ]
 
@@ -798,6 +800,7 @@ dependencies = [
  "clap",
  "convert_case 0.6.0",
  "enumset",
+ "pumpkin-checking",
  "pumpkin-constraints",
  "pumpkin-core",
 ]

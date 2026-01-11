@@ -4,6 +4,8 @@ mod linear;
 mod nogood;
 mod time_table;
 
+use pumpkin_checking::VariableState;
+
 use crate::model::Atomic;
 use crate::model::Model;
 
@@ -61,8 +63,8 @@ pub(crate) fn verify_inference(
     inference: &drcp_format::Inference<std::rc::Rc<str>, i32, std::rc::Rc<str>>,
 ) -> Result<Fact, InvalidInference> {
     let fact = Fact {
-        premises: inference.premises.clone(),
-        consequent: inference.consequent.clone(),
+        premises: inference.premises.iter().cloned().map(Into::into).collect(),
+        consequent: inference.consequent.clone().map(Into::into),
     };
 
     let label = inference
@@ -79,7 +81,9 @@ pub(crate) fn verify_inference(
             return Err(InvalidInference::Unsound);
         };
 
-        if !model.is_trivially_true(atomic.clone()) {
+        let atomic: Atomic = atomic.into();
+
+        if !model.is_trivially_true(&atomic) {
             // If the consequent is not trivially true in the model then the inference
             // is unsound.
             return Err(InvalidInference::Unsound);
@@ -87,6 +91,11 @@ pub(crate) fn verify_inference(
 
         return Ok(fact);
     }
+
+    // Setup the state for a conflict check.
+    let variable_state =
+        VariableState::prepare_for_conflict_check(fact.premises.clone(), fact.consequent.clone())
+            .ok_or(InvalidInference::InconsistentPremises)?;
 
     // Get the constraint that generated the inference from the model.
     let generated_by_constraint_id = inference
@@ -98,27 +107,27 @@ pub(crate) fn verify_inference(
 
     match label {
         "linear_bounds" => {
-            linear::verify_linear_bounds(&fact, generated_by)?;
+            linear::verify_linear_bounds(&fact, generated_by, variable_state)?;
         }
 
         "nogood" => {
-            nogood::verify_nogood(&fact, generated_by)?;
+            nogood::verify_nogood(&fact, generated_by, variable_state)?;
         }
 
         "time_table" => {
-            time_table::verify_time_table(&fact, generated_by)?;
+            time_table::verify_time_table(&fact, generated_by, variable_state)?;
         }
 
         "all_different" => {
-            all_different::verify_all_different(&fact, generated_by)?;
+            all_different::verify_all_different(&fact, generated_by, variable_state)?;
         }
 
         "binary_equals" => {
-            arithmetic::verify_binary_equals(&fact, generated_by)?;
+            arithmetic::verify_binary_equals(&fact, generated_by, variable_state)?;
         }
 
         "binary_not_equals" => {
-            arithmetic::verify_binary_not_equals(&fact, generated_by)?;
+            arithmetic::verify_binary_not_equals(&fact, generated_by, variable_state)?;
         }
 
         _ => return Err(InvalidInference::UnsupportedLabel),

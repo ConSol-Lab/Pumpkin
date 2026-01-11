@@ -1,6 +1,10 @@
 use std::cmp::Ordering;
 
 use enumset::EnumSet;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::CheckerVariable;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::I32Ext;
 
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -45,6 +49,102 @@ impl<Inner> AffineView<Inner> {
 
     fn map(&self, value: i32) -> i32 {
         self.scale * value + self.offset
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self <= value]
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self >= value]
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self == value]
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self != value]
+    }
+
+    fn induced_lower_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> I32Ext {
+        if self.scale.is_positive() {
+            match self.inner.induced_lower_bound(variable_state) {
+                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                bound => bound,
+            }
+        } else {
+            match self.inner.induced_upper_bound(variable_state) {
+                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                I32Ext::NegativeInf => I32Ext::PositiveInf,
+                I32Ext::PositiveInf => I32Ext::NegativeInf,
+            }
+        }
+    }
+
+    fn induced_upper_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> I32Ext {
+        if self.scale.is_positive() {
+            match self.inner.induced_upper_bound(variable_state) {
+                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                bound => bound,
+            }
+        } else {
+            match self.inner.induced_lower_bound(variable_state) {
+                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                I32Ext::NegativeInf => I32Ext::PositiveInf,
+                I32Ext::PositiveInf => I32Ext::NegativeInf,
+            }
+        }
+    }
+
+    fn induced_fixed_value(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<i32> {
+        self.inner
+            .induced_fixed_value(variable_state)
+            .map(|value| self.map(value))
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        _variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        todo!("how to iterate holes of a scaled domain");
+        #[allow(unreachable_code, reason = "todo does not compile to impl Iterator")]
+        std::iter::empty()
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        self.inner
+            .iter_induced_domain(variable_state)
+            .map(|iter| iter.map(|value| self.map(value)))
     }
 }
 
