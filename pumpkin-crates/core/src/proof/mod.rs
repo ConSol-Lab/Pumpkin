@@ -12,7 +12,6 @@ mod proof_atomics;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
 
 use dimacs::DimacsProof;
 use drcp_format::Deduction;
@@ -26,7 +25,6 @@ use proof_atomics::ProofAtomics;
 use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
@@ -80,7 +78,6 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        inference_codes: &KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
@@ -97,8 +94,6 @@ impl ProofLog {
             return Ok(ConstraintTag::create_from_index(0));
         };
 
-        let (tag, label) = inference_codes[inference_code].clone();
-
         let inference_tag = constraint_tags.next_key();
 
         let inference = Inference {
@@ -110,8 +105,8 @@ impl ProofLog {
             consequent: propagated.map(|predicate| {
                 proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
             }),
-            generated_by: Some(tag.into()),
-            label: Some(label),
+            generated_by: Some(inference_code.tag().into()),
+            label: Some(inference_code.label()),
         };
 
         writer.log_inference(inference)?;

@@ -91,8 +91,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
             .collect::<Vec<_>>();
         let theta_lambda_tree = ThetaLambdaTree::new(&tasks);
 
-        let inference_code =
-            context.create_inference_code(self.constraint_tag, DisjunctiveEdgeFinding);
+        let inference_code = InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding);
 
         tasks.iter().for_each(|task| {
             context.register(task.start_time.clone(), DomainEvents::BOUNDS, task.id);
@@ -119,7 +118,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.tasks,
             &mut self.sorted_tasks,
-            self.inference_code,
+            &self.inference_code,
         )
     }
 
@@ -131,7 +130,7 @@ impl<Var: IntegerVariable + 'static> Propagator for DisjunctivePropagator<Var> {
             &mut context,
             &self.tasks,
             &mut sorted_tasks,
-            self.inference_code,
+            &self.inference_code,
         )
     }
 }
@@ -143,7 +142,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
     context: &mut PropagationContext,
     tasks: &[DisjunctiveTask<Var>],
     sorted_tasks: &mut [DisjunctiveTask<SortedTaskVar>],
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     // First we create our Theta-Lambda tree and add all of the tasks to Theta (Lambda is empty at
     // this point)
@@ -169,7 +168,7 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         if theta_lambda_tree.ect() > lct_j {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: create_conflict_explanation(theta_lambda_tree, context, lct_j),
-                inference_code,
+                inference_code: inference_code.clone(),
             }));
         }
 

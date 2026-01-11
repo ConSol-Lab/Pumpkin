@@ -1,4 +1,6 @@
 use enumset::EnumSet;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
 use crate::containers::StorageKey;
@@ -8,6 +10,8 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
+#[cfg(feature = "check-propagations")]
+use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -25,6 +29,74 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl CheckerVariable<Predicate> for DomainId {
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self <= value]
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self >= value]
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self == value]
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self != value]
+    }
+
+    fn induced_lower_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> pumpkin_checking::I32Ext {
+        variable_state.lower_bound(self)
+    }
+
+    fn induced_upper_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> pumpkin_checking::I32Ext {
+        variable_state.upper_bound(self)
+    }
+
+    fn induced_fixed_value(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<i32> {
+        variable_state.fixed_value(self)
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        variable_state.holes(self)
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        variable_state.iter_domain(self)
     }
 }
 

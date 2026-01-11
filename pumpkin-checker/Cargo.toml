@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+pumpkin-checking = { version = "0.2.2", path = "../pumpkin-crates/checking/" }
+pumpkin-propagators = { version = "0.2.2", features = ["include-checkers"], path = "../pumpkin-crates/propagators/" }
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
 drcp-format = { version = "0.3.0", path = "../drcp-format" }

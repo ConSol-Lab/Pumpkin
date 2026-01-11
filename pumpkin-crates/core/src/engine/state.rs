@@ -1,8 +1,14 @@
 use std::sync::Arc;
 
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::InferenceChecker;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::VariableState;
+
 use crate::basic_types::PropagatorConflict;
+#[cfg(feature = "check-propagations")]
+use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -19,12 +25,12 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
+use crate::propagation::InferenceCheckers;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -67,11 +73,32 @@ pub struct State {
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
 
-    pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
     /// The [`ConstraintTag`]s generated for this proof.
     pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
     statistics: StateStatistics,
+
+    #[cfg(feature = "check-propagations")]
+    checkers: HashMap<InferenceCode, BoxedChecker>,
+}
+
+/// Wrapper around `Box<dyn InferenceChecker<Predicate>>` that implements [`Clone`].
+#[cfg(feature = "check-propagations")]
+#[derive(Debug)]
+struct BoxedChecker(Box<dyn InferenceChecker<Predicate>>);
+
+#[cfg(feature = "check-propagations")]
+impl Clone for BoxedChecker {
+    fn clone(&self) -> Self {
+        BoxedChecker(dyn_clone::clone_box(&*self.0))
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl BoxedChecker {
+    fn check(&self, variable_state: VariableState<Predicate>) -> bool {
+        self.0.check(variable_state)
+    }
 }
 
 create_statistics_struct!(StateStatistics {
@@ -106,7 +133,7 @@ impl From<PropagatorConflict> for Conflict {
 }
 
 /// A conflict because a domain became empty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
@@ -154,9 +181,10 @@ impl Default for State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
+            #[cfg(feature = "check-propagations")]
+            checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -197,18 +225,6 @@ impl State {
 
 /// Operations to create .
 impl State {
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    ///
-    /// The inference codes are required to log inferences with [`ProofLog::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.inference_codes
-            .push((constraint_tag, inference_label.to_str()))
-    }
-
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
@@ -363,6 +379,8 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        constructor.add_inference_checkers(InferenceCheckers::new(self));
+
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
         let constructor_context =
@@ -385,6 +403,28 @@ impl State {
         self.enqueue_propagator(handle);
 
         handle
+    }
+
+    /// Add an inference checker to the state.
+    ///
+    /// The inference checker will be used to check propagations performed during
+    /// [`Self::propagate_to_fixed_point`].
+    ///
+    /// If an inference checker already exists for the given inference code, a panic is triggered.
+    #[cfg(feature = "check-propagations")]
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: impl Into<Box<dyn InferenceChecker<Predicate>>>,
+    ) {
+        let previous_checker = self
+            .checkers
+            .insert(inference_code, BoxedChecker(checker.into()));
+
+        assert!(
+            previous_checker.is_none(),
+            "cannot add multiple checkers for the same inference code"
+        );
     }
 }
 
@@ -567,6 +607,9 @@ impl State {
             propagator.propagate(context)
         };
 
+        #[cfg(feature = "check-propagations")]
+        self.check_propagations(num_trail_entries_before);
+
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -593,6 +636,9 @@ impl State {
             Err(conflict) => {
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
+                    #[cfg(feature = "check-propagations")]
+                    self.run_checker(inner.conjunction.clone(), None, &inner.inference_code);
+
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
@@ -607,6 +653,41 @@ impl State {
             }
         }
         Ok(())
+    }
+
+    /// For every propagation on the trail, run the inference checker for it.
+    ///
+    /// If the checker rejects the inference, this method panics.
+    #[cfg(feature = "check-propagations")]
+    fn check_propagations(&mut self, first_propagation_index: usize) {
+        let mut reason_buffer = vec![];
+
+        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_index);
+
+            let (reason_ref, inference_code) = entry
+                .reason
+                .expect("propagations should only be checked after propagations");
+
+            reason_buffer.clear();
+            let reason_exists = self.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    trail_index,
+                    &mut self.notification_engine,
+                ),
+                &mut self.propagators,
+                &mut reason_buffer,
+            );
+            assert!(reason_exists, "all propagations have reasons");
+
+            self.run_checker(
+                reason_buffer.drain(..),
+                Some(entry.predicate),
+                &inference_code,
+            );
+        }
     }
 
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
@@ -647,6 +728,30 @@ impl State {
         ));
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl State {
+    /// Run the checker for the given inference code on the given inference.
+    fn run_checker(
+        &self,
+        premises: impl IntoIterator<Item = Predicate>,
+        consequent: Option<Predicate>,
+        inference_code: &InferenceCode,
+    ) {
+        // Get the checker for the inference code.
+        let checker = self
+            .checkers
+            .get(inference_code)
+            .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
+
+        // Construct the variable state for the conflict check.
+        let variable_state = VariableState::prepare_for_conflict_check(premises, consequent)
+            .unwrap_or_else(|| panic!("inconsistent atomics in inference by {:?}", inference_code));
+
+        // Run the conflict check.
+        assert!(checker.check(variable_state));
     }
 }
 

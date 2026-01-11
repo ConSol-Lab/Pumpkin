@@ -833,7 +833,6 @@ impl ConstraintSatisfactionSolver {
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
             let _ = self.internal_parameters.proof_log.log_inference(
-                &self.state.inference_codes,
                 &mut self.state.constraint_tags,
                 inference_code,
                 inference_premises,
@@ -877,9 +876,7 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = self
-                    .state
-                    .create_inference_code(constraint_tag, NogoodLabel);
+                let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -1045,9 +1042,7 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = self
-            .state
-            .create_inference_code(constraint_tag, NogoodLabel);
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 

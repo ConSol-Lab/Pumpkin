@@ -51,7 +51,7 @@ where
             a,
             b,
             c,
-            inference_code: context.create_inference_code(constraint_tag, IntegerMultiplication),
+            inference_code: InferenceCode::new(constraint_tag, IntegerMultiplication),
         }
     }
 }
@@ -87,7 +87,7 @@ where
     }
 
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c, self.inference_code)
+        perform_propagation(context, &self.a, &self.b, &self.c, &self.inference_code)
     }
 }
 
@@ -96,7 +96,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     a: &VA,
     b: &VB,
     c: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     // First we propagate the signs
     propagate_signs(&mut context, a, b, c, inference_code)?;
@@ -184,7 +184,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
                     & [b == context.lower_bound(b)]
                     & [c == context.lower_bound(c)]
             ),
-            inference_code,
+            inference_code: inference_code.clone(),
         }
         .into());
     }
@@ -219,7 +219,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     a: &VA,
     b: &VB,
     c: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     let a_min = context.lower_bound(a);
     let a_max = context.upper_bound(a);

@@ -1,6 +1,9 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::InferenceChecker;
+
 use super::Domains;
 use super::LocalId;
 use super::Propagator;
@@ -18,9 +21,7 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
-use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
@@ -36,8 +37,40 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
+    /// Add inference checkers to the solver if applicable.
+    ///
+    /// By default this does nothing, and should only be implemented when `check-propagations` is
+    /// turned on.
+    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
+
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
+}
+
+/// Holds all inference checkers in the solver.
+///
+/// Only useful if the `check-propagations` feature is enabled.
+#[derive(Debug)]
+pub struct InferenceCheckers<'state> {
+    state: &'state mut State,
+}
+
+impl<'state> InferenceCheckers<'state> {
+    pub(crate) fn new(state: &'state mut State) -> Self {
+        InferenceCheckers { state }
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl InferenceCheckers<'_> {
+    /// Forwards to [`State::add_inference_checker`].
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        self.state.add_inference_checker(inference_code, checker);
+    }
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.
@@ -157,17 +190,6 @@ impl PropagatorConstructorContext<'_> {
         var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 
-    /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
-    /// in the solver and the proof.
-    pub fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.state
-            .create_inference_code(constraint_tag, inference_label)
-    }
-
     /// Get a new [`LocalId`] which is guaranteed to be unused.
     pub(crate) fn get_next_local_id(&self) -> LocalId {
         *self.next_local_id.deref()
@@ -189,6 +211,19 @@ impl PropagatorConstructorContext<'_> {
             },
             state: self.state,
         }
+    }
+
+    /// Add an inference checker for inferences produced by the propagator.
+    ///
+    /// If the `check-propagations` feature is enabled, this forwards to
+    /// [`State::add_inference_checker`]. Otherwise, nothing happens.
+    #[cfg(feature = "check-propagations")]
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        self.state.add_inference_checker(inference_code, checker);
     }
 
     /// Set the next local id to be at least one more than the largest encountered local id.

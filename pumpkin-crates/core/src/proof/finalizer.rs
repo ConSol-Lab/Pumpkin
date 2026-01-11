@@ -99,9 +99,8 @@ fn get_required_assumptions(
     // If the predicate is a unit-nogood, we explain the root-level assignment.
     if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
         let _ = context.proof_log.log_inference(
-            &context.state.inference_codes,
             &mut context.state.constraint_tags,
-            *inference_code,
+            inference_code.clone(),
             [],
             Some(predicate),
             &context.state.variable_names,

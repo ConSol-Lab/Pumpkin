@@ -59,7 +59,7 @@ where
         context.register(index.clone(), DomainEvents::ANY_INT, ID_INDEX);
         context.register(rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
 
-        let inference_code = context.create_inference_code(constraint_tag, Element);
+        let inference_code = InferenceCode::new(constraint_tag, Element);
 
         ElementPropagator {
             array,
@@ -158,12 +158,12 @@ where
         context.post(
             predicate![self.index >= 0],
             conjunction!(),
-            self.inference_code,
+            &self.inference_code,
         )?;
         context.post(
             predicate![self.index <= self.array.len() as i32 - 1],
             conjunction!(),
-            self.inference_code,
+            &self.inference_code,
         )?;
         Ok(())
     }
@@ -194,7 +194,7 @@ where
                     .with_value(rhs_lb)
                     .into_bits(),
             ),
-            self.inference_code,
+            &self.inference_code,
         )?;
         context.post(
             predicate![self.rhs <= rhs_ub],
@@ -204,7 +204,7 @@ where
                     .with_value(rhs_ub)
                     .into_bits(),
             ),
-            self.inference_code,
+            &self.inference_code,
         )?;
 
         Ok(())
@@ -237,7 +237,7 @@ where
         }
 
         for (idx, reason) in to_remove.drain(..) {
-            context.post(predicate![self.index != idx], reason, self.inference_code)?;
+            context.post(predicate![self.index != idx], reason, &self.inference_code)?;
         }
 
         Ok(())
@@ -257,12 +257,12 @@ where
         context.post(
             predicate![lhs >= rhs_lb],
             conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
-            self.inference_code,
+            &self.inference_code,
         )?;
         context.post(
             predicate![lhs <= rhs_ub],
             conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
-            self.inference_code,
+            &self.inference_code,
         )?;
         Ok(())
     }

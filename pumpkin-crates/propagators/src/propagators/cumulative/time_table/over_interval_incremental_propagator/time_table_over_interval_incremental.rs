@@ -123,7 +123,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
 
         self.is_time_table_outdated = true;
 
-        self.inference_code = Some(context.create_inference_code(self.constraint_tag, TimeTable));
+        self.inference_code = Some(InferenceCode::new(self.constraint_tag, TimeTable));
 
         self
     }
@@ -182,7 +182,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     {
                         conflict = Some(Err(create_conflict_explanation(
                             context.reborrow(),
-                            self.inference_code.unwrap(),
+                            self.inference_code.as_ref().unwrap(),
                             &conflict_tasks,
                             self.parameters.options.explanation_type,
                         )
@@ -243,7 +243,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             self.time_table = create_time_table_over_interval_from_scratch(
                 context.domains(),
                 &self.parameters,
-                self.inference_code.unwrap(),
+                self.inference_code.as_ref().unwrap(),
             )?;
 
             // Then we note that the time-table is not outdated anymore
@@ -304,7 +304,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.domains(),
-                            self.inference_code.unwrap(),
+                            self.inference_code.as_ref().unwrap(),
                             &mut conflicting_profile,
                             &self.parameters,
                         );
@@ -313,7 +313,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                             &synchronised_conflict_explanation,
                             context.domains(),
                             &self.parameters,
-                            self.inference_code.unwrap(),
+                            self.inference_code.as_ref().unwrap(),
                         ),
                         "The conflict explanation was not the same as the conflict explanation from scratch!"
                     );
@@ -335,7 +335,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         create_time_table_over_interval_from_scratch(
                             context.domains(),
                             &self.parameters,
-                            self.inference_code.unwrap(),
+                            self.inference_code.as_ref().unwrap(),
                         )
                         .is_err(),
                         "Time-table from scratch could not find conflict"
@@ -345,7 +345,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 
                     return Err(create_conflict_explanation(
                         context.domains(),
-                        self.inference_code.unwrap(),
+                        self.inference_code.as_ref().unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
                     )
@@ -390,7 +390,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         if self.parameters.is_infeasible {
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: conjunction!(),
-                inference_code: self.inference_code.unwrap(),
+                inference_code: self.inference_code.clone().unwrap(),
             }));
         }
 
@@ -399,7 +399,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(
                 context.domains(),
-                self.inference_code.unwrap(),
+                self.inference_code.as_ref().unwrap(),
                 &self.time_table,
                 &self.parameters,
             ),
@@ -412,7 +412,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
-            self.inference_code.unwrap(),
+            self.inference_code.as_ref().unwrap(),
             self.time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
@@ -523,7 +523,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             &mut context,
             &self.parameters,
             &self.updatable_structures,
-            self.inference_code.unwrap(),
+            self.inference_code.as_ref().unwrap(),
         )
     }
 }

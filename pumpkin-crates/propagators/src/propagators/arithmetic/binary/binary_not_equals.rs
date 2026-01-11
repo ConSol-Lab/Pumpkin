@@ -48,7 +48,7 @@ where
             a,
             b,
 
-            inference_code: context.create_inference_code(constraint_tag, BinaryNotEquals),
+            inference_code: InferenceCode::new(constraint_tag, BinaryNotEquals),
         }
     }
 }
@@ -78,7 +78,7 @@ where
                 // If this is the case then we have detected a conflict
                 Some(PropagatorConflict {
                     conjunction: conjunction!([self.a == lb_a] & [self.b == lb_a]),
-                    inference_code: self.inference_code,
+                    inference_code: self.inference_code.clone(),
                 })
             } else {
                 None
@@ -117,7 +117,7 @@ where
             context.post(
                 predicate!(self.b != a_lb),
                 conjunction!([self.a == a_lb]),
-                self.inference_code,
+                &self.inference_code,
             )?;
         }
 
@@ -126,7 +126,7 @@ where
             context.post(
                 predicate!(self.a != b_lb),
                 conjunction!([self.b == b_lb]),
-                self.inference_code,
+                &self.inference_code,
             )?;
         }
 
@@ -152,7 +152,7 @@ where
             context.post(
                 predicate!(self.b != a_lb),
                 conjunction!([self.a == a_lb]),
-                self.inference_code,
+                &self.inference_code,
             )?;
         }
 
@@ -160,7 +160,7 @@ where
             context.post(
                 predicate!(self.a != b_lb),
                 conjunction!([self.b == b_lb]),
-                self.inference_code,
+                &self.inference_code,
             )?;
         }
 

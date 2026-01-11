@@ -106,14 +106,12 @@ impl ConflictResolver for ResolutionResolver {
             )
             .expect("Failed to write proof log");
 
-        let inference_code = context
-            .state
-            .create_inference_code(constraint_tag, NogoodLabel);
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
         if learned_nogood.predicates.len() == 1 {
             let _ = context
                 .unit_nogood_inference_codes
-                .insert(!learned_nogood.predicates[0], inference_code);
+                .insert(!learned_nogood.predicates[0], inference_code.clone());
         }
 
         context

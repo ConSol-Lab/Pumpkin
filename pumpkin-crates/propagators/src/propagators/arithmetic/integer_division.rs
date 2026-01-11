@@ -55,7 +55,7 @@ where
         context.register(denominator.clone(), DomainEvents::BOUNDS, ID_DENOMINATOR);
         context.register(rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
 
-        let inference_code = context.create_inference_code(constraint_tag, Division);
+        let inference_code = InferenceCode::new(constraint_tag, Division);
 
         DivisionPropagator {
             numerator,
@@ -100,7 +100,7 @@ where
             &self.numerator,
             &self.denominator,
             &self.rhs,
-            self.inference_code,
+            &self.inference_code,
         )
     }
 }
@@ -110,7 +110,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     if context.lower_bound(denominator) < 0 && context.upper_bound(denominator) > 0 {
         // For now we don't do anything in this case, note that this will not lead to incorrect
@@ -194,7 +194,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
@@ -284,7 +284,7 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_max = context.upper_bound(rhs);
     let numerator_max = context.upper_bound(numerator);
@@ -330,7 +330,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);

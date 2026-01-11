@@ -1,3 +1,13 @@
+#[cfg(feature = "include-checkers")]
+use pumpkin_checking::AtomicConstraint;
+#[cfg(feature = "include-checkers")]
+use pumpkin_checking::CheckerVariable;
+#[cfg(feature = "include-checkers")]
+use pumpkin_checking::I32Ext;
+#[cfg(feature = "include-checkers")]
+use pumpkin_checking::InferenceChecker;
+#[cfg(feature = "include-checkers")]
+use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -9,6 +19,8 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
+#[cfg(feature = "include-checkers")]
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -39,6 +51,17 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
+    #[cfg(feature = "include-checkers")]
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, LinearBounds),
+            Box::new(LinearLessOrEqualInferenceChecker::new(
+                self.x.clone(),
+                self.c,
+            )),
+        );
+    }
+
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs {
             x,
@@ -66,7 +89,7 @@ where
             c,
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
-            inference_code: context.create_inference_code(constraint_tag, LinearBounds),
+            inference_code: InferenceCode::new(constraint_tag, LinearBounds),
             reason_buffer: Vec::default(),
         }
     }
@@ -99,7 +122,7 @@ where
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
                 .collect(),
-            inference_code: self.inference_code,
+            inference_code: self.inference_code.clone(),
         }
     }
 }
@@ -206,7 +229,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(predicate![x_i <= bound], i, self.inference_code)?;
+                context.post(predicate![x_i <= bound], i, &self.inference_code)?;
             }
         }
 
@@ -263,11 +286,49 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
+                context.post(predicate![x_i <= bound], reason, &self.inference_code)?;
             }
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg(feature = "include-checkers")]
+pub struct LinearLessOrEqualInferenceChecker<Var> {
+    terms: Box<[Var]>,
+    bound: I32Ext,
+}
+
+#[cfg(feature = "include-checkers")]
+impl<Var> LinearLessOrEqualInferenceChecker<Var> {
+    pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
+        LinearLessOrEqualInferenceChecker {
+            terms,
+            bound: I32Ext::I32(bound),
+        }
+    }
+}
+
+#[cfg(feature = "include-checkers")]
+impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualInferenceChecker<Var>
+where
+    Var: CheckerVariable<Atomic>,
+    Atomic: AtomicConstraint,
+{
+    fn check(&self, variable_state: VariableState<Atomic>) -> bool {
+        // Next, we evaluate the linear inequality. The lower bound of the
+        // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
+        // I32Ext, and if the lower bound of one of the terms is -infty, then the left-hand side
+        // will be -infty regardless of the other terms.
+        let left_hand_side = self.terms.iter().fold(I32Ext::I32(0), |acc, variable| {
+            let lower_bound = variable.induced_lower_bound(&variable_state);
+
+            acc + lower_bound
+        });
+
+        left_hand_side > self.bound
     }
 }
 

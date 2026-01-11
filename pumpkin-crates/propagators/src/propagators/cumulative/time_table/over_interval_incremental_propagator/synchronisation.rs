@@ -58,7 +58,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
     synchronised_conflict_explanation: &PropagationStatusCP,
     context: Domains,
     parameters: &CumulativeParameters<Var>,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
 ) -> bool {
     let error_from_scratch =
         create_time_table_over_interval_from_scratch(context, parameters, inference_code);
@@ -81,7 +81,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 /// included in the profile and sorting them in the same order.
 pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
     mut context: Domains,
-    inference_code: InferenceCode,
+    inference_code: &InferenceCode,
     conflicting_profile: &mut ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {

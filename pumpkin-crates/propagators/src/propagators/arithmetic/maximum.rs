@@ -48,7 +48,7 @@ where
             LocalId::from(array.len() as u32),
         );
 
-        let inference_code = context.create_inference_code(constraint_tag, Maximum);
+        let inference_code = InferenceCode::new(constraint_tag, Maximum);
 
         MaximumPropagator {
             array,
@@ -92,7 +92,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             context.post(
                 predicate![var <= rhs_ub],
                 conjunction!([self.rhs <= rhs_ub]),
-                self.inference_code,
+                &self.inference_code,
             )?;
 
             let var_lb = context.lower_bound(var);
@@ -112,7 +112,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         context.post(
             predicate![self.rhs >= max_lb],
             PropositionalConjunction::from(lb_reason),
-            self.inference_code,
+            &self.inference_code,
         )?;
 
         // Rule 3.
@@ -128,7 +128,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             context.post(
                 predicate![self.rhs <= max_ub],
                 ub_reason,
-                self.inference_code,
+                &self.inference_code,
             )?;
         }
 
@@ -161,7 +161,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 context.post(
                     predicate![propagating_variable >= rhs_lb],
                     propagation_reason,
-                    self.inference_code,
+                    &self.inference_code,
                 )?;
             }
         }
