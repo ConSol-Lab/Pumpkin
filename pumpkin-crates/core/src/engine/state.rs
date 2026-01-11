@@ -607,6 +607,7 @@ impl State {
             propagator.propagate(context)
         };
 
+        #[cfg(feature = "check-propagations")]
         self.check_propagations(num_trail_entries_before);
 
         match propagation_status {
@@ -636,28 +637,8 @@ impl State {
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
                     #[cfg(feature = "check-propagations")]
-                    {
-                        let checker =
-                            self.checkers.get(&inner.inference_code).unwrap_or_else(|| {
-                                panic!(
-                                    "missing checker for inference code {:?}",
-                                    inner.inference_code
-                                )
-                            });
+                    self.run_checker(inner.conjunction.clone(), None, &inner.inference_code);
 
-                        let variable_state = VariableState::prepare_for_conflict_check(
-                            inner.conjunction.clone(),
-                            None,
-                        )
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "inconsistent atomics in inference by {:?}",
-                                inner.inference_code,
-                            )
-                        });
-
-                        assert!(checker.check(variable_state));
-                    }
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
@@ -674,12 +655,6 @@ impl State {
         Ok(())
     }
 
-    #[cfg(not(feature = "check-propagations"))]
-    fn check_propagations(&mut self, _: usize) {
-        // If the feature is disabled, nothing happens here. The compiler will remove the method
-        // call.
-    }
-
     /// For every propagation on the trail, run the inference checker for it.
     ///
     /// If the checker rejects the inference, this method panics.
@@ -688,8 +663,6 @@ impl State {
         let mut reason_buffer = vec![];
 
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
-            use pumpkin_checking::VariableState;
-
             let entry = self.assignments.get_trail_entry(trail_index);
 
             let (reason_ref, inference_code) = entry
@@ -709,18 +682,11 @@ impl State {
             );
             assert!(reason_exists, "all propagations have reasons");
 
-            let checker = self
-                .checkers
-                .get(&inference_code)
-                .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
-
-            let variable_state = VariableState::prepare_for_conflict_check(
+            self.run_checker(
                 reason_buffer.drain(..),
                 Some(entry.predicate),
-            )
-            .unwrap_or_else(|| panic!("inconsistent atomics in inference by {inference_code:?}"));
-
-            assert!(checker.check(variable_state));
+                &inference_code,
+            );
         }
     }
 
@@ -762,6 +728,30 @@ impl State {
         ));
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl State {
+    /// Run the checker for the given inference code on the given inference.
+    fn run_checker(
+        &self,
+        premises: impl IntoIterator<Item = Predicate>,
+        consequent: Option<Predicate>,
+        inference_code: &InferenceCode,
+    ) {
+        // Get the checker for the inference code.
+        let checker = self
+            .checkers
+            .get(inference_code)
+            .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
+
+        // Construct the variable state for the conflict check.
+        let variable_state = VariableState::prepare_for_conflict_check(premises, consequent)
+            .unwrap_or_else(|| panic!("inconsistent atomics in inference by {:?}", inference_code));
+
+        // Run the conflict check.
+        assert!(checker.check(variable_state));
     }
 }
 
