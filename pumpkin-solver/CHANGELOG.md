@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.2.3) (2026-01-12)
+
+
+### Features
+
+* Extract propagators into separate crate ([#337](https://github.com/ConSol-Lab/Pumpkin/issues/337)) ([8153051](https://github.com/ConSol-Lab/Pumpkin/commit/8153051b408cd314661d0c6ca4a5837934360ed2))
+
+
+### Bug Fixes
+
+* Off-by-one error when explaining empty domain conflict ([#322](https://github.com/ConSol-Lab/Pumpkin/issues/322)) ([c3739c4](https://github.com/ConSol-Lab/Pumpkin/commit/c3739c427406f8f46a743c35233664028318f73f)), closes [#321](https://github.com/ConSol-Lab/Pumpkin/issues/321)
+* **pumpkin-solver:** Stop search when a SIGTERM signal is received ([#324](https://github.com/ConSol-Lab/Pumpkin/issues/324)) ([4f6b04c](https://github.com/ConSol-Lab/Pumpkin/commit/4f6b04c20d11e2f9eefb9a621422fb0df8b85424))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-11-10)
 
 
