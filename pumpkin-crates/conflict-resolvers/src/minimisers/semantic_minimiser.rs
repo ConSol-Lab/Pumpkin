@@ -1,15 +1,15 @@
 use std::cmp;
 
-use crate::containers::HashSet;
-use crate::containers::KeyedVec;
-use crate::containers::SparseSet;
-use crate::engine::conflict_analysis::MinimisationContext;
-use crate::engine::conflict_analysis::NogoodMinimiser;
-use crate::engine::predicates::predicate::PredicateType;
-use crate::predicate;
-use crate::predicates::Predicate;
-use crate::propagation::HasAssignments;
-use crate::variables::DomainId;
+use pumpkin_core::conflict_analysis::MinimisationContext;
+use pumpkin_core::conflict_analysis::NogoodMinimiser;
+use pumpkin_core::containers::HashSet;
+use pumpkin_core::containers::KeyedVec;
+use pumpkin_core::containers::SparseSet;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateType;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::variables::DomainId;
 
 #[derive(Clone, Debug)]
 pub(crate) struct SemanticMinimiser {
@@ -105,11 +105,11 @@ impl SemanticMinimiser {
     fn accommodate(&mut self, context: &MinimisationContext) {
         assert!(self.domains.len() == self.original_domains.len());
 
-        while (self.domains.len() as u32) < context.assignments().num_domains() {
+        while (self.domains.len() as u32) < context.number_of_domains() {
             let domain_id = DomainId::new(self.domains.len() as u32);
-            let lower_bound = context.assignments().get_initial_lower_bound(domain_id);
-            let upper_bound = context.assignments().get_initial_upper_bound(domain_id);
-            let holes = context.assignments().get_initial_holes(domain_id);
+            let lower_bound = context.initial_lower_bound(domain_id);
+            let upper_bound = context.initial_upper_bound(domain_id);
+            let holes = context.initial_holes(domain_id);
             self.grow(lower_bound, upper_bound, holes);
         }
     }

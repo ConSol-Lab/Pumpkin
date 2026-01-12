@@ -736,6 +736,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-conflict-resolvers"
+version = "0.2.2"
+dependencies = [
+ "pumpkin-core",
+]
+
+[[package]]
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
@@ -804,6 +811,7 @@ dependencies = [
  "flatzinc",
  "log",
  "pumpkin-checker",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-macros",

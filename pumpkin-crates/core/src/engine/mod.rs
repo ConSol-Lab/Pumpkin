@@ -13,7 +13,6 @@ pub(crate) mod termination;
 pub(crate) mod variable_names;
 pub(crate) mod variables;
 
-pub(crate) use conflict_analysis::ResolutionResolver;
 pub use constraint_satisfaction_solver::ConflictResolverType;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
@@ -21,7 +20,7 @@ pub use cp::EmptyDomain;
 pub(crate) use cp::*;
 pub(crate) use debug_helper::DebugDyn;
 pub(crate) use debug_helper::DebugHelper;
-pub(crate) use literal_block_distance::Lbd;
+pub use literal_block_distance::Lbd;
 pub use reason::Reason;
 pub use restart_strategy::RestartOptions;
 pub(crate) use restart_strategy::RestartStrategy;

@@ -83,7 +83,7 @@ where
         }
     }
 
-    pub(crate) fn get_value(&self, key: Key) -> &Value {
+    pub fn get_value(&self, key: Key) -> &Value {
         pumpkin_assert_moderate!(
             key.index() < self.map_key_to_position.len(),
             "Attempted to get key with index {} for a map with length {}",
@@ -97,7 +97,7 @@ where
     /// empty.
     ///
     ///  The time-complexity of this operation is O(logn).
-    pub(crate) fn pop_max(&mut self) -> Option<Key> {
+    pub fn pop_max(&mut self) -> Option<Key> {
         if !self.has_no_nonremoved_elements() {
             let best_key = self.map_position_to_key[0];
             pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
@@ -113,7 +113,7 @@ where
     ///
     /// The worst-case time-complexity of this operation is O(logn); average case is likely to be
     /// better
-    pub(crate) fn increment(&mut self, key: Key, increment: Value) {
+    pub fn increment(&mut self, key: Key, increment: Value) {
         let position = self.map_key_to_position[key];
         self.values[position] += increment;
         // Recall that increment may be applied to keys not present
@@ -127,7 +127,7 @@ where
     /// nothing. Its value is the previous value used before 'delete_key' was called.
     ///
     ///  The run-time complexity of this operation is O(logn)
-    pub(crate) fn restore_key(&mut self, key: Key) {
+    pub fn restore_key(&mut self, key: Key) {
         if !self.is_key_present(key) {
             // The key is somewhere in the range [end_position, max_size-1]
             // We place the key at the end of the heap, increase end_position, and sift up
@@ -145,7 +145,7 @@ where
     /// [`KeyValueHeap::divide_values`].
     ///
     /// The run-time complexity of this operation is O(logn)
-    pub(crate) fn delete_key(&mut self, key: Key) {
+    pub fn delete_key(&mut self, key: Key) {
         if self.is_key_present(key) {
             // Place the key at the end of the heap, decrement the heap, and sift down to ensure a
             // valid heap
@@ -159,11 +159,11 @@ where
     }
 
     /// Returns how many elements are in the heap (including the (temporarily) "removed" values)
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.values.len()
     }
 
-    pub(crate) fn num_nonremoved_elements(&self) -> usize {
+    pub fn num_nonremoved_elements(&self) -> usize {
         self.end_position
     }
 
@@ -173,14 +173,14 @@ where
     }
 
     /// Returns whether the key is currently not (temporarily) remove
-    pub(crate) fn is_key_present(&self, key: Key) -> bool {
+    pub fn is_key_present(&self, key: Key) -> bool {
         key.index() < self.map_key_to_position.len()
             && self.map_key_to_position[key] < self.end_position
     }
 
     /// Increases the size of the heap by one and adjust the data structures appropriately by adding
     /// `Key` and `Value`
-    pub(crate) fn grow(&mut self, key: Key, value: Value) {
+    pub fn grow(&mut self, key: Key, value: Value) {
         let last_index = self.values.len();
         self.values.push(value);
         // Initially the key is placed placed at the very end, will be placed in the correct
@@ -196,7 +196,7 @@ where
         self.sift_up(self.end_position - 1);
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.values.clear();
         self.map_key_to_position.clear();
         self.map_position_to_key.clear();

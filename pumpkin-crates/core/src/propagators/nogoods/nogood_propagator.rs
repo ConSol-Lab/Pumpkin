@@ -25,7 +25,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
-use crate::propagation::HasAssignments;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -375,11 +374,9 @@ impl Propagator for NogoodPropagator {
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates (if it
             // did not then it should have propagated earlier).
-            let current_lbd = self.lbd_helper.compute_lbd(
-                &self.temp_nogood_reason,
-                #[allow(deprecated, reason = "should be refactored later")]
-                context.assignments(),
-            );
+            let current_lbd = self
+                .lbd_helper
+                .compute_lbd(&self.temp_nogood_reason, &context);
 
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogood_info[info_id].lbd {
@@ -447,7 +444,7 @@ impl NogoodPropagator {
         // but will be assigned at the level of the predicate at index one.
         let lbd = self
             .lbd_helper
-            .compute_lbd(&nogood.as_slice()[1..], context.assignments());
+            .compute_lbd(&nogood.as_slice()[1..], context);
 
         statistics
             .learned_clause_statistics

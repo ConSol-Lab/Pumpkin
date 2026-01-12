@@ -8,7 +8,5 @@ mod resolvers;
 pub use conflict_analysis_context::ConflictAnalysisContext;
 pub use minimisers::MinimisationContext;
 pub use minimisers::NogoodMinimiser;
-pub(crate) use minimisers::*;
 pub use resolvers::ConflictResolver;
 pub use resolvers::LearnedNogood;
-pub(crate) use resolvers::*;

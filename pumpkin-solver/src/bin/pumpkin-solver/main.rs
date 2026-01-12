@@ -24,6 +24,9 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::parse_cnf;
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -576,7 +579,10 @@ fn run() -> PumpkinResult<()> {
         },
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
-        conflict_resolver: args.conflict_resolver,
+        conflict_resolver: match args.conflict_resolver {
+            ConflictResolverType::NoLearning => Box::new(NoLearningResolver),
+            ConflictResolverType::UIP => Box::new(ResolutionResolver::new(AnalysisMode::OneUIP)),
+        },
         learning_options,
     };
 

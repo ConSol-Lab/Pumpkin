@@ -1,14 +1,19 @@
 use std::fmt::Debug;
 
+use dyn_clone::DynClone;
+use dyn_clone::clone_trait_object;
+
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 #[cfg(doc)]
 use crate::engine::reason::ReasonStore;
+
+clone_trait_object!(ConflictResolver);
 
 /// A [`ConflictResolver`] is responsible for restoring the state of the solver so that search can
 /// continue after a conflict is encountered.
 ///
 /// See [`ConflictResolver::resolve_conflict`] for more information.
-pub trait ConflictResolver: Debug {
+pub trait ConflictResolver: Debug + DynClone {
     /// Resolve a conflicting state in the solver so that search can proceed.
     ///
     /// The state provided will be inconsistent. The last entry on the trail is the last

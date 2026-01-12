@@ -12,11 +12,7 @@ use std::sync::Arc;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-use super::ResolutionResolver;
-use super::conflict_analysis::AnalysisMode;
 use super::conflict_analysis::ConflictAnalysisContext;
-use super::conflict_analysis::NoLearningResolver;
-use super::conflict_analysis::SemanticMinimiser;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
@@ -103,7 +99,6 @@ pub struct ConstraintSatisfactionSolver {
     restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
-    semantic_minimiser: SemanticMinimiser,
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
@@ -163,7 +158,7 @@ pub struct SatisfactionSolverOptions {
     /// The proof log for the solver.
     pub proof_log: ProofLog,
     /// The resolver used for conflict analysis
-    pub conflict_resolver: ConflictResolverType,
+    pub conflict_resolver: Box<dyn Resolver>,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
@@ -177,7 +172,7 @@ impl Default for SatisfactionSolverOptions {
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
-            conflict_resolver: ConflictResolverType::default(),
+            conflict_resolver: todo!(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 1000,
         }
@@ -227,7 +222,6 @@ impl ConstraintSatisfactionSolver {
             counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher: &mut DummyBrancher,
-            semantic_minimiser: &mut self.semantic_minimiser,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
@@ -235,6 +229,7 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: &mut self.restart_strategy,
 
             state: &mut self.state,
+            nogood_propagator_handle: self.nogood_propagator_handle,
         };
 
         let conflict = conflict_analysis_context.get_conflict_nogood();
@@ -269,14 +264,8 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             nogood_propagator_handle: handle,
             solver_statistics: SolverStatistics::default(),
-            semantic_minimiser: SemanticMinimiser::default(),
             unit_nogood_inference_codes: Default::default(),
-            conflict_resolver: match solver_options.conflict_resolver {
-                ConflictResolverType::NoLearning => Box::new(NoLearningResolver),
-                ConflictResolverType::UIP => {
-                    Box::new(ResolutionResolver::new(handle, AnalysisMode::OneUIP))
-                }
-            },
+            conflict_resolver: solver_options.conflict_resolver.clone(),
             internal_parameters: solver_options,
             state,
         }
@@ -483,23 +472,24 @@ impl ConstraintSatisfactionSolver {
                     counters: &mut self.solver_statistics,
                     solver_state: &mut self.solver_state,
                     brancher,
-                    semantic_minimiser: &mut self.semantic_minimiser,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
                     rng: &mut self.internal_parameters.random_generator,
                     restart_strategy: &mut self.restart_strategy,
                     state: &mut self.state,
+                    nogood_propagator_handle: self.nogood_propagator_handle,
                 };
 
-                let mut resolver = ResolutionResolver::new(
-                    self.nogood_propagator_handle,
-                    AnalysisMode::AllDecision,
-                );
-
-                let learned_nogood = resolver.learn_nogood(&mut conflict_analysis_context);
-
-                CoreExtractionResult::Core(learned_nogood.predicates.clone())
+                todo!()
+                // let mut resolver = ResolutionResolver::new(
+                //     self.nogood_propagator_handle,
+                //     AnalysisMode::AllDecision,
+                // );
+                //
+                // let learned_nogood = resolver.learn_nogood(&mut conflict_analysis_context);
+                //
+                // CoreExtractionResult::Core(learned_nogood.predicates.clone())
             })
     }
 
@@ -706,13 +696,13 @@ impl ConstraintSatisfactionSolver {
             counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher,
-            semantic_minimiser: &mut self.semantic_minimiser,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
             rng: &mut self.internal_parameters.random_generator,
             restart_strategy: &mut self.restart_strategy,
             state: &mut self.state,
+            nogood_propagator_handle: self.nogood_propagator_handle,
         };
 
         self.conflict_resolver

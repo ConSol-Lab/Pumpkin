@@ -1,3 +1,4 @@
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::SolverStatistics;
@@ -5,6 +6,8 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
+use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::propagation::HasAssignments;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
@@ -30,13 +33,13 @@ impl<'a> MinimisationContext<'a> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
-    pub(crate) fn get_propagation_reason(
+    pub fn get_propagation_reason(
         &mut self,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         input_predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
     ) {
-        ConflictAnalysisContext::get_propagation_reason(
+        ConflictAnalysisContext::get_propagation_reason_inner(
             input_predicate,
             current_nogood,
             self.proof_log,
@@ -44,6 +47,24 @@ impl<'a> MinimisationContext<'a> {
             reason_buffer,
             self.state,
         );
+    }
+
+    pub fn explain_root_assignment(&mut self, predicate: Predicate) {
+        explain_root_assignment(
+            &mut RootExplanationContext {
+                proof_log: &mut self.proof_log,
+                unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
+                state: &mut self.state,
+            },
+            predicate,
+        );
+    }
+
+    pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: usize) {
+        self.counters
+            .learned_clause_statistics
+            .average_number_of_removed_atomic_constraints_recursive
+            .add_term(num_predicates_removed as u64);
     }
 }
 

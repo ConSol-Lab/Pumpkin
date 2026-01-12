@@ -104,7 +104,9 @@ pub mod predicates {
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
+    pub use crate::basic_types::PredicateIdGenerator;
     pub use crate::basic_types::PropositionalConjunction;
+    pub use crate::engine::Lbd;
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;

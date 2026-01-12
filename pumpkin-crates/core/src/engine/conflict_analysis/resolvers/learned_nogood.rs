@@ -13,7 +13,7 @@ use crate::predicates::Predicate;
 #[derive(Clone, Debug)]
 pub struct LearnedNogood {
     pub predicates: Vec<Predicate>,
-    pub backjump_level: usize,
+    pub backtrack_level: usize,
 }
 
 impl Deref for LearnedNogood {
@@ -29,7 +29,7 @@ impl LearnedNogood {
     ///
     /// This method automatically ensures that the invariants of nogoods hold; see [`LearnedNogood`]
     /// for more details on these invariants.
-    pub(crate) fn create_from_vec(
+    pub fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
     ) -> Self {
@@ -70,7 +70,7 @@ impl LearnedNogood {
 
         Self {
             predicates: clean_nogood,
-            backjump_level,
+            backtrack_level: backjump_level,
         }
     }
 }
