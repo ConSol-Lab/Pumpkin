@@ -8,6 +8,8 @@ pub(crate) use encoders::PseudoBooleanEncoding;
 use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
+use pumpkin_conflict_resolvers::DefaultResolver;
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::termination::TimeBudget;
 
@@ -33,10 +35,11 @@ pub(crate) fn wcnf_problem(
 
     let brancher = solver.default_brancher();
     let mut termination = time_limit.map(TimeBudget::starting_now);
+    let resolver = DefaultResolver::new(AnalysisMode::OneUIP);
 
     let mut solver = OptimisationSolver::new(solver, objective, LinearSearch::new(encoding));
 
-    match solver.solve(&mut termination, brancher) {
+    match solver.solve(&mut termination, brancher, resolver) {
         MaxSatOptimisationResult::Optimal { solution } => {
             println!("s OPTIMUM FOUND");
             println!(

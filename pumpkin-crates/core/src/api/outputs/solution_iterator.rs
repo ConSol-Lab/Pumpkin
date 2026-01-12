@@ -8,6 +8,7 @@ use super::SatisfactionResult::Unsatisfiable;
 use super::SolutionReference;
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::results::ProblemSolution;
@@ -16,26 +17,37 @@ use crate::termination::TerminationCondition;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]
-pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
+pub struct SolutionIterator<'solver, 'brancher, 'termination, 'resolver, B, T, R> {
     solver: &'solver mut Solver,
     brancher: &'brancher mut B,
     termination: &'termination mut T,
+    resolver: &'resolver mut R,
+
     next_blocking_clause: Option<Vec<Predicate>>,
     has_solution: bool,
 }
 
-impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
-    SolutionIterator<'solver, 'brancher, 'termination, B, T>
+impl<
+    'solver,
+    'brancher,
+    'termination,
+    'resolver,
+    B: Brancher,
+    T: TerminationCondition,
+    R: ConflictResolver,
+> SolutionIterator<'solver, 'brancher, 'termination, 'resolver, B, T, R>
 {
     pub(crate) fn new(
         solver: &'solver mut Solver,
         brancher: &'brancher mut B,
         termination: &'termination mut T,
+        resolver: &'resolver mut R,
     ) -> Self {
         SolutionIterator {
             solver,
             brancher,
             termination,
+            resolver,
             next_blocking_clause: None,
             has_solution: false,
         }
@@ -57,7 +69,10 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             }
         }
 
-        let result = match self.solver.satisfy(self.brancher, self.termination) {
+        let result = match self
+            .solver
+            .satisfy(self.brancher, self.termination, self.resolver)
+        {
             Satisfiable(satisfiable) => {
                 let solution: Solution = satisfiable.solution().into();
                 self.has_solution = true;

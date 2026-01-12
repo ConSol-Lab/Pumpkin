@@ -771,6 +771,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "rand",
  "thiserror",
@@ -827,6 +828,7 @@ dependencies = [
 name = "pumpkin-solver-py"
 version = "0.2.2"
 dependencies = [
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-solver",
  "pyo3",

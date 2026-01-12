@@ -4,8 +4,8 @@ use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
-use crate::conflict_analysis::LearnedNogood;
-use crate::conflict_analysis::MinimisationContext;
+use crate::conflict_resolving::LearnedNogood;
+use crate::conflict_resolving::MinimisationContext;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -67,7 +67,7 @@ impl ConflictAnalysisContext<'_> {
         self.state.assignments.find_last_decision()
     }
 
-    pub fn minimisation_context(&mut self) -> MinimisationContext {
+    pub fn minimisation_context(&mut self) -> MinimisationContext<'_> {
         MinimisationContext {
             proof_log: self.proof_log,
             unit_nogood_inference_codes: self.unit_nogood_inference_codes,

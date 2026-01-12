@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_conflict_resolvers::DefaultResolver;
+use pumpkin_conflict_resolvers::default_core_extractor;
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_solver::ConstraintOperationError;
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
@@ -201,8 +204,9 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
+        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
 
-        match solver.satisfy(&mut brancher, &mut termination) {
+        match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution {
                     solver_solution: satisfiable.solution().into(),
@@ -233,13 +237,14 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
+        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
 
         let solver_assumptions = assumptions
             .iter()
             .map(|pred| pred.to_solver_predicate(&variable_map))
             .collect::<Vec<_>>();
 
-        match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
+        match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &mut resolver, &solver_assumptions) {
             pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
                     solver_solution: satisfiable.solution().into(),
@@ -257,7 +262,7 @@ impl Model {
                 //     literals in the python wrapper as well. For now, this is the simplest way
                 //     forward. I expect that the situation above almost never happens in practice.
                 let core = result
-                    .extract_core()
+                    .extract_core(&mut default_core_extractor())
                     .iter()
                     .map(|predicate| assumptions
                          .iter()
@@ -295,6 +300,7 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
+        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,
@@ -309,11 +315,13 @@ impl Model {
             Optimiser::LinearSatUnsat => solver.optimise(
                 &mut brancher,
                 &mut termination,
+                &mut resolver,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => solver.optimise(
                 &mut brancher,
                 &mut termination,
+                &mut resolver,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
         };

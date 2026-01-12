@@ -128,11 +128,12 @@ pub mod state {
     pub use crate::propagation::PropagatorId;
 }
 
-pub mod conflict_analysis {
-    //! Contains structures for the conflict analysis.
+pub mod conflict_resolving {
+    //! Contains structures for the conflict resolving.
 
     pub use crate::engine::conflict_analysis::ConflictAnalysisContext;
     pub use crate::engine::conflict_analysis::ConflictResolver;
+    pub use crate::engine::conflict_analysis::CoreExtractor;
     pub use crate::engine::conflict_analysis::LearnedNogood;
     pub use crate::engine::conflict_analysis::MinimisationContext;
     pub use crate::engine::conflict_analysis::NogoodMinimiser;

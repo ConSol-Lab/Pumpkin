@@ -1,7 +1,7 @@
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::conflict_analysis::MinimisationContext;
-use pumpkin_core::conflict_analysis::NogoodMinimiser;
+use pumpkin_core::conflict_resolving::MinimisationContext;
+use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::predicates::Predicate;

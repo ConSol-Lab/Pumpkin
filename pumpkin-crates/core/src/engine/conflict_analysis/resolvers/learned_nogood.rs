@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::conflict_analysis::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 
 /// A structure which stores a learned nogood

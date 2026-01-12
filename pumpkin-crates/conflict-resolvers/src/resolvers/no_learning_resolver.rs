@@ -1,5 +1,5 @@
-use pumpkin_core::conflict_analysis::ConflictAnalysisContext;
-use pumpkin_core::conflict_analysis::ConflictResolver;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::propagation::ReadDomains;
 
 /// Resolve conflicts by backtracking one decision level trying the opposite of the last decision.

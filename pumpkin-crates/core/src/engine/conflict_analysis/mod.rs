@@ -9,4 +9,5 @@ pub use conflict_analysis_context::ConflictAnalysisContext;
 pub use minimisers::MinimisationContext;
 pub use minimisers::NogoodMinimiser;
 pub use resolvers::ConflictResolver;
+pub use resolvers::CoreExtractor;
 pub use resolvers::LearnedNogood;

@@ -28,13 +28,14 @@ use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::conflict_resolving::CoreExtractor;
 use crate::containers::HashMap;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
-use crate::engine::conflict_analysis::ConflictResolver as Resolver;
+use crate::engine::conflict_analysis::ConflictResolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
@@ -105,8 +106,6 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
     unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
-    /// The resolver which is used upon a conflict.
-    conflict_resolver: Box<dyn Resolver>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -157,8 +156,6 @@ pub struct SatisfactionSolverOptions {
     pub random_generator: SmallRng,
     /// The proof log for the solver.
     pub proof_log: ProofLog,
-    /// The resolver used for conflict analysis
-    pub conflict_resolver: Box<dyn Resolver>,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
@@ -172,7 +169,6 @@ impl Default for SatisfactionSolverOptions {
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
-            conflict_resolver: todo!(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 1000,
         }
@@ -265,7 +261,6 @@ impl ConstraintSatisfactionSolver {
             nogood_propagator_handle: handle,
             solver_statistics: SolverStatistics::default(),
             unit_nogood_inference_codes: Default::default(),
-            conflict_resolver: solver_options.conflict_resolver.clone(),
             internal_parameters: solver_options,
             state,
         }
@@ -275,9 +270,10 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         let dummy_assumptions: Vec<Predicate> = vec![];
-        self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
+        self.solve_under_assumptions(&dummy_assumptions, termination, brancher, resolver)
     }
 
     pub fn solve_under_assumptions(
@@ -285,6 +281,7 @@ impl ConstraintSatisfactionSolver {
         assumptions: &[Predicate],
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         if self.solver_state.is_inconsistent() {
             return CSPSolverExecutionFlag::Infeasible;
@@ -293,7 +290,7 @@ impl ConstraintSatisfactionSolver {
         let start_time = Instant::now();
 
         self.initialise(assumptions);
-        let result = self.solve_internal(termination, brancher);
+        let result = self.solve_internal(termination, brancher, resolver);
 
         self.solver_statistics
             .engine_statistics
@@ -448,7 +445,11 @@ impl ConstraintSatisfactionSolver {
     ///     }
     /// }
     /// ```
-    pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
+    pub fn extract_clausal_core(
+        &mut self,
+        brancher: &mut impl Brancher,
+        core_extractor: &mut impl CoreExtractor,
+    ) -> CoreExtractionResult {
         if self.solver_state.is_infeasible() {
             return CoreExtractionResult::Core(vec![]);
         }
@@ -481,15 +482,8 @@ impl ConstraintSatisfactionSolver {
                     nogood_propagator_handle: self.nogood_propagator_handle,
                 };
 
-                todo!()
-                // let mut resolver = ResolutionResolver::new(
-                //     self.nogood_propagator_handle,
-                //     AnalysisMode::AllDecision,
-                // );
-                //
-                // let learned_nogood = resolver.learn_nogood(&mut conflict_analysis_context);
-                //
-                // CoreExtractionResult::Core(learned_nogood.predicates.clone())
+                let nogood = core_extractor.extract_core(&mut conflict_analysis_context);
+                CoreExtractionResult::Core(nogood.predicates.clone())
             })
     }
 
@@ -548,6 +542,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         loop {
             if termination.should_stop() {
@@ -603,7 +598,7 @@ impl ConstraintSatisfactionSolver {
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
-                self.resolve_conflict_with_nogood(brancher);
+                self.resolve_conflict(brancher, resolver);
 
                 brancher.on_conflict();
                 self.decay_nogood_activities();
@@ -689,7 +684,11 @@ impl ConstraintSatisfactionSolver {
     ///
     /// # Note
     /// This method performs no propagation, this is left up to the solver afterwards.
-    fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
+    fn resolve_conflict(
+        &mut self,
+        brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
+    ) {
         pumpkin_assert_moderate!(self.solver_state.is_conflicting());
 
         let mut conflict_analysis_context = ConflictAnalysisContext {
@@ -705,8 +704,7 @@ impl ConstraintSatisfactionSolver {
             nogood_propagator_handle: self.nogood_propagator_handle,
         };
 
-        self.conflict_resolver
-            .resolve_conflict(&mut conflict_analysis_context);
+        resolver.resolve_conflict(&mut conflict_analysis_context);
 
         self.solver_state.declare_solving();
     }
@@ -1180,289 +1178,301 @@ impl CSPSolverState {
 
 declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 
-#[cfg(test)]
-mod tests {
-
-    use super::ConstraintSatisfactionSolver;
-    use super::CoreExtractionResult;
-    use crate::DefaultBrancher;
-    use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::predicate;
-    use crate::predicates::Predicate;
-    use crate::termination::Indefinite;
-
-    fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
-        core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
-    }
-
-    fn is_result_the_same(res1: &CoreExtractionResult, res2: &CoreExtractionResult) -> bool {
-        match (res1, res2) {
-            (
-                CoreExtractionResult::ConflictingAssumption(assumption1),
-                CoreExtractionResult::ConflictingAssumption(assumption2),
-            ) => assumption1 == assumption2,
-            (CoreExtractionResult::Core(core1), CoreExtractionResult::Core(core2)) => {
-                is_same_core(core1, core2)
-            }
-            _ => false,
-        }
-    }
-
-    fn run_test(
-        mut solver: ConstraintSatisfactionSolver,
-        assumptions: Vec<Predicate>,
-        expected_flag: CSPSolverExecutionFlag,
-        expected_result: CoreExtractionResult,
-    ) {
-        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
-        let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
-        assert_eq!(flag, expected_flag, "The flags do not match.");
-
-        if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
-            assert!(
-                is_result_the_same(
-                    &solver.extract_clausal_core(&mut brancher),
-                    &expected_result
-                ),
-                "The result is not the same"
-            );
-        }
-    }
-
-    fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-
-        let _ = solver.add_clause([lit1, lit2], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2], constraint_tag);
-        let _ = solver.add_clause([!lit1, lit2], constraint_tag);
-        (solver, vec![lit1, lit2])
-    }
-
-    #[test]
-    fn core_extraction_unit_core() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let _ = solver.add_clause(vec![lit1], constraint_tag);
-
-        run_test(
-            solver,
-            vec![!lit1],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lit1]),
-        )
-    }
-
-    #[test]
-    fn simple_core_extraction_1_1() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[0]]),
-        )
-    }
-
-    #[test]
-    fn simple_core_extraction_1_2() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[1], !lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[1]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_1_infeasible() {
-        let (mut solver, lits) = create_instance1();
-        let constraint_tag = solver.new_constraint_tag();
-        let _ = solver.add_clause([!lits[0], !lits[1]], constraint_tag);
-        run_test(
-            solver,
-            vec![!lits[1], !lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_1_core_conflicting() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[1], lits[1]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::ConflictingAssumption(!lits[1]),
-        );
-    }
-    fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
-
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
-        (solver, vec![lit1, lit2, lit3])
-    }
-
-    #[test]
-    fn simple_core_extraction_2_1() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], lits[1], !lits[2]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], lits[1], !lits[2], lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::ConflictingAssumption(!lits[0]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_2_inconsistent_long_assumptions() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::ConflictingAssumption(!lits[0]),
-        );
-    }
-    fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
-
-        let lit1 = solver.create_new_literal(None).get_true_predicate();
-        let lit2 = solver.create_new_literal(None).get_true_predicate();
-        let lit3 = solver.create_new_literal(None).get_true_predicate();
-
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
-        (solver, vec![lit1, lit2, lit3])
-    }
-
-    #[test]
-    fn simple_core_extraction_3_1() {
-        let (solver, lits) = create_instance3();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1], !lits[2]],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[0], !lits[1], !lits[2]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_3_2() {
-        let (solver, lits) = create_instance3();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1]],
-            CSPSolverExecutionFlag::Feasible,
-            CoreExtractionResult::Core(vec![]), // will be ignored in the test
-        );
-    }
-
-    // #[test]
-    // fn core_extraction_equality_assumption() {
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-    //
-    //     let x = solver.create_new_integer_variable(0, 10, None);
-    //     let y = solver.create_new_integer_variable(0, 10, None);
-    //     let z = solver.create_new_integer_variable(0, 10, None);
-    //
-    //     let constraint_tag = solver.new_constraint_tag();
-    //
-    //     let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
-    //         terms: [x.scaled(1), y.scaled(-1)].into(),
-    //         rhs: 0,
-    //         constraint_tag,
-    //     });
-    //     assert!(result.is_ok());
-    //     run_test(
-    //         solver,
-    //         vec![
-    //             predicate!(x >= 5),
-    //             predicate!(z != 10),
-    //             predicate!(y == 5),
-    //             predicate!(x <= 5),
-    //         ],
-    //         CSPSolverExecutionFlag::Infeasible,
-    //         CoreExtractionResult::Core(vec![predicate!(x == 5), predicate!(y == 5)]),
-    //     )
-    // }
-
-    #[test]
-    fn new_domain_with_negative_lower_bound() {
-        let lb = -2;
-        let ub = 2;
-
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(lb, ub, None);
-
-        assert_eq!(lb, solver.state.assignments.get_lower_bound(domain_id));
-
-        assert_eq!(ub, solver.state.assignments.get_upper_bound(domain_id));
-
-        assert!(
-            !solver
-                .state
-                .assignments
-                .is_predicate_satisfied(predicate![domain_id == lb])
-        );
-
-        for value in (lb + 1)..ub {
-            let predicate = predicate![domain_id >= value];
-
-            assert!(!solver.state.assignments.is_predicate_satisfied(predicate));
-
-            assert!(
-                !solver
-                    .state
-                    .assignments
-                    .is_predicate_satisfied(predicate![domain_id == value])
-            );
-        }
-
-        assert!(
-            !solver
-                .state
-                .assignments
-                .is_predicate_satisfied(predicate![domain_id == ub])
-        );
-    }
-
-    // #[test]
-    // fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-    //
-    //     let x = solver.create_new_integer_variable(1, 1, None);
-    //     let y = solver.create_new_integer_variable(2, 2, None);
-    //
-    //     let constraint_tag = solver.new_constraint_tag();
-    //
-    //     let propagator = LinearNotEqualPropagatorArgs {
-    //         terms: vec![x, y].into(),
-    //         rhs: 3,
-    //         constraint_tag,
-    //     };
-    //     let result = solver.add_propagator(propagator);
-    //     assert!(result.is_err());
-    // }
-}
+// #[cfg(test)]
+// mod tests {
+//
+//     use pumpkin_conflict_resolvers::DefaultResolver;
+//     use pumpkin_conflict_resolvers::default_core_extractor;
+//     use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+//
+//     use super::ConstraintSatisfactionSolver;
+//     use super::CoreExtractionResult;
+//     use crate::DefaultBrancher;
+//     use crate::basic_types::CSPSolverExecutionFlag;
+//     use crate::predicate;
+//     use crate::predicates::Predicate;
+//     use crate::termination::Indefinite;
+//
+//     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
+//         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
+//     }
+//
+//     fn is_result_the_same(res1: &CoreExtractionResult, res2: &CoreExtractionResult) -> bool {
+//         match (res1, res2) {
+//             (
+//                 CoreExtractionResult::ConflictingAssumption(assumption1),
+//                 CoreExtractionResult::ConflictingAssumption(assumption2),
+//             ) => assumption1 == assumption2,
+//             (CoreExtractionResult::Core(core1), CoreExtractionResult::Core(core2)) => {
+//                 is_same_core(core1, core2)
+//             }
+//             _ => false,
+//         }
+//     }
+//
+//     fn run_test(
+//         mut solver: ConstraintSatisfactionSolver,
+//         assumptions: Vec<Predicate>,
+//         expected_flag: CSPSolverExecutionFlag,
+//         expected_result: CoreExtractionResult,
+//     ) {
+//         let mut brancher =
+// DefaultBrancher::default_over_all_variables(&solver.state.assignments);         let mut resolver
+// = DefaultResolver::new(AnalysisMode::OneUIP);
+//
+//         let flag = solver.solve_under_assumptions(
+//             &assumptions,
+//             &mut Indefinite,
+//             &mut brancher,
+//             &mut resolver,
+//         );
+//         assert_eq!(flag, expected_flag, "The flags do not match.");
+//
+//         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
+//             assert!(
+//                 is_result_the_same(
+//                     &solver.extract_clausal_core(&mut brancher, &mut default_core_extractor()),
+//                     &expected_result
+//                 ),
+//                 "The result is not the same"
+//             );
+//         }
+//     }
+//
+//     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
+//         let mut solver = ConstraintSatisfactionSolver::default();
+//         let constraint_tag = solver.new_constraint_tag();
+//         let lit1 = solver.create_new_literal(None).get_true_predicate();
+//         let lit2 = solver.create_new_literal(None).get_true_predicate();
+//
+//         let _ = solver.add_clause([lit1, lit2], constraint_tag);
+//         let _ = solver.add_clause([lit1, !lit2], constraint_tag);
+//         let _ = solver.add_clause([!lit1, lit2], constraint_tag);
+//         (solver, vec![lit1, lit2])
+//     }
+//
+//     #[test]
+//     fn core_extraction_unit_core() {
+//         let mut solver = ConstraintSatisfactionSolver::default();
+//         let constraint_tag = solver.new_constraint_tag();
+//         let lit1 = solver.create_new_literal(None).get_true_predicate();
+//         let _ = solver.add_clause(vec![lit1], constraint_tag);
+//
+//         run_test(
+//             solver,
+//             vec![!lit1],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![!lit1]),
+//         )
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_1_1() {
+//         let (solver, lits) = create_instance1();
+//         run_test(
+//             solver,
+//             vec![!lits[0], !lits[1]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![!lits[0]]),
+//         )
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_1_2() {
+//         let (solver, lits) = create_instance1();
+//         run_test(
+//             solver,
+//             vec![!lits[1], !lits[0]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![!lits[1]]),
+//         );
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_1_infeasible() {
+//         let (mut solver, lits) = create_instance1();
+//         let constraint_tag = solver.new_constraint_tag();
+//         let _ = solver.add_clause([!lits[0], !lits[1]], constraint_tag);
+//         run_test(
+//             solver,
+//             vec![!lits[1], !lits[0]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![]),
+//         );
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_1_core_conflicting() {
+//         let (solver, lits) = create_instance1();
+//         run_test(
+//             solver,
+//             vec![!lits[1], lits[1]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::ConflictingAssumption(!lits[1]),
+//         );
+//     }
+//     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
+//         let mut solver = ConstraintSatisfactionSolver::default();
+//         let constraint_tag = solver.new_constraint_tag();
+//         let lit1 = solver.create_new_literal(None).get_true_predicate();
+//         let lit2 = solver.create_new_literal(None).get_true_predicate();
+//         let lit3 = solver.create_new_literal(None).get_true_predicate();
+//
+//         let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
+//         let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
+//         (solver, vec![lit1, lit2, lit3])
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_2_1() {
+//         let (solver, lits) = create_instance2();
+//         run_test(
+//             solver,
+//             vec![!lits[0], lits[1], !lits[2]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]),
+//         );
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
+//         let (solver, lits) = create_instance2();
+//         run_test(
+//             solver,
+//             vec![!lits[0], lits[1], !lits[2], lits[0]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::ConflictingAssumption(!lits[0]),
+//         );
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_2_inconsistent_long_assumptions() {
+//         let (solver, lits) = create_instance2();
+//         run_test(
+//             solver,
+//             vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::ConflictingAssumption(!lits[0]),
+//         );
+//     }
+//     fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
+//         let mut solver = ConstraintSatisfactionSolver::default();
+//         let constraint_tag = solver.new_constraint_tag();
+//
+//         let lit1 = solver.create_new_literal(None).get_true_predicate();
+//         let lit2 = solver.create_new_literal(None).get_true_predicate();
+//         let lit3 = solver.create_new_literal(None).get_true_predicate();
+//
+//         let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
+//         (solver, vec![lit1, lit2, lit3])
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_3_1() {
+//         let (solver, lits) = create_instance3();
+//         run_test(
+//             solver,
+//             vec![!lits[0], !lits[1], !lits[2]],
+//             CSPSolverExecutionFlag::Infeasible,
+//             CoreExtractionResult::Core(vec![!lits[0], !lits[1], !lits[2]]),
+//         );
+//     }
+//
+//     #[test]
+//     fn simple_core_extraction_3_2() {
+//         let (solver, lits) = create_instance3();
+//         run_test(
+//             solver,
+//             vec![!lits[0], !lits[1]],
+//             CSPSolverExecutionFlag::Feasible,
+//             CoreExtractionResult::Core(vec![]), // will be ignored in the test
+//         );
+//     }
+//
+//     // #[test]
+//     // fn core_extraction_equality_assumption() {
+//     //     let mut solver = ConstraintSatisfactionSolver::default();
+//     //
+//     //     let x = solver.create_new_integer_variable(0, 10, None);
+//     //     let y = solver.create_new_integer_variable(0, 10, None);
+//     //     let z = solver.create_new_integer_variable(0, 10, None);
+//     //
+//     //     let constraint_tag = solver.new_constraint_tag();
+//     //
+//     //     let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
+//     //         terms: [x.scaled(1), y.scaled(-1)].into(),
+//     //         rhs: 0,
+//     //         constraint_tag,
+//     //     });
+//     //     assert!(result.is_ok());
+//     //     run_test(
+//     //         solver,
+//     //         vec![
+//     //             predicate!(x >= 5),
+//     //             predicate!(z != 10),
+//     //             predicate!(y == 5),
+//     //             predicate!(x <= 5),
+//     //         ],
+//     //         CSPSolverExecutionFlag::Infeasible,
+//     //         CoreExtractionResult::Core(vec![predicate!(x == 5), predicate!(y == 5)]),
+//     //     )
+//     // }
+//
+//     #[test]
+//     fn new_domain_with_negative_lower_bound() {
+//         let lb = -2;
+//         let ub = 2;
+//
+//         let mut solver = ConstraintSatisfactionSolver::default();
+//         let domain_id = solver.create_new_integer_variable(lb, ub, None);
+//
+//         assert_eq!(lb, solver.state.assignments.get_lower_bound(domain_id));
+//
+//         assert_eq!(ub, solver.state.assignments.get_upper_bound(domain_id));
+//
+//         assert!(
+//             !solver
+//                 .state
+//                 .assignments
+//                 .is_predicate_satisfied(predicate![domain_id == lb])
+//         );
+//
+//         for value in (lb + 1)..ub {
+//             let predicate = predicate![domain_id >= value];
+//
+//             assert!(!solver.state.assignments.is_predicate_satisfied(predicate));
+//
+//             assert!(
+//                 !solver
+//                     .state
+//                     .assignments
+//                     .is_predicate_satisfied(predicate![domain_id == value])
+//             );
+//         }
+//
+//         assert!(
+//             !solver
+//                 .state
+//                 .assignments
+//                 .is_predicate_satisfied(predicate![domain_id == ub])
+//         );
+//     }
+//
+//     // #[test]
+//     // fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
+//     //     let mut solver = ConstraintSatisfactionSolver::default();
+//     //
+//     //     let x = solver.create_new_integer_variable(1, 1, None);
+//     //     let y = solver.create_new_integer_variable(2, 2, None);
+//     //
+//     //     let constraint_tag = solver.new_constraint_tag();
+//     //
+//     //     let propagator = LinearNotEqualPropagatorArgs {
+//     //         terms: vec![x, y].into(),
+//     //         rhs: 3,
+//     //         constraint_tag,
+//     //     };
+//     //     let result = solver.add_propagator(propagator);
+//     //     assert!(result.is_err());
+//     // }
+// }

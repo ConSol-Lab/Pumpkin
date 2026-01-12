@@ -8,7 +8,7 @@ use crate::statistics::log_statistic;
 /// Structure responsible for storing several statistics of the solving process of the
 /// [`ConstraintSatisfactionSolver`].
 #[derive(Debug, Default)]
-pub(crate) struct SolverStatistics {
+pub struct SolverStatistics {
     /// Core statistics of the solver engine (e.g. the number of decisions)
     pub(crate) engine_statistics: EngineStatistics,
     /// The statistics related to clause learning

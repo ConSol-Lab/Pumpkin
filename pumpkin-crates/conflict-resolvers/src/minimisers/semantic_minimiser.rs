@@ -1,7 +1,7 @@
 use std::cmp;
 
-use pumpkin_core::conflict_analysis::MinimisationContext;
-use pumpkin_core::conflict_analysis::NogoodMinimiser;
+use pumpkin_core::conflict_resolving::MinimisationContext;
+use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::SparseSet;
@@ -260,18 +260,19 @@ impl SimpleIntegerDomain {
 
 #[cfg(test)]
 mod tests {
-    use crate::conjunction;
-    use crate::containers::HashMap;
-    use crate::engine::SolverStatistics;
-    use crate::engine::conflict_analysis::MinimisationContext;
-    use crate::engine::conflict_analysis::Mode;
-    use crate::engine::conflict_analysis::NogoodMinimiser;
-    use crate::engine::conflict_analysis::SemanticMinimiser;
-    use crate::predicate;
-    use crate::predicates::Predicate;
-    use crate::predicates::PropositionalConjunction;
-    use crate::proof::ProofLog;
-    use crate::state::State;
+    use pumpkin_core::SolverStatistics;
+    use pumpkin_core::conflict_resolving::MinimisationContext;
+    use pumpkin_core::conflict_resolving::NogoodMinimiser;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::containers::HashMap;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::proof::ProofLog;
+    use pumpkin_core::state::State;
+
+    use crate::minimisers::semantic_minimiser::Mode;
+    use crate::minimisers::semantic_minimiser::SemanticMinimiser;
 
     #[test]
     fn trivial_nogood() {
@@ -282,12 +283,16 @@ mod tests {
             vec![predicate!(domain_id >= 0), predicate!(domain_id <= 10)];
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert!(nogood.is_empty());
@@ -302,12 +307,15 @@ mod tests {
             vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -326,12 +334,15 @@ mod tests {
         ];
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -347,12 +358,15 @@ mod tests {
             vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -368,20 +382,23 @@ mod tests {
             vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         let mut other = Vec::default();
         p.minimise(context, &mut other);
 
@@ -400,12 +417,15 @@ mod tests {
                 .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 3);
@@ -428,12 +448,15 @@ mod tests {
         .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 4);
@@ -463,12 +486,15 @@ mod tests {
         .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 6);
@@ -506,12 +532,15 @@ mod tests {
         .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 2);
@@ -542,12 +571,15 @@ mod tests {
         .into();
 
         p.set_mode(Mode::DisableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 3);
@@ -566,12 +598,15 @@ mod tests {
         let mut nogood = conjunction!([domain_0 >= 2] & [domain_0 >= 1] & [domain_0 >= 5]).into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -589,12 +624,15 @@ mod tests {
                 .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -615,12 +653,15 @@ mod tests {
                 .into();
 
         p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let mut proof_log = ProofLog::default();
+        let mut unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &mut unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);

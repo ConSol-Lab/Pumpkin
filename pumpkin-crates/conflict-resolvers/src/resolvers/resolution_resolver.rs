@@ -1,10 +1,11 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::conflict_analysis::ConflictAnalysisContext;
-use pumpkin_core::conflict_analysis::ConflictResolver;
-use pumpkin_core::conflict_analysis::LearnedNogood;
-use pumpkin_core::conflict_analysis::NogoodMinimiser;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::conflict_resolving::CoreExtractor;
+use pumpkin_core::conflict_resolving::LearnedNogood;
+use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicates::Lbd;
@@ -73,6 +74,19 @@ impl ConflictResolver for ResolutionResolver {
         let constraint_tag = context.log_deduction(learned_nogood.predicates.iter().copied());
 
         context.process_learned_nogood(learned_nogood, lbd, constraint_tag);
+    }
+}
+
+impl CoreExtractor for ResolutionResolver {
+    fn extract_core(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
+        let previous_mode = self.mode;
+        self.mode = AnalysisMode::AllDecision;
+
+        let learned_nogood = self.learn_nogood(context);
+
+        self.mode = previous_mode;
+
+        learned_nogood
     }
 }
 

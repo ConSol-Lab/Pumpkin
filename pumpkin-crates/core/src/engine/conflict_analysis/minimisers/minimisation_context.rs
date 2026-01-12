@@ -23,12 +23,26 @@ use crate::state::State;
 pub struct MinimisationContext<'a> {
     pub(crate) state: &'a mut State,
 
-    pub(crate) proof_log: &'a mut ProofLog,
+    pub proof_log: &'a mut ProofLog,
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
 
     pub(crate) counters: &'a mut SolverStatistics,
 }
+
 impl<'a> MinimisationContext<'a> {
+    pub fn new(
+        state: &'a mut State,
+        proof_log: &'a mut ProofLog,
+        unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
+        counters: &'a mut SolverStatistics,
+    ) -> Self {
+        Self {
+            state,
+            proof_log,
+            unit_nogood_inference_codes,
+            counters,
+        }
+    }
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///

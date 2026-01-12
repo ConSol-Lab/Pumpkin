@@ -40,4 +40,6 @@ pub use crate::basic_types::Duration;
 pub use crate::basic_types::Instant;
 pub use crate::basic_types::Random;
 #[allow(deprecated, reason = "Will be refactored in the future")]
+pub use crate::engine::SolverStatistics;
+#[allow(deprecated, reason = "Will be refactored in the future")]
 pub use crate::engine::test_solver::TestSolver;
