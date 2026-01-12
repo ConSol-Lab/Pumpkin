@@ -28,7 +28,7 @@ use crate::pumpkin_assert_simple;
 /// Used during conflict analysis to provide the necessary information.
 ///
 /// All fields are made public for the time being for simplicity. In the future that may change.
-pub(crate) struct ConflictAnalysisContext<'a> {
+pub struct ConflictAnalysisContext<'a> {
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) brancher: &'a mut dyn Brancher,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,

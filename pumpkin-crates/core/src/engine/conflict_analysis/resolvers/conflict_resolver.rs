@@ -8,7 +8,7 @@ use crate::engine::reason::ReasonStore;
 /// continue after a conflict is encountered.
 ///
 /// See [`ConflictResolver::resolve_conflict`] for more information.
-pub(crate) trait ConflictResolver: Debug {
+pub trait ConflictResolver: Debug {
     /// Resolve a conflicting state in the solver so that search can proceed.
     ///
     /// The state provided will be inconsistent. The last entry on the trail is the last

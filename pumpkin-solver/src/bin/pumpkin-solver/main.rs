@@ -357,7 +357,7 @@ struct Args {
 
     /// Determines the conflict resolver.
     #[arg(long, value_enum, default_value_t)]
-    conflict_resolver: ConflictResolver,
+    conflict_resolver: ConflictResolverType,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
     ///

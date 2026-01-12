@@ -16,7 +16,8 @@ use crate::state::State;
 /// Can be used to get the reason for a [`Predicate`] using
 /// [`MinimisationContext::get_propagation_reason`], and information about integer variables and
 /// [`Predicate`]s (see [`ReadDomains`]).
-pub(crate) struct MinimisationContext<'a> {
+#[derive(Debug)]
+pub struct MinimisationContext<'a> {
     pub(crate) state: &'a mut State,
 
     pub(crate) proof_log: &'a mut ProofLog,

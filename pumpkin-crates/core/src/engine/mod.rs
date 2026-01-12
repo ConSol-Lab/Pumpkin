@@ -14,7 +14,7 @@ pub(crate) mod variable_names;
 pub(crate) mod variables;
 
 pub(crate) use conflict_analysis::ResolutionResolver;
-pub use constraint_satisfaction_solver::ConflictResolver;
+pub use constraint_satisfaction_solver::ConflictResolverType;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
 pub use cp::EmptyDomain;

@@ -145,7 +145,7 @@ pub enum CoreExtractionResult {
 /// solver.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-pub enum ConflictResolver {
+pub enum ConflictResolverType {
     NoLearning,
     #[default]
     UIP,
@@ -163,7 +163,7 @@ pub struct SatisfactionSolverOptions {
     /// The proof log for the solver.
     pub proof_log: ProofLog,
     /// The resolver used for conflict analysis
-    pub conflict_resolver: ConflictResolver,
+    pub conflict_resolver: ConflictResolverType,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
@@ -177,7 +177,7 @@ impl Default for SatisfactionSolverOptions {
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
-            conflict_resolver: ConflictResolver::default(),
+            conflict_resolver: ConflictResolverType::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 1000,
         }
@@ -272,8 +272,8 @@ impl ConstraintSatisfactionSolver {
             semantic_minimiser: SemanticMinimiser::default(),
             unit_nogood_inference_codes: Default::default(),
             conflict_resolver: match solver_options.conflict_resolver {
-                ConflictResolver::NoLearning => Box::new(NoLearningResolver),
-                ConflictResolver::UIP => {
+                ConflictResolverType::NoLearning => Box::new(NoLearningResolver),
+                ConflictResolverType::UIP => {
                     Box::new(ResolutionResolver::new(handle, AnalysisMode::OneUIP))
                 }
             },
