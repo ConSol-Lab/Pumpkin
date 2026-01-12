@@ -8,7 +8,17 @@ ENDC = "\033[0m"
 IMPLEMENTATION_GRADE_CONTRIBUTION = 5.0
 
 
-def passed_all_test_cases(test_name: str, timeout=60, crate="implementation") -> bool:
+def passed_all_test_cases(
+    test_name: str, log_failed: bool = False, timeout: int = 60, crate: str = "implementation"
+) -> bool:
+    """Runs the test cases with `test_name` as name and returns whether *all* test cases passed.
+
+    :param test_name: The name of the test cases to run.
+    :param log_failed: Whether to log the failed test cases.
+    :param timeout: The timeout in seconds for the command (60 seconds by default).
+    :param crate: The crate which contains the test cases ('implementation' by default).
+    :return: True if all test cases passed and false otherwise.
+    """
     print(f"Running test cases {test_name}...")
     try:
         result = subprocess.run(
@@ -46,19 +56,23 @@ def passed_all_test_cases(test_name: str, timeout=60, crate="implementation") ->
         except json.JSONDecodeError:
             continue
 
-    if "type" in msg and msg["type"] == "suite":
-        assert "passed" in msg
-        assert "failed" in msg
+        if "type" in msg and msg["type"] == "suite" and "passed" in msg and "failed" in msg:
+            # A test suite has been run, we should retrieve the information
 
-        num_matched += 1
+            passed = msg["passed"]
+            failed = msg["failed"]
 
-        passed = msg["passed"]
-        failed = msg["failed"]
+            if passed + failed != 0:
+                num_matched += 1
 
-        passed_all = failed == 0
+            passed_all = failed == 0
 
-        total_passed = passed
-        total_failed = failed
+            total_passed = passed
+            total_failed = failed
+        elif log_failed and "type" in msg and msg["type"] == "test" and "event" in msg and msg["event"] == "failed":
+            # A failing test case; since `log_failed` is enabled, we should log it
+            assert "name" in msg
+            print(f"\t{FAIL}Failed:{ENDC} {msg['name']}")
 
     if num_matched == 0:
         raise Exception(f"No test cases ran for {test_name}")

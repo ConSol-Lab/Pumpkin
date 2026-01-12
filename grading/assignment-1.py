@@ -1,3 +1,5 @@
+import argparse
+
 from common import IMPLEMENTATION_GRADE_CONTRIBUTION, passed_all_test_cases
 
 TEST_CASES_WITH_PERCENTAGE = {
@@ -11,9 +13,17 @@ TEST_CASES_WITH_PERCENTAGE = {
 assert sum(TEST_CASES_WITH_PERCENTAGE.values()) == IMPLEMENTATION_GRADE_CONTRIBUTION
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog="Grader Assignment 1")
+    parser.add_argument(
+        "--log",
+        action="store_true",
+        help="When this option is enabled, the names of the failed test cases are logged for debugging purposes",
+    )
+    args = parser.parse_args()
+
     result = 0.0
     for test_name, grade_contribution in TEST_CASES_WITH_PERCENTAGE.items():
-        if passed_all_test_cases(test_name):
+        if passed_all_test_cases(test_name, args.log):
             result += grade_contribution
     print("----------------------------------------------------------------------------------------")
     print()
