@@ -187,13 +187,13 @@ impl PropagationContext<'_> {
         &mut self,
         predicate: Predicate,
         reason: impl Into<Reason>,
-        inference_code: InferenceCode,
+        inference_code: &InferenceCode,
     ) -> Result<(), EmptyDomainConflict> {
         let slot = self.reason_store.new_slot();
 
         let modification_result = self.assignments.post_predicate(
             predicate,
-            Some((slot.reason_ref(), inference_code)),
+            Some((slot.reason_ref(), inference_code.clone())),
             self.notification_engine,
         );
 

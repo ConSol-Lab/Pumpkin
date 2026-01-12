@@ -66,7 +66,7 @@ where
             c,
             lower_bound_left_hand_side,
             current_bounds: current_bounds.into(),
-            inference_code: context.create_inference_code(constraint_tag, LinearBounds),
+            inference_code: InferenceCode::new(constraint_tag, LinearBounds),
             reason_buffer: Vec::default(),
         }
     }
@@ -99,7 +99,7 @@ where
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
                 .collect(),
-            inference_code: self.inference_code,
+            inference_code: self.inference_code.clone(),
         }
     }
 }
@@ -206,7 +206,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(predicate![x_i <= bound], i, self.inference_code)?;
+                context.post(predicate![x_i <= bound], i, &self.inference_code)?;
             }
         }
 
@@ -263,7 +263,7 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason, self.inference_code)?;
+                context.post(predicate![x_i <= bound], reason, &self.inference_code)?;
             }
         }
 
