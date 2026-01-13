@@ -70,6 +70,18 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    /// Whether the linear propagator should only do conflict detection.
+    pub(crate) linear_conflict_only: bool,
+
+    /// Whether the circuit propagator should only do conflict detection.
+    pub(crate) circuit_conflict_only: bool,
+
+    /// Whether the cumulative propagator should only do conflict detection.
+    pub(crate) cumulative_conflict_only: bool,
+
+    /// Whether the all_different propagator should only do conflict detection.
+    pub(crate) all_different_conflict_only: bool,
 }
 
 fn log_statistics(

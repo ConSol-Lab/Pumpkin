@@ -14,11 +14,13 @@ pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
     Inequality {
         terms: terms.into(),
         rhs,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -29,8 +31,9 @@ pub fn less_than<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    less_than_or_equals(terms, rhs - 1, constraint_tag)
+    less_than_or_equals(terms, rhs - 1, constraint_tag, conflict_detection_only)
 }
 
 /// Create the [`NegatableConstraint`] `∑ terms_i > rhs`.
@@ -40,8 +43,9 @@ pub fn greater_than<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    greater_than_or_equals(terms, rhs + 1, constraint_tag)
+    greater_than_or_equals(terms, rhs + 1, constraint_tag, conflict_detection_only)
 }
 
 /// Create the [`NegatableConstraint`] `∑ terms_i >= rhs`.
@@ -51,9 +55,10 @@ pub fn greater_than_or_equals<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
     let terms: Box<[_]> = terms.into().iter().map(|var| var.scaled(-1)).collect();
-    less_than_or_equals(terms, -rhs, constraint_tag)
+    less_than_or_equals(terms, -rhs, constraint_tag, conflict_detection_only)
 }
 
 /// Creates the [`NegatableConstraint`] `lhs <= rhs`.
@@ -63,8 +68,14 @@ pub fn binary_less_than_or_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0, constraint_tag)
+    less_than_or_equals(
+        [lhs.scaled(1), rhs.scaled(-1)],
+        0,
+        constraint_tag,
+        conflict_detection_only,
+    )
 }
 
 /// Creates the [`NegatableConstraint`] `lhs < rhs`.
@@ -74,8 +85,14 @@ pub fn binary_less_than<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1), constraint_tag)
+    binary_less_than_or_equals(
+        lhs.scaled(1),
+        rhs.offset(-1),
+        constraint_tag,
+        conflict_detection_only,
+    )
 }
 
 /// Creates the [`NegatableConstraint`] `lhs >= rhs`.
@@ -85,8 +102,14 @@ pub fn binary_greater_than_or_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    binary_less_than_or_equals(lhs.scaled(-1), rhs.scaled(-1), constraint_tag)
+    binary_less_than_or_equals(
+        lhs.scaled(-1),
+        rhs.scaled(-1),
+        constraint_tag,
+        conflict_detection_only,
+    )
 }
 
 /// Creates the [`NegatableConstraint`] `lhs > rhs`.
@@ -96,14 +119,21 @@ pub fn binary_greater_than<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    binary_less_than(lhs.scaled(-1), rhs.scaled(-1), constraint_tag)
+    binary_less_than(
+        lhs.scaled(-1),
+        rhs.scaled(-1),
+        constraint_tag,
+        conflict_detection_only,
+    )
 }
 
 struct Inequality<Var> {
     terms: Box<[Var]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
@@ -112,6 +142,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
+            conflict_detection_only: self.conflict_detection_only,
         }
         .post(solver)
     }
@@ -125,6 +156,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             x: self.terms,
             c: self.rhs,
             constraint_tag: self.constraint_tag,
+            conflict_detection_only: self.conflict_detection_only,
         }
         .implied_by(solver, reification_literal)
     }
@@ -138,6 +170,7 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
             terms: self.terms.iter().map(|term| term.scaled(-1)).collect(),
             rhs: -self.rhs - 1,
             constraint_tag: self.constraint_tag,
+            conflict_detection_only: self.conflict_detection_only,
         }
     }
 }
@@ -153,7 +186,7 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = less_than([x], 0, constraint_tag).post(&mut solver);
+        let result = less_than([x], 0, constraint_tag, false).post(&mut solver);
         assert_eq!(
             result,
             Err(ConstraintOperationError::InfeasiblePropagator),
@@ -168,7 +201,7 @@ mod tests {
         let constraint_tag = solver.new_constraint_tag();
         let x = solver.new_named_bounded_integer(0, 0, "x");
 
-        let result = greater_than([x], 0, constraint_tag).post(&mut solver);
+        let result = greater_than([x], 0, constraint_tag, false).post(&mut solver);
         assert_eq!(
             result,
             Err(ConstraintOperationError::InfeasiblePropagator),

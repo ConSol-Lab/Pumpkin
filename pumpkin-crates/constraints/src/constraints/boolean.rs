@@ -16,12 +16,14 @@ pub fn boolean_less_than_or_equals(
     bools: impl Into<Box<[Literal]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl Constraint {
     BooleanLessThanOrEqual {
         weights: weights.into(),
         bools: bools.into(),
         rhs,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -31,12 +33,14 @@ pub fn boolean_equals(
     bools: impl Into<Box<[Literal]>>,
     rhs: DomainId,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl Constraint {
     BooleanEqual {
         weights: weights.into(),
         bools: bools.into(),
         rhs,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -45,13 +49,20 @@ struct BooleanLessThanOrEqual {
     bools: Box<[Literal]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 }
 
 impl Constraint for BooleanLessThanOrEqual {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs, self.constraint_tag).post(solver)
+        less_than_or_equals(
+            domains,
+            self.rhs,
+            self.constraint_tag,
+            self.conflict_detection_only,
+        )
+        .post(solver)
     }
 
     fn implied_by(
@@ -61,8 +72,13 @@ impl Constraint for BooleanLessThanOrEqual {
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        less_than_or_equals(domains, self.rhs, self.constraint_tag)
-            .implied_by(solver, reification_literal)
+        less_than_or_equals(
+            domains,
+            self.rhs,
+            self.constraint_tag,
+            self.conflict_detection_only,
+        )
+        .implied_by(solver, reification_literal)
     }
 }
 
@@ -81,13 +97,20 @@ struct BooleanEqual {
     bools: Box<[Literal]>,
     rhs: DomainId,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 }
 
 impl Constraint for BooleanEqual {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).post(solver)
+        equals(
+            domains,
+            0,
+            self.constraint_tag,
+            self.conflict_detection_only,
+        )
+        .post(solver)
     }
 
     fn implied_by(
@@ -97,7 +120,13 @@ impl Constraint for BooleanEqual {
     ) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
+        equals(
+            domains,
+            0,
+            self.constraint_tag,
+            self.conflict_detection_only,
+        )
+        .implied_by(solver, reification_literal)
     }
 }
 

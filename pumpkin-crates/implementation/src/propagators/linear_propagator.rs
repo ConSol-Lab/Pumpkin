@@ -18,6 +18,7 @@ pub struct LinearConstructor<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
     pub constraint_tag: ConstraintTag,
+    pub conflict_detection_only: bool,
 }
 
 impl<Var> PropagatorConstructor for LinearConstructor<Var>
@@ -31,6 +32,7 @@ where
 
         LinearLessOrEqualPropagator {
             // TODO
+            conflict_detection_only: self.conflict_detection_only,
             _inference_code: context.create_inference_code(self.constraint_tag, LinearBounds),
             phantom_data: PhantomData,
         }
@@ -41,6 +43,7 @@ where
 #[derive(Clone, Debug)]
 pub struct LinearLessOrEqualPropagator<Var> {
     // TODO
+    conflict_detection_only: bool,
     _inference_code: InferenceCode,
     /// Here to avoid build warnings
     phantom_data: PhantomData<Var>,
@@ -59,7 +62,11 @@ where
     }
 
     fn propagate_from_scratch(&self, mut _context: PropagationContext) -> PropagationStatusCP {
-        // TODO
+        if self.conflict_detection_only {
+            // TODO: Only perform conflict detection
+            todo!();
+        }
+
         todo!()
     }
 }

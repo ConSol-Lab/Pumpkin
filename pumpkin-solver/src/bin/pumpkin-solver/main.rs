@@ -363,6 +363,21 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 1000)]
     memory_preallocated: usize,
+
+    /// Whether the linear propagator should only do conflict detection.
+    #[arg(long)]
+    linear_conflict_only: bool,
+
+    /// Whether the circuit propagator should only do conflict detection.
+    #[arg(long)]
+    circuit_conflict_only: bool,
+
+    /// Whether the cumulative propagator should only do conflict detection.
+    #[arg(long)]
+    cumulative_conflict_only: bool,
+    /// Whether the all_different propagator should only do conflict detection.
+    #[arg(long)]
+    all_different_conflict_only: bool,
 }
 
 fn configure_logging(
@@ -569,6 +584,10 @@ fn run() -> PumpkinResult<()> {
                 optimisation_strategy: args.optimisation_strategy,
                 proof_type: args.proof_path.map(|_| args.proof_type),
                 verbose: args.verbose,
+                linear_conflict_only: args.linear_conflict_only,
+                circuit_conflict_only: args.circuit_conflict_only,
+                cumulative_conflict_only: args.cumulative_conflict_only,
+                all_different_conflict_only: args.all_different_conflict_only,
             },
         )?,
     }

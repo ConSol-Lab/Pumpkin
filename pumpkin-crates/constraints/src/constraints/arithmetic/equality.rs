@@ -17,6 +17,7 @@ struct EqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 }
 
 /// Creates the [`NegatableConstraint`] `∑ terms_i = rhs`.
@@ -26,11 +27,13 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
     EqualConstraint {
         terms: terms.into(),
         rhs,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -41,11 +44,13 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
     EqualConstraint {
         terms: [lhs.scaled(1), rhs.scaled(-1)].into(),
         rhs: 0,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -53,6 +58,7 @@ struct NotEqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 }
 
 /// Create the [`NegatableConstraint`] `∑ terms_i != rhs`.
@@ -62,8 +68,9 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
-    equals(terms, rhs, constraint_tag).negation()
+    equals(terms, rhs, constraint_tag, conflict_detection_only).negation()
 }
 
 /// Creates the [`NegatableConstraint`] `lhs != rhs`.
@@ -73,11 +80,13 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl NegatableConstraint {
     NotEqualConstraint {
         terms: [lhs.scaled(1), rhs.scaled(-1)].into(),
         rhs: 0,
         constraint_tag,
+        conflict_detection_only,
     }
 }
 
@@ -93,14 +102,26 @@ where
                 constraint_tag: self.constraint_tag,
             })?;
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(
+                self.terms.clone(),
+                self.rhs,
+                self.constraint_tag,
+                self.conflict_detection_only,
+            )
+            .post(solver)?;
 
             let negated = self
                 .terms
                 .iter()
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(
+                negated,
+                -self.rhs,
+                self.constraint_tag,
+                self.conflict_detection_only,
+            )
+            .post(solver)?;
         }
 
         Ok(())
@@ -121,16 +142,26 @@ where
                 reification_literal,
             })?;
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+            less_than_or_equals(
+                self.terms.clone(),
+                self.rhs,
+                self.constraint_tag,
+                self.conflict_detection_only,
+            )
+            .implied_by(solver, reification_literal)?;
 
             let negated = self
                 .terms
                 .iter()
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+            less_than_or_equals(
+                negated,
+                -self.rhs,
+                self.constraint_tag,
+                self.conflict_detection_only,
+            )
+            .implied_by(solver, reification_literal)?;
         }
 
         Ok(())
@@ -148,6 +179,7 @@ where
             terms: self.terms.clone(),
             rhs: self.rhs,
             constraint_tag: self.constraint_tag,
+            conflict_detection_only: self.conflict_detection_only,
         }
     }
 }
@@ -161,6 +193,7 @@ where
             terms,
             rhs,
             constraint_tag,
+            conflict_detection_only: _,
         } = self;
 
         if terms.len() == 2 {
@@ -190,6 +223,7 @@ where
             terms,
             rhs,
             constraint_tag,
+            conflict_detection_only: _,
         } = self;
 
         if terms.len() == 2 {
@@ -224,6 +258,7 @@ where
             terms: self.terms.clone(),
             rhs: self.rhs,
             constraint_tag: self.constraint_tag,
+            conflict_detection_only: self.conflict_detection_only,
         }
     }
 }

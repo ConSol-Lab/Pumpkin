@@ -17,6 +17,7 @@ declare_inference_label!(AllDifferentSimple);
 pub struct AllDifferentConstructor<Var> {
     pub x: Box<[Var]>,
     pub constraint_tag: ConstraintTag,
+    pub conflict_detection_only: bool,
 }
 
 impl<Var> PropagatorConstructor for AllDifferentConstructor<Var>
@@ -30,6 +31,7 @@ where
 
         AllDifferentPropagator {
             // TODO
+            conflict_detection_only: self.conflict_detection_only,
             _inference_code: context.create_inference_code(self.constraint_tag, AllDifferentSimple),
             phantom_data: PhantomData,
         }
@@ -40,6 +42,7 @@ where
 #[derive(Clone, Debug)]
 pub struct AllDifferentPropagator<Var> {
     // TODO
+    conflict_detection_only: bool,
     _inference_code: InferenceCode,
     /// Here to avoid build warnings
     phantom_data: PhantomData<Var>,
@@ -58,7 +61,11 @@ where
     }
 
     fn propagate_from_scratch(&self, mut _context: PropagationContext) -> PropagationStatusCP {
-        // TODO
+        if self.conflict_detection_only {
+            // TODO: Only perform conflict detection
+            todo!();
+        }
+
         todo!()
     }
 }

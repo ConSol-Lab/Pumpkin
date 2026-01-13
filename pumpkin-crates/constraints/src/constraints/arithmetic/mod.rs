@@ -17,8 +17,14 @@ pub fn plus<Var: IntegerVariable + 'static>(
     b: Var,
     c: Var,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl Constraint {
-    equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0, constraint_tag)
+    equals(
+        [a.scaled(1), b.scaled(1), c.scaled(-1)],
+        0,
+        constraint_tag,
+        conflict_detection_only,
+    )
 }
 
 /// Creates the [`Constraint`] `a * b = c`.

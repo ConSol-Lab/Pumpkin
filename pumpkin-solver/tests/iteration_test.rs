@@ -22,6 +22,7 @@ fn iterator_finds_all_solutions() {
         .add_constraint(pumpkin_constraints::all_different(
             vec![x, y, z],
             constraint_tag,
+            false,
         ))
         .post();
 

@@ -8,7 +8,7 @@ use crate::propagators::linear_tests::set_up_linear_leq_state;
 
 #[test]
 fn linear_leq_propagation_491680() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -17,13 +17,15 @@ fn linear_leq_propagation_158220() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((41, 55), -1, 0), ((54, 56), 1, 0), ((0, 1), -169, 0)],
         -4,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -3)
 }
 
 #[test]
 fn linear_leq_propagation_455807() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -32,6 +34,7 @@ fn linear_leq_propagation_154517() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((35, 48), -1, 0), ((47, 59), 1, 0), ((0, 1), -167, 0)],
         -2,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
@@ -41,13 +44,15 @@ fn linear_leq_propagation_410892() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((66, 66), -1, 0), ((66, 71), 1, 0), ((0, 1), -168, 0)],
         -3,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -3)
 }
 
 #[test]
 fn linear_leq_propagation_185996() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -56,6 +61,7 @@ fn linear_leq_propagation_284170() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((43, 43), 1, 0), ((37, 42), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 164)
 }
@@ -65,13 +71,14 @@ fn linear_leq_propagation_369170() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((37, 56), -1, 0), ((59, 60), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
 
 #[test]
 fn linear_leq_propagation_26754() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -80,13 +87,14 @@ fn linear_leq_propagation_233454() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((46, 55), -1, 0), ((51, 61), 1, 0), ((0, 1), -170, 0)],
         -5,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_58595() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -95,6 +103,7 @@ fn linear_leq_propagation_336621() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((41, 43), -1, 0), ((45, 58), 1, 0), ((0, 1), -167, 0)],
         -2,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
@@ -104,13 +113,15 @@ fn linear_leq_propagation_76222() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((31, 31), -1, 0), ((42, 46), 1, 0), ((0, 1), -172, 0)],
         -7,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -18)
 }
 
 #[test]
 fn linear_leq_propagation_5007() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -119,6 +130,7 @@ fn linear_leq_propagation_384745() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((40, 55), 1, 0), ((23, 23), -1, 0), ((0, 1), 157, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 148)
 }
@@ -128,6 +140,7 @@ fn linear_leq_propagation_136255() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((63, 69), 1, 0), ((54, 61), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 163)
 }
@@ -137,6 +150,7 @@ fn linear_leq_propagation_376309() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((39, 46), -1, 0), ((43, 61), 1, 0), ((0, 1), -170, 0)],
         -5,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -2)
 }
@@ -144,7 +158,7 @@ fn linear_leq_propagation_376309() {
 #[test]
 fn linear_leq_propagation_63538() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((46, 58), -1, 0), ((33, 56), 1, 0)], -3);
+        set_up_linear_leq_state(&[((46, 58), -1, 0), ((33, 56), 1, 0)], -3, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 55)
 }
 
@@ -153,6 +167,7 @@ fn linear_leq_propagation_251555() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((36, 45), -1, 0), ((48, 58), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
@@ -160,13 +175,14 @@ fn linear_leq_propagation_251555() {
 #[test]
 fn linear_leq_propagation_100852() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((42, 56), 1, 0), ((44, 59), -1, 0)], -3);
+        set_up_linear_leq_state(&[((42, 56), 1, 0), ((44, 59), -1, 0)], -3, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -45)
 }
 
 #[test]
 fn linear_leq_propagation_137871() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -175,6 +191,7 @@ fn linear_leq_propagation_289040() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((37, 37), -1, 0), ((47, 57), 1, 0), ((0, 1), -173, 0)],
         -8,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -18)
 }
@@ -184,13 +201,15 @@ fn linear_leq_propagation_62296() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((34, 34), -1, 0), ((46, 50), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -13)
 }
 
 #[test]
 fn linear_leq_propagation_53261() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -199,6 +218,7 @@ fn linear_leq_propagation_330588() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((48, 58), 1, 0), ((38, 38), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 155)
 }
@@ -208,6 +228,7 @@ fn linear_leq_propagation_154961() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((60, 65), 1, 0), ((53, 58), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 163)
 }
@@ -217,6 +238,7 @@ fn linear_leq_propagation_43389() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((34, 34), -1, 0), ((43, 50), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -10)
 }
@@ -226,13 +248,14 @@ fn linear_leq_propagation_389675() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((32, 57), -1, 0), ((56, 65), 1, 0), ((0, 1), -167, 0)],
         -2,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_23155() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -241,6 +264,7 @@ fn linear_leq_propagation_122331() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((28, 36), -1, 0), ((36, 58), 1, 0), ((0, 1), -169, 0)],
         -4,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
@@ -250,39 +274,40 @@ fn linear_leq_propagation_486658() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((24, 36), -1, 0), ((34, 56), 1, 0), ((0, 1), -168, 0)],
         -3,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_196690() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_125967() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((32, 43), 1, 0), ((40, 53), -1, 0)], -10);
+        set_up_linear_leq_state(&[((32, 43), 1, 0), ((40, 53), -1, 0)], -10, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -42)
 }
 
 #[test]
 fn linear_leq_propagation_24032() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_233281() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((35, 43), 1, 0), ((43, 53), -1, 0)], -10);
+        set_up_linear_leq_state(&[((35, 43), 1, 0), ((43, 53), -1, 0)], -10, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -45)
 }
 
 #[test]
 fn linear_leq_propagation_29916() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -291,6 +316,7 @@ fn linear_leq_propagation_269164() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((35, 40), -1, 0), ((38, 56), 1, 0), ((0, 1), -168, 0)],
         -3,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
@@ -300,6 +326,7 @@ fn linear_leq_propagation_206369() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((24, 24), -1, 0), ((32, 65), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -9)
 }
@@ -309,26 +336,28 @@ fn linear_leq_propagation_381424() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((31, 45), -1, 0), ((45, 61), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_210145() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_269457() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_259396() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((45, 59), 1, 0), ((46, 61), -1, 0)], -2);
+        set_up_linear_leq_state(&[((45, 59), 1, 0), ((46, 61), -1, 0)], -2, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -47)
 }
 
@@ -337,6 +366,7 @@ fn linear_leq_propagation_480633() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((53, 53), -1, 0), ((53, 67), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
@@ -346,6 +376,7 @@ fn linear_leq_propagation_146557() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((38, 38), -1, 0), ((53, 58), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -16)
 }
@@ -355,6 +386,7 @@ fn linear_leq_propagation_222536() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((33, 33), -1, 0), ((36, 43), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
@@ -362,7 +394,7 @@ fn linear_leq_propagation_222536() {
 #[test]
 fn linear_leq_propagation_442235() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((51, 52), 1, 0), ((50, 55), -1, 0)], -3);
+        set_up_linear_leq_state(&[((51, 52), 1, 0), ((50, 55), -1, 0)], -3, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -54)
 }
 
@@ -371,6 +403,7 @@ fn linear_leq_propagation_42333() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((51, 62), -1, 0), ((58, 60), 1, 0), ((0, 1), -171, 0)],
         -6,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -2)
 }
@@ -380,13 +413,14 @@ fn linear_leq_propagation_374466() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((48, 55), -1, 0), ((59, 68), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -5)
 }
 
 #[test]
 fn linear_leq_propagation_432431() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -395,13 +429,14 @@ fn linear_leq_propagation_32295() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((34, 44), -1, 0), ((44, 46), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_447801() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -410,13 +445,14 @@ fn linear_leq_propagation_389980() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((27, 27), -1, 0), ((31, 41), 1, 0), ((0, 1), -175, 0)],
         -10,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -14)
 }
 
 #[test]
 fn linear_leq_propagation_423187() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -425,32 +461,35 @@ fn linear_leq_propagation_94369() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((41, 54), -1, 0), ((55, 55), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -2)
 }
 
 #[test]
 fn linear_leq_propagation_354297() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_194257() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_151977() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_254921() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0), ((0, 1), -1, 0)], 1);
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0), ((0, 1), -1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
@@ -459,6 +498,7 @@ fn linear_leq_propagation_419110() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((23, 29), -1, 0), ((32, 64), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
@@ -468,6 +508,7 @@ fn linear_leq_propagation_383921() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((37, 58), 1, 0), ((28, 36), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 164)
 }
@@ -477,20 +518,21 @@ fn linear_leq_propagation_391408() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((29, 29), -1, 0), ((31, 58), 1, 0), ((0, 1), -167, 0)],
         -2,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -4)
 }
 
 #[test]
 fn linear_leq_propagation_167920() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_145063() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((17, 39), 1, 0), ((26, 49), -1, 0)], -10);
+        set_up_linear_leq_state(&[((17, 39), 1, 0), ((26, 49), -1, 0)], -10, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -27)
 }
 
@@ -499,13 +541,14 @@ fn linear_leq_propagation_484669() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((36, 52), -1, 0), ((47, 53), 1, 0), ((0, 1), -171, 0)],
         -6,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -1)
 }
 
 #[test]
 fn linear_leq_propagation_341968() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -514,6 +557,7 @@ fn linear_leq_propagation_37291() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((42, 45), -1, 0), ((50, 58), 1, 0), ((0, 1), -166, 0)],
         -1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -6)
 }
@@ -533,6 +577,7 @@ fn linear_leq_propagation_179371() {
             ((0, 1), 3, 0),
         ],
         9,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -542,6 +587,7 @@ fn linear_leq_propagation_243210() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((15, 15), -1, 0), ((24, 51), 1, 0), ((0, 1), -169, 0)],
         -4,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -13)
 }
@@ -551,6 +597,7 @@ fn linear_leq_propagation_200558() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((38, 46), 1, 0), ((28, 28), -1, 0), ((0, 1), 164, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 155)
 }
@@ -560,19 +607,21 @@ fn linear_leq_propagation_245516() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((29, 42), 1, 0), ((28, 28), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 164)
 }
 
 #[test]
 fn linear_leq_propagation_430331() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0);
+    let (solver, _, variables) = set_up_linear_leq_state(&[((0, 1), 1, 0)], 0, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
 #[test]
 fn linear_leq_propagation_293784() {
-    let (solver, _, variables) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1);
+    let (solver, _, variables) =
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -581,6 +630,7 @@ fn linear_leq_propagation_6091() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((28, 33), 1, 0), ((17, 17), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 154)
 }
@@ -590,6 +640,7 @@ fn linear_leq_propagation_93135() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((33, 54), 1, 0), ((14, 14), -1, 0), ((0, 1), 165, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 146)
 }
@@ -599,6 +650,7 @@ fn linear_leq_propagation_3963() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((30, 33), 1, 0), ((14, 14), -1, 0), ((0, 1), 161, 0)],
         165,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 149)
 }
@@ -622,6 +674,7 @@ fn linear_leq_propagation_33904() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -641,6 +694,7 @@ fn linear_leq_propagation_275772() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -662,6 +716,7 @@ fn linear_leq_propagation_236360() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -697,6 +752,7 @@ fn linear_leq_propagation_272801() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -750,6 +806,7 @@ fn linear_leq_propagation_304649() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
@@ -759,6 +816,7 @@ fn linear_leq_propagation_94915() {
     let (solver, _, variables) = set_up_linear_leq_state(
         &[((85, 121), 1, 0), ((30, 30), -1, 0), ((54, 91), -1, 0)],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= -55)
 }
@@ -849,6 +907,7 @@ fn linear_leq_propagation_341119() {
             ((0, 1), 102, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 83)
 }
@@ -885,6 +944,7 @@ fn linear_leq_propagation_488326() {
             ((0, 1), 83, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 36)
 }
@@ -971,6 +1031,7 @@ fn linear_leq_propagation_334843() {
             ((0, 1), 102, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 79)
 }
@@ -1021,6 +1082,7 @@ fn linear_leq_propagation_456517() {
             ((0, 1), 90, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 56)
 }
@@ -1099,6 +1161,7 @@ fn linear_leq_propagation_22670() {
             ((0, 1), 91, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 75)
 }
@@ -1202,6 +1265,7 @@ fn linear_leq_propagation_483104() {
             ((0, 1), 96, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 86)
 }
@@ -1284,6 +1348,7 @@ fn linear_leq_propagation_136278() {
             ((0, 1), 74, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 72)
 }
@@ -1331,6 +1396,7 @@ fn linear_leq_propagation_444242() {
             ((0, 1), 52, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 47)
 }
@@ -1407,6 +1473,7 @@ fn linear_leq_propagation_31368() {
             ((0, 1), 47, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 35)
 }
@@ -1523,6 +1590,7 @@ fn linear_leq_propagation_46582() {
             ((0, 1), 75, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 74)
 }
@@ -1625,6 +1693,7 @@ fn linear_leq_propagation_262729() {
             ((0, 1), 77, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 69)
 }
@@ -1705,6 +1774,7 @@ fn linear_leq_propagation_24597() {
             ((0, 1), 111, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 76)
 }
@@ -1802,6 +1872,7 @@ fn linear_leq_propagation_334294() {
             ((0, 1), 79, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 63)
 }
@@ -1894,6 +1965,7 @@ fn linear_leq_propagation_70361() {
             ((0, 1), 83, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 63)
 }
@@ -1966,6 +2038,7 @@ fn linear_leq_propagation_427279() {
             ((0, 1), 52, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 39)
 }
@@ -1973,7 +2046,7 @@ fn linear_leq_propagation_427279() {
 #[test]
 fn linear_leq_propagation_392725() {
     let (solver, _, variables) =
-        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0), ((0, 1), 1, 0)], 1);
+        set_up_linear_leq_state(&[((1, 1), 1, 0), ((0, 1), 1, 0), ((0, 1), 1, 0)], 1, false);
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }
 
@@ -2023,6 +2096,7 @@ fn linear_leq_propagation_40310() {
             ((0, 1), 105, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 41)
 }
@@ -2131,6 +2205,7 @@ fn linear_leq_propagation_6338() {
             ((0, 1), 98, 0),
         ],
         0,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 97)
 }
@@ -2151,6 +2226,7 @@ fn linear_leq_propagation_487499() {
             ((0, 1), 1, 0),
         ],
         1,
+        false,
     );
     assert!(solver.upper_bound(*variables.last().unwrap()) <= 0)
 }

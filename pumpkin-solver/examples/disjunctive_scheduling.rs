@@ -72,6 +72,7 @@ fn main() {
                 variables,
                 -(processing_times[x] as i32),
                 constraint_tag,
+                false,
             )
             .reify(&mut solver, literal);
 

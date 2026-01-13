@@ -17,6 +17,7 @@ mod linear_propagation_tests;
 fn set_up_linear_leq_state(
     variable_info: &[((i32, i32), i32, i32)],
     c: i32,
+    conflict_detection_only: bool,
 ) -> (
     TestSolver,
     Result<PropagatorId, Conflict>,
@@ -36,6 +37,7 @@ fn set_up_linear_leq_state(
         x: variables.clone().into(),
         c,
         constraint_tag,
+        conflict_detection_only,
     });
     (solver, result, variables)
 }

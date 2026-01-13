@@ -31,6 +31,7 @@ fn proof_with_reified_literals() {
             [variable],
             5,
             constraint_tag,
+            false,
         ))
         .post()
         .expect_err("unsat");
@@ -57,6 +58,7 @@ fn proof_with_equality_unit_nogood_step() {
             x1,
             x2,
             constraint_tag,
+            false,
         ))
         .post()
         .expect("no conflict");
@@ -66,6 +68,7 @@ fn proof_with_equality_unit_nogood_step() {
             [x1],
             1,
             constraint_tag,
+            false,
         ))
         .post()
         .expect_err("conflict");

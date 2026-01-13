@@ -12,6 +12,7 @@ pub fn cumulative<StartTimes, Durations, ResourceRequirements>(
     resource_requirements: ResourceRequirements,
     resource_capacity: i32,
     constraint_tag: ConstraintTag,
+    conflict_detection_only: bool,
 ) -> impl Constraint
 where
     StartTimes: IntoIterator,
@@ -40,5 +41,6 @@ where
             .try_into()
             .expect("Expected u32 for capacity"),
         constraint_tag,
+        conflict_detection_only,
     }
 }

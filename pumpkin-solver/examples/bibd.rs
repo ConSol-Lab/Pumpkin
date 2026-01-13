@@ -100,6 +100,7 @@ fn main() {
                 row.clone(),
                 bibd.row_sum as i32,
                 constraint_tag,
+                false,
             ))
             .post();
     }
@@ -111,6 +112,7 @@ fn main() {
                 row,
                 bibd.column_sum as i32,
                 constraint_tag,
+                false,
             ))
             .post();
     }
@@ -139,6 +141,7 @@ fn main() {
                     pairwise_product[r1][r2].clone(),
                     bibd.max_dot_product as i32,
                     constraint_tag,
+                    false,
                 ))
                 .post();
         }

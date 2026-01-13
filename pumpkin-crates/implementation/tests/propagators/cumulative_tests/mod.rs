@@ -2,6 +2,7 @@
     deprecated,
     reason = "Will be refactored in the future using the state API"
 )]
+mod cumulative_checker_tests;
 mod cumulative_conflict_tests;
 mod cumulative_propagation_tests;
 
@@ -14,6 +15,7 @@ use pumpkin_core::variables::DomainId;
 fn set_up_cumulative_state(
     task_info: &[((i32, i32), u32, u32)],
     capacity: u32,
+    conflict_detection_only: bool,
 ) -> (TestSolver, Result<PropagatorId, Conflict>, Vec<DomainId>) {
     let mut solver = TestSolver::default();
 
@@ -34,6 +36,7 @@ fn set_up_cumulative_state(
         resource_usages: resource_usages.into(),
         capacity,
         constraint_tag,
+        conflict_detection_only,
     });
     (solver, result, start_times)
 }
