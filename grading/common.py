@@ -8,6 +8,27 @@ ENDC = "\033[0m"
 IMPLEMENTATION_GRADE_CONTRIBUTION = 5.0
 
 
+def build_test_cases(crate: str = "implementation"):
+    try:
+        subprocess.run(
+            [
+                "cargo",
+                "+nightly",
+                "build",
+                "--tests",
+                "-p",
+                crate,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"{FAIL}Building test cases failed with the following error log:\n{e.stderr}{ENDC}")
+        raise e
+
+
 def passed_all_test_cases(
     test_name: str, log_failed: bool = False, timeout: int = 60, crate: str = "implementation"
 ) -> bool:

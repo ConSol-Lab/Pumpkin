@@ -1,6 +1,6 @@
 import argparse
 
-from common import IMPLEMENTATION_GRADE_CONTRIBUTION, passed_all_test_cases
+from common import IMPLEMENTATION_GRADE_CONTRIBUTION, build_test_cases, passed_all_test_cases
 
 TEST_CASES_WITH_PERCENTAGE = {
     "propagators::linear_tests::linear_propagation_tests": 5.0 / 6.0,
@@ -20,6 +20,9 @@ if __name__ == "__main__":
         help="When this option is enabled, the names of the failed test cases are logged for debugging purposes",
     )
     args = parser.parse_args()
+
+    print(f"Building test cases...\n")
+    build_test_cases()
 
     result = 0.0
     for test_name, grade_contribution in TEST_CASES_WITH_PERCENTAGE.items():
