@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use pumpkin_core::Random;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -19,6 +20,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::rand::Rng;
+use pumpkin_core::rand::SeedableRng;
+use pumpkin_core::rand::rngs::SmallRng;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -375,7 +379,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                         parameters.options.explanation_type,
                     );
                     if parameters.options.log_test_cases
-                    // && SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.5
+                        && SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.15
                     {
                         let mut bounds: HashMap<DomainId, Vec<i32>> = HashMap::default();
                         for element in reason.conjunction.iter() {
@@ -387,11 +391,13 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                             "
                 #[test]
                 fn cumulative_time_table_conflict_{}(){{
-                    let (_, result, _) = set_up_cumulative_state(&{:?}, {});
+                    // Test case with {} variables
+                    let (_, result, _) = set_up_cumulative_state(&{:?}, {}, true);
                     assert!(result.is_err(), \"Expected an error to occur but was {{result:?}}\")
                 }}
                 ",
-                            parameters.options.num_test_cases_generated,
+                            SmallRng::from_entropy().generate_i32_in_range(0, 1_000_000),
+                            bounds.len(),
                             new_profile
                                 .profile_tasks
                                 .iter()
@@ -522,6 +528,8 @@ mod tests {
     use pumpkin_core::predicates::Predicate;
     use pumpkin_core::propagation::EnqueueDecision;
     use pumpkin_core::state::Conflict;
+    use pumpkin_core::state::PropagatorId;
+    use pumpkin_core::variables::DomainId;
 
     use crate::cumulative::ArgTask;
     use crate::cumulative::options::CumulativePropagatorOptions;

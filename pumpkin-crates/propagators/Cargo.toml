@@ -19,6 +19,7 @@ clap = { version = "4.5.40", optional = true, features=["derive"]}
 
 [dev-dependencies]
 pumpkin-constraints = { version = "0.2.2", path = "../constraints" }
+more-asserts = {version = "0.3.1"}
 
 [features]
 clap = ["dep:clap", "pumpkin-core/clap"]

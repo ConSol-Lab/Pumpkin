@@ -179,27 +179,32 @@ where
             // if SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.035 {
             //     let random_test_number =
             //         SmallRng::from_entropy().generate_usize_in_range(0..500000);
+            //     let state_input = (0..self.x.len())
+            //         .filter(|index| {
+            //             !context.is_fixed(&self.x[*index])
+            //                 || context.lower_bound(&self.x[*index]) != 0
+            //         })
+            //         .map(|index| {
+            //             let domain = self.x[index].lower_bound_predicate(0).get_domain();
+            //             (
+            //                 (context.lower_bound(&domain), context.upper_bound(&domain)),
+            //                 self.x[index].get_scale(),
+            //                 self.x[index].get_offset(),
+            //             )
+            //         })
+            //         .collect::<Vec<_>>();
             //     println!(
             //         "
             //     #[test]
             //     fn linear_leq_conflict_{}(){{
-            //         let (_, result, _) = set_up_linear_leq_state(&{:?}, {});
+            //         // Test case with {} variables
+            //         let (_, result, _) = set_up_linear_leq_state(&{:?}, {}, true);
             //         assert!(result.is_err(), \"Expected an error to occur but was {{result:?}}\")
             //     }}
             //     ",
             //         random_test_number,
-            //         (0..self.x.len())
-            //             .filter(|index| !context.is_fixed(&self.x[*index])
-            //                 || context.lower_bound(&self.x[*index]) != 0)
-            //             .map(|index| {
-            //                 let domain = self.x[index].lower_bound_predicate(0).get_domain();
-            //                 (
-            //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
-            //                     self.x[index].get_scale(),
-            //                     self.x[index].get_offset(),
-            //                 )
-            //             })
-            //             .collect::<Vec<_>>(),
+            //         state_input.len(),
+            //         state_input,
             //         self.c
             //     );
             // }
@@ -238,52 +243,53 @@ where
 
             if context.upper_bound(x_i) > bound {
                 let predicate = predicate![x_i <= bound];
-                let mut entered = false;
                 // if SmallRng::from_entropy().gen_range(0.0..=1.0) <= 0.0001
                 //     && !context.evaluate_predicate(predicate).is_some()
                 // {
-                //     entered = true;
                 //     let random_test_number =
                 //         SmallRng::from_entropy().generate_usize_in_range(0..500000);
+                //     let state_input = (0..self.x.len())
+                //         .filter(|index| {
+                //             (!context.is_fixed(&self.x[*index])
+                //                 || context.lower_bound(&self.x[*index]) != 0)
+                //                 && *index != i
+                //         })
+                //         .map(|index| {
+                //             let domain = self.x[index].lower_bound_predicate(0).get_domain();
+                //             (
+                //                 (context.lower_bound(&domain), context.upper_bound(&domain)),
+                //                 self.x[index].get_scale(),
+                //                 self.x[index].get_offset(),
+                //             )
+                //         })
+                //         .chain(std::iter::once({
+                //             let domain = x_i.lower_bound_predicate(0).get_domain();
+                //             (
+                //                 (context.lower_bound(&domain), context.upper_bound(&domain)),
+                //                 self.x[i].get_scale(),
+                //                 self.x[i].get_offset(),
+                //             )
+                //         }))
+                //         .collect::<Vec<_>>();
                 //     println!(
                 //         "
                 // #[test]
                 // fn linear_leq_propagation_{}(){{
-                //     let (solver, _, variables) = set_up_linear_leq_state(&{:?}, {});
-                //     assert!(solver.upper_bound(*variables.last().unwrap()) <={})
+                //     // Test case with {} variables
+                //     let (solver, result, variables) = set_up_linear_leq_state(&{:?}, {}, false);
+                //     assert!(result.is_ok());
+                //     assert_le!(solver.upper_bound(*variables.last().unwrap()), {})
                 // }}
                 // ",
                 //         random_test_number,
-                //         (0..self.x.len())
-                //             .filter(|index| (!context.is_fixed(&self.x[*index])
-                //                 || context.lower_bound(&self.x[*index]) != 0)
-                //                 && *index != i)
-                //             .map(|index| {
-                //                 let domain = self.x[index].lower_bound_predicate(0).get_domain();
-                //                 (
-                //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
-                //                     self.x[index].get_scale(),
-                //                     self.x[index].get_offset(),
-                //                 )
-                //             })
-                //             .chain(std::iter::once({
-                //                 let domain = x_i.lower_bound_predicate(0).get_domain();
-                //                 (
-                //                     (context.lower_bound(&domain), context.upper_bound(&domain)),
-                //                     self.x[i].get_scale(),
-                //                     self.x[i].get_offset(),
-                //                 )
-                //             }))
-                //             .collect::<Vec<_>>(),
+                //         state_input.len(),
+                //         state_input,
                 //         self.c,
                 //         bound
                 //     );
                 // }
                 let result = context.post(predicate, i, self.inference_code);
 
-                if entered && result.is_err() {
-                    panic!();
-                }
                 result?
             }
         }
