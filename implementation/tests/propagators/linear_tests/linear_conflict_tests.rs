@@ -5,10 +5,12 @@
 )]
 
 use crate::propagators::linear_tests::set_up_linear_leq_state;
+// rcpsp_simplified.mzn + 01.dzn
 #[test]
-fn linear_leq_conflict_190449() {
+fn linear_leq_conflict_471385() {
+    // Test case with 3 variables
     let (_, result, _) =
-        set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 7, 0), ((0, 1), 7, 0)], 14, true);
+        set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 5, 0), ((1, 1), 4, 0)], 16, true);
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -16,9 +18,19 @@ fn linear_leq_conflict_190449() {
 }
 
 #[test]
-fn linear_leq_conflict_100085() {
-    let (_, result, _) =
-        set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 5, 0), ((0, 1), 7, 0)], 10, true);
+fn linear_leq_conflict_418622() {
+    // Test case with 5 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((0, 1), 1, 0),
+            ((1, 1), 5, 0),
+            ((1, 1), 4, 0),
+            ((1, 1), 9, 0),
+            ((0, 1), 3, 0),
+        ],
+        9,
+        true,
+    );
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -26,8 +38,19 @@ fn linear_leq_conflict_100085() {
 }
 
 #[test]
-fn linear_leq_conflict_154283() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 5, 0)], 12, true);
+fn linear_leq_conflict_42296() {
+    // Test case with 5 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((0, 1), 5, 0),
+            ((1, 1), 5, 0),
+            ((1, 1), 4, 0),
+            ((1, 1), 9, 0),
+            ((0, 1), 3, 0),
+        ],
+        9,
+        true,
+    );
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -35,8 +58,9 @@ fn linear_leq_conflict_154283() {
 }
 
 #[test]
-fn linear_leq_conflict_3841() {
-    let (_, result, _) = set_up_linear_leq_state(&[((46, 46), -1, 0), ((47, 47), 1, 0)], -1, true);
+fn linear_leq_conflict_199230() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 10, true);
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -44,89 +68,8 @@ fn linear_leq_conflict_3841() {
 }
 
 #[test]
-fn linear_leq_conflict_198399() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 4, 0)], 4, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_52309() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 4, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_38330() {
-    let (_, result, _) = set_up_linear_leq_state(&[((41, 42), -1, 0), ((42, 43), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_13146() {
-    let (_, result, _) =
-        set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 5, 0), ((1, 1), 9, 0)], 9, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_91499() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 4, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_104532() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 4, 0)], 5, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_279476() {
-    let (_, result, _) = set_up_linear_leq_state(&[((43, 43), -1, 0), ((46, 52), 1, 0)], -3, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_258873() {
-    let (_, result, _) = set_up_linear_leq_state(&[((37, 37), -1, 0), ((38, 38), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_430237() {
-    let (_, result, _) = set_up_linear_leq_state(&[((37, 38), -1, 0), ((38, 43), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_149905() {
+fn linear_leq_conflict_118152() {
+    // Test case with 3 variables
     let (_, result, _) =
         set_up_linear_leq_state(&[((1, 1), 2, 0), ((1, 1), 1, 0), ((1, 1), 10, 0)], 11, true);
     assert!(
@@ -136,8 +79,9 @@ fn linear_leq_conflict_149905() {
 }
 
 #[test]
-fn linear_leq_conflict_361443() {
-    let (_, result, _) = set_up_linear_leq_state(&[((34, 34), -1, 0), ((35, 42), 1, 0)], -1, true);
+fn linear_leq_conflict_199997() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 7, 0)], 14, true);
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -145,7 +89,38 @@ fn linear_leq_conflict_361443() {
 }
 
 #[test]
-fn linear_leq_conflict_453757() {
+fn linear_leq_conflict_41718() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 7, 0)], 13, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_388285() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 14, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_384533() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((34, 34), -1, 0), ((35, 35), 1, 0)], -1, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_48764() {
+    // Test case with 2 variables
     let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
     assert!(
         result.is_err(),
@@ -154,8 +129,9 @@ fn linear_leq_conflict_453757() {
 }
 
 #[test]
-fn linear_leq_conflict_441951() {
-    let (_, result, _) = set_up_linear_leq_state(&[((51, 53), -1, 0), ((48, 49), 1, 0)], -7, true);
+fn linear_leq_conflict_342818() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 9, 0)], 9, true);
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -163,8 +139,9 @@ fn linear_leq_conflict_441951() {
 }
 
 #[test]
-fn linear_leq_conflict_230764() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 5, 0), ((1, 1), 5, 0)], 9, true);
+fn linear_leq_conflict_201487() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 9, 0), ((1, 1), 7, 0)], 13, true);
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -172,9 +149,95 @@ fn linear_leq_conflict_230764() {
 }
 
 #[test]
-fn linear_leq_conflict_192039() {
+fn linear_leq_conflict_52086() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 9, 0)], 12, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_374297() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_293039() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 7, 0)], 14, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_347780() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 13, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_72322() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((24, 24), -1, 0), ((24, 24), 1, 0)], -1, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_121822() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((33, 35), 1, 0), ((37, 37), -1, 0)], -5, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_375850() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((26, 26), -1, 0), ((26, 26), 1, 0)], -1, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_26151() {
+    // Test case with 3 variables
     let (_, result, _) =
-        set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 10, 0), ((1, 1), 5, 0)], 10, true);
+        set_up_linear_leq_state(&[((0, 1), 1, 0), ((1, 1), 3, 0), ((1, 1), 10, 0)], 11, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+// ghoulomb.mzn + 3-5-11.dzn
+#[test]
+fn linear_leq_conflict_156793() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), -34, 0), ((80, 80), 1, 0), ((30, 30), -1, 0)],
+        0,
+        true,
+    );
     assert!(
         result.is_err(),
         "Expected an error to occur but was {result:?}"
@@ -182,150 +245,27 @@ fn linear_leq_conflict_192039() {
 }
 
 #[test]
-fn linear_leq_conflict_209548() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 5, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_317973() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 8, 0)], 15, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_461072() {
-    let (_, result, _) = set_up_linear_leq_state(&[((36, 36), -1, 0), ((37, 37), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_13432() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 4, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_353061() {
-    let (_, result, _) = set_up_linear_leq_state(&[((45, 45), -1, 0), ((46, 46), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_314195() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_418827() {
-    let (_, result, _) = set_up_linear_leq_state(&[((36, 36), -1, 0), ((37, 37), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_425474() {
-    let (_, result, _) = set_up_linear_leq_state(&[((38, 42), -1, 0), ((36, 36), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_298325() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_433301() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_181431() {
-    let (_, result, _) = set_up_linear_leq_state(&[((44, 50), -1, 0), ((43, 43), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_271174() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_402104() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_128947() {
-    let (_, result, _) = set_up_linear_leq_state(&[((47, 48), -1, 0), ((39, 46), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_33836() {
-    let (_, result, _) = set_up_linear_leq_state(&[((40, 41), -1, 0), ((41, 42), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_62139() {
+fn linear_leq_conflict_173631() {
+    // Test case with 15 variables
     let (_, result, _) = set_up_linear_leq_state(
         &[
-            ((1, 1), 10, 0),
-            ((1, 1), 9, 0),
-            ((0, 1), 5, 0),
-            ((0, 1), 9, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((1, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((1, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
+            ((0, 1), 1, 0),
         ],
-        15,
+        1,
         true,
     );
     assert!(
@@ -335,379 +275,10 @@ fn linear_leq_conflict_62139() {
 }
 
 #[test]
-fn linear_leq_conflict_189689() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_32888() {
-    let (_, result, _) = set_up_linear_leq_state(&[((38, 38), -1, 0), ((33, 33), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_346027() {
-    let (_, result, _) = set_up_linear_leq_state(&[((37, 37), -1, 0), ((38, 38), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_60764() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 16, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_449277() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 9, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_162573() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_421083() {
-    let (_, result, _) = set_up_linear_leq_state(&[((46, 46), -1, 0), ((47, 53), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_432991() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 16, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_308478() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_359394() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_374650() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 16, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_31830() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_22585() {
-    let (_, result, _) = set_up_linear_leq_state(&[((47, 47), -1, 0), ((47, 47), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_382215() {
-    let (_, result, _) = set_up_linear_leq_state(&[((53, 54), -1, 0), ((54, 55), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_203008() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 9, 0)], 9, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_338333() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_144964() {
-    let (_, result, _) = set_up_linear_leq_state(&[((38, 39), -1, 0), ((37, 37), 1, 0)], -5, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_286856() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 10, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_387327() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 10, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_36227() {
-    let (_, result, _) = set_up_linear_leq_state(&[((39, 44), -1, 0), ((38, 38), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_189695() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_142642() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 16, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_479807() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_261758() {
-    let (_, result, _) = set_up_linear_leq_state(&[((37, 37), -1, 0), ((37, 37), 1, 0)], -1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_145025() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_382558() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_160032() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 5, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_114713() {
-    let (_, result, _) = set_up_linear_leq_state(&[((32, 33), -1, 0), ((31, 31), 1, 0)], -5, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_252397() {
-    let (_, result, _) = set_up_linear_leq_state(&[((33, 34), -1, 0), ((32, 32), 1, 0)], -10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_370748() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 6, 0), ((1, 1), 10, 0)], 11, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_492685() {
-    let (_, result, _) =
-        set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 4, 0), ((0, 1), 5, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_341098() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_181628() {
-    let (_, result, _) = set_up_linear_leq_state(&[((53, 53), -1, 0), ((49, 53), 1, 0)], -5, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_435667() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 9, 0)], 9, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_137423() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_202242() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_457889() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 3, 0), ((1, 1), 10, 0)], 10, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_18541() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 16, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_148727() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 1, 0), ((1, 1), 8, 0)], 8, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_332986() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), 10, 0), ((1, 1), 9, 0)], 14, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_111321() {
-    let (_, result, _) = set_up_linear_leq_state(&[((94, 94), 1, 0), ((84, 84), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_2142() {
+fn linear_leq_conflict_18387() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -15, 0), ((61, 61), 1, 0), ((44, 44), -1, 0)],
+        &[((1, 1), -38, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
         0,
         true,
     );
@@ -718,54 +289,10 @@ fn linear_leq_conflict_2142() {
 }
 
 #[test]
-fn linear_leq_conflict_128151() {
-    let (_, result, _) = set_up_linear_leq_state(&[((70, 70), 1, 0), ((60, 60), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_417830() {
-    let (_, result, _) = set_up_linear_leq_state(&[((97, 97), 1, 0), ((82, 82), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_87483() {
-    let (_, result, _) = set_up_linear_leq_state(&[((67, 67), 1, 0), ((61, 61), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_348467() {
-    let (_, result, _) = set_up_linear_leq_state(&[((68, 68), 1, 0), ((61, 61), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_416502() {
-    let (_, result, _) = set_up_linear_leq_state(&[((71, 71), 1, 0), ((65, 65), -1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_109296() {
+fn linear_leq_conflict_211353() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -32, 0), ((65, 65), 1, 0), ((30, 30), -1, 0)],
+        &[((1, 1), -22, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
         0,
         true,
     );
@@ -776,9 +303,10 @@ fn linear_leq_conflict_109296() {
 }
 
 #[test]
-fn linear_leq_conflict_79771() {
+fn linear_leq_conflict_115695() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -70, 0), ((80, 80), 1, 0), ((3, 3), -1, 0)],
+        &[((1, 1), -37, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
         0,
         true,
     );
@@ -789,9 +317,10 @@ fn linear_leq_conflict_79771() {
 }
 
 #[test]
-fn linear_leq_conflict_414013() {
+fn linear_leq_conflict_413729() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -63, 0), ((80, 80), 1, 0), ((12, 12), -1, 0)],
+        &[((1, 1), -22, 0), ((96, 96), 1, 0), ((1, 1), -1, 0)],
         0,
         true,
     );
@@ -802,9 +331,10 @@ fn linear_leq_conflict_414013() {
 }
 
 #[test]
-fn linear_leq_conflict_218800() {
+fn linear_leq_conflict_179278() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -37, 0), ((65, 65), 1, 0), ((7, 7), -1, 0)],
+        &[((1, 1), -82, 0), ((96, 96), 1, 0), ((1, 1), -1, 0)],
         0,
         true,
     );
@@ -815,9 +345,10 @@ fn linear_leq_conflict_218800() {
 }
 
 #[test]
-fn linear_leq_conflict_114069() {
+fn linear_leq_conflict_493909() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -26, 0), ((96, 96), 1, 0), ((1, 1), -1, 0)],
+        &[((1, 1), -37, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -828,9 +359,10 @@ fn linear_leq_conflict_114069() {
 }
 
 #[test]
-fn linear_leq_conflict_104763() {
+fn linear_leq_conflict_361286() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -33, 0), ((96, 96), 1, 0), ((1, 1), -1, 0)],
+        &[((1, 1), -82, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -841,9 +373,10 @@ fn linear_leq_conflict_104763() {
 }
 
 #[test]
-fn linear_leq_conflict_26757() {
+fn linear_leq_conflict_381929() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -22, 0), ((96, 96), 1, 0), ((44, 44), -1, 0)],
+        &[((1, 1), -60, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -854,9 +387,10 @@ fn linear_leq_conflict_26757() {
 }
 
 #[test]
-fn linear_leq_conflict_63928() {
+fn linear_leq_conflict_499248() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -40, 0), ((96, 96), 1, 0), ((30, 30), -1, 0)],
+        &[((1, 1), -92, 0), ((96, 96), 1, 0), ((1, 1), -1, 0)],
         0,
         true,
     );
@@ -867,19 +401,10 @@ fn linear_leq_conflict_63928() {
 }
 
 #[test]
-fn linear_leq_conflict_307963() {
-    let (_, result, _) =
-        set_up_linear_leq_state(&[((0, 1), 1, 0), ((1, 1), 1, 0), ((1, 1), 1, 0)], 1, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_30488() {
+fn linear_leq_conflict_247575() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -49, 0), ((80, 80), 1, 0), ((7, 7), -1, 0)],
+        &[((1, 1), -59, 0), ((65, 65), 1, 0), ((1, 1), -1, 0)],
         0,
         true,
     );
@@ -890,9 +415,10 @@ fn linear_leq_conflict_30488() {
 }
 
 #[test]
-fn linear_leq_conflict_292021() {
+fn linear_leq_conflict_201811() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -78, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
+        &[((1, 1), -43, 0), ((65, 65), 1, 0), ((20, 20), -1, 0)],
         0,
         true,
     );
@@ -903,9 +429,10 @@ fn linear_leq_conflict_292021() {
 }
 
 #[test]
-fn linear_leq_conflict_71653() {
+fn linear_leq_conflict_120782() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -59, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
+        &[((1, 1), -46, 0), ((65, 65), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -916,9 +443,10 @@ fn linear_leq_conflict_71653() {
 }
 
 #[test]
-fn linear_leq_conflict_167091() {
+fn linear_leq_conflict_190798() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -66, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
+        &[((1, 1), -54, 0), ((65, 65), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -929,9 +457,30 @@ fn linear_leq_conflict_167091() {
 }
 
 #[test]
-fn linear_leq_conflict_234869() {
+fn linear_leq_conflict_283282() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), -46, 0), ((65, 65), 1, 0)], 0, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_60373() {
+    // Test case with 2 variables
+    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), -37, 0), ((65, 65), 1, 0)], 0, true);
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_175340() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -44, 0), ((96, 96), 1, 0), ((3, 3), -1, 0)],
+        &[((1, 1), -26, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -942,18 +491,10 @@ fn linear_leq_conflict_234869() {
 }
 
 #[test]
-fn linear_leq_conflict_77505() {
-    let (_, result, _) = set_up_linear_leq_state(&[((1, 1), -52, 0), ((80, 80), 1, 0)], 0, true);
-    assert!(
-        result.is_err(),
-        "Expected an error to occur but was {result:?}"
-    )
-}
-
-#[test]
-fn linear_leq_conflict_342639() {
+fn linear_leq_conflict_373034() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -59, 0), ((96, 96), 1, 0), ((20, 20), -1, 0)],
+        &[((1, 1), -86, 0), ((96, 96), 1, 0), ((7, 7), -1, 0)],
         0,
         true,
     );
@@ -964,9 +505,10 @@ fn linear_leq_conflict_342639() {
 }
 
 #[test]
-fn linear_leq_conflict_112055() {
+fn linear_leq_conflict_41812() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -40, 0), ((96, 96), 1, 0), ((20, 20), -1, 0)],
+        &[((1, 1), -54, 0), ((96, 96), 1, 0), ((20, 20), -1, 0)],
         0,
         true,
     );
@@ -976,11 +518,990 @@ fn linear_leq_conflict_112055() {
     )
 }
 
+// tsp.mzn + TSP_N20_2.dzn
 #[test]
-fn linear_leq_conflict_285511() {
+fn linear_leq_conflict_499642() {
+    // Test case with 3 variables
     let (_, result, _) = set_up_linear_leq_state(
-        &[((1, 1), -49, 0), ((96, 96), 1, 0), ((20, 20), -1, 0)],
-        0,
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((16, 18), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_163268() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((4, 6), -1, 0), ((14, 20), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_186039() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((2, 4), -1, 0), ((15, 20), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_319165() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((5, 7), -1, 0), ((15, 19), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_375155() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((4, 6), -1, 0), ((16, 19), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_31526() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((16, 18), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_329350() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((15, 18), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_60708() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((15, 17), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_98707() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((4, 6), -1, 0), ((13, 15), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_344870() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((7, 9), -1, 0), ((16, 18), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_24180() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((7, 9), -1, 0), ((16, 18), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_457612() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((5, 7), -1, 0), ((14, 19), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_93437() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((15, 17), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_174546() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((5, 7), -1, 0), ((14, 19), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_261011() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((2, 4), -1, 0), ((15, 20), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_246346() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((2, 11), -1, 0), ((13, 20), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_311804() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((5, 7), -1, 0), ((14, 19), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_215807() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((15, 17), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_84610() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((3, 5), -1, 0), ((14, 16), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_100950() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((1, 1), 19, 0), ((6, 8), -1, 0), ((15, 17), 1, 0)],
+        18,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+// Carpet cutting: cc_base.mzn + mzn_rnd_test.16.dzn
+#[test]
+fn linear_leq_conflict_279692() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1242, 1291), 1, 0),
+            ((1242, 1291), -1, 0),
+            ((1, 1), 2953, 0),
+        ],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_441089() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((705, 788), 1, 0), ((705, 705), -1, 0), ((1, 1), 3016, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_285481() {
+    // Test case with 18 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1652, 1763), -1, 0),
+            ((1, 1), 138, 0),
+            ((181, 181), 1, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((56, 56), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((76, 76), 1, 0),
+            ((113, 113), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_375461() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_448778() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_63797() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_253737() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_287040() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_95034() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_167013() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((901, 964), 1, 0), ((957, 957), -1, 0), ((1, 1), 2968, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_131018() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((901, 964), 1, 0), ((957, 957), -1, 0), ((1, 1), 2968, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_90733() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((901, 964), 1, 0), ((957, 957), -1, 0), ((1, 1), 2968, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_317865() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1142, 1206), 1, 0),
+            ((1029, 1029), -1, 0),
+            ((1, 1), 2968, 0),
+        ],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_130532() {
+    // Test case with 4 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((889, 1089), 1, 0),
+            ((1, 1), 50, 0),
+            ((957, 1028), -1, 0),
+            ((1, 1), 3084, 0),
+        ],
+        2953,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_398824() {
+    // Test case with 4 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((889, 1089), 1, 0),
+            ((1, 1), 50, 0),
+            ((957, 1028), -1, 0),
+            ((1, 1), 3084, 0),
+        ],
+        2953,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_350082() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((566, 592), 1, 0), ((629, 629), -1, 0), ((1, 1), 3016, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_493970() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((566, 592), 1, 0), ((629, 629), -1, 0), ((1, 1), 3016, 0)],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_105737() {
+    // Test case with 16 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1468, 1538), -1, 0),
+            ((1, 1), 138, 0),
+            ((181, 181), 1, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((76, 76), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_247403() {
+    // Test case with 15 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1468, 1538), -1, 0),
+            ((1, 1), 138, 0),
+            ((181, 181), 1, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_361445() {
+    // Test case with 15 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1468, 1538), -1, 0),
+            ((1, 1), 138, 0),
+            ((181, 181), 1, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+// mknapsack_global.fzn + mknap1-6.dzn
+#[test]
+fn linear_leq_conflict_466539() {
+    // Test case with 16 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1343, 1439), -1, 0),
+            ((1, 1), 138, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((56, 56), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((76, 76), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_131630() {
+    // Test case with 16 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1343, 1439), -1, 0),
+            ((1, 1), 138, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((56, 56), 1, 0),
+            ((0, 121), 1, 0),
+            ((72, 72), 1, 0),
+            ((510, 510), 1, 0),
+            ((76, 76), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_34033() {
+    // Test case with 16 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1343, 1439), -1, 0),
+            ((1, 1), 138, 0),
+            ((181, 181), 1, 0),
+            ((170, 170), 1, 0),
+            ((74, 74), 1, 0),
+            ((197, 197), 1, 0),
+            ((72, 72), 1, 0),
+            ((0, 121), 1, 0),
+            ((112, 112), 1, 0),
+            ((268, 268), 1, 0),
+            ((113, 113), 1, 0),
+            ((63, 63), 1, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+            ((0, 1), 50, 0),
+        ],
+        -75,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_320721() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1215, 1342), 1, 0),
+            ((1271, 1271), -1, 0),
+            ((1, 1), 2968, 0),
+        ],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_180441() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_25739() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_104407() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((204, 228), 1, 0), ((204, 204), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_260976() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_40070() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_316112() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_27988() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_40870() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_26370() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_219712() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_197472() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_290056() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_412757() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((26, 26), 1, 0), ((0, 81), -1, 0), ((1, 1), 457, 0)],
+        315,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_298881() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[((100, 228), 1, 0), ((168, 168), -1, 0), ((1, 1), 315, 0)],
+        228,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_439766() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1236, 1236), 1, 0),
+            ((1236, 1236), -1, 0),
+            ((1, 1), 2953, 0),
+        ],
+        2903,
+        true,
+    );
+    assert!(
+        result.is_err(),
+        "Expected an error to occur but was {result:?}"
+    )
+}
+
+#[test]
+fn linear_leq_conflict_394788() {
+    // Test case with 3 variables
+    let (_, result, _) = set_up_linear_leq_state(
+        &[
+            ((1242, 1291), 1, 0),
+            ((1242, 1291), -1, 0),
+            ((1, 1), 2953, 0),
+        ],
+        2903,
         true,
     );
     assert!(
