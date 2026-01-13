@@ -406,6 +406,8 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_core::Solver;
     /// # use pumpkin_core::termination::Indefinite;
     /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
+    /// # use pumpkin_conflict_resolvers::default_conflict_resolver;
+    /// # use pumpkin_conflict_resolvers::default_core_extractor;
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.
@@ -423,13 +425,21 @@ impl ConstraintSatisfactionSolver {
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut termination = Indefinite;
     /// let mut brancher = solver.default_brancher();
-    /// let result = solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+    /// let mut resolver = default_conflict_resolver();
+    ///
+    /// let result = solver.satisfy_under_assumptions(
+    ///     &mut brancher,
+    ///     &mut termination,
+    ///     &mut resolver,
+    ///     &assumptions,
+    /// );
     ///
     /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut unsatisfiable) =
     ///     result
     /// {
     ///     {
-    ///         let core = unsatisfiable.extract_core();
+    ///         let mut core_extractor = default_core_extractor();
+    ///         let core = unsatisfiable.extract_core(&mut core_extractor);
     ///
     ///         // The order of the literals in the core is undefined, so we check for unordered
     ///         // equality.

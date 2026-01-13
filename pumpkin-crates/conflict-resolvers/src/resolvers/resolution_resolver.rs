@@ -15,15 +15,25 @@ use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
 
-use crate::minimisers::recursive_minimiser::RecursiveMinimiser;
-use crate::minimisers::semantic_minimiser::Mode;
-use crate::minimisers::semantic_minimiser::SemanticMinimiser;
+use crate::minimisers::RecursiveMinimiser;
+use crate::minimisers::SemanticMinimisationMode;
+use crate::minimisers::SemanticMinimiser;
 
-/// Resolve conflicts according to the CDCL procedure.
+/// [`ConflictResolver`] which resolves conflicts according to the CDCL procedure.
 ///
 /// This conflict resolver will derive a nogood that is implied by the constraints already present
 /// in the solver. This new nogood is added as a constraint to the solver, and the solver
 /// backtracks to the decision level at which the new constraint propagates.
+///
+/// The [`ResolutionResolver`] can be used in two [`AnalysisMode`]s:
+/// - [`AnalysisMode::OneUIP`] - Resolves until finding the unit implication point.
+/// - [AnalysisMode::AllDecision] - Resolves until the learned nogood contains only decisions.
+///
+/// For an in-depth explanation and overview of CDCL and UIP, see \[1\].
+///
+/// # Bibliography
+/// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT solvers’,
+/// Handbook of satisfiability, pp. 131–153, 2009.
 #[derive(Clone, Debug)]
 pub struct ResolutionResolver {
     /// Heap containing the predicates which still need to be processed; sorted non-increasing
@@ -51,10 +61,10 @@ pub struct ResolutionResolver {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-/// Determines which type of learning is performed by the resolver.
+/// Determines which type of learning is performed by the [`ResolutionResolver`].
 pub enum AnalysisMode {
     #[default]
-    /// Stanard conflict analysis which returns as soon as the first unit implication point is
+    /// Standard conflict analysis which returns as soon as the first unit implication point is
     /// found (i.e. when a nogood is created which only contains a single predicate from the
     /// current decision level)
     OneUIP,
@@ -309,9 +319,9 @@ impl ResolutionResolver {
                 // If we do not minimise then we do the equality
                 // merging in the first iteration of removing
                 // duplicates
-                Mode::EnableEqualityMerging
+                SemanticMinimisationMode::EnableEqualityMerging
             } else {
-                Mode::DisableEqualityMerging
+                SemanticMinimisationMode::DisableEqualityMerging
             });
         self.semantic_minimiser.minimise(
             context.minimisation_context(),
@@ -329,7 +339,7 @@ impl ResolutionResolver {
             // equality predicates which remain in the nogood
             let size_before_semantic_minimisation = self.processed_nogood_predicates.len();
             self.semantic_minimiser
-                .set_mode(Mode::EnableEqualityMerging);
+                .set_mode(SemanticMinimisationMode::EnableEqualityMerging);
             self.semantic_minimiser.minimise(
                 context.minimisation_context(),
                 &mut self.processed_nogood_predicates,

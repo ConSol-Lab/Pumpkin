@@ -163,6 +163,12 @@ where
         self.values.len()
     }
 
+    /// Returns whether there are no elements in the heap (including the (temporarily) "removed"
+    /// values)
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn num_nonremoved_elements(&self) -> usize {
         self.end_position
     }
@@ -207,7 +213,7 @@ where
     /// that have been [`KeyValueHeap::delete_key`].
     ///
     /// The run-time complexity of this operation is O(n)
-    pub(crate) fn divide_values(&mut self, divisor: Value) {
+    pub fn divide_values(&mut self, divisor: Value) {
         for value in self.values.iter_mut() {
             *value /= divisor;
         }

@@ -3,9 +3,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_conflict_resolvers::DefaultResolver;
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_conflict_resolvers::default_core_extractor;
-use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_solver::ConstraintOperationError;
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
@@ -204,7 +203,7 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
-        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+        let mut resolver = default_conflict_resolver();
 
         match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
@@ -237,7 +236,7 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
-        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+        let mut resolver = default_conflict_resolver();
 
         let solver_assumptions = assumptions
             .iter()
@@ -300,7 +299,7 @@ impl Model {
 
         let mut brancher = solver.default_brancher();
         let mut termination = get_termination(end_time);
-        let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+        let mut resolver = default_conflict_resolver();
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,

@@ -43,6 +43,7 @@ impl<'a> MinimisationContext<'a> {
             counters,
         }
     }
+
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///
@@ -63,17 +64,20 @@ impl<'a> MinimisationContext<'a> {
         );
     }
 
+    /// Explains the root assignment of `predicate` in the proof log.
     pub fn explain_root_assignment(&mut self, predicate: Predicate) {
         explain_root_assignment(
             &mut RootExplanationContext {
-                proof_log: &mut self.proof_log,
-                unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-                state: &mut self.state,
+                proof_log: self.proof_log,
+                unit_nogood_inference_codes: self.unit_nogood_inference_codes,
+                state: self.state,
             },
             predicate,
         );
     }
 
+    /// Used for keeping track of statistics; specifies that `num_predicates_removed` were removed
+    /// by recursive minimisation.
     pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: usize) {
         self.counters
             .learned_clause_statistics

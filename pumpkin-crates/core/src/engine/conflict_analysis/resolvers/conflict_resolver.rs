@@ -19,8 +19,7 @@ pub trait ConflictResolver: Debug + DynClone {
     /// The state provided will be inconsistent. The last entry on the trail is the last
     /// _successful_ propagation, and the conflict information contains either an explicit conflict
     /// nogood or the predicate and reason that triggered a domain to become empty. The reason of
-    /// any propagation can be queried using [`ReasonStore::get_or_compute`]. An instance of
-    /// [`ReasonStore`] is provided in the context.
+    /// any propagation can be queried using [`ConflictAnalysisContext::get_propagation_reason`].
     ///
     /// Additionally, it is guaranteed that the conflict is not at the root-level. Such a conflict
     /// means that nothing could restore the solver, so resolving a root-level conflict is

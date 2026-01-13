@@ -6,10 +6,10 @@ use crate::predicates::Predicate;
 /// A structure which stores a learned nogood
 ///
 /// There are two assumptions:
-/// - The asserting literal (i.e. the literal of the current decision level) is placed at the `0`th
-///   index of [`LearnedNogood::literals`].
-/// - A literal from the second-highest decision level is placed at the `1`st index of
-///   [`LearnedNogood::literals`].
+/// - The asserting [`Predicate`] (i.e. the predicate of the current decision level) is placed at
+///   the `0`th index of [`LearnedNogood::predicates`].
+/// - A [`Predicate`] from the second-highest decision level is placed at the `1`st index of
+///   [`LearnedNogood::predicates`].
 #[derive(Clone, Debug)]
 pub struct LearnedNogood {
     pub predicates: Vec<Predicate>,

@@ -23,6 +23,7 @@ impl LinearSearch {
         LinearSearch { encoding }
     }
 
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     pub(crate) fn solve(
         &self,
         solver: &mut Solver,

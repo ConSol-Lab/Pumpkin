@@ -4,8 +4,14 @@ use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
+#[cfg(doc)]
+use crate::branching::branchers::autonomous_search::AutonomousSearch;
+#[cfg(doc)]
+use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
 use crate::conflict_resolving::MinimisationContext;
+#[cfg(doc)]
+use crate::conflict_resolving::NogoodMinimiser;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -62,162 +68,10 @@ impl Debug for ConflictAnalysisContext<'_> {
 }
 
 impl ConflictAnalysisContext<'_> {
-    /// Returns the last decision which was made by the solver.
-    pub fn find_last_decision(&mut self) -> Option<Predicate> {
-        self.state.assignments.find_last_decision()
-    }
-
-    pub fn minimisation_context(&mut self) -> MinimisationContext<'_> {
-        MinimisationContext {
-            proof_log: self.proof_log,
-            unit_nogood_inference_codes: self.unit_nogood_inference_codes,
-            counters: self.counters,
-            state: self.state,
-        }
-    }
-
-    pub fn initial_conflict_size(&mut self, num_initial_conflict_predicates: usize) {
-        self.counters
-            .learned_clause_statistics
-            .average_conflict_size
-            .add_term(num_initial_conflict_predicates as u64);
-    }
-
-    pub fn should_minimise(&self) -> bool {
-        self.should_minimise
-    }
-
-    pub fn is_logging_inferences(&self) -> bool {
-        self.proof_log.is_logging_inferences()
-    }
-
-    pub fn explain_root_assignment(&mut self, predicate: Predicate) {
-        explain_root_assignment(
-            &mut RootExplanationContext {
-                proof_log: &mut self.proof_log,
-                unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-                state: &mut self.state,
-            },
-            predicate,
-        );
-    }
-
-    pub fn predicate_appeared_in_conflict(&mut self, predicate: Predicate) {
-        self.brancher.on_appearance_in_conflict_predicate(predicate);
-    }
-
-    pub fn trail_position(&self, predicate: Predicate) -> usize {
-        self.state
-            .assignments
-            .get_trail_position(&predicate)
-            .unwrap()
-    }
-
-    pub fn is_implied(&self, predicate: Predicate) -> bool {
-        self.state.assignments.trail[self.trail_position(predicate)].predicate == predicate
-    }
-
-    /// Adds a learned nogood to the database.
-    pub fn add_learned_nogood(
-        &mut self,
-        learned_nogood: LearnedNogood,
-        constraint_tag: ConstraintTag,
-    ) {
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
-
-        let (nogood_propagator, mut propagation_context) = self
-            .state
-            .get_propagator_mut_with_context(self.nogood_propagator_handle);
-        let nogood_propagator =
-            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
-
-        nogood_propagator.add_asserting_nogood(
-            learned_nogood.predicates,
-            inference_code,
-            &mut propagation_context,
-            self.counters,
-        );
-    }
-
-    /// Log a deduction (learned nogood) to the proof.
-    ///
-    /// The inferences and marked propagations are assumed to be recorded in reverse-application
-    /// order.
-    pub fn log_deduction(
-        &mut self,
-        premises: impl IntoIterator<Item = Predicate>,
-    ) -> ConstraintTag {
-        self.proof_log
-            .log_deduction(
-                premises,
-                &self.state.variable_names,
-                &mut self.state.constraint_tags,
-            )
-            .expect("Failed to write proof log")
-    }
-
-    /// Posts the predicate with reason an empty reason.
-    pub fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
-        let update_occurred = self
-            .state
-            .post(predicate)
-            .expect("Expected enqueued predicate to not lead to conflict directly");
-
-        pumpkin_assert_simple!(
-            update_occurred,
-            "The propagated predicate should not already be true."
-        );
-    }
-
-    /// Adds the learned nogood to the nogood database and backtracks to
-    /// [`LearnedNogood::backtrack_level`].
-    pub fn process_learned_nogood(
-        &mut self,
-        learned_nogood: LearnedNogood,
-        lbd: u32,
-        constraint_tag: ConstraintTag,
-    ) {
-        let current_checkpoint = self.get_checkpoint();
-
-        self.counters
-            .learned_clause_statistics
-            .average_backtrack_amount
-            .add_term((current_checkpoint - learned_nogood.backtrack_level) as u64);
-
-        self.counters.engine_statistics.sum_of_backjumps +=
-            current_checkpoint as u64 - 1 - learned_nogood.backtrack_level as u64;
-        if current_checkpoint - learned_nogood.backtrack_level > 1 {
-            self.counters.engine_statistics.num_backjumps += 1;
-        }
-
-        // important to notify about the conflict _before_ backtracking removes literals from
-        // the trail -> although in the current version this does nothing but notify that a
-        // conflict happened
-        self.restart_strategy
-            .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
-
-        self.backtrack(learned_nogood.backtrack_level);
-
-        if learned_nogood.predicates.len() == 1 {
-            let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
-            let _ = self
-                .unit_nogood_inference_codes
-                .insert(!learned_nogood.predicates[0], inference_code.clone());
-        }
-
-        self.counters
-            .learned_clause_statistics
-            .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
-
-        self.counters
-            .learned_clause_statistics
-            .average_learned_nogood_length
-            .add_term(learned_nogood.predicates.len() as u64);
-
-        self.add_learned_nogood(learned_nogood, constraint_tag);
-    }
-
     /// Backtracks the solver to the provided backtrack level.
+    ///
+    /// This method panics if the provided `backtrack_level` is not lower than the current
+    /// checkpoint (retrieved using [`ReadDomains::get_checkpoint`]).
     pub fn backtrack(&mut self, backtrack_level: usize) {
         ConstraintSatisfactionSolver::backtrack(
             self.state,
@@ -295,11 +149,192 @@ impl ConflictAnalysisContext<'_> {
         );
     }
 
+    /// Adds the [`LearnedNogood`] to the nogood database and backtracks to
+    /// [`LearnedNogood::backtrack_level`].
+    pub fn process_learned_nogood(
+        &mut self,
+        learned_nogood: LearnedNogood,
+        lbd: u32,
+        constraint_tag: ConstraintTag,
+    ) {
+        let current_checkpoint = self.get_checkpoint();
+
+        self.counters
+            .learned_clause_statistics
+            .average_backtrack_amount
+            .add_term((current_checkpoint - learned_nogood.backtrack_level) as u64);
+
+        self.counters.engine_statistics.sum_of_backjumps +=
+            current_checkpoint as u64 - 1 - learned_nogood.backtrack_level as u64;
+        if current_checkpoint - learned_nogood.backtrack_level > 1 {
+            self.counters.engine_statistics.num_backjumps += 1;
+        }
+
+        // important to notify about the conflict _before_ backtracking removes literals from
+        // the trail -> although in the current version this does nothing but notify that a
+        // conflict happened
+        self.restart_strategy
+            .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
+
+        self.backtrack(learned_nogood.backtrack_level);
+
+        if learned_nogood.predicates.len() == 1 {
+            let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
+            let _ = self
+                .unit_nogood_inference_codes
+                .insert(!learned_nogood.predicates[0], inference_code.clone());
+        }
+
+        self.counters
+            .learned_clause_statistics
+            .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
+
+        self.counters
+            .learned_clause_statistics
+            .average_learned_nogood_length
+            .add_term(learned_nogood.predicates.len() as u64);
+
+        self.add_learned_nogood(learned_nogood, constraint_tag);
+    }
+
+    /// Returns the last decision which was made by the solver (if such a decision exists).
+    pub fn find_last_decision(&mut self) -> Option<Predicate> {
+        self.state.assignments.find_last_decision()
+    }
+
+    /// Posts the predicate with an empty reason.
+    ///
+    /// This method will panic if posting the [`Predicate`] leads to a conflict.
+    pub fn post_predicate_without_reason(&mut self, predicate: Predicate) {
+        let update_occurred = self
+            .state
+            .post(predicate)
+            .expect("Expected enqueued predicate to not lead to conflict directly");
+
+        pumpkin_assert_simple!(
+            update_occurred,
+            "The propagated predicate should not already be true."
+        );
+    }
+
+    /// Returns the trail position at which [`Predicate`] became true.
+    pub fn trail_position(&self, predicate: Predicate) -> usize {
+        self.state
+            .assignments
+            .get_trail_position(&predicate)
+            .unwrap()
+    }
+
+    /// Returns whether the provided [`Predicate`] is implied.
+    ///
+    /// For example, if we post the [`Predicate`] [x >= v], then the predicate [x >= v - 1] is
+    /// implied.
+    pub fn is_implied(&self, predicate: Predicate) -> bool {
+        self.state.assignments.trail[self.trail_position(predicate)].predicate == predicate
+    }
+
+    /// Returns an instance of [`MinimisationContext`] which can be used by [`NogoodMinimiser`]s.
+    pub fn minimisation_context(&mut self) -> MinimisationContext<'_> {
+        MinimisationContext {
+            proof_log: self.proof_log,
+            unit_nogood_inference_codes: self.unit_nogood_inference_codes,
+            counters: self.counters,
+            state: self.state,
+        }
+    }
+}
+
+/// Methods used for retrieving options.
+impl ConflictAnalysisContext<'_> {
+    /// Returns whether nogood minimisation should be performed by the [`ConflictResolver`].
+    pub fn should_minimise(&self) -> bool {
+        self.should_minimise
+    }
+
+    /// Returns whether inferences are currently being logged.
+    pub fn is_logging_inferences(&self) -> bool {
+        self.proof_log.is_logging_inferences()
+    }
+}
+
+/// Methods used for proof logging
+impl ConflictAnalysisContext<'_> {
+    /// Explains the root assignment of `predicate` in the proof log.
+    pub fn explain_root_assignment(&mut self, predicate: Predicate) {
+        explain_root_assignment(
+            &mut RootExplanationContext {
+                proof_log: self.proof_log,
+                unit_nogood_inference_codes: self.unit_nogood_inference_codes,
+                state: self.state,
+            },
+            predicate,
+        );
+    }
+
+    /// Log a deduction (learned nogood) to the proof.
+    ///
+    /// The inferences and marked propagations are assumed to be recorded in reverse-application
+    /// order.
+    pub fn log_deduction(
+        &mut self,
+        premises: impl IntoIterator<Item = Predicate>,
+    ) -> ConstraintTag {
+        self.proof_log
+            .log_deduction(
+                premises,
+                &self.state.variable_names,
+                &mut self.state.constraint_tags,
+            )
+            .expect("Failed to write proof log")
+    }
+}
+
+/// Methods used for keeping track of statistics.
+impl ConflictAnalysisContext<'_> {
+    /// Used for keeping track of statistics; specifies that `num_predicates_removed` were removed
+    /// by semantic minimisation.
     pub fn removed_predicates_by_semantic(&mut self, num_predicates_removed: u64) {
         self.counters
             .learned_clause_statistics
             .average_number_of_removed_atomic_constraints_semantic
             .add_term(num_predicates_removed);
+    }
+
+    /// Used for keeping track of statistics; specifies that a new conflict with `num_predicates`
+    /// was found.
+    pub fn initial_conflict_size(&mut self, num_predicates: usize) {
+        self.counters
+            .learned_clause_statistics
+            .average_conflict_size
+            .add_term(num_predicates as u64);
+    }
+
+    /// Informs the used [`Brancher`] that the provided `predicate` appeared during conflict
+    /// analysis.
+    ///
+    /// This is used by [`Brancher`]s such as [`AutonomousSearch`] to guide the search.
+    pub fn predicate_appeared_in_conflict(&mut self, predicate: Predicate) {
+        self.brancher.on_appearance_in_conflict_predicate(predicate);
+    }
+}
+
+impl ConflictAnalysisContext<'_> {
+    /// Adds a learned nogood to the database.
+    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood, constraint_tag: ConstraintTag) {
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
+
+        let (nogood_propagator, mut propagation_context) = self
+            .state
+            .get_propagator_mut_with_context(self.nogood_propagator_handle);
+        let nogood_propagator =
+            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
+
+        nogood_propagator.add_asserting_nogood(
+            learned_nogood.predicates,
+            inference_code,
+            &mut propagation_context,
+            self.counters,
+        );
     }
 
     /// Compute the reason for `predicate` being true. The reason will be stored in

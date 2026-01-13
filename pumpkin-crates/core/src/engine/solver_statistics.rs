@@ -5,8 +5,7 @@ use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 
-/// Structure responsible for storing several statistics of the solving process of the
-/// [`ConstraintSatisfactionSolver`].
+/// Structure responsible for storing several statistics of the solving process of the solver.
 #[derive(Debug, Default)]
 pub struct SolverStatistics {
     /// Core statistics of the solver engine (e.g. the number of decisions)

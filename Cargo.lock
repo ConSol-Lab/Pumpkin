@@ -746,6 +746,7 @@ dependencies = [
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
+ "pumpkin-conflict-resolvers",
  "pumpkin-core",
  "pumpkin-propagators",
 ]
@@ -798,6 +799,7 @@ dependencies = [
  "clap",
  "convert_case 0.6.0",
  "enumset",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
 ]

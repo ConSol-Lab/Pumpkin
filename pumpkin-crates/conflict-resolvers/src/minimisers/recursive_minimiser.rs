@@ -8,29 +8,27 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
 
+/// [`NogoodMinimiser`] that removes redundant [`Predicate`]s by analysing the implication graph.
+///
+/// A literal is redundant/dominated if a subset of the other literals in the learned clause imply
+/// that literal.
+///
+/// The implementation is based on \[1\] and \[2\].
+///
+/// # Bibliography
+///
+/// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
+/// to improved propositional proof traces’. SAT'09.
+///
+/// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
 #[derive(Debug, Clone, Default)]
-pub(crate) struct RecursiveMinimiser {
+pub struct RecursiveMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
 }
 
 impl NogoodMinimiser for RecursiveMinimiser {
-    /// Removes redundant literals from the learned clause.
-    /// Redundancy is detected by looking at the implication graph:
-    /// * a literal is redundant/dominated if a subset of the other literals in the learned clause
-    ///   imply that literal.
-    ///
-    /// The function assumes that the learned clause is stored internally
-    /// in `analysis_result`, and that the first literal is
-    /// asserting. The asserting literal cannot be removed.
-    ///
-    /// The implementation is based on the algorithm from the papers:
-    ///
-    /// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
-    /// to improved propositional proof traces’. SAT'09.
-    ///
-    /// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
     fn minimise(&mut self, mut context: MinimisationContext, nogood: &mut Vec<Predicate>) {
         let num_literals_before_minimisation = nogood.len();
 

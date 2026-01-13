@@ -24,9 +24,10 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::parse_cnf;
-use pumpkin_conflict_resolvers::DefaultResolver;
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -635,7 +636,7 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                DefaultResolver::new(AnalysisMode::OneUIP),
+                ResolutionResolver::new(AnalysisMode::OneUIP),
             )?,
         },
     }
@@ -655,7 +656,7 @@ fn cnf_problem(
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher();
-    let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+    let mut resolver = default_conflict_resolver();
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {

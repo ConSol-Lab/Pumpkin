@@ -1,7 +1,6 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use pumpkin_conflict_resolvers::DefaultResolver;
-use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
@@ -31,7 +30,7 @@ fn iterator_finds_all_solutions() {
     let mut termination = Indefinite;
     // And we create a search strategy (in this case, simply the default)
     let mut brancher = solver.default_brancher();
-    let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+    let mut resolver = default_conflict_resolver();
 
     // Then we solve to satisfaction
     let mut solution_iterator =

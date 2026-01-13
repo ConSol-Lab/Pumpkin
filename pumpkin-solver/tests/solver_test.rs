@@ -2,8 +2,7 @@
 
 use std::path::PathBuf;
 
-use pumpkin_conflict_resolvers::DefaultResolver;
-use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
@@ -38,7 +37,7 @@ fn proof_with_reified_literals() {
         .expect_err("unsat");
 
     let mut brancher = solver.default_brancher();
-    let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+    let mut resolver = default_conflict_resolver();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
     assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
@@ -75,7 +74,7 @@ fn proof_with_equality_unit_nogood_step() {
         .expect_err("conflict");
 
     let mut brancher = solver.default_brancher();
-    let mut resolver = DefaultResolver::new(AnalysisMode::OneUIP);
+    let mut resolver = default_conflict_resolver();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
     assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));

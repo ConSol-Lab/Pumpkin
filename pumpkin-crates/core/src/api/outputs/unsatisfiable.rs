@@ -53,6 +53,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_core::predicate;
     /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::constraints::Constraint;
+    /// # use pumpkin_conflict_resolvers::default_core_extractor;
+    /// # use pumpkin_conflict_resolvers::default_conflict_resolver;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///
@@ -71,6 +73,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// let mut termination = Indefinite;
     /// // And we create a search strategy (in this case, simply the default)
     /// let mut brancher = solver.default_brancher();
+    /// // Finally, we create a default conflict resolver
+    /// let mut resolver = default_conflict_resolver();
     ///
     /// // Then we solve to satisfaction
     /// let assumptions = vec![
@@ -79,14 +83,16 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     predicate!(y != 0),
     /// ];
     /// let result =
-    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &mut resolver, &assumptions);
     ///
     /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
     ///     mut unsatisfiable,
     /// ) = result
     /// {
     ///     {
-    ///         let core = unsatisfiable.extract_core();
+    ///         // Now we extract the core using a core extractor
+    ///         let mut core_extractor = default_core_extractor();
+    ///         let core = unsatisfiable.extract_core(&mut core_extractor);
     ///
     ///         // In this case, the core should be equal to all assumption predicates
     ///         assert_eq!(core, vec![predicate!(y == 1), predicate!(x == 1)].into());

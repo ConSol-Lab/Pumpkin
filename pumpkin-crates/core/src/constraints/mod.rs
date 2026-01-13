@@ -1,3 +1,4 @@
+//! Defines the main building blocks of constraints.
 use crate::ConstraintOperationError;
 use crate::Solver;
 use crate::propagation::PropagatorConstructor;
