@@ -1,46 +1,38 @@
-use crate::basic_types::moving_averages::MovingAverage;
-use crate::containers::HashMap;
-use crate::containers::HashSet;
-use crate::engine::Assignments;
-use crate::engine::conflict_analysis::MinimisationContext;
-use crate::engine::conflict_analysis::NogoodMinimiser;
-use crate::predicates::Predicate;
-use crate::proof::RootExplanationContext;
-use crate::proof::explain_root_assignment;
-use crate::propagation::CurrentNogood;
-use crate::propagation::HasAssignments;
-use crate::propagation::ReadDomains;
-use crate::pumpkin_assert_eq_moderate;
-use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
+use pumpkin_core::asserts::pumpkin_assert_moderate;
+use pumpkin_core::asserts::pumpkin_assert_simple;
+use pumpkin_core::conflict_resolving::MinimisationContext;
+use pumpkin_core::conflict_resolving::NogoodMinimiser;
+use pumpkin_core::containers::HashMap;
+use pumpkin_core::containers::HashSet;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::state::CurrentNogood;
 
+/// [`NogoodMinimiser`] that removes redundant [`Predicate`]s by analysing the implication graph.
+///
+/// A literal is redundant/dominated if a subset of the other literals in the learned clause imply
+/// that literal.
+///
+/// The implementation is based on \[1\] and \[2\].
+///
+/// # Bibliography
+///
+/// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
+/// to improved propositional proof traces’. SAT'09.
+///
+/// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
 #[derive(Debug, Clone, Default)]
-pub(crate) struct RecursiveMinimiser {
+pub struct RecursiveMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
 }
 
 impl NogoodMinimiser for RecursiveMinimiser {
-    /// Removes redundant literals from the learned clause.
-    /// Redundancy is detected by looking at the implication graph:
-    /// * a literal is redundant/dominated if a subset of the other literals in the learned clause
-    ///   imply that literal.
-    ///
-    /// The function assumes that the learned clause is stored internally
-    /// in `analysis_result`, and that the first literal is
-    /// asserting. The asserting literal cannot be removed.
-    ///
-    /// The implementation is based on the algorithm from the papers:
-    ///
-    /// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
-    /// to improved propositional proof traces’. SAT'09.
-    ///
-    /// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
     fn minimise(&mut self, mut context: MinimisationContext, nogood: &mut Vec<Predicate>) {
         let num_literals_before_minimisation = nogood.len();
 
-        self.initialise_minimisation_data_structures(nogood, context.assignments());
+        self.initialise_minimisation_data_structures(nogood, &context);
 
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
@@ -65,11 +57,7 @@ impl NogoodMinimiser for RecursiveMinimiser {
         self.clean_up_minimisation();
 
         let num_predicates_removed = num_literals_before_minimisation - nogood.len();
-        context
-            .counters
-            .learned_clause_statistics
-            .average_number_of_removed_atomic_constraints_recursive
-            .add_term(num_predicates_removed as u64);
+        context.removed_predicates_by_recursive(num_predicates_removed);
     }
 }
 
@@ -80,7 +68,7 @@ impl RecursiveMinimiser {
         context: &mut MinimisationContext,
         current_nogood: &[Predicate],
     ) {
-        pumpkin_assert_eq_moderate!(context.state.truth_value(input_predicate), Some(true));
+        pumpkin_assert_moderate!(context.evaluate_predicate(input_predicate) == Some(true));
 
         self.current_depth += 1;
 
@@ -137,14 +125,7 @@ impl RecursiveMinimiser {
                 // The minimisation can introduce new inferences in the proof. If those inferences
                 // contain root-level antecedents, which we identified here, we need to make sure
                 // the proof is aware that that root-level assignment is used.
-                explain_root_assignment(
-                    &mut RootExplanationContext {
-                        proof_log: context.proof_log,
-                        unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                        state: context.state,
-                    },
-                    antecedent_predicate,
-                );
+                context.explain_root_assignment(antecedent_predicate);
                 continue;
             }
 
@@ -224,7 +205,7 @@ impl RecursiveMinimiser {
     fn initialise_minimisation_data_structures(
         &mut self,
         nogood: &Vec<Predicate>,
-        assignments: &Assignments,
+        context: &MinimisationContext,
     ) {
         pumpkin_assert_simple!(self.current_depth == 0);
 
@@ -232,26 +213,21 @@ impl RecursiveMinimiser {
         for &predicate in nogood {
             // Predicates from the current decision level are always kept.
             // This is the analogue of asserting literals.
-            if assignments
-                .get_checkpoint_for_predicate(&predicate)
-                .unwrap()
-                == assignments.get_checkpoint()
+            if context.get_checkpoint_for_predicate(predicate).unwrap() == context.get_checkpoint()
             {
                 let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;
             }
 
             // Decision predicate must be kept.
-            if assignments.is_decision_predicate(&predicate) {
+            if context.is_decision_predicate(predicate) {
                 self.assign_predicate_label(predicate, Label::Keep);
             } else {
                 self.assign_predicate_label(predicate, Label::Seen);
             }
 
             self.mark_decision_level_as_allowed(
-                assignments
-                    .get_checkpoint_for_predicate(&predicate)
-                    .unwrap(),
+                context.get_checkpoint_for_predicate(predicate).unwrap(),
             );
         }
     }

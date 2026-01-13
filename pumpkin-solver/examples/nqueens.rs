@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ProofLog;
@@ -87,7 +88,9 @@ fn main() {
         .post();
 
     let mut brancher = solver.default_brancher();
-    match solver.satisfy(&mut brancher, &mut Indefinite) {
+    let mut resolver = default_conflict_resolver();
+
+    match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.solution();
 

@@ -13,6 +13,7 @@ use std::time::Instant;
 use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
+use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::statistics::log_statistic;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
@@ -122,6 +123,7 @@ pub(crate) fn solve(
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
     options: FlatZincOptions,
+    mut resolver: impl ConflictResolver,
 ) -> Result<(), FlatZincError> {
     let init_start_time = Instant::now();
 
@@ -171,6 +173,7 @@ pub(crate) fn solve(
                     termination,
                     outputs,
                     init_time,
+                    resolver,
                 );
                 return Ok(());
             }
@@ -194,11 +197,13 @@ pub(crate) fn solve(
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
             &mut brancher,
             &mut termination,
+            &mut resolver,
             LinearSatUnsat::new(direction, objective, callback),
         ),
         OptimisationStrategy::LinearUnsatSat => solver.optimise(
             &mut brancher,
             &mut termination,
+            &mut resolver,
             LinearUnsatSat::new(direction, objective, callback),
         ),
     };
@@ -256,9 +261,11 @@ fn satisfy(
     mut termination: impl TerminationCondition,
     outputs: Vec<Output>,
     init_time: Duration,
+    mut resolver: impl ConflictResolver,
 ) {
     if options.all_solutions {
-        let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
+        let mut solution_iterator =
+            solver.get_solution_iterator(&mut brancher, &mut termination, &mut resolver);
         let mut has_found_solution = false;
         loop {
             match solution_iterator.next_solution() {
@@ -297,7 +304,7 @@ fn satisfy(
             }
         }
     } else {
-        match solver.satisfy(&mut brancher, &mut termination) {
+        match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
             SatisfactionResult::Satisfiable(satisfiable) => solution_callback(
                 satisfiable.brancher(),
                 None,

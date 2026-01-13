@@ -4,6 +4,7 @@ use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::ExplanationContext;
+use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
@@ -139,6 +140,18 @@ pub trait ReadDomains {
 
     /// Returns the current checkpoint.
     fn get_checkpoint(&self) -> usize;
+
+    /// Returns the lowest value in the domain of `var` at the time of its creation.
+    fn initial_lower_bound(&self, var: DomainId) -> i32;
+
+    /// Returns the highest value in the domain of `var` at the time of its creation.
+    fn initial_upper_bound(&self, var: DomainId) -> i32;
+
+    /// Returns all of the holes present at the time of thecreation of `var`.
+    fn initial_holes(&self, var: DomainId) -> Vec<i32>;
+
+    /// Returns the number of currently defined domains.
+    fn number_of_domains(&self) -> u32;
 }
 
 impl<T: HasAssignments> ReadDomains for T {
@@ -228,5 +241,21 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn get_checkpoint(&self) -> usize {
         self.assignments().get_checkpoint()
+    }
+
+    fn initial_lower_bound(&self, var: DomainId) -> i32 {
+        self.assignments().get_initial_lower_bound(var)
+    }
+
+    fn initial_upper_bound(&self, var: DomainId) -> i32 {
+        self.assignments().get_initial_upper_bound(var)
+    }
+
+    fn initial_holes(&self, var: DomainId) -> Vec<i32> {
+        self.assignments().get_initial_holes(var)
+    }
+
+    fn number_of_domains(&self) -> u32 {
+        self.assignments().num_domains()
     }
 }

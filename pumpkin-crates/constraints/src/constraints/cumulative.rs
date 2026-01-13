@@ -44,6 +44,7 @@ use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;
 /// # use pumpkin_core::results::ProblemSolution;
+/// # use pumpkin_conflict_resolvers::default_conflict_resolver;
 /// let solver = Solver::default();
 ///
 /// let mut solver = Solver::default();
@@ -71,8 +72,9 @@ use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 ///
 /// let mut termination = Indefinite;
 /// let mut brancher = solver.default_brancher();
+/// let mut resolver = default_conflict_resolver();
 ///
-/// let result = solver.satisfy(&mut brancher, &mut termination);
+/// let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 ///
 /// // We check whether the result was feasible
 /// if let SatisfactionResult::Satisfiable(satisfiable) = result {

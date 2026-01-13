@@ -3,6 +3,7 @@
 #[cfg(doc)]
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::CoreExtractor;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
 use crate::predicates::Predicate;
@@ -52,6 +53,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_core::predicate;
     /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::constraints::Constraint;
+    /// # use pumpkin_conflict_resolvers::default_core_extractor;
+    /// # use pumpkin_conflict_resolvers::default_conflict_resolver;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///
@@ -70,6 +73,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// let mut termination = Indefinite;
     /// // And we create a search strategy (in this case, simply the default)
     /// let mut brancher = solver.default_brancher();
+    /// // Finally, we create a default conflict resolver
+    /// let mut resolver = default_conflict_resolver();
     ///
     /// // Then we solve to satisfaction
     /// let assumptions = vec![
@@ -78,14 +83,16 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     predicate!(y != 0),
     /// ];
     /// let result =
-    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &mut resolver, &assumptions);
     ///
     /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
     ///     mut unsatisfiable,
     /// ) = result
     /// {
     ///     {
-    ///         let core = unsatisfiable.extract_core();
+    ///         // Now we extract the core using a core extractor
+    ///         let mut core_extractor = default_core_extractor();
+    ///         let core = unsatisfiable.extract_core(&mut core_extractor);
     ///
     ///         // In this case, the core should be equal to all assumption predicates
     ///         assert_eq!(core, vec![predicate!(y == 1), predicate!(x == 1)].into());
@@ -101,8 +108,11 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// search for CP’, in Integration of Constraint Programming, Artificial Intelligence, and
     /// Operations Research: 17th International Conference, CPAIOR 2020, Vienna, Austria, September
     /// 21--24, 2020, Proceedings 17, 2020, pp. 205–221.
-    pub fn extract_core(&mut self) -> Box<[Predicate]> {
-        match self.solver.extract_clausal_core(self.brancher) {
+    pub fn extract_core(&mut self, core_extractor: &mut impl CoreExtractor) -> Box<[Predicate]> {
+        match self
+            .solver
+            .extract_clausal_core(self.brancher, core_extractor)
+        {
             CoreExtractionResult::ConflictingAssumption(conflicting_assumption) => {
                 panic!(
                     "Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}",

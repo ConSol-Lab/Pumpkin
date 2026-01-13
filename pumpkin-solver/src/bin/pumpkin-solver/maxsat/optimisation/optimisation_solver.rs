@@ -1,4 +1,5 @@
 use log::debug;
+use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
 use pumpkin_solver::branching::Brancher;
@@ -38,12 +39,15 @@ impl OptimisationSolver {
         &mut self,
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
+        mut resolver: impl ConflictResolver,
     ) -> MaxSatOptimisationResult {
         let process_time = Stopwatch::starting_now();
 
         // Compute an initial solution from which to start minimizing
         let initial_solution_result = {
-            let initial_solve_result = self.solver.satisfy(&mut brancher, termination);
+            let initial_solve_result =
+                self.solver
+                    .satisfy(&mut brancher, termination, &mut resolver);
 
             match initial_solve_result {
                 SatisfactionResult::Satisfiable(satisfiable) => {
@@ -67,6 +71,7 @@ impl OptimisationSolver {
                 termination,
                 brancher,
                 solution,
+                &mut resolver,
             ),
             InitialSolveResult::Unsatisfiable => MaxSatOptimisationResult::Infeasible,
             InitialSolveResult::Unknown => MaxSatOptimisationResult::Unknown,

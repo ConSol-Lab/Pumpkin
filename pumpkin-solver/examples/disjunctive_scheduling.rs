@@ -9,6 +9,7 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
+use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
 use pumpkin_solver::results::ProblemSolution;
@@ -87,13 +88,14 @@ fn main() {
     }
 
     let mut brancher = solver.default_brancher();
+    let mut resolver = default_conflict_resolver();
     if matches!(
-        solver.satisfy(&mut brancher, &mut Indefinite),
+        solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),
         SatisfactionResult::Unsatisfiable(_, _),
     ) {
         panic!("Infeasibility Detected")
     }
-    match solver.satisfy(&mut brancher, &mut Indefinite) {
+    match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.solution();
 

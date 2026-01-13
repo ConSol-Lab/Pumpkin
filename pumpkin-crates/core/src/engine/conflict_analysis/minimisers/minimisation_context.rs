@@ -1,3 +1,4 @@
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::SolverStatistics;
@@ -5,6 +6,8 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
+use crate::proof::RootExplanationContext;
+use crate::proof::explain_root_assignment;
 use crate::propagation::HasAssignments;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
@@ -16,26 +19,42 @@ use crate::state::State;
 /// Can be used to get the reason for a [`Predicate`] using
 /// [`MinimisationContext::get_propagation_reason`], and information about integer variables and
 /// [`Predicate`]s (see [`ReadDomains`]).
-pub(crate) struct MinimisationContext<'a> {
+#[derive(Debug)]
+pub struct MinimisationContext<'a> {
     pub(crate) state: &'a mut State,
 
-    pub(crate) proof_log: &'a mut ProofLog,
+    pub proof_log: &'a mut ProofLog,
     pub(crate) unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
 
     pub(crate) counters: &'a mut SolverStatistics,
 }
+
 impl<'a> MinimisationContext<'a> {
+    pub fn new(
+        state: &'a mut State,
+        proof_log: &'a mut ProofLog,
+        unit_nogood_inference_codes: &'a HashMap<Predicate, InferenceCode>,
+        counters: &'a mut SolverStatistics,
+    ) -> Self {
+        Self {
+            state,
+            proof_log,
+            unit_nogood_inference_codes,
+            counters,
+        }
+    }
+
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
-    pub(crate) fn get_propagation_reason(
+    pub fn get_propagation_reason(
         &mut self,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         input_predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
     ) {
-        ConflictAnalysisContext::get_propagation_reason(
+        ConflictAnalysisContext::get_propagation_reason_inner(
             input_predicate,
             current_nogood,
             self.proof_log,
@@ -43,6 +62,27 @@ impl<'a> MinimisationContext<'a> {
             reason_buffer,
             self.state,
         );
+    }
+
+    /// Explains the root assignment of `predicate` in the proof log.
+    pub fn explain_root_assignment(&mut self, predicate: Predicate) {
+        explain_root_assignment(
+            &mut RootExplanationContext {
+                proof_log: self.proof_log,
+                unit_nogood_inference_codes: self.unit_nogood_inference_codes,
+                state: self.state,
+            },
+            predicate,
+        );
+    }
+
+    /// Used for keeping track of statistics; specifies that `num_predicates_removed` were removed
+    /// by recursive minimisation.
+    pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: usize) {
+        self.counters
+            .learned_clause_statistics
+            .average_number_of_removed_atomic_constraints_recursive
+            .add_term(num_predicates_removed as u64);
     }
 }
 

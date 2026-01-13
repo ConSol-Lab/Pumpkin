@@ -4,7 +4,7 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct PredicateIdGenerator {
+pub struct PredicateIdGenerator {
     id_to_predicate: KeyedVec<PredicateId, Predicate>,
     predicate_to_id: HashMap<Predicate, PredicateId>,
 }
@@ -12,7 +12,7 @@ pub(crate) struct PredicateIdGenerator {
 impl PredicateIdGenerator {
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
-    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
@@ -22,11 +22,11 @@ impl PredicateIdGenerator {
         }
     }
 
-    pub(crate) fn get_predicate(&self, id: PredicateId) -> Predicate {
+    pub fn get_predicate(&self, id: PredicateId) -> Predicate {
         self.id_to_predicate[id]
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.id_to_predicate.clear();
         self.predicate_to_id.clear();
     }

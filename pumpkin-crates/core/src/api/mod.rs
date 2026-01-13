@@ -67,7 +67,7 @@ pub mod options {
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
-    pub use crate::engine::ConflictResolver;
+    pub use crate::engine::ConflictResolverType;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::nogoods::LearningOptions;
@@ -104,7 +104,9 @@ pub mod predicates {
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
+    pub use crate::basic_types::PredicateIdGenerator;
     pub use crate::basic_types::PropositionalConjunction;
+    pub use crate::engine::Lbd;
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
@@ -124,6 +126,17 @@ pub mod state {
     pub use crate::engine::State;
     pub use crate::propagation::CurrentNogood;
     pub use crate::propagation::PropagatorId;
+}
+
+pub mod conflict_resolving {
+    //! Contains structures for the conflict resolving.
+
+    pub use crate::engine::conflict_analysis::ConflictAnalysisContext;
+    pub use crate::engine::conflict_analysis::ConflictResolver;
+    pub use crate::engine::conflict_analysis::CoreExtractor;
+    pub use crate::engine::conflict_analysis::LearnedNogood;
+    pub use crate::engine::conflict_analysis::MinimisationContext;
+    pub use crate::engine::conflict_analysis::NogoodMinimiser;
 }
 
 pub use crate::basic_types::Function;

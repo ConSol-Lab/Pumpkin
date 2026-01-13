@@ -736,9 +736,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-conflict-resolvers"
+version = "0.2.2"
+dependencies = [
+ "pumpkin-core",
+]
+
+[[package]]
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
+ "pumpkin-conflict-resolvers",
  "pumpkin-core",
  "pumpkin-propagators",
 ]
@@ -764,6 +772,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "rand",
  "thiserror",
@@ -790,6 +799,7 @@ dependencies = [
  "clap",
  "convert_case 0.6.0",
  "enumset",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
 ]
@@ -804,6 +814,7 @@ dependencies = [
  "flatzinc",
  "log",
  "pumpkin-checker",
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-macros",
@@ -819,6 +830,7 @@ dependencies = [
 name = "pumpkin-solver-py"
 version = "0.2.2"
 dependencies = [
+ "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-solver",
  "pyo3",

@@ -1,24 +1,31 @@
 use std::cmp;
 
-use crate::containers::HashSet;
-use crate::containers::KeyedVec;
-use crate::containers::SparseSet;
-use crate::engine::conflict_analysis::MinimisationContext;
-use crate::engine::conflict_analysis::NogoodMinimiser;
-use crate::engine::predicates::predicate::PredicateType;
-use crate::predicate;
-use crate::predicates::Predicate;
-use crate::propagation::HasAssignments;
-use crate::variables::DomainId;
+use pumpkin_core::conflict_resolving::MinimisationContext;
+use pumpkin_core::conflict_resolving::NogoodMinimiser;
+use pumpkin_core::containers::HashSet;
+use pumpkin_core::containers::KeyedVec;
+use pumpkin_core::containers::SparseSet;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateType;
+use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::variables::DomainId;
 
+/// [`NogoodMinimiser`] that removes redundant [`Predicate`]s by analysing the semantic meaning of
+/// the predicates.
+///
+/// A [`Predicate`] is redundant if it is implied by another predicate in the nogood.
+///
+/// For example, if there is a nogood `[x >= 5] /\ [x >= 7] /\ [...] -> ⊥`, then the predicate [x
+/// >= 5] is redundant.
 #[derive(Clone, Debug)]
-pub(crate) struct SemanticMinimiser {
+pub struct SemanticMinimiser {
     original_domains: KeyedVec<DomainId, SimpleIntegerDomain>,
     domains: KeyedVec<DomainId, SimpleIntegerDomain>,
     present_ids: SparseSet<DomainId>,
     helper: Vec<Predicate>,
 
-    mode: Mode,
+    mode: SemanticMinimisationMode,
 }
 
 impl Default for SemanticMinimiser {
@@ -29,14 +36,19 @@ impl Default for SemanticMinimiser {
             domains: Default::default(),
             present_ids: SparseSet::new(vec![], mapping),
             helper: Vec::default(),
-            mode: Mode::EnableEqualityMerging,
+            mode: SemanticMinimisationMode::EnableEqualityMerging,
         }
     }
 }
 
+/// Used to determine whether the [`SemanticMinimiser`] merges equality [`Predicate`]s or not.
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum Mode {
+pub enum SemanticMinimisationMode {
+    /// Enables equality merging; for example, if the predicates [x >= v] and [x <= v] are present
+    /// in the domain description, then it is replaced with [x == v].
     EnableEqualityMerging,
+    /// Disables equality merging; for example, if the predicates [x >= v] and [x <= v] are present
+    /// in the domain description, then they are both kept in the nogood after minimisation.
     DisableEqualityMerging,
 }
 
@@ -66,7 +78,8 @@ impl NogoodMinimiser for SemanticMinimiser {
 }
 
 impl SemanticMinimiser {
-    pub(crate) fn set_mode(&mut self, mode: Mode) {
+    /// Sets the [`SemanticMinimisationMode`] used by the [`SemanticMinimiser`].
+    pub fn set_mode(&mut self, mode: SemanticMinimisationMode) {
         self.mode = mode
     }
 
@@ -105,11 +118,11 @@ impl SemanticMinimiser {
     fn accommodate(&mut self, context: &MinimisationContext) {
         assert!(self.domains.len() == self.original_domains.len());
 
-        while (self.domains.len() as u32) < context.assignments().num_domains() {
+        while (self.domains.len() as u32) < context.number_of_domains() {
             let domain_id = DomainId::new(self.domains.len() as u32);
-            let lower_bound = context.assignments().get_initial_lower_bound(domain_id);
-            let upper_bound = context.assignments().get_initial_upper_bound(domain_id);
-            let holes = context.assignments().get_initial_holes(domain_id);
+            let lower_bound = context.initial_lower_bound(domain_id);
+            let upper_bound = context.initial_upper_bound(domain_id);
+            let holes = context.initial_holes(domain_id);
             self.grow(lower_bound, upper_bound, holes);
         }
     }
@@ -220,9 +233,9 @@ impl SimpleIntegerDomain {
         domain_id: DomainId,
         original_domain: &SimpleIntegerDomain,
         description: &mut Vec<Predicate>,
-        mode: Mode,
+        mode: SemanticMinimisationMode,
     ) {
-        if let Mode::EnableEqualityMerging = mode {
+        if let SemanticMinimisationMode::EnableEqualityMerging = mode {
             // If the domain assigned at a nonroot level, this is just one predicate.
             if self.lower_bound == self.upper_bound
                 && self.lower_bound != original_domain.lower_bound
@@ -260,18 +273,19 @@ impl SimpleIntegerDomain {
 
 #[cfg(test)]
 mod tests {
-    use crate::conjunction;
-    use crate::containers::HashMap;
-    use crate::engine::SolverStatistics;
-    use crate::engine::conflict_analysis::MinimisationContext;
-    use crate::engine::conflict_analysis::Mode;
-    use crate::engine::conflict_analysis::NogoodMinimiser;
-    use crate::engine::conflict_analysis::SemanticMinimiser;
-    use crate::predicate;
-    use crate::predicates::Predicate;
-    use crate::predicates::PropositionalConjunction;
-    use crate::proof::ProofLog;
-    use crate::state::State;
+    use pumpkin_core::SolverStatistics;
+    use pumpkin_core::conflict_resolving::MinimisationContext;
+    use pumpkin_core::conflict_resolving::NogoodMinimiser;
+    use pumpkin_core::conjunction;
+    use pumpkin_core::containers::HashMap;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::proof::ProofLog;
+    use pumpkin_core::state::State;
+
+    use crate::minimisers::semantic_minimiser::SemanticMinimisationMode;
+    use crate::minimisers::semantic_minimiser::SemanticMinimiser;
 
     #[test]
     fn trivial_nogood() {
@@ -281,13 +295,17 @@ mod tests {
         let mut nogood: Vec<Predicate> =
             vec![predicate!(domain_id >= 0), predicate!(domain_id <= 10)];
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert!(nogood.is_empty());
@@ -301,13 +319,16 @@ mod tests {
         let mut nogood: Vec<Predicate> =
             vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -325,13 +346,16 @@ mod tests {
             predicate!(domain_id <= 5),
         ];
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -346,13 +370,16 @@ mod tests {
         let mut nogood: Vec<Predicate> =
             vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -367,21 +394,24 @@ mod tests {
         let mut nogood: Vec<Predicate> =
             vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         let mut other = Vec::default();
         p.minimise(context, &mut other);
 
@@ -399,13 +429,16 @@ mod tests {
             conjunction!([domain_0 >= 5] & [domain_0 <= 9] & [domain_1 >= 0] & [domain_1 <= 4])
                 .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 3);
@@ -427,13 +460,16 @@ mod tests {
         )
         .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 4);
@@ -462,13 +498,16 @@ mod tests {
         )
         .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 6);
@@ -505,13 +544,16 @@ mod tests {
         )
         .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 2);
@@ -541,13 +583,16 @@ mod tests {
         )
         .into();
 
-        p.set_mode(Mode::DisableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::DisableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 3);
@@ -565,13 +610,16 @@ mod tests {
 
         let mut nogood = conjunction!([domain_0 >= 2] & [domain_0 >= 1] & [domain_0 >= 5]).into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -588,13 +636,16 @@ mod tests {
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 5] & [domain_0 >= 1])
                 .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);
@@ -614,13 +665,16 @@ mod tests {
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 1] & [domain_0 != 1])
                 .into();
 
-        p.set_mode(Mode::EnableEqualityMerging);
-        let context = MinimisationContext {
-            proof_log: &mut ProofLog::default(),
-            unit_nogood_inference_codes: &mut HashMap::default(),
-            counters: &mut SolverStatistics::default(),
-            state: &mut state,
-        };
+        p.set_mode(SemanticMinimisationMode::EnableEqualityMerging);
+        let mut proof_log = ProofLog::default();
+        let unit_nogood_inference_codes = HashMap::default();
+        let mut solver_statistics = SolverStatistics::default();
+        let context = MinimisationContext::new(
+            &mut state,
+            &mut proof_log,
+            &unit_nogood_inference_codes,
+            &mut solver_statistics,
+        );
         p.minimise(context, &mut nogood);
 
         assert_eq!(nogood.len(), 1);

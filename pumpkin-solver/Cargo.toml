@@ -16,6 +16,7 @@ log = "0.4.27"
 pumpkin-core = { version = "0.2.2", path = "../pumpkin-crates/core/", features = ["clap"] }
 pumpkin-constraints = {version = "0.2.2", path = "../pumpkin-crates/constraints/"}
 pumpkin-propagators = {version = "0.2.2", path = "../pumpkin-crates/propagators/", features=["clap"]}
+pumpkin-conflict-resolvers = {version = "0.2.2", path = "../pumpkin-crates/conflict-resolvers/"}
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 

@@ -15,6 +15,7 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::RandomSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
+use crate::conflict_resolving::ConflictResolver;
 use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -320,12 +321,16 @@ impl Solver {
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
     /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
     /// which can be used to obtain the found solution or find other solutions.
-    pub fn satisfy<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+    pub fn satisfy<'this, 'brancher, B: Brancher, T: TerminationCondition, R: ConflictResolver>(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &mut T,
+        resolver: &mut R,
     ) -> SatisfactionResult<'this, 'brancher, B> {
-        match self.satisfaction_solver.solve(termination, brancher) {
+        match self
+            .satisfaction_solver
+            .solve(termination, brancher, resolver)
+        {
             CSPSolverExecutionFlag::Feasible => {
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
@@ -346,18 +351,23 @@ impl Solver {
         }
     }
 
+    /// Returns a [`SolutionIterator`] which can be used to generate multiple solutions for a
+    /// satisfaction problem.
     pub fn get_solution_iterator<
         'this,
         'brancher,
         'termination,
+        'resolver,
         B: Brancher,
         T: TerminationCondition,
+        R: ConflictResolver,
     >(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &'termination mut T,
-    ) -> SolutionIterator<'this, 'brancher, 'termination, B, T> {
-        SolutionIterator::new(self, brancher, termination)
+        resolver: &'resolver mut R,
+    ) -> SolutionIterator<'this, 'brancher, 'termination, 'resolver, B, T, R> {
+        SolutionIterator::new(self, brancher, termination, resolver)
     }
 
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
@@ -371,16 +381,19 @@ impl Solver {
     /// # Bibliography
     /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
     /// Notes in Theoretical Computer Science, vol. 89, no. 4, pp. 543–560, 2003.
-    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher>(
         &'this mut self,
         brancher: &'brancher mut B,
-        termination: &mut T,
+        termination: &mut impl TerminationCondition,
+        resolver: &mut impl ConflictResolver,
         assumptions: &[Predicate],
     ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
-        match self
-            .satisfaction_solver
-            .solve_under_assumptions(assumptions, termination, brancher)
-        {
+        match self.satisfaction_solver.solve_under_assumptions(
+            assumptions,
+            termination,
+            brancher,
+            resolver,
+        ) {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
@@ -423,13 +436,14 @@ impl Solver {
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
+        resolver: &mut impl ConflictResolver,
         mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
     ) -> OptimisationResult
     where
         B: Brancher,
         Callback: SolutionCallback<B>,
     {
-        optimisation_procedure.optimise(brancher, termination, self)
+        optimisation_procedure.optimise(brancher, termination, resolver, self)
     }
 }
 

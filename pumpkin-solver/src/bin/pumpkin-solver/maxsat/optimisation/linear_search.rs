@@ -1,4 +1,5 @@
 use log::info;
+use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
 use pumpkin_solver::asserts::pumpkin_assert_moderate;
@@ -22,6 +23,7 @@ impl LinearSearch {
         LinearSearch { encoding }
     }
 
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     pub(crate) fn solve(
         &self,
         solver: &mut Solver,
@@ -30,6 +32,7 @@ impl LinearSearch {
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
         initial_solution: Solution,
+        resolver: &mut impl ConflictResolver,
     ) -> MaxSatOptimisationResult {
         brancher.on_solution(initial_solution.as_reference());
 
@@ -79,7 +82,7 @@ impl LinearSearch {
                 };
             }
 
-            let result = solver.satisfy(&mut brancher, termination);
+            let result = solver.satisfy(&mut brancher, termination, resolver);
 
             match result {
                 SatisfactionResult::Satisfiable(satisfiable) => {

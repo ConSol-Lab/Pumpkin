@@ -110,7 +110,7 @@ fn get_required_assumptions(
 
     // There must be some combination of other factors.
     let mut reason = vec![];
-    ConflictAnalysisContext::get_propagation_reason(
+    ConflictAnalysisContext::get_propagation_reason_inner(
         predicate,
         CurrentNogood::empty(),
         context.proof_log,
