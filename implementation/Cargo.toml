@@ -11,14 +11,14 @@ description = "The implementation of propagators of the Pumpkin constraint progr
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.2.2", path = "../core" }
+pumpkin-core = { version = "0.2.2", path = "../pumpkin-crates/core" }
 enumset = "1.1.2"
 bitfield-struct = "0.9.2"
 convert_case = "0.6.0"
 clap = { version = "4.5.40", optional = true, features=["derive"]}
 
 [dev-dependencies]
-pumpkin-constraints = { version = "0.2.2", path = "../constraints" }
+pumpkin-constraints = { version = "0.2.2", path = "../pumpkin-crates/constraints" }
 
 [features]
 clap = ["dep:clap", "pumpkin-core/clap"]
