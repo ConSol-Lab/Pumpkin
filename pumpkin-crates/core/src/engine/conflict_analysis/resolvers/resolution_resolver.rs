@@ -425,45 +425,50 @@ impl ResolutionResolver {
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
-        if matches!(self.mode, AnalysisMode::ExtendedUIP) {
-            // When using extended UIP, we need to ensure that all of the remaining predicates are
-            // added to the domain.
-            pumpkin_assert_simple!(
-                self.to_process_heap.num_nonremoved_elements() > 0,
-                "There should be at least one element in the final nogood"
-            );
-            pumpkin_assert_eq_moderate!(
-                self.to_process_heap
-                    .keys()
-                    .map(|predicate_id| self
-                        .predicate_id_generator
-                        .get_predicate(predicate_id)
-                        .get_domain())
-                    .unique()
-                    .count(),
-                1,
-                "There should be only one variable in the final nogood from teh current decision level"
-            );
+        match self.mode {
+            AnalysisMode::ExtendedUIP => {
+                // When using extended UIP, we need to ensure that all of the remaining predicates
+                // are added to the domain.
+                pumpkin_assert_simple!(
+                    self.to_process_heap.num_nonremoved_elements() > 0,
+                    "There should be at least one element in the final nogood"
+                );
+                pumpkin_assert_eq_moderate!(
+                    self.to_process_heap
+                        .keys()
+                        .map(|predicate_id| self
+                            .predicate_id_generator
+                            .get_predicate(predicate_id)
+                            .get_domain())
+                        .unique()
+                        .count(),
+                    1,
+                    "There should be only one variable in the final nogood from teh current decision level"
+                );
 
-            // We need to add all of the remaining predicates to the nogood; due to the way in
-            // which the extended UIP is calculated, this could be multiple elements.
-            let propagating_domain = self
-                .predicate_id_generator
-                .get_predicate(*self.to_process_heap.peek_max().unwrap().0)
-                .get_domain();
-            while self.to_process_heap.num_nonremoved_elements() > 0 {
-                let predicate = self.pop_predicate_from_conflict_nogood();
-                pumpkin_assert_eq_simple!(predicate.get_domain(), propagating_domain);
-                self.processed_nogood_predicates.push(predicate);
+                // We need to add all of the remaining predicates to the nogood; due to the way in
+                // which the extended UIP is calculated, this could be multiple elements.
+                let propagating_domain = self
+                    .predicate_id_generator
+                    .get_predicate(*self.to_process_heap.peek_max().unwrap().0)
+                    .get_domain();
+                while self.to_process_heap.num_nonremoved_elements() > 0 {
+                    let predicate = self.pop_predicate_from_conflict_nogood();
+                    pumpkin_assert_eq_simple!(predicate.get_domain(), propagating_domain);
+                    self.processed_nogood_predicates.push(predicate);
+                }
             }
-        } else if self.to_process_heap.num_nonremoved_elements() > 0 {
-            let last_predicate = self.pop_predicate_from_conflict_nogood();
-            self.processed_nogood_predicates.push(last_predicate);
-        } else {
-            pumpkin_assert_simple!(
-                matches!(self.mode, AnalysisMode::AllDecision),
-                "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
-            )
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
+                if self.to_process_heap.num_nonremoved_elements() > 0 {
+                    let last_predicate = self.pop_predicate_from_conflict_nogood();
+                    self.processed_nogood_predicates.push(last_predicate);
+                } else {
+                    pumpkin_assert_simple!(
+                        matches!(self.mode, AnalysisMode::AllDecision),
+                        "If the heap is empty when extracting the final nogood then we should be performing all decision learning"
+                    )
+                }
+            }
         }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
@@ -534,18 +539,23 @@ impl ResolutionResolver {
         );
 
         // If we are using extended UIP then we update some statistics
-        if !learned_nogood.is_empty() && matches!(self.mode, AnalysisMode::ExtendedUIP) {
-            let propagating_predicate = learned_nogood[0].get_domain();
-            context
-                .counters
-                .learned_clause_statistics
-                .average_number_of_predicates_describing_domain_when_extended
-                .add_term(
-                    learned_nogood
-                        .iter()
-                        .filter(|predicate| predicate.get_domain() == propagating_predicate)
-                        .count(),
-                );
+        match self.mode {
+            AnalysisMode::ExtendedUIP => {
+                if !learned_nogood.is_empty() {
+                    let propagating_predicate = learned_nogood[0].get_domain();
+                    context
+                        .counters
+                        .learned_clause_statistics
+                        .average_number_of_predicates_describing_domain_when_extended
+                        .add_term(
+                            learned_nogood
+                                .iter()
+                                .filter(|predicate| predicate.get_domain() == propagating_predicate)
+                                .count(),
+                        );
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {}
         }
         info!(
             "Adding nogood of length {} with {} predicates from the current decision level which backtracks to {}",
@@ -626,18 +636,23 @@ impl LearnedNogood {
         // We perform a linear scan to maintain the two invariants:
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
-        let propagating_domain = matches!(analysis_mode, AnalysisMode::ExtendedUIP).then_some(
-            clean_nogood
-                .iter()
-                .find(|predicate| {
-                    context
-                        .state
-                        .get_checkpoint_for_predicate(**predicate)
-                        .is_some_and(|checkpoint| checkpoint == context.state.get_checkpoint())
-                })
-                .copied()
-                .expect("Expected at least one element to be from the current decision level"),
-        );
+        let propagating_domain = match analysis_mode {
+            AnalysisMode::ExtendedUIP => Some(
+                clean_nogood
+                    .iter()
+                    .find(|predicate| {
+                        context
+                            .state
+                            .get_checkpoint_for_predicate(**predicate)
+                            .is_some_and(|checkpoint| checkpoint == context.state.get_checkpoint())
+                    })
+                    .copied()
+                    .expect("Expected at least one element to be from the current decision level"),
+            ),
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
+                None
+            }
+        };
 
         let mut index = 1;
         let mut highest_level_below_current = 0;
@@ -650,11 +665,11 @@ impl LearnedNogood {
 
             if dl == context.state.get_checkpoint() {
                 clean_nogood.swap(0, index);
-                if !matches!(analysis_mode, AnalysisMode::ExtendedUIP) {
+                if propagating_domain.is_none() {
                     index -= 1;
                 }
             } else if dl > highest_level_below_current
-                && (!matches!(analysis_mode, AnalysisMode::ExtendedUIP)
+                && (propagating_domain.is_none()
                     || predicate.get_domain() != propagating_domain.unwrap().get_domain())
             {
                 highest_level_below_current = dl;
@@ -676,7 +691,7 @@ impl LearnedNogood {
             0
         };
 
-        if clean_nogood.len() > 1 && matches!(analysis_mode, AnalysisMode::ExtendedUIP) {
+        if clean_nogood.len() > 1 && propagating_domain.is_some() {
             // In this case, the order of the predicates is irrelevant (for now)
             //
             // We first find the propagating domain
