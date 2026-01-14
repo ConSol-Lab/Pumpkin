@@ -257,7 +257,7 @@ impl Propagator for NogoodPropagator {
         // TODO: cannot do learned nogood management easily when using extended UIP, disabled for
         // everything for now
         match self.analysis_mode {
-            AnalysisMode::ExtendedUIP => {
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 // First we clean up the nogood database
                 // self.clean_up_learned_nogoods_if_needed(
                 //     context.assignments,
@@ -883,7 +883,7 @@ impl NogoodPropagator {
         }
 
         match self.analysis_mode {
-            AnalysisMode::ExtendedUIP => {
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 // If we are using extended UIP then we (currently) do not add watchers.
                 info!("Adding nogood: {nogood:?}");
                 let lbd = self.lbd_helper.compute_lbd(
@@ -1139,7 +1139,7 @@ impl NogoodPropagator {
         }
 
         match self.analysis_mode {
-            AnalysisMode::ExtendedUIP => {
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 // We do not add watchers when using extended UIP
                 // AND
                 // We register for all predicates since otherwise the nogood propagator is not

@@ -18,6 +18,7 @@ use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::conflict_analysis::RecursiveMinimiser;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateType;
 use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
@@ -77,6 +78,9 @@ pub(crate) enum AnalysisMode {
     ExtendedUIP,
     /// Perform learning using 1UIP and propagation using extended UIP propagation.
     HalfExtendedUIP,
+    /// Perform extended conflict analysis, but resolve until you can propagate a bound (or it is a
+    /// UIP)
+    BoundsExtendedUIP,
 }
 
 impl ConflictResolver for ResolutionResolver {
@@ -223,6 +227,72 @@ impl ResolutionResolver {
                         .count()
                         > 1
                 }
+                AnalysisMode::BoundsExtendedUIP => {
+                    let present_domain_ids = self
+                        .to_process_heap
+                        .keys()
+                        .map(|predicate_id| {
+                            self.predicate_id_generator
+                                .get_predicate(predicate_id)
+                                .get_domain()
+                        })
+                        .unique()
+                        .collect::<Vec<_>>();
+                    if present_domain_ids.len() > 1 {
+                        true
+                    } else {
+                        let (lower_bounds, upper_bounds, _inequalities, equalities) = self
+                            .to_process_heap
+                            .keys()
+                            .map(|predicate_id| {
+                                self.predicate_id_generator.get_predicate(predicate_id)
+                            })
+                            .fold(
+                                (0, 0, 0, 0),
+                                |(lower_bounds, upper_bounds, inequalities, equalities),
+                                 predicate| {
+                                    match predicate.get_predicate_type() {
+                                        PredicateType::LowerBound => (
+                                            lower_bounds + 1,
+                                            upper_bounds,
+                                            inequalities,
+                                            equalities,
+                                        ),
+                                        PredicateType::UpperBound => (
+                                            lower_bounds,
+                                            upper_bounds + 1,
+                                            inequalities,
+                                            equalities,
+                                        ),
+                                        PredicateType::NotEqual => (
+                                            lower_bounds,
+                                            upper_bounds,
+                                            inequalities + 1,
+                                            equalities,
+                                        ),
+                                        PredicateType::Equal => (
+                                            lower_bounds,
+                                            upper_bounds,
+                                            inequalities,
+                                            equalities + 1,
+                                        ),
+                                    }
+                                },
+                            );
+                        // We return true if we cannot propagate any bounds
+                        //
+                        // We can propagate bounds in the following situations:
+                        // - There is a lower-bound present but no upper-bound OR there is an
+                        //   upper-bound present but no lower-bound
+                        // - There are only holes present
+                        // - There is an equality present (would necessarily lead to a single
+                        // predicate due to semantic minimisation)
+                        !((lower_bounds > 0 && upper_bounds == 0)
+                            || (lower_bounds == 0 && upper_bounds > 0)
+                            || (lower_bounds == 0 && upper_bounds == 0)
+                            || equalities > 0)
+                    }
+                }
             }
         } {
             // Replace the predicate from the nogood that has been assigned last on the trail.
@@ -336,7 +406,10 @@ impl ResolutionResolver {
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
-            AnalysisMode::OneUIP | AnalysisMode::ExtendedUIP | AnalysisMode::HalfExtendedUIP => {
+            AnalysisMode::OneUIP
+            | AnalysisMode::ExtendedUIP
+            | AnalysisMode::HalfExtendedUIP
+            | AnalysisMode::BoundsExtendedUIP => {
                 dec_level == context.state.assignments.get_checkpoint()
             }
             AnalysisMode::AllDecision => {
@@ -426,7 +499,7 @@ impl ResolutionResolver {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
         match self.mode {
-            AnalysisMode::ExtendedUIP => {
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 // When using extended UIP, we need to ensure that all of the remaining predicates
                 // are added to the domain.
                 pumpkin_assert_simple!(
@@ -540,7 +613,7 @@ impl ResolutionResolver {
 
         // If we are using extended UIP then we update some statistics
         match self.mode {
-            AnalysisMode::ExtendedUIP => {
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 if !learned_nogood.is_empty() {
                     let propagating_predicate = learned_nogood[0].get_domain();
                     context
@@ -637,7 +710,7 @@ impl LearnedNogood {
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
         let propagating_domain = match analysis_mode {
-            AnalysisMode::ExtendedUIP => Some(
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => Some(
                 clean_nogood
                     .iter()
                     .find(|predicate| {

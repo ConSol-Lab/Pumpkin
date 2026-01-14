@@ -151,6 +151,7 @@ pub enum ConflictResolver {
     UIP,
     ExtendedUIP,
     HalfExtendedUIP,
+    BoundsExtendedUIP,
 }
 
 #[allow(clippy::from_over_into, reason = "Easier with imports")]
@@ -164,6 +165,7 @@ impl Into<AnalysisMode> for ConflictResolver {
             ConflictResolver::UIP => AnalysisMode::OneUIP,
             ConflictResolver::ExtendedUIP => AnalysisMode::ExtendedUIP,
             ConflictResolver::HalfExtendedUIP => AnalysisMode::HalfExtendedUIP,
+            ConflictResolver::BoundsExtendedUIP => AnalysisMode::BoundsExtendedUIP,
         }
     }
 }
@@ -300,6 +302,10 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::HalfExtendedUIP => Box::new(ResolutionResolver::new(
                     handle,
                     AnalysisMode::HalfExtendedUIP,
+                )),
+                ConflictResolver::BoundsExtendedUIP => Box::new(ResolutionResolver::new(
+                    handle,
+                    AnalysisMode::BoundsExtendedUIP,
                 )),
             },
             internal_parameters: solver_options,
