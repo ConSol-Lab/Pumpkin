@@ -8,8 +8,8 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
-use crate::branching::value_selection::RandomSplitter;
-use crate::branching::variable_selection::RandomSelector;
+use crate::branching::value_selection::InDomainMin;
+use crate::branching::variable_selection::InputOrder;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
@@ -118,7 +118,7 @@ impl DefaultBrancher {
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`RandomSelector`] with [`RandomSplitter`].
+    /// [`InputOrder`] with [`InDomainMin`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         AutonomousSearch {
             predicate_id_info: DeletablePredicateIdGenerator::default(),
@@ -130,8 +130,8 @@ impl DefaultBrancher {
             best_known_solution: None,
             should_synchronise: false,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::new(assignments.get_domains()),
-                RandomSplitter,
+                InputOrder::new(&assignments.get_domains().collect::<Vec<_>>()),
+                InDomainMin,
             ),
             statistics: Default::default(),
         }

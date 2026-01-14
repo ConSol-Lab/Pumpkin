@@ -9,10 +9,10 @@ use crate::basic_types::Solution;
 use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::branching::value_selection::RandomSplitter;
+use crate::branching::value_selection::InDomainMin;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::RandomSelector;
+use crate::branching::variable_selection::InputOrder;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::constraints::ConstraintPoster;
@@ -536,9 +536,7 @@ impl Solver {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`] using [`RandomSelector`] for variable selection
-/// (over the variables in the order in which they were defined) and [`RandomSplitter`] for
-/// value selection.
+/// [`IndependentVariableValueBrancher`].
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
@@ -548,4 +546,4 @@ impl Solver {
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 pub type DefaultBrancher =
-    AutonomousSearch<IndependentVariableValueBrancher<DomainId, RandomSelector, RandomSplitter>>;
+    AutonomousSearch<IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>>;
