@@ -58,6 +58,7 @@ impl Not for Literal {
 }
 
 /// Forwards a function implementation to the field on self.
+#[cfg(feature = "check-propagations")]
 macro_rules! forward {
     (
         $field:ident,

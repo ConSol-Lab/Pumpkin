@@ -21,6 +21,7 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
+#[cfg(feature = "check-propagations")]
 use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
@@ -54,6 +55,10 @@ pub trait PropagatorConstructor {
 /// Only useful if the `check-propagations` feature is enabled.
 #[derive(Debug)]
 pub struct InferenceCheckers<'state> {
+    #[cfg_attr(
+        not(feature = "check-propagations"),
+        allow(unused, "only used when the feature 'check-propagations' is enabled")
+    )]
     state: &'state mut State,
 }
 
