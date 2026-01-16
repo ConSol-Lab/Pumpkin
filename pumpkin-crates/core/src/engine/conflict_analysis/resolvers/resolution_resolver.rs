@@ -19,6 +19,7 @@ use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
 use crate::propagation::CurrentNogood;
+use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -124,6 +125,13 @@ impl ConflictResolver for ResolutionResolver {
             .learned_clause_statistics
             .average_learned_nogood_length
             .add_term(learned_nogood.predicates.len() as u64);
+
+        context.state.add_inference_checker(
+            inference_code.clone(),
+            Box::new(NogoodChecker {
+                nogood: learned_nogood.predicates.clone().into(),
+            }),
+        );
 
         self.add_learned_nogood(context, learned_nogood, inference_code);
     }

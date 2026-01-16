@@ -410,14 +410,14 @@ impl State {
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,
-        checker: impl Into<Box<dyn InferenceChecker<Predicate>>>,
+        checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
         let previous_checker = self.checkers.insert(
             CheckerKey {
                 inference_code,
                 propagator_id: None,
             },
-            BoxedChecker::from(checker.into()),
+            BoxedChecker::from(checker),
         );
 
         assert!(
@@ -792,28 +792,34 @@ impl State {
         inference_code: &InferenceCode,
         propagator_id: PropagatorId,
     ) {
-        let key_with_propagator = CheckerKey {
-            inference_code: inference_code.clone(),
-            propagator_id: Some(propagator_id),
-        };
+        let scoped_checkers = self
+            .checkers
+            .get(&CheckerKey {
+                inference_code: inference_code.clone(),
+                propagator_id: Some(propagator_id),
+            })
+            .into_iter();
 
-        let key_without_propagator = CheckerKey {
-            inference_code: inference_code.clone(),
-            propagator_id: Some(propagator_id),
-        };
+        let unscoped_checkers = self
+            .checkers
+            .get(&CheckerKey {
+                inference_code: inference_code.clone(),
+                propagator_id: None,
+            })
+            .into_iter();
 
-        for key in [key_with_propagator, key_without_propagator] {
-            // Get the checker for the inference code.
-            let checker = self
-                .checkers
-                .get(&key)
-                .unwrap_or_else(|| panic!("missing checker for inference code {inference_code:?}"));
+        // Will be set to true if we execute at least one checker. If it remains false after the
+        // loop a panic is triggered.
+        let mut at_least_one_checker = false;
+
+        for checker in scoped_checkers.chain(unscoped_checkers) {
+            at_least_one_checker = true;
 
             // Construct the variable state for the conflict check.
             let variable_state =
                 VariableState::prepare_for_conflict_check(premises.clone(), consequent)
                     .unwrap_or_else(|| {
-                        panic!("inconsistent atomics in inference by {:?}", inference_code)
+                        panic!("inconsistent atomics in inference by {inference_code:?}")
                     });
 
             // Run the conflict check.
@@ -823,6 +829,11 @@ impl State {
                 inference_code
             );
         }
+
+        assert!(
+            at_least_one_checker,
+            "missing checker for inference code {inference_code:?}"
+        );
     }
 }
 
