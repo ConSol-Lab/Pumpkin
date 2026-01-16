@@ -7,12 +7,12 @@ use crate::engine::Assignments;
 #[cfg(test)]
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
-#[cfg(doc)]
-use crate::engine::propagation::PropagationContext;
 use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
+#[cfg(doc)]
+use crate::propagation::Domains;
 
 /// The context provided to the [`Brancher`],
 /// it allows the retrieval of domain values of variables and access to methods from a [`Random`]

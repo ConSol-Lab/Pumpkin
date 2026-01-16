@@ -1,5 +1,4 @@
 use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 

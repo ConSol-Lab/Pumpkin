@@ -7,9 +7,9 @@ use super::ProofLog;
 use crate::containers::HashMap;
 use crate::engine::State;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::propagation::CurrentNogood;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagation::CurrentNogood;
 
 pub(crate) struct FinalizingContext<'a> {
     pub(crate) conflict: PropositionalConjunction,
@@ -41,9 +41,11 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
         })
         .collect::<Vec<_>>();
 
-    let _ = context
-        .proof_log
-        .log_deduction(final_nogood, context.state.variable_names());
+    let _ = context.proof_log.log_deduction(
+        final_nogood,
+        &context.state.variable_names,
+        &mut context.state.constraint_tags,
+    );
 }
 
 pub(crate) struct RootExplanationContext<'a> {
@@ -86,20 +88,22 @@ fn get_required_assumptions(
 
     // If the predicate is a root-level assignment, add the appropriate inference to the proof.
     if context.state.assignments.is_initial_bound(predicate) {
-        let _ = context
-            .proof_log
-            .log_domain_inference(predicate, context.state.variable_names());
+        let _ = context.proof_log.log_domain_inference(
+            predicate,
+            &context.state.variable_names,
+            &mut context.state.constraint_tags,
+        );
         return vec![];
     }
 
     // If the predicate is a unit-nogood, we explain the root-level assignment.
     if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
         let _ = context.proof_log.log_inference(
-            &context.state.inference_codes,
-            *inference_code,
+            &mut context.state.constraint_tags,
+            inference_code.clone(),
             [],
             Some(predicate),
-            context.state.variable_names(),
+            &context.state.variable_names,
         );
         return vec![];
     }

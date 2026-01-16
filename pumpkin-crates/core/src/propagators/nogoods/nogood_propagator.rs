@@ -18,19 +18,20 @@ use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::EnqueueDecision;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
+use crate::propagation::Domains;
+use crate::propagation::EnqueueDecision;
+use crate::propagation::ExplanationContext;
+use crate::propagation::HasAssignments;
+use crate::propagation::Priority;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
 use crate::pumpkin_assert_advanced;
@@ -50,7 +51,7 @@ use crate::state::PropagatorHandle;
 /// The idea for propagation is the two-watcher scheme; this is achieved by internally keeping
 /// track of watch lists.
 #[derive(Clone, Debug)]
-pub(crate) struct NogoodPropagator {
+pub struct NogoodPropagator {
     /// The [`PredicateId`]s of the nogoods.
     nogood_predicates: ArenaAllocator,
     /// The information corresponding to each nogood; including activity, and LBD.
@@ -102,7 +103,9 @@ impl NogoodPropagatorConstructor {
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type PropagatorImpl = NogoodPropagator;
 
-    fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+        context.will_not_register_any_events();
+
         NogoodPropagator {
             handle: PropagatorHandle::new(context.propagator_id),
             parameters: self.parameters,
@@ -199,8 +202,8 @@ impl Propagator for NogoodPropagator {
         "NogoodPropagator"
     }
 
-    fn priority(&self) -> u32 {
-        0
+    fn priority(&self) -> Priority {
+        Priority::High
     }
 
     fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
@@ -208,7 +211,7 @@ impl Propagator for NogoodPropagator {
         EnqueueDecision::Enqueue
     }
 
-    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Conflict> {
+    fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -229,7 +232,7 @@ impl Propagator for NogoodPropagator {
             pumpkin_assert_moderate!(
                 {
                     let predicate = context.get_predicate(predicate_id);
-                    context.is_predicate_satisfied(predicate)
+                    context.evaluate_predicate(predicate) == Some(true)
                 },
                 "The predicate {} with id {predicate_id:?} should be satisfied but was not",
                 context.get_predicate(predicate_id),
@@ -301,7 +304,7 @@ impl Propagator for NogoodPropagator {
                 // At this point, nonwatched predicates and nogood[1] are falsified.
                 pumpkin_assert_advanced!(nogood_predicates.iter().skip(1).all(|p| {
                     let predicate = context.get_predicate(*p);
-                    context.is_predicate_satisfied(predicate)
+                    context.evaluate_predicate(predicate) == Some(true)
                 }));
 
                 // There are two scenarios:
@@ -313,7 +316,7 @@ impl Propagator for NogoodPropagator {
                 let result = context.post(
                     predicate,
                     reason,
-                    self.inference_codes
+                    &self.inference_codes
                         [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)],
                 );
                 // If the propagation lead to a conflict.
@@ -329,14 +332,11 @@ impl Propagator for NogoodPropagator {
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: PropagationContext) {
+    fn synchronise(&mut self, _context: Domains) {
         self.updated_predicate_ids.clear()
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> Result<(), Conflict> {
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> Result<(), Conflict> {
         // Very inefficient version!
 
         // The algorithm goes through every nogood explicitly
@@ -428,7 +428,7 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
@@ -491,7 +491,7 @@ impl NogoodPropagator {
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(nogood_id.id as u64);
         let inference_code =
-            self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
         let predicate = !context
             .notification_engine
@@ -516,7 +516,7 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> PropagationStatusCP {
         self.add_permanent_nogood(nogood, inference_code, context)
     }
@@ -526,7 +526,7 @@ impl NogoodPropagator {
         &mut self,
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> PropagationStatusCP {
         pumpkin_assert_simple!(
             context.get_checkpoint() == 0,
@@ -613,7 +613,7 @@ impl NogoodPropagator {
             context.post(
                 !nogood[0],
                 PropositionalConjunction::from(input_nogood),
-                inference_code,
+                &inference_code,
             )?;
             Ok(())
         }
@@ -664,7 +664,7 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate.
     fn add_watcher(
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
         predicate: PredicateId,
         watcher: Watcher,
         watch_lists: &mut KeyedVec<PredicateId, Vec<Watcher>>,
@@ -1110,7 +1110,7 @@ impl NogoodPropagator {
     ///     3. Detecting predicates falsified at the root. In that case, the nogood is preprocessed
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
-    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContextMut) {
+    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContext) {
         pumpkin_assert_simple!(context.get_checkpoint() == 0);
         // The code below is broken down into several parts
 
@@ -1122,13 +1122,17 @@ impl NogoodPropagator {
         // We assume that duplicate predicates have been removed
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
-        if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
+        if nogood.is_empty()
+            || nogood
+                .iter()
+                .any(|p| context.evaluate_predicate(*p) == Some(false))
+        {
             *nogood = vec![Predicate::trivially_false()];
             return;
         }
 
         // Remove predicates that are satisfied at the root level.
-        nogood.retain(|p| !context.is_predicate_satisfied(*p));
+        nogood.retain(|p| context.evaluate_predicate(*p) != Some(true));
 
         // If the nogood is violating at the root, the previous retain would leave an empty nogood.
         // Return a violating nogood.
@@ -1145,12 +1149,12 @@ impl NogoodPropagator {
     fn debug_propagate_nogood_from_scratch(
         &self,
         nogood_id: NogoodId,
-        context: &mut PropagationContextMut,
+        context: &mut PropagationContext,
     ) -> Result<(), Conflict> {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = self.inference_codes[info_id];
+        let inference_code = &self.inference_codes[info_id];
 
         if self.nogood_info[info_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to
@@ -1162,7 +1166,7 @@ impl NogoodPropagator {
         // First we get the number of falsified predicates
         let has_falsified_predicate = nogood.iter().any(|predicate| {
             let predicate = context.get_predicate(*predicate);
-            context.is_predicate_falsified(predicate)
+            context.evaluate_predicate(predicate) == Some(false)
         });
 
         // If at least one predicate is false, then the nogood can be skipped
@@ -1174,7 +1178,7 @@ impl NogoodPropagator {
             .iter()
             .filter(|predicate| {
                 let predicate = context.get_predicate(**predicate);
-                context.is_predicate_satisfied(predicate)
+                context.evaluate_predicate(predicate) == Some(true)
             })
             .count();
 
@@ -1187,7 +1191,7 @@ impl NogoodPropagator {
                     .iter()
                     .map(|predicate_id| context.get_predicate(*predicate_id))
                     .collect::<PropositionalConjunction>(),
-                inference_code,
+                inference_code: inference_code.clone(),
             }
             .into());
         }
@@ -1277,17 +1281,21 @@ impl NogoodPropagator {
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
+    use crate::containers::StorageKey;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::proof::ConstraintTag;
+    use crate::proof::InferenceCode;
 
     #[test]
     fn ternary_nogood_propagate() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let dummy = solver.new_variable(0, 1);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
@@ -1327,7 +1335,7 @@ mod tests {
     #[test]
     fn unsat() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);

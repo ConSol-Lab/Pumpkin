@@ -2,8 +2,7 @@
 
 use std::rc::Rc;
 
-use pumpkin_core::constraint_arguments::ArgDisjunctiveTask;
-use pumpkin_solver::constraints;
+use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::predicate;
@@ -39,7 +38,7 @@ pub(crate) fn run(
                 annos,
                 "int_max",
                 constraint_tag,
-                |a, b, c, constraint_tag| constraints::maximum([a, b], c, constraint_tag),
+                |a, b, c, constraint_tag| pumpkin_constraints::maximum([a, b], c, constraint_tag),
             )?,
             "int_min" => compile_ternary_int_predicate(
                 context,
@@ -47,7 +46,7 @@ pub(crate) fn run(
                 annos,
                 "int_min",
                 constraint_tag,
-                |a, b, c, constraint_tag| constraints::minimum([a, b], c, constraint_tag),
+                |a, b, c, constraint_tag| pumpkin_constraints::minimum([a, b], c, constraint_tag),
             )?,
 
             // We rewrite `array_int_element` to `array_var_int_element`.
@@ -62,7 +61,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_imp",
                 constraint_tag,
-                constraints::binary_equals,
+                pumpkin_constraints::binary_equals,
             )?,
             "int_ge_imp" => compile_binary_int_imp(
                 context,
@@ -70,7 +69,7 @@ pub(crate) fn run(
                 annos,
                 "int_ge_imp",
                 constraint_tag,
-                constraints::binary_greater_than_or_equals,
+                pumpkin_constraints::binary_greater_than_or_equals,
             )?,
             "int_gt_imp" => compile_binary_int_imp(
                 context,
@@ -78,7 +77,7 @@ pub(crate) fn run(
                 annos,
                 "int_gt_imp",
                 constraint_tag,
-                constraints::binary_greater_than,
+                pumpkin_constraints::binary_greater_than,
             )?,
             "int_le_imp" => compile_binary_int_imp(
                 context,
@@ -86,7 +85,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_imp",
                 constraint_tag,
-                constraints::binary_less_than_or_equals,
+                pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt_imp" => compile_binary_int_imp(
                 context,
@@ -94,7 +93,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_imp",
                 constraint_tag,
-                constraints::binary_less_than,
+                pumpkin_constraints::binary_less_than,
             )?,
             "int_ne_imp" => compile_binary_int_imp(
                 context,
@@ -102,7 +101,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_imp",
                 constraint_tag,
-                constraints::binary_not_equals,
+                pumpkin_constraints::binary_not_equals,
             )?,
 
             "int_lin_eq_imp" => compile_int_lin_imp_predicate(
@@ -111,7 +110,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq_imp",
                 constraint_tag,
-                constraints::equals,
+                pumpkin_constraints::equals,
             )?,
             "int_lin_ge_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -119,7 +118,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ge_imp",
                 constraint_tag,
-                constraints::greater_than_or_equals,
+                pumpkin_constraints::greater_than_or_equals,
             )?,
             "int_lin_gt_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -127,7 +126,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_gt_imp",
                 constraint_tag,
-                constraints::greater_than,
+                pumpkin_constraints::greater_than,
             )?,
             "int_lin_le_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -135,7 +134,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le_imp",
                 constraint_tag,
-                constraints::less_than_or_equals,
+                pumpkin_constraints::less_than_or_equals,
             )?,
             "int_lin_lt_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -143,7 +142,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_lt_imp",
                 constraint_tag,
-                constraints::less_than,
+                pumpkin_constraints::less_than,
             )?,
             "int_lin_ne_imp" => compile_int_lin_imp_predicate(
                 context,
@@ -151,7 +150,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne_imp",
                 constraint_tag,
-                constraints::not_equals,
+                pumpkin_constraints::not_equals,
             )?,
 
             "int_lin_ne" => compile_int_lin_predicate(
@@ -160,7 +159,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne",
                 constraint_tag,
-                constraints::not_equals,
+                pumpkin_constraints::not_equals,
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -168,7 +167,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_ne_reif",
                 constraint_tag,
-                constraints::not_equals,
+                pumpkin_constraints::not_equals,
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
@@ -176,7 +175,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le",
                 constraint_tag,
-                constraints::less_than_or_equals,
+                pumpkin_constraints::less_than_or_equals,
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -184,7 +183,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_le_reif",
                 constraint_tag,
-                constraints::less_than_or_equals,
+                pumpkin_constraints::less_than_or_equals,
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
@@ -192,7 +191,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq",
                 constraint_tag,
-                constraints::equals,
+                pumpkin_constraints::equals,
             )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
@@ -200,7 +199,7 @@ pub(crate) fn run(
                 annos,
                 "int_lin_eq_reif",
                 constraint_tag,
-                constraints::equals,
+                pumpkin_constraints::equals,
             )?,
             "int_ne" => compile_binary_int_predicate(
                 context,
@@ -208,7 +207,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne",
                 constraint_tag,
-                constraints::binary_not_equals,
+                pumpkin_constraints::binary_not_equals,
             )?,
             "int_ne_reif" => compile_reified_binary_int_predicate(
                 context,
@@ -216,7 +215,7 @@ pub(crate) fn run(
                 annos,
                 "int_ne_reif",
                 constraint_tag,
-                constraints::binary_not_equals,
+                pumpkin_constraints::binary_not_equals,
             )?,
             "int_eq" => compile_binary_int_predicate(
                 context,
@@ -224,7 +223,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq",
                 constraint_tag,
-                constraints::binary_equals,
+                pumpkin_constraints::binary_equals,
             )?,
             "int_eq_reif" => compile_reified_binary_int_predicate(
                 context,
@@ -232,7 +231,7 @@ pub(crate) fn run(
                 annos,
                 "int_eq_reif",
                 constraint_tag,
-                constraints::binary_equals,
+                pumpkin_constraints::binary_equals,
             )?,
             "int_le" => compile_binary_int_predicate(
                 context,
@@ -240,7 +239,7 @@ pub(crate) fn run(
                 annos,
                 "int_le",
                 constraint_tag,
-                constraints::binary_less_than_or_equals,
+                pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_le_reif" => compile_reified_binary_int_predicate(
                 context,
@@ -248,7 +247,7 @@ pub(crate) fn run(
                 annos,
                 "int_le_reif",
                 constraint_tag,
-                constraints::binary_less_than_or_equals,
+                pumpkin_constraints::binary_less_than_or_equals,
             )?,
             "int_lt" => compile_binary_int_predicate(
                 context,
@@ -256,7 +255,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt",
                 constraint_tag,
-                constraints::binary_less_than,
+                pumpkin_constraints::binary_less_than,
             )?,
             "int_lt_reif" => compile_reified_binary_int_predicate(
                 context,
@@ -264,7 +263,7 @@ pub(crate) fn run(
                 annos,
                 "int_lt_reif",
                 constraint_tag,
-                constraints::binary_less_than,
+                pumpkin_constraints::binary_less_than,
             )?,
 
             "int_plus" => compile_ternary_int_predicate(
@@ -273,7 +272,7 @@ pub(crate) fn run(
                 annos,
                 "int_plus",
                 constraint_tag,
-                constraints::plus,
+                pumpkin_constraints::plus,
             )?,
 
             "int_times" => compile_ternary_int_predicate(
@@ -282,7 +281,7 @@ pub(crate) fn run(
                 annos,
                 "int_times",
                 constraint_tag,
-                constraints::times,
+                pumpkin_constraints::times,
             )?,
             "int_div" => compile_ternary_int_predicate(
                 context,
@@ -290,7 +289,7 @@ pub(crate) fn run(
                 annos,
                 "int_div",
                 constraint_tag,
-                constraints::division,
+                pumpkin_constraints::division,
             )?,
             "int_abs" => compile_binary_int_predicate(
                 context,
@@ -298,7 +297,7 @@ pub(crate) fn run(
                 annos,
                 "int_abs",
                 constraint_tag,
-                constraints::absolute,
+                pumpkin_constraints::absolute,
             )?,
 
             "pumpkin_all_different" => {
@@ -381,7 +380,7 @@ fn compile_disjunctive_strict(
 
     assert_eq!(start_times.len(), durations.len());
 
-    let post_result = constraints::disjunctive_strict(
+    let post_result = pumpkin_constraints::disjunctive_strict(
         start_times
             .iter()
             .zip(durations.iter())
@@ -408,7 +407,7 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    let post_result = constraints::cumulative_with_options(
+    let post_result = pumpkin_constraints::cumulative_with_options(
         start_times.iter().copied(),
         durations.iter().copied(),
         resource_requirements.iter().copied(),
@@ -431,7 +430,7 @@ fn compile_array_int_maximum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     Ok(
-        constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
+        pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
@@ -448,7 +447,7 @@ fn compile_array_int_minimum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     Ok(
-        constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
+        pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
@@ -520,7 +519,7 @@ fn compile_set_in_reif(
                 })
                 .collect::<Vec<_>>();
 
-            constraints::clause(clause, constraint_tag)
+            pumpkin_constraints::clause(clause, constraint_tag)
                 .reify(context.solver, reif)
                 .is_ok()
         }
@@ -541,7 +540,7 @@ fn compile_array_var_int_element(
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
     Ok(
-        constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
+        pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
@@ -561,7 +560,7 @@ fn compile_bool_not(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(constraints::binary_not_equals(a, b, constraint_tag)
+    Ok(pumpkin_constraints::binary_not_equals(a, b, constraint_tag)
         .post(context.solver)
         .is_ok())
 }
@@ -577,7 +576,7 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    Ok(constraints::binary_equals(a, b, constraint_tag)
+    Ok(pumpkin_constraints::binary_equals(a, b, constraint_tag)
         .reify(context.solver, r)
         .is_ok())
 }
@@ -594,7 +593,7 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(constraints::binary_equals(a, b, constraint_tag)
+    Ok(pumpkin_constraints::binary_equals(a, b, constraint_tag)
         .post(context.solver)
         .is_ok())
 }
@@ -630,7 +629,7 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    Ok(constraints::conjunction([a, b], constraint_tag)
+    Ok(pumpkin_constraints::conjunction([a, b], constraint_tag)
         .reify(context.solver, r)
         .is_ok())
 }
@@ -650,7 +649,7 @@ fn compile_bool2int(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     Ok(
-        constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
+        pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
@@ -666,7 +665,7 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(constraints::clause(clause.as_ref(), constraint_tag)
+    Ok(pumpkin_constraints::clause(clause.as_ref(), constraint_tag)
         .reify(context.solver, r)
         .is_ok())
 }
@@ -702,16 +701,16 @@ fn compile_bool_xor_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = constraints::clause([!a, !b, !r], constraint_tag)
+    let c1 = pumpkin_constraints::clause([!a, !b, !r], constraint_tag)
         .post(context.solver)
         .is_ok();
-    let c2 = constraints::clause([!a, b, r], constraint_tag)
+    let c2 = pumpkin_constraints::clause([!a, b, r], constraint_tag)
         .post(context.solver)
         .is_ok();
-    let c3 = constraints::clause([a, !b, r], constraint_tag)
+    let c3 = pumpkin_constraints::clause([a, !b, r], constraint_tag)
         .post(context.solver)
         .is_ok();
-    let c4 = constraints::clause([a, b, !r], constraint_tag)
+    let c4 = pumpkin_constraints::clause([a, b, !r], constraint_tag)
         .post(context.solver)
         .is_ok();
 
@@ -731,7 +730,7 @@ fn compile_array_var_bool_element(
     let rhs = context.resolve_bool_variable(&exprs[2])?;
 
     Ok(
-        constraints::element(index, array.iter().cloned(), rhs, constraint_tag)
+        pumpkin_constraints::element(index, array.iter().cloned(), rhs, constraint_tag)
             .post(context.solver)
             .is_ok(),
     )
@@ -748,7 +747,7 @@ fn compile_array_bool_and(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     Ok(
-        constraints::conjunction(conjunction.as_ref(), constraint_tag)
+        pumpkin_constraints::conjunction(conjunction.as_ref(), constraint_tag)
             .reify(context.solver, r)
             .is_ok(),
     )
@@ -906,7 +905,7 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(constraints::boolean_equals(
+    Ok(pumpkin_constraints::boolean_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
@@ -927,7 +926,7 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(constraints::boolean_less_than_or_equals(
+    Ok(pumpkin_constraints::boolean_less_than_or_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
@@ -946,9 +945,11 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    Ok(constraints::all_different(variables, constraint_tag)
-        .post(context.solver)
-        .is_ok())
+    Ok(
+        pumpkin_constraints::all_different(variables, constraint_tag)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_table(
@@ -964,7 +965,7 @@ fn compile_table(
     let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
     let table = create_table(flat_table, variables.len());
 
-    Ok(constraints::table(variables, table, constraint_tag)
+    Ok(pumpkin_constraints::table(variables, table, constraint_tag)
         .post(context.solver)
         .is_ok())
 }
@@ -984,7 +985,7 @@ fn compile_table_reif(
 
     let reified = context.resolve_bool_variable(&exprs[2])?;
 
-    Ok(constraints::table(variables, table, constraint_tag)
+    Ok(pumpkin_constraints::table(variables, table, constraint_tag)
         .reify(context.solver, reified)
         .is_ok())
 }
