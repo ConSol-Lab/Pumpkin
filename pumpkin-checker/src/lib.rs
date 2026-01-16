@@ -12,8 +12,9 @@ use drcp_format::reader::ProofReader;
 
 pub mod deductions;
 pub mod inferences;
-
 pub mod model;
+
+pub(crate) mod math;
 
 use model::*;
 

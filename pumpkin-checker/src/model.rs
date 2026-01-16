@@ -17,6 +17,9 @@ use pumpkin_checking::Comparison;
 use pumpkin_checking::I32Ext;
 use pumpkin_checking::VariableState;
 
+use crate::math::div_ceil;
+use crate::math::div_floor;
+
 #[derive(Clone, Debug)]
 pub enum Constraint {
     Nogood(Nogood),
@@ -27,11 +30,21 @@ pub enum Constraint {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Atomic(IntAtomic<Rc<str>, i32>);
+pub enum Atomic {
+    True,
+    False,
+    IntAtomic(IntAtomic<Rc<str>, i32>),
+}
 
 impl From<IntAtomic<Rc<str>, i32>> for Atomic {
     fn from(value: IntAtomic<Rc<str>, i32>) -> Self {
-        Atomic(value)
+        Atomic::IntAtomic(value)
+    }
+}
+
+impl From<bool> for Atomic {
+    fn from(value: bool) -> Self {
+        if value { Atomic::True } else { Atomic::False }
     }
 }
 
@@ -39,11 +52,19 @@ impl AtomicConstraint for Atomic {
     type Identifier = Rc<str>;
 
     fn identifier(&self) -> Self::Identifier {
-        Rc::clone(&self.0.name)
+        match self {
+            Atomic::True => Rc::from("true"),
+            Atomic::False => Rc::from("false"),
+            Atomic::IntAtomic(int_atomic) => Rc::clone(&int_atomic.name),
+        }
     }
 
     fn comparison(&self) -> Comparison {
-        match self.0.comparison {
+        let Atomic::IntAtomic(int_atomic) = self else {
+            return Comparison::Equal;
+        };
+
+        match int_atomic.comparison {
             drcp_format::IntComparison::GreaterEqual => Comparison::GreaterEqual,
             drcp_format::IntComparison::LessEqual => Comparison::LessEqual,
             drcp_format::IntComparison::Equal => Comparison::Equal,
@@ -52,12 +73,22 @@ impl AtomicConstraint for Atomic {
     }
 
     fn value(&self) -> i32 {
-        self.0.value
+        match self {
+            Atomic::True => 1,
+            Atomic::False => 0,
+            Atomic::IntAtomic(int_atomic) => int_atomic.value,
+        }
     }
 
     fn negate(&self) -> Self {
-        let owned = self.0.clone();
-        Self(!owned)
+        match self {
+            Atomic::True => Atomic::False,
+            Atomic::False => Atomic::True,
+            Atomic::IntAtomic(int_atomic) => {
+                let owned = int_atomic.clone();
+                Atomic::IntAtomic(!owned)
+            }
+        }
     }
 }
 
@@ -94,19 +125,47 @@ impl From<VariableExpr<i32>> for Variable {
 
 impl CheckerVariable<Atomic> for Variable {
     fn atomic_less_than(&self, value: i32) -> Atomic {
-        todo!()
+        match self.0 {
+            VariableExpr::Identifier(ref name) => Atomic::from(IntAtomic {
+                name: Rc::clone(name),
+                comparison: drcp_format::IntComparison::LessEqual,
+                value,
+            }),
+            VariableExpr::Constant(constant) => (constant <= value).into(),
+        }
     }
 
     fn atomic_greater_than(&self, value: i32) -> Atomic {
-        todo!()
+        match self.0 {
+            VariableExpr::Identifier(ref name) => Atomic::from(IntAtomic {
+                name: Rc::clone(name),
+                comparison: drcp_format::IntComparison::GreaterEqual,
+                value,
+            }),
+            VariableExpr::Constant(constant) => (constant >= value).into(),
+        }
     }
 
     fn atomic_equal(&self, value: i32) -> Atomic {
-        todo!()
+        match self.0 {
+            VariableExpr::Identifier(ref name) => Atomic::from(IntAtomic {
+                name: Rc::clone(name),
+                comparison: drcp_format::IntComparison::Equal,
+                value,
+            }),
+            VariableExpr::Constant(constant) => (constant == value).into(),
+        }
     }
 
     fn atomic_not_equal(&self, value: i32) -> Atomic {
-        todo!()
+        match self.0 {
+            VariableExpr::Identifier(ref name) => Atomic::from(IntAtomic {
+                name: Rc::clone(name),
+                comparison: drcp_format::IntComparison::NotEqual,
+                value,
+            }),
+            VariableExpr::Constant(constant) => (constant != value).into(),
+        }
     }
 
     fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
@@ -181,21 +240,59 @@ pub struct Term {
     pub variable: Variable,
 }
 
+impl Term {
+    /// Apply the inverse transformation of this view on a value, to go from the value in the domain
+    /// of `self` to a value in the domain of `self.inner`.
+    fn invert(&self, value: i32, rounding: Rounding) -> i32 {
+        match rounding {
+            Rounding::Up => div_ceil(value, self.weight.get()),
+            Rounding::Down => div_floor(value, self.weight.get()),
+        }
+    }
+}
+
+enum Rounding {
+    Up,
+    Down,
+}
+
 impl CheckerVariable<Atomic> for Term {
     fn atomic_less_than(&self, value: i32) -> Atomic {
-        todo!()
+        if self.weight.is_negative() {
+            let inverted_value = self.invert(value, Rounding::Up);
+            self.variable.atomic_greater_than(inverted_value)
+        } else {
+            let inverted_value = self.invert(value, Rounding::Down);
+            self.variable.atomic_less_than(inverted_value)
+        }
     }
 
     fn atomic_greater_than(&self, value: i32) -> Atomic {
-        todo!()
+        if self.weight.is_negative() {
+            let inverted_value = self.invert(value, Rounding::Down);
+            self.variable.atomic_less_than(inverted_value)
+        } else {
+            let inverted_value = self.invert(value, Rounding::Up);
+            self.variable.atomic_greater_than(inverted_value)
+        }
     }
 
     fn atomic_equal(&self, value: i32) -> Atomic {
-        todo!()
+        if value % self.weight.get() == 0 {
+            let inverted_value = self.invert(value, Rounding::Up);
+            self.variable.atomic_equal(inverted_value)
+        } else {
+            Atomic::False
+        }
     }
 
     fn atomic_not_equal(&self, value: i32) -> Atomic {
-        todo!()
+        if value % self.weight.get() == 0 {
+            let inverted_value = self.invert(value, Rounding::Up);
+            self.variable.atomic_not_equal(inverted_value)
+        } else {
+            Atomic::True
+        }
     }
 
     fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
