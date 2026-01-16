@@ -41,6 +41,7 @@ impl TrailedValues {
         self.values[trailed_integer] = value;
     }
 
+    #[cfg(test)]
     pub(crate) fn add_assign(&mut self, trailed_integer: TrailedInteger, addition: i64) {
         self.write(trailed_integer, self.values[trailed_integer] + addition);
     }

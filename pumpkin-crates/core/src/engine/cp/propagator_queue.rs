@@ -3,7 +3,8 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 
 use crate::containers::KeyedVec;
-use crate::engine::cp::propagation::PropagatorId;
+use crate::propagation::Priority;
+use crate::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Clone)]
@@ -34,7 +35,7 @@ impl PropagatorQueue {
         self.num_enqueued == 0
     }
 
-    pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
+    pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: Priority) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 
         if !self.is_propagator_enqueued(propagator_id) {
@@ -43,7 +44,7 @@ impl PropagatorQueue {
             self.num_enqueued += 1;
 
             if self.queues[priority as usize].is_empty() {
-                self.present_priorities.push(Reverse(priority));
+                self.present_priorities.push(Reverse(priority as u32));
             }
             self.queues[priority as usize].push_back(propagator_id);
         }
@@ -92,5 +93,28 @@ impl PropagatorQueue {
             .get(propagator_id)
             .copied()
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::PropagatorQueue;
+    use crate::propagation::Priority;
+    use crate::state::PropagatorId;
+
+    #[test]
+    fn test_ordering() {
+        let mut queue = PropagatorQueue::default();
+
+        queue.enqueue_propagator(PropagatorId(1), Priority::High);
+        queue.enqueue_propagator(PropagatorId(0), Priority::Medium);
+        queue.enqueue_propagator(PropagatorId(3), Priority::VeryLow);
+        queue.enqueue_propagator(PropagatorId(4), Priority::Low);
+
+        assert_eq!(PropagatorId(1), queue.pop().unwrap());
+        assert_eq!(PropagatorId(0), queue.pop().unwrap());
+        assert_eq!(PropagatorId(4), queue.pop().unwrap());
+        assert_eq!(PropagatorId(3), queue.pop().unwrap());
+        assert_eq!(None, queue.pop());
     }
 }

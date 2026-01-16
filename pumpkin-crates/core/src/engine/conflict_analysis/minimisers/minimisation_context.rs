@@ -2,12 +2,12 @@ use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::SolverStatistics;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
-#[cfg(doc)]
-use crate::engine::propagation::ReadDomains;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
+use crate::propagation::HasAssignments;
+#[cfg(doc)]
+use crate::propagation::ReadDomains;
 use crate::state::CurrentNogood;
 use crate::state::State;
 
@@ -49,5 +49,13 @@ impl<'a> MinimisationContext<'a> {
 impl<'a> HasAssignments for MinimisationContext<'a> {
     fn assignments(&self) -> &Assignments {
         &self.state.assignments
+    }
+
+    fn trailed_values(&self) -> &crate::engine::TrailedValues {
+        &self.state.trailed_values
+    }
+
+    fn trailed_values_mut(&mut self) -> &mut crate::engine::TrailedValues {
+        &mut self.state.trailed_values
     }
 }

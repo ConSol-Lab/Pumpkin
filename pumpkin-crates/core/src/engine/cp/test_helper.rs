@@ -4,19 +4,19 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use super::propagation::EnqueueDecision;
+use crate::propagation::EnqueueDecision;
 use super::WatchListPropositional;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
-use crate::engine::propagation::PropagatorInitialisationContext;
+use crate::propagation::LocalId;
+use crate::propagation::PropagationContext;
+use crate::propagation::PropagationContextMut;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -24,7 +24,7 @@ use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::DomainEvents;
+use crate::propagation::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
 
