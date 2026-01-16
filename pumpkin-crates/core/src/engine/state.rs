@@ -707,7 +707,7 @@ impl State {
     ///
     /// If the checker rejects the inference, this method panics.
     #[cfg(feature = "check-propagations")]
-    fn check_propagations(&mut self, first_propagation_index: usize) {
+    pub(crate) fn check_propagations(&mut self, first_propagation_index: usize) {
         let mut reason_buffer = vec![];
 
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {

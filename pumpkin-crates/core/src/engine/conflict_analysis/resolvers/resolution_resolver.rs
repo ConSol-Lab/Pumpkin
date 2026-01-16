@@ -247,6 +247,9 @@ impl ResolutionResolver {
         learned_nogood: LearnedNogood,
         inference_code: InferenceCode,
     ) {
+        #[cfg(feature = "check-propagations")]
+        let trail_len_before_nogood = context.state.trail_len();
+
         let (nogood_propagator, mut propagation_context) = context
             .state
             .get_propagator_mut_with_context(self.nogood_propagator_handle);
@@ -259,6 +262,9 @@ impl ResolutionResolver {
             &mut propagation_context,
             context.counters,
         );
+
+        #[cfg(feature = "check-propagations")]
+        context.state.check_propagations(trail_len_before_nogood);
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.
