@@ -50,6 +50,7 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
+use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
@@ -947,6 +948,13 @@ impl ConstraintSatisfactionSolver {
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
+
+        self.state.add_inference_checker(
+            inference_code.clone(),
+            Box::new(NogoodChecker {
+                nogood: nogood.clone().into(),
+            }),
+        );
 
         let (nogood_propagator, mut context) = self
             .state

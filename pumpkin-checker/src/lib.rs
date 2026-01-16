@@ -12,9 +12,9 @@ use drcp_format::reader::ProofReader;
 
 pub mod deductions;
 pub mod inferences;
-mod state;
-
 pub mod model;
+
+pub(crate) mod math;
 
 use model::*;
 
@@ -150,11 +150,11 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
         fzn_rs::Method::Optimize {
             direction: fzn_rs::ast::OptimizationDirection::Minimize,
             objective,
-        } => Some(Objective::Minimize(objective.clone())),
+        } => Some(Objective::Minimize(objective.clone().into())),
         fzn_rs::Method::Optimize {
             direction: fzn_rs::ast::OptimizationDirection::Maximize,
             objective,
-        } => Some(Objective::Maximize(objective.clone())),
+        } => Some(Objective::Maximize(objective.clone().into())),
     };
 
     for (name, variable) in fzn_model.variables.iter() {
@@ -181,7 +181,12 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                     let weight = weight?;
                     let variable = variable?;
 
-                    terms.push((weight, variable));
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
                 }
 
                 Constraint::LinearLeq(Linear {
@@ -204,7 +209,12 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                     let weight = weight?;
                     let variable = variable?;
 
-                    terms.push((weight, variable));
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
                 }
 
                 Constraint::LinearEq(Linear {
@@ -233,7 +243,7 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                             let resource_usage = maybe_resource_usage?;
 
                             Ok(Task {
-                                start_time,
+                                start_time: start_time.into(),
                                 duration,
                                 resource_usage,
                             })
@@ -250,6 +260,7 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
             FlatZincConstraints::AllDifferent(variables) => {
                 let variables = fzn_model
                     .resolve_array(variables)?
+                    .map(|maybe_variable| maybe_variable.map(Variable::from))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Constraint::AllDifferent(AllDifferent { variables })
@@ -367,7 +378,9 @@ fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>
 
         match conclusion {
             drcp_format::Conclusion::Unsat => nogood.as_ref().is_empty(),
-            drcp_format::Conclusion::DualBound(atomic) => nogood.as_ref() == [!atomic.clone()],
+            drcp_format::Conclusion::DualBound(atomic) => {
+                nogood.as_ref() == [Atomic::from(!atomic.clone())]
+            }
         }
     })
 }

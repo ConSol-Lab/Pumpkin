@@ -1,2 +1,2 @@
-pub(crate) mod nogoods;
+pub mod nogoods;
 pub(crate) mod reified_propagator;
