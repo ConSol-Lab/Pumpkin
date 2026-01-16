@@ -1,7 +1,6 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-#[cfg(any(feature = "check-propagations", doc))]
 use pumpkin_checking::InferenceChecker;
 
 use super::Domains;
@@ -21,7 +20,6 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
-#[cfg(feature = "check-propagations")]
 use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
@@ -51,17 +49,8 @@ pub trait PropagatorConstructor {
 }
 
 /// Interface used to add [`InferenceChecker`]s to the [`State`].
-///
-/// Only useful if the `check-propagations` feature is enabled.
 #[derive(Debug)]
 pub struct InferenceCheckers<'state> {
-    #[cfg_attr(
-        not(feature = "check-propagations"),
-        allow(
-            unused,
-            reason = "only used when the feature 'check-propagations' is enabled"
-        )
-    )]
     state: &'state mut State,
 }
 
@@ -71,7 +60,6 @@ impl<'state> InferenceCheckers<'state> {
     }
 }
 
-#[cfg(feature = "check-propagations")]
 impl InferenceCheckers<'_> {
     /// Forwards to [`State::add_inference_checker`].
     pub fn add_inference_checker(
@@ -225,9 +213,8 @@ impl PropagatorConstructorContext<'_> {
 
     /// Add an inference checker for inferences produced by the propagator.
     ///
-    /// If the `check-propagations` feature is enabled, this forwards to
-    /// [`State::add_inference_checker`]. Otherwise, nothing happens.
-    #[cfg(feature = "check-propagations")]
+    /// If the `check-propagations` feature is not enabled, adding an [`InferenceChecker`] will not
+    /// do anything.
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,

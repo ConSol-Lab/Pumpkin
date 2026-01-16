@@ -12,7 +12,7 @@ workspace = true
 
 [dependencies]
 pumpkin-core = { version = "0.2.2", path = "../core" }
-pumpkin-checking = { version = "0.2.2", path = "../checking", optional = true }
+pumpkin-checking = { version = "0.2.2", path = "../checking" }
 enumset = "1.1.2"
 bitfield-struct = "0.9.2"
 convert_case = "0.8.0"
@@ -23,4 +23,3 @@ pumpkin-constraints = { version = "0.2.2", path = "../constraints" }
 
 [features]
 clap = ["dep:clap", "pumpkin-core/clap"]
-include-checkers = ["dep:pumpkin-checking", "pumpkin-core/check-propagations"]

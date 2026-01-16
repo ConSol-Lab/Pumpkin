@@ -1,5 +1,4 @@
 use enumset::EnumSet;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
@@ -10,7 +9,6 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
-#[cfg(feature = "check-propagations")]
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
@@ -32,7 +30,6 @@ impl DomainId {
     }
 }
 
-#[cfg(feature = "check-propagations")]
 impl CheckerVariable<Predicate> for DomainId {
     fn atomic_less_than(&self, value: i32) -> Predicate {
         use crate::predicate;

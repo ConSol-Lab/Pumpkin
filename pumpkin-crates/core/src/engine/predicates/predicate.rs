@@ -1,4 +1,3 @@
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::AtomicConstraint;
 
 use crate::engine::Assignments;
@@ -234,7 +233,6 @@ impl std::fmt::Debug for Predicate {
     }
 }
 
-#[cfg(feature = "check-propagations")]
 impl AtomicConstraint for Predicate {
     type Identifier = DomainId;
 

@@ -1,11 +1,8 @@
 use std::ops::Not;
 
 use enumset::EnumSet;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::CheckerVariable;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::I32Ext;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
 use super::DomainId;
@@ -58,7 +55,6 @@ impl Not for Literal {
 }
 
 /// Forwards a function implementation to the field on self.
-#[cfg(feature = "check-propagations")]
 macro_rules! forward {
     (
         $field:ident,
@@ -77,7 +73,6 @@ macro_rules! forward {
     }
 }
 
-#[cfg(feature = "check-propagations")]
 impl CheckerVariable<Predicate> for Literal {
     forward!(integer_variable, fn atomic_less_than(&self, value: i32) -> Predicate);
     forward!(integer_variable, fn atomic_greater_than(&self, value: i32) -> Predicate);

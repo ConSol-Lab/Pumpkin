@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::BoxedChecker;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
 use crate::basic_types::PropagatorConflict;
-#[cfg(feature = "check-propagations")]
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -80,7 +77,6 @@ pub struct State {
 
     statistics: StateStatistics,
 
-    #[cfg(feature = "check-propagations")]
     checkers: HashMap<InferenceCode, BoxedChecker<Predicate>>,
 }
 
@@ -166,7 +162,6 @@ impl Default for State {
             notification_engine: NotificationEngine::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
-            #[cfg(feature = "check-propagations")]
             checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -391,10 +386,9 @@ impl State {
     /// Add an inference checker to the state.
     ///
     /// The inference checker will be used to check propagations performed during
-    /// [`Self::propagate_to_fixed_point`].
+    /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
     ///
     /// If an inference checker already exists for the given inference code, a panic is triggered.
-    #[cfg(feature = "check-propagations")]
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,

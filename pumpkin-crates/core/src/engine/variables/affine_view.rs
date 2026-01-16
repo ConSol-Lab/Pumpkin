@@ -1,9 +1,7 @@
 use std::cmp::Ordering;
 
 use enumset::EnumSet;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::CheckerVariable;
-#[cfg(feature = "check-propagations")]
 use pumpkin_checking::I32Ext;
 
 use super::TransformableVariable;
@@ -52,7 +50,6 @@ impl<Inner> AffineView<Inner> {
     }
 }
 
-#[cfg(feature = "check-propagations")]
 impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     fn atomic_less_than(&self, value: i32) -> Predicate {
         use crate::predicate;
