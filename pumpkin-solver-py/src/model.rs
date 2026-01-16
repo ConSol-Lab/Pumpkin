@@ -1,5 +1,8 @@
 use std::num::NonZero;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::path::PathBuf;
+use std::thread::ThreadId;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -31,10 +34,10 @@ use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
 use crate::variables::Predicate;
 
-#[pyclass(unsendable)]
+#[pyclass]
 pub struct Model {
-    solver: Solver,
-    brancher: DefaultBrancher,
+    solver: ThreadBound<Solver>,
+    brancher: ThreadBound<DefaultBrancher>,
 }
 
 #[pyclass]
@@ -77,7 +80,18 @@ impl Model {
         let solver = Solver::with_options(options);
         let brancher = solver.default_brancher();
 
-        Ok(Model { solver, brancher })
+        let owner = std::thread::current().id();
+
+        Ok(Model {
+            solver: ThreadBound {
+                value: solver,
+                owner,
+            },
+            brancher: ThreadBound {
+                value: brancher,
+                owner,
+            },
+        })
     }
 
     /// Create a new integer variable.
@@ -185,7 +199,10 @@ impl Model {
     fn satisfy(&mut self, timeout: Option<f32>) -> SatisfactionResult {
         let mut termination = get_termination(timeout);
 
-        match self.solver.satisfy(&mut self.brancher, &mut termination) {
+        match self
+            .solver
+            .satisfy(self.brancher.deref_mut(), &mut termination)
+        {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution::from(satisfiable.solution()))
             }
@@ -211,7 +228,7 @@ impl Model {
             .map(|pred| pred.into_solver_predicate())
             .collect::<Vec<_>>();
 
-        match self.solver.satisfy_under_assumptions(&mut self.brancher, &mut termination, &solver_assumptions) {
+        match self.solver.satisfy_under_assumptions(self.brancher.deref_mut(), &mut termination, &solver_assumptions) {
             pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(satisfiable.solution().into())
             }
@@ -267,12 +284,12 @@ impl Model {
 
         let result = match optimiser {
             Optimiser::LinearSatUnsat => self.solver.optimise(
-                &mut self.brancher,
+                self.brancher.deref_mut(),
                 &mut termination,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => self.solver.optimise(
-                &mut self.brancher,
+                self.brancher.deref_mut(),
                 &mut termination,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
@@ -301,4 +318,35 @@ fn get_termination(end_time: Option<f32>) -> Box<dyn TerminationCondition> {
             Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
         })
         .unwrap_or(Box::new(Indefinite))
+}
+
+/// A wrapper around a type that is `!Send` that crashes if it is accessed by different threads.
+struct ThreadBound<T> {
+    value: T,
+    owner: ThreadId,
+}
+
+unsafe impl<T> Send for ThreadBound<T> {}
+unsafe impl<T> Sync for ThreadBound<T> {}
+
+impl<T> Deref for ThreadBound<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        if std::thread::current().id() != self.owner {
+            panic!("Accessing non-send value from multiple threads");
+        }
+
+        &self.value
+    }
+}
+
+impl<T> DerefMut for ThreadBound<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        if std::thread::current().id() != self.owner {
+            panic!("Accessing non-send value from multiple threads");
+        }
+
+        &mut self.value
+    }
 }
