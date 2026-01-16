@@ -57,7 +57,10 @@ pub trait PropagatorConstructor {
 pub struct InferenceCheckers<'state> {
     #[cfg_attr(
         not(feature = "check-propagations"),
-        allow(unused, "only used when the feature 'check-propagations' is enabled")
+        allow(
+            unused,
+            reason = "only used when the feature 'check-propagations' is enabled"
+        )
     )]
     state: &'state mut State,
 }
