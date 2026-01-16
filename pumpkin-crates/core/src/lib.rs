@@ -16,7 +16,7 @@ pub mod constraints;
 pub mod optimisation;
 pub mod proof;
 pub mod propagation;
-pub(crate) mod propagators;
+pub mod propagators;
 pub mod statistics;
 
 pub use convert_case;

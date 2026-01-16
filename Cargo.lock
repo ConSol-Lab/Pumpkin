@@ -724,6 +724,7 @@ dependencies = [
  "flate2",
  "fzn-rs",
  "pumpkin-checking",
+ "pumpkin-core",
  "pumpkin-propagators",
  "thiserror",
 ]

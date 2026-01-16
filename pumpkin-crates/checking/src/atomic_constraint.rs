@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::Hash;
 
 /// Captures the data associated with an atomic constraint.
 ///
@@ -8,7 +9,7 @@ use std::fmt::Display;
 /// - and `value` is an integer.
 pub trait AtomicConstraint: Sized {
     /// The type of identifier used for variables.
-    type Identifier;
+    type Identifier: Hash + Eq;
 
     /// The identifier of this atomic constraint.
     fn identifier(&self) -> Self::Identifier;

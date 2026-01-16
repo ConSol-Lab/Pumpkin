@@ -1,4 +1,8 @@
+use std::ops::Deref;
+
+use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
+use pumpkin_core::propagators::nogoods::NogoodChecker;
 
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
@@ -17,9 +21,11 @@ pub(crate) fn verify_nogood(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let is_implied_by_nogood = nogood.iter().all(|atomic| state.is_true(atomic));
+    let checker = NogoodChecker {
+        nogood: nogood.deref().into(),
+    };
 
-    if is_implied_by_nogood {
+    if checker.check(state) {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)
