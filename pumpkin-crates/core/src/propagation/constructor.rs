@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-#[cfg(feature = "check-propagations")]
+#[cfg(any(feature = "check-propagations", doc))]
 use pumpkin_checking::InferenceChecker;
 
 use super::Domains;
@@ -41,13 +41,15 @@ pub trait PropagatorConstructor {
     ///
     /// By default this does nothing, and should only be implemented when `check-propagations` is
     /// turned on.
+    ///
+    /// See [`InferenceChecker`] for more information.
     fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
 }
 
-/// Holds all inference checkers in the solver.
+/// Interface used to add [`InferenceChecker`]s to the [`State`].
 ///
 /// Only useful if the `check-propagations` feature is enabled.
 #[derive(Debug)]

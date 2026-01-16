@@ -1,7 +1,7 @@
-use std::{
-    cmp::Ordering,
-    ops::{Add, Mul},
-};
+use std::cmp::Ordering;
+use std::iter::Sum;
+use std::ops::Add;
+use std::ops::Mul;
 
 /// An [`i32`] or positive/negative infinity.
 ///
@@ -114,5 +114,11 @@ impl Mul<i32> for I32Ext {
                 }
             }
         }
+    }
+}
+
+impl Sum for I32Ext {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(I32Ext::I32(0), |acc, value| acc + value)
     }
 }

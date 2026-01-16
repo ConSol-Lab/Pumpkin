@@ -322,11 +322,11 @@ where
         // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
         // I32Ext, and if the lower bound of one of the terms is -infty, then the left-hand side
         // will be -infty regardless of the other terms.
-        let left_hand_side = self.terms.iter().fold(I32Ext::I32(0), |acc, variable| {
-            let lower_bound = variable.induced_lower_bound(&variable_state);
-
-            acc + lower_bound
-        });
+        let left_hand_side: I32Ext = self
+            .terms
+            .iter()
+            .map(|variable| variable.induced_lower_bound(&variable_state))
+            .sum();
 
         left_hand_side > self.bound
     }

@@ -1,7 +1,10 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::{AtomicConstraint, Comparison, I32Ext};
+use crate::AtomicConstraint;
+use crate::Comparison;
+use crate::I32Ext;
 
 /// The domains of all variables in the problem.
 ///
@@ -29,6 +32,9 @@ where
 {
     /// Create a variable state that applies all the premises and, if present, the negation of the
     /// consequent.
+    ///
+    /// If `premises /\ !consequent` contain mutually exclusive atomic constraints (e.g., `[x >=
+    /// 5]` and `[x <= 2]`) then `None` is returned.
     ///
     /// An [`InferenceChecker`] will receive a [`VariableState`] that conforms to this description.
     pub fn prepare_for_conflict_check(
@@ -212,7 +218,8 @@ impl Domain {
         }
     }
 
-    /// Tighten the lower bound and remove any holes that are no longer strictly larger than the lower bound.
+    /// Tighten the lower bound and remove any holes that are no longer strictly larger than the
+    /// lower bound.
     fn tighten_lower_bound(&mut self, bound: i32) {
         if self.lower_bound >= bound {
             return;
@@ -227,7 +234,8 @@ impl Domain {
         }
     }
 
-    /// Tighten the upper bound and remove any holes that are no longer strictly smaller than the upper bound.
+    /// Tighten the upper bound and remove any holes that are no longer strictly smaller than the
+    /// upper bound.
     fn tighten_upper_bound(&mut self, bound: i32) {
         if self.upper_bound <= bound {
             return;

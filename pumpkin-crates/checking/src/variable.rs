@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-use crate::{AtomicConstraint, I32Ext, VariableState};
+use crate::AtomicConstraint;
+use crate::I32Ext;
+use crate::VariableState;
 
 /// A variable in a constraint satisfaction problem.
 pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
