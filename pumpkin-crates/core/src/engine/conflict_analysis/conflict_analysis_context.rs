@@ -12,8 +12,6 @@ use crate::engine::State;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::ExplanationContext;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
@@ -21,6 +19,8 @@ use crate::proof::InferenceCode;
 use crate::proof::ProofLog;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
+use crate::propagation::CurrentNogood;
+use crate::propagation::ExplanationContext;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
@@ -86,11 +86,11 @@ impl ConflictAnalysisContext<'_> {
         let conflict_nogood = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
-                    &self.state.inference_codes,
+                    &mut self.state.constraint_tags,
                     conflict.inference_code,
                     conflict.conjunction.iter().copied(),
                     None,
-                    self.state.variable_names(),
+                    &self.state.variable_names,
                 );
 
                 conflict.conjunction
@@ -175,20 +175,20 @@ impl ConflictAnalysisContext<'_> {
                     .expect("Expected to be able to retrieve step id for unit nogood");
 
                 let _ = proof_log.log_inference(
-                    &state.inference_codes,
-                    *inference_code,
+                    &mut state.constraint_tags,
+                    inference_code.clone(),
                     [],
                     Some(predicate),
-                    state.variable_names(),
+                    &state.variable_names,
                 );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
-                    &state.inference_codes,
+                    &mut state.constraint_tags,
                     inference_code,
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
-                    state.variable_names(),
+                    &state.variable_names,
                 );
             }
         }
@@ -218,11 +218,11 @@ impl ConflictAnalysisContext<'_> {
 
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
-            &self.state.inference_codes,
+            &mut self.state.constraint_tags,
             conflict.trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
-            self.state.variable_names(),
+            &self.state.variable_names,
         );
 
         let old_lower_bound = self.state.lower_bound(conflict_domain);

@@ -82,7 +82,7 @@ impl Assignments {
         } else {
             let values_at_current_checkpoint =
                 self.trail.values_at_checkpoint(self.get_checkpoint());
-            let entry = values_at_current_checkpoint[0];
+            let entry = &values_at_current_checkpoint[0];
             pumpkin_assert_eq_simple!(None, entry.reason);
 
             Some(entry.predicate)
@@ -108,7 +108,9 @@ impl Assignments {
     }
 
     pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
-        self.trail[index]
+        // The clone is required because of InferenceCode is not copy. However, it is a
+        // reference-counted type, so cloning is cheap.
+        self.trail[index].clone()
     }
 
     // registers the domain of a new integer variable
@@ -797,14 +799,14 @@ impl Assignments {
     }
 }
 
-#[cfg(test)]
 impl Assignments {
+    #[deprecated]
     pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
         self.trail
             .iter()
             .find_map(|entry| {
                 if entry.predicate == predicate {
-                    entry.reason.map(|(reason_ref, _)| reason_ref)
+                    entry.reason.as_ref().map(|(reason_ref, _)| *reason_ref)
                 } else {
                     None
                 }
@@ -813,7 +815,7 @@ impl Assignments {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
@@ -1424,7 +1426,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1452,7 +1454,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_assign_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1490,7 +1492,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_upper_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();
@@ -1520,7 +1522,7 @@ mod tests {
 
     #[test]
     fn jump_in_bound_change_lower_bound_event_backtrack() {
-        let mut notification_engine = NotificationEngine::default();
+        let mut notification_engine = NotificationEngine::test_default();
         let mut assignment = Assignments::default();
         let d1 = assignment.grow(1, 5);
         notification_engine.grow();

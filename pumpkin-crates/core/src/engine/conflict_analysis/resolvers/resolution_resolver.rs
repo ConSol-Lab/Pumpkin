@@ -14,11 +14,11 @@ use crate::engine::conflict_analysis::Mode;
 use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::conflict_analysis::RecursiveMinimiser;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
-use crate::engine::propagation::CurrentNogood;
 use crate::predicates::Predicate;
 use crate::proof::InferenceCode;
 use crate::proof::RootExplanationContext;
 use crate::proof::explain_root_assignment;
+use crate::propagation::CurrentNogood;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -101,18 +101,17 @@ impl ConflictResolver for ResolutionResolver {
             .proof_log
             .log_deduction(
                 learned_nogood.predicates.iter().copied(),
-                context.state.variable_names(),
+                &context.state.variable_names,
+                &mut context.state.constraint_tags,
             )
             .expect("Failed to write proof log");
 
-        let inference_code = context
-            .state
-            .create_inference_code(constraint_tag, NogoodLabel);
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
         if learned_nogood.predicates.len() == 1 {
             let _ = context
                 .unit_nogood_inference_codes
-                .insert(!learned_nogood.predicates[0], inference_code);
+                .insert(!learned_nogood.predicates[0], inference_code.clone());
         }
 
         context

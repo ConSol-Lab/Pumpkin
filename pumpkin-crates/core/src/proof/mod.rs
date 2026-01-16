@@ -12,7 +12,6 @@ mod proof_atomics;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
 
 use dimacs::DimacsProof;
 use drcp_format::Deduction;
@@ -26,7 +25,6 @@ use proof_atomics::ProofAtomics;
 use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
@@ -65,7 +63,6 @@ impl ProofLog {
                 propagation_order_hint: if log_hints { Some(vec![]) } else { None },
                 logged_domain_inferences: HashMap::default(),
                 proof_atomics: ProofAtomics::default(),
-                constraint_tags: KeyGenerator::default(),
             }),
         })
     }
@@ -81,7 +78,7 @@ impl ProofLog {
     /// Log an inference to the proof.
     pub(crate) fn log_inference(
         &mut self,
-        inference_codes: &KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
         inference_code: InferenceCode,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Option<Predicate>,
@@ -90,15 +87,12 @@ impl ProofLog {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
         else {
             return Ok(ConstraintTag::create_from_index(0));
         };
-
-        let (tag, label) = inference_codes[inference_code].clone();
 
         let inference_tag = constraint_tags.next_key();
 
@@ -111,8 +105,8 @@ impl ProofLog {
             consequent: propagated.map(|predicate| {
                 proof_atomics.map_predicate_to_proof_atomic(predicate, variable_names)
             }),
-            generated_by: Some(tag.into()),
-            label: Some(label),
+            generated_by: Some(inference_code.tag().into()),
+            label: Some(inference_code.label()),
         };
 
         writer.log_inference(inference)?;
@@ -127,12 +121,12 @@ impl ProofLog {
         &mut self,
         predicate: Predicate,
         variable_names: &VariableNames,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
             logged_domain_inferences,
-            constraint_tags,
             proof_atomics,
             ..
         }) = self.internal_proof.as_mut()
@@ -180,12 +174,12 @@ impl ProofLog {
         &mut self,
         premises: impl IntoIterator<Item = Predicate>,
         variable_names: &VariableNames,
+        constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
                 propagation_order_hint,
-                constraint_tags,
                 proof_atomics,
                 logged_domain_inferences,
                 ..
@@ -291,17 +285,6 @@ impl ProofLog {
         proof_atomics.reify_predicate(literal, predicate);
     }
 
-    /// Create a new constraint tag.
-    pub(crate) fn new_constraint_tag(&mut self) -> ConstraintTag {
-        match self.internal_proof {
-            Some(ProofImpl::CpProof {
-                ref mut constraint_tags,
-                ..
-            }) => constraint_tags.next_key(),
-            _ => ConstraintTag::create_from_index(0),
-        }
-    }
-
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_proof.is_some()
     }
@@ -345,8 +328,6 @@ impl Write for Sink {
 enum ProofImpl {
     CpProof {
         writer: ProofWriter<Sink, i32>,
-        /// The [`ConstraintTag`]s generated for this proof.
-        constraint_tags: KeyGenerator<ConstraintTag>,
         // If propagation hints are enabled, this is a buffer used to record propagations in the
         // order they can be applied to derive the next nogood.
         //
