@@ -104,8 +104,9 @@ impl Iterator for PredicateIdIterator {
     }
 }
 
+/// An ID for a predicate which has its truth-value tracked by the solver.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub(crate) struct PredicateId {
+pub struct PredicateId {
     pub(crate) id: u32,
 }
 

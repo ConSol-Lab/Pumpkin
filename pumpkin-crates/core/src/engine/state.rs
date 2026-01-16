@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::basic_types::PropagatorConflict;
-use crate::containers::KeyedVec;
+use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -11,15 +11,6 @@ use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::propagation::CurrentNogood;
-use crate::engine::propagation::ExplanationContext;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
-use crate::engine::propagation::constructor::PropagatorConstructor;
-use crate::engine::propagation::constructor::PropagatorConstructorContext;
-use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
@@ -27,9 +18,17 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
+use crate::propagation::CurrentNogood;
+use crate::propagation::Domains;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorConstructor;
+use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
@@ -56,7 +55,7 @@ pub struct State {
     /// Keep track of trailed values (i.e. values which automatically backtrack).
     pub(crate) trailed_values: TrailedValues,
     /// The names of the variables in the solver.
-    variable_names: VariableNames,
+    pub(crate) variable_names: VariableNames,
     /// Dictates the order in which propagators will be called to propagate.
     pub(crate) propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -65,7 +64,9 @@ pub struct State {
     /// Component responsible for providing notifications for changes to the domains of variables
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
-    pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
+
+    /// The [`ConstraintTag`]s generated for this proof.
+    pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
     statistics: StateStatistics,
 }
@@ -102,7 +103,7 @@ impl From<PropagatorConflict> for Conflict {
 }
 
 /// A conflict because a domain became empty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
@@ -150,8 +151,8 @@ impl Default for State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
+            constraint_tags: KeyGenerator::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -192,16 +193,9 @@ impl State {
 
 /// Operations to create .
 impl State {
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    ///
-    /// The inference codes are required to log inferences with [`ProofLog::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.inference_codes
-            .push((constraint_tag, inference_label.to_str()))
+    /// Create a new [`ConstraintTag`].
+    pub fn new_constraint_tag(&mut self) -> ConstraintTag {
+        self.constraint_tags.next_key()
     }
 
     /// Creates a new Boolean (0-1) variable.
@@ -345,8 +339,6 @@ impl State {
     /// While the propagator is added to the queue for propagation, this function does _not_
     /// trigger a round of propagation. An explicit call to [`State::propagate_to_fixed_point`] is
     /// necessary to run the new propagator for the first time.
-    #[allow(private_bounds, reason = "Propagator will be part of public API")]
-    #[allow(private_interfaces, reason = "Constructor will be part of public API")]
     pub fn add_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
@@ -362,7 +354,7 @@ impl State {
         let propagator = constructor.create(constructor_context);
 
         pumpkin_assert_simple!(
-            propagator.priority() <= 3,
+            propagator.priority() as u8 <= 3,
             "The propagator priority exceeds 3.
              Currently we only support values up to 3,
              but this can easily be changed if there is a good reason."
@@ -385,19 +377,11 @@ impl State {
     /// Get a reference to the propagator identified by the given handle.
     ///
     /// For an exclusive reference, use [`State::get_propagator_mut`].
-    #[allow(
-        private_bounds,
-        reason = "Propagator will be part of public interface in the future"
-    )]
     pub fn get_propagator<P: Propagator>(&self, handle: PropagatorHandle<P>) -> Option<&P> {
         self.propagators.get_propagator(handle)
     }
 
     /// Get an exclusive reference to the propagator identified by the given handle.
-    #[allow(
-        private_bounds,
-        reason = "Propagator will be part of public interface in the future"
-    )]
     pub fn get_propagator_mut<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,
@@ -410,10 +394,10 @@ impl State {
     pub(crate) fn get_propagator_mut_with_context<P: Propagator>(
         &mut self,
         handle: PropagatorHandle<P>,
-    ) -> (Option<&mut P>, PropagationContextMut<'_>) {
+    ) -> (Option<&mut P>, PropagationContext<'_>) {
         (
             self.propagators.get_propagator_mut(handle),
-            PropagationContextMut::new(
+            PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
                 &mut self.reason_store,
@@ -515,13 +499,15 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let context = PropagationContext::new(&self.assignments);
+            let context = Domains::new(&self.assignments, &mut self.trailed_values);
             propagator.synchronise(context);
         }
 
-        let _ = self
-            .notification_engine
-            .process_backtrack_events(&mut self.assignments, &mut self.propagators);
+        let _ = self.notification_engine.process_backtrack_events(
+            &mut self.assignments,
+            &mut self.trailed_values,
+            &mut self.propagators,
+        );
         self.notification_engine.clear_event_drain();
 
         self.notification_engine
@@ -555,7 +541,7 @@ impl State {
 
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut self.trailed_values,
                 &mut self.assignments,
                 &mut self.reason_store,
@@ -978,5 +964,21 @@ impl State {
             };
             None
         }
+    }
+}
+
+impl State {
+    pub fn get_domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.assignments, &mut self.trailed_values)
+    }
+
+    pub fn get_propagation_context(&mut self) -> PropagationContext<'_> {
+        PropagationContext::new(
+            &mut self.trailed_values,
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.notification_engine,
+            PropagatorId(0),
+        )
     }
 }

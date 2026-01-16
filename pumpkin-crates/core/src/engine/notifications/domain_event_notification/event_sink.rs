@@ -2,9 +2,9 @@ use enumset::EnumSet;
 
 use super::DomainEvent;
 use crate::containers::KeyedVec;
-#[cfg(doc)]
-use crate::engine::DomainEvents;
 use crate::engine::variables::DomainId;
+#[cfg(doc)]
+use crate::propagation::DomainEvents;
 #[cfg(doc)]
 use crate::propagators;
 use crate::pumpkin_assert_advanced;

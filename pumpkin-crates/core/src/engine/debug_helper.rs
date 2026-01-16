@@ -7,14 +7,14 @@ use log::debug;
 use super::TrailedValues;
 use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
-use super::propagation::ExplanationContext;
-use super::propagation::store::PropagatorStore;
 use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
-use crate::engine::propagation::PropagationContextMut;
-use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
+use crate::propagation::ExplanationContext;
+use crate::propagation::PropagationContext;
+use crate::propagation::Propagator;
+use crate::propagation::PropagatorId;
+use crate::propagation::store::PropagatorStore;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::state::Conflict;
 
@@ -77,14 +77,14 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
             );
-            let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let propagation_status_cp = propagator.propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
                 panic!(
@@ -255,14 +255,14 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
-                let context = PropagationContextMut::new(
+                let context = PropagationContext::new(
                     &mut trailed_values_clone,
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut notification_engine_clone,
                     propagator_id,
                 );
-                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+                let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
@@ -370,15 +370,14 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
-                    let context = PropagationContextMut::new(
+                    let context = PropagationContext::new(
                         &mut trailed_values_clone,
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut notification_engine_clone,
                         propagator_id,
                     );
-                    let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(context);
+                    let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
                     // We break if an error was found or if there were no more propagations (i.e.
                     // fixpoint was reached)
@@ -437,14 +436,14 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let context = PropagationContextMut::new(
+            let context = PropagationContext::new(
                 &mut trailed_values_clone,
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut notification_engine_clone,
                 propagator_id,
             );
-            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
+            let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(
                 debug_propagation_status_cp.is_err(),
                 "Debug propagation could not reproduce the conflict reported
