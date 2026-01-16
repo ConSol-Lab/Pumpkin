@@ -12,6 +12,7 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -34,6 +35,8 @@ use crate::cumulative::CumulativeParameters;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::UpdatableStructures;
 use crate::cumulative::options::CumulativePropagatorOptions;
+use crate::cumulative::time_table::CheckerTask;
+use crate::cumulative::time_table::TimeTableChecker;
 use crate::cumulative::util::create_tasks;
 use crate::cumulative::util::register_tasks;
 use crate::cumulative::util::update_bounds_task;
@@ -97,6 +100,25 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> PropagatorConstructor for TimeTablePerPointPropagator<Var> {
     type PropagatorImpl = Self;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, TimeTable),
+            Box::new(TimeTableChecker {
+                tasks: self
+                    .parameters
+                    .tasks
+                    .iter()
+                    .map(|task| CheckerTask {
+                        start_time: task.start_variable.clone(),
+                        duration: task.processing_time,
+                        resource_usage: task.resource_usage,
+                    })
+                    .collect(),
+                capacity: self.parameters.capacity,
+            }),
+        );
+    }
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         self.updatable_structures

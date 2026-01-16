@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-
-use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
+use pumpkin_propagators::cumulative::time_table::CheckerTask;
+use pumpkin_propagators::cumulative::time_table::TimeTableChecker;
 
 use super::Fact;
 use crate::inferences::InvalidInference;
@@ -21,29 +21,22 @@ pub(crate) fn verify_time_table(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    // The profile is a key-value store. The keys correspond to time-points, and the values to the
-    // relative change in resource consumption. A BTreeMap is used to maintain a sorted order of
-    // the time points.
-    let mut profile = BTreeMap::new();
+    let checker = TimeTableChecker {
+        tasks: cumulative
+            .tasks
+            .iter()
+            .map(|task| CheckerTask {
+                start_time: task.start_time.clone(),
+                resource_usage: task.resource_usage,
+                duration: task.duration,
+            })
+            .collect(),
+        capacity: cumulative.capacity,
+    };
 
-    for task in cumulative.tasks.iter() {
-        let lst = task.start_time.induced_upper_bound(&state);
-        let ect = task.start_time.induced_lower_bound(&state) + task.duration;
-
-        if ect <= lst {
-            *profile.entry(ect).or_insert(0) += task.resource_usage;
-            *profile.entry(lst).or_insert(0) -= task.resource_usage;
-        }
+    if checker.check(state) {
+        Ok(())
+    } else {
+        Err(InvalidInference::Unsound)
     }
-
-    let mut usage = 0;
-    for delta in profile.values() {
-        usage += delta;
-
-        if usage > cumulative.capacity {
-            return Ok(());
-        }
-    }
-
-    Err(InvalidInference::Unsound)
 }
