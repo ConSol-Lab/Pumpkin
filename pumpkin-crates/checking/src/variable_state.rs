@@ -5,6 +5,8 @@ use std::hash::Hash;
 use crate::AtomicConstraint;
 use crate::Comparison;
 use crate::I32Ext;
+#[cfg(doc)]
+use crate::InferenceChecker;
 
 /// The domains of all variables in the problem.
 ///
@@ -127,7 +129,7 @@ where
         })
     }
 
-    /// Apply the given [`Atomic`] to the state.
+    /// Apply the given `Atomic` to the state.
     ///
     /// Returns true if the state remains consistent, or false if the atomic cannot be true in
     /// conjunction with previously applied atomics.
@@ -302,11 +304,12 @@ impl Iterator for DomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TestAtomic;
 
     #[test]
     fn domain_iterator_unbounded() {
-        let state = VariableState::default();
-        let iterator = state.iter_domain(&fzn_rs::VariableExpr::Identifier(Rc::from("x1")));
+        let state = VariableState::<TestAtomic>::default();
+        let iterator = state.iter_domain(&"x1");
 
         assert!(iterator.is_none());
     }
@@ -315,16 +318,13 @@ mod tests {
     fn domain_iterator_unbounded_lower_bound() {
         let mut state = VariableState::default();
 
-        let variable_name = Rc::from("x1");
-        let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
-
-        let _ = state.apply(&IntAtomic {
-            name: variable_name,
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::LessEqual,
             value: 5,
         });
 
-        let iterator = state.iter_domain(&variable);
+        let iterator = state.iter_domain(&"x1");
 
         assert!(iterator.is_none());
     }
@@ -333,16 +333,13 @@ mod tests {
     fn domain_iterator_unbounded_upper_bound() {
         let mut state = VariableState::default();
 
-        let variable_name = Rc::from("x1");
-        let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
-
-        let _ = state.apply(&IntAtomic {
-            name: variable_name,
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::GreaterEqual,
             value: 5,
         });
 
-        let iterator = state.iter_domain(&variable);
+        let iterator = state.iter_domain(&"x1");
 
         assert!(iterator.is_none());
     }
@@ -351,23 +348,20 @@ mod tests {
     fn domain_iterator_bounded_no_holes() {
         let mut state = VariableState::default();
 
-        let variable_name = Rc::from("x1");
-        let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
-
-        let _ = state.apply(&IntAtomic {
-            name: Rc::clone(&variable_name),
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::GreaterEqual,
             value: 5,
         });
 
-        let _ = state.apply(&IntAtomic {
-            name: variable_name,
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::LessEqual,
             value: 10,
         });
 
         let values = state
-            .iter_domain(&variable)
+            .iter_domain(&"x1")
             .expect("the domain is bounded")
             .collect::<Vec<_>>();
 
@@ -378,29 +372,26 @@ mod tests {
     fn domain_iterator_bounded_with_holes() {
         let mut state = VariableState::default();
 
-        let variable_name = Rc::from("x1");
-        let variable = fzn_rs::VariableExpr::Identifier(Rc::clone(&variable_name));
-
-        let _ = state.apply(&IntAtomic {
-            name: Rc::clone(&variable_name),
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::GreaterEqual,
             value: 5,
         });
 
-        let _ = state.apply(&IntAtomic {
-            name: Rc::clone(&variable_name),
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::NotEqual,
             value: 7,
         });
 
-        let _ = state.apply(&IntAtomic {
-            name: variable_name,
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
             comparison: Comparison::LessEqual,
             value: 10,
         });
 
         let values = state
-            .iter_domain(&variable)
+            .iter_domain(&"x1")
             .expect("the domain is bounded")
             .collect::<Vec<_>>();
 

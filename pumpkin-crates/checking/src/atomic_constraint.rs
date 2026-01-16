@@ -44,3 +44,31 @@ impl Display for Comparison {
         write!(f, "{s}")
     }
 }
+
+/// A simple implementation of an [`AtomicConstraint`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TestAtomic {
+    pub name: &'static str,
+    pub comparison: Comparison,
+    pub value: i32,
+}
+
+impl AtomicConstraint for TestAtomic {
+    type Identifier = &'static str;
+
+    fn identifier(&self) -> Self::Identifier {
+        self.name
+    }
+
+    fn comparison(&self) -> Comparison {
+        self.comparison
+    }
+
+    fn value(&self) -> i32 {
+        self.value
+    }
+
+    fn negate(&self) -> Self {
+        todo!()
+    }
+}

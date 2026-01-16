@@ -63,6 +63,10 @@ fn verify_linear_inference(
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+    use std::rc::Rc;
+
+    use drcp_format::IntAtomic;
     use drcp_format::IntComparison::*;
     use fzn_rs::VariableExpr::*;
 
@@ -73,21 +77,34 @@ mod tests {
     fn linear_1() {
         // x1 - x2 <= -7
         let linear = Linear {
-            terms: vec![(1, Identifier("x1".into())), (-1, Identifier("x2".into()))],
+            terms: vec![
+                Term {
+                    weight: NonZero::new(1).unwrap(),
+                    variable: Identifier(Rc::from("x1")).into(),
+                },
+                Term {
+                    weight: NonZero::new(-1).unwrap(),
+                    variable: Identifier(Rc::from("x2")).into(),
+                },
+            ],
             bound: -7,
         };
 
-        let premises = vec![Atomic {
+        let premises = vec![Atomic::IntAtomic(IntAtomic {
             name: "x2".into(),
             comparison: LessEqual,
             value: 37,
-        }];
+        })];
 
-        let consequent = Some(Atomic {
+        let consequent = Some(Atomic::IntAtomic(IntAtomic {
             name: "x1".into(),
             comparison: LessEqual,
             value: 30,
-        });
+        }));
+
+        let variable_state =
+            VariableState::prepare_for_conflict_check(premises.clone(), consequent.clone())
+                .expect("no mutually exclusive atomics");
 
         verify_linear_inference(
             &linear,
@@ -95,6 +112,7 @@ mod tests {
                 premises,
                 consequent,
             },
+            variable_state,
         )
         .expect("valid inference");
     }
