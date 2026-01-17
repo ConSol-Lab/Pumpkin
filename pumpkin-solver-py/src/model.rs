@@ -1,8 +1,5 @@
 use std::num::NonZero;
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::path::PathBuf;
-use std::thread::ThreadId;
 use std::time::Duration;
 use std::time::Instant;
 
