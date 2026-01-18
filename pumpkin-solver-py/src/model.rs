@@ -5,6 +5,9 @@ use std::time::Instant;
 
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
+use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::branching::branchers::warm_start::WarmStart;
+use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::containers::StorageKey;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -246,13 +249,24 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, timeout=None))]
+    /// Solve the model to optimality.
+    ///
+    /// Resets any incremental state in the stored brancher, but it is unlikely that the Model can
+    /// be used in an incremental fashion after this call.
+    #[pyo3(signature = (
+        objective,
+        optimiser=Optimiser::LinearSatUnsat,
+        direction=Direction::Minimise,
+        timeout=None,
+        warm_start=HashMap::default(),
+    ))]
     fn optimise(
         &mut self,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
         timeout: Option<f32>,
+        warm_start: HashMap<IntExpression, i32>,
     ) -> OptimisationResult {
         let mut termination = get_termination(timeout);
 
@@ -263,16 +277,18 @@ impl Model {
 
         let objective = objective.0;
 
-        let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+        let callback: fn(&Solver, SolutionReference, &DynamicBrancher) = |_, _, _| {};
+
+        let mut brancher = self.create_warm_started_brancher(warm_start);
 
         let result = match optimiser {
             Optimiser::LinearSatUnsat => self.solver.optimise(
-                &mut self.brancher,
+                &mut brancher,
                 &mut termination,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => self.solver.optimise(
-                &mut self.brancher,
+                &mut brancher,
                 &mut termination,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
@@ -290,6 +306,40 @@ impl Model {
             }
             pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
         }
+    }
+}
+
+impl Model {
+    /// Create a brancher that is warm started with the given assignment.
+    ///
+    /// This resets the [`DefaultBrancher`] on self, so any knowledge on previous incremental
+    /// solves is lost.
+    fn create_warm_started_brancher(
+        &mut self,
+        warm_start: HashMap<IntExpression, i32>,
+    ) -> DynamicBrancher {
+        // First create the slice of variables to give to the WarmStart brancher.
+        let warm_start_variables: Vec<_> = warm_start.keys().map(|variable| variable.0).collect();
+
+        // For every variable collect the value into another slice.
+        let warm_start_values: Vec<_> = warm_start_variables
+            .iter()
+            .map(|variable| {
+                warm_start
+                    .get(&IntExpression(*variable))
+                    .copied()
+                    .expect("all elements are keys")
+            })
+            .collect();
+
+        // Swap out the default brancher stored on self with a new default brancher.
+        let default_brancher =
+            std::mem::replace(&mut self.brancher, self.solver.default_brancher());
+
+        DynamicBrancher::new(vec![
+            Box::new(WarmStart::new(&warm_start_variables, &warm_start_values)),
+            Box::new(default_brancher),
+        ])
     }
 }
 
