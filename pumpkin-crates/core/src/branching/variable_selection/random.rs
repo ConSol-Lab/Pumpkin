@@ -20,6 +20,11 @@ impl RandomSelector {
             }),
         }
     }
+
+    /// Add a domain to consideration in the variable selection.
+    pub fn add_domain(&mut self, domain: DomainId) {
+        self.variables.insert(domain);
+    }
 }
 
 impl VariableSelector<DomainId> for RandomSelector {
