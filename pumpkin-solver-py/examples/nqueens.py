@@ -1,25 +1,27 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from pumpkin_solver_py import constraints, SatisfactionResult, Model
+from pumpkin_solver import constraints, SatisfactionResult, Model
 
 
 def main(n: int, proof: Path | None):
     assert n > 0, "Please provide a positive non-zero 'n'"
 
-    model = Model()
+    model = Model(proof=proof)
 
     variables = [model.new_integer_variable(0, n - 1, name=f"q{i}") for i in range(n)]
 
-    model.add_constraint(constraints.AllDifferent(variables), tag=1)
+    model.add_constraint(
+        constraints.AllDifferent(variables, model.new_constraint_tag())
+    )
 
     diag1 = [var.offset(i) for (i, var) in enumerate(variables)]
     diag2 = [var.offset(-i) for (i, var) in enumerate(variables)]
 
-    model.add_constraint(constraints.AllDifferent(diag1), tag=2)
-    model.add_constraint(constraints.AllDifferent(diag2), tag=3)
+    model.add_constraint(constraints.AllDifferent(diag1, model.new_constraint_tag()))
+    model.add_constraint(constraints.AllDifferent(diag2, model.new_constraint_tag()))
 
-    status = model.satisfy(proof=proof)
+    status = model.satisfy()
     match status:
         case SatisfactionResult.Satisfiable(solution):
             row_separator = "+---" * n + "+"
