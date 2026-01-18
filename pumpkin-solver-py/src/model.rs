@@ -13,6 +13,8 @@ use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::ConstraintTag;
 use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::rand::SeedableRng;
+use pumpkin_solver::rand::rngs::SmallRng;
 use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::termination::TerminationCondition;
@@ -62,8 +64,8 @@ impl StorageKey for Tag {
 #[pymethods]
 impl Model {
     #[new]
-    #[pyo3(signature = (proof=None))]
-    fn new(proof: Option<PathBuf>) -> PyResult<Model> {
+    #[pyo3(signature = (proof=None, seed=None))]
+    fn new(proof: Option<PathBuf>, seed: Option<u64>) -> PyResult<Model> {
         let proof_log = proof
             .map(|path| ProofLog::cp(&path, true))
             .transpose()
@@ -71,6 +73,11 @@ impl Model {
 
         let options = SolverOptions {
             proof_log,
+            // TODO: The solver options should probably be refactored to accept a seed instead the
+            // the number generator instance. Now we cannot have a solver default that is shared
+            // between the rust and python interfaces without duplicating the default seed as done
+            // now.
+            random_generator: SmallRng::seed_from_u64(seed.unwrap_or(42)),
             ..Default::default()
         };
 
