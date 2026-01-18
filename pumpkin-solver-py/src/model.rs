@@ -246,13 +246,15 @@ impl Model {
         }
     }
 
-    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, timeout=None))]
+    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, timeout=None, on_solution=None))]
     fn optimise(
         &mut self,
+        py: Python<'_>,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
         timeout: Option<f32>,
+        on_solution: Option<Py<PyAny>>,
     ) -> OptimisationResult {
         let mut termination = get_termination(timeout);
 
@@ -263,7 +265,15 @@ impl Model {
 
         let objective = objective.0;
 
-        let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+        let callback = move |_: &Solver, solution: SolutionReference<'_>, _: &DefaultBrancher| {
+            let python_solution = crate::result::Solution::from(solution);
+
+            if let Some(on_solution_callback) = on_solution.as_ref() {
+                let _ = on_solution_callback
+                    .call(py, (python_solution,), None)
+                    .expect("failed to call solution callback");
+            }
+        };
 
         let result = match optimiser {
             Optimiser::LinearSatUnsat => self.solver.optimise(
