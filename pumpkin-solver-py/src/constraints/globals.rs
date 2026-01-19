@@ -29,10 +29,9 @@ macro_rules! python_constraint {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 pumpkin_constraints::$constraint_func(
-                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
                 ).post(solver)
             }
@@ -41,10 +40,9 @@ macro_rules! python_constraint {
                 self,
                 solver: &mut pumpkin_solver::Solver,
                 reification_literal: pumpkin_solver::variables::Literal,
-                variable_map: &VariableMap,
             ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 pumpkin_constraints::$constraint_func(
-                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
                 ).implied_by(solver, reification_literal)
             }
