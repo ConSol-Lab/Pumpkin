@@ -70,6 +70,19 @@ impl AtomicConstraint for TestAtomic {
     }
 
     fn negate(&self) -> Self {
-        todo!()
+        TestAtomic {
+            name: self.name,
+            comparison: match self.comparison {
+                Comparison::GreaterEqual => Comparison::LessEqual,
+                Comparison::LessEqual => Comparison::GreaterEqual,
+                Comparison::Equal => Comparison::NotEqual,
+                Comparison::NotEqual => Comparison::Equal,
+            },
+            value: match self.comparison {
+                Comparison::GreaterEqual => self.value - 1,
+                Comparison::LessEqual => self.value + 1,
+                Comparison::NotEqual | Comparison::Equal => self.value,
+            },
+        }
     }
 }
