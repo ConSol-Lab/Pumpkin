@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::iter::Sum;
 use std::ops::Add;
 use std::ops::Mul;
+use std::ops::Neg;
 
 /// An [`i32`] or positive/negative infinity.
 ///
@@ -27,6 +28,18 @@ impl PartialEq<i32> for I32Ext {
             I32Ext::I32(v1) => v1 == other,
             I32Ext::NegativeInf | I32Ext::PositiveInf => false,
         }
+    }
+}
+
+impl PartialEq<I32Ext> for i32 {
+    fn eq(&self, other: &I32Ext) -> bool {
+        other.eq(self)
+    }
+}
+
+impl PartialOrd<I32Ext> for i32 {
+    fn partial_cmp(&self, other: &I32Ext) -> Option<Ordering> {
+        other.neg().partial_cmp(&self.neg())
     }
 }
 
@@ -127,6 +140,18 @@ impl Mul<i32> for I32Ext {
     }
 }
 
+impl Neg for I32Ext {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            I32Ext::I32(value) => I32Ext::I32(-value),
+            I32Ext::NegativeInf => I32Ext::PositiveInf,
+            I32Ext::PositiveInf => Self::NegativeInf,
+        }
+    }
+}
+
 impl Sum for I32Ext {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(I32Ext::I32(0), |acc, value| acc + value)
@@ -138,6 +163,20 @@ mod tests {
     use I32Ext::*;
 
     use super::*;
+
+    #[test]
+    fn ordering_of_i32_with_i32_ext() {
+        assert!(I32(2) < 3);
+        assert!(I32(-1) < 3);
+        assert!(I32(-10) < -1);
+    }
+
+    #[test]
+    fn ordering_of_i32_ext_with_i32() {
+        assert!(1 < I32(2));
+        assert!(-10 < I32(-1));
+        assert!(-11 < I32(-10));
+    }
 
     #[test]
     fn test_adding_i32s() {

@@ -1,9 +1,14 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::I32Ext;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -29,6 +34,16 @@ where
     VB: IntegerVariable + 'static,
 {
     type PropagatorImpl = AbsoluteValuePropagator<VA, VB>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, AbsoluteValue),
+            Box::new(AbsoluteValueChecker {
+                signed: self.signed.clone(),
+                absolute: self.absolute.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let AbsoluteValueArgs {
@@ -143,6 +158,45 @@ where
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AbsoluteValueChecker<VA, VB> {
+    signed: VA,
+    absolute: VB,
+}
+
+impl<VA, VB, Atomic> InferenceChecker<Atomic> for AbsoluteValueChecker<VA, VB>
+where
+    VA: CheckerVariable<Atomic>,
+    VB: CheckerVariable<Atomic>,
+    Atomic: AtomicConstraint,
+{
+    fn check(&self, state: pumpkin_checking::VariableState<Atomic>) -> bool {
+        let signed_lower = self.signed.induced_lower_bound(&state);
+        let signed_upper = self.signed.induced_upper_bound(&state);
+        let absolute_lower = self.absolute.induced_lower_bound(&state);
+        let absolute_upper = self.absolute.induced_upper_bound(&state);
+
+        if absolute_lower < 0 {
+            // The absolute value cannot have negative values.
+            return true;
+        }
+
+        // Now we compute the interval for |signed| based on the domain of signed.
+        let (computed_signed_lower, computed_signed_upper) = if signed_lower >= 0 {
+            (signed_lower, signed_upper)
+        } else if signed_upper <= 0 {
+            (-signed_upper, -signed_lower)
+        } else if signed_lower < 0 && 0_i32 < signed_upper {
+            (I32Ext::I32(0), std::cmp::max(-signed_lower, signed_upper))
+        } else {
+            unreachable!()
+        };
+
+        // The intervals should not match, otherwise there is no conflict.
+        computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper
     }
 }
 
