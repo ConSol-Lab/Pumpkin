@@ -437,7 +437,7 @@ impl Solver {
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
         mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
-    ) -> OptimisationResult
+    ) -> OptimisationResult<Callback::Stop>
     where
         B: Brancher,
         Callback: SolutionCallback<B>,

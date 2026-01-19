@@ -131,6 +131,8 @@
 //!
 //! Then we can find the optimal solution using [`Solver::optimise`]:
 //! ```rust
+//! # use std::cmp::max;
+//! # use std::ops::ControlFlow;
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::results::OptimisationResult;
 //! # use pumpkin_solver::termination::Indefinite;
@@ -139,7 +141,6 @@
 //! # use pumpkin_solver::constraints::Constraint;
 //! # use pumpkin_solver::optimisation::OptimisationDirection;
 //! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
-//! # use std::cmp::max;
 //! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::results::SolutionReference;
 //! # use pumpkin_solver::DefaultBrancher;
@@ -153,8 +154,12 @@
 //! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
+//!
+//! let callback = |_: &Solver, _: SolutionReference, _: &DefaultBrancher| -> ControlFlow<()> {
+//!     return ControlFlow::Continue(());
+//! };
+//!
 //! // Then we solve to optimality
-//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,

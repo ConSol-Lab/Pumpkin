@@ -17,7 +17,7 @@ pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
-    ) -> OptimisationResult;
+    ) -> OptimisationResult<Callback::Stop>;
 }
 
 /// The type of search which is performed by the solver.
