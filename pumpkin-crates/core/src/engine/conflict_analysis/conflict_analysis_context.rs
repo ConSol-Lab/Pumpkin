@@ -9,7 +9,6 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 #[cfg(doc)]
 use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
-use crate::conflict_resolving::MinimisationContext;
 #[cfg(doc)]
 use crate::conflict_resolving::NogoodMinimiser;
 use crate::containers::HashMap;
@@ -67,7 +66,7 @@ impl Debug for ConflictAnalysisContext<'_> {
     }
 }
 
-impl ConflictAnalysisContext<'_> {
+impl<'a> ConflictAnalysisContext<'a> {
     /// Backtracks the solver to the provided backtrack level.
     ///
     /// This method panics if the provided `backtrack_level` is not lower than the current
@@ -232,16 +231,6 @@ impl ConflictAnalysisContext<'_> {
     pub fn is_implied(&self, predicate: Predicate) -> bool {
         self.state.assignments.trail[self.trail_position(predicate)].predicate == predicate
     }
-
-    /// Returns an instance of [`MinimisationContext`] which can be used by [`NogoodMinimiser`]s.
-    pub fn minimisation_context(&mut self) -> MinimisationContext<'_> {
-        MinimisationContext {
-            proof_log: self.proof_log,
-            unit_nogood_inference_codes: self.unit_nogood_inference_codes,
-            counters: self.counters,
-            state: self.state,
-        }
-    }
 }
 
 /// Methods used for retrieving options.
@@ -297,6 +286,13 @@ impl ConflictAnalysisContext<'_> {
         self.counters
             .learned_clause_statistics
             .average_number_of_removed_atomic_constraints_semantic
+            .add_term(num_predicates_removed);
+    }
+
+    pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: u64) {
+        self.counters
+            .learned_clause_statistics
+            .average_number_of_removed_atomic_constraints_recursive
             .add_term(num_predicates_removed);
     }
 

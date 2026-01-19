@@ -323,27 +323,21 @@ impl ResolutionResolver {
             } else {
                 SemanticMinimisationMode::DisableEqualityMerging
             });
-        self.semantic_minimiser.minimise(
-            context.minimisation_context(),
-            &mut self.processed_nogood_predicates,
-        );
+        self.semantic_minimiser
+            .minimise(context, &mut self.processed_nogood_predicates);
 
         if context.should_minimise() {
             // Then we perform recursive minimisation to remove the dominated predicates
-            self.recursive_minimiser.minimise(
-                context.minimisation_context(),
-                &mut self.processed_nogood_predicates,
-            );
+            self.recursive_minimiser
+                .minimise(context, &mut self.processed_nogood_predicates);
 
             // We perform a final semantic minimisation call which allows the merging of the
             // equality predicates which remain in the nogood
             let size_before_semantic_minimisation = self.processed_nogood_predicates.len();
             self.semantic_minimiser
                 .set_mode(SemanticMinimisationMode::EnableEqualityMerging);
-            self.semantic_minimiser.minimise(
-                context.minimisation_context(),
-                &mut self.processed_nogood_predicates,
-            );
+            self.semantic_minimiser
+                .minimise(context, &mut self.processed_nogood_predicates);
             context.removed_predicates_by_semantic(
                 (size_before_semantic_minimisation - self.processed_nogood_predicates.len()) as u64,
             );

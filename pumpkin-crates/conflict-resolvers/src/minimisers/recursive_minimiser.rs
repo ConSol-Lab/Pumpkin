@@ -1,6 +1,6 @@
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
-use pumpkin_core::conflict_resolving::MinimisationContext;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::HashSet;
@@ -29,10 +29,10 @@ pub struct RecursiveMinimiser {
 }
 
 impl NogoodMinimiser for RecursiveMinimiser {
-    fn minimise(&mut self, mut context: MinimisationContext, nogood: &mut Vec<Predicate>) {
+    fn minimise(&mut self, context: &mut ConflictAnalysisContext, nogood: &mut Vec<Predicate>) {
         let num_literals_before_minimisation = nogood.len();
 
-        self.initialise_minimisation_data_structures(nogood, &context);
+        self.initialise_minimisation_data_structures(nogood, context);
 
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
@@ -40,7 +40,7 @@ impl NogoodMinimiser for RecursiveMinimiser {
         for i in 0..initial_nogood_size {
             let learned_predicate = nogood[i];
 
-            self.compute_label(learned_predicate, &mut context, nogood);
+            self.compute_label(learned_predicate, context, nogood);
 
             let label = self.get_predicate_label(learned_predicate);
             // Keep the predicate in case it was not deemed deemed redundant.
@@ -57,7 +57,7 @@ impl NogoodMinimiser for RecursiveMinimiser {
         self.clean_up_minimisation();
 
         let num_predicates_removed = num_literals_before_minimisation - nogood.len();
-        context.removed_predicates_by_recursive(num_predicates_removed);
+        context.removed_predicates_by_recursive(num_predicates_removed as u64);
     }
 }
 
@@ -65,7 +65,7 @@ impl RecursiveMinimiser {
     fn compute_label(
         &mut self,
         input_predicate: Predicate,
-        context: &mut MinimisationContext,
+        context: &mut ConflictAnalysisContext,
         current_nogood: &[Predicate],
     ) {
         pumpkin_assert_moderate!(context.evaluate_predicate(input_predicate) == Some(true));
@@ -110,9 +110,9 @@ impl RecursiveMinimiser {
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
         context.get_propagation_reason(
-            &mut reason,
             input_predicate,
             CurrentNogood::from(current_nogood),
+            &mut reason,
         );
 
         for antecedent_predicate in reason.iter().copied() {
@@ -205,7 +205,7 @@ impl RecursiveMinimiser {
     fn initialise_minimisation_data_structures(
         &mut self,
         nogood: &Vec<Predicate>,
-        context: &MinimisationContext,
+        context: &ConflictAnalysisContext,
     ) {
         pumpkin_assert_simple!(self.current_depth == 0);
 

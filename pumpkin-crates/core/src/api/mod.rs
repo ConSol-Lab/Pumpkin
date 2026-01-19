@@ -135,7 +135,6 @@ pub mod conflict_resolving {
     pub use crate::engine::conflict_analysis::ConflictResolver;
     pub use crate::engine::conflict_analysis::CoreExtractor;
     pub use crate::engine::conflict_analysis::LearnedNogood;
-    pub use crate::engine::conflict_analysis::MinimisationContext;
     pub use crate::engine::conflict_analysis::NogoodMinimiser;
 }
 
