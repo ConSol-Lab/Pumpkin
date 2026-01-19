@@ -248,6 +248,7 @@ mod tests {
         let t2 = triggered_conflict.clone();
 
         let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
         let i1 = inference_code.clone();
         let i2 = inference_code.clone();
 
@@ -324,6 +325,7 @@ mod tests {
 
         let var = solver.new_variable(1, 1);
         let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
 
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -364,6 +366,7 @@ mod tests {
         let var = solver.new_variable(1, 5);
 
         let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
 
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {

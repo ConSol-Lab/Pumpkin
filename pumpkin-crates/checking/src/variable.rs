@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
 use crate::AtomicConstraint;
+use crate::Comparison;
 use crate::I32Ext;
+use crate::TestAtomic;
 use crate::VariableState;
 
 /// A variable in a constraint satisfaction problem.
@@ -44,4 +46,70 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     ) -> Option<impl Iterator<Item = i32> + 'state>
     where
         'this: 'state;
+}
+
+impl CheckerVariable<TestAtomic> for &'static str {
+    fn atomic_less_than(&self, value: i32) -> TestAtomic {
+        TestAtomic {
+            name: self,
+            comparison: Comparison::LessEqual,
+            value,
+        }
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> TestAtomic {
+        TestAtomic {
+            name: self,
+            comparison: Comparison::GreaterEqual,
+            value,
+        }
+    }
+
+    fn atomic_equal(&self, value: i32) -> TestAtomic {
+        TestAtomic {
+            name: self,
+            comparison: Comparison::Equal,
+            value,
+        }
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> TestAtomic {
+        TestAtomic {
+            name: self,
+            comparison: Comparison::NotEqual,
+            value,
+        }
+    }
+
+    fn induced_lower_bound(&self, variable_state: &VariableState<TestAtomic>) -> I32Ext {
+        variable_state.lower_bound(self)
+    }
+
+    fn induced_upper_bound(&self, variable_state: &VariableState<TestAtomic>) -> I32Ext {
+        variable_state.upper_bound(self)
+    }
+
+    fn induced_fixed_value(&self, variable_state: &VariableState<TestAtomic>) -> Option<i32> {
+        variable_state.fixed_value(self)
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        variable_state: &'state VariableState<TestAtomic>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        variable_state.holes(self)
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state VariableState<TestAtomic>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        variable_state.iter_domain(self)
+    }
 }

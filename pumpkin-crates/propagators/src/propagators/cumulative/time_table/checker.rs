@@ -32,9 +32,9 @@ where
             let lst = task.start_time.induced_upper_bound(&state);
             let ect = task.start_time.induced_lower_bound(&state) + task.duration;
 
-            if ect <= lst {
-                *profile.entry(ect).or_insert(0) += task.resource_usage;
-                *profile.entry(lst).or_insert(0) -= task.resource_usage;
+            if lst <= ect {
+                *profile.entry(lst).or_insert(0) += task.resource_usage;
+                *profile.entry(ect).or_insert(0) -= task.resource_usage;
             }
         }
 
@@ -48,5 +48,52 @@ where
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_checking::TestAtomic;
+    use pumpkin_checking::VariableState;
+
+    use super::*;
+
+    #[test]
+    fn conflict_on_unary_resource() {
+        let state = VariableState::prepare_for_conflict_check(
+            [
+                TestAtomic {
+                    name: "x1",
+                    comparison: pumpkin_checking::Comparison::Equal,
+                    value: 1,
+                },
+                TestAtomic {
+                    name: "x2",
+                    comparison: pumpkin_checking::Comparison::Equal,
+                    value: 1,
+                },
+            ],
+            None,
+        )
+        .expect("no conflicting atomics");
+
+        let checker = TimeTableChecker {
+            tasks: vec![
+                CheckerTask {
+                    start_time: "x1",
+                    resource_usage: 1,
+                    duration: 1,
+                },
+                CheckerTask {
+                    start_time: "x2",
+                    resource_usage: 1,
+                    duration: 1,
+                },
+            ]
+            .into(),
+            capacity: 1,
+        };
+
+        assert!(checker.check(state));
     }
 }
