@@ -760,9 +760,11 @@ impl State {
         });
 
         assert!(
-            !any_checker_accepts_inference,
-            "checker for inference code {:?} fails",
-            inference_code
+            any_checker_accepts_inference,
+            "checker for inference code {:?} fails on inference {:?} -> {:?}",
+            inference_code,
+            premises.into_iter().collect::<Vec<_>>(),
+            consequent,
         );
     }
 }
