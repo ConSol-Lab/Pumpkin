@@ -19,10 +19,9 @@ impl ConflictResolver for NoLearningResolver {
             .expect("the solver is not at decision level 0, so there exists a last decision");
 
         let current_checkpoint = context.get_checkpoint();
-        let _ = context.get_state_mut().restore_to(current_checkpoint - 1);
+        let _ = context.restore_to(current_checkpoint - 1);
 
         let update_occurred = context
-            .get_state_mut()
             .post(!last_decision)
             .expect("Expected enqueued predicate to not lead to conflict directly");
 

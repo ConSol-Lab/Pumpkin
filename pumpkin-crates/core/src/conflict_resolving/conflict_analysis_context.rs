@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 #[cfg(doc)]
@@ -9,6 +10,7 @@ use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
+use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -29,6 +31,7 @@ use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
+use crate::state::EmptyDomain;
 use crate::state::PropagatorHandle;
 
 /// Used during conflict analysis to provide the necessary information.
@@ -46,6 +49,8 @@ pub struct ConflictAnalysisContext<'a> {
     pub(crate) state: &'a mut State,
 
     pub(crate) nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+
+    pub(crate) rng: &'a mut dyn Random,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -59,8 +64,26 @@ impl ConflictAnalysisContext<'_> {
         self.state
     }
 
-    pub fn get_state_mut(&mut self) -> &mut State {
-        self.state
+    /// Apply a [`Predicate`] to the [`State`].
+    ///
+    /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
+    /// already true.
+    ///
+    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] error is returned.
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
+        self.state.post(predicate)
+    }
+
+    /// Restore to the given checkpoint and return the [`DomainId`]s which were fixed before
+    /// restoring, with their assigned values.
+    ///
+    /// If the provided checkpoint is equal to the current checkpoint, this is a no-op. If
+    /// the provided checkpoint is larger than the current checkpoint, this method will
+    /// panic.
+    ///
+    /// See [`State::new_checkpoint`] for an example.
+    pub fn restore_to(&mut self, checkpoint: usize) {
+        ConstraintSatisfactionSolver::backtrack(self.state, checkpoint, self.brancher, self.rng);
     }
 
     /// Returns a nogood which led to the conflict, excluding predicates from the root decision
@@ -196,7 +219,7 @@ impl ConflictAnalysisContext<'_> {
 
         let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
-        let _ = self.state.restore_to(learned_nogood.backtrack_level);
+        let _ = self.restore_to(learned_nogood.backtrack_level);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);

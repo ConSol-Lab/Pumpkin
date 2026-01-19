@@ -224,6 +224,8 @@ impl ConstraintSatisfactionSolver {
 
             state: &mut self.state,
             nogood_propagator_handle: self.nogood_propagator_handle,
+
+            rng: &mut self.internal_parameters.random_generator,
         };
 
         let conflict = conflict_analysis_context.get_conflict_nogood();
@@ -479,6 +481,8 @@ impl ConstraintSatisfactionSolver {
                     restart_strategy: &mut self.restart_strategy,
                     state: &mut self.state,
                     nogood_propagator_handle: self.nogood_propagator_handle,
+
+                    rng: &mut self.internal_parameters.random_generator,
                 };
                 let mut predicates = context.get_conflict_nogood();
                 let mut core: HashSet<Predicate> = HashSet::default();
@@ -715,6 +719,7 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: &mut self.restart_strategy,
             state: &mut self.state,
             nogood_propagator_handle: self.nogood_propagator_handle,
+            rng: &mut self.internal_parameters.random_generator,
         };
 
         resolver.resolve_conflict(&mut conflict_analysis_context);

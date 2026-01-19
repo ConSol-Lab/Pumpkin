@@ -597,6 +597,10 @@ impl Solver {
             restart_strategy: &mut self.satisfaction_solver.restart_strategy,
             state: &mut self.satisfaction_solver.state,
             nogood_propagator_handle: self.satisfaction_solver.nogood_propagator_handle,
+            rng: &mut self
+                .satisfaction_solver
+                .internal_parameters
+                .random_generator,
         }
     }
 }
