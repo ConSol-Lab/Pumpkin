@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
-use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::branching::Brancher;
 use pumpkin_solver::branching::branchers::warm_start::WarmStart;
 use pumpkin_solver::containers::HashMap;
 use pumpkin_solver::containers::StorageKey;
@@ -22,6 +22,8 @@ use pumpkin_solver::results::SolutionReference;
 use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::termination::TerminationCondition;
 use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::variables::AffineView;
+use pumpkin_solver::variables::DomainId;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -39,7 +41,7 @@ use crate::variables::Predicate;
 #[pyclass(unsendable)]
 pub struct Model {
     solver: Solver,
-    brancher: DefaultBrancher,
+    brancher: PythonBrancher,
 }
 
 #[pyclass]
@@ -85,7 +87,10 @@ impl Model {
         };
 
         let solver = Solver::with_options(options);
-        let brancher = solver.default_brancher();
+        let brancher = PythonBrancher {
+            warm_start: WarmStart::new(&[], &[]),
+            default_brancher: solver.default_brancher(),
+        };
 
         Ok(Model { solver, brancher })
     }
@@ -105,7 +110,7 @@ impl Model {
             self.solver.new_bounded_integer(lower_bound, upper_bound)
         };
 
-        self.brancher.add_domain(domain_id);
+        self.brancher.default_brancher.add_domain(domain_id);
 
         domain_id.into()
     }
@@ -120,6 +125,7 @@ impl Model {
         };
 
         self.brancher
+            .default_brancher
             .add_domain(literal.get_true_predicate().get_domain());
 
         literal.into()
@@ -137,7 +143,7 @@ impl Model {
     /// A tag should be provided for this link to be identifiable in the proof.
     fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
         let new_domain = self.solver.new_bounded_integer(0, 1);
-        self.brancher.add_domain(new_domain);
+        self.brancher.default_brancher.add_domain(new_domain);
 
         let boolean_true = boolean.0.get_true_predicate();
 
@@ -256,15 +262,16 @@ impl Model {
         }
     }
 
-    /// Solve the model to optimality.
-    ///
-    /// Resets any incremental state in the stored brancher, but it is unlikely that the Model can
-    /// be used in an incremental fashion after this call.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "this is common in many Python APIs"
+    )]
     #[pyo3(signature = (
         objective,
         optimiser=Optimiser::LinearSatUnsat,
         direction=Direction::Minimise,
         timeout=None,
+        on_solution=None,
         warm_start=HashMap::default(),
     ))]
     fn optimise(
@@ -274,6 +281,7 @@ impl Model {
         optimiser: Optimiser,
         direction: Direction,
         timeout: Option<f32>,
+        on_solution: Option<Py<PyAny>>,
         warm_start: HashMap<IntExpression, i32>,
     ) -> OptimisationResult {
         let mut termination = get_termination(timeout);
@@ -285,18 +293,26 @@ impl Model {
 
         let objective = objective.0;
 
-        let callback: fn(&Solver, SolutionReference, &DynamicBrancher) = |_, _, _| {};
+        let callback = move |_: &Solver, solution: SolutionReference<'_>, _: &PythonBrancher| {
+            let python_solution = crate::result::Solution::from(solution);
 
-        let mut brancher = self.create_warm_started_brancher(warm_start);
+            if let Some(on_solution_callback) = on_solution.as_ref() {
+                let _ = on_solution_callback
+                    .call(py, (python_solution,), None)
+                    .expect("solution callback should be callable");
+            }
+        };
+
+        self.update_warm_start(warm_start);
 
         let result = match optimiser {
             Optimiser::LinearSatUnsat => self.solver.optimise(
-                &mut brancher,
+                &mut self.brancher,
                 &mut termination,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => self.solver.optimise(
-                &mut brancher,
+                &mut self.brancher,
                 &mut termination,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
@@ -318,14 +334,8 @@ impl Model {
 }
 
 impl Model {
-    /// Create a brancher that is warm started with the given assignment.
-    ///
-    /// This resets the [`DefaultBrancher`] on self, so any knowledge on previous incremental
-    /// solves is lost.
-    fn create_warm_started_brancher(
-        &mut self,
-        warm_start: HashMap<IntExpression, i32>,
-    ) -> DynamicBrancher {
+    /// Update the warm start in the [`PythonBrancher`].
+    fn update_warm_start(&mut self, warm_start: HashMap<IntExpression, i32>) {
         // First create the slice of variables to give to the WarmStart brancher.
         let warm_start_variables: Vec<_> = warm_start.keys().map(|variable| variable.0).collect();
 
@@ -340,14 +350,7 @@ impl Model {
             })
             .collect();
 
-        // Swap out the default brancher stored on self with a new default brancher.
-        let default_brancher =
-            std::mem::replace(&mut self.brancher, self.solver.default_brancher());
-
-        DynamicBrancher::new(vec![
-            Box::new(WarmStart::new(&warm_start_variables, &warm_start_values)),
-            Box::new(default_brancher),
-        ])
+        self.brancher.warm_start = WarmStart::new(&warm_start_variables, &warm_start_values);
     }
 }
 
@@ -359,4 +362,26 @@ fn get_termination(end_time: Option<f32>) -> Box<dyn TerminationCondition> {
             Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
         })
         .unwrap_or(Box::new(Indefinite))
+}
+
+struct PythonBrancher {
+    warm_start: WarmStart<AffineView<DomainId>>,
+    default_brancher: DefaultBrancher,
+}
+
+impl Brancher for PythonBrancher {
+    fn next_decision(
+        &mut self,
+        context: &mut pumpkin_solver::branching::SelectionContext,
+    ) -> Option<pumpkin_solver::predicates::Predicate> {
+        if let Some(predicate) = self.warm_start.next_decision(context) {
+            return Some(predicate);
+        }
+
+        self.default_brancher.next_decision(context)
+    }
+
+    fn subscribe_to_events(&self) -> Vec<pumpkin_solver::branching::BrancherEvent> {
+        self.default_brancher.subscribe_to_events()
+    }
 }
