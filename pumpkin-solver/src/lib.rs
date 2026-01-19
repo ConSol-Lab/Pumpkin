@@ -321,7 +321,7 @@
 //!         );
 //!     }
 //! }
-//!```
+//! ```
 //!
 //! ## Feature Flags
 //! - `gzipped-proofs` (default): Write proofs to a gzipped file.

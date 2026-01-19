@@ -15,6 +15,7 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::RandomSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
+use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
@@ -579,6 +580,24 @@ impl Solver {
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_dual_bound(&mut self, bound: Predicate) {
         let _ = self.satisfaction_solver.conclude_proof_optimal(bound);
+    }
+}
+
+impl Solver {
+    #[deprecated(note = "Should only be used for testing")]
+    pub fn conflict_analysis_context<'a>(
+        &'a mut self,
+        brancher: &'a mut impl Brancher,
+    ) -> ConflictAnalysisContext<'a> {
+        ConflictAnalysisContext {
+            solver_state: &mut self.satisfaction_solver.solver_state,
+            brancher,
+            proof_log: &mut self.satisfaction_solver.internal_parameters.proof_log,
+            unit_nogood_inference_codes: &mut self.satisfaction_solver.unit_nogood_inference_codes,
+            restart_strategy: &mut self.satisfaction_solver.restart_strategy,
+            state: &mut self.satisfaction_solver.state,
+            nogood_propagator_handle: self.satisfaction_solver.nogood_propagator_handle,
+        }
     }
 }
 

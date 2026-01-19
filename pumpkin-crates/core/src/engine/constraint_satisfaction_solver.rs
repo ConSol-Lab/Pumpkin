@@ -92,21 +92,21 @@ pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
     pub(crate) solver_state: CSPSolverState,
-    state: State,
-    nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    pub(crate) state: State,
+    pub(crate) nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
 
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
-    restart_strategy: RestartStrategy,
+    pub(crate) restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
-    internal_parameters: SatisfactionSolverOptions,
+    pub(crate) internal_parameters: SatisfactionSolverOptions,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
-    unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
+    pub(crate) unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
