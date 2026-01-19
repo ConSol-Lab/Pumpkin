@@ -36,7 +36,7 @@ def test_warm_start_with_callback():
     first_value = None
 
     def on_solution(solution):
-        # nonlocal first_value
+        nonlocal first_value
 
         if first_value is None:
             first_value = solution.int_value(objective)
