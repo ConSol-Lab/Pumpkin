@@ -1,7 +1,6 @@
 use std::cmp;
 
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
-use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::SparseSet;
@@ -10,6 +9,8 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::DomainId;
+
+use crate::minimisers::NogoodMinimiser;
 
 /// [`NogoodMinimiser`] that removes redundant [`Predicate`]s by analysing the semantic meaning of
 /// the predicates.

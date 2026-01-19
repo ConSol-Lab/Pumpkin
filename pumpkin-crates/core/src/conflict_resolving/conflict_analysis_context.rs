@@ -10,8 +10,6 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 #[cfg(doc)]
 use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
-#[cfg(doc)]
-use crate::conflict_resolving::NogoodMinimiser;
 use crate::containers::HashMap;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;

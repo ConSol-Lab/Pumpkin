@@ -332,13 +332,13 @@
 pub mod conflict_resolvers {
     //! Contains the implementations of [`ConflictResolver`]s, [`CoreExtractor`]s, and
     //! [`NogoodMinimiser`]s.
+    #[cfg(doc)]
+    use pumpkin_conflict_resolvers::minimisers::NogoodMinimiser;
     pub use pumpkin_conflict_resolvers::*;
     #[cfg(doc)]
     use pumpkin_core::conflict_resolving::ConflictResolver;
     #[cfg(doc)]
     use pumpkin_core::conflict_resolving::CoreExtractor;
-    #[cfg(doc)]
-    use pumpkin_core::conflict_resolving::NogoodMinimiser;
 }
 
 pub mod propagators {

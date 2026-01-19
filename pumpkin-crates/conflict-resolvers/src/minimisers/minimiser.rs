@@ -1,5 +1,5 @@
-use crate::conflict_resolving::ConflictAnalysisContext;
-use crate::predicates::Predicate;
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
+use pumpkin_core::predicates::Predicate;
 
 /// A trait for the behaviour of nogood minimisation approaches.
 ///

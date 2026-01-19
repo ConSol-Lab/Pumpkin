@@ -5,7 +5,6 @@ use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::conflict_resolving::CoreExtractor;
 use pumpkin_core::conflict_resolving::LearnedNogood;
-use pumpkin_core::conflict_resolving::NogoodMinimiser;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicates::Lbd;
@@ -15,6 +14,7 @@ use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
 
+use crate::minimisers::NogoodMinimiser;
 use crate::minimisers::RecursiveMinimiser;
 use crate::minimisers::SemanticMinimisationMode;
 use crate::minimisers::SemanticMinimiser;
