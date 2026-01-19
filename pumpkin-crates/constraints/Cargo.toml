@@ -15,5 +15,8 @@ pumpkin-core = { version = "0.2.2", path = "../core" }
 pumpkin-propagators = {version = "0.2.2", path="../propagators"}
 pumpkin-conflict-resolvers = {version = "0.2.2", path = "../conflict-resolvers/"}
 
+[dev-dependencies]
+pumpkin-solver = { version = "0.2.2", path="../../pumpkin-solver"}
+
 [features]
 clap = ["pumpkin-core/clap", "pumpkin-propagators/clap"]

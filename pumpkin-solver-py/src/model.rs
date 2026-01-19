@@ -3,14 +3,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_conflict_resolvers::default_conflict_resolver;
-use pumpkin_conflict_resolvers::default_core_extractor;
 use pumpkin_solver::ConstraintOperationError;
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
 use pumpkin_solver::containers::KeyGenerator;
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::containers::StorageKey;
+use pumpkin_solver::default_conflict_resolver;
+use pumpkin_solver::default_core_extractor;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;

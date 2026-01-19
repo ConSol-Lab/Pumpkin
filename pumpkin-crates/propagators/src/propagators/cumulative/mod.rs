@@ -46,7 +46,7 @@
 //! # use pumpkin_core::constraints;
 //! # use pumpkin_core::constraints::Constraint;
 //! # use pumpkin_core::results::ProblemSolution;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);

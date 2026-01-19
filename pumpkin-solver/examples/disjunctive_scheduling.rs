@@ -9,9 +9,9 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
-use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
+use pumpkin_solver::default_conflict_resolver;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;

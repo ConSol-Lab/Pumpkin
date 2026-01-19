@@ -66,7 +66,7 @@
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -85,7 +85,7 @@
 //! # use pumpkin_solver::results::ProblemSolution;
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -148,7 +148,7 @@
 //! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::results::SolutionReference;
 //! # use pumpkin_solver::DefaultBrancher;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -202,7 +202,7 @@
 //! # use pumpkin_solver::results::solution_iterator::IteratedSolution;
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -276,8 +276,8 @@
 //! # use pumpkin_solver::predicate;
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
-//! # use pumpkin_conflict_resolvers::default_core_extractor;
+//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_solver::default_core_extractor;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -348,5 +348,21 @@ pub mod propagators {
     pub use pumpkin_propagators::*;
 }
 
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 pub use pumpkin_constraints::*;
+#[cfg(doc)]
+use pumpkin_core::conflict_resolving::ConflictResolver;
+#[cfg(doc)]
+use pumpkin_core::conflict_resolving::CoreExtractor;
 pub use pumpkin_core::*;
+
+/// Returns a default [`CoreExtractor`].
+pub fn default_core_extractor() -> ResolutionResolver {
+    ResolutionResolver::new(AnalysisMode::AllDecision)
+}
+
+/// Returns a default [`ConflictResolver`].
+pub fn default_conflict_resolver() -> ResolutionResolver {
+    ResolutionResolver::new(AnalysisMode::OneUIP)
+}

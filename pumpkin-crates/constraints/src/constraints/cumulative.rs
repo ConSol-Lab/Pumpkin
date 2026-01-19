@@ -44,7 +44,7 @@ use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;
 /// # use pumpkin_core::results::ProblemSolution;
-/// # use pumpkin_conflict_resolvers::default_conflict_resolver;
+/// # use pumpkin_solver::default_conflict_resolver;
 /// let solver = Solver::default();
 ///
 /// let mut solver = Solver::default();

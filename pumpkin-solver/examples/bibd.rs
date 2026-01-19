@@ -13,8 +13,8 @@
 //!
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_solver::Solver;
+use pumpkin_solver::default_conflict_resolver;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;

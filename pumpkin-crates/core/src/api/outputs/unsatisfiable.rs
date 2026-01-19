@@ -53,8 +53,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_core::predicate;
     /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::constraints::Constraint;
-    /// # use pumpkin_conflict_resolvers::default_core_extractor;
-    /// # use pumpkin_conflict_resolvers::default_conflict_resolver;
+    /// # use pumpkin_solver::default_core_extractor;
+    /// # use pumpkin_solver::default_conflict_resolver;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///

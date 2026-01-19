@@ -40,8 +40,8 @@ pub trait CoreExtractor: Debug + DynClone {
     /// # use pumpkin_core::Solver;
     /// # use pumpkin_core::termination::Indefinite;
     /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
-    /// # use pumpkin_conflict_resolvers::default_core_extractor;
-    /// # use pumpkin_conflict_resolvers::default_conflict_resolver;
+    /// # use pumpkin_solver::default_core_extractor;
+    /// # use pumpkin_solver::default_conflict_resolver;
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.

@@ -18,7 +18,7 @@
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use pumpkin_core::results::ProblemSolution;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! let mut solver = Solver::default();
 //!
 //! let variables = vec![solver.new_literal()];
@@ -48,7 +48,7 @@
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use crate::pumpkin_core::results::ProblemSolution;
-//! # use pumpkin_conflict_resolvers::default_conflict_resolver;
+//! # use pumpkin_solver::default_conflict_resolver;
 //! let mut solver = Solver::default();
 //!
 //! let literals = vec![solver.new_literal()];

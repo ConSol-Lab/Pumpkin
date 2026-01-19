@@ -1,7 +1,7 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use pumpkin_conflict_resolvers::default_conflict_resolver;
 use pumpkin_solver::Solver;
+use pumpkin_solver::default_conflict_resolver;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::termination::Indefinite;
