@@ -1,3 +1,4 @@
+use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 #[cfg(doc)]
@@ -17,7 +18,17 @@ impl ConflictResolver for NoLearningResolver {
             .find_last_decision()
             .expect("the solver is not at decision level 0, so there exists a last decision");
 
-        context.backtrack(context.get_checkpoint() - 1);
-        context.post_predicate_without_reason(!last_decision);
+        let current_checkpoint = context.get_checkpoint();
+        let _ = context.get_state_mut().restore_to(current_checkpoint - 1);
+
+        let update_occurred = context
+            .get_state_mut()
+            .post(!last_decision)
+            .expect("Expected enqueued predicate to not lead to conflict directly");
+
+        pumpkin_assert_simple!(
+            update_occurred,
+            "The propagated predicate should not already be true."
+        );
     }
 }

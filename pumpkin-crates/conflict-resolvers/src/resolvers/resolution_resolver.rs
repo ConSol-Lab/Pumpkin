@@ -103,20 +103,26 @@ impl ConflictResolver for ResolutionResolver {
             .lbd_helper
             .compute_lbd(&learned_nogood.predicates, context);
 
+        // Update statistics
         self.statistics.average_lbd.add_term(lbd as u64);
-
         self.statistics
             .average_backtrack_amount
             .add_term((context.get_checkpoint() - learned_nogood.backtrack_level) as u64);
         self.statistics.num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
-
         self.statistics
             .average_learned_nogood_length
             .add_term(learned_nogood.predicates.len() as u64);
 
         let constraint_tag = context.log_deduction(learned_nogood.predicates.iter().copied());
 
-        context.process_learned_nogood(learned_nogood, lbd, constraint_tag);
+        // TODO: not the most graceful implementation
+        context.inform_of_learned_nogood(lbd);
+
+        let _ = context
+            .get_state_mut()
+            .restore_to(learned_nogood.backtrack_level);
+
+        context.add_learned_nogood(learned_nogood, constraint_tag);
     }
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
@@ -308,7 +314,7 @@ impl ResolutionResolver {
                 // by assigning explicitly set predicates the
                 // value `2 * trail_position`, whereas implied predicates get `2 *
                 // trail_position + 1`.
-                let heap_value = if context.is_implied(predicate) {
+                let heap_value = if context.get_state().is_on_trail(predicate) {
                     context.trail_position(predicate) * 2
                 } else {
                     context.trail_position(predicate) * 2 + 1

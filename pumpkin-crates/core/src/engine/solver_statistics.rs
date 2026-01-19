@@ -10,18 +10,14 @@ pub struct SolverStatistics {
 }
 
 impl SolverStatistics {
-    pub(crate) fn log(&self, _statistic_logger: StatisticLogger, verbose: bool) {
+    pub(crate) fn log(&self, _statistic_logger: StatisticLogger, _verbose: bool) {
         log_statistic("nodes", self.engine_statistics.num_decisions);
         log_statistic("restarts", self.engine_statistics.num_restarts);
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
-        log_statistic("backjumps", self.engine_statistics.sum_of_backjumps);
         log_statistic(
             "solveTime",
             self.engine_statistics.time_spent_in_solver.as_secs_f64(),
         );
-        if verbose {
-            log_statistic("numberOfBackjumps", self.engine_statistics.num_backjumps);
-        }
     }
 }
 
@@ -36,13 +32,4 @@ pub(crate) struct EngineStatistics {
     pub(crate) time_spent_in_solver: Duration,
     /// The peak depth of the seach tree
     pub(crate) peak_depth: u64,
-    /// The number of levels which were backjumped.
-    ///
-    /// For an individual backtrack due to a learned nogood, this is calculated according to the
-    /// formula `CurrentDecisionLevel - 1 - BacktrackLevel` (i.e. how many levels (in total) has
-    /// the solver backtracked and not backjumped)
-    pub(crate) sum_of_backjumps: u64,
-    /// The number of times a backjump (i.e. backtracking more than a single decision level due to
-    /// a learned nogood) occurs.
-    pub(crate) num_backjumps: u64,
 }

@@ -215,13 +215,11 @@ impl ConstraintSatisfactionSolver {
         }
 
         let mut conflict_analysis_context = ConflictAnalysisContext {
-            counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher: &mut DummyBrancher,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-            rng: &mut self.internal_parameters.random_generator,
             restart_strategy: &mut self.restart_strategy,
 
             state: &mut self.state,
@@ -480,13 +478,11 @@ impl ConstraintSatisfactionSolver {
             })
             .unwrap_or_else(|| {
                 let mut conflict_analysis_context = ConflictAnalysisContext {
-                    counters: &mut self.solver_statistics,
                     solver_state: &mut self.solver_state,
                     brancher,
                     should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-                    rng: &mut self.internal_parameters.random_generator,
                     restart_strategy: &mut self.restart_strategy,
                     state: &mut self.state,
                     nogood_propagator_handle: self.nogood_propagator_handle,
@@ -702,13 +698,11 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_moderate!(self.solver_state.is_conflicting());
 
         let mut conflict_analysis_context = ConflictAnalysisContext {
-            counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-            rng: &mut self.internal_parameters.random_generator,
             restart_strategy: &mut self.restart_strategy,
             state: &mut self.state,
             nogood_propagator_handle: self.nogood_propagator_handle,

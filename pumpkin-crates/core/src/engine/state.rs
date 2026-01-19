@@ -75,6 +75,15 @@ create_statistics_struct!(StateStatistics {
     num_propagators_called: usize,
     num_propagations: usize,
     num_conflicts: usize,
+    /// The number of levels which were backjumped.
+    ///
+    /// For an individual backtrack due to a learned nogood, this is calculated according to the
+    /// formula `CurrentDecisionLevel - 1 - BacktrackLevel` (i.e. how many levels (in total) has
+    /// the solver backtracked and not backjumped)
+    sum_of_backjumps: u64,
+    /// The number of times a backjump (i.e. backtracking more than a single decision level due to
+    /// a learned nogood) occurs.
+    num_backjumps: u64,
 });
 
 /// Information concerning the conflict returned by [`State::propagate_to_fixed_point`].
@@ -320,6 +329,23 @@ impl State {
     pub(crate) fn trail_entry(&self, trail_index: usize) -> ConstraintProgrammingTrailEntry {
         self.assignments.get_trail_entry(trail_index)
     }
+
+    /// Returns whether the provided [`Predicate`] is explicitly on the trail.
+    ///
+    /// For example, if we post the [`Predicate`] [x >= v], then the predicate [x >= v - 1] is
+    /// not explicity on the trail.
+    pub fn is_on_trail(&self, predicate: Predicate) -> bool {
+        let trail_position = self.trail_position(predicate);
+
+        trail_position.is_some_and(|trail_position| {
+            self.assignments.trail[trail_position].predicate == predicate
+        })
+    }
+
+    /// Returns whether the trail position of the provided [`Predicate`].
+    pub fn trail_position(&self, predicate: Predicate) -> Option<usize> {
+        self.assignments.get_trail_position(&predicate)
+    }
 }
 
 /// Operations for adding constraints.
@@ -482,6 +508,11 @@ impl State {
     /// See [`State::new_checkpoint`] for an example.
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
+
+        self.statistics.sum_of_backjumps += (self.get_checkpoint() - 1 - checkpoint) as u64;
+        if self.get_checkpoint() - checkpoint > 1 {
+            self.statistics.num_backjumps += 1;
+        }
 
         if checkpoint == self.get_checkpoint() {
             return vec![];
