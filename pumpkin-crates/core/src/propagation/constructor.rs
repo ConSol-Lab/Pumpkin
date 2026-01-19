@@ -52,15 +52,11 @@ pub trait PropagatorConstructor {
 #[derive(Debug)]
 pub struct InferenceCheckers<'state> {
     state: &'state mut State,
-    propagator_id: PropagatorId,
 }
 
 impl<'state> InferenceCheckers<'state> {
-    pub(crate) fn new(state: &'state mut State, propagator_id: PropagatorId) -> Self {
-        InferenceCheckers {
-            state,
-            propagator_id,
-        }
+    pub(crate) fn new(state: &'state mut State) -> Self {
+        InferenceCheckers { state }
     }
 }
 
@@ -71,11 +67,7 @@ impl InferenceCheckers<'_> {
         inference_code: InferenceCode,
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
-        self.state.add_inference_checker_for_propagator(
-            self.propagator_id,
-            inference_code,
-            checker,
-        );
+        self.state.add_inference_checker(inference_code, checker);
     }
 }
 

@@ -78,20 +78,7 @@ pub struct State {
     statistics: StateStatistics,
 
     /// Inference checkers to run in the propagation loop.
-    checkers: HashMap<CheckerKey, BoxedChecker<Predicate>>,
-}
-
-/// The checker key is a combination of an [`InferenceCode`] and an optional [`PropagatorId`]. The
-/// latter is optional because a constraint may decompose into multiple constraints that all
-/// receive the same inference code.
-///
-/// Whenever a checker is added via a [`PropagatorConstructor`], the propagator ID is given,
-/// restricting the checker to be executed only when the propagator that added it produced the
-/// inference to check.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct CheckerKey {
-    inference_code: InferenceCode,
-    propagator_id: Option<PropagatorId>,
+    checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -371,13 +358,10 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        constructor.add_inference_checkers(InferenceCheckers::new(self));
+
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
-
-        constructor.add_inference_checkers(InferenceCheckers::new(
-            self,
-            original_handle.propagator_id(),
-        ));
 
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
@@ -406,51 +390,15 @@ impl State {
     /// The inference checker will be used to check propagations performed during
     /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
     ///
-    /// If an inference checker already exists for the given inference code, a panic is triggered.
+    /// Multiple inference checkers may be added for the same inference code. In that case, if
+    /// any checker accepts the inference, the inference is accepted.
     pub fn add_inference_checker(
         &mut self,
         inference_code: InferenceCode,
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
-        let previous_checker = self.checkers.insert(
-            CheckerKey {
-                inference_code,
-                propagator_id: None,
-            },
-            BoxedChecker::from(checker),
-        );
-
-        assert!(
-            previous_checker.is_none(),
-            "cannot add multiple checkers for the same inference code"
-        );
-    }
-
-    /// Add an inference checker to the state to run for a specific propagator.
-    ///
-    /// The inference checker will be used to check propagations performed during
-    /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
-    ///
-    /// If an inference checker already exists for the given inference code and propagator, a panic
-    /// is triggered.
-    pub(crate) fn add_inference_checker_for_propagator(
-        &mut self,
-        propagator_id: PropagatorId,
-        inference_code: InferenceCode,
-        checker: impl Into<Box<dyn InferenceChecker<Predicate>>>,
-    ) {
-        let previous_checker = self.checkers.insert(
-            CheckerKey {
-                inference_code,
-                propagator_id: Some(propagator_id),
-            },
-            BoxedChecker::from(checker.into()),
-        );
-
-        assert!(
-            previous_checker.is_none(),
-            "cannot add multiple checkers for the same inference code"
-        );
+        let checkers = self.checkers.entry(inference_code).or_default();
+        checkers.push(BoxedChecker::from(checker));
     }
 }
 
@@ -661,7 +609,7 @@ impl State {
             }
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]
-                self.check_conflict(propagator_id, &conflict);
+                self.check_conflict(&conflict);
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
@@ -687,13 +635,12 @@ impl State {
     ///
     /// Panics when the inference checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
-    fn check_conflict(&mut self, propagator_id: PropagatorId, conflict: &Conflict) {
+    fn check_conflict(&mut self, conflict: &Conflict) {
         if let Conflict::Propagator(propagator_conflict) = conflict {
             self.run_checker(
                 propagator_conflict.conjunction.clone(),
                 None,
                 &propagator_conflict.inference_code,
-                propagator_id,
             );
         }
     }
@@ -717,8 +664,6 @@ impl State {
                 .reason
                 .expect("propagations should only be checked after propagations");
 
-            let propagator_id = self.reason_store.get_propagator(reason_ref);
-
             reason_buffer.clear();
             let reason_exists = self.reason_store.get_or_compute(
                 reason_ref,
@@ -736,7 +681,6 @@ impl State {
                 std::mem::take(&mut reason_buffer),
                 Some(entry.predicate),
                 &inference_code,
-                propagator_id,
             );
         }
     }
@@ -790,31 +734,19 @@ impl State {
         premises: impl IntoIterator<Item = Predicate> + Clone,
         consequent: Option<Predicate>,
         inference_code: &InferenceCode,
-        propagator_id: PropagatorId,
     ) {
-        let scoped_checkers = self
+        let checkers = self
             .checkers
-            .get(&CheckerKey {
-                inference_code: inference_code.clone(),
-                propagator_id: Some(propagator_id),
-            })
-            .into_iter();
+            .get(inference_code)
+            .map(|vec| vec.as_slice())
+            .unwrap_or(&[]);
 
-        let unscoped_checkers = self
-            .checkers
-            .get(&CheckerKey {
-                inference_code: inference_code.clone(),
-                propagator_id: None,
-            })
-            .into_iter();
+        assert!(
+            !checkers.is_empty(),
+            "missing checker for inference code {inference_code:?}"
+        );
 
-        // Will be set to true if we execute at least one checker. If it remains false after the
-        // loop a panic is triggered.
-        let mut at_least_one_checker = false;
-
-        for checker in scoped_checkers.chain(unscoped_checkers) {
-            at_least_one_checker = true;
-
+        let any_checker_accepts_inference = checkers.iter().any(|checker| {
             // Construct the variable state for the conflict check.
             let variable_state =
                 VariableState::prepare_for_conflict_check(premises.clone(), consequent)
@@ -822,17 +754,13 @@ impl State {
                         panic!("inconsistent atomics in inference by {inference_code:?}")
                     });
 
-            // Run the conflict check.
-            assert!(
-                checker.check(variable_state),
-                "checker for inference code {:?} fails",
-                inference_code
-            );
-        }
+            checker.check(variable_state)
+        });
 
         assert!(
-            at_least_one_checker,
-            "missing checker for inference code {inference_code:?}"
+            !any_checker_accepts_inference,
+            "checker for inference code {:?} fails",
+            inference_code
         );
     }
 }
