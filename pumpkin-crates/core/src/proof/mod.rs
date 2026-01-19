@@ -25,7 +25,6 @@ use proof_atomics::ProofAtomics;
 use crate::Solver;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::StorageKey;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
 use crate::variables::Literal;
@@ -84,6 +83,8 @@ impl ProofLog {
         propagated: Option<Predicate>,
         variable_names: &VariableNames,
     ) -> std::io::Result<ConstraintTag> {
+        let inference_tag = constraint_tags.next_key();
+
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
@@ -91,10 +92,8 @@ impl ProofLog {
             ..
         }) = self.internal_proof.as_mut()
         else {
-            return Ok(ConstraintTag::create_from_index(0));
+            return Ok(inference_tag);
         };
-
-        let inference_tag = constraint_tags.next_key();
 
         let inference = Inference {
             constraint_id: inference_tag.into(),
@@ -123,6 +122,8 @@ impl ProofLog {
         variable_names: &VariableNames,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
+        let inference_tag = constraint_tags.next_key();
+
         let Some(ProofImpl::CpProof {
             writer,
             propagation_order_hint: Some(propagation_sequence),
@@ -131,7 +132,7 @@ impl ProofLog {
             ..
         }) = self.internal_proof.as_mut()
         else {
-            return Ok(ConstraintTag::create_from_index(0));
+            return Ok(inference_tag);
         };
 
         if let Some(hint_idx) = logged_domain_inferences.get(&predicate).copied() {
@@ -144,8 +145,6 @@ impl ProofLog {
 
             return Ok(tag);
         }
-
-        let inference_tag = constraint_tags.next_key();
 
         let inference = Inference {
             constraint_id: inference_tag.into(),
@@ -176,6 +175,8 @@ impl ProofLog {
         variable_names: &VariableNames,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
     ) -> std::io::Result<ConstraintTag> {
+        let constraint_tag = constraint_tags.next_key();
+
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
@@ -186,8 +187,6 @@ impl ProofLog {
             }) => {
                 // Reset the logged domain inferences.
                 logged_domain_inferences.clear();
-
-                let constraint_tag = constraint_tags.next_key();
 
                 let deduction = Deduction {
                     constraint_id: constraint_tag.into(),
@@ -219,10 +218,10 @@ impl ProofLog {
             Some(ProofImpl::DimacsProof(writer)) => {
                 let clause = premises.into_iter().map(|predicate| !predicate);
                 writer.learned_clause(clause, variable_names)?;
-                Ok(ConstraintTag::create_from_index(0))
+                Ok(constraint_tag)
             }
 
-            None => Ok(ConstraintTag::create_from_index(0)),
+            None => Ok(constraint_tag),
         }
     }
 

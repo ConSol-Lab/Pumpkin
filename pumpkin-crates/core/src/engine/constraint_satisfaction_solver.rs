@@ -1249,13 +1249,15 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
+        let c3 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2], constraint_tag);
-        let _ = solver.add_clause([!lit1, lit2], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2], c1);
+        let _ = solver.add_clause([lit1, !lit2], c2);
+        let _ = solver.add_clause([!lit1, lit2], c3);
         (solver, vec![lit1, lit2])
     }
 
@@ -1321,13 +1323,14 @@ mod tests {
     }
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2, lit3], c1);
+        let _ = solver.add_clause([lit1, !lit2, lit3], c2);
         (solver, vec![lit1, lit2, lit3])
     }
 
