@@ -74,8 +74,7 @@ impl ConflictAnalysisContext<'_> {
         self.state.post(predicate)
     }
 
-    /// Restore to the given checkpoint and return the [`DomainId`]s which were fixed before
-    /// restoring, with their assigned values.
+    /// Restore to the given checkpoint.
     ///
     /// If the provided checkpoint is equal to the current checkpoint, this is a no-op. If
     /// the provided checkpoint is larger than the current checkpoint, this method will
@@ -219,7 +218,7 @@ impl ConflictAnalysisContext<'_> {
 
         let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
-        let _ = self.restore_to(learned_nogood.backtrack_level);
+        self.restore_to(learned_nogood.backtrack_level);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);

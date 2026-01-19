@@ -274,7 +274,6 @@
 //! Pumpkin allows the user to specify assumptions which can then be used to extract an
 //! unsatisfiable core (see
 //! [`core::results::unsatisfiable::UnsatisfiableUnderAssumptions::extract_core`]).
-//! 
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::core::results::SatisfactionResultUnderAssumptions;
@@ -327,7 +326,6 @@
 //!     }
 //! }
 //! ```
-//!
 //! ## Feature Flags
 //! - `gzipped-proofs` (default): Write proofs to a gzipped file.
 //! - `debug-checks`: Enable expensive assertions in the solver. Turning this on slows down the

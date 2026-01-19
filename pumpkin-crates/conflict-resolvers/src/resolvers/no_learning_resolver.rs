@@ -19,7 +19,7 @@ impl ConflictResolver for NoLearningResolver {
             .expect("the solver is not at decision level 0, so there exists a last decision");
 
         let current_checkpoint = context.get_checkpoint();
-        let _ = context.restore_to(current_checkpoint - 1);
+        context.restore_to(current_checkpoint - 1);
 
         let update_occurred = context
             .post(!last_decision)
