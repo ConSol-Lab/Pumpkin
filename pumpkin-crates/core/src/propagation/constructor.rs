@@ -38,8 +38,8 @@ pub trait PropagatorConstructor {
 
     /// Add inference checkers to the solver if applicable.
     ///
-    /// By default this does nothing, and should only be implemented when `check-propagations` is
-    /// turned on.
+    /// If the `check-propagations` feature is turned on, then the inference checker will be used
+    /// to verify the propagations done by this propagator are correct.
     ///
     /// See [`InferenceChecker`] for more information.
     fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
