@@ -25,10 +25,10 @@
 //! **adding variables**:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::OptimisationResult;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::ProblemSolution;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::results::OptimisationResult;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::results::ProblemSolution;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # use std::cmp::max;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -42,11 +42,11 @@
 //! Then we can **add constraints** supported by the [`Solver`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::OptimisationResult;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::ProblemSolution;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::results::OptimisationResult;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::results::ProblemSolution;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -60,12 +60,13 @@
 //!     .post();
 //! ```
 //!
-//! For finding a solution, a [`termination::TerminationCondition`], a [`branching::Brancher`] and a
-//! [`conflict_resolving::ConflictResolver`] should be specified, which determine when the solver
-//! should stop searching and the variable/value selection strategy which should be used:
+//! For finding a solution, a [`core::termination::TerminationCondition`], a
+//! [`core::branching::Brancher`] and a [`core::conflict_resolving::ConflictResolver`] should be
+//! specified, which determine when the solver should stop searching and the variable/value
+//! selection strategy which should be used:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::termination::Indefinite;
+//! # use pumpkin_solver::core::termination::Indefinite;
 //! # use pumpkin_solver::default_conflict_resolver;
 //! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
@@ -76,15 +77,14 @@
 //! let mut resolver = default_conflict_resolver();
 //! ```
 //!
-//!
 //! **Finding a solution** to this problem can be done by using [`Solver::satisfy`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::SatisfactionResult;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::ProblemSolution;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::results::SatisfactionResult;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::results::ProblemSolution;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # use pumpkin_solver::default_conflict_resolver;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
@@ -115,11 +115,10 @@
 //!
 //! **Optimizing an objective** can be done in a similar way using [`Solver::optimise`]; first the
 //! objective variable and a constraint over this value are added:
-//!
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -133,21 +132,20 @@
 //!     .add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1))
 //!     .post();
 //! ```
-//!
 //! Then we can find the optimal solution using [`Solver::optimise`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::OptimisationResult;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::ProblemSolution;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
-//! # use pumpkin_solver::optimisation::OptimisationDirection;
-//! # use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
+//! # use pumpkin_solver::core::results::OptimisationResult;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::results::ProblemSolution;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
+//! # use pumpkin_solver::core::optimisation::OptimisationDirection;
+//! # use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
 //! # use std::cmp::max;
-//! # use crate::pumpkin_solver::optimisation::OptimisationProcedure;
-//! # use pumpkin_solver::results::SolutionReference;
-//! # use pumpkin_solver::DefaultBrancher;
+//! # use crate::pumpkin_solver::core::optimisation::OptimisationProcedure;
+//! # use pumpkin_solver::core::results::SolutionReference;
+//! # use pumpkin_solver::core::DefaultBrancher;
 //! # use pumpkin_solver::default_conflict_resolver;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
@@ -162,8 +160,8 @@
 //! # let mut brancher = solver.default_brancher();
 //! # let mut resolver = default_conflict_resolver();
 //! // Then we solve to optimality
-//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher, &ResolutionResolver) = |_, _, _, _| {};
-//! let result = solver.optimise(
+//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher, &ResolutionResolver) = |_, _, _,
+//! _| {}; let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
 //!     &mut resolver,
@@ -197,12 +195,12 @@
 //! remain blocked if the solver is used again.
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::SatisfactionResult;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::results::ProblemSolution;
-//! # use pumpkin_solver::results::solution_iterator::IteratedSolution;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::results::SatisfactionResult;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::results::ProblemSolution;
+//! # use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # use pumpkin_solver::default_conflict_resolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -269,14 +267,16 @@
 //!
 //! # Obtaining an unsatisfiable core
 //! Pumpkin allows the user to specify assumptions which can then be used to extract an
-//! unsatisfiable core (see [`results::unsatisfiable::UnsatisfiableUnderAssumptions::extract_core`]).
+//! unsatisfiable core (see
+//! [`core::results::unsatisfiable::UnsatisfiableUnderAssumptions::extract_core`]).
+//! 
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
-//! # use pumpkin_solver::termination::Indefinite;
-//! # use pumpkin_solver::predicate;
-//! # use pumpkin_solver::constraints;
-//! # use pumpkin_solver::constraints::Constraint;
+//! # use pumpkin_solver::core::results::SatisfactionResultUnderAssumptions;
+//! # use pumpkin_solver::core::termination::Indefinite;
+//! # use pumpkin_solver::core::predicate;
+//! # use pumpkin_solver::core::constraints;
+//! # use pumpkin_solver::core::constraints::Constraint;
 //! # use pumpkin_solver::default_conflict_resolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -288,7 +288,9 @@
 //!
 //! // We create the all-different constraint
 //! let c1 = solver.new_constraint_tag();
-//! solver.add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1)).post();
+//! solver
+//!     .add_constraint(pumpkin_constraints::all_different(vec![x, y, z], c1))
+//!     .post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -298,31 +300,29 @@
 //! let mut resolver = default_conflict_resolver();
 //!
 //! // Then we solve to satisfaction
-//! let assumptions = vec![
-//!     predicate!(x == 1),
-//!     predicate!(y <= 1),
-//!     predicate!(y != 0),
-//! ];
-//! let result =
-//!     solver.satisfy_under_assumptions(
-//!         &mut brancher,
-//!         &mut termination,
-//!         &mut resolver,
-//!         &assumptions
-//!     );
+//! let assumptions = vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)];
+//! let result = solver.satisfy_under_assumptions(
+//!     &mut brancher,
+//!     &mut termination,
+//!     &mut resolver,
+//!     &assumptions,
+//! );
 //!
-//! if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
-//!     mut unsatisfiable,
-//! ) = result
+//! if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut unsatisfiable) =
+//!     result
 //! {
 //!     {
 //!         let core = unsatisfiable.extract_core();
 //!
 //!         // In this case, the core should be equal to all of the assumption literals
-//!         assert_eq!(core, vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y !=
-//! 0)].into());     }
+//!         assert_eq!(
+//!             core,
+//!             vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)].into()
+//!         );
+//!     }
 //! }
-//! ```
+//!```
+//!
 //! ## Feature Flags
 //! - `gzipped-proofs` (default): Write proofs to a gzipped file.
 //! - `debug-checks`: Enable expensive assertions in the solver. Turning this on slows down the
@@ -345,13 +345,18 @@ pub mod propagators {
     pub use pumpkin_propagators::*;
 }
 
+pub mod core {
+    //! The core interfaces and structures used by the pumpkin solver.
+    pub use pumpkin_core::*;
+}
+
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 pub use pumpkin_constraints::*;
+pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::proof::ProofLog;
-pub use pumpkin_core::*;
 
 /// Returns a default [`ConflictResolver`].
 pub fn default_conflict_resolver() -> ResolutionResolver {

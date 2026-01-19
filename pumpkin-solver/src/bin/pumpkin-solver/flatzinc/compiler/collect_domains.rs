@@ -6,7 +6,7 @@ use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;

@@ -3,14 +3,14 @@
 use std::rc::Rc;
 
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
-use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::NegatableConstraint;
-use pumpkin_solver::predicate;
-use pumpkin_solver::predicates::Predicate;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::variables::AffineView;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_solver::core::constraints::Constraint;
+use pumpkin_solver::core::constraints::NegatableConstraint;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::predicates::Predicate;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::TransformableVariable;
 
 use super::context::CompilationContext;
 use crate::flatzinc::FlatZincError;

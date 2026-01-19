@@ -1,12 +1,12 @@
 use log::info;
 use pumpkin_core::conflict_resolving::ConflictResolver;
-use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
-use pumpkin_solver::asserts::pumpkin_assert_moderate;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
-use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_solver::core::Function;
+use pumpkin_solver::core::asserts::pumpkin_assert_moderate;
+use pumpkin_solver::core::branching::Brancher;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::results::Solution;
+use pumpkin_solver::core::termination::TerminationCondition;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;

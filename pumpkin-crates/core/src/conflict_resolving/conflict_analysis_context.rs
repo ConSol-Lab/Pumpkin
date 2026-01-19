@@ -135,14 +135,6 @@ impl ConflictAnalysisContext<'_> {
     pub fn find_last_decision(&mut self) -> Option<Predicate> {
         self.state.assignments.find_last_decision()
     }
-
-    /// Returns the trail position at which [`Predicate`] became true.
-    pub fn trail_position(&self, predicate: Predicate) -> usize {
-        self.state
-            .assignments
-            .get_trail_position(&predicate)
-            .unwrap()
-    }
 }
 
 /// Methods used for proof logging
@@ -193,9 +185,8 @@ impl ConflictAnalysisContext<'_> {
     /// which the solver backtracked.
     pub fn process_learned_nogood(
         &mut self,
-        learned_nogood: Vec<Predicate>,
+        learned_nogood_predicates: Vec<Predicate>,
         lbd: u32,
-        constraint_tag: ConstraintTag,
     ) -> usize {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
@@ -203,10 +194,11 @@ impl ConflictAnalysisContext<'_> {
         self.restart_strategy
             .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
 
-        let learned_nogood = LearnedNogood::create_from_vec(learned_nogood, self);
+        let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
         let _ = self.state.restore_to(learned_nogood.backtrack_level);
 
+        let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
         if learned_nogood.len() == 1 {

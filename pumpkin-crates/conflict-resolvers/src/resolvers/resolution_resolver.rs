@@ -112,14 +112,8 @@ impl ConflictResolver for ResolutionResolver {
             .average_learned_nogood_length
             .add_term(self.processed_nogood_predicates.len() as u64);
 
-        let constraint_tag =
-            context.log_deduction(self.processed_nogood_predicates.iter().copied());
-
-        let backtrack_level = context.process_learned_nogood(
-            self.processed_nogood_predicates.clone(),
-            lbd,
-            constraint_tag,
-        );
+        let backtrack_level =
+            context.process_learned_nogood(self.processed_nogood_predicates.clone(), lbd);
 
         self.statistics
             .average_backtrack_amount
@@ -308,9 +302,18 @@ impl ResolutionResolver {
                 // value `2 * trail_position`, whereas implied predicates get `2 *
                 // trail_position + 1`.
                 let heap_value = if context.get_state().is_on_trail(predicate) {
-                    context.trail_position(predicate) * 2
+                    context
+                        .get_state()
+                        .trail_position(predicate)
+                        .expect("Predicate should be true during conflict analysis")
+                        * 2
                 } else {
-                    context.trail_position(predicate) * 2 + 1
+                    context
+                        .get_state()
+                        .trail_position(predicate)
+                        .expect("Predicate should be true during conflict analysis")
+                        * 2
+                        + 1
                 };
 
                 // We restore the key and since we know that the value is 0, we can safely
@@ -385,7 +388,12 @@ impl ResolutionResolver {
                 .iter()
                 .filter(|p| context.evaluate_predicate(**p) == Some(true))
                 .count()
-                == self.processed_nogood_predicates.len() - 1
+                >= self.processed_nogood_predicates.len() - 1,
+            "Not all predicates evaluated to true: {:?}",
+            self.processed_nogood_predicates
+                .iter()
+                .filter(|p| context.evaluate_predicate(**p) != Some(true))
+                .collect::<Vec<_>>()
         );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.

@@ -1,4 +1,4 @@
-use pumpkin_solver::results::ProblemSolution;
+use pumpkin_solver::core::results::ProblemSolution;
 use pyo3::prelude::*;
 
 use crate::variables::BoolExpression;
@@ -24,16 +24,16 @@ pub enum SatisfactionUnderAssumptionsResult {
 
 #[pyclass]
 #[derive(Clone)]
-pub struct Solution(pumpkin_solver::results::Solution);
+pub struct Solution(pumpkin_solver::core::results::Solution);
 
-impl From<pumpkin_solver::results::Solution> for Solution {
-    fn from(value: pumpkin_solver::results::Solution) -> Self {
+impl From<pumpkin_solver::core::results::Solution> for Solution {
+    fn from(value: pumpkin_solver::core::results::Solution) -> Self {
         Solution(value)
     }
 }
 
-impl From<pumpkin_solver::results::SolutionReference<'_>> for Solution {
-    fn from(value: pumpkin_solver::results::SolutionReference<'_>) -> Self {
+impl From<pumpkin_solver::core::results::SolutionReference<'_>> for Solution {
+    fn from(value: pumpkin_solver::core::results::SolutionReference<'_>) -> Self {
         Solution(value.into())
     }
 }

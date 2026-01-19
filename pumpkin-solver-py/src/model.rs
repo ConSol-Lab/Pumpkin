@@ -4,23 +4,23 @@ use std::time::Duration;
 use std::time::Instant;
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
-use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
-use pumpkin_solver::containers::StorageKey;
+use pumpkin_solver::core::DefaultBrancher;
+use pumpkin_solver::core::containers::StorageKey;
+use pumpkin_solver::core::optimisation::OptimisationDirection;
+use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::rand::SeedableRng;
+use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::SolutionReference;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::termination::TerminationCondition;
+use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::default_conflict_resolver;
-use pumpkin_solver::optimisation::OptimisationDirection;
-use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::rand::SeedableRng;
-use pumpkin_solver::rand::rngs::SmallRng;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::termination::TerminationCondition;
-use pumpkin_solver::termination::TimeBudget;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -199,13 +199,13 @@ impl Model {
             .solver
             .satisfy(&mut self.brancher, &mut termination, &mut resolver)
         {
-            pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
+            pumpkin_solver::core::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution::from(satisfiable.solution()))
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unsatisfiable(_, _, _) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown(_, _, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unknown(_, _, _) => {
                 SatisfactionResult::Unknown()
             }
         }
@@ -226,10 +226,10 @@ impl Model {
             .collect::<Vec<_>>();
 
         match self.solver.satisfy_under_assumptions(&mut self.brancher, &mut termination, &mut resolver, &solver_assumptions) {
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(satisfiable.solution().into())
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
                 // Maarten: For now we assume that the core _must_ consist of the predicates that
                 //     were the input to the solve call. In general this is not the case, e.g. when
                 //     the assumptions can be semantically minized (the assumptions [y <= 1],
@@ -251,10 +251,10 @@ impl Model {
 
                 SatisfactionUnderAssumptionsResult::UnsatisfiableUnderAssumptions(core)
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
                 SatisfactionUnderAssumptionsResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
         }
@@ -309,16 +309,18 @@ impl Model {
         };
 
         match result {
-            pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
+            pumpkin_solver::core::results::OptimisationResult::Satisfiable(solution) => {
                 OptimisationResult::Satisfiable(solution.into())
             }
-            pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
+            pumpkin_solver::core::results::OptimisationResult::Optimal(solution) => {
                 OptimisationResult::Optimal(solution.into())
             }
-            pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
+            pumpkin_solver::core::results::OptimisationResult::Unsatisfiable => {
                 OptimisationResult::Unsatisfiable()
             }
-            pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
+            pumpkin_solver::core::results::OptimisationResult::Unknown => {
+                OptimisationResult::Unknown()
+            }
         }
     }
 }

@@ -11,11 +11,11 @@
 
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::variables::TransformableVariable;
 use pumpkin_solver::default_conflict_resolver;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::variables::TransformableVariable;
 
 fn main() {
     let mut args = std::env::args();

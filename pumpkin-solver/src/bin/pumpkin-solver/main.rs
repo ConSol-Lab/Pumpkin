@@ -31,19 +31,19 @@ use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
 use pumpkin_solver::Solver;
-use pumpkin_solver::convert_case::Case;
+use pumpkin_solver::core::convert_case::Case;
+use pumpkin_solver::core::optimisation::OptimisationStrategy;
+use pumpkin_solver::core::options::*;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::pumpkin_assert_simple;
+use pumpkin_solver::core::rand::SeedableRng;
+use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::results::SolutionReference;
+use pumpkin_solver::core::statistics::configure_statistic_logging;
+use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::default_conflict_resolver;
-use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::options::*;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::rand::SeedableRng;
-use pumpkin_solver::rand::rngs::SmallRng;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::statistics::configure_statistic_logging;
-use pumpkin_solver::termination::TimeBudget;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -526,12 +526,12 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    if pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
-        >= pumpkin_solver::asserts::PUMPKIN_ASSERT_MODERATE
+    if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+        >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
         warn!(
             "Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.",
-            pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+            pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         );
     };
 
@@ -569,16 +569,17 @@ fn run() -> PumpkinResult<()> {
         activity_bump_increment: 1.0,
     };
 
+    let should_minimise_nogoods = if args.proof_type == ProofType::Full {
+        warn!("Recursive minimisation is disabled when logging the full proof.");
+        false
+    } else {
+        !args.no_learning_clause_minimisation
+    };
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        learning_clause_minimisation: if args.proof_type == ProofType::Full {
-            warn!("Recursive minimisation is disabled when logging the full proof.");
-            false
-        } else {
-            !args.no_learning_clause_minimisation
-        },
+        should_minimise_nogoods,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
@@ -639,7 +640,7 @@ fn run() -> PumpkinResult<()> {
                 },
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
-                    !args.no_learning_clause_minimisation,
+                    should_minimise_nogoods,
                     is_logging_inferences,
                 ),
             )?,
