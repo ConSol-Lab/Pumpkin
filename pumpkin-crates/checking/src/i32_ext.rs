@@ -74,9 +74,19 @@ impl Add for I32Ext {
     fn add(self, rhs: I32Ext) -> Self::Output {
         match (self, rhs) {
             (I32Ext::I32(lhs), I32Ext::I32(rhs)) => I32Ext::I32(lhs + rhs),
+
+            (I32Ext::I32(_), Self::NegativeInf) => Self::NegativeInf,
+            (I32Ext::I32(_), Self::PositiveInf) => Self::PositiveInf,
+            (Self::NegativeInf, I32Ext::I32(_)) => Self::NegativeInf,
+            (Self::PositiveInf, I32Ext::I32(_)) => Self::PositiveInf,
+
             (I32Ext::NegativeInf, I32Ext::NegativeInf) => I32Ext::NegativeInf,
             (I32Ext::PositiveInf, I32Ext::PositiveInf) => I32Ext::PositiveInf,
-            (lhs, rhs) => panic!("the result of {lhs:?} + {rhs:?} is indeterminate"),
+
+            (lhs @ I32Ext::NegativeInf, rhs @ I32Ext::PositiveInf)
+            | (lhs @ I32Ext::PositiveInf, rhs @ I32Ext::NegativeInf) => {
+                panic!("the result of {lhs:?} + {rhs:?} is indeterminate")
+            }
         }
     }
 }
@@ -120,5 +130,27 @@ impl Mul<i32> for I32Ext {
 impl Sum for I32Ext {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(I32Ext::I32(0), |acc, value| acc + value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use I32Ext::*;
+
+    use super::*;
+
+    #[test]
+    fn test_adding_i32s() {
+        assert_eq!(I32(3) + I32(4), I32(7));
+    }
+
+    #[test]
+    fn test_adding_negative_inf() {
+        assert_eq!(I32(3) + NegativeInf, NegativeInf);
+    }
+
+    #[test]
+    fn test_adding_positive_inf() {
+        assert_eq!(I32(3) + PositiveInf, PositiveInf);
     }
 }
