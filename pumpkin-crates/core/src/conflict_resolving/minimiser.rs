@@ -1,4 +1,4 @@
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 
 /// A trait for the behaviour of nogood minimisation approaches.

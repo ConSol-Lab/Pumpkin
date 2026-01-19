@@ -12,6 +12,7 @@ use crate::branching::Brancher;
 use crate::termination::TerminationCondition;
 
 pub mod branching;
+pub mod conflict_resolving;
 pub mod constraints;
 pub mod optimisation;
 pub mod proof;

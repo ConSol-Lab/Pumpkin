@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use dyn_clone::DynClone;
 use dyn_clone::clone_trait_object;
 
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictAnalysisContext;
 #[cfg(doc)]
 use crate::engine::reason::ReasonStore;
 

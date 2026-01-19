@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use crate::Random;
+use crate::SolverStatistics;
 use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
@@ -22,7 +23,6 @@ use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
-use crate::engine::solver_statistics::SolverStatistics;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
@@ -66,7 +66,7 @@ impl Debug for ConflictAnalysisContext<'_> {
     }
 }
 
-impl<'a> ConflictAnalysisContext<'a> {
+impl ConflictAnalysisContext<'_> {
     /// Backtracks the solver to the provided backtrack level.
     ///
     /// This method panics if the provided `backtrack_level` is not lower than the current
@@ -292,7 +292,7 @@ impl ConflictAnalysisContext<'_> {
     pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: u64) {
         self.counters
             .learned_clause_statistics
-            .average_number_of_removed_atomic_constraints_recursive
+            .average_number_of_removed_atomic_constraints_semantic
             .add_term(num_predicates_removed);
     }
 
@@ -326,7 +326,7 @@ impl ConflictAnalysisContext<'_> {
             nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
 
         nogood_propagator.add_asserting_nogood(
-            learned_nogood.predicates,
+            learned_nogood.to_vec(),
             inference_code,
             &mut propagation_context,
             self.counters,

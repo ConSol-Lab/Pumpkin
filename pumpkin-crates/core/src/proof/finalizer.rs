@@ -4,9 +4,9 @@
 
 use super::InferenceCode;
 use super::ProofLog;
+use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashMap;
 use crate::engine::State;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagation::CurrentNogood;
