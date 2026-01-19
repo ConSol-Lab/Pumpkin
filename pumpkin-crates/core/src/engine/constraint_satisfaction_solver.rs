@@ -30,6 +30,7 @@ use crate::branching::SelectionContext;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::RestartOptions;
@@ -52,6 +53,7 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
 use crate::variables::DomainId;
@@ -471,7 +473,7 @@ impl ConstraintSatisfactionSolver {
                 CoreExtractionResult::ConflictingAssumption(*conflicting_assumption)
             })
             .unwrap_or_else(|| {
-                let _conflict_analysis_context = ConflictAnalysisContext {
+                let mut context = ConflictAnalysisContext {
                     solver_state: &mut self.solver_state,
                     brancher,
                     proof_log: &mut self.internal_parameters.proof_log,
@@ -480,8 +482,25 @@ impl ConstraintSatisfactionSolver {
                     state: &mut self.state,
                     nogood_propagator_handle: self.nogood_propagator_handle,
                 };
+                let mut predicates = context.get_conflict_nogood();
+                let mut core: HashSet<Predicate> = HashSet::default();
 
-                todo!()
+                while let Some(predicate) = predicates.pop() {
+                    if context.state.assignments.is_decision_predicate(&predicate) {
+                        let _ = core.insert(predicate);
+                    }
+
+                    ConflictAnalysisContext::get_propagation_reason_inner(
+                        predicate,
+                        CurrentNogood::empty(),
+                        context.proof_log,
+                        context.unit_nogood_inference_codes,
+                        &mut predicates,
+                        context.state,
+                    );
+                }
+
+                CoreExtractionResult::Core(core.into_iter().collect())
             })
     }
 
