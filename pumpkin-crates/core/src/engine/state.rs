@@ -29,6 +29,7 @@ use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
+#[cfg(feature = "check-propagations")]
 use crate::propagation::InferenceCheckers;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -358,6 +359,7 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        #[cfg(feature = "check-propagations")]
         constructor.add_inference_checkers(InferenceCheckers::new(self));
 
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
