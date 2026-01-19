@@ -294,19 +294,21 @@ impl Model {
 
         let objective = objective.0;
 
-        let mut error_in_callback = None;
-
         let callback = |_: &Solver, solution: SolutionReference<'_>, _: &PythonBrancher| {
             let python_solution = crate::result::Solution::from(solution);
 
-            if let Some(on_solution_callback) = on_solution.as_ref()
-                && let Err(err) = on_solution_callback.call(py, (python_solution,), None)
-            {
-                error_in_callback = Some(err);
-                return ControlFlow::Break(());
-            }
+            // If there is a solution callback, unpack it.
+            let Some(on_solution_callback) = on_solution.as_ref() else {
+                return ControlFlow::Continue(());
+            };
 
-            ControlFlow::Continue(())
+            // Call the callback, and if there is an error, unpack it.
+            let Err(err) = on_solution_callback.call(py, (python_solution,), None) else {
+                return ControlFlow::Continue(());
+            };
+
+            // Stop optimising and return the error.
+            ControlFlow::Break(err)
         };
 
         self.update_warm_start(warm_start);
@@ -324,11 +326,8 @@ impl Model {
             ),
         };
 
-        if let Some(err) = error_in_callback {
-            return Err(err);
-        }
-
         match result {
+            pumpkin_solver::results::OptimisationResult::Stopped(_, err) => Err(err),
             pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
                 Ok(OptimisationResult::Satisfiable(solution.into()))
             }

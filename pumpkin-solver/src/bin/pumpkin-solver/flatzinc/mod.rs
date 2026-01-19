@@ -177,21 +177,23 @@ pub(crate) fn solve(
             }
         };
 
-    let callback =
-        |solver: &Solver, solution: SolutionReference<'_>, brancher: &DynamicBrancher| {
-            solution_callback(
-                brancher,
-                Some(objective),
-                options.all_solutions,
-                &outputs,
-                solver,
-                solution,
-                options.verbose,
-                init_time,
-            );
+    let callback = |solver: &Solver,
+                    solution: SolutionReference<'_>,
+                    brancher: &DynamicBrancher|
+     -> ControlFlow<()> {
+        solution_callback(
+            brancher,
+            Some(objective),
+            options.all_solutions,
+            &outputs,
+            solver,
+            solution,
+            options.verbose,
+            init_time,
+        );
 
-            ControlFlow::Continue(())
-        };
+        ControlFlow::Continue(())
+    };
 
     let result = match options.optimisation_strategy {
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
@@ -207,6 +209,9 @@ pub(crate) fn solve(
     };
 
     match result {
+        OptimisationResult::Stopped(_, _) => {
+            unreachable!("the callback will never return ControlFlow::Break")
+        }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
             if !options.all_solutions {
