@@ -6,6 +6,7 @@ mod parser;
 
 use std::fs::File;
 use std::io::Read;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
@@ -185,7 +186,8 @@ pub(crate) fn solve<R: ConflictResolver>(
     let callback = |solver: &Solver,
                     solution: SolutionReference<'_>,
                     brancher: &DynamicBrancher,
-                    resolver: &R| {
+                    resolver: &R|
+     -> ControlFlow<()> {
         solution_callback(
             brancher,
             resolver,
@@ -197,6 +199,8 @@ pub(crate) fn solve<R: ConflictResolver>(
             options.verbose,
             init_time,
         );
+
+        ControlFlow::Continue(())
     };
 
     let result = match options.optimisation_strategy {
@@ -215,6 +219,9 @@ pub(crate) fn solve<R: ConflictResolver>(
     };
 
     match result {
+        OptimisationResult::Stopped(_, _) => {
+            unreachable!("the callback will never return ControlFlow::Break")
+        }
         OptimisationResult::Optimal(optimal_solution) => {
             let objective_value = optimal_solution.get_integer_value(objective) as i64;
             if !options.all_solutions {

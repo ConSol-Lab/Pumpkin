@@ -1,4 +1,5 @@
 use std::num::NonZero;
+use std::ops::ControlFlow;
 
 use super::OptimisationProcedure;
 use super::solution_callback::SolutionCallback;
@@ -52,7 +53,7 @@ where
         termination: &mut impl TerminationCondition,
         resolver: &mut R,
         solver: &mut Solver,
-    ) -> OptimisationResult {
+    ) -> OptimisationResult<Callback::Stop> {
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
@@ -65,12 +66,16 @@ where
             SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
         };
 
-        self.solution_callback.on_solution_callback(
+        let callback_result = self.solution_callback.on_solution_callback(
             solver,
             primal_solution.as_reference(),
             brancher,
             resolver,
         );
+
+        if let ControlFlow::Break(stop) = callback_result {
+            return OptimisationResult::Stopped(primal_solution, stop);
+        }
 
         let primal_objective = primal_solution.get_integer_value(objective.clone());
 
@@ -113,7 +118,8 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    self.solution_callback.on_solution_callback(
+                    // Optimisation will stop regardless of the result of the callback.
+                    let _ = self.solution_callback.on_solution_callback(
                         solver,
                         primal_solution.as_reference(),
                         brancher,

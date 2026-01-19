@@ -50,13 +50,15 @@ pub enum SatisfactionResultUnderAssumptions<
 
 /// The result of a call to [`Solver::optimise`].
 #[derive(Debug)]
-pub enum OptimisationResult {
+pub enum OptimisationResult<Stop> {
     /// Indicates that an optimal solution has been found and proven to be optimal. It provides an
     /// instance of [`Solution`] which contains the optimal solution.
     Optimal(Solution),
     /// Indicates that a solution was found and provides an instance of [`Solution`] which contains
     /// best known solution by the solver.
     Satisfiable(Solution),
+    /// The optimisation was stopped by the solution callback.
+    Stopped(Solution, Stop),
     /// Indicates that there is no solution to the problem.
     Unsatisfiable,
     /// Indicates that it is not known whether a solution exists. This is likely due to a

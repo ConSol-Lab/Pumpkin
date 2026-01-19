@@ -134,6 +134,7 @@
 //! ```
 //! Then we can find the optimal solution using [`Solver::optimise`]:
 //! ```rust
+//! # use std::ops::ControlFlow;
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::core::results::OptimisationResult;
 //! # use pumpkin_solver::core::termination::Indefinite;
@@ -159,9 +160,13 @@
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
 //! # let mut resolver = default_conflict_resolver();
+//!
+//! let callback = |_: &Solver, _: SolutionReference, _: &DefaultBrancher, _: &ResolutionResolver| -> ControlFlow<()> {
+//!     return ControlFlow::Continue(());
+//! };
+//!
 //! // Then we solve to optimality
-//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher, &ResolutionResolver) = |_, _, _,
-//! _| {}; let result = solver.optimise(
+//! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
 //!     &mut resolver,
