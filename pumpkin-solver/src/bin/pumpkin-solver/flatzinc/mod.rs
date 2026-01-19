@@ -80,21 +80,23 @@ pub(crate) struct FlatZincOptions {
 fn log_statistics(
     solver: &Solver,
     brancher: &impl Brancher,
+    resolver: &impl ConflictResolver,
     verbose: bool,
     init_time: Duration,
     objective_value: Option<i64>,
 ) {
     log_statistic("initTime", init_time.as_secs_f64());
     if let Some(objective) = objective_value {
-        solver.log_statistics_with_objective(Some(brancher), objective, verbose);
+        solver.log_statistics_with_objective(brancher, resolver, objective, verbose);
     } else {
-        solver.log_statistics(Some(brancher), verbose);
+        solver.log_statistics(brancher, resolver, verbose);
     }
 }
 
 #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
 fn solution_callback(
     brancher: &impl Brancher,
+    resolver: &impl ConflictResolver,
     instance_objective_function: Option<DomainId>,
     options_all_solutions: bool,
     outputs: &[Output],
@@ -107,23 +109,24 @@ fn solution_callback(
         if let Some(objective) = instance_objective_function {
             log_statistic("initTime", init_time.as_secs_f64());
             solver.log_statistics_with_objective(
-                Some(brancher),
+                brancher,
+                resolver,
                 solution.get_integer_value(objective) as i64,
                 verbose,
             );
         } else {
-            solver.log_statistics(Some(brancher), verbose)
+            solver.log_statistics(brancher, resolver, verbose)
         }
         print_solution_from_solver(solution, outputs);
     }
 }
 
-pub(crate) fn solve(
+pub(crate) fn solve<R: ConflictResolver>(
     mut solver: Solver,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
     options: FlatZincOptions,
-    mut resolver: impl ConflictResolver,
+    mut resolver: R,
 ) -> Result<(), FlatZincError> {
     let init_start_time = Instant::now();
 
@@ -179,19 +182,22 @@ pub(crate) fn solve(
             }
         };
 
-    let callback =
-        |solver: &Solver, solution: SolutionReference<'_>, brancher: &DynamicBrancher| {
-            solution_callback(
-                brancher,
-                Some(objective),
-                options.all_solutions,
-                &outputs,
-                solver,
-                solution,
-                options.verbose,
-                init_time,
-            );
-        };
+    let callback = |solver: &Solver,
+                    solution: SolutionReference<'_>,
+                    brancher: &DynamicBrancher,
+                    resolver: &R| {
+        solution_callback(
+            brancher,
+            resolver,
+            Some(objective),
+            options.all_solutions,
+            &outputs,
+            solver,
+            solution,
+            options.verbose,
+            init_time,
+        );
+    };
 
     let result = match options.optimisation_strategy {
         OptimisationStrategy::LinearSatUnsat => solver.optimise(
@@ -215,6 +221,7 @@ pub(crate) fn solve(
                 log_statistics(
                     &solver,
                     &brancher,
+                    &resolver,
                     options.verbose,
                     init_time,
                     Some(objective_value),
@@ -225,6 +232,7 @@ pub(crate) fn solve(
             log_statistics(
                 &solver,
                 &brancher,
+                &resolver,
                 options.verbose,
                 init_time,
                 Some(objective_value),
@@ -236,6 +244,7 @@ pub(crate) fn solve(
             log_statistics(
                 &solver,
                 &brancher,
+                &resolver,
                 options.verbose,
                 init_time,
                 Some(objective_value),
@@ -243,11 +252,25 @@ pub(crate) fn solve(
         }
         OptimisationResult::Unsatisfiable => {
             println!("{MSG_UNSATISFIABLE}");
-            log_statistics(&solver, &brancher, options.verbose, init_time, None);
+            log_statistics(
+                &solver,
+                &brancher,
+                &resolver,
+                options.verbose,
+                init_time,
+                None,
+            );
         }
         OptimisationResult::Unknown => {
             println!("{MSG_UNKNOWN}");
-            log_statistics(&solver, &brancher, options.verbose, init_time, None);
+            log_statistics(
+                &solver,
+                &brancher,
+                &resolver,
+                options.verbose,
+                init_time,
+                None,
+            );
         }
     };
 
@@ -269,10 +292,11 @@ fn satisfy(
         let mut has_found_solution = false;
         loop {
             match solution_iterator.next_solution() {
-                IteratedSolution::Solution(solution, solver, brancher) => {
+                IteratedSolution::Solution(solution, solver, brancher, resolver) => {
                     has_found_solution = true;
                     solution_callback(
                         brancher,
+                        resolver,
                         None,
                         options.all_solutions,
                         &outputs,
@@ -285,20 +309,41 @@ fn satisfy(
                 IteratedSolution::Finished => {
                     assert!(has_found_solution);
                     println!("==========");
-                    log_statistics(solver, &brancher, options.verbose, init_time, None);
+                    log_statistics(
+                        solver,
+                        &brancher,
+                        &resolver,
+                        options.verbose,
+                        init_time,
+                        None,
+                    );
                     break;
                 }
                 IteratedSolution::Unknown => {
                     if !has_found_solution {
                         println!("{MSG_UNKNOWN}");
                     }
-                    log_statistics(solver, &brancher, options.verbose, init_time, None);
+                    log_statistics(
+                        solver,
+                        &brancher,
+                        &resolver,
+                        options.verbose,
+                        init_time,
+                        None,
+                    );
                     break;
                 }
                 IteratedSolution::Unsatisfiable => {
                     assert!(!has_found_solution);
                     println!("{MSG_UNSATISFIABLE}");
-                    log_statistics(solver, &brancher, options.verbose, init_time, None);
+                    log_statistics(
+                        solver,
+                        &brancher,
+                        &resolver,
+                        options.verbose,
+                        init_time,
+                        None,
+                    );
                     break;
                 }
             }
@@ -307,6 +352,7 @@ fn satisfy(
         match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
             SatisfactionResult::Satisfiable(satisfiable) => solution_callback(
                 satisfiable.brancher(),
+                satisfiable.conflict_resolver(),
                 None,
                 options.all_solutions,
                 &outputs,
@@ -315,13 +361,13 @@ fn satisfy(
                 options.verbose,
                 init_time,
             ),
-            SatisfactionResult::Unsatisfiable(solver, brancher) => {
+            SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
                 println!("{MSG_UNSATISFIABLE}");
-                log_statistics(solver, brancher, options.verbose, init_time, None);
+                log_statistics(solver, brancher, resolver, options.verbose, init_time, None);
             }
-            SatisfactionResult::Unknown(solver, brancher) => {
+            SatisfactionResult::Unknown(solver, brancher, resolver) => {
                 println!("{MSG_UNKNOWN}");
-                log_statistics(solver, brancher, options.verbose, init_time, None);
+                log_statistics(solver, brancher, resolver, options.verbose, init_time, None);
             }
         }
     }

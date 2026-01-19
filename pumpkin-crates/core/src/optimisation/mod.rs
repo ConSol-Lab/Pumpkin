@@ -12,12 +12,13 @@ pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
 pub mod solution_callback;
 
-pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
+pub trait OptimisationProcedure<B: Brancher, R: ConflictResolver, Callback: SolutionCallback<B, R>>
+{
     fn optimise(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        resolver: &mut impl ConflictResolver,
+        resolver: &mut R,
         solver: &mut Solver,
     ) -> OptimisationResult;
 }

@@ -40,7 +40,12 @@ impl LinearSearch {
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
 
-        solver.log_statistics_with_objective(Some(&brancher), best_objective_value as i64, true);
+        solver.log_statistics_with_objective(
+            &brancher,
+            resolver,
+            best_objective_value as i64,
+            true,
+        );
         println!("o {best_objective_value}");
         info!(
             "Current objective is {} after {} seconds ({} ms)",
@@ -57,7 +62,8 @@ impl LinearSearch {
         loop {
             if best_objective_value == objective_function.get_constant_term() {
                 solver.log_statistics_with_objective(
-                    Some(&brancher),
+                    &brancher,
+                    resolver,
                     best_objective_value as i64,
                     true,
                 );
@@ -73,7 +79,8 @@ impl LinearSearch {
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
                 solver.log_statistics_with_objective(
-                    Some(&brancher),
+                    &brancher,
+                    resolver,
                     best_objective_value as i64,
                     true,
                 );
@@ -101,7 +108,8 @@ impl LinearSearch {
                     best_solution = satisfiable.solution().into();
 
                     satisfiable.solver().log_statistics_with_objective(
-                        Some(satisfiable.brancher()),
+                        satisfiable.brancher(),
+                        satisfiable.conflict_resolver(),
                         best_objective_value as i64,
                         true,
                     );
@@ -114,9 +122,10 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                SatisfactionResult::Unsatisfiable(solver, brancher) => {
+                SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
                     solver.log_statistics_with_objective(
-                        Some(brancher),
+                        brancher,
+                        resolver,
                         best_objective_value as i64,
                         true,
                     );
@@ -125,9 +134,10 @@ impl LinearSearch {
                         solution: best_solution,
                     };
                 }
-                SatisfactionResult::Unknown(solver, brancher) => {
+                SatisfactionResult::Unknown(solver, brancher, resolver) => {
                     solver.log_statistics_with_objective(
-                        Some(brancher),
+                        brancher,
+                        resolver,
                         best_objective_value as i64,
                         true,
                     );

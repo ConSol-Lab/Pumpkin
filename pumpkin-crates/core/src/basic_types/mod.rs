@@ -1,7 +1,6 @@
 mod constraint_operation_error;
 mod csp_solver_execution_flag;
 mod function;
-pub(crate) mod moving_averages;
 mod predicate_id_generators;
 mod propagation_status_cp;
 mod propositional_conjunction;

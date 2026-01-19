@@ -91,7 +91,7 @@ fn main() {
     let mut resolver = default_conflict_resolver();
     if matches!(
         solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),
-        SatisfactionResult::Unsatisfiable(_, _),
+        SatisfactionResult::Unsatisfiable(_, _, _),
     ) {
         panic!("Infeasibility Detected")
     }
@@ -122,7 +122,7 @@ fn main() {
                     .join(" - ")
             );
         }
-        SatisfactionResult::Unsatisfiable(_, _) => panic!("Infeasibility Detected"),
-        SatisfactionResult::Unknown(_, _) => println!("Timeout."),
+        SatisfactionResult::Unsatisfiable(_, _, _) => panic!("Infeasibility Detected"),
+        SatisfactionResult::Unknown(_, _, _) => println!("Timeout."),
     };
 }

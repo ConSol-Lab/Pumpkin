@@ -55,7 +55,7 @@ impl<
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution<'_, B> {
+    pub fn next_solution(&mut self) -> IteratedSolution<'_, B, R> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             // We do not care much about this tag, as the proof is nonsensical for
             // solution enumeration anyways.
@@ -79,19 +79,19 @@ impl<
                 self.next_blocking_clause = Some(get_blocking_clause(solution.as_reference()));
                 IterationResult::Solution(solution)
             }
-            Unsatisfiable(_, _) => {
+            Unsatisfiable(_, _, _) => {
                 if self.has_solution {
                     IterationResult::Finished
                 } else {
                     IterationResult::Unsatisfiable
                 }
             }
-            Unknown(_, _) => IterationResult::Unknown,
+            Unknown(_, _, _) => IterationResult::Unknown,
         };
 
         match result {
             IterationResult::Solution(solution) => {
-                IteratedSolution::Solution(solution, self.solver, self.brancher)
+                IteratedSolution::Solution(solution, self.solver, self.brancher, self.resolver)
             }
             IterationResult::Finished => IteratedSolution::Finished,
             IterationResult::Unsatisfiable => IteratedSolution::Unsatisfiable,
@@ -128,9 +128,9 @@ fn get_blocking_clause(solution: SolutionReference) -> Vec<Predicate> {
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
 #[derive(Debug)]
-pub enum IteratedSolution<'a, B> {
+pub enum IteratedSolution<'a, B, R> {
     /// A new solution was identified.
-    Solution(Solution, &'a Solver, &'a B),
+    Solution(Solution, &'a Solver, &'a B, &'a R),
 
     /// No more solutions exist.
     Finished,

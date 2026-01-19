@@ -4,10 +4,13 @@ use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::SparseSet;
+use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
+use pumpkin_core::statistics::moving_averages::MovingAverage;
 use pumpkin_core::variables::DomainId;
 
 use crate::minimisers::NogoodMinimiser;
@@ -27,7 +30,14 @@ pub struct SemanticMinimiser {
     helper: Vec<Predicate>,
 
     mode: SemanticMinimisationMode,
+
+    statistics: SemanticMinimiserStatistics,
 }
+
+create_statistics_struct!(SemanticMinimiserStatistics {
+    /// The average number of atomic constraints removed by semantic minimisation during conflict analysis
+    average_number_of_removed_atomic_constraints_semantic: CumulativeMovingAverage<u64>,
+});
 
 impl Default for SemanticMinimiser {
     fn default() -> Self {
@@ -38,12 +48,13 @@ impl Default for SemanticMinimiser {
             present_ids: SparseSet::new(vec![], mapping),
             helper: Vec::default(),
             mode: SemanticMinimisationMode::EnableEqualityMerging,
+            statistics: SemanticMinimiserStatistics::default(),
         }
     }
 }
 
 /// Used to determine whether the [`SemanticMinimiser`] merges equality [`Predicate`]s or not.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SemanticMinimisationMode {
     /// Enables equality merging; for example, if the predicates [x >= v] and [x <= v] are present
     /// in the domain description, then it is replaced with [x == v].
@@ -58,6 +69,8 @@ impl NogoodMinimiser for SemanticMinimiser {
         self.accommodate(context);
         self.clean_up();
         self.apply_predicates(nogood);
+
+        let len_before = nogood.len();
 
         // Compile the nogood based on the internal state.
         // Add domain description to the helper.
@@ -75,6 +88,12 @@ impl NogoodMinimiser for SemanticMinimiser {
             );
         }
         *nogood = self.helper.clone();
+
+        if self.mode == SemanticMinimisationMode::EnableEqualityMerging {
+            self.statistics
+                .average_number_of_removed_atomic_constraints_semantic
+                .add_term((len_before - nogood.len()) as u64);
+        }
     }
 }
 

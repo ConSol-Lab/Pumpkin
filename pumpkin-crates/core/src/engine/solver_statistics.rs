@@ -1,7 +1,4 @@
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::time::Duration;
-use crate::create_statistics_struct;
-use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 
@@ -10,12 +7,10 @@ use crate::statistics::log_statistic;
 pub struct SolverStatistics {
     /// Core statistics of the solver engine (e.g. the number of decisions)
     pub(crate) engine_statistics: EngineStatistics,
-    /// The statistics related to clause learning
-    pub(crate) learned_clause_statistics: LearnedClauseStatistics,
 }
 
 impl SolverStatistics {
-    pub(crate) fn log(&self, statistic_logger: StatisticLogger, verbose: bool) {
+    pub(crate) fn log(&self, _statistic_logger: StatisticLogger, verbose: bool) {
         log_statistic("nodes", self.engine_statistics.num_decisions);
         log_statistic("restarts", self.engine_statistics.num_restarts);
         log_statistic("peakDepth", self.engine_statistics.peak_depth);
@@ -26,7 +21,6 @@ impl SolverStatistics {
         );
         if verbose {
             log_statistic("numberOfBackjumps", self.engine_statistics.num_backjumps);
-            self.learned_clause_statistics.log(statistic_logger)
         }
     }
 }
@@ -52,22 +46,3 @@ pub(crate) struct EngineStatistics {
     /// a learned nogood) occurs.
     pub(crate) num_backjumps: u64,
 }
-
-create_statistics_struct!(
-    /// The statistics related to clause learning
-    LearnedClauseStatistics {
-        /// The average number of elements in the conflict explanation
-        average_conflict_size: CumulativeMovingAverage<u64>,
-        /// The average number of atomic constraints removed by recursive minimisation during conflict analysis
-        average_number_of_removed_atomic_constraints_recursive: CumulativeMovingAverage<u64>,
-        /// The average number of atomic constraints removed by semantic minimisation during conflict analysis
-        average_number_of_removed_atomic_constraints_semantic: CumulativeMovingAverage<u64>,
-        /// The number of learned clauses which have a size of 1
-        num_unit_nogoods_learned: u64,
-        /// The average length of the learned nogood
-        average_learned_nogood_length: CumulativeMovingAverage<u64>,
-        /// The average number of levels which have been backtracked by the solver (e.g. when a learned clause is created)
-        average_backtrack_amount: CumulativeMovingAverage<u64>,
-        /// The average literal-block distance (LBD) metric for newly added learned nogoods
-        average_lbd: CumulativeMovingAverage<u64>,
-});

@@ -5,7 +5,10 @@ use dyn_clone::clone_trait_object;
 
 use crate::conflict_resolving::ConflictAnalysisContext;
 #[cfg(doc)]
+use crate::create_statistics_struct;
+#[cfg(doc)]
 use crate::engine::reason::ReasonStore;
+use crate::statistics::StatisticLogger;
 
 clone_trait_object!(ConflictResolver);
 
@@ -38,4 +41,9 @@ pub trait ConflictResolver: Debug + DynClone {
     /// Typically, implementations of this function will make an assignment that will prevent
     /// the solver from entering the same subtree again.
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext);
+
+    /// Logs statistics of the conflict resolver using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }

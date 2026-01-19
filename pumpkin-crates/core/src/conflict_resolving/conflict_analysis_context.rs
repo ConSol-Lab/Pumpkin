@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use crate::Random;
 use crate::SolverStatistics;
 use crate::basic_types::StoredConflictInfo;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 #[cfg(doc)]
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
@@ -156,11 +155,6 @@ impl ConflictAnalysisContext<'_> {
     ) {
         let current_checkpoint = self.get_checkpoint();
 
-        self.counters
-            .learned_clause_statistics
-            .average_backtrack_amount
-            .add_term((current_checkpoint - learned_nogood.backtrack_level) as u64);
-
         self.counters.engine_statistics.sum_of_backjumps +=
             current_checkpoint as u64 - 1 - learned_nogood.backtrack_level as u64;
         if current_checkpoint - learned_nogood.backtrack_level > 1 {
@@ -181,15 +175,6 @@ impl ConflictAnalysisContext<'_> {
                 .unit_nogood_inference_codes
                 .insert(!learned_nogood.predicates[0], inference_code.clone());
         }
-
-        self.counters
-            .learned_clause_statistics
-            .num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
-
-        self.counters
-            .learned_clause_statistics
-            .average_learned_nogood_length
-            .add_term(learned_nogood.predicates.len() as u64);
 
         self.add_learned_nogood(learned_nogood, constraint_tag);
     }
@@ -278,31 +263,6 @@ impl ConflictAnalysisContext<'_> {
 
 /// Methods used for keeping track of statistics.
 impl ConflictAnalysisContext<'_> {
-    /// Used for keeping track of statistics; specifies that `num_predicates_removed` were removed
-    /// by semantic minimisation.
-    pub fn removed_predicates_by_semantic(&mut self, num_predicates_removed: u64) {
-        self.counters
-            .learned_clause_statistics
-            .average_number_of_removed_atomic_constraints_semantic
-            .add_term(num_predicates_removed);
-    }
-
-    pub fn removed_predicates_by_recursive(&mut self, num_predicates_removed: u64) {
-        self.counters
-            .learned_clause_statistics
-            .average_number_of_removed_atomic_constraints_semantic
-            .add_term(num_predicates_removed);
-    }
-
-    /// Used for keeping track of statistics; specifies that a new conflict with `num_predicates`
-    /// was found.
-    pub fn initial_conflict_size(&mut self, num_predicates: usize) {
-        self.counters
-            .learned_clause_statistics
-            .average_conflict_size
-            .add_term(num_predicates as u64);
-    }
-
     /// Informs the used [`Brancher`] that the provided `predicate` appeared during conflict
     /// analysis.
     ///
@@ -327,7 +287,6 @@ impl ConflictAnalysisContext<'_> {
             learned_nogood.to_vec(),
             inference_code,
             &mut propagation_context,
-            self.counters,
         );
     }
 

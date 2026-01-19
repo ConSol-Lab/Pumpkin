@@ -3,8 +3,6 @@ use crate::DefaultBrancher;
 use crate::basic_types::DeletablePredicateIdGenerator;
 use crate::basic_types::PredicateId;
 use crate::basic_types::SolutionReference;
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
@@ -19,6 +17,8 @@ use crate::propagation::ReadDomains;
 use crate::results::Solution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
+use crate::statistics::moving_averages::CumulativeMovingAverage;
+use crate::statistics::moving_averages::MovingAverage;
 use crate::variables::DomainId;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).

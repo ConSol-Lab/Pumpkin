@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::ConstraintOperationError;
 use pumpkin_solver::DefaultBrancher;
 use pumpkin_solver::Solver;
@@ -212,10 +213,10 @@ impl Model {
                     variable_map,
                 })
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _) => {
+            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _, _) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown(_, _) => {
+            pumpkin_solver::results::SatisfactionResult::Unknown(_, _, _) => {
                 SatisfactionResult::Unknown()
             }
         }
@@ -308,7 +309,8 @@ impl Model {
 
         let objective = objective.to_affine_view(&variable_map);
 
-        let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+        let callback: fn(&Solver, SolutionReference, &DefaultBrancher, &ResolutionResolver) =
+            |_, _, _, _| {};
 
         let result = match optimiser {
             Optimiser::LinearSatUnsat => solver.optimise(

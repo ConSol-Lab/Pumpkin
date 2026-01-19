@@ -43,7 +43,7 @@ fn iterator_finds_all_solutions() {
 
     loop {
         match solution_iterator.next_solution() {
-            IteratedSolution::Solution(solution, _, _) => {
+            IteratedSolution::Solution(solution, _, _, _) => {
                 number_of_solutions += 1;
                 // We have found another solution, the same invariant should hold
                 let value_x = solution.get_integer_value(x);

@@ -123,19 +123,26 @@ impl Solver {
     /// Logs the statistics currently present in the solver with the provided objective value.
     pub fn log_statistics_with_objective(
         &self,
-        brancher: Option<&impl Brancher>,
+        brancher: &impl Brancher,
+        resolver: &impl ConflictResolver,
         objective_value: i64,
         verbose: bool,
     ) {
         log_statistic("objective", objective_value);
-        self.log_statistics(brancher, verbose);
+        self.log_statistics(brancher, resolver, verbose);
     }
 
     /// Logs the statistics currently present in the solver.
-    pub fn log_statistics(&self, brancher: Option<&impl Brancher>, verbose: bool) {
+    pub fn log_statistics(
+        &self,
+        brancher: &impl Brancher,
+        resolver: &impl ConflictResolver,
+        verbose: bool,
+    ) {
         self.satisfaction_solver.log_statistics(verbose);
-        if verbose && let Some(brancher) = brancher {
-            brancher.log_statistics(StatisticLogger::new(["brancher"]));
+        resolver.log_statistics(StatisticLogger::default());
+        if verbose {
+            brancher.log_statistics(StatisticLogger::default());
         }
         log_statistic_postfix();
     }
@@ -321,12 +328,19 @@ impl Solver {
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
     /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
     /// which can be used to obtain the found solution or find other solutions.
-    pub fn satisfy<'this, 'brancher, B: Brancher, T: TerminationCondition, R: ConflictResolver>(
+    pub fn satisfy<
+        'this,
+        'brancher,
+        'resolver,
+        B: Brancher,
+        T: TerminationCondition,
+        R: ConflictResolver,
+    >(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &mut T,
-        resolver: &mut R,
-    ) -> SatisfactionResult<'this, 'brancher, B> {
+        resolver: &'resolver mut R,
+    ) -> SatisfactionResult<'this, 'brancher, 'resolver, B, R> {
         match self
             .satisfaction_solver
             .solve(termination, brancher, resolver)
@@ -334,19 +348,19 @@ impl Solver {
             CSPSolverExecutionFlag::Feasible => {
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
-                SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher))
+                SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher, resolver))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 let _ = self.satisfaction_solver.conclude_proof_unsat();
 
-                SatisfactionResult::Unsatisfiable(self, brancher)
+                SatisfactionResult::Unsatisfiable(self, brancher, resolver)
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResult::Unknown(self, brancher)
+                SatisfactionResult::Unknown(self, brancher, resolver)
             }
         }
     }
@@ -381,13 +395,19 @@ impl Solver {
     /// # Bibliography
     /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
     /// Notes in Theoretical Computer Science, vol. 89, no. 4, pp. 543–560, 2003.
-    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher>(
+    pub fn satisfy_under_assumptions<
+        'this,
+        'brancher,
+        'resolver,
+        B: Brancher,
+        R: ConflictResolver,
+    >(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &mut impl TerminationCondition,
-        resolver: &mut impl ConflictResolver,
+        resolver: &'resolver mut R,
         assumptions: &[Predicate],
-    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
+    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, 'resolver, B, R> {
         match self.satisfaction_solver.solve_under_assumptions(
             assumptions,
             termination,
@@ -398,7 +418,9 @@ impl Solver {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
                 brancher.on_solution(solution.as_reference());
-                SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(self, brancher))
+                SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(
+                    self, brancher, resolver,
+                ))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 if self
@@ -432,16 +454,17 @@ impl Solver {
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise<B, Callback>(
+    pub fn optimise<B, R, Callback>(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        resolver: &mut impl ConflictResolver,
-        mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
+        resolver: &mut R,
+        mut optimisation_procedure: impl OptimisationProcedure<B, R, Callback>,
     ) -> OptimisationResult
     where
         B: Brancher,
-        Callback: SolutionCallback<B>,
+        R: ConflictResolver,
+        Callback: SolutionCallback<B, R>,
     {
         optimisation_procedure.optimise(brancher, termination, resolver, self)
     }

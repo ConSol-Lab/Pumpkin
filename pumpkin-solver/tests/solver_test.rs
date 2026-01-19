@@ -40,7 +40,7 @@ fn proof_with_reified_literals() {
     let mut resolver = default_conflict_resolver();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }
 
 #[test]
@@ -77,5 +77,5 @@ fn proof_with_equality_unit_nogood_step() {
     let mut resolver = default_conflict_resolver();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }

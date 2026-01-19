@@ -10,12 +10,10 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
-use crate::engine::SolverStatistics;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -426,7 +424,6 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContext,
-        statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
         // root-level; this is essentially the same as adding a predicate at the root level
@@ -445,11 +442,6 @@ impl NogoodPropagator {
         let lbd = self
             .lbd_helper
             .compute_lbd(&nogood.as_slice()[1..], context);
-
-        statistics
-            .learned_clause_statistics
-            .average_lbd
-            .add_term(lbd as u64);
 
         let nogood = nogood
             .iter()

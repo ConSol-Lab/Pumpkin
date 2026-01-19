@@ -7,12 +7,17 @@ use pumpkin_core::conflict_resolving::CoreExtractor;
 use pumpkin_core::conflict_resolving::LearnedNogood;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
+use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
+use pumpkin_core::statistics::Statistic;
+use pumpkin_core::statistics::StatisticLogger;
+use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
+use pumpkin_core::statistics::moving_averages::MovingAverage;
 
 use crate::minimisers::NogoodMinimiser;
 use crate::minimisers::RecursiveMinimiser;
@@ -58,7 +63,24 @@ pub struct ResolutionResolver {
     /// A minimiser which recursively determines whether a predicate is redundant in the nogood
     recursive_minimiser: RecursiveMinimiser,
     semantic_minimiser: SemanticMinimiser,
+
+    statistics: LearnedNogoodStatistics,
 }
+
+create_statistics_struct!(
+    /// The statistics related to clause learning
+    LearnedNogoodStatistics {
+        /// The average number of elements in the conflict explanation
+        average_conflict_size: CumulativeMovingAverage<u64>,
+        /// The number of learned clauses which have a size of 1
+        num_unit_nogoods_learned: u64,
+        /// The average length of the learned nogood
+        average_learned_nogood_length: CumulativeMovingAverage<u64>,
+        /// The average number of levels which have been backtracked by the solver (e.g. when a learned clause is created)
+        average_backtrack_amount: CumulativeMovingAverage<u64>,
+        /// The average literal-block distance (LBD) metric for newly added learned nogoods
+        average_lbd: CumulativeMovingAverage<u64>,
+});
 
 #[derive(Debug, Clone, Copy, Default)]
 /// Determines which type of learning is performed by the [`ResolutionResolver`].
@@ -81,9 +103,27 @@ impl ConflictResolver for ResolutionResolver {
             .lbd_helper
             .compute_lbd(&learned_nogood.predicates, context);
 
+        self.statistics.average_lbd.add_term(lbd as u64);
+
+        self.statistics
+            .average_backtrack_amount
+            .add_term((context.get_checkpoint() - learned_nogood.backtrack_level) as u64);
+        self.statistics.num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
+
+        self.statistics
+            .average_learned_nogood_length
+            .add_term(learned_nogood.predicates.len() as u64);
+
         let constraint_tag = context.log_deduction(learned_nogood.predicates.iter().copied());
 
         context.process_learned_nogood(learned_nogood, lbd, constraint_tag);
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger.clone());
+        self.semantic_minimiser
+            .log_statistics(statistic_logger.clone());
+        self.recursive_minimiser.log_statistics(statistic_logger);
     }
 }
 
@@ -111,6 +151,7 @@ impl ResolutionResolver {
             lbd_helper: Default::default(),
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
+            statistics: Default::default(),
         }
     }
 
@@ -128,7 +169,9 @@ impl ResolutionResolver {
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
             self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
-        context.initial_conflict_size(num_initial_conflict_predicates);
+        self.statistics
+            .average_conflict_size
+            .add_term(num_initial_conflict_predicates as u64);
 
         // In the case of 1UIP
         // Keep refining the conflict nogood until there is only one predicate from the current
@@ -333,14 +376,10 @@ impl ResolutionResolver {
 
             // We perform a final semantic minimisation call which allows the merging of the
             // equality predicates which remain in the nogood
-            let size_before_semantic_minimisation = self.processed_nogood_predicates.len();
             self.semantic_minimiser
                 .set_mode(SemanticMinimisationMode::EnableEqualityMerging);
             self.semantic_minimiser
                 .minimise(context, &mut self.processed_nogood_predicates);
-            context.removed_predicates_by_semantic(
-                (size_before_semantic_minimisation - self.processed_nogood_predicates.len()) as u64,
-            );
         }
 
         let learned_nogood =

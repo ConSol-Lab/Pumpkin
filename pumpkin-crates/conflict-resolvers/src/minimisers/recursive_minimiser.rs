@@ -3,9 +3,12 @@ use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::HashSet;
+use pumpkin_core::create_statistics_struct;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
+use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
+use pumpkin_core::statistics::moving_averages::MovingAverage;
 
 use crate::minimisers::NogoodMinimiser;
 
@@ -27,7 +30,14 @@ pub struct RecursiveMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
+
+    statistics: RecursiveMinimiserStatistics,
 }
+
+create_statistics_struct!(RecursiveMinimiserStatistics {
+    /// The average number of atomic constraints removed by recursive minimisation during conflict analysis
+    average_number_of_removed_atomic_constraints_recursive: CumulativeMovingAverage<u64>,
+});
 
 impl NogoodMinimiser for RecursiveMinimiser {
     fn minimise(&mut self, context: &mut ConflictAnalysisContext, nogood: &mut Vec<Predicate>) {
@@ -57,8 +67,9 @@ impl NogoodMinimiser for RecursiveMinimiser {
 
         self.clean_up_minimisation();
 
-        let num_predicates_removed = num_literals_before_minimisation - nogood.len();
-        context.removed_predicates_by_recursive(num_predicates_removed as u64);
+        self.statistics
+            .average_number_of_removed_atomic_constraints_recursive
+            .add_term((num_literals_before_minimisation - nogood.len()) as u64);
     }
 }
 

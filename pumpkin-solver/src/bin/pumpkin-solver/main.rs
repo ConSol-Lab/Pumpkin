@@ -660,9 +660,11 @@ fn cnf_problem(
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
-            satisfiable
-                .solver()
-                .log_statistics(Some(satisfiable.brancher()), true);
+            satisfiable.solver().log_statistics(
+                satisfiable.brancher(),
+                satisfiable.conflict_resolver(),
+                true,
+            );
             println!("s SATISFIABLE");
             println!(
                 "v {}",
@@ -673,13 +675,13 @@ fn cnf_problem(
                 )
             );
         }
-        SatisfactionResult::Unsatisfiable(solver, brancher) => {
-            solver.log_statistics(Some(brancher), true);
+        SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
+            solver.log_statistics(brancher, resolver, true);
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown(solver, brancher) => {
-            solver.log_statistics(Some(brancher), true);
+        SatisfactionResult::Unknown(solver, brancher, resolver) => {
+            solver.log_statistics(brancher, resolver, true);
             println!("s UNKNOWN");
         }
     }
