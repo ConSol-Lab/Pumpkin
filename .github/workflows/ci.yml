@@ -26,7 +26,7 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: dtolnay/rust-toolchain@stable
-    - run: cargo test --release --no-fail-fast
+    - run: cargo test --release --no-fail-fast --features pumpkin-core/check-propagations
 
   wasm-test:
     name: Test Suite for pumpkin-core in WebAssembly
