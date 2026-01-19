@@ -60,11 +60,15 @@ where
         };
 
         loop {
-            self.solution_callback.on_solution_callback(
+            let callback_result = self.solution_callback.on_solution_callback(
                 solver,
                 best_solution.as_reference(),
                 brancher,
             );
+
+            if callback_result.is_break() {
+                return OptimisationResult::Satisfiable(best_solution);
+            }
 
             let best_objective_value = best_solution.get_integer_value(objective.clone());
 

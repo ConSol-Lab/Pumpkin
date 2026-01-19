@@ -6,6 +6,7 @@ mod parser;
 
 use std::fs::File;
 use std::io::Read;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
@@ -188,6 +189,8 @@ pub(crate) fn solve(
                 options.verbose,
                 init_time,
             );
+
+            ControlFlow::Continue(())
         };
 
     let result = match options.optimisation_strategy {

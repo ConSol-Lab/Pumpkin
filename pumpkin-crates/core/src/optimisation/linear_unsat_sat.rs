@@ -62,11 +62,15 @@ where
             SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
         };
 
-        self.solution_callback.on_solution_callback(
+        let callback_result = self.solution_callback.on_solution_callback(
             solver,
             primal_solution.as_reference(),
             brancher,
         );
+
+        if callback_result.is_break() {
+            return OptimisationResult::Satisfiable(primal_solution);
+        }
 
         let primal_objective = primal_solution.get_integer_value(objective.clone());
 
@@ -108,7 +112,8 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    self.solution_callback.on_solution_callback(
+                    // Optimisation will stop regardless of the result of the callback.
+                    let _ = self.solution_callback.on_solution_callback(
                         solver,
                         primal_solution.as_reference(),
                         brancher,

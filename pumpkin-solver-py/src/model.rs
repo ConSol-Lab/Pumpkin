@@ -1,4 +1,5 @@
 use std::num::NonZero;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
@@ -283,7 +284,7 @@ impl Model {
         timeout: Option<f32>,
         on_solution: Option<Py<PyAny>>,
         warm_start: HashMap<IntExpression, i32>,
-    ) -> OptimisationResult {
+    ) -> PyResult<OptimisationResult> {
         let mut termination = get_termination(timeout);
 
         let direction = match direction {
@@ -293,14 +294,19 @@ impl Model {
 
         let objective = objective.0;
 
-        let callback = move |_: &Solver, solution: SolutionReference<'_>, _: &PythonBrancher| {
+        let mut error_in_callback = None;
+
+        let callback = |_: &Solver, solution: SolutionReference<'_>, _: &PythonBrancher| {
             let python_solution = crate::result::Solution::from(solution);
 
-            if let Some(on_solution_callback) = on_solution.as_ref() {
-                let _ = on_solution_callback
-                    .call(py, (python_solution,), None)
-                    .expect("solution callback should be callable");
+            if let Some(on_solution_callback) = on_solution.as_ref()
+                && let Err(err) = on_solution_callback.call(py, (python_solution,), None)
+            {
+                error_in_callback = Some(err);
+                return ControlFlow::Break(());
             }
+
+            ControlFlow::Continue(())
         };
 
         self.update_warm_start(warm_start);
@@ -318,17 +324,23 @@ impl Model {
             ),
         };
 
+        if let Some(err) = error_in_callback {
+            return Err(err);
+        }
+
         match result {
             pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
-                OptimisationResult::Satisfiable(solution.into())
+                Ok(OptimisationResult::Satisfiable(solution.into()))
             }
             pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
-                OptimisationResult::Optimal(solution.into())
+                Ok(OptimisationResult::Optimal(solution.into()))
             }
             pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
-                OptimisationResult::Unsatisfiable()
+                Ok(OptimisationResult::Unsatisfiable())
             }
-            pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
+            pumpkin_solver::results::OptimisationResult::Unknown => {
+                Ok(OptimisationResult::Unknown())
+            }
         }
     }
 }
