@@ -149,6 +149,7 @@
 //! # use pumpkin_solver::results::SolutionReference;
 //! # use pumpkin_solver::DefaultBrancher;
 //! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
@@ -161,7 +162,7 @@
 //! # let mut brancher = solver.default_brancher();
 //! # let mut resolver = default_conflict_resolver();
 //! // Then we solve to optimality
-//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+//! let callback: fn(&Solver, SolutionReference, &DefaultBrancher, &ResolutionResolver) = |_, _, _, _| {};
 //! let result = solver.optimise(
 //!     &mut brancher,
 //!     &mut termination,
@@ -237,7 +238,7 @@
 //!
 //! loop {
 //!     match solution_iterator.next_solution() {
-//!         IteratedSolution::Solution(solution, _, _) => {
+//!         IteratedSolution::Solution(solution, _, _, _) => {
 //!             number_of_solutions += 1;
 //!             // We have found another solution, the same invariant should hold
 //!             let value_x = solution.get_integer_value(x);
@@ -277,7 +278,6 @@
 //! # use pumpkin_solver::constraints;
 //! # use pumpkin_solver::constraints::Constraint;
 //! # use pumpkin_solver::default_conflict_resolver;
-//! # use pumpkin_solver::default_core_extractor;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -316,12 +316,11 @@
 //! ) = result
 //! {
 //!     {
-//!         let mut core_extractor = default_core_extractor();
-//!         let core = unsatisfiable.extract_core(&mut core_extractor);
+//!         let core = unsatisfiable.extract_core();
 //!
 //!         // In this case, the core should be equal to all of the assumption literals
-//!         assert_eq!(core, vec![predicate!(y == 1), predicate!(x == 1)].into());
-//!     }
+//!         assert_eq!(core, vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y !=
+//! 0)].into());     }
 //! }
 //! ```
 //! ## Feature Flags

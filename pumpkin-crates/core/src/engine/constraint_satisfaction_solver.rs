@@ -405,7 +405,6 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_core::termination::Indefinite;
     /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
     /// # use pumpkin_solver::default_conflict_resolver;
-    /// # use pumpkin_solver::default_core_extractor;
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.
@@ -436,8 +435,7 @@ impl ConstraintSatisfactionSolver {
     ///     result
     /// {
     ///     {
-    ///         let mut core_extractor = default_core_extractor();
-    ///         let core = unsatisfiable.extract_core(&mut core_extractor);
+    ///         let core = unsatisfiable.extract_core();
     ///
     ///         // The order of the literals in the core is undefined, so we check for unordered
     ///         // equality.
@@ -465,8 +463,8 @@ impl ConstraintSatisfactionSolver {
                 self.assumptions
                     .iter()
                     .skip(index + 1)
-                    .any(|other_assumptiion| {
-                        assumption.is_mutually_exclusive_with(*other_assumptiion)
+                    .any(|other_assumption| {
+                        assumption.is_mutually_exclusive_with(*other_assumption)
                     })
             })
             .map(|(_, conflicting_assumption)| {
@@ -488,6 +486,7 @@ impl ConstraintSatisfactionSolver {
                 while let Some(predicate) = predicates.pop() {
                     if context.state.assignments.is_decision_predicate(&predicate) {
                         let _ = core.insert(predicate);
+                        continue;
                     }
 
                     ConflictAnalysisContext::get_propagation_reason_inner(
