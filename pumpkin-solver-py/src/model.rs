@@ -11,7 +11,6 @@ use pumpkin_solver::containers::KeyGenerator;
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::containers::StorageKey;
 use pumpkin_solver::default_conflict_resolver;
-use pumpkin_solver::default_core_extractor;
 use pumpkin_solver::optimisation::OptimisationDirection;
 use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
@@ -262,7 +261,7 @@ impl Model {
                 //     literals in the python wrapper as well. For now, this is the simplest way
                 //     forward. I expect that the situation above almost never happens in practice.
                 let core = result
-                    .extract_core(&mut default_core_extractor())
+                    .extract_core()
                     .iter()
                     .map(|predicate| assumptions
                          .iter()

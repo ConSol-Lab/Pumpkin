@@ -546,6 +546,7 @@ fn run() -> PumpkinResult<()> {
     } else {
         ProofLog::default()
     };
+    let is_logging_inferences = proof_log.is_logging_inferences();
 
     let restart_options = RestartOptions {
         sequence_generator_type: args.restart_sequence_generator_type,
@@ -636,7 +637,11 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::OneUIP),
+                ResolutionResolver::new(
+                    AnalysisMode::OneUIP,
+                    !args.no_learning_clause_minimisation,
+                    is_logging_inferences,
+                ),
             )?,
         },
     }

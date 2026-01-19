@@ -330,15 +330,13 @@
 //!   solver by several orders of magnitude, so it is turned off by default.
 
 pub mod conflict_resolvers {
-    //! Contains the implementations of [`ConflictResolver`]s, [`CoreExtractor`]s, and
+    //! Contains the implementations of [`ConflictResolver`]s, and
     //! [`NogoodMinimiser`]s.
     #[cfg(doc)]
     use pumpkin_conflict_resolvers::minimisers::NogoodMinimiser;
     pub use pumpkin_conflict_resolvers::*;
     #[cfg(doc)]
     use pumpkin_core::conflict_resolving::ConflictResolver;
-    #[cfg(doc)]
-    use pumpkin_core::conflict_resolving::CoreExtractor;
 }
 
 pub mod propagators {
@@ -353,16 +351,14 @@ use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 pub use pumpkin_constraints::*;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
-#[cfg(doc)]
-use pumpkin_core::conflict_resolving::CoreExtractor;
+use pumpkin_core::proof::ProofLog;
 pub use pumpkin_core::*;
-
-/// Returns a default [`CoreExtractor`].
-pub fn default_core_extractor() -> ResolutionResolver {
-    ResolutionResolver::new(AnalysisMode::AllDecision)
-}
 
 /// Returns a default [`ConflictResolver`].
 pub fn default_conflict_resolver() -> ResolutionResolver {
-    ResolutionResolver::new(AnalysisMode::OneUIP)
+    ResolutionResolver::new(
+        AnalysisMode::OneUIP,
+        true,
+        ProofLog::default().is_logging_inferences(),
+    )
 }

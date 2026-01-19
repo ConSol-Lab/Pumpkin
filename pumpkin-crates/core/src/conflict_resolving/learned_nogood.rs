@@ -11,9 +11,9 @@ use crate::predicates::Predicate;
 /// - A [`Predicate`] from the second-highest decision level is placed at the `1`st index of
 ///   [`LearnedNogood::predicates`].
 #[derive(Clone, Debug)]
-pub struct LearnedNogood {
-    pub predicates: Vec<Predicate>,
-    pub backtrack_level: usize,
+pub(crate) struct LearnedNogood {
+    pub(crate) predicates: Vec<Predicate>,
+    pub(crate) backtrack_level: usize,
 }
 
 impl Deref for LearnedNogood {
@@ -29,7 +29,7 @@ impl LearnedNogood {
     ///
     /// This method automatically ensures that the invariants of nogoods hold; see [`LearnedNogood`]
     /// for more details on these invariants.
-    pub fn create_from_vec(
+    pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
     ) -> Self {

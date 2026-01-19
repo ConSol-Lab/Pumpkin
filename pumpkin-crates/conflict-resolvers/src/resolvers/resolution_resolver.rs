@@ -3,8 +3,6 @@ use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
-use pumpkin_core::conflict_resolving::CoreExtractor;
-use pumpkin_core::conflict_resolving::LearnedNogood;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
@@ -65,6 +63,9 @@ pub struct ResolutionResolver {
     semantic_minimiser: SemanticMinimiser,
 
     statistics: LearnedNogoodStatistics,
+
+    should_minimise: bool,
+    log_inferences: bool,
 }
 
 create_statistics_struct!(
@@ -97,32 +98,32 @@ pub enum AnalysisMode {
 
 impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
-        let learned_nogood = self.learn_nogood(context);
+        self.learn_nogood(context);
 
         let lbd = self
             .lbd_helper
-            .compute_lbd(&learned_nogood.predicates, context);
+            .compute_lbd(&self.processed_nogood_predicates, context);
 
         // Update statistics
         self.statistics.average_lbd.add_term(lbd as u64);
-        self.statistics
-            .average_backtrack_amount
-            .add_term((context.get_checkpoint() - learned_nogood.backtrack_level) as u64);
-        self.statistics.num_unit_nogoods_learned += (learned_nogood.predicates.len() == 1) as u64;
+        self.statistics.num_unit_nogoods_learned +=
+            (self.processed_nogood_predicates.len() == 1) as u64;
         self.statistics
             .average_learned_nogood_length
-            .add_term(learned_nogood.predicates.len() as u64);
+            .add_term(self.processed_nogood_predicates.len() as u64);
 
-        let constraint_tag = context.log_deduction(learned_nogood.predicates.iter().copied());
+        let constraint_tag =
+            context.log_deduction(self.processed_nogood_predicates.iter().copied());
 
-        // TODO: not the most graceful implementation
-        context.inform_of_learned_nogood(lbd);
+        let backtrack_level = context.process_learned_nogood(
+            self.processed_nogood_predicates.clone(),
+            lbd,
+            constraint_tag,
+        );
 
-        let _ = context
-            .get_state_mut()
-            .restore_to(learned_nogood.backtrack_level);
-
-        context.add_learned_nogood(learned_nogood, constraint_tag);
+        self.statistics
+            .average_backtrack_amount
+            .add_term((context.get_checkpoint() - backtrack_level) as u64);
     }
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
@@ -133,21 +134,8 @@ impl ConflictResolver for ResolutionResolver {
     }
 }
 
-impl CoreExtractor for ResolutionResolver {
-    fn extract_core(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
-        let previous_mode = self.mode;
-        self.mode = AnalysisMode::AllDecision;
-
-        let learned_nogood = self.learn_nogood(context);
-
-        self.mode = previous_mode;
-
-        learned_nogood
-    }
-}
-
 impl ResolutionResolver {
-    pub fn new(mode: AnalysisMode) -> Self {
+    pub fn new(mode: AnalysisMode, should_minimise: bool, log_inferences: bool) -> Self {
         Self {
             mode,
             to_process_heap: Default::default(),
@@ -158,18 +146,24 @@ impl ResolutionResolver {
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
+            should_minimise,
+            log_inferences,
         }
     }
 
-    pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
+    pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
-            let should_explain = context.is_logging_inferences();
-            self.add_predicate_to_conflict_nogood(*predicate, self.mode, context, should_explain);
+            self.add_predicate_to_conflict_nogood(
+                *predicate,
+                self.mode,
+                context,
+                self.log_inferences,
+            );
         }
 
         // Record conflict nogood size statistics.
@@ -215,12 +209,11 @@ impl ResolutionResolver {
             );
 
             for i in 0..self.reason_buffer.len() {
-                let should_explain = context.is_logging_inferences();
                 self.add_predicate_to_conflict_nogood(
                     self.reason_buffer[i],
                     self.mode,
                     context,
-                    should_explain,
+                    self.log_inferences,
                 );
             }
         }
@@ -343,7 +336,7 @@ impl ResolutionResolver {
         self.predicate_id_generator.get_predicate(next_predicate_id)
     }
 
-    fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
+    fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
 
@@ -363,19 +356,18 @@ impl ResolutionResolver {
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
-        self.semantic_minimiser
-            .set_mode(if !context.should_minimise() {
-                // If we do not minimise then we do the equality
-                // merging in the first iteration of removing
-                // duplicates
-                SemanticMinimisationMode::EnableEqualityMerging
-            } else {
-                SemanticMinimisationMode::DisableEqualityMerging
-            });
+        self.semantic_minimiser.set_mode(if !self.should_minimise {
+            // If we do not minimise then we do the equality
+            // merging in the first iteration of removing
+            // duplicates
+            SemanticMinimisationMode::EnableEqualityMerging
+        } else {
+            SemanticMinimisationMode::DisableEqualityMerging
+        });
         self.semantic_minimiser
             .minimise(context, &mut self.processed_nogood_predicates);
 
-        if context.should_minimise() {
+        if self.should_minimise {
             // Then we perform recursive minimisation to remove the dominated predicates
             self.recursive_minimiser
                 .minimise(context, &mut self.processed_nogood_predicates);
@@ -388,22 +380,17 @@ impl ResolutionResolver {
                 .minimise(context, &mut self.processed_nogood_predicates);
         }
 
-        let learned_nogood =
-            LearnedNogood::create_from_vec(self.processed_nogood_predicates.clone(), context);
-
         pumpkin_assert_advanced!(
-            learned_nogood
-                .predicates
+            self.processed_nogood_predicates
                 .iter()
-                .skip(1)
-                .all(|p| context.evaluate_predicate(*p) == Some(true))
+                .filter(|p| context.evaluate_predicate(**p) == Some(true))
+                .count()
+                == self.processed_nogood_predicates.len() - 1
         );
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.
-        for predicate in learned_nogood.predicates.iter() {
+        for predicate in self.processed_nogood_predicates.iter() {
             context.predicate_appeared_in_conflict(*predicate);
         }
-
-        learned_nogood
     }
 }

@@ -29,7 +29,6 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
-use crate::conflict_resolving::CoreExtractor;
 use crate::containers::HashMap;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
@@ -217,7 +216,6 @@ impl ConstraintSatisfactionSolver {
         let mut conflict_analysis_context = ConflictAnalysisContext {
             solver_state: &mut self.solver_state,
             brancher: &mut DummyBrancher,
-            should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
             restart_strategy: &mut self.restart_strategy,
@@ -453,11 +451,7 @@ impl ConstraintSatisfactionSolver {
     ///     }
     /// }
     /// ```
-    pub fn extract_clausal_core(
-        &mut self,
-        brancher: &mut impl Brancher,
-        core_extractor: &mut impl CoreExtractor,
-    ) -> CoreExtractionResult {
+    pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
         if self.solver_state.is_infeasible() {
             return CoreExtractionResult::Core(vec![]);
         }
@@ -477,10 +471,9 @@ impl ConstraintSatisfactionSolver {
                 CoreExtractionResult::ConflictingAssumption(*conflicting_assumption)
             })
             .unwrap_or_else(|| {
-                let mut conflict_analysis_context = ConflictAnalysisContext {
+                let _conflict_analysis_context = ConflictAnalysisContext {
                     solver_state: &mut self.solver_state,
                     brancher,
-                    should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
                     restart_strategy: &mut self.restart_strategy,
@@ -488,8 +481,7 @@ impl ConstraintSatisfactionSolver {
                     nogood_propagator_handle: self.nogood_propagator_handle,
                 };
 
-                let nogood = core_extractor.extract_core(&mut conflict_analysis_context);
-                CoreExtractionResult::Core(nogood.predicates.clone())
+                todo!()
             })
     }
 
@@ -700,7 +692,6 @@ impl ConstraintSatisfactionSolver {
         let mut conflict_analysis_context = ConflictAnalysisContext {
             solver_state: &mut self.solver_state,
             brancher,
-            should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
             restart_strategy: &mut self.restart_strategy,
