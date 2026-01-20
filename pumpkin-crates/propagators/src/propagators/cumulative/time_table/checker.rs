@@ -22,7 +22,12 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check(&self, state: pumpkin_checking::VariableState<Atomic>) -> bool {
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
         // The profile is a key-value store. The keys correspond to time-points, and the values to
         // the relative change in resource consumption. A BTreeMap is used to maintain a
         // sorted order of the time points.
@@ -60,22 +65,21 @@ mod tests {
 
     #[test]
     fn conflict_on_unary_resource() {
-        let state = VariableState::prepare_for_conflict_check(
-            [
-                TestAtomic {
-                    name: "x1",
-                    comparison: pumpkin_checking::Comparison::Equal,
-                    value: 1,
-                },
-                TestAtomic {
-                    name: "x2",
-                    comparison: pumpkin_checking::Comparison::Equal,
-                    value: 1,
-                },
-            ],
-            None,
-        )
-        .expect("no conflicting atomics");
+        let premises = [
+            TestAtomic {
+                name: "x1",
+                comparison: pumpkin_checking::Comparison::Equal,
+                value: 1,
+            },
+            TestAtomic {
+                name: "x2",
+                comparison: pumpkin_checking::Comparison::Equal,
+                value: 1,
+            },
+        ];
+
+        let state = VariableState::prepare_for_conflict_check(premises, None)
+            .expect("no conflicting atomics");
 
         let checker = TimeTableChecker {
             tasks: vec![
@@ -94,6 +98,6 @@ mod tests {
             capacity: 1,
         };
 
-        assert!(checker.check(state));
+        assert!(checker.check(state, &premises, None));
     }
 }

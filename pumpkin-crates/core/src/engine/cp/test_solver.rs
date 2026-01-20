@@ -61,7 +61,12 @@ impl TestSolver {
         struct Checker;
 
         impl InferenceChecker<Predicate> for Checker {
-            fn check(&self, _: pumpkin_checking::VariableState<Predicate>) -> bool {
+            fn check(
+                &self,
+                _: pumpkin_checking::VariableState<Predicate>,
+                _: &[Predicate],
+                _: Option<&Predicate>,
+            ) -> bool {
                 true
             }
         }

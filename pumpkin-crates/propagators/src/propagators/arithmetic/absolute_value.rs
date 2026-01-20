@@ -173,7 +173,12 @@ where
     VB: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check(&self, state: pumpkin_checking::VariableState<Atomic>) -> bool {
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
         let signed_lower = self.signed.induced_lower_bound(&state);
         let signed_upper = self.signed.induced_upper_bound(&state);
         let absolute_lower = self.absolute.induced_lower_bound(&state);

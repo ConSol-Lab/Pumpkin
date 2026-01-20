@@ -13,7 +13,7 @@ use crate::model::Constraint;
 /// The premises and negation of the consequent should lead to an overflow of the resource
 /// capacity.
 pub(crate) fn verify_time_table(
-    _: &Fact,
+    fact: &Fact,
     constraint: &Constraint,
     state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
@@ -34,7 +34,7 @@ pub(crate) fn verify_time_table(
         capacity: cumulative.capacity,
     };
 
-    if checker.check(state) {
+    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)

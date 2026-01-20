@@ -20,7 +20,15 @@ pub use variable_state::*;
 /// inference rule.
 pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// Returns `true` if `state` is a conflict, and `false` if not.
-    fn check(&self, state: VariableState<Atomic>) -> bool;
+    ///
+    /// For the conflict check, all the premises are true in the state and the consequent, if
+    /// present, if false.
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> bool;
 }
 
 /// Wrapper around `Box<dyn InferenceChecker<Atomic>>` that implements [`Clone`].
@@ -41,7 +49,12 @@ impl<Atomic: AtomicConstraint> From<Box<dyn InferenceChecker<Atomic>>> for Boxed
 
 impl<Atomic: AtomicConstraint> BoxedChecker<Atomic> {
     /// See [`InferenceChecker::check`].
-    pub fn check(&self, variable_state: VariableState<Atomic>) -> bool {
-        self.0.check(variable_state)
+    pub fn check(
+        &self,
+        variable_state: VariableState<Atomic>,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> bool {
+        self.0.check(variable_state, premises, consequent)
     }
 }

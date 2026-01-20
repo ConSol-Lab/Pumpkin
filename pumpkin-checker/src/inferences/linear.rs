@@ -49,12 +49,12 @@ pub(super) fn verify_linear_bounds(
 
 fn verify_linear_inference(
     linear: &Linear,
-    _: &Fact,
+    fact: &Fact,
     state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
     let checker = LinearLessOrEqualInferenceChecker::new(linear.terms.clone().into(), linear.bound);
 
-    if InferenceChecker::<Atomic>::check(&checker, state) {
+    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)

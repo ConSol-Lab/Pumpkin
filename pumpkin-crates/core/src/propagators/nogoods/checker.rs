@@ -12,7 +12,12 @@ impl<Atomic> InferenceChecker<Atomic> for NogoodChecker<Atomic>
 where
     Atomic: AtomicConstraint + Clone + Debug,
 {
-    fn check(&self, state: pumpkin_checking::VariableState<Atomic>) -> bool {
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
         self.nogood.iter().all(|atomic| state.is_true(atomic))
     }
 }

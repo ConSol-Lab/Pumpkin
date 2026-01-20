@@ -307,7 +307,12 @@ where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
 {
-    fn check(&self, variable_state: VariableState<Atomic>) -> bool {
+    fn check(
+        &self,
+        variable_state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
         // Next, we evaluate the linear inequality. The lower bound of the
         // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
         // I32Ext, and if the lower bound of one of the terms is -infty, then the left-hand side

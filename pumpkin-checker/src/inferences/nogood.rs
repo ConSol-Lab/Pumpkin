@@ -13,7 +13,7 @@ use crate::model::Constraint;
 ///
 /// This inference is used to rewrite a nogood `L /\ p -> false` to `L -> not p`.
 pub(crate) fn verify_nogood(
-    _: &Fact,
+    fact: &Fact,
     constraint: &Constraint,
     state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
@@ -25,7 +25,7 @@ pub(crate) fn verify_nogood(
         nogood: nogood.deref().into(),
     };
 
-    if checker.check(state) {
+    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)
