@@ -13,14 +13,14 @@ use std::ops::Neg;
 ///   yield `IntExt::I32(0)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntExt {
-    I32(i32),
+    Int(i32),
     NegativeInf,
     PositiveInf,
 }
 
 impl From<i32> for IntExt {
     fn from(value: i32) -> Self {
-        IntExt::I32(value)
+        IntExt::Int(value)
     }
 }
 
@@ -29,7 +29,7 @@ impl TryInto<i32> for IntExt {
 
     fn try_into(self) -> Result<i32, Self::Error> {
         match self {
-            IntExt::I32(inner) => Ok(inner),
+            IntExt::Int(inner) => Ok(inner),
             IntExt::NegativeInf | IntExt::PositiveInf => Err(()),
         }
     }
@@ -38,7 +38,7 @@ impl TryInto<i32> for IntExt {
 impl PartialEq<i32> for IntExt {
     fn eq(&self, other: &i32) -> bool {
         match self {
-            IntExt::I32(v1) => v1 == other,
+            IntExt::Int(v1) => v1 == other,
             IntExt::NegativeInf | IntExt::PositiveInf => false,
         }
     }
@@ -65,18 +65,18 @@ impl PartialOrd<IntExt> for IntExt {
 impl Ord for IntExt {
     fn cmp(&self, other: &Self) -> Ordering {
         match self {
-            IntExt::I32(v1) => match other {
-                IntExt::I32(v2) => v1.cmp(v2),
+            IntExt::Int(v1) => match other {
+                IntExt::Int(v2) => v1.cmp(v2),
                 IntExt::NegativeInf => Ordering::Greater,
                 IntExt::PositiveInf => Ordering::Less,
             },
             IntExt::NegativeInf => match other {
-                IntExt::I32(_) => Ordering::Less,
+                IntExt::Int(_) => Ordering::Less,
                 IntExt::PositiveInf => Ordering::Less,
                 IntExt::NegativeInf => Ordering::Equal,
             },
             IntExt::PositiveInf => match other {
-                IntExt::I32(_) => Ordering::Greater,
+                IntExt::Int(_) => Ordering::Greater,
                 IntExt::NegativeInf => Ordering::Greater,
                 IntExt::PositiveInf => Ordering::Greater,
             },
@@ -87,7 +87,7 @@ impl Ord for IntExt {
 impl PartialOrd<i32> for IntExt {
     fn partial_cmp(&self, other: &i32) -> Option<Ordering> {
         match self {
-            IntExt::I32(v1) => v1.partial_cmp(other),
+            IntExt::Int(v1) => v1.partial_cmp(other),
             IntExt::NegativeInf => Some(Ordering::Less),
             IntExt::PositiveInf => Some(Ordering::Greater),
         }
@@ -98,7 +98,7 @@ impl Add<i32> for IntExt {
     type Output = IntExt;
 
     fn add(self, rhs: i32) -> Self::Output {
-        self + IntExt::I32(rhs)
+        self + IntExt::Int(rhs)
     }
 }
 
@@ -107,12 +107,12 @@ impl Add for IntExt {
 
     fn add(self, rhs: IntExt) -> Self::Output {
         match (self, rhs) {
-            (IntExt::I32(lhs), IntExt::I32(rhs)) => IntExt::I32(lhs + rhs),
+            (IntExt::Int(lhs), IntExt::Int(rhs)) => IntExt::Int(lhs + rhs),
 
-            (IntExt::I32(_), Self::NegativeInf) => Self::NegativeInf,
-            (IntExt::I32(_), Self::PositiveInf) => Self::PositiveInf,
-            (Self::NegativeInf, IntExt::I32(_)) => Self::NegativeInf,
-            (Self::PositiveInf, IntExt::I32(_)) => Self::PositiveInf,
+            (IntExt::Int(_), Self::NegativeInf) => Self::NegativeInf,
+            (IntExt::Int(_), Self::PositiveInf) => Self::PositiveInf,
+            (Self::NegativeInf, IntExt::Int(_)) => Self::NegativeInf,
+            (Self::PositiveInf, IntExt::Int(_)) => Self::PositiveInf,
 
             (IntExt::NegativeInf, IntExt::NegativeInf) => IntExt::NegativeInf,
             (IntExt::PositiveInf, IntExt::PositiveInf) => IntExt::PositiveInf,
@@ -129,7 +129,7 @@ impl Mul<i32> for IntExt {
     type Output = IntExt;
 
     fn mul(self, rhs: i32) -> Self::Output {
-        self * IntExt::I32(rhs)
+        self * IntExt::Int(rhs)
     }
 }
 
@@ -138,16 +138,16 @@ impl Mul for IntExt {
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (IntExt::I32(lhs), IntExt::I32(rhs)) => IntExt::I32(lhs * rhs),
+            (IntExt::Int(lhs), IntExt::Int(rhs)) => IntExt::Int(lhs * rhs),
 
             // Multiplication with 0 will always yield 0.
-            (IntExt::I32(0), Self::NegativeInf)
-            | (IntExt::I32(0), Self::PositiveInf)
-            | (Self::NegativeInf, IntExt::I32(0))
-            | (Self::PositiveInf, IntExt::I32(0)) => IntExt::I32(0),
+            (IntExt::Int(0), Self::NegativeInf)
+            | (IntExt::Int(0), Self::PositiveInf)
+            | (Self::NegativeInf, IntExt::Int(0))
+            | (Self::PositiveInf, IntExt::Int(0)) => IntExt::Int(0),
 
-            (IntExt::I32(value), IntExt::NegativeInf)
-            | (IntExt::NegativeInf, IntExt::I32(value)) => {
+            (IntExt::Int(value), IntExt::NegativeInf)
+            | (IntExt::NegativeInf, IntExt::Int(value)) => {
                 if value >= 0 {
                     IntExt::NegativeInf
                 } else {
@@ -155,8 +155,8 @@ impl Mul for IntExt {
                 }
             }
 
-            (IntExt::I32(value), IntExt::PositiveInf)
-            | (IntExt::PositiveInf, IntExt::I32(value)) => {
+            (IntExt::Int(value), IntExt::PositiveInf)
+            | (IntExt::PositiveInf, IntExt::Int(value)) => {
                 if value >= 0 {
                     IntExt::PositiveInf
                 } else {
@@ -178,7 +178,7 @@ impl Neg for IntExt {
 
     fn neg(self) -> Self::Output {
         match self {
-            IntExt::I32(value) => IntExt::I32(-value),
+            IntExt::Int(value) => IntExt::Int(-value),
             IntExt::NegativeInf => IntExt::PositiveInf,
             IntExt::PositiveInf => Self::NegativeInf,
         }
@@ -187,7 +187,7 @@ impl Neg for IntExt {
 
 impl Sum for IntExt {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(IntExt::I32(0), |acc, value| acc + value)
+        iter.fold(IntExt::Int(0), |acc, value| acc + value)
     }
 }
 
@@ -199,30 +199,30 @@ mod tests {
 
     #[test]
     fn ordering_of_i32_with_i32_ext() {
-        assert!(I32(2) < 3);
-        assert!(I32(-1) < 3);
-        assert!(I32(-10) < -1);
+        assert!(Int(2) < 3);
+        assert!(Int(-1) < 3);
+        assert!(Int(-10) < -1);
     }
 
     #[test]
     fn ordering_of_i32_ext_with_i32() {
-        assert!(1 < I32(2));
-        assert!(-10 < I32(-1));
-        assert!(-11 < I32(-10));
+        assert!(1 < Int(2));
+        assert!(-10 < Int(-1));
+        assert!(-11 < Int(-10));
     }
 
     #[test]
     fn test_adding_i32s() {
-        assert_eq!(I32(3) + I32(4), I32(7));
+        assert_eq!(Int(3) + Int(4), Int(7));
     }
 
     #[test]
     fn test_adding_negative_inf() {
-        assert_eq!(I32(3) + NegativeInf, NegativeInf);
+        assert_eq!(Int(3) + NegativeInf, NegativeInf);
     }
 
     #[test]
     fn test_adding_positive_inf() {
-        assert_eq!(I32(3) + PositiveInf, PositiveInf);
+        assert_eq!(Int(3) + PositiveInf, PositiveInf);
     }
 }

@@ -195,7 +195,7 @@ where
         } else if signed_upper <= 0 {
             (-signed_upper, -signed_lower)
         } else if signed_lower < 0 && 0_i32 < signed_upper {
-            (IntExt::I32(0), std::cmp::max(-signed_lower, signed_upper))
+            (IntExt::Int(0), std::cmp::max(-signed_lower, signed_upper))
         } else {
             unreachable!()
         };

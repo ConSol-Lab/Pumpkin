@@ -420,12 +420,12 @@ where
         // the step is unsound!
         let mut consistent = true;
 
-        if let IntExt::I32(value) = self.rhs.induced_upper_bound(&state) {
+        if let IntExt::Int(value) = self.rhs.induced_upper_bound(&state) {
             let atomic = self.lhs.atomic_less_than(value);
             consistent &= state.apply(&atomic);
         }
 
-        if let IntExt::I32(value) = self.rhs.induced_lower_bound(&state) {
+        if let IntExt::Int(value) = self.rhs.induced_lower_bound(&state) {
             let atomic = self.lhs.atomic_greater_than(value);
             consistent &= state.apply(&atomic);
         }

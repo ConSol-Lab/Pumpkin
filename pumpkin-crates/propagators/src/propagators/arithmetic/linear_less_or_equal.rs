@@ -297,7 +297,7 @@ impl<Var> LinearLessOrEqualInferenceChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
         LinearLessOrEqualInferenceChecker {
             terms,
-            bound: IntExt::I32(bound),
+            bound: IntExt::Int(bound),
         }
     }
 }

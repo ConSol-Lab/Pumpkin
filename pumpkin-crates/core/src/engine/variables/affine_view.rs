@@ -85,12 +85,12 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     ) -> IntExt {
         if self.scale.is_positive() {
             match self.inner.induced_lower_bound(variable_state) {
-                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
                 bound => bound,
             }
         } else {
             match self.inner.induced_upper_bound(variable_state) {
-                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
                 IntExt::NegativeInf => IntExt::PositiveInf,
                 IntExt::PositiveInf => IntExt::NegativeInf,
             }
@@ -103,12 +103,12 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     ) -> IntExt {
         if self.scale.is_positive() {
             match self.inner.induced_upper_bound(variable_state) {
-                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
                 bound => bound,
             }
         } else {
             match self.inner.induced_lower_bound(variable_state) {
-                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
                 IntExt::NegativeInf => IntExt::PositiveInf,
                 IntExt::PositiveInf => IntExt::NegativeInf,
             }

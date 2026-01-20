@@ -92,7 +92,7 @@ where
         let domain = self.domains.get(identifier)?;
 
         if domain.lower_bound == domain.upper_bound {
-            let IntExt::I32(value) = domain.lower_bound else {
+            let IntExt::Int(value) = domain.lower_bound else {
                 panic!(
                     "lower can only equal upper if they are integers, otherwise the sign of infinity makes them different"
                 );
@@ -113,13 +113,13 @@ where
     {
         let domain = self.domains.get(identifier)?;
 
-        let IntExt::I32(lower_bound) = domain.lower_bound else {
+        let IntExt::Int(lower_bound) = domain.lower_bound else {
             // If there is no lower bound, then the domain is unbounded.
             return None;
         };
 
         // Ensure there is also an upper bound.
-        if !matches!(domain.upper_bound, IntExt::I32(_)) {
+        if !matches!(domain.upper_bound, IntExt::Int(_)) {
             return None;
         }
 
@@ -227,7 +227,7 @@ impl Domain {
             return;
         }
 
-        self.lower_bound = IntExt::I32(bound);
+        self.lower_bound = IntExt::Int(bound);
         self.holes = self.holes.split_off(&bound);
 
         // Take care of the condition where the new bound is already a hole in the domain.
@@ -243,7 +243,7 @@ impl Domain {
             return;
         }
 
-        self.upper_bound = IntExt::I32(bound);
+        self.upper_bound = IntExt::Int(bound);
 
         // Note the '+ 1' to keep the elements <= the upper bound instead of <
         // the upper bound.
@@ -277,7 +277,7 @@ impl Iterator for DomainIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         let DomainIterator { domain, next_value } = self;
 
-        let IntExt::I32(upper_bound) = domain.upper_bound else {
+        let IntExt::Int(upper_bound) = domain.upper_bound else {
             panic!("Only finite domains can be iterated.")
         };
 
