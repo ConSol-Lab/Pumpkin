@@ -2,6 +2,10 @@
 use std::slice;
 
 use bitfield_struct::bitfield;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::I32Ext;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::conjunction;
 use pumpkin_core::containers::HashSet;
@@ -17,6 +21,7 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -47,6 +52,16 @@ where
     BVar: IntegerVariable + 'static,
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, BinaryEquals),
+            Box::new(BinaryEqualsChecker {
+                lhs: self.a.clone(),
+                rhs: self.b.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let BinaryEqualsPropagatorArgs {
@@ -381,6 +396,47 @@ struct BinaryEqualsPropagation {
     /// Padding
     #[bits(16)]
     __: u16,
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryEqualsChecker<Lhs, Rhs> {
+    pub lhs: Lhs,
+    pub rhs: Rhs,
+}
+
+impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
+where
+    Atomic: AtomicConstraint,
+    Lhs: CheckerVariable<Atomic>,
+    Rhs: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        mut state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        // We apply the domain of variable 2 to variable 1. If the state remains consistent, then
+        // the step is unsound!
+        let mut consistent = true;
+
+        if let I32Ext::I32(value) = self.rhs.induced_upper_bound(&state) {
+            let atomic = self.lhs.atomic_less_than(value);
+            consistent &= state.apply(&atomic);
+        }
+
+        if let I32Ext::I32(value) = self.rhs.induced_lower_bound(&state) {
+            let atomic = self.lhs.atomic_greater_than(value);
+            consistent &= state.apply(&atomic);
+        }
+
+        for value in self.rhs.induced_holes(&state).collect::<Vec<_>>() {
+            let atomic = self.lhs.atomic_not_equal(value);
+            consistent &= state.apply(&atomic);
+        }
+
+        !consistent
+    }
 }
 
 #[allow(deprecated, reason = "Will be refactored")]
