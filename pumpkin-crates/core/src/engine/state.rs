@@ -733,10 +733,12 @@ impl State {
     /// Run the checker for the given inference code on the given inference.
     fn run_checker(
         &self,
-        premises: impl IntoIterator<Item = Predicate> + Clone,
+        premises: impl IntoIterator<Item = Predicate>,
         consequent: Option<Predicate>,
         inference_code: &InferenceCode,
     ) {
+        let premises: Vec<_> = premises.into_iter().collect();
+
         let checkers = self
             .checkers
             .get(inference_code)
@@ -756,7 +758,7 @@ impl State {
                         panic!("inconsistent atomics in inference by {inference_code:?}")
                     });
 
-            checker.check(variable_state)
+            checker.check(variable_state, &premises, consequent.as_ref())
         });
 
         assert!(
