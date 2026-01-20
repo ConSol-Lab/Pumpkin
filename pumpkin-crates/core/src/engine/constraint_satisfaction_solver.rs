@@ -406,7 +406,13 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_core::Solver;
     /// # use pumpkin_core::termination::Indefinite;
     /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
+    /// # #[cfg(not(target_arch = "wasm32"))]
     /// # use pumpkin_solver::default_conflict_resolver;
+    /// # #[cfg(target_arch = "wasm32")]
+    /// # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+    /// # #[cfg(target_arch = "wasm32")]
+    /// # use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+    ///
     /// let mut solver = Solver::default();
     ///
     /// // We use a dummy constraint tag for this example.
@@ -424,7 +430,12 @@ impl ConstraintSatisfactionSolver {
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut termination = Indefinite;
     /// let mut brancher = solver.default_brancher();
+    ///
+    /// #[cfg(not(target_arch = "wasm32"))]
+    /// // Then we create a conflict resolver
     /// let mut resolver = default_conflict_resolver();
+    /// #[cfg(target_arch = "wasm32")]
+    /// let mut resolver = ResolutionResolver::new(AnalysisMode::OneUIP, true, false);
     ///
     /// let result = solver.satisfy_under_assumptions(
     ///     &mut brancher,
