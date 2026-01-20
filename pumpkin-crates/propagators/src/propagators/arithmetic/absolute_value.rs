@@ -1,7 +1,7 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -195,7 +195,7 @@ where
         } else if signed_upper <= 0 {
             (-signed_upper, -signed_lower)
         } else if signed_lower < 0 && 0_i32 < signed_upper {
-            (I32Ext::I32(0), std::cmp::max(-signed_lower, signed_upper))
+            (IntExt::I32(0), std::cmp::max(-signed_lower, signed_upper))
         } else {
             unreachable!()
         };

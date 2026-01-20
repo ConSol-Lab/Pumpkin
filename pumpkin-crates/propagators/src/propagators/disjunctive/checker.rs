@@ -4,8 +4,8 @@ use std::marker::PhantomData;
 
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
@@ -51,8 +51,8 @@ where
             // - For tasks in omega, both bounds should be present to define the interval
             // - For the propagating task, the lower-bound should be present, and the negation of
             //   the consequent ensures that an upper-bound is present
-            if task.start_time.induced_lower_bound(&state) != I32Ext::NegativeInf
-                && task.start_time.induced_upper_bound(&state) != I32Ext::PositiveInf
+            if task.start_time.induced_lower_bound(&state) != IntExt::NegativeInf
+                && task.start_time.induced_upper_bound(&state) != IntExt::PositiveInf
             {
                 // Now we calculate the durations of tasks
                 let est_task: i32 = task
@@ -61,7 +61,7 @@ where
                     .try_into()
                     .unwrap();
                 let lst_task =
-                    <I32Ext as TryInto<i32>>::try_into(task.start_time.induced_upper_bound(&state))
+                    <IntExt as TryInto<i32>>::try_into(task.start_time.induced_upper_bound(&state))
                         .unwrap();
 
                 let is_propagating_task = if let Some(consequent) = consequent {

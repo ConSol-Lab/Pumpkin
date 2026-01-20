@@ -62,14 +62,14 @@ impl CheckerVariable<Predicate> for DomainId {
     fn induced_lower_bound(
         &self,
         variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> pumpkin_checking::I32Ext {
+    ) -> pumpkin_checking::IntExt {
         variable_state.lower_bound(self)
     }
 
     fn induced_upper_bound(
         &self,
         variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> pumpkin_checking::I32Ext {
+    ) -> pumpkin_checking::IntExt {
         variable_state.upper_bound(self)
     }
 

@@ -4,8 +4,8 @@ use std::slice;
 use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::conjunction;
 use pumpkin_core::containers::HashSet;
@@ -420,12 +420,12 @@ where
         // the step is unsound!
         let mut consistent = true;
 
-        if let I32Ext::I32(value) = self.rhs.induced_upper_bound(&state) {
+        if let IntExt::I32(value) = self.rhs.induced_upper_bound(&state) {
             let atomic = self.lhs.atomic_less_than(value);
             consistent &= state.apply(&atomic);
         }
 
-        if let I32Ext::I32(value) = self.rhs.induced_lower_bound(&state) {
+        if let IntExt::I32(value) = self.rhs.induced_lower_bound(&state) {
             let atomic = self.lhs.atomic_greater_than(value);
             consistent &= state.apply(&atomic);
         }

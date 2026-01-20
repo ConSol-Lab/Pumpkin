@@ -2,7 +2,7 @@ use std::ops::Not;
 
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
+use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
 use super::DomainId;
@@ -80,8 +80,8 @@ impl CheckerVariable<Predicate> for Literal {
     forward!(integer_variable, fn atomic_not_equal(&self, value: i32) -> Predicate);
     forward!(integer_variable, fn atomic_equal(&self, value: i32) -> Predicate);
 
-    forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> I32Ext);
-    forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> I32Ext);
+    forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
+    forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
     forward!(integer_variable, fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32>);
     forward!(
         integer_variable,

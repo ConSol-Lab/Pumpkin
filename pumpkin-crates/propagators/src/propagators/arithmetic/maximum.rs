@@ -1,7 +1,7 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -208,13 +208,13 @@ where
             .iter()
             .map(|element| element.induced_lower_bound(&state))
             .max()
-            .unwrap_or(I32Ext::NegativeInf);
+            .unwrap_or(IntExt::NegativeInf);
         let highest_maximum = self
             .array
             .iter()
             .map(|element| element.induced_upper_bound(&state))
             .max()
-            .unwrap_or(I32Ext::PositiveInf);
+            .unwrap_or(IntExt::PositiveInf);
 
         // If the intersection between the domain of `rhs` and `[lowest_maximum,
         // highest_maximum]` is empty, there is a conflict.

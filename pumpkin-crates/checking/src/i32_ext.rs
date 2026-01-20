@@ -9,191 +9,191 @@ use std::ops::Neg;
 /// # Notes on arithmetic operations:
 /// - The result of the operation `infty + -infty` is undetermined, and if evaluated will cause a
 ///   panic.
-/// - Multiplying [`I32Ext::PositiveInf`] or [`I32Ext::NegativeInf`] with `I32Ext::I32(0)` will
-///   yield `I32Ext::I32(0)`.
+/// - Multiplying [`IntExt::PositiveInf`] or [`IntExt::NegativeInf`] with `IntExt::I32(0)` will
+///   yield `IntExt::I32(0)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum I32Ext {
+pub enum IntExt {
     I32(i32),
     NegativeInf,
     PositiveInf,
 }
 
-impl From<i32> for I32Ext {
+impl From<i32> for IntExt {
     fn from(value: i32) -> Self {
-        I32Ext::I32(value)
+        IntExt::I32(value)
     }
 }
 
-impl TryInto<i32> for I32Ext {
+impl TryInto<i32> for IntExt {
     type Error = ();
 
     fn try_into(self) -> Result<i32, Self::Error> {
         match self {
-            I32Ext::I32(inner) => Ok(inner),
-            I32Ext::NegativeInf | I32Ext::PositiveInf => Err(()),
+            IntExt::I32(inner) => Ok(inner),
+            IntExt::NegativeInf | IntExt::PositiveInf => Err(()),
         }
     }
 }
 
-impl PartialEq<i32> for I32Ext {
+impl PartialEq<i32> for IntExt {
     fn eq(&self, other: &i32) -> bool {
         match self {
-            I32Ext::I32(v1) => v1 == other,
-            I32Ext::NegativeInf | I32Ext::PositiveInf => false,
+            IntExt::I32(v1) => v1 == other,
+            IntExt::NegativeInf | IntExt::PositiveInf => false,
         }
     }
 }
 
-impl PartialEq<I32Ext> for i32 {
-    fn eq(&self, other: &I32Ext) -> bool {
+impl PartialEq<IntExt> for i32 {
+    fn eq(&self, other: &IntExt) -> bool {
         other.eq(self)
     }
 }
 
-impl PartialOrd<I32Ext> for i32 {
-    fn partial_cmp(&self, other: &I32Ext) -> Option<Ordering> {
+impl PartialOrd<IntExt> for i32 {
+    fn partial_cmp(&self, other: &IntExt) -> Option<Ordering> {
         other.neg().partial_cmp(&self.neg())
     }
 }
 
-impl PartialOrd<I32Ext> for I32Ext {
-    fn partial_cmp(&self, other: &I32Ext) -> Option<Ordering> {
+impl PartialOrd<IntExt> for IntExt {
+    fn partial_cmp(&self, other: &IntExt) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for I32Ext {
+impl Ord for IntExt {
     fn cmp(&self, other: &Self) -> Ordering {
         match self {
-            I32Ext::I32(v1) => match other {
-                I32Ext::I32(v2) => v1.cmp(v2),
-                I32Ext::NegativeInf => Ordering::Greater,
-                I32Ext::PositiveInf => Ordering::Less,
+            IntExt::I32(v1) => match other {
+                IntExt::I32(v2) => v1.cmp(v2),
+                IntExt::NegativeInf => Ordering::Greater,
+                IntExt::PositiveInf => Ordering::Less,
             },
-            I32Ext::NegativeInf => match other {
-                I32Ext::I32(_) => Ordering::Less,
-                I32Ext::PositiveInf => Ordering::Less,
-                I32Ext::NegativeInf => Ordering::Equal,
+            IntExt::NegativeInf => match other {
+                IntExt::I32(_) => Ordering::Less,
+                IntExt::PositiveInf => Ordering::Less,
+                IntExt::NegativeInf => Ordering::Equal,
             },
-            I32Ext::PositiveInf => match other {
-                I32Ext::I32(_) => Ordering::Greater,
-                I32Ext::NegativeInf => Ordering::Greater,
-                I32Ext::PositiveInf => Ordering::Greater,
+            IntExt::PositiveInf => match other {
+                IntExt::I32(_) => Ordering::Greater,
+                IntExt::NegativeInf => Ordering::Greater,
+                IntExt::PositiveInf => Ordering::Greater,
             },
         }
     }
 }
 
-impl PartialOrd<i32> for I32Ext {
+impl PartialOrd<i32> for IntExt {
     fn partial_cmp(&self, other: &i32) -> Option<Ordering> {
         match self {
-            I32Ext::I32(v1) => v1.partial_cmp(other),
-            I32Ext::NegativeInf => Some(Ordering::Less),
-            I32Ext::PositiveInf => Some(Ordering::Greater),
+            IntExt::I32(v1) => v1.partial_cmp(other),
+            IntExt::NegativeInf => Some(Ordering::Less),
+            IntExt::PositiveInf => Some(Ordering::Greater),
         }
     }
 }
 
-impl Add<i32> for I32Ext {
-    type Output = I32Ext;
+impl Add<i32> for IntExt {
+    type Output = IntExt;
 
     fn add(self, rhs: i32) -> Self::Output {
-        self + I32Ext::I32(rhs)
+        self + IntExt::I32(rhs)
     }
 }
 
-impl Add for I32Ext {
-    type Output = I32Ext;
+impl Add for IntExt {
+    type Output = IntExt;
 
-    fn add(self, rhs: I32Ext) -> Self::Output {
+    fn add(self, rhs: IntExt) -> Self::Output {
         match (self, rhs) {
-            (I32Ext::I32(lhs), I32Ext::I32(rhs)) => I32Ext::I32(lhs + rhs),
+            (IntExt::I32(lhs), IntExt::I32(rhs)) => IntExt::I32(lhs + rhs),
 
-            (I32Ext::I32(_), Self::NegativeInf) => Self::NegativeInf,
-            (I32Ext::I32(_), Self::PositiveInf) => Self::PositiveInf,
-            (Self::NegativeInf, I32Ext::I32(_)) => Self::NegativeInf,
-            (Self::PositiveInf, I32Ext::I32(_)) => Self::PositiveInf,
+            (IntExt::I32(_), Self::NegativeInf) => Self::NegativeInf,
+            (IntExt::I32(_), Self::PositiveInf) => Self::PositiveInf,
+            (Self::NegativeInf, IntExt::I32(_)) => Self::NegativeInf,
+            (Self::PositiveInf, IntExt::I32(_)) => Self::PositiveInf,
 
-            (I32Ext::NegativeInf, I32Ext::NegativeInf) => I32Ext::NegativeInf,
-            (I32Ext::PositiveInf, I32Ext::PositiveInf) => I32Ext::PositiveInf,
+            (IntExt::NegativeInf, IntExt::NegativeInf) => IntExt::NegativeInf,
+            (IntExt::PositiveInf, IntExt::PositiveInf) => IntExt::PositiveInf,
 
-            (lhs @ I32Ext::NegativeInf, rhs @ I32Ext::PositiveInf)
-            | (lhs @ I32Ext::PositiveInf, rhs @ I32Ext::NegativeInf) => {
+            (lhs @ IntExt::NegativeInf, rhs @ IntExt::PositiveInf)
+            | (lhs @ IntExt::PositiveInf, rhs @ IntExt::NegativeInf) => {
                 panic!("the result of {lhs:?} + {rhs:?} is indeterminate")
             }
         }
     }
 }
 
-impl Mul<i32> for I32Ext {
-    type Output = I32Ext;
+impl Mul<i32> for IntExt {
+    type Output = IntExt;
 
     fn mul(self, rhs: i32) -> Self::Output {
-        self * I32Ext::I32(rhs)
+        self * IntExt::I32(rhs)
     }
 }
 
-impl Mul for I32Ext {
+impl Mul for IntExt {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (I32Ext::I32(lhs), I32Ext::I32(rhs)) => I32Ext::I32(lhs * rhs),
+            (IntExt::I32(lhs), IntExt::I32(rhs)) => IntExt::I32(lhs * rhs),
 
             // Multiplication with 0 will always yield 0.
-            (I32Ext::I32(0), Self::NegativeInf)
-            | (I32Ext::I32(0), Self::PositiveInf)
-            | (Self::NegativeInf, I32Ext::I32(0))
-            | (Self::PositiveInf, I32Ext::I32(0)) => I32Ext::I32(0),
+            (IntExt::I32(0), Self::NegativeInf)
+            | (IntExt::I32(0), Self::PositiveInf)
+            | (Self::NegativeInf, IntExt::I32(0))
+            | (Self::PositiveInf, IntExt::I32(0)) => IntExt::I32(0),
 
-            (I32Ext::I32(value), I32Ext::NegativeInf)
-            | (I32Ext::NegativeInf, I32Ext::I32(value)) => {
+            (IntExt::I32(value), IntExt::NegativeInf)
+            | (IntExt::NegativeInf, IntExt::I32(value)) => {
                 if value >= 0 {
-                    I32Ext::NegativeInf
+                    IntExt::NegativeInf
                 } else {
-                    I32Ext::PositiveInf
+                    IntExt::PositiveInf
                 }
             }
 
-            (I32Ext::I32(value), I32Ext::PositiveInf)
-            | (I32Ext::PositiveInf, I32Ext::I32(value)) => {
+            (IntExt::I32(value), IntExt::PositiveInf)
+            | (IntExt::PositiveInf, IntExt::I32(value)) => {
                 if value >= 0 {
-                    I32Ext::PositiveInf
+                    IntExt::PositiveInf
                 } else {
-                    I32Ext::NegativeInf
+                    IntExt::NegativeInf
                 }
             }
 
-            (I32Ext::NegativeInf, I32Ext::NegativeInf)
-            | (I32Ext::PositiveInf, I32Ext::PositiveInf) => I32Ext::PositiveInf,
+            (IntExt::NegativeInf, IntExt::NegativeInf)
+            | (IntExt::PositiveInf, IntExt::PositiveInf) => IntExt::PositiveInf,
 
-            (I32Ext::NegativeInf, I32Ext::PositiveInf)
-            | (I32Ext::PositiveInf, I32Ext::NegativeInf) => I32Ext::NegativeInf,
+            (IntExt::NegativeInf, IntExt::PositiveInf)
+            | (IntExt::PositiveInf, IntExt::NegativeInf) => IntExt::NegativeInf,
         }
     }
 }
 
-impl Neg for I32Ext {
+impl Neg for IntExt {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
         match self {
-            I32Ext::I32(value) => I32Ext::I32(-value),
-            I32Ext::NegativeInf => I32Ext::PositiveInf,
-            I32Ext::PositiveInf => Self::NegativeInf,
+            IntExt::I32(value) => IntExt::I32(-value),
+            IntExt::NegativeInf => IntExt::PositiveInf,
+            IntExt::PositiveInf => Self::NegativeInf,
         }
     }
 }
 
-impl Sum for I32Ext {
+impl Sum for IntExt {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(I32Ext::I32(0), |acc, value| acc + value)
+        iter.fold(IntExt::I32(0), |acc, value| acc + value)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use I32Ext::*;
+    use IntExt::*;
 
     use super::*;
 

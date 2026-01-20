@@ -14,7 +14,7 @@ use fzn_rs::ast::Domain;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::Comparison;
-use pumpkin_checking::I32Ext;
+use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
 use crate::math::div_ceil;
@@ -180,14 +180,14 @@ impl CheckerVariable<Atomic> for Variable {
         }
     }
 
-    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
+    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.lower_bound(ident),
             VariableExpr::Constant(value) => value.into(),
         }
     }
 
-    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
+    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt {
         match self.0 {
             VariableExpr::Identifier(ref ident) => variable_state.upper_bound(ident),
             VariableExpr::Constant(value) => value.into(),
@@ -311,7 +311,7 @@ impl CheckerVariable<Atomic> for Term {
         }
     }
 
-    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
+    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt {
         if self.weight.is_positive() {
             self.variable.induced_lower_bound(variable_state) * self.weight.get()
         } else {
@@ -319,7 +319,7 @@ impl CheckerVariable<Atomic> for Term {
         }
     }
 
-    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext {
+    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt {
         if self.weight.is_positive() {
             self.variable.induced_upper_bound(variable_state) * self.weight.get()
         } else {

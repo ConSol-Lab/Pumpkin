@@ -4,13 +4,13 @@ use std::hash::Hash;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
-use crate::I32Ext;
 #[cfg(doc)]
 use crate::InferenceChecker;
+use crate::IntExt;
 
 /// The domains of all variables in the problem.
 ///
-/// Domains are initially unbounded. This is why bounds are represented as [`I32Ext`].
+/// Domains are initially unbounded. This is why bounds are represented as [`IntExt`].
 ///
 /// Domains can be reduced through [`VariableState::apply`]. By default, the domain of every
 /// variable is infinite.
@@ -60,19 +60,19 @@ where
     }
 
     /// Get the lower bound of a variable.
-    pub fn lower_bound(&self, identifier: &Ident) -> I32Ext {
+    pub fn lower_bound(&self, identifier: &Ident) -> IntExt {
         self.domains
             .get(identifier)
             .map(|domain| domain.lower_bound)
-            .unwrap_or(I32Ext::NegativeInf)
+            .unwrap_or(IntExt::NegativeInf)
     }
 
     /// Get the upper bound of a variable.
-    pub fn upper_bound(&self, identifier: &Ident) -> I32Ext {
+    pub fn upper_bound(&self, identifier: &Ident) -> IntExt {
         self.domains
             .get(identifier)
             .map(|domain| domain.upper_bound)
-            .unwrap_or(I32Ext::PositiveInf)
+            .unwrap_or(IntExt::PositiveInf)
     }
 
     /// Get the holes within the lower and upper bound of the variable expression.
@@ -92,7 +92,7 @@ where
         let domain = self.domains.get(identifier)?;
 
         if domain.lower_bound == domain.upper_bound {
-            let I32Ext::I32(value) = domain.lower_bound else {
+            let IntExt::I32(value) = domain.lower_bound else {
                 panic!(
                     "lower can only equal upper if they are integers, otherwise the sign of infinity makes them different"
                 );
@@ -113,13 +113,13 @@ where
     {
         let domain = self.domains.get(identifier)?;
 
-        let I32Ext::I32(lower_bound) = domain.lower_bound else {
+        let IntExt::I32(lower_bound) = domain.lower_bound else {
             // If there is no lower bound, then the domain is unbounded.
             return None;
         };
 
         // Ensure there is also an upper bound.
-        if !matches!(domain.upper_bound, I32Ext::I32(_)) {
+        if !matches!(domain.upper_bound, IntExt::I32(_)) {
             return None;
         }
 
@@ -206,16 +206,16 @@ where
 /// A domain inside the variable state.
 #[derive(Clone, Debug)]
 struct Domain {
-    lower_bound: I32Ext,
-    upper_bound: I32Ext,
+    lower_bound: IntExt,
+    upper_bound: IntExt,
     holes: BTreeSet<i32>,
 }
 
 impl Domain {
     fn new() -> Domain {
         Domain {
-            lower_bound: I32Ext::NegativeInf,
-            upper_bound: I32Ext::PositiveInf,
+            lower_bound: IntExt::NegativeInf,
+            upper_bound: IntExt::PositiveInf,
             holes: BTreeSet::default(),
         }
     }
@@ -227,7 +227,7 @@ impl Domain {
             return;
         }
 
-        self.lower_bound = I32Ext::I32(bound);
+        self.lower_bound = IntExt::I32(bound);
         self.holes = self.holes.split_off(&bound);
 
         // Take care of the condition where the new bound is already a hole in the domain.
@@ -243,7 +243,7 @@ impl Domain {
             return;
         }
 
-        self.upper_bound = I32Ext::I32(bound);
+        self.upper_bound = IntExt::I32(bound);
 
         // Note the '+ 1' to keep the elements <= the upper bound instead of <
         // the upper bound.
@@ -277,7 +277,7 @@ impl Iterator for DomainIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         let DomainIterator { domain, next_value } = self;
 
-        let I32Ext::I32(upper_bound) = domain.upper_bound else {
+        let IntExt::I32(upper_bound) = domain.upper_bound else {
             panic!("Only finite domains can be iterated.")
         };
 

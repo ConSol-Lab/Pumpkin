@@ -1,7 +1,7 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
@@ -290,14 +290,14 @@ where
 #[derive(Debug, Clone)]
 pub struct LinearLessOrEqualInferenceChecker<Var> {
     terms: Box<[Var]>,
-    bound: I32Ext,
+    bound: IntExt,
 }
 
 impl<Var> LinearLessOrEqualInferenceChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
         LinearLessOrEqualInferenceChecker {
             terms,
-            bound: I32Ext::I32(bound),
+            bound: IntExt::I32(bound),
         }
     }
 }
@@ -315,9 +315,9 @@ where
     ) -> bool {
         // Next, we evaluate the linear inequality. The lower bound of the
         // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
-        // I32Ext, and if the lower bound of one of the terms is -infty, then the left-hand side
+        // IntExt, and if the lower bound of one of the terms is -infty, then the left-hand side
         // will be -infty regardless of the other terms.
-        let left_hand_side: I32Ext = self
+        let left_hand_side: IntExt = self
             .terms
             .iter()
             .map(|variable| variable.induced_lower_bound(&variable_state))

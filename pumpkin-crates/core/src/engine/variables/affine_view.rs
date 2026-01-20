@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
-use pumpkin_checking::I32Ext;
+use pumpkin_checking::IntExt;
 
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -82,17 +82,17 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     fn induced_lower_bound(
         &self,
         variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> I32Ext {
+    ) -> IntExt {
         if self.scale.is_positive() {
             match self.inner.induced_lower_bound(variable_state) {
-                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                IntExt::I32(value) => IntExt::I32(self.map(value)),
                 bound => bound,
             }
         } else {
             match self.inner.induced_upper_bound(variable_state) {
-                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
-                I32Ext::NegativeInf => I32Ext::PositiveInf,
-                I32Ext::PositiveInf => I32Ext::NegativeInf,
+                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::NegativeInf => IntExt::PositiveInf,
+                IntExt::PositiveInf => IntExt::NegativeInf,
             }
         }
     }
@@ -100,17 +100,17 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
     fn induced_upper_bound(
         &self,
         variable_state: &pumpkin_checking::VariableState<Predicate>,
-    ) -> I32Ext {
+    ) -> IntExt {
         if self.scale.is_positive() {
             match self.inner.induced_upper_bound(variable_state) {
-                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
+                IntExt::I32(value) => IntExt::I32(self.map(value)),
                 bound => bound,
             }
         } else {
             match self.inner.induced_lower_bound(variable_state) {
-                I32Ext::I32(value) => I32Ext::I32(self.map(value)),
-                I32Ext::NegativeInf => I32Ext::PositiveInf,
-                I32Ext::PositiveInf => I32Ext::NegativeInf,
+                IntExt::I32(value) => IntExt::I32(self.map(value)),
+                IntExt::NegativeInf => IntExt::PositiveInf,
+                IntExt::PositiveInf => IntExt::NegativeInf,
             }
         }
     }

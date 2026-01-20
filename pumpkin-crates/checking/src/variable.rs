@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
-use crate::I32Ext;
+use crate::IntExt;
 use crate::TestAtomic;
 use crate::VariableState;
 
@@ -24,10 +24,10 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     fn atomic_not_equal(&self, value: i32) -> Atomic;
 
     /// Get the lower bound of the domain.
-    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext;
+    fn induced_lower_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt;
 
     /// Get the upper bound of the domain.
-    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> I32Ext;
+    fn induced_upper_bound(&self, variable_state: &VariableState<Atomic>) -> IntExt;
 
     /// Get the value the variable is fixed to, if the variable is fixed.
     fn induced_fixed_value(&self, variable_state: &VariableState<Atomic>) -> Option<i32>;
@@ -88,11 +88,11 @@ impl CheckerVariable<TestAtomic> for &'static str {
         }
     }
 
-    fn induced_lower_bound(&self, variable_state: &VariableState<TestAtomic>) -> I32Ext {
+    fn induced_lower_bound(&self, variable_state: &VariableState<TestAtomic>) -> IntExt {
         variable_state.lower_bound(self)
     }
 
-    fn induced_upper_bound(&self, variable_state: &VariableState<TestAtomic>) -> I32Ext {
+    fn induced_upper_bound(&self, variable_state: &VariableState<TestAtomic>) -> IntExt {
         variable_state.upper_bound(self)
     }
 
