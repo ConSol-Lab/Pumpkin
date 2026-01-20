@@ -28,7 +28,7 @@ pub(crate) fn verify_time_table(
             .map(|task| CheckerTask {
                 start_time: task.start_time.clone(),
                 resource_usage: task.resource_usage,
-                duration: task.duration,
+                processing_time: task.duration,
             })
             .collect(),
         capacity: cumulative.capacity,

@@ -121,7 +121,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> PropagatorConstruc
                     .iter()
                     .map(|task| CheckerTask {
                         start_time: task.start_variable.clone(),
-                        duration: task.processing_time,
+                        processing_time: task.processing_time,
                         resource_usage: task.resource_usage,
                     })
                     .collect(),
