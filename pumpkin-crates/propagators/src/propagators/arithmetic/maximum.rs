@@ -1,3 +1,7 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::I32Ext;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -5,6 +9,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -30,6 +35,16 @@ where
     Rhs: IntegerVariable + 'static,
 {
     type PropagatorImpl = MaximumPropagator<ElementVar, Rhs>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, Maximum),
+            Box::new(MaximumChecker {
+                array: self.array.clone(),
+                rhs: self.rhs.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let MaximumArgs {
@@ -167,6 +182,45 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MaximumChecker<ElementVar, Rhs> {
+    pub array: Box<[ElementVar]>,
+    pub rhs: Rhs,
+}
+
+impl<ElementVar, Rhs, Atomic> InferenceChecker<Atomic> for MaximumChecker<ElementVar, Rhs>
+where
+    Atomic: AtomicConstraint,
+    ElementVar: CheckerVariable<Atomic>,
+    Rhs: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        let lowest_maximum = self
+            .array
+            .iter()
+            .map(|element| element.induced_lower_bound(&state))
+            .max()
+            .unwrap_or(I32Ext::NegativeInf);
+        let highest_maximum = self
+            .array
+            .iter()
+            .map(|element| element.induced_upper_bound(&state))
+            .max()
+            .unwrap_or(I32Ext::PositiveInf);
+
+        // If the intersection between the domain of `rhs` and `[lowest_maximum,
+        // highest_maximum]` is empty, there is a conflict.
+
+        lowest_maximum > self.rhs.induced_upper_bound(&state)
+            || highest_maximum < self.rhs.induced_lower_bound(&state)
     }
 }
 
