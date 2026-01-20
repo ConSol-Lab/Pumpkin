@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::Debug;
 use std::iter::Sum;
 use std::ops::Add;
 use std::ops::Mul;
@@ -12,8 +13,8 @@ use std::ops::Neg;
 /// - Multiplying [`IntExt::PositiveInf`] or [`IntExt::NegativeInf`] with `IntExt::I32(0)` will
 ///   yield `IntExt::I32(0)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IntExt {
-    Int(i32),
+pub enum IntExt<Int = i32> {
+    Int(Int),
     NegativeInf,
     PositiveInf,
 }
@@ -24,6 +25,17 @@ impl From<i32> for IntExt {
     }
 }
 
+impl From<IntExt<i32>> for IntExt<i64> {
+    fn from(value: IntExt<i32>) -> Self {
+        match value {
+            IntExt::Int(int) => IntExt::Int(int.into()),
+            IntExt::NegativeInf => IntExt::NegativeInf,
+            IntExt::PositiveInf => IntExt::PositiveInf,
+        }
+    }
+}
+
+// TODO: This is not a great pattern, but for now I do not want to touch this.
 impl TryInto<i32> for IntExt {
     type Error = ();
 
@@ -35,8 +47,8 @@ impl TryInto<i32> for IntExt {
     }
 }
 
-impl PartialEq<i32> for IntExt {
-    fn eq(&self, other: &i32) -> bool {
+impl<Int: PartialEq> PartialEq<Int> for IntExt<Int> {
+    fn eq(&self, other: &Int) -> bool {
         match self {
             IntExt::Int(v1) => v1 == other,
             IntExt::NegativeInf | IntExt::PositiveInf => false,
@@ -56,13 +68,13 @@ impl PartialOrd<IntExt> for i32 {
     }
 }
 
-impl PartialOrd<IntExt> for IntExt {
-    fn partial_cmp(&self, other: &IntExt) -> Option<Ordering> {
+impl<Int: Ord> PartialOrd for IntExt<Int> {
+    fn partial_cmp(&self, other: &IntExt<Int>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for IntExt {
+impl<Int: Ord> Ord for IntExt<Int> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self {
             IntExt::Int(v1) => match other {
@@ -94,6 +106,16 @@ impl PartialOrd<i32> for IntExt {
     }
 }
 
+impl PartialOrd<i64> for IntExt<i64> {
+    fn partial_cmp(&self, other: &i64) -> Option<Ordering> {
+        match self {
+            IntExt::Int(v1) => v1.partial_cmp(other),
+            IntExt::NegativeInf => Some(Ordering::Less),
+            IntExt::PositiveInf => Some(Ordering::Greater),
+        }
+    }
+}
+
 impl Add<i32> for IntExt {
     type Output = IntExt;
 
@@ -102,10 +124,10 @@ impl Add<i32> for IntExt {
     }
 }
 
-impl Add for IntExt {
-    type Output = IntExt;
+impl<Int: Add<Output = Int> + Debug> Add for IntExt<Int> {
+    type Output = IntExt<Int>;
 
-    fn add(self, rhs: IntExt) -> Self::Output {
+    fn add(self, rhs: IntExt<Int>) -> Self::Output {
         match (self, rhs) {
             (IntExt::Int(lhs), IntExt::Int(rhs)) => IntExt::Int(lhs + rhs),
 
@@ -186,6 +208,12 @@ impl Neg for IntExt {
 }
 
 impl Sum for IntExt {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(IntExt::Int(0), |acc, value| acc + value)
+    }
+}
+
+impl Sum for IntExt<i64> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(IntExt::Int(0), |acc, value| acc + value)
     }

@@ -290,15 +290,12 @@ where
 #[derive(Debug, Clone)]
 pub struct LinearLessOrEqualInferenceChecker<Var> {
     terms: Box<[Var]>,
-    bound: IntExt,
+    bound: i32,
 }
 
 impl<Var> LinearLessOrEqualInferenceChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualInferenceChecker {
-            terms,
-            bound: IntExt::Int(bound),
-        }
+        LinearLessOrEqualInferenceChecker { terms, bound }
     }
 }
 
@@ -317,13 +314,13 @@ where
         // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
         // IntExt, and if the lower bound of one of the terms is -infty, then the left-hand side
         // will be -infty regardless of the other terms.
-        let left_hand_side: IntExt = self
+        let left_hand_side: IntExt<i64> = self
             .terms
             .iter()
-            .map(|variable| variable.induced_lower_bound(&variable_state))
+            .map(|variable| variable.induced_lower_bound(&variable_state).into())
             .sum();
 
-        left_hand_side > self.bound
+        left_hand_side > i64::from(self.bound)
     }
 }
 

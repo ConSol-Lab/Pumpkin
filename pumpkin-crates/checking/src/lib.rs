@@ -4,7 +4,7 @@
 //! inferences are sound w.r.t. an inference rule.
 
 mod atomic_constraint;
-mod i32_ext;
+mod int_ext;
 mod variable;
 mod variable_state;
 
@@ -12,7 +12,7 @@ use std::fmt::Debug;
 
 pub use atomic_constraint::*;
 use dyn_clone::DynClone;
-pub use i32_ext::*;
+pub use int_ext::*;
 pub use variable::*;
 pub use variable_state::*;
 
