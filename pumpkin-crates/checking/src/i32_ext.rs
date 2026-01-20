@@ -6,9 +6,11 @@ use std::ops::Neg;
 
 /// An [`i32`] or positive/negative infinity.
 ///
-/// # Note
-/// The result of the operation `infty + -infty` is undetermined, and if evaluated will cause a
-/// panic.
+/// # Notes on arithmetic operations:
+/// - The result of the operation `infty + -infty` is undetermined, and if evaluated will cause a
+///   panic.
+/// - Multiplying [`I32Ext::PositiveInf`] or [`I32Ext::NegativeInf`] with `I32Ext::I32(0)` will
+///   yield `I32Ext::I32(0)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum I32Ext {
     I32(i32),
@@ -81,6 +83,14 @@ impl PartialOrd<i32> for I32Ext {
     }
 }
 
+impl Add<i32> for I32Ext {
+    type Output = I32Ext;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        self + I32Ext::I32(rhs)
+    }
+}
+
 impl Add for I32Ext {
     type Output = I32Ext;
 
@@ -104,38 +114,50 @@ impl Add for I32Ext {
     }
 }
 
-impl Add<i32> for I32Ext {
-    type Output = I32Ext;
-
-    fn add(self, rhs: i32) -> Self::Output {
-        match self {
-            I32Ext::I32(lhs) => I32Ext::I32(lhs + rhs),
-            I32Ext::NegativeInf => I32Ext::NegativeInf,
-            I32Ext::PositiveInf => I32Ext::PositiveInf,
-        }
-    }
-}
-
 impl Mul<i32> for I32Ext {
     type Output = I32Ext;
 
     fn mul(self, rhs: i32) -> Self::Output {
-        match self {
-            I32Ext::I32(lhs) => I32Ext::I32(lhs * rhs),
-            I32Ext::NegativeInf => {
-                if rhs >= 0 {
+        self * I32Ext::I32(rhs)
+    }
+}
+
+impl Mul for I32Ext {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (I32Ext::I32(lhs), I32Ext::I32(rhs)) => I32Ext::I32(lhs * rhs),
+
+            // Multiplication with 0 will always yield 0.
+            (I32Ext::I32(0), Self::NegativeInf)
+            | (I32Ext::I32(0), Self::PositiveInf)
+            | (Self::NegativeInf, I32Ext::I32(0))
+            | (Self::PositiveInf, I32Ext::I32(0)) => I32Ext::I32(0),
+
+            (I32Ext::I32(value), I32Ext::NegativeInf)
+            | (I32Ext::NegativeInf, I32Ext::I32(value)) => {
+                if value >= 0 {
                     I32Ext::NegativeInf
                 } else {
                     I32Ext::PositiveInf
                 }
             }
-            I32Ext::PositiveInf => {
-                if rhs >= 0 {
+
+            (I32Ext::I32(value), I32Ext::PositiveInf)
+            | (I32Ext::PositiveInf, I32Ext::I32(value)) => {
+                if value >= 0 {
                     I32Ext::PositiveInf
                 } else {
                     I32Ext::NegativeInf
                 }
             }
+
+            (I32Ext::NegativeInf, I32Ext::NegativeInf)
+            | (I32Ext::PositiveInf, I32Ext::PositiveInf) => I32Ext::PositiveInf,
+
+            (I32Ext::NegativeInf, I32Ext::PositiveInf)
+            | (I32Ext::PositiveInf, I32Ext::NegativeInf) => I32Ext::NegativeInf,
         }
     }
 }
