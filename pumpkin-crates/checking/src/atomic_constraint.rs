@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -7,7 +8,7 @@ use std::hash::Hash;
 /// - `identifier` identifies a variable,
 /// - `op` is a [`Comparison`],
 /// - and `value` is an integer.
-pub trait AtomicConstraint: Sized {
+pub trait AtomicConstraint: Sized + Debug {
     /// The type of identifier used for variables.
     type Identifier: Hash + Eq;
 

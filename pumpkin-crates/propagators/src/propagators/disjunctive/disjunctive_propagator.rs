@@ -8,6 +8,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -22,6 +23,7 @@ use pumpkin_core::variables::IntegerVariable;
 use super::disjunctive_task::ArgDisjunctiveTask;
 use super::disjunctive_task::DisjunctiveTask;
 use super::theta_lambda_tree::ThetaLambdaTree;
+use crate::disjunctive::checker::DisjunctiveEdgeFindingChecker;
 use crate::propagators::disjunctive::DisjunctiveEdgeFinding;
 
 /// [`Propagator`] responsible for using disjunctive reasoning to propagate the [Disjunctive](https://sofdem.github.io/gccat/gccat/Cdisjunctive.html) constraint.
@@ -104,6 +106,22 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
 
             inference_code,
         }
+    }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding),
+            Box::new(DisjunctiveEdgeFindingChecker {
+                tasks: self
+                    .tasks
+                    .iter()
+                    .map(|task| ArgDisjunctiveTask {
+                        start_time: task.start_time.clone(),
+                        processing_time: task.processing_time,
+                    })
+                    .collect(),
+            }),
+        );
     }
 }
 

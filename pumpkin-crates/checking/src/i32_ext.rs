@@ -24,6 +24,17 @@ impl From<i32> for I32Ext {
     }
 }
 
+impl TryInto<i32> for I32Ext {
+    type Error = ();
+
+    fn try_into(self) -> Result<i32, Self::Error> {
+        match self {
+            I32Ext::I32(inner) => Ok(inner),
+            I32Ext::NegativeInf | I32Ext::PositiveInf => Err(()),
+        }
+    }
+}
+
 impl PartialEq<i32> for I32Ext {
     fn eq(&self, other: &i32) -> bool {
         match self {

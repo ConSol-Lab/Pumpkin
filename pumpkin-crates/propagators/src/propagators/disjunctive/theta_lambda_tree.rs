@@ -19,20 +19,20 @@ use super::disjunctive_task::DisjunctiveTask;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Node {
     /// The earliest completion time of the set of tasks represented by this node.
-    ect: i32,
+    pub(super) ect: i32,
     /// The sum of the processing times of the set of tasks represented by this node.
-    sum_of_processing_times: i32,
+    pub(super) sum_of_processing_times: i32,
     /// The earliest completion time of the set of tasks represented by this node if a single grey
     /// task can be added to the set of tasks.
-    ect_bar: i32,
+    pub(super) ect_bar: i32,
     /// The sum of processing times of the set of tasks represented by this node if a single grey
     /// task can be added to the set of tasks.
-    sum_of_processing_times_bar: i32,
+    pub(super) sum_of_processing_times_bar: i32,
 }
 
 impl Node {
     // Constructs an empty node
-    fn empty() -> Self {
+    pub(super) fn empty() -> Self {
         Self {
             ect: i32::MIN,
             sum_of_processing_times: 0,
@@ -42,7 +42,7 @@ impl Node {
     }
 
     // Construct a new white node with the provided value
-    fn new_white_node(ect: i32, sum_of_processing_times: i32) -> Self {
+    pub(super) fn new_white_node(ect: i32, sum_of_processing_times: i32) -> Self {
         Self {
             ect,
             sum_of_processing_times,
@@ -52,7 +52,7 @@ impl Node {
     }
 
     // Construct a new gray node with the provided value
-    fn new_gray_node(ect: i32, sum_of_processing_times: i32) -> Self {
+    pub(super) fn new_gray_node(ect: i32, sum_of_processing_times: i32) -> Self {
         Self {
             ect: i32::MIN,
             sum_of_processing_times: 0,

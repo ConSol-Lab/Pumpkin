@@ -31,7 +31,7 @@ impl DomainId {
 }
 
 impl CheckerVariable<Predicate> for DomainId {
-    fn does_atomic_constrain_self(&self, atomic: Predicate) -> bool {
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
         atomic.get_domain() == *self
     }
 
