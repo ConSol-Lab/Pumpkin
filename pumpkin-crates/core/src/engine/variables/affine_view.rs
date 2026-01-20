@@ -51,7 +51,7 @@ impl<Inner> AffineView<Inner> {
 }
 
 impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
-    fn does_atomic_constrain_self(&self, atomic: Predicate) -> bool {
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
         self.inner.does_atomic_constrain_self(atomic)
     }
 

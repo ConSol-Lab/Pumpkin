@@ -9,7 +9,7 @@ use crate::VariableState;
 /// A variable in a constraint satisfaction problem.
 pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     /// Tests whether the given atomic is a statement over the variable `self`.
-    fn does_atomic_constrain_self(&self, atomic: Atomic) -> bool;
+    fn does_atomic_constrain_self(&self, atomic: &Atomic) -> bool;
 
     /// Get the atomic constraint `[self <= value]`.
     fn atomic_less_than(&self, value: i32) -> Atomic;
@@ -52,7 +52,7 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
 }
 
 impl CheckerVariable<TestAtomic> for &'static str {
-    fn does_atomic_constrain_self(&self, atomic: TestAtomic) -> bool {
+    fn does_atomic_constrain_self(&self, atomic: &TestAtomic) -> bool {
         &atomic.name == self
     }
 

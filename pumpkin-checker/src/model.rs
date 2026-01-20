@@ -124,7 +124,7 @@ impl From<VariableExpr<i32>> for Variable {
 }
 
 impl CheckerVariable<Atomic> for Variable {
-    fn does_atomic_constrain_self(&self, atomic: Atomic) -> bool {
+    fn does_atomic_constrain_self(&self, atomic: &Atomic) -> bool {
         let Variable(VariableExpr::Identifier(ident)) = self else {
             return false;
         };
@@ -269,7 +269,7 @@ enum Rounding {
 }
 
 impl CheckerVariable<Atomic> for Term {
-    fn does_atomic_constrain_self(&self, atomic: Atomic) -> bool {
+    fn does_atomic_constrain_self(&self, atomic: &Atomic) -> bool {
         self.variable.does_atomic_constrain_self(atomic)
     }
 
