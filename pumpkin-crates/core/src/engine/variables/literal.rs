@@ -74,6 +74,7 @@ macro_rules! forward {
 }
 
 impl CheckerVariable<Predicate> for Literal {
+    forward!(integer_variable, fn does_atomic_constrain_self(&self, atomic: Predicate) -> bool);
     forward!(integer_variable, fn atomic_less_than(&self, value: i32) -> Predicate);
     forward!(integer_variable, fn atomic_greater_than(&self, value: i32) -> Predicate);
     forward!(integer_variable, fn atomic_not_equal(&self, value: i32) -> Predicate);

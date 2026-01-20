@@ -51,6 +51,10 @@ impl<Inner> AffineView<Inner> {
 }
 
 impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
+    fn does_atomic_constrain_self(&self, atomic: Predicate) -> bool {
+        self.inner.does_atomic_constrain_self(atomic)
+    }
+
     fn atomic_less_than(&self, value: i32) -> Predicate {
         use crate::predicate;
 

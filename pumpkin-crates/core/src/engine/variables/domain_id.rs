@@ -31,6 +31,10 @@ impl DomainId {
 }
 
 impl CheckerVariable<Predicate> for DomainId {
+    fn does_atomic_constrain_self(&self, atomic: Predicate) -> bool {
+        atomic.get_domain() == *self
+    }
+
     fn atomic_less_than(&self, value: i32) -> Predicate {
         use crate::predicate;
 

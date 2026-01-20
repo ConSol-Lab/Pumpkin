@@ -124,6 +124,18 @@ impl From<VariableExpr<i32>> for Variable {
 }
 
 impl CheckerVariable<Atomic> for Variable {
+    fn does_atomic_constrain_self(&self, atomic: Atomic) -> bool {
+        let Variable(VariableExpr::Identifier(ident)) = self else {
+            return false;
+        };
+
+        let Atomic::IntAtomic(atomic) = atomic else {
+            return false;
+        };
+
+        &atomic.name == ident
+    }
+
     fn atomic_less_than(&self, value: i32) -> Atomic {
         match self.0 {
             VariableExpr::Identifier(ref name) => Atomic::from(IntAtomic {
@@ -257,6 +269,10 @@ enum Rounding {
 }
 
 impl CheckerVariable<Atomic> for Term {
+    fn does_atomic_constrain_self(&self, atomic: Atomic) -> bool {
+        self.variable.does_atomic_constrain_self(atomic)
+    }
+
     fn atomic_less_than(&self, value: i32) -> Atomic {
         if self.weight.is_negative() {
             let inverted_value = self.invert(value, Rounding::Up);
