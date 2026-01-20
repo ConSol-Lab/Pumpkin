@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::iter::Sum;
 use std::ops::Add;
+use std::ops::AddAssign;
 use std::ops::Mul;
 use std::ops::Neg;
 
@@ -143,6 +144,21 @@ impl<Int: Add<Output = Int> + Debug> Add for IntExt<Int> {
             | (lhs @ IntExt::PositiveInf, rhs @ IntExt::NegativeInf) => {
                 panic!("the result of {lhs:?} + {rhs:?} is indeterminate")
             }
+        }
+    }
+}
+
+impl<Int> AddAssign<Int> for IntExt<Int>
+where
+    Int: AddAssign<Int>,
+{
+    fn add_assign(&mut self, rhs: Int) {
+        match self {
+            IntExt::Int(value) => {
+                value.add_assign(rhs);
+            }
+
+            IntExt::NegativeInf | IntExt::PositiveInf => {}
         }
     }
 }
