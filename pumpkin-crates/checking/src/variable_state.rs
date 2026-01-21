@@ -75,6 +75,7 @@ where
             .unwrap_or(IntExt::PositiveInf)
     }
 
+    /// Tests whether the given value is in the domain of the variable.
     pub fn contains(&self, identifier: &Ident, value: i32) -> bool {
         self.domains
             .get(identifier)
@@ -83,7 +84,7 @@ where
                     && value <= domain.upper_bound
                     && !domain.holes.contains(&value)
             })
-            .unwrap_or(false)
+            .unwrap_or(true)
     }
 
     /// Get the holes within the lower and upper bound of the variable expression.
