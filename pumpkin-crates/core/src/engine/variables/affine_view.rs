@@ -124,6 +124,25 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
             .map(|value| self.map(value))
     }
 
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        let translated_value = value - self.offset;
+
+        // If the translated value does not divide by scale, then the original value is not in the
+        // domain of this affine view.
+        if translated_value % self.scale != 0 {
+            return false;
+        }
+
+        let unscaled_value = translated_value / self.scale;
+
+        self.inner
+            .induced_domain_contains(variable_state, unscaled_value)
+    }
+
     fn induced_holes<'this, 'state>(
         &'this self,
         variable_state: &'state pumpkin_checking::VariableState<Predicate>,
@@ -151,19 +170,6 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
         self.inner
             .iter_induced_domain(variable_state)
             .map(|iter| iter.map(|value| self.map(value)))
-    }
-
-    fn induced_domain_contains(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-        value: i32,
-    ) -> bool {
-        if (value - self.offset) % self.scale == 0 {
-            let inverted = self.invert(value, Rounding::Up);
-            self.inner.induced_domain_contains(variable_state, inverted)
-        } else {
-            false
-        }
     }
 }
 

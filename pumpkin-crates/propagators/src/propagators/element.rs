@@ -3,6 +3,10 @@
 #![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
 
 use bitfield_struct::bitfield;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::Domain;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -11,6 +15,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -39,6 +44,17 @@ where
     VE: IntegerVariable + 'static,
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, Element),
+            Box::new(ElementChecker {
+                array: self.array.clone(),
+                index: self.index.clone(),
+                rhs: self.rhs.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let ElementArgs {
@@ -293,6 +309,85 @@ struct RightHandSideReason {
     #[bits(32, from = Bound::from_bits)]
     bound: Bound,
     value: i32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ElementChecker<VX, VI, VE> {
+    pub array: Box<[VX]>,
+    pub index: VI,
+    pub rhs: VE,
+}
+
+impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
+where
+    Atomic: AtomicConstraint,
+    VX: CheckerVariable<Atomic>,
+    VI: CheckerVariable<Atomic>,
+    VE: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        // A domain consistent checker for element does the following:
+        // 1. Determine the elements in the array whose index is in the domain of the index
+        //    variable.
+        // 2. Take the union of the domains of those elements.
+        // 3. Intersect that union with the domain on the right-hand side.
+        //
+        // The intersection should be empty for a conflict to exist.
+
+        let supported_elements: Vec<_> = self
+            .array
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| self.index.induced_domain_contains(&state, *idx as i32))
+            .map(|(_, element)| element)
+            .collect();
+
+        let mut union = Domain::empty();
+        for element in supported_elements {
+            // Compute `union <- union cup element`
+            //
+            let holes = union
+                .holes()
+                .iter()
+                .copied()
+                .filter(|hole| element.induced_domain_contains(&state, *hole))
+                .collect();
+
+            let lower_bound = union.lower_bound().min(element.induced_lower_bound(&state));
+            let upper_bound = union.upper_bound().max(element.induced_upper_bound(&state));
+
+            union = Domain::new(lower_bound, upper_bound, holes);
+        }
+
+        assert!(
+            union.is_consistent(),
+            "at least one element has a non-empty domain or else variable state would be inconsistent"
+        );
+
+        // Compute `|union cap rhs| == 0`.
+        let intersection_lower_bound = union
+            .lower_bound()
+            .max(self.rhs.induced_lower_bound(&state));
+        let intersection_upper_bound = union
+            .upper_bound()
+            .min(self.rhs.induced_upper_bound(&state));
+        let holes = union
+            .holes()
+            .iter()
+            .copied()
+            .chain(self.rhs.induced_holes(&state))
+            .collect();
+
+        let intersected_domain =
+            Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
+
+        !intersected_domain.is_consistent()
+    }
 }
 
 #[allow(deprecated, reason = "Will be refactored")]

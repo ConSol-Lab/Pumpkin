@@ -147,7 +147,10 @@ where
     /// conjunction with previously applied atomics.
     pub fn apply(&mut self, atomic: &Atomic) -> bool {
         let identifier = atomic.identifier();
-        let domain = self.domains.entry(identifier).or_insert(Domain::new());
+        let domain = self
+            .domains
+            .entry(identifier)
+            .or_insert(Domain::all_integers());
 
         match atomic.comparison() {
             Comparison::GreaterEqual => {
@@ -217,14 +220,15 @@ where
 
 /// A domain inside the variable state.
 #[derive(Clone, Debug)]
-struct Domain {
+pub struct Domain {
     lower_bound: IntExt,
     upper_bound: IntExt,
     holes: BTreeSet<i32>,
 }
 
 impl Domain {
-    fn new() -> Domain {
+    /// Create a domain that contains all integers.
+    pub fn all_integers() -> Domain {
         Domain {
             lower_bound: IntExt::NegativeInf,
             upper_bound: IntExt::PositiveInf,
@@ -232,10 +236,50 @@ impl Domain {
         }
     }
 
+    /// Create an empty/inconsistent domain.
+    pub fn empty() -> Domain {
+        Domain {
+            lower_bound: IntExt::PositiveInf,
+            upper_bound: IntExt::NegativeInf,
+            holes: BTreeSet::default(),
+        }
+    }
+
+    /// Construct a new domain.
+    pub fn new(lower_bound: IntExt, upper_bound: IntExt, holes: BTreeSet<i32>) -> Self {
+        let mut domain = Domain::all_integers();
+        domain.holes = holes;
+
+        if let IntExt::Int(bound) = lower_bound {
+            domain.tighten_lower_bound(bound);
+        }
+
+        if let IntExt::Int(bound) = upper_bound {
+            domain.tighten_upper_bound(bound);
+        }
+
+        domain
+    }
+
+    /// Get the holes in the domain.
+    pub fn holes(&self) -> &BTreeSet<i32> {
+        &self.holes
+    }
+
+    /// Get the lower bound of the domain.
+    pub fn lower_bound(&self) -> IntExt {
+        self.lower_bound
+    }
+
+    /// Get the upper bound of the domain.
+    pub fn upper_bound(&self) -> IntExt {
+        self.upper_bound
+    }
+
     /// Tighten the lower bound and remove any holes that are no longer strictly larger than the
     /// lower bound.
     fn tighten_lower_bound(&mut self, bound: i32) {
-        if self.lower_bound >= bound {
+        if self.lower_bound >= bound && !self.holes.contains(&bound) {
             return;
         }
 
@@ -251,7 +295,7 @@ impl Domain {
     /// Tighten the upper bound and remove any holes that are no longer strictly smaller than the
     /// upper bound.
     fn tighten_upper_bound(&mut self, bound: i32) {
-        if self.upper_bound <= bound {
+        if self.upper_bound <= bound && !self.holes.contains(&bound) {
             return;
         }
 
@@ -268,7 +312,7 @@ impl Domain {
     }
 
     /// Returns true if the domain contains at least one value.
-    fn is_consistent(&self) -> bool {
+    pub fn is_consistent(&self) -> bool {
         // No need to check holes, as the invariant of `Domain` specifies the bounds are as tight
         // as possible, taking holes into account.
 

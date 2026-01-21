@@ -80,6 +80,14 @@ impl CheckerVariable<Predicate> for DomainId {
         variable_state.fixed_value(self)
     }
 
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        variable_state.contains(self, value)
+    }
+
     fn induced_holes<'this, 'state>(
         &'this self,
         variable_state: &'state pumpkin_checking::VariableState<Predicate>,
@@ -98,14 +106,6 @@ impl CheckerVariable<Predicate> for DomainId {
         'this: 'state,
     {
         variable_state.iter_domain(self)
-    }
-
-    fn induced_domain_contains(
-        &self,
-        variable_state: &pumpkin_checking::VariableState<Predicate>,
-        value: i32,
-    ) -> bool {
-        variable_state.contains(self, value)
     }
 }
 
