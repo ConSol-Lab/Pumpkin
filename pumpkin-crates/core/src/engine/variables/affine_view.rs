@@ -126,14 +126,19 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
 
     fn induced_holes<'this, 'state>(
         &'this self,
-        _variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
     ) -> impl Iterator<Item = i32> + 'state
     where
         'this: 'state,
     {
+        if self.scale == 1 || self.scale == -1 {
+            return self
+                .inner
+                .induced_holes(variable_state)
+                .map(|value| self.map(value));
+        }
+
         todo!("how to iterate holes of a scaled domain");
-        #[allow(unreachable_code, reason = "todo does not compile to impl Iterator")]
-        std::iter::empty()
     }
 
     fn iter_induced_domain<'this, 'state>(
