@@ -1,3 +1,6 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -5,6 +8,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -63,6 +67,17 @@ where
             rhs,
             inference_code,
         }
+    }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, Division),
+            Box::new(IntegerDivisionChecker {
+                numerator: self.numerator.clone(),
+                denominator: self.denominator.clone(),
+                rhs: self.rhs.clone(),
+            }),
+        );
     }
 }
 
@@ -375,6 +390,72 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct IntegerDivisionChecker<VA, VB, VC> {
+    pub numerator: VA,
+    pub denominator: VB,
+    pub rhs: VC,
+}
+
+impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerDivisionChecker<VA, VB, VC>
+where
+    Atomic: AtomicConstraint,
+    VA: CheckerVariable<Atomic>,
+    VB: CheckerVariable<Atomic>,
+    VC: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _premises: &[Atomic],
+        _consequent: Option<&Atomic>,
+    ) -> bool {
+        // We apply interval arithmetic to determine that the computed interval `a div b`
+        // does not intersect with the domain of `c`.
+        //
+        // See https://en.wikipedia.org/wiki/Interval_arithmetic#Interval_operators.
+        //
+        // We guarantee that 0 is not the interval [y1, y2].
+
+        let x1 = self.numerator.induced_lower_bound(&state);
+        let x2 = self.numerator.induced_upper_bound(&state);
+        let y1 = self.denominator.induced_lower_bound(&state);
+        let y2 = self.denominator.induced_upper_bound(&state);
+
+        assert!(
+            y2 < 0 || y1 > 0,
+            "The interval of the denominator should not contain 0"
+        );
+
+        let floor_x1y1 = x1.floor_div(&y1);
+        let floor_x1y2 = x1.floor_div(&y2);
+        let floor_x2y1 = x2.floor_div(&y1);
+        let floor_x2y2 = x2.floor_div(&y2);
+
+        let ceil_x1y1 = x1.ceil_div(&y1);
+        let ceil_x1y2 = x1.ceil_div(&y2);
+        let ceil_x2y1 = x2.ceil_div(&y1);
+        let ceil_x2y2 = x2.ceil_div(&y2);
+
+        // TODO: Can we just ignore these options?
+        let computed_c_lower = [ceil_x1y1, ceil_x1y2, ceil_x2y1, ceil_x2y2]
+            .into_iter()
+            .flatten()
+            .min()
+            .expect("Expected at least one element to be defined");
+        let computed_c_upper = [floor_x1y1, floor_x1y2, floor_x2y1, floor_x2y2]
+            .into_iter()
+            .flatten()
+            .max()
+            .expect("Expected at least one element to be defined");
+
+        let c_lower = self.rhs.induced_lower_bound(&state);
+        let c_upper = self.rhs.induced_upper_bound(&state);
+
+        computed_c_upper < c_lower || computed_c_lower > c_upper
+    }
 }
 
 #[allow(deprecated, reason = "Will be refactored")]

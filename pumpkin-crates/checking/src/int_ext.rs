@@ -20,6 +20,70 @@ pub enum IntExt<Int = i32> {
     PositiveInf,
 }
 
+impl IntExt<i32> {
+    pub fn floor_div(&self, other: &IntExt<i32>) -> Option<IntExt<i32>> {
+        match (self, other) {
+            (IntExt::Int(inner), IntExt::Int(inner_other)) => {
+                let inner = *inner as f64;
+                let inner_other = *inner_other as f64;
+
+                Some(IntExt::Int((inner / inner_other).floor() as i32))
+            }
+            (IntExt::NegativeInf, IntExt::Int(inner)) => {
+                if inner.is_positive() {
+                    Some(IntExt::NegativeInf)
+                } else {
+                    Some(IntExt::PositiveInf)
+                }
+            }
+            (IntExt::PositiveInf, IntExt::Int(inner)) => {
+                if inner.is_positive() {
+                    Some(IntExt::PositiveInf)
+                } else {
+                    Some(IntExt::NegativeInf)
+                }
+            }
+            (IntExt::PositiveInf, IntExt::NegativeInf) => None,
+            (IntExt::PositiveInf, IntExt::PositiveInf) => None,
+            (IntExt::NegativeInf, IntExt::NegativeInf) => None,
+            (IntExt::NegativeInf, IntExt::PositiveInf) => None,
+            (IntExt::Int(_), IntExt::NegativeInf) => Some(IntExt::Int(0)),
+            (IntExt::Int(_), IntExt::PositiveInf) => Some(IntExt::Int(0)),
+        }
+    }
+
+    pub fn ceil_div(&self, other: &IntExt<i32>) -> Option<IntExt<i32>> {
+        match (self, other) {
+            (IntExt::Int(inner), IntExt::Int(inner_other)) => {
+                let inner = *inner as f64;
+                let inner_other = *inner_other as f64;
+
+                Some(IntExt::Int((inner / inner_other).ceil() as i32))
+            }
+            (IntExt::NegativeInf, IntExt::Int(inner)) => {
+                if inner.is_positive() {
+                    Some(IntExt::NegativeInf)
+                } else {
+                    Some(IntExt::PositiveInf)
+                }
+            }
+            (IntExt::PositiveInf, IntExt::Int(inner)) => {
+                if inner.is_positive() {
+                    Some(IntExt::PositiveInf)
+                } else {
+                    Some(IntExt::NegativeInf)
+                }
+            }
+            (IntExt::PositiveInf, IntExt::NegativeInf) => None,
+            (IntExt::PositiveInf, IntExt::PositiveInf) => None,
+            (IntExt::NegativeInf, IntExt::NegativeInf) => None,
+            (IntExt::NegativeInf, IntExt::PositiveInf) => None,
+            (IntExt::Int(_), IntExt::NegativeInf) => Some(IntExt::Int(0)),
+            (IntExt::Int(_), IntExt::PositiveInf) => Some(IntExt::Int(0)),
+        }
+    }
+}
+
 impl From<i32> for IntExt {
     fn from(value: i32) -> Self {
         IntExt::Int(value)
