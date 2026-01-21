@@ -99,6 +99,14 @@ impl CheckerVariable<Predicate> for DomainId {
     {
         variable_state.iter_domain(self)
     }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        variable_state.contains(self, value)
+    }
 }
 
 impl IntegerVariable for DomainId {

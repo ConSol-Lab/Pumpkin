@@ -24,7 +24,9 @@ use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
+use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -52,12 +54,16 @@ pub trait PropagatorConstructor {
 #[derive(Debug)]
 pub struct InferenceCheckers<'state> {
     state: &'state mut State,
+    reification_literal: Option<Literal>,
 }
 
 impl<'state> InferenceCheckers<'state> {
     #[cfg(feature = "check-propagations")]
     pub(crate) fn new(state: &'state mut State) -> Self {
-        InferenceCheckers { state }
+        InferenceCheckers {
+            state,
+            reification_literal: None,
+        }
     }
 }
 
@@ -68,7 +74,20 @@ impl InferenceCheckers<'_> {
         inference_code: InferenceCode,
         checker: Box<dyn InferenceChecker<Predicate>>,
     ) {
-        self.state.add_inference_checker(inference_code, checker);
+        if let Some(reification_literal) = self.reification_literal {
+            let reification_checker = ReifiedChecker {
+                inner: checker.into(),
+                reification_literal,
+            };
+            self.state
+                .add_inference_checker(inference_code, Box::new(reification_checker));
+        } else {
+            self.state.add_inference_checker(inference_code, checker);
+        }
+    }
+
+    pub fn with_reification_literal(&mut self, literal: Literal) {
+        self.reification_literal = Some(literal)
     }
 }
 

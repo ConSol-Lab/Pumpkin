@@ -75,6 +75,17 @@ where
             .unwrap_or(IntExt::PositiveInf)
     }
 
+    pub fn contains(&self, identifier: &Ident, value: i32) -> bool {
+        self.domains
+            .get(identifier)
+            .map(|domain| {
+                value >= domain.lower_bound
+                    && value <= domain.upper_bound
+                    && !domain.holes.contains(&value)
+            })
+            .unwrap_or(false)
+    }
+
     /// Get the holes within the lower and upper bound of the variable expression.
     pub fn holes<'a>(&'a self, identifier: &Ident) -> impl Iterator<Item = i32> + 'a
     where

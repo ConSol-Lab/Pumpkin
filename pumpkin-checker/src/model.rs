@@ -238,6 +238,13 @@ impl CheckerVariable<Atomic> for Variable {
             VariableExpr::Constant(value) => Some(Box::new(std::iter::once(value))),
         }
     }
+
+    fn induced_domain_contains(&self, variable_state: &VariableState<Atomic>, value: i32) -> bool {
+        match self.0 {
+            VariableExpr::Identifier(ref ident) => variable_state.contains(ident, value),
+            VariableExpr::Constant(constant_value) => constant_value == value,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -359,6 +366,16 @@ impl CheckerVariable<Atomic> for Term {
         self.variable
             .iter_induced_domain(variable_state)
             .map(|iter| iter.map(|value| value * self.weight.get()))
+    }
+
+    fn induced_domain_contains(&self, variable_state: &VariableState<Atomic>, value: i32) -> bool {
+        if value % self.weight.get() == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.variable
+                .induced_domain_contains(variable_state, inverted)
+        } else {
+            false
+        }
     }
 }
 

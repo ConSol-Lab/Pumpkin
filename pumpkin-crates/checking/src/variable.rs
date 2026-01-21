@@ -32,6 +32,9 @@ pub trait CheckerVariable<Atomic: AtomicConstraint>: Debug + Clone {
     /// Get the value the variable is fixed to, if the variable is fixed.
     fn induced_fixed_value(&self, variable_state: &VariableState<Atomic>) -> Option<i32>;
 
+    /// Returns whether the value is in the domain.
+    fn induced_domain_contains(&self, variable_state: &VariableState<Atomic>, value: i32) -> bool;
+
     /// Get the holes in the domain.
     fn induced_holes<'this, 'state>(
         &'this self,
@@ -98,6 +101,14 @@ impl CheckerVariable<TestAtomic> for &'static str {
 
     fn induced_fixed_value(&self, variable_state: &VariableState<TestAtomic>) -> Option<i32> {
         variable_state.fixed_value(self)
+    }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &VariableState<TestAtomic>,
+        value: i32,
+    ) -> bool {
+        variable_state.contains(self, value)
     }
 
     fn induced_holes<'this, 'state>(

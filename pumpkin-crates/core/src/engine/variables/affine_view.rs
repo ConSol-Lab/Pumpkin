@@ -147,6 +147,19 @@ impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
             .iter_induced_domain(variable_state)
             .map(|iter| iter.map(|value| self.map(value)))
     }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        if (value - self.offset) % self.scale == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.inner.induced_domain_contains(variable_state, inverted)
+        } else {
+            false
+        }
+    }
 }
 
 impl<View> IntegerVariable for AffineView<View>

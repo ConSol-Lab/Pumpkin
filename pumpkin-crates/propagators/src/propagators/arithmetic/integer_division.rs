@@ -416,8 +416,6 @@ where
         // does not intersect with the domain of `c`.
         //
         // See https://en.wikipedia.org/wiki/Interval_arithmetic#Interval_operators.
-        //
-        // We guarantee that 0 is not the interval [y1, y2].
 
         let x1 = self.numerator.induced_lower_bound(&state);
         let x2 = self.numerator.induced_upper_bound(&state);
@@ -426,7 +424,7 @@ where
 
         assert!(
             y2 < 0 || y1 > 0,
-            "The interval of the denominator should not contain 0"
+            "Currentl, the checker does not contain inferences where the denominator spans 0"
         );
 
         let floor_x1y1 = x1.floor_div(&y1);

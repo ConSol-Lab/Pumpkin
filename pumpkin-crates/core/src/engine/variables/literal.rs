@@ -83,6 +83,7 @@ impl CheckerVariable<Predicate> for Literal {
     forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
     forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
     forward!(integer_variable, fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32>);
+    forward!(integer_variable, fn induced_domain_contains(&self, variable_state: &VariableState<Predicate>, value: i32) -> bool);
     forward!(
         integer_variable,
         fn <'this, 'state> induced_holes(
