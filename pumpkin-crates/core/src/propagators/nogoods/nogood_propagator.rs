@@ -719,68 +719,75 @@ impl NogoodPropagator {
                 .collect::<Vec<_>>()
         );
 
+        let (min_exception, max_exception) =
+            exceptions
+                .iter()
+                .fold((None, None), |(min_exception, max_exception), exception| {
+                    (
+                        min_exception.map_or_else(
+                            || Some(*exception),
+                            |min_exception: i32| Some(min_exception.min(*exception)),
+                        ),
+                        max_exception.map_or_else(
+                            || Some(*exception),
+                            |max_exception: i32| Some(max_exception.max(*exception)),
+                        ),
+                    )
+                });
+
         // Now we propagate our nogood
         //
-        // We store the bound of the lower-bound predicate in `above_bound`; e.g., if we have the
+        // We store the bound of the lower-bound predicate in `lb` e.g., if we have the
         // predicate [x >= 5], then we store 5
         //
-        // If there is no such predicate in the nogood then we store the lower-bound of the
-        // variable.
-        let above_bound = if let Some(lower_bound_predicate) = lower_bound {
-            lower_bound_predicate.get_right_hand_side()
-        } else {
-            context.lower_bound(&propagated_domain)
-        };
+        // If there is no such predicate in the nogood then there must be one or more holes, and we
+        // store the minimum value of this.
+        let lb = lower_bound.map_or_else(
+            || min_exception.unwrap(),
+            |predicate| predicate.get_right_hand_side(),
+        );
 
-        // We store the bound of the upper-bound predicate in `below`; e.g., if we have the
+        // We store the bound of the upper-bound predicate in `ub`; e.g., if we have the
         // predicate [x <= 10], then we store 10
         //
-        // If there is no such predicate in the nogood then we store the upper-bound of the
-        // variable
-        let below_bound = if let Some(upper_bound_predicate) = upper_bound {
-            upper_bound_predicate.get_right_hand_side()
-        } else {
-            context.upper_bound(&propagated_domain)
-        };
-        assert!(above_bound <= below_bound);
+        // If there is no such predicate in the nogood then there must be one or more holes, and we
+        // store the maximum value of this.
+        let ub = upper_bound.map_or_else(
+            || max_exception.unwrap(),
+            |predicate| predicate.get_right_hand_side(),
+        );
+        assert!(lb <= ub);
 
-        // We store information concerning the values which we should remove from the domain of the
-        // variable
-        let mut min_range = None;
-        let mut max_range = None;
-
-        // TODO: could be strenghtened if one of the predicates is satisfied; i.e., one is on
-        // the bound
-        //
         // Now we check whether we can do any bound propagation
         if upper_bound.is_none() {
+            assert!(
+                exceptions.len() > 1
+                    || (!exceptions.is_empty()
+                        && lower_bound.is_some()
+                        && ub > lower_bound.unwrap().get_right_hand_side()),
+            );
             // First, if there is no upper-bound predicate ([x <= v]), then we can propagate the
-            // upper-bound based on the lower-bound predicate *and/or* the inequality predicates.
+            // upper-bound based on the lower-bound predicate and/or the inequality predicates (note
+            // that there must be one or more holes due to semantic minimisation and unit
+            // propagation taking place previously).
             //
             // For example, if we have the predicates [x >= 5] /\ [x != 10], then we know that it
             // should either hold that [x <= 4] or [x = 10]. In either case, we know that [x <=
             // 10].
             //
             // Thus, we calculate the new maximum value as either the maximum value of the
-            // inequality predicates or the right-hand side of the lower-bound predicate minus one
-            // (note that it can never be the case that there is an inequality predicate with a
-            // value lower than the lower-bound predicate due to semantic minimisation).
-            pumpkin_assert_moderate!(
-                exceptions.is_empty() || *exceptions.iter().max().unwrap() > above_bound
-            );
-            let max_value = *exceptions.iter().max().unwrap_or(&(above_bound - 1));
-            // We update the max value for creating holes in the domain to the newly propagated
-            // upper-bound
-            max_range = Some(max_value);
-            if max_value < context.upper_bound(&propagated_domain) {
+            // inequality predicates (note that it can never be the case that there is an inequality
+            // predicate with a value lower than the lower-bound predicate due to semantic
+            // minimisation).
+            if ub < context.upper_bound(&propagated_domain) {
                 propagated = true;
                 statistics.num_extended_upper_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
-                    predicate!(propagated_domain <= max_value)
+                    predicate!(propagated_domain <= ub)
                 );
                 let result = context.post(
-                    predicate!(propagated_domain <= max_value),
+                    predicate!(propagated_domain <= ub),
                     reason.clone(),
                     inference_code,
                 );
@@ -791,34 +798,36 @@ impl NogoodPropagator {
                 result?
             }
         }
+
         if lower_bound.is_none() {
+            assert!(
+                exceptions.len() > 1
+                    || (!exceptions.is_empty()
+                        && upper_bound.is_some()
+                        && lb < upper_bound.unwrap().get_right_hand_side()),
+                "Holes: {exceptions:?}\nlb: {lower_bound:?}\nub: {upper_bound:?}"
+            );
             // First, if there is no lower-bound predicate ([x >= v]), then we can propagate the
-            // lower-bound based on the upper-bound predicate *and/or* the inequality predicates.
+            // lower-bound based on the upper-bound predicate and/or the inequality predicates (note
+            // that there must be one or more holes due to semantic minimisation and unit
+            // propagation taking place previously).
             //
             // For example, if we have the predicates [x <= 15] /\ [x != 10], then we know that it
             // should either hold that [x >= 16] or [x = 10]. In either case, we know that [x >= 10]
             //
-            // Thus, we calculate the new minimum value as either the minimum value of the
-            // inequality predicates or the right-hand side of the upper-bound predicate plus one
-            // (note that it can never be the case that there is an inequality predicate with a
-            // value higher than the upper-bound predicate due to semantic minimisation).
-            pumpkin_assert_moderate!(
-                exceptions.is_empty() || *exceptions.iter().min().unwrap() < below_bound
-            );
-            let min_value = *exceptions.iter().min().unwrap_or(&(below_bound + 1));
-            // We update the min value for creating holes in the domain to the newly propagated
-            // lower-bound
-            min_range = Some(min_value);
-
-            if min_value > context.lower_bound(&propagated_domain) {
+            // Thus, we calculate the new minimum value as the minimum value of the
+            // inequality predicates (note that it can never be the case that there is an inequality
+            // predicate with a value higher than the upper-bound predicate due to
+            // semantic minimisation).
+            if lb > context.lower_bound(&propagated_domain) {
                 propagated = true;
                 statistics.num_extended_lower_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
-                    predicate!(propagated_domain >= min_value)
+                    predicate!(propagated_domain >= lb)
                 );
                 let result = context.post(
-                    predicate!(propagated_domain >= min_value),
+                    predicate!(propagated_domain >= lb),
                     reason.clone(),
                     inference_code,
                 );
@@ -868,7 +877,8 @@ impl NogoodPropagator {
         //
         // Hence, we iterate over the range that we have created, removing the values while *not*
         // removing the values for which there is an inequality predicate.
-        for value_in_domain in min_range.unwrap_or(above_bound)..=max_range.unwrap_or(below_bound) {
+        info!("Iterating from [{lb}, {ub}]");
+        for value_in_domain in lb..=ub {
             if !exceptions.contains(&value_in_domain)
                 && context.contains(&propagated_domain, value_in_domain)
             {
