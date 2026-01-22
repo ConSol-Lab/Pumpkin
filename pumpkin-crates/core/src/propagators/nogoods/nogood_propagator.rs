@@ -100,6 +100,7 @@ pub(crate) struct NogoodPropagator {
 create_statistics_struct!(NogoodPropagatorStatistics {
     num_unit_propagations: usize,
     num_extended_propagation_calls: usize,
+    num_variables_propagated: usize,
     num_extended_lower_bound_propagations: usize,
     num_extended_upper_bound_propagations: usize,
     num_extended_hole_propagations: usize,
@@ -645,6 +646,8 @@ impl NogoodPropagator {
 
         let mut last_describing_predicate = Predicate::trivially_false();
 
+        let mut propagated = false;
+
         for predicate in nogood.iter().filter_map(|&predicate_id| {
             // First, we filter out all of the predicates which are currently satisfied and
             // which are not concerning the propagated domain id
@@ -770,16 +773,22 @@ impl NogoodPropagator {
             // upper-bound
             max_range = Some(max_value);
             if max_value < context.upper_bound(&propagated_domain) {
+                propagated = true;
                 statistics.num_extended_upper_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain <= max_value)
                 );
-                context.post(
+                let result = context.post(
                     predicate!(propagated_domain <= max_value),
                     reason.clone(),
                     inference_code,
-                )?;
+                );
+
+                if result.is_err() {
+                    statistics.num_variables_propagated += 1;
+                }
+                result?
             }
         } else if lower_bound.is_none() {
             // First, if there is no lower-bound predicate ([x >= v]), then we can propagate the
@@ -801,16 +810,22 @@ impl NogoodPropagator {
             min_range = Some(min_value);
 
             if min_value > context.lower_bound(&propagated_domain) {
+                propagated = true;
                 statistics.num_extended_lower_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain >= min_value)
                 );
-                context.post(
+                let result = context.post(
                     predicate!(propagated_domain >= min_value),
                     reason.clone(),
                     inference_code,
-                )?;
+                );
+
+                if result.is_err() {
+                    statistics.num_variables_propagated += 1;
+                }
+                result?
             }
         }
 
@@ -856,17 +871,26 @@ impl NogoodPropagator {
             if !exceptions.contains(&value_in_domain)
                 && context.contains(&propagated_domain, value_in_domain)
             {
+                propagated = true;
                 statistics.num_extended_hole_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain != value_in_domain),
                 );
-                context.post(
+                let result = context.post(
                     predicate!(propagated_domain != value_in_domain),
                     reason.clone(),
                     inference_code,
-                )?;
+                );
+                if result.is_err() {
+                    statistics.num_variables_propagated += 1;
+                }
+                result?
             }
+        }
+
+        if propagated {
+            statistics.num_variables_propagated += 1;
         }
 
         Ok(())
