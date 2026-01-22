@@ -100,7 +100,9 @@ pub(crate) struct NogoodPropagator {
 create_statistics_struct!(NogoodPropagatorStatistics {
     num_unit_propagations: usize,
     num_extended_propagation_calls: usize,
-    num_extended_propagations: usize,
+    num_extended_lower_bound_propagations: usize,
+    num_extended_upper_bound_propagations: usize,
+    num_extended_hole_propagations: usize,
     average_num_predicates_describing_domain_when_propagating_extended: CumulativeMovingAverage<usize>
 });
 
@@ -768,7 +770,7 @@ impl NogoodPropagator {
             // upper-bound
             max_range = Some(max_value);
             if max_value < context.upper_bound(&propagated_domain) {
-                statistics.num_extended_propagations += 1;
+                statistics.num_extended_upper_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain <= max_value)
@@ -799,7 +801,7 @@ impl NogoodPropagator {
             min_range = Some(min_value);
 
             if min_value > context.lower_bound(&propagated_domain) {
-                statistics.num_extended_propagations += 1;
+                statistics.num_extended_lower_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain >= min_value)
@@ -854,7 +856,7 @@ impl NogoodPropagator {
             if !exceptions.contains(&value_in_domain)
                 && context.contains(&propagated_domain, value_in_domain)
             {
-                statistics.num_extended_propagations += 1;
+                statistics.num_extended_hole_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
                     predicate!(propagated_domain != value_in_domain),

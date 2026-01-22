@@ -616,16 +616,26 @@ impl ResolutionResolver {
             AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 if !learned_nogood.is_empty() {
                     let propagating_predicate = learned_nogood[0].get_domain();
+                    let num_predicates_describing_domain = learned_nogood
+                        .iter()
+                        .filter(|predicate| predicate.get_domain() == propagating_predicate)
+                        .count();
                     context
                         .counters
                         .learned_clause_statistics
                         .average_number_of_predicates_describing_domain_when_extended
-                        .add_term(
-                            learned_nogood
-                                .iter()
-                                .filter(|predicate| predicate.get_domain() == propagating_predicate)
-                                .count(),
-                        );
+                        .add_term(num_predicates_describing_domain);
+                    if num_predicates_describing_domain == 1 {
+                        context
+                            .counters
+                            .learned_clause_statistics
+                            .num_regular_nogood_learned += 1;
+                    } else {
+                        context
+                            .counters
+                            .learned_clause_statistics
+                            .num_extended_nogood_learned += 1;
+                    }
                 }
             }
             AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {}

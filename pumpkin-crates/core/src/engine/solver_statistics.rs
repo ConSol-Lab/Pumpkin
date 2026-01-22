@@ -72,4 +72,6 @@ create_statistics_struct!(
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
         average_number_of_predicates_describing_domain_when_extended: CumulativeMovingAverage<usize>,
+        num_extended_nogood_learned: usize,
+        num_regular_nogood_learned: usize,
 });
