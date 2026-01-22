@@ -790,7 +790,8 @@ impl NogoodPropagator {
                 }
                 result?
             }
-        } else if lower_bound.is_none() {
+        }
+        if lower_bound.is_none() {
             // First, if there is no lower-bound predicate ([x >= v]), then we can propagate the
             // lower-bound based on the upper-bound predicate *and/or* the inequality predicates.
             //
