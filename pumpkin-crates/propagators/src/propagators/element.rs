@@ -338,7 +338,6 @@ where
         // 3. Intersect that union with the domain on the right-hand side.
         //
         // The intersection should be empty for a conflict to exist.
-
         let supported_elements: Vec<_> = self
             .array
             .iter()
@@ -348,7 +347,7 @@ where
             .collect();
 
         let mut union = Domain::empty();
-        for element in supported_elements {
+        for element in &supported_elements {
             // Compute `union <- union cup element`
             //
             let holes = union
@@ -393,6 +392,8 @@ where
 #[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
+    use pumpkin_checking::TestAtomic;
+    use pumpkin_checking::VariableState;
     use pumpkin_core::TestSolver;
 
     use super::*;
@@ -537,5 +538,37 @@ mod tests {
             solver.get_reason_int(predicate![rhs <= 15]),
             conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1])
         );
+    }
+
+    #[test]
+    fn simple_test() {
+        let premises = [
+            TestAtomic {
+                name: "x1",
+                comparison: pumpkin_checking::Comparison::GreaterEqual,
+                value: 4,
+            },
+            TestAtomic {
+                name: "x2",
+                comparison: pumpkin_checking::Comparison::NotEqual,
+                value: 2,
+            },
+        ];
+
+        let consequent = Some(TestAtomic {
+            name: "x4",
+            comparison: pumpkin_checking::Comparison::NotEqual,
+            value: 2,
+        });
+        let state = VariableState::prepare_for_conflict_check(premises, consequent)
+            .expect("no conflicting atomics");
+
+        let checker = ElementChecker {
+            array: vec!["x1", "x2"].into(),
+            index: "x3",
+            rhs: "x4",
+        };
+
+        assert!(checker.check(state, &premises, consequent.as_ref()));
     }
 }
