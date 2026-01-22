@@ -1,6 +1,7 @@
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -427,27 +428,27 @@ where
             "Currentl, the checker does not contain inferences where the denominator spans 0"
         );
 
-        let floor_x1y1 = x1.floor_div(&y1);
-        let floor_x1y2 = x1.floor_div(&y2);
-        let floor_x2y1 = x2.floor_div(&y1);
-        let floor_x2y2 = x2.floor_div(&y2);
+        let computed_c_lower: IntExt = *[
+            x1.div_ceil(y1),
+            x1.div_ceil(y2),
+            x2.div_ceil(y1),
+            x2.div_ceil(y2),
+        ]
+        .iter()
+        .flatten()
+        .min()
+        .expect("Expected at least one element to be defined");
 
-        let ceil_x1y1 = x1.ceil_div(&y1);
-        let ceil_x1y2 = x1.ceil_div(&y2);
-        let ceil_x2y1 = x2.ceil_div(&y1);
-        let ceil_x2y2 = x2.ceil_div(&y2);
-
-        // TODO: Can we just ignore these options?
-        let computed_c_lower = [ceil_x1y1, ceil_x1y2, ceil_x2y1, ceil_x2y2]
-            .into_iter()
-            .flatten()
-            .min()
-            .expect("Expected at least one element to be defined");
-        let computed_c_upper = [floor_x1y1, floor_x1y2, floor_x2y1, floor_x2y2]
-            .into_iter()
-            .flatten()
-            .max()
-            .expect("Expected at least one element to be defined");
+        let computed_c_upper: IntExt = *[
+            x1.div_floor(y1),
+            x1.div_floor(y2),
+            x2.div_floor(y1),
+            x2.div_floor(y2),
+        ]
+        .iter()
+        .flatten()
+        .min()
+        .expect("Expected at least one element to be defined");
 
         let c_lower = self.rhs.induced_lower_bound(&state);
         let c_upper = self.rhs.induced_upper_bound(&state);

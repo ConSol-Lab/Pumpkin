@@ -21,65 +21,52 @@ pub enum IntExt<Int = i32> {
 }
 
 impl IntExt<i32> {
-    pub fn floor_div(&self, other: &IntExt<i32>) -> Option<IntExt<i32>> {
-        match (self, other) {
-            (IntExt::Int(inner), IntExt::Int(inner_other)) => {
-                let inner = *inner as f64;
-                let inner_other = *inner_other as f64;
+    pub fn div_ceil(&self, other: IntExt<i32>) -> Option<IntExt<i32>> {
+        let result = self.div(other).ceil();
 
-                Some(IntExt::Int((inner / inner_other).floor() as i32))
-            }
-            (IntExt::NegativeInf, IntExt::Int(inner)) => {
-                if inner.is_positive() {
-                    Some(IntExt::NegativeInf)
-                } else {
-                    Some(IntExt::PositiveInf)
-                }
-            }
-            (IntExt::PositiveInf, IntExt::Int(inner)) => {
-                if inner.is_positive() {
-                    Some(IntExt::PositiveInf)
-                } else {
-                    Some(IntExt::NegativeInf)
-                }
-            }
-            (IntExt::PositiveInf, IntExt::NegativeInf) => None,
-            (IntExt::PositiveInf, IntExt::PositiveInf) => None,
-            (IntExt::NegativeInf, IntExt::NegativeInf) => None,
-            (IntExt::NegativeInf, IntExt::PositiveInf) => None,
-            (IntExt::Int(_), IntExt::NegativeInf) => Some(IntExt::Int(0)),
-            (IntExt::Int(_), IntExt::PositiveInf) => Some(IntExt::Int(0)),
-        }
+        Self::int_ext_from_int_f64(result)
     }
 
-    pub fn ceil_div(&self, other: &IntExt<i32>) -> Option<IntExt<i32>> {
-        match (self, other) {
-            (IntExt::Int(inner), IntExt::Int(inner_other)) => {
-                let inner = *inner as f64;
-                let inner_other = *inner_other as f64;
+    pub fn div_floor(&self, other: IntExt<i32>) -> Option<IntExt<i32>> {
+        let result = self.div(other).floor();
 
-                Some(IntExt::Int((inner / inner_other).ceil() as i32))
+        Self::int_ext_from_int_f64(result)
+    }
+
+    fn int_ext_from_int_f64(value: f64) -> Option<IntExt<i32>> {
+        if value.is_nan() {
+            return None;
+        }
+
+        if value.is_infinite() {
+            if value.is_sign_positive() {
+                return Some(IntExt::PositiveInf);
+            } else {
+                return Some(IntExt::NegativeInf);
             }
-            (IntExt::NegativeInf, IntExt::Int(inner)) => {
-                if inner.is_positive() {
-                    Some(IntExt::NegativeInf)
-                } else {
-                    Some(IntExt::PositiveInf)
-                }
-            }
-            (IntExt::PositiveInf, IntExt::Int(inner)) => {
-                if inner.is_positive() {
-                    Some(IntExt::PositiveInf)
-                } else {
-                    Some(IntExt::NegativeInf)
-                }
-            }
-            (IntExt::PositiveInf, IntExt::NegativeInf) => None,
-            (IntExt::PositiveInf, IntExt::PositiveInf) => None,
-            (IntExt::NegativeInf, IntExt::NegativeInf) => None,
-            (IntExt::NegativeInf, IntExt::PositiveInf) => None,
-            (IntExt::Int(_), IntExt::NegativeInf) => Some(IntExt::Int(0)),
-            (IntExt::Int(_), IntExt::PositiveInf) => Some(IntExt::Int(0)),
+        }
+
+        assert!(value.fract().abs() < 1e-10);
+
+        Some(IntExt::Int(value as i32))
+    }
+}
+
+impl<Int: Into<f64>> IntExt<Int> {
+    fn div(self, rhs: Self) -> f64 {
+        let value: f64 = self.into();
+        let rhs_value: f64 = rhs.into();
+
+        value / rhs_value
+    }
+}
+
+impl<Int: Into<f64>> From<IntExt<Int>> for f64 {
+    fn from(value: IntExt<Int>) -> Self {
+        match value {
+            IntExt::Int(inner) => inner.into(),
+            IntExt::NegativeInf => -f64::INFINITY,
+            IntExt::PositiveInf => f64::INFINITY,
         }
     }
 }
