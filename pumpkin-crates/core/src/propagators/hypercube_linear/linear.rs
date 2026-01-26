@@ -1,6 +1,6 @@
 use std::num::NonZero;
 
-use crate::variables::{AffineView, DomainId};
+use crate::variables::{AffineView, DomainId, TransformableVariable};
 
 /// The linear inequality part of a hypercube linear constraint.
 #[derive(Clone, Debug)]
@@ -11,6 +11,11 @@ pub struct LinearInequality {
 
 impl LinearInequality {
     pub fn new(terms: impl IntoIterator<Item = (NonZero<i32>, DomainId)>, bound: i32) -> Self {
-        todo!()
+        let terms = terms
+            .into_iter()
+            .map(|(weight, domain)| domain.scaled(weight.get()))
+            .collect();
+
+        LinearInequality { terms, bound }
     }
 }
