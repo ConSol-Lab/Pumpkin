@@ -27,6 +27,7 @@ impl<Var> Debug for ResourceProfile<Var> {
             .field("start", &self.start)
             .field("end", &self.end)
             .field("height", &self.height)
+            .field("profile_tasks", &self.profile_tasks)
             .finish()
     }
 }

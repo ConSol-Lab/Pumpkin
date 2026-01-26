@@ -2,7 +2,14 @@
 //! constraint.
 #![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
 
+use std::cell::RefCell;
+
 use bitfield_struct::bitfield;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::Domain;
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::Union;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -11,6 +18,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -39,6 +47,17 @@ where
     VE: IntegerVariable + 'static,
 {
     type PropagatorImpl = ElementPropagator<VX, VI, VE>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, Element),
+            Box::new(ElementChecker::new(
+                self.array.clone(),
+                self.index.clone(),
+                self.rhs.clone(),
+            )),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let ElementArgs {
@@ -295,9 +314,96 @@ struct RightHandSideReason {
     value: i32,
 }
 
+#[derive(Clone, Debug)]
+pub struct ElementChecker<VX, VI, VE> {
+    array: Box<[VX]>,
+    index: VI,
+    rhs: VE,
+
+    union: RefCell<Union>,
+}
+
+impl<VX, VI, VE> ElementChecker<VX, VI, VE> {
+    /// Create a new [`ElementChecker`].
+    pub fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
+        ElementChecker {
+            array,
+            index,
+            rhs,
+            union: RefCell::new(Union::empty()),
+        }
+    }
+}
+
+impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
+where
+    Atomic: AtomicConstraint,
+    VX: CheckerVariable<Atomic>,
+    VI: CheckerVariable<Atomic>,
+    VE: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        self.union.borrow_mut().reset();
+
+        // A domain consistent checker for element does the following:
+        // 1. Determine the elements in the array whose index is in the domain of the index
+        //    variable.
+        // 2. Take the union of the domains of those elements.
+        // 3. Intersect that union with the domain on the right-hand side.
+        //
+        // The intersection should be empty for a conflict to exist.
+        let supported_elements: Vec<_> = self
+            .array
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| self.index.induced_domain_contains(&state, *idx as i32))
+            .map(|(_, element)| element)
+            .collect();
+
+        for element in supported_elements {
+            self.union.borrow_mut().add(&state, element);
+        }
+
+        assert!(
+            self.union.borrow().is_consistent(),
+            "at least one element has a non-empty domain or else variable state would be inconsistent"
+        );
+
+        // Compute `|union cap rhs| == 0`.
+        let intersection_lower_bound = self
+            .union
+            .borrow()
+            .lower_bound()
+            .max(self.rhs.induced_lower_bound(&state));
+        let intersection_upper_bound = self
+            .union
+            .borrow()
+            .upper_bound()
+            .min(self.rhs.induced_upper_bound(&state));
+        let holes = self
+            .union
+            .borrow()
+            .holes()
+            .chain(self.rhs.induced_holes(&state))
+            .collect();
+
+        let intersected_domain =
+            Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
+
+        !intersected_domain.is_consistent()
+    }
+}
+
 #[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
+    use pumpkin_checking::TestAtomic;
+    use pumpkin_checking::VariableState;
     use pumpkin_core::TestSolver;
 
     use super::*;
@@ -442,5 +548,33 @@ mod tests {
             solver.get_reason_int(predicate![rhs <= 15]),
             conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1])
         );
+    }
+
+    #[test]
+    fn holes_outside_union_bounds_are_ignored() {
+        let premises = [
+            TestAtomic {
+                name: "x1",
+                comparison: pumpkin_checking::Comparison::GreaterEqual,
+                value: 4,
+            },
+            TestAtomic {
+                name: "x2",
+                comparison: pumpkin_checking::Comparison::NotEqual,
+                value: 2,
+            },
+        ];
+
+        let consequent = Some(TestAtomic {
+            name: "x4",
+            comparison: pumpkin_checking::Comparison::NotEqual,
+            value: 2,
+        });
+        let state = VariableState::prepare_for_conflict_check(premises, consequent)
+            .expect("no conflicting atomics");
+
+        let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
+
+        assert!(checker.check(state, &premises, consequent.as_ref()));
     }
 }

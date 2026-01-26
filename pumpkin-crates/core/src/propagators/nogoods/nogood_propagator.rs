@@ -621,6 +621,13 @@ impl NogoodPropagator {
         //
         // The preprocessing ensures that all predicates are unassigned.
         else {
+            #[cfg(feature = "check-propagations")]
+            let nogood = input_nogood
+                .iter()
+                .map(|predicate| context.get_id(*predicate))
+                .collect::<Vec<_>>();
+
+            #[cfg(not(feature = "check-propagations"))]
             let nogood = nogood
                 .iter()
                 .map(|predicate| context.get_id(*predicate))

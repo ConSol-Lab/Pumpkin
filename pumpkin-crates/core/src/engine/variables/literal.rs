@@ -1,6 +1,9 @@
 use std::ops::Not;
 
 use enumset::EnumSet;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::IntExt;
+use pumpkin_checking::VariableState;
 
 use super::DomainId;
 use super::IntegerVariable;
@@ -49,6 +52,56 @@ impl Not for Literal {
             integer_variable: self.integer_variable.scaled(-1).offset(1),
         }
     }
+}
+
+/// Forwards a function implementation to the field on self.
+macro_rules! forward {
+    (
+        $field:ident,
+        fn $(<$($lt:lifetime),+>)? $name:ident(
+            & $($lt_self:lifetime)? self,
+            $($param_name:ident : $param_type:ty),*
+        ) -> $return_type:ty
+        $(where $($where_clause:tt)*)?
+    ) => {
+        fn $name$(<$($lt),+>)?(
+            & $($lt_self)? self,
+            $($param_name: $param_type),*
+        ) -> $return_type $(where $($where_clause)*)? {
+            self.$field.$name($($param_name),*)
+        }
+    }
+}
+
+impl CheckerVariable<Predicate> for Literal {
+    forward!(integer_variable, fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool);
+    forward!(integer_variable, fn atomic_less_than(&self, value: i32) -> Predicate);
+    forward!(integer_variable, fn atomic_greater_than(&self, value: i32) -> Predicate);
+    forward!(integer_variable, fn atomic_not_equal(&self, value: i32) -> Predicate);
+    forward!(integer_variable, fn atomic_equal(&self, value: i32) -> Predicate);
+
+    forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
+    forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
+    forward!(integer_variable, fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32>);
+    forward!(integer_variable, fn induced_domain_contains(&self, variable_state: &VariableState<Predicate>, value: i32) -> bool);
+    forward!(
+        integer_variable,
+        fn <'this, 'state> induced_holes(
+            &'this self,
+            variable_state: &'state VariableState<Predicate>
+        ) -> impl Iterator<Item = i32> + 'state
+        where
+            'this: 'state,
+    );
+    forward!(
+        integer_variable,
+        fn <'this, 'state> iter_induced_domain(
+            &'this self,
+            variable_state: &'state VariableState<Predicate>
+        ) -> Option<impl Iterator<Item = i32> + 'state>
+        where
+            'this: 'state,
+    );
 }
 
 impl IntegerVariable for Literal {

@@ -1,3 +1,8 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
+use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -9,6 +14,7 @@ use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -38,6 +44,16 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, LinearBounds),
+            Box::new(LinearLessOrEqualInferenceChecker::new(
+                self.x.clone(),
+                self.c,
+            )),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearLessOrEqualPropagatorArgs {
@@ -268,6 +284,43 @@ where
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LinearLessOrEqualInferenceChecker<Var> {
+    terms: Box<[Var]>,
+    bound: i32,
+}
+
+impl<Var> LinearLessOrEqualInferenceChecker<Var> {
+    pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
+        LinearLessOrEqualInferenceChecker { terms, bound }
+    }
+}
+
+impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualInferenceChecker<Var>
+where
+    Var: CheckerVariable<Atomic>,
+    Atomic: AtomicConstraint,
+{
+    fn check(
+        &self,
+        variable_state: VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        // Next, we evaluate the linear inequality. The lower bound of the
+        // left-hand side must exceed the bound in the constraint. Note that the accumulator is an
+        // IntExt, and if the lower bound of one of the terms is -infty, then the left-hand side
+        // will be -infty regardless of the other terms.
+        let left_hand_side: IntExt<i64> = self
+            .terms
+            .iter()
+            .map(|variable| variable.induced_lower_bound(&variable_state).into())
+            .sum();
+
+        left_hand_side > i64::from(self.bound)
     }
 }
 

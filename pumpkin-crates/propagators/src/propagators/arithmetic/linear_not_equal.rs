@@ -1,6 +1,11 @@
 use std::rc::Rc;
 
 use enumset::enum_set;
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::IntExt;
+use pumpkin_checking::VariableState;
 use pumpkin_core::asserts::pumpkin_assert_extreme;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -13,6 +18,7 @@ use pumpkin_core::propagation::DomainEvent;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -43,6 +49,16 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = LinearNotEqualPropagator<Var>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, LinearNotEquals),
+            Box::new(LinearNotEqualChecker {
+                terms: self.terms.as_ref().into(),
+                bound: self.rhs,
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let LinearNotEqualPropagatorArgs {
@@ -355,6 +371,34 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
             self.should_recalculate_lhs || self.fixed_lhs == expected_fixed_lhs;
 
         number_of_fixed_terms_is_correct && lhs_is_outdated_or_correct
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LinearNotEqualChecker<Var> {
+    pub terms: Box<[Var]>,
+    pub bound: i32,
+}
+
+impl<Var, Atomic> InferenceChecker<Atomic> for LinearNotEqualChecker<Var>
+where
+    Var: CheckerVariable<Atomic>,
+    Atomic: AtomicConstraint,
+{
+    fn check(&self, state: VariableState<Atomic>, _: &[Atomic], _: Option<&Atomic>) -> bool {
+        // We evaluate the linear sum. It should be fixed to the bound for a conflict to
+        // exist.
+        let mut left_hand_side = IntExt::Int(0);
+
+        for term in self.terms.iter() {
+            let Some(value) = term.induced_fixed_value(&state) else {
+                return false;
+            };
+
+            left_hand_side += i64::from(value);
+        }
+
+        left_hand_side == i64::from(self.bound)
     }
 }
 
