@@ -53,15 +53,15 @@ pub enum PredicateType {
     Equal = EQUAL_CODE,
 }
 impl PredicateType {
-    pub(crate) fn is_lower_bound(&self) -> bool {
+    pub fn is_lower_bound(&self) -> bool {
         matches!(self, PredicateType::LowerBound)
     }
 
-    pub(crate) fn is_upper_bound(&self) -> bool {
+    pub fn is_upper_bound(&self) -> bool {
         matches!(self, PredicateType::UpperBound)
     }
 
-    pub(crate) fn is_disequality(&self) -> bool {
+    pub fn is_disequality(&self) -> bool {
         matches!(self, PredicateType::NotEqual)
     }
 

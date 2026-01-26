@@ -1,5 +1,4 @@
 use super::PredicateIdAssignments;
-use super::predicate_tracker_for_domain::PredicateTrackerForDomain;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::containers::KeyedVec;
@@ -7,6 +6,7 @@ use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::DomainEvent;
+use crate::engine::notifications::predicate_notification::predicate_trackers::PredicateTracker;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::variables::DomainId;
@@ -28,7 +28,7 @@ pub(crate) struct PredicateNotifier {
     /// Tracks the current status for [`PredicateId`]s.
     pub(crate) predicate_id_assignments: PredicateIdAssignments,
     /// Contains the [`PredicateTrackerForDomain`] for each [`DomainId`]
-    domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTrackerForDomain>,
+    domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTracker>,
 }
 
 impl PredicateNotifier {
@@ -118,14 +118,25 @@ impl PredicateNotifier {
             return;
         }
 
-        // Otherwise we update the structures
-        self.domain_id_to_predicate_tracker[domain].on_update(
-            domain,
-            predicate_type,
-            assignments,
-            trailed_values,
-            &mut self.predicate_id_assignments,
-        );
+        if predicate_type.is_disequality() {
+            for removed_value in assignments.get_holes_at_current_checkpoint(domain) {
+                let predicate =
+                    predicate_type.into_predicate(domain, assignments, Some(removed_value));
+
+                self.domain_id_to_predicate_tracker[domain].on_update(
+                    predicate,
+                    trailed_values,
+                    &mut self.predicate_id_assignments,
+                );
+            }
+        } else {
+            // Otherwise we update the structures
+            self.domain_id_to_predicate_tracker[domain].on_update(
+                predicate_type.into_predicate(domain, assignments, None),
+                trailed_values,
+                &mut self.predicate_id_assignments,
+            );
+        }
     }
 
     /// This method will extend the scope of [`PredicateNotifier`] by adding the provided
@@ -140,16 +151,14 @@ impl PredicateNotifier {
 
         // First, we resize the number of DomainIds for which we store predicate trackers
         if self.domain_id_to_predicate_tracker.len() <= predicate.get_domain().index() {
-            self.domain_id_to_predicate_tracker.resize(
-                predicate.get_domain().index() + 1,
-                PredicateTrackerForDomain::new(),
-            );
+            self.domain_id_to_predicate_tracker
+                .resize(predicate.get_domain().index() + 1, PredicateTracker::new());
         }
 
         // Now we initialise the predicate tracker; this does not add it to the scope yet but it
         // initialises the structures
         self.domain_id_to_predicate_tracker[predicate.get_domain()].initialise(
-            predicate,
+            predicate.get_domain(),
             assignments.get_initial_lower_bound(predicate.get_domain()),
             assignments.get_initial_upper_bound(predicate.get_domain()),
             trailed_values,
@@ -158,7 +167,6 @@ impl PredicateNotifier {
         // Now we add it to the scope of the tracker
         //
         // We check whether it was already tracked or not
-        let _ = self.domain_id_to_predicate_tracker[predicate.get_domain()]
-            .watch_predicate(predicate, id);
+        let _ = self.domain_id_to_predicate_tracker[predicate.get_domain()].track(predicate, id);
     }
 }
