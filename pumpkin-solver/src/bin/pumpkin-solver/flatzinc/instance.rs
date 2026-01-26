@@ -2,10 +2,10 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::rc::Rc;
 
-use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::optimisation::OptimisationDirection;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::core::optimisation::OptimisationDirection;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which

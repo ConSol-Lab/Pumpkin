@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::variables::TransformableVariable;
 
 #[derive(Parser)]
 struct Cli {
@@ -87,7 +88,9 @@ fn main() {
         .post();
 
     let mut brancher = solver.default_brancher();
-    match solver.satisfy(&mut brancher, &mut Indefinite) {
+    let mut resolver = ResolutionResolver::default();
+
+    match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.solution();
 
@@ -109,10 +112,10 @@ fn main() {
 
             println!("{row_separator}");
         }
-        SatisfactionResult::Unsatisfiable(_, _) => {
+        SatisfactionResult::Unsatisfiable(_, _, _) => {
             println!("{n}-queens is unsatisfiable.");
         }
-        SatisfactionResult::Unknown(_, _) => {
+        SatisfactionResult::Unknown(_, _, _) => {
             println!("Timeout.");
         }
     };

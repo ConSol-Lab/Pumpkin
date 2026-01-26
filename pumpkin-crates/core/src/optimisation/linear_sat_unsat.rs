@@ -4,6 +4,7 @@ use super::OptimisationProcedure;
 use super::solution_callback::SolutionCallback;
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::results::OptimisationResult;
@@ -37,16 +38,18 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
     }
 }
 
-impl<Var, Callback, B> OptimisationProcedure<B, Callback> for LinearSatUnsat<Var, Callback>
+impl<Var, Callback, B, R> OptimisationProcedure<B, R, Callback> for LinearSatUnsat<Var, Callback>
 where
     Var: IntegerVariable,
     B: Brancher,
-    Callback: SolutionCallback<B>,
+    R: ConflictResolver,
+    Callback: SolutionCallback<B, R>,
 {
     fn optimise(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
+        resolver: &mut R,
         solver: &mut Solver,
     ) -> OptimisationResult<Callback::Stop> {
         let objective = match self.direction {
@@ -55,10 +58,10 @@ where
         };
 
         // First we will solve the satisfaction problem without constraining the objective.
-        let mut best_solution: Solution = match solver.satisfy(brancher, termination) {
+        let mut best_solution: Solution = match solver.satisfy(brancher, termination, resolver) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_, _) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
+            SatisfactionResult::Unsatisfiable(_, _, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
         };
 
         loop {
@@ -66,6 +69,7 @@ where
                 solver,
                 best_solution.as_reference(),
                 brancher,
+                resolver,
             );
 
             if let ControlFlow::Break(stop) = callback_result {
@@ -78,6 +82,7 @@ where
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
                     termination,
+                    resolver,
                     &[predicate![objective <= best_objective_value - 1]],
                 );
 

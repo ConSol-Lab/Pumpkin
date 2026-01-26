@@ -1,11 +1,11 @@
 use crate::containers::SparseSet;
-use crate::engine::Assignments;
 use crate::predicates::Predicate;
+use crate::propagation::ReadDomains;
 
 /// Used to compute the LBD of nogoods.
 /// The type carries state that prevents the re-allocation of helper data structures.
 #[derive(Clone, Debug)]
-pub(crate) struct Lbd {
+pub struct Lbd {
     lbd_helper: SparseSet<u32>,
 }
 
@@ -23,17 +23,17 @@ impl Default for Lbd {
 
 impl Lbd {
     /// Compute the LBD of the given nogood under the given assignment.
-    pub(crate) fn compute_lbd(
+    pub fn compute_lbd<Context: ReadDomains>(
         &mut self,
         predicates: &[Predicate],
-        assignments: &Assignments,
+        context: &Context,
     ) -> u32 {
         self.lbd_helper.set_to_empty();
         self.lbd_helper
-            .accommodate(&(assignments.get_checkpoint() as u32));
+            .accommodate(&(context.get_checkpoint() as u32));
 
         for predicate in predicates {
-            let checkpoint = assignments.get_checkpoint_for_predicate(predicate).unwrap();
+            let checkpoint = context.get_checkpoint_for_predicate(*predicate).unwrap();
 
             self.lbd_helper.insert(checkpoint as u32);
         }

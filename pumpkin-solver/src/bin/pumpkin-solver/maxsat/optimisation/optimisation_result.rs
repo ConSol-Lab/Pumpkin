@@ -1,4 +1,4 @@
-use pumpkin_solver::results::Solution;
+use pumpkin_solver::core::results::Solution;
 
 #[cfg(doc)]
 use super::optimisation_solver::OptimisationSolver;

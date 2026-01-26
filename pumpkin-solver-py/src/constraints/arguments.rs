@@ -1,6 +1,6 @@
-use pumpkin_solver::variables::AffineView;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;

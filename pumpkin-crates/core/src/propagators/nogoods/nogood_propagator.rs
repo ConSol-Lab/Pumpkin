@@ -10,12 +10,10 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
-use crate::engine::SolverStatistics;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -25,7 +23,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
-use crate::propagation::HasAssignments;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -375,11 +372,9 @@ impl Propagator for NogoodPropagator {
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates (if it
             // did not then it should have propagated earlier).
-            let current_lbd = self.lbd_helper.compute_lbd(
-                &self.temp_nogood_reason,
-                #[allow(deprecated, reason = "should be refactored later")]
-                context.assignments(),
-            );
+            let current_lbd = self
+                .lbd_helper
+                .compute_lbd(&self.temp_nogood_reason, &context);
 
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogood_info[info_id].lbd {
@@ -429,7 +424,6 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContext,
-        statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
         // root-level; this is essentially the same as adding a predicate at the root level
@@ -447,12 +441,7 @@ impl NogoodPropagator {
         // but will be assigned at the level of the predicate at index one.
         let lbd = self
             .lbd_helper
-            .compute_lbd(&nogood.as_slice()[1..], context.assignments());
-
-        statistics
-            .learned_clause_statistics
-            .average_lbd
-            .add_term(lbd as u64);
+            .compute_lbd(&nogood.as_slice()[1..], context);
 
         let nogood = nogood
             .iter()

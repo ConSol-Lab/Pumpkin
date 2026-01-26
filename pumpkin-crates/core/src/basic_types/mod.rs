@@ -1,7 +1,6 @@
 mod constraint_operation_error;
 mod csp_solver_execution_flag;
 mod function;
-pub(crate) mod moving_averages;
 mod predicate_id_generators;
 mod propagation_status_cp;
 mod propositional_conjunction;
@@ -17,7 +16,7 @@ pub(crate) use csp_solver_execution_flag::CSPSolverExecutionFlag;
 pub use function::Function;
 pub(crate) use predicate_id_generators::DeletablePredicateIdGenerator;
 pub use predicate_id_generators::PredicateId;
-pub(crate) use predicate_id_generators::PredicateIdGenerator;
+pub use predicate_id_generators::PredicateIdGenerator;
 pub use propagation_status_cp::*;
 pub use propositional_conjunction::PropositionalConjunction;
 pub use random::*;

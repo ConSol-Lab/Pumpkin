@@ -24,22 +24,25 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::parse_cnf;
+use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
+use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
 use pumpkin_solver::Solver;
-use pumpkin_solver::convert_case::Case;
-use pumpkin_solver::optimisation::OptimisationStrategy;
-use pumpkin_solver::options::*;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::rand::SeedableRng;
-use pumpkin_solver::rand::rngs::SmallRng;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::statistics::configure_statistic_logging;
-use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::core::convert_case::Case;
+use pumpkin_solver::core::optimisation::OptimisationStrategy;
+use pumpkin_solver::core::options::*;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::pumpkin_assert_simple;
+use pumpkin_solver::core::rand::SeedableRng;
+use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::results::SolutionReference;
+use pumpkin_solver::core::statistics::configure_statistic_logging;
+use pumpkin_solver::core::termination::TimeBudget;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -357,7 +360,7 @@ struct Args {
 
     /// Determines the conflict resolver.
     #[arg(long, value_enum, default_value_t)]
-    conflict_resolver: ConflictResolver,
+    conflict_resolver: ConflictResolverType,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
     ///
@@ -522,12 +525,12 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    if pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
-        >= pumpkin_solver::asserts::PUMPKIN_ASSERT_MODERATE
+    if pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+        >= pumpkin_solver::core::asserts::PUMPKIN_ASSERT_MODERATE
     {
         warn!(
             "Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.",
-            pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
+            pumpkin_solver::core::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION
         );
     };
 
@@ -564,19 +567,19 @@ fn run() -> PumpkinResult<()> {
         activity_bump_increment: 1.0,
     };
 
+    let should_minimise_nogoods = if args.proof_type == ProofType::Full {
+        warn!("Recursive minimisation is disabled when logging the full proof.");
+        false
+    } else {
+        !args.no_learning_clause_minimisation
+    };
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        learning_clause_minimisation: if args.proof_type == ProofType::Full {
-            warn!("Recursive minimisation is disabled when logging the full proof.");
-            false
-        } else {
-            !args.no_learning_clause_minimisation
-        },
+        should_minimise_nogoods,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
-        conflict_resolver: args.conflict_resolver,
         learning_options,
     };
 
@@ -594,25 +597,48 @@ fn run() -> PumpkinResult<()> {
             instance_path,
             args.upper_bound_encoding,
         )?,
-        FileFormat::FlatZinc => flatzinc::solve(
-            Solver::with_options(solver_options),
-            instance_path,
-            time_limit,
-            FlatZincOptions {
-                free_search: args.free_search,
-                all_solutions: args.all_solutions,
-                cumulative_options: CumulativeOptions::new(
-                    args.cumulative_allow_holes,
-                    args.cumulative_explanation_type,
-                    !args.cumulative_single_profiles,
-                    args.cumulative_propagation_method,
-                    args.cumulative_incremental_backtracking,
-                ),
-                optimisation_strategy: args.optimisation_strategy,
-                proof_type: args.proof_path.map(|_| args.proof_type),
-                verbose: args.verbose,
-            },
-        )?,
+        FileFormat::FlatZinc => match args.conflict_resolver {
+            ConflictResolverType::NoLearning => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                NoLearningResolver,
+            )?,
+            ConflictResolverType::UIP => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
+            )?,
+        },
     }
 
     Ok(())
@@ -630,11 +656,15 @@ fn cnf_problem(
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher();
-    match solver.satisfy(&mut brancher, &mut termination) {
+    let mut resolver = ResolutionResolver::default();
+
+    match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
-            satisfiable
-                .solver()
-                .log_statistics(Some(satisfiable.brancher()), true);
+            satisfiable.solver().log_statistics(
+                satisfiable.brancher(),
+                satisfiable.conflict_resolver(),
+                true,
+            );
             println!("s SATISFIABLE");
             println!(
                 "v {}",
@@ -645,13 +675,13 @@ fn cnf_problem(
                 )
             );
         }
-        SatisfactionResult::Unsatisfiable(solver, brancher) => {
-            solver.log_statistics(Some(brancher), true);
+        SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
+            solver.log_statistics(brancher, resolver, true);
 
             println!("s UNSATISFIABLE");
         }
-        SatisfactionResult::Unknown(solver, brancher) => {
-            solver.log_statistics(Some(brancher), true);
+        SatisfactionResult::Unknown(solver, brancher, resolver) => {
+            solver.log_statistics(brancher, resolver, true);
             println!("s UNKNOWN");
         }
     }

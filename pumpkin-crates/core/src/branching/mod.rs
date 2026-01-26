@@ -17,14 +17,19 @@
 //! # use pumpkin_core::variables::Literal;
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
-//! # use crate::pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! let mut solver = Solver::default();
 //!
 //! let variables = vec![solver.new_literal()];
 //!
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
-//! let result = solver.satisfy(&mut brancher, &mut termination);
+//!
+//! // Then we create a conflict resolver
+//! let mut resolver = ResolutionResolver::default();
+//!
+//! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //! if let SatisfactionResult::Satisfiable(satisfiable) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     variables.into_iter().for_each(|variable| {
@@ -45,13 +50,18 @@
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use crate::pumpkin_core::results::ProblemSolution;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! let mut solver = Solver::default();
 //!
 //! let literals = vec![solver.new_literal()];
 //!
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
-//! let result = solver.satisfy(&mut brancher, &mut termination);
+//!
+//! // Then we create a conflict resolver
+//! let mut resolver = ResolutionResolver::default();
+//!
+//! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //! if let SatisfactionResult::Satisfiable(satisfiable) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     literals.into_iter().for_each(|literal| {

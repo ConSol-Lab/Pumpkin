@@ -4,9 +4,9 @@
 
 use super::InferenceCode;
 use super::ProofLog;
+use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashMap;
 use crate::engine::State;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagation::CurrentNogood;
@@ -110,7 +110,7 @@ fn get_required_assumptions(
 
     // There must be some combination of other factors.
     let mut reason = vec![];
-    ConflictAnalysisContext::get_propagation_reason(
+    ConflictAnalysisContext::get_propagation_reason_inner(
         predicate,
         CurrentNogood::empty(),
         context.proof_log,

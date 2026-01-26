@@ -4,27 +4,28 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_solver::DefaultBrancher;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::branching::branchers::warm_start::WarmStart;
-use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::containers::StorageKey;
-use pumpkin_solver::optimisation::OptimisationDirection;
-use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::rand::SeedableRng;
-use pumpkin_solver::rand::rngs::SmallRng;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::termination::TerminationCondition;
-use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::variables::AffineView;
-use pumpkin_solver::variables::DomainId;
+use pumpkin_solver::core::DefaultBrancher;
+use pumpkin_solver::core::branching::Brancher;
+use pumpkin_solver::core::branching::branchers::warm_start::WarmStart;
+use pumpkin_solver::core::containers::HashMap;
+use pumpkin_solver::core::containers::StorageKey;
+use pumpkin_solver::core::optimisation::OptimisationDirection;
+use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::rand::SeedableRng;
+use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::SolutionReference;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::termination::TerminationCondition;
+use pumpkin_solver::core::termination::TimeBudget;
+use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::DomainId;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -201,15 +202,19 @@ impl Model {
     #[pyo3(signature = (timeout=None))]
     fn satisfy(&mut self, timeout: Option<f32>) -> SatisfactionResult {
         let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
-        match self.solver.satisfy(&mut self.brancher, &mut termination) {
-            pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
+        match self
+            .solver
+            .satisfy(&mut self.brancher, &mut termination, &mut resolver)
+        {
+            pumpkin_solver::core::results::SatisfactionResult::Satisfiable(satisfiable) => {
                 SatisfactionResult::Satisfiable(Solution::from(satisfiable.solution()))
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unsatisfiable(_, _, _) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown(_, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unknown(_, _, _) => {
                 SatisfactionResult::Unknown()
             }
         }
@@ -222,17 +227,18 @@ impl Model {
         timeout: Option<f32>,
     ) -> SatisfactionUnderAssumptionsResult {
         let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
         let solver_assumptions = assumptions
             .iter()
             .map(|pred| pred.into_solver_predicate())
             .collect::<Vec<_>>();
 
-        match self.solver.satisfy_under_assumptions(&mut self.brancher, &mut termination, &solver_assumptions) {
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
+        match self.solver.satisfy_under_assumptions(&mut self.brancher, &mut termination, &mut resolver, &solver_assumptions) {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
                 SatisfactionUnderAssumptionsResult::Satisfiable(satisfiable.solution().into())
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
                 // Maarten: For now we assume that the core _must_ consist of the predicates that
                 //     were the input to the solve call. In general this is not the case, e.g. when
                 //     the assumptions can be semantically minized (the assumptions [y <= 1],
@@ -254,10 +260,10 @@ impl Model {
 
                 SatisfactionUnderAssumptionsResult::UnsatisfiableUnderAssumptions(core)
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
                 SatisfactionUnderAssumptionsResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
         }
@@ -286,6 +292,7 @@ impl Model {
         warm_start: HashMap<IntExpression, i32>,
     ) -> PyResult<OptimisationResult> {
         let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,
@@ -294,7 +301,10 @@ impl Model {
 
         let objective = objective.0;
 
-        let callback = |_: &Solver, solution: SolutionReference<'_>, _: &PythonBrancher| {
+        let callback = move |_: &Solver,
+                             solution: SolutionReference<'_>,
+                             _: &PythonBrancher,
+                             _: &ResolutionResolver| {
             let python_solution = crate::result::Solution::from(solution);
 
             // If there is a solution callback, unpack it.
@@ -317,27 +327,29 @@ impl Model {
             Optimiser::LinearSatUnsat => self.solver.optimise(
                 &mut self.brancher,
                 &mut termination,
+                &mut resolver,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
             Optimiser::LinearUnsatSat => self.solver.optimise(
                 &mut self.brancher,
                 &mut termination,
+                &mut resolver,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
         };
 
         match result {
-            pumpkin_solver::results::OptimisationResult::Stopped(_, err) => Err(err),
-            pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
+            pumpkin_solver::core::results::OptimisationResult::Stopped(_, err) => Err(err),
+            pumpkin_solver::core::results::OptimisationResult::Satisfiable(solution) => {
                 Ok(OptimisationResult::Satisfiable(solution.into()))
             }
-            pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
+            pumpkin_solver::core::results::OptimisationResult::Optimal(solution) => {
                 Ok(OptimisationResult::Optimal(solution.into()))
             }
-            pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
+            pumpkin_solver::core::results::OptimisationResult::Unsatisfiable => {
                 Ok(OptimisationResult::Unsatisfiable())
             }
-            pumpkin_solver::results::OptimisationResult::Unknown => {
+            pumpkin_solver::core::results::OptimisationResult::Unknown => {
                 Ok(OptimisationResult::Unknown())
             }
         }
@@ -383,8 +395,8 @@ struct PythonBrancher {
 impl Brancher for PythonBrancher {
     fn next_decision(
         &mut self,
-        context: &mut pumpkin_solver::branching::SelectionContext,
-    ) -> Option<pumpkin_solver::predicates::Predicate> {
+        context: &mut pumpkin_solver::core::branching::SelectionContext,
+    ) -> Option<pumpkin_solver::core::predicates::Predicate> {
         if let Some(predicate) = self.warm_start.next_decision(context) {
             return Some(predicate);
         }
@@ -392,7 +404,7 @@ impl Brancher for PythonBrancher {
         self.default_brancher.next_decision(context)
     }
 
-    fn subscribe_to_events(&self) -> Vec<pumpkin_solver::branching::BrancherEvent> {
+    fn subscribe_to_events(&self) -> Vec<pumpkin_solver::core::branching::BrancherEvent> {
         self.default_brancher.subscribe_to_events()
     }
 }
