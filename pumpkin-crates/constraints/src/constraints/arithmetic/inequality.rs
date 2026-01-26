@@ -1,4 +1,4 @@
-use implementation::propagators::linear_propagator::LinearConstructor;
+use implementation::propagators::linear::LinearConstructor;
 use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;

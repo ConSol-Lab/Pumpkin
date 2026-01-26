@@ -2,7 +2,7 @@
     deprecated,
     reason = "Will be refactored in the future using the state API"
 )]
-use implementation::propagators::linear_propagator::LinearConstructor;
+use implementation::propagators::linear::LinearConstructor;
 use pumpkin_core::TestSolver;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorId;
