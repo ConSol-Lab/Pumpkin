@@ -5,16 +5,18 @@ pub use hypercube::*;
 pub use linear::*;
 
 use crate::basic_types::PredicateId;
+use crate::declare_inference_label;
+use crate::predicate;
 use crate::proof::ConstraintTag;
-use crate::propagation::EnqueueDecision;
-use crate::propagation::LocalId;
-use crate::propagation::NotificationContext;
-use crate::propagation::OpaqueDomainEvent;
+use crate::proof::InferenceCode;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
+use crate::propagation::ReadDomains;
 use crate::results::PropagationStatusCP;
+use crate::state::Conflict;
+use crate::state::PropagatorConflict;
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
@@ -40,9 +42,9 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             .collect();
 
         HypercubeLinearPropagator {
-            hypercube,
             hypercube_predicates,
             linear,
+            constraint_tag,
         }
     }
 }
@@ -50,10 +52,13 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
-    hypercube: Hypercube,
-    hypercube_predicates: Box<[PredicateId]>,
     linear: LinearInequality,
+
+    hypercube_predicates: Box<[PredicateId]>,
+    constraint_tag: ConstraintTag,
 }
+
+declare_inference_label!(HypercubeLinear);
 
 impl Propagator for HypercubeLinearPropagator {
     fn name(&self) -> &str {
@@ -66,11 +71,30 @@ impl Propagator for HypercubeLinearPropagator {
             .iter()
             .all(|&predicate_id| context.is_predicate_id_satisfied(predicate_id));
 
-        if is_hypercube_satisfied {
-            todo!()
+        if !is_hypercube_satisfied {
+            return Ok(());
         }
 
-        Ok(())
+        let lower_bound_terms = self
+            .linear
+            .terms()
+            .map(|term| i64::from(context.lower_bound(&term)))
+            .sum::<i64>();
+
+        if lower_bound_terms > i64::from(self.linear.bound()) {
+            let conjunction = self
+                .linear
+                .terms()
+                .map(|term| predicate![term >= context.lower_bound(&term)])
+                .collect();
+
+            Err(Conflict::Propagator(PropagatorConflict {
+                conjunction,
+                inference_code: InferenceCode::new(self.constraint_tag, HypercubeLinear),
+            }))
+        } else {
+            Ok(())
+        }
     }
 }
 

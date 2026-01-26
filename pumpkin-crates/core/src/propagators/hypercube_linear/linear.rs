@@ -46,13 +46,18 @@ impl LinearInequality {
     pub fn terms(&self) -> impl Iterator<Item = AffineView<DomainId>> + '_ {
         self.terms.iter().copied()
     }
+
+    /// The bound of the linear inequality.
+    pub fn bound(&self) -> i32 {
+        self.bound
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{containers::HashSet, state::State};
-
     use super::*;
+    use crate::containers::HashSet;
+    use crate::state::State;
 
     #[test]
     fn terms_are_iterable() {
