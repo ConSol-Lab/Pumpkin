@@ -29,6 +29,7 @@ use crate::proof::explain_root_assignment;
 use crate::propagation::CurrentNogood;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
+use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::EmptyDomain;
@@ -218,16 +219,26 @@ impl ConflictAnalysisContext<'_> {
 
         let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
-        self.restore_to(learned_nogood.backtrack_level);
-
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
+
+        self.state.add_inference_checker(
+            inference_code.clone(),
+            Box::new(NogoodChecker {
+                nogood: learned_nogood.predicates.clone().into(),
+            }),
+        );
+
+        self.restore_to(learned_nogood.backtrack_level);
 
         if learned_nogood.len() == 1 {
             let _ = self
                 .unit_nogood_inference_codes
                 .insert(!learned_nogood[0], inference_code.clone());
         }
+
+        #[cfg(feature = "check-propagations")]
+        let trail_len_before_nogood = self.state.trail_len();
 
         let (nogood_propagator, mut propagation_context) = self
             .state
@@ -240,6 +251,9 @@ impl ConflictAnalysisContext<'_> {
             inference_code,
             &mut propagation_context,
         );
+
+        #[cfg(feature = "check-propagations")]
+        self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }
