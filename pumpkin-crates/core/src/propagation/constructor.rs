@@ -253,9 +253,19 @@ impl PropagatorConstructorContext<'_> {
 
 impl Drop for PropagatorConstructorContext<'_> {
     fn drop(&mut self) {
-        if let RefOrOwned::Owned(did_register) = self.did_register
-            && !did_register
-        {
+        if std::thread::panicking() {
+            // If we are already unwinding due to a panic, we do not want to trigger another one.
+            return;
+        }
+
+        let did_register = match self.did_register {
+            // If we are in a reborrowed context, we do not want to enforce registration.
+            RefOrOwned::Ref(_) => return,
+
+            RefOrOwned::Owned(did_register) => did_register,
+        };
+
+        if !did_register {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
