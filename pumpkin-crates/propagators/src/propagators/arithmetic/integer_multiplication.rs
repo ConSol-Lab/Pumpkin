@@ -1,3 +1,6 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
@@ -5,6 +8,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -34,6 +38,17 @@ where
     VC: IntegerVariable + 'static,
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, IntegerMultiplication),
+            Box::new(IntegerMultiplicationChecker {
+                a: self.a.clone(),
+                b: self.b.clone(),
+                c: self.c.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let IntegerMultiplicationArgs {
@@ -355,6 +370,51 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
         "Either the numerator {numerator} was non-positive or the denominator {denominator} was non-positive"
     );
     numerator / denominator + (numerator % denominator).signum()
+}
+
+#[derive(Clone, Debug)]
+pub struct IntegerMultiplicationChecker<VA, VB, VC> {
+    pub a: VA,
+    pub b: VB,
+    pub c: VC,
+}
+
+impl<VA, VB, VC, Atomic> InferenceChecker<Atomic> for IntegerMultiplicationChecker<VA, VB, VC>
+where
+    Atomic: AtomicConstraint,
+    VA: CheckerVariable<Atomic>,
+    VB: CheckerVariable<Atomic>,
+    VC: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        // We apply interval arithmetic to determine that the computed interval `a times b`
+        // does not intersect with the domain of `c`.
+        //
+        // See https://en.wikipedia.org/wiki/Interval_arithmetic#Interval_operators.
+
+        let x1 = self.a.induced_lower_bound(&state);
+        let x2 = self.a.induced_upper_bound(&state);
+        let y1 = self.b.induced_lower_bound(&state);
+        let y2 = self.b.induced_upper_bound(&state);
+
+        let c_lower = self.c.induced_lower_bound(&state);
+        let c_upper = self.c.induced_upper_bound(&state);
+
+        let x1y1 = x1 * y1;
+        let x1y2 = x1 * y2;
+        let x2y1 = x2 * y1;
+        let x2y2 = x2 * y2;
+
+        let computed_c_lower = x1y1.min(x1y2).min(x2y1).min(x2y2);
+        let computed_c_upper = x1y1.max(x1y2).max(x2y1).max(x2y2);
+
+        computed_c_upper < c_lower || computed_c_lower > c_upper
+    }
 }
 
 #[allow(deprecated, reason = "Will be refactored")]

@@ -2,6 +2,8 @@
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 
+use pumpkin_checking::InferenceChecker;
+
 use super::PropagatorQueue;
 use crate::containers::KeyGenerator;
 use crate::engine::EmptyDomain;
@@ -14,6 +16,7 @@ use crate::options::LearningOptions;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
+use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
@@ -53,6 +56,25 @@ impl Default for TestSolver {
 
 #[deprecated = "Will be replaced by the state API"]
 impl TestSolver {
+    pub fn accept_inferences_by(&mut self, inference_code: InferenceCode) {
+        #[derive(Debug, Clone, Copy)]
+        struct Checker;
+
+        impl InferenceChecker<Predicate> for Checker {
+            fn check(
+                &self,
+                _: pumpkin_checking::VariableState<Predicate>,
+                _: &[Predicate],
+                _: Option<&Predicate>,
+            ) -> bool {
+                true
+            }
+        }
+
+        self.state
+            .add_inference_checker(inference_code, Box::new(Checker));
+    }
+
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.state.new_interval_variable(lb, ub, None)
     }

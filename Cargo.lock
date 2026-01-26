@@ -212,15 +212,6 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "convert_case"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
-name = "convert_case"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
@@ -414,7 +405,7 @@ dependencies = [
 name = "fzn-rs-derive"
 version = "0.1.0"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case",
  "fzn-rs",
  "proc-macro2",
  "quote",
@@ -732,7 +723,17 @@ dependencies = [
  "drcp-format",
  "flate2",
  "fzn-rs",
+ "pumpkin-checking",
+ "pumpkin-core",
+ "pumpkin-propagators",
  "thiserror",
+]
+
+[[package]]
+name = "pumpkin-checking"
+version = "0.2.2"
+dependencies = [
+ "dyn-clone",
 ]
 
 [[package]]
@@ -758,7 +759,7 @@ dependencies = [
  "bitfield",
  "bitfield-struct",
  "clap",
- "convert_case 0.6.0",
+ "convert_case",
  "downcast-rs",
  "drcp-format",
  "dyn-clone",
@@ -772,6 +773,7 @@ dependencies = [
  "log",
  "num",
  "once_cell",
+ "pumpkin-checking",
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "rand",
@@ -797,8 +799,9 @@ version = "0.2.2"
 dependencies = [
  "bitfield-struct",
  "clap",
- "convert_case 0.6.0",
+ "convert_case",
  "enumset",
+ "pumpkin-checking",
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",

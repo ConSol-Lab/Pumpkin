@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::VariableState;
+
 use super::Fact;
 use crate::inferences::InvalidInference;
+use crate::model::Atomic;
 use crate::model::Constraint;
-use crate::state::VariableState;
 
 /// Verify an `all_different` inference.
 ///
@@ -12,8 +15,9 @@ use crate::state::VariableState;
 ///
 /// The checker will reject inferences with redundant atomic constraints.
 pub(crate) fn verify_all_different(
-    fact: &Fact,
+    _: &Fact,
     constraint: &Constraint,
+    state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
     // This checker takes the union of the domains of the variables in the constraint. If there
     // are fewer values in the union of the domain than there are variables, then there is a
@@ -23,14 +27,11 @@ pub(crate) fn verify_all_different(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let variable_state = VariableState::prepare_for_conflict_check(fact)
-        .ok_or(InvalidInference::InconsistentPremises)?;
-
     // Collect all values present in at least one of the domains.
     let union_of_domains = all_different
         .variables
         .iter()
-        .filter_map(|variable| variable_state.iter_domain(variable))
+        .filter_map(|variable| variable.iter_induced_domain(&state))
         .flatten()
         .collect::<HashSet<_>>();
 
@@ -40,7 +41,7 @@ pub(crate) fn verify_all_different(
     let num_variables = all_different
         .variables
         .iter()
-        .filter(|variable| variable_state.iter_domain(variable).is_some())
+        .filter(|variable| variable.iter_induced_domain(&state).is_some())
         .count();
 
     if union_of_domains.len() < num_variables {

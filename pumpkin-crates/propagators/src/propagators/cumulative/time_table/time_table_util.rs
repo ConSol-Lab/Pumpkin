@@ -421,6 +421,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 profile.start < context.upper_bound(&task.start_variable) + task.processing_time
             });
             for profile in &time_table[lower_bound_index..upper_bound_index] {
+                propagation_handler.next_profile();
                 // Check whether this profile can cause an update
                 if can_be_updated_by_profile(context.domains(), task, profile, parameters.capacity)
                 {

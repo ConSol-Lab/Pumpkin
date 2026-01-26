@@ -47,6 +47,7 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
+use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
@@ -957,6 +958,13 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
 
+        self.state.add_inference_checker(
+            inference_code.clone(),
+            Box::new(NogoodChecker {
+                nogood: nogood.clone().into(),
+            }),
+        );
+
         let (nogood_propagator, mut context) = self
             .state
             .get_propagator_mut_with_context(self.nogood_propagator_handle);
@@ -1283,13 +1291,15 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
+        let c3 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2], constraint_tag);
-        let _ = solver.add_clause([!lit1, lit2], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2], c1);
+        let _ = solver.add_clause([lit1, !lit2], c2);
+        let _ = solver.add_clause([!lit1, lit2], c3);
         (solver, vec![lit1, lit2])
     }
 
@@ -1355,13 +1365,14 @@ mod tests {
     }
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2, lit3], c1);
+        let _ = solver.add_clause([lit1, !lit2, lit3], c2);
         (solver, vec![lit1, lit2, lit3])
     }
 
