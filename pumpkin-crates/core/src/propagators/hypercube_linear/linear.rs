@@ -15,7 +15,7 @@ pub struct LinearInequality {
 impl LinearInequality {
     /// Construct a new linear inequality.
     ///
-    /// If the terms simplify to 0 and the `bound` is less than 0, then `None` is returned.
+    /// If the terms simplify to 0 and the `bound` is at least 0, then `None` is returned.
     pub fn new(
         terms: impl IntoIterator<Item = (NonZero<i32>, DomainId)>,
         bound: i32,
@@ -35,7 +35,7 @@ impl LinearInequality {
             .map(|(domain, weight)| domain.scaled(weight))
             .collect::<Box<[_]>>();
 
-        if terms.is_empty() && bound < 0 {
+        if terms.is_empty() && bound >= 0 {
             return None;
         }
 
@@ -70,7 +70,7 @@ mod tests {
             [(NonZero::new(2).unwrap(), x), (NonZero::new(3).unwrap(), y)],
             8,
         )
-        .expect("not trivially false");
+        .expect("not trivially true");
 
         let iterated_terms = linear.terms().collect::<HashSet<_>>();
 
@@ -92,7 +92,7 @@ mod tests {
             [(NonZero::new(2).unwrap(), x), (NonZero::new(3).unwrap(), x)],
             8,
         )
-        .expect("not trivially false");
+        .expect("not trivially true");
 
         let iterated_terms = linear.terms().collect::<HashSet<_>>();
 
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn trivially_satisfied_linear_inequalities_are_okay() {
+    fn trivially_satisfied_linear_inequalities_are_not_created() {
         let mut state = State::default();
 
         let x = state.new_interval_variable(1, 10, Some("x".into()));
@@ -114,15 +114,13 @@ mod tests {
                 (NonZero::new(-2).unwrap(), x),
             ],
             8,
-        )
-        .expect("not trivially false");
+        );
 
-        let iterated_terms = linear.terms().collect::<HashSet<_>>();
-        assert_eq!(HashSet::<AffineView<DomainId>>::default(), iterated_terms);
+        assert!(linear.is_none());
     }
 
     #[test]
-    fn trivially_unsatisfied_linear_cannot_be_created() {
+    fn trivially_unsatisfied_linear_are_okay() {
         let mut state = State::default();
 
         let x = state.new_interval_variable(1, 10, Some("x".into()));
@@ -133,8 +131,12 @@ mod tests {
                 (NonZero::new(-2).unwrap(), x),
             ],
             -1,
-        );
+        )
+        .expect("not trivially satisfiable");
 
-        assert!(linear.is_none());
+        assert_eq!(
+            Vec::<AffineView<DomainId>>::new(),
+            linear.terms().collect::<Vec<_>>()
+        );
     }
 }
