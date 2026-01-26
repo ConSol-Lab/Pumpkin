@@ -33,7 +33,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
     ) -> Result<Self, EncodingError> {
         // a good heuristic is to sort the literals by weight with a stable ordering
         //  this reduces the size of the encoding significantly
-        weighted_literals.sort_by(|p1, p2| p1.weight.cmp(&p2.weight));
+        weighted_literals.sort_by_key(|lit| lit.weight);
 
         let mut encoder = GeneralisedTotaliserEncoder {
             index_last_added_weighted_literal: usize::MAX,
