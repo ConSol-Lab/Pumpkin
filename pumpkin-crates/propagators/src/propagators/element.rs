@@ -2,11 +2,14 @@
 //! constraint.
 #![allow(clippy::double_parens, reason = "originates inside the bitfield macro")]
 
+use std::cell::RefCell;
+
 use bitfield_struct::bitfield;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::Domain;
 use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::Union;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -48,11 +51,11 @@ where
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, Element),
-            Box::new(ElementChecker {
-                array: self.array.clone(),
-                index: self.index.clone(),
-                rhs: self.rhs.clone(),
-            }),
+            Box::new(ElementChecker::new(
+                self.array.clone(),
+                self.index.clone(),
+                self.rhs.clone(),
+            )),
         );
     }
 
@@ -313,9 +316,23 @@ struct RightHandSideReason {
 
 #[derive(Clone, Debug)]
 pub struct ElementChecker<VX, VI, VE> {
-    pub array: Box<[VX]>,
-    pub index: VI,
-    pub rhs: VE,
+    array: Box<[VX]>,
+    index: VI,
+    rhs: VE,
+
+    union: RefCell<Union>,
+}
+
+impl<VX, VI, VE> ElementChecker<VX, VI, VE> {
+    /// Create a new [`ElementChecker`].
+    pub fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
+        ElementChecker {
+            array,
+            index,
+            rhs,
+            union: RefCell::new(Union::empty()),
+        }
+    }
 }
 
 impl<VX, VI, VE, Atomic> InferenceChecker<Atomic> for ElementChecker<VX, VI, VE>
@@ -331,6 +348,8 @@ where
         _: &[Atomic],
         _: Option<&Atomic>,
     ) -> bool {
+        self.union.borrow_mut().reset();
+
         // A domain consistent checker for element does the following:
         // 1. Determine the elements in the array whose index is in the domain of the index
         //    variable.
@@ -346,39 +365,30 @@ where
             .map(|(_, element)| element)
             .collect();
 
-        let mut union = Domain::empty();
-        for element in &supported_elements {
-            // Compute `union <- union cup element`
-            //
-            let holes = union
-                .holes()
-                .iter()
-                .copied()
-                .filter(|hole| element.induced_domain_contains(&state, *hole))
-                .collect();
-
-            let lower_bound = union.lower_bound().min(element.induced_lower_bound(&state));
-            let upper_bound = union.upper_bound().max(element.induced_upper_bound(&state));
-
-            union = Domain::new(lower_bound, upper_bound, holes);
+        for element in supported_elements {
+            self.union.borrow_mut().add(&state, element);
         }
 
         assert!(
-            union.is_consistent(),
+            self.union.borrow().is_consistent(),
             "at least one element has a non-empty domain or else variable state would be inconsistent"
         );
 
         // Compute `|union cap rhs| == 0`.
-        let intersection_lower_bound = union
+        let intersection_lower_bound = self
+            .union
+            .borrow()
             .lower_bound()
             .max(self.rhs.induced_lower_bound(&state));
-        let intersection_upper_bound = union
+        let intersection_upper_bound = self
+            .union
+            .borrow()
             .upper_bound()
             .min(self.rhs.induced_upper_bound(&state));
-        let holes = union
+        let holes = self
+            .union
+            .borrow()
             .holes()
-            .iter()
-            .copied()
             .chain(self.rhs.induced_holes(&state))
             .collect();
 
@@ -541,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_test() {
+    fn holes_outside_union_bounds_are_ignored() {
         let premises = [
             TestAtomic {
                 name: "x1",
@@ -563,11 +573,7 @@ mod tests {
         let state = VariableState::prepare_for_conflict_check(premises, consequent)
             .expect("no conflicting atomics");
 
-        let checker = ElementChecker {
-            array: vec!["x1", "x2"].into(),
-            index: "x3",
-            rhs: "x4",
-        };
+        let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
 
         assert!(checker.check(state, &premises, consequent.as_ref()));
     }

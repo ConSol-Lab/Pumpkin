@@ -5,6 +5,7 @@
 
 mod atomic_constraint;
 mod int_ext;
+mod union;
 mod variable;
 mod variable_state;
 
@@ -13,6 +14,7 @@ use std::fmt::Debug;
 pub use atomic_constraint::*;
 use dyn_clone::DynClone;
 pub use int_ext::*;
+pub use union::*;
 pub use variable::*;
 pub use variable_state::*;
 
