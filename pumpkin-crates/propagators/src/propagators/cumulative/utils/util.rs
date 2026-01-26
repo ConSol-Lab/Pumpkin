@@ -24,7 +24,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
-    ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
+    ordered_tasks.sort_by_key(|task| task.resource_usage);
 
     let mut id = 0;
     ordered_tasks
