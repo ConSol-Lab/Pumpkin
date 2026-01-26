@@ -1,3 +1,5 @@
+use pumpkin_checking::VariableState;
+
 use crate::{predicates::Predicate, variables::DomainId};
 
 /// Error that occurs when constructing a [`Hypercube`].
@@ -12,7 +14,9 @@ pub struct InconsistentHypercube(DomainId);
 ///
 /// The hypercube will always be consistent.
 #[derive(Clone, Debug)]
-pub struct Hypercube {}
+pub struct Hypercube {
+    state: VariableState<Predicate>,
+}
 
 impl Hypercube {
     /// Create a new hypercube from a sequence of predicates.
@@ -23,7 +27,11 @@ impl Hypercube {
     ) -> Result<Self, InconsistentHypercube> {
         // Note: Ideally this would be an implementation of [`TryFrom`], however, that cannot be
         // done in the same way due to a 'conflicting implementations' error.
-        todo!()
+
+        let state = VariableState::prepare_for_conflict_check(predicates, None)
+            .map_err(InconsistentHypercube)?;
+
+        Ok(Hypercube { state })
     }
 }
 

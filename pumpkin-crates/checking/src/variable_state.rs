@@ -42,21 +42,21 @@ where
     pub fn prepare_for_conflict_check(
         premises: impl IntoIterator<Item = Atomic>,
         consequent: Option<Atomic>,
-    ) -> Option<Self> {
+    ) -> Result<Self, Atomic::Identifier> {
         let mut variable_state = VariableState::default();
 
         let negated_consequent = consequent.as_ref().map(AtomicConstraint::negate);
 
         // Apply all the premises and the negation of the consequent to the state.
-        if !premises
+        if let Some(premise) = premises
             .into_iter()
             .chain(negated_consequent)
-            .all(|premise| variable_state.apply(&premise))
+            .find(|premise| !variable_state.apply(premise))
         {
-            return None;
+            return Err(premise.identifier());
         }
 
-        Some(variable_state)
+        Ok(variable_state)
     }
 
     /// Get the lower bound of a variable.
