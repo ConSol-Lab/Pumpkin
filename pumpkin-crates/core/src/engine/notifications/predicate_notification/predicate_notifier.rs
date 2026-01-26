@@ -6,7 +6,7 @@ use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::DomainEvent;
-use crate::engine::notifications::predicate_notification::predicate_trackers::PredicateTracker;
+use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::variables::DomainId;
@@ -27,7 +27,7 @@ pub(crate) struct PredicateNotifier {
     pub(crate) predicate_to_id: PredicateIdGenerator,
     /// Tracks the current status for [`PredicateId`]s.
     pub(crate) predicate_id_assignments: PredicateIdAssignments,
-    /// Contains the [`PredicateTrackerForDomain`] for each [`DomainId`]
+    /// Contains the [`PredicateTracker`] for each [`DomainId`]
     domain_id_to_predicate_tracker: KeyedVec<DomainId, PredicateTracker>,
 }
 
