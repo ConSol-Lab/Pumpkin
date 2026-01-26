@@ -55,7 +55,7 @@ pub fn verify_deduction(
         deduction.premises.iter().cloned().map(Into::into),
         None,
     )
-    .ok_or(InvalidDeduction::InconsistentPremises)?;
+    .map_err(|_| InvalidDeduction::InconsistentPremises)?;
 
     let mut unused_inferences = Vec::new();
 
