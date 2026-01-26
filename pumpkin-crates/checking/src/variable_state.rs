@@ -59,6 +59,14 @@ where
         Ok(variable_state)
     }
 
+    /// The domains for which at least one atomic is applied.
+    pub fn domains<'this>(&'this self) -> impl Iterator<Item = &'this Ident> + 'this
+    where
+        Ident: 'this,
+    {
+        self.domains.keys()
+    }
+
     /// Get the lower bound of a variable.
     pub fn lower_bound(&self, identifier: &Ident) -> IntExt {
         self.domains

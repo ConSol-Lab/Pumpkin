@@ -1,6 +1,9 @@
+use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
-use crate::{predicates::Predicate, variables::DomainId};
+use crate::predicate;
+use crate::predicates::Predicate;
+use crate::variables::DomainId;
 
 /// Error that occurs when constructing a [`Hypercube`].
 ///
@@ -33,13 +36,41 @@ impl Hypercube {
 
         Ok(Hypercube { state })
     }
+
+    /// Get all predicates that define the hypercube.
+    pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
+        self.state.domains().flat_map(|domain_id| {
+            let lower_bound_predicate =
+                if let IntExt::Int(lower_bound) = self.state.lower_bound(domain_id) {
+                    Some(predicate![domain_id >= lower_bound])
+                } else {
+                    None
+                };
+            let upper_bound_predicate =
+                if let IntExt::Int(upper_bound) = self.state.upper_bound(domain_id) {
+                    Some(predicate![domain_id <= upper_bound])
+                } else {
+                    None
+                };
+
+            [lower_bound_predicate, upper_bound_predicate]
+                .into_iter()
+                .flatten()
+                .chain(
+                    self.state
+                        .holes(domain_id)
+                        .map(|value| predicate![domain_id != value]),
+                )
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{predicate, state::State};
-
     use super::*;
+    use crate::containers::HashSet;
+    use crate::predicate;
+    use crate::state::State;
 
     #[test]
     fn consistent_hypercube_can_be_created() {
@@ -64,5 +95,38 @@ mod tests {
             .expect_err("hypercube is inconsistent");
 
         assert_eq!(InconsistentHypercube(x), error);
+    }
+
+    #[test]
+    fn hypercube_iters_predicates_from_constructor() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+        let y = state.new_interval_variable(1, 10, Some("y".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        assert_eq!(
+            [predicate![x >= 2], predicate![y >= 2]]
+                .into_iter()
+                .collect::<HashSet<_>>(),
+            hypercube.iter_predicates().collect::<HashSet<_>>(),
+        );
+    }
+
+    #[test]
+    fn iterating_predicates_ignores_subsumed_predicates() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![x >= 4]]).expect("not inconsistent");
+
+        assert_eq!(
+            [predicate![x >= 4]].into_iter().collect::<HashSet<_>>(),
+            hypercube.iter_predicates().collect::<HashSet<_>>(),
+        );
     }
 }
