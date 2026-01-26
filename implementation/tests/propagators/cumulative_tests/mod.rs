@@ -13,7 +13,7 @@ use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorId;
 use pumpkin_core::variables::DomainId;
 
-fn set_up_cumulative_state(
+pub fn set_up_cumulative_state(
     task_info: &[((i32, i32), u32, u32)],
     capacity: u32,
     conflict_detection_only: bool,

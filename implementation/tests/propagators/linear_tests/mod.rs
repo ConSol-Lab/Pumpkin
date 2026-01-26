@@ -14,7 +14,7 @@ mod linear_checker_tests;
 mod linear_conflict_tests;
 mod linear_propagation_tests;
 
-fn set_up_linear_leq_state(
+pub fn set_up_linear_leq_state(
     variable_info: &[((i32, i32), i32, i32)],
     c: i32,
     conflict_detection_only: bool,
