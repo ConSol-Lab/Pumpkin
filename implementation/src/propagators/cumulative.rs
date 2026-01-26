@@ -29,13 +29,13 @@ where
 {
     type PropagatorImpl = CumulativeTimeTablePropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         // Register for events
 
         CumulativeTimeTablePropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: context.create_inference_code(self.constraint_tag, AllDifferentSimple),
+            _inference_code: InferenceCode::new(self.constraint_tag, AllDifferentSimple),
             phantom_data: PhantomData,
         }
     }

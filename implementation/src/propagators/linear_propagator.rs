@@ -27,13 +27,13 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         // Register for events
 
         LinearLessOrEqualPropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: context.create_inference_code(self.constraint_tag, LinearBounds),
+            _inference_code: InferenceCode::new(self.constraint_tag, LinearBounds),
             phantom_data: PhantomData,
         }
     }

@@ -21,6 +21,7 @@ mod tests {
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::reason::ReasonStore;
     use crate::predicate;
+    use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
     use crate::propagation::PropagationContext;
     use crate::propagation::PropagatorId;
@@ -46,7 +47,7 @@ mod tests {
             let result = context.post(
                 predicate![domain >= 2],
                 conjunction!(),
-                InferenceCode::create_from_index(0),
+                &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
             );
             assert!(result.is_ok());
         }
@@ -75,7 +76,7 @@ mod tests {
             let result = context.post(
                 predicate![domain <= 15],
                 conjunction!(),
-                InferenceCode::create_from_index(0),
+                &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
             );
             assert!(result.is_ok());
         }
@@ -104,7 +105,7 @@ mod tests {
             let result = context.post(
                 predicate![domain != 15],
                 conjunction!(),
-                InferenceCode::create_from_index(0),
+                &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
             );
             assert!(result.is_ok());
         }

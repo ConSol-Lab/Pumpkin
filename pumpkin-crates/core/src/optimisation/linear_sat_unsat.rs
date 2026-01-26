@@ -1,3 +1,5 @@
+use std::ops::ControlFlow;
+
 use super::OptimisationProcedure;
 use super::solution_callback::SolutionCallback;
 use crate::Solver;
@@ -46,7 +48,7 @@ where
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
         solver: &mut Solver,
-    ) -> OptimisationResult {
+    ) -> OptimisationResult<Callback::Stop> {
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
@@ -60,11 +62,15 @@ where
         };
 
         loop {
-            self.solution_callback.on_solution_callback(
+            let callback_result = self.solution_callback.on_solution_callback(
                 solver,
                 best_solution.as_reference(),
                 brancher,
             );
+
+            if let ControlFlow::Break(stop) = callback_result {
+                return OptimisationResult::Stopped(best_solution, stop);
+            }
 
             let best_objective_value = best_solution.get_integer_value(objective.clone());
 

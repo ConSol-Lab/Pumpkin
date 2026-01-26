@@ -26,14 +26,13 @@ where
 {
     type PropagatorImpl = CircuitPropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
+    fn create(self, _context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         // Register for events
 
         CircuitPropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: context
-                .create_inference_code(self.constraint_tag, CircuitForwardCheck),
+            _inference_code: InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
             phantom_data: PhantomData,
         }
     }

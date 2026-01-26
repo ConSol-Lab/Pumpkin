@@ -316,7 +316,7 @@ impl Propagator for NogoodPropagator {
                 let result = context.post(
                     predicate,
                     reason,
-                    self.inference_codes
+                    &self.inference_codes
                         [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)],
                 );
                 // If the propagation lead to a conflict.
@@ -491,7 +491,7 @@ impl NogoodPropagator {
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(nogood_id.id as u64);
         let inference_code =
-            self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
         let predicate = !context
             .notification_engine
@@ -613,7 +613,7 @@ impl NogoodPropagator {
             context.post(
                 !nogood[0],
                 PropositionalConjunction::from(input_nogood),
-                inference_code,
+                &inference_code,
             )?;
             Ok(())
         }
@@ -1154,7 +1154,7 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = self.inference_codes[info_id];
+        let inference_code = &self.inference_codes[info_id];
 
         if self.nogood_info[info_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to
@@ -1191,7 +1191,7 @@ impl NogoodPropagator {
                     .iter()
                     .map(|predicate_id| context.get_predicate(*predicate_id))
                     .collect::<PropositionalConjunction>(),
-                inference_code,
+                inference_code: inference_code.clone(),
             }
             .into());
         }
@@ -1286,13 +1286,16 @@ impl NogoodPropagator {
 mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
+    use crate::containers::StorageKey;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::proof::ConstraintTag;
+    use crate::proof::InferenceCode;
 
     #[test]
     fn ternary_nogood_propagate() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let dummy = solver.new_variable(0, 1);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
@@ -1332,7 +1335,7 @@ mod tests {
     #[test]
     fn unsat() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);

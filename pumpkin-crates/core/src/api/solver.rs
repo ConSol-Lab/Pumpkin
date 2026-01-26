@@ -211,6 +211,19 @@ impl Solver {
             .create_new_literal_for_predicate(predicate, None, constraint_tag)
     }
 
+    pub fn new_named_literal_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        constraint_tag: ConstraintTag,
+        name: impl Into<String>,
+    ) -> Literal {
+        self.satisfaction_solver.create_new_literal_for_predicate(
+            predicate,
+            Some(name.into().into()),
+            constraint_tag,
+        )
+    }
+
     /// Create a fresh propositional variable with a given name and return the literal with positive
     /// polarity.
     ///
@@ -424,7 +437,7 @@ impl Solver {
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
         mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
-    ) -> OptimisationResult
+    ) -> OptimisationResult<Callback::Stop>
     where
         B: Brancher,
         Callback: SolutionCallback<B>,
