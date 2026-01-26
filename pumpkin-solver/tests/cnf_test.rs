@@ -64,6 +64,7 @@ test_cnf_instance!(prime4);
 // test_cnf_instance!(prime4294967297);
 test_cnf_instance!(prime49);
 test_cnf_instance!(prime529);
+#[cfg(not(feature = "check-propagations"))]
 test_cnf_instance!(prime65537);
 test_cnf_instance!(prime841);
 test_cnf_instance!(prime9);
