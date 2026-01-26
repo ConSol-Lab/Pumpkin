@@ -42,8 +42,10 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             .collect();
 
         HypercubeLinearPropagator {
-            hypercube_predicates,
+            hypercube,
             linear,
+
+            hypercube_predicates,
             constraint_tag,
         }
     }
@@ -52,6 +54,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
+    hypercube: Hypercube,
     linear: LinearInequality,
 
     hypercube_predicates: Box<[PredicateId]>,
@@ -86,6 +89,7 @@ impl Propagator for HypercubeLinearPropagator {
                 .linear
                 .terms()
                 .map(|term| predicate![term >= context.lower_bound(&term)])
+                .chain(self.hypercube.iter_predicates())
                 .collect();
 
             Err(Conflict::Propagator(PropagatorConflict {
@@ -125,7 +129,7 @@ mod tests {
             ],
             5,
         )
-        .expect("not trivially false");
+        .expect("not trivially true");
 
         let constraint_tag = state.new_constraint_tag();
         let _ = state.add_propagator(HypercubeLinearConstructor {
@@ -134,6 +138,36 @@ mod tests {
             constraint_tag,
         });
 
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn incremental_hypercube_evaluation() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+        let z = state.new_interval_variable(0, 5, Some("z".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2], predicate![z <= 3]])
+                .expect("not inconsistent");
+
+        let linear = LinearInequality::trivially_false();
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        let _ = state.post(predicate![x >= 2]).expect("domain not empty");
+        assert!(state.propagate_to_fixed_point().is_ok());
+        let _ = state.post(predicate![y >= 2]).expect("domain not empty");
+        let _ = state.post(predicate![z <= 3]).expect("domain not empty");
         assert!(state.propagate_to_fixed_point().is_err());
     }
 }

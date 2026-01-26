@@ -13,6 +13,14 @@ pub struct LinearInequality {
 }
 
 impl LinearInequality {
+    /// Create a linear inequality that is trivially false.
+    pub fn trivially_false() -> LinearInequality {
+        LinearInequality {
+            terms: [].into(),
+            bound: -1,
+        }
+    }
+
     /// Construct a new linear inequality.
     ///
     /// If the terms simplify to 0 and the `bound` is at least 0, then `None` is returned.
