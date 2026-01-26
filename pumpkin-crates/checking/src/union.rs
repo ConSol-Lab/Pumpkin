@@ -67,16 +67,11 @@ impl Union {
         self.all_holes
             .retain(|&value| !variable.induced_domain_contains(state, value));
 
-        // Here we take the holes out of self so we can use `self.contains` and extend the holes
-        // with values that remain.
-        let mut all_holes = std::mem::take(&mut self.all_holes);
         let other_holes = variable
             .induced_holes(state)
-            .filter(|&value| !self.contains(value));
+            .filter(|&value| value < self.lower_bound || value > self.upper_bound);
 
-        all_holes.extend(other_holes);
-        self.all_holes = all_holes;
-
+        self.all_holes.extend(other_holes);
         self.lower_bound = self.lower_bound.min(variable.induced_lower_bound(state));
         self.upper_bound = self.upper_bound.max(variable.induced_upper_bound(state));
     }
@@ -230,5 +225,33 @@ mod tests {
         assert_eq!(IntExt::<i32>::NegativeInf, union.lower_bound());
         assert_eq!(IntExt::<i32>::PositiveInf, union.upper_bound());
         assert!(union.holes().next().is_none());
+    }
+
+    #[test]
+    fn holes_in_union_and_new_variable_should_be_kept() {
+        let state = VariableState::prepare_for_conflict_check(
+            [
+                TestAtomic {
+                    name: "x",
+                    comparison: NotEqual,
+                    value: 5,
+                },
+                TestAtomic {
+                    name: "y",
+                    comparison: NotEqual,
+                    value: 5,
+                },
+            ],
+            None,
+        )
+        .expect("not inconsistent");
+
+        let mut union = Union::empty();
+        union.add(&state, &"x");
+        union.add(&state, &"y");
+
+        assert_eq!(IntExt::<i32>::NegativeInf, union.lower_bound());
+        assert_eq!(IntExt::<i32>::PositiveInf, union.upper_bound());
+        assert_eq!(vec![5], union.holes().collect::<Vec<_>>());
     }
 }
