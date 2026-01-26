@@ -115,13 +115,13 @@ impl Propagator for HypercubeLinearPropagator {
 
         let next_predicate_to_watch = self.hypercube_predicates[NUM_WATCHED_PREDICATES..]
             .iter()
-            .position(|&predicate| context.evaluate_predicate(predicate) != Some(true));
+            .position(|&predicate| context.evaluate_predicate(predicate) != Some(true))
+            .map(|index| index + NUM_WATCHED_PREDICATES);
 
-        if let Some(index) = next_predicate_to_watch {
+        if let Some(predicate_index) = next_predicate_to_watch {
             // To update the watcher we find a new predicate that is not assigned to true and put
             // it in the spot of the predicate that became true.
 
-            let predicate_index = index + NUM_WATCHED_PREDICATES;
             let next_predicate_to_watch = self.hypercube_predicates[predicate_index];
 
             context.unwatch_predicate(predicate_id);
@@ -138,7 +138,7 @@ impl Propagator for HypercubeLinearPropagator {
             .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
             .count();
 
-        if satisfied_watchers >= 2 {
+        if satisfied_watchers >= NUM_WATCHED_PREDICATES - 1 {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
