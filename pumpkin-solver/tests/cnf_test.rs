@@ -21,17 +21,21 @@ macro_rules! test_cnf_instance {
     };
 }
 
+#[cfg(not(feature = "check-propagations"))]
 test_cnf_instance!(add128);
 test_cnf_instance!(add16);
 test_cnf_instance!(add32);
 test_cnf_instance!(add4);
+#[cfg(not(feature = "check-propagations"))]
 test_cnf_instance!(add64);
 test_cnf_instance!(add8);
 test_cnf_instance!(block0);
 test_cnf_instance!(elimclash);
 test_cnf_instance!(elimredundant);
 test_cnf_instance!(empty);
+#[cfg(not(feature = "check-propagations"))]
 test_cnf_instance!(factor2708413neg);
+#[cfg(not(feature = "check-propagations"))]
 test_cnf_instance!(factor2708413pos);
 test_cnf_instance!(full1);
 test_cnf_instance!(full2);
