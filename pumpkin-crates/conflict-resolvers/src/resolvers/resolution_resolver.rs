@@ -65,7 +65,6 @@ pub struct ResolutionResolver {
     statistics: LearnedNogoodStatistics,
 
     should_minimise: bool,
-    log_inferences: bool,
 }
 
 create_statistics_struct!(
@@ -129,7 +128,7 @@ impl ConflictResolver for ResolutionResolver {
 }
 
 impl ResolutionResolver {
-    pub fn new(mode: AnalysisMode, should_minimise: bool, log_inferences: bool) -> Self {
+    pub fn new(mode: AnalysisMode, should_minimise: bool) -> Self {
         Self {
             mode,
             to_process_heap: Default::default(),
@@ -141,7 +140,6 @@ impl ResolutionResolver {
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
             should_minimise,
-            log_inferences,
         }
     }
 
@@ -152,12 +150,7 @@ impl ResolutionResolver {
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
-            self.add_predicate_to_conflict_nogood(
-                *predicate,
-                self.mode,
-                context,
-                self.log_inferences,
-            );
+            self.add_predicate_to_conflict_nogood(*predicate, self.mode, context);
         }
 
         // Record conflict nogood size statistics.
@@ -203,12 +196,7 @@ impl ResolutionResolver {
             );
 
             for i in 0..self.reason_buffer.len() {
-                self.add_predicate_to_conflict_nogood(
-                    self.reason_buffer[i],
-                    self.mode,
-                    context,
-                    self.log_inferences,
-                );
+                self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
             }
         }
 
@@ -231,7 +219,6 @@ impl ResolutionResolver {
         predicate: Predicate,
         mode: AnalysisMode,
         context: &mut ConflictAnalysisContext,
-        should_explain: bool,
     ) {
         let dec_level = context
             .get_checkpoint_for_predicate(predicate)
@@ -244,10 +231,7 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
-            // do nothing, only possibly explain the predicate in the proof
-            if should_explain {
-                context.explain_root_assignment(predicate);
-            }
+            context.explain_root_assignment(predicate);
         }
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add

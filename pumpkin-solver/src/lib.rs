@@ -359,13 +359,8 @@ pub use pumpkin_constraints::*;
 pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
-use pumpkin_core::proof::ProofLog;
 
 /// Returns a default [`ConflictResolver`].
 pub fn default_conflict_resolver() -> ResolutionResolver {
-    ResolutionResolver::new(
-        AnalysisMode::OneUIP,
-        true,
-        ProofLog::default().is_logging_inferences(),
-    )
+    ResolutionResolver::new(AnalysisMode::OneUIP, true)
 }
