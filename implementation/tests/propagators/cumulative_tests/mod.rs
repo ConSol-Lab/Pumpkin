@@ -7,6 +7,7 @@ mod cumulative_conflict_tests;
 mod cumulative_propagation_tests;
 
 use implementation::propagators::cumulative::CumulativeConstructor;
+use implementation::propagators::cumulative::Task;
 use pumpkin_core::TestSolver;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorId;
@@ -20,20 +21,21 @@ fn set_up_cumulative_state(
     let mut solver = TestSolver::default();
 
     let mut start_times = Vec::default();
-    let mut durations = Vec::default();
-    let mut resource_usages = Vec::default();
+    let mut tasks = Vec::default();
 
     for ((lb, ub), duration, resource_usage) in task_info {
-        start_times.push(solver.new_variable(*lb, *ub));
-        durations.push(*duration);
-        resource_usages.push(*resource_usage);
+        let start_time = solver.new_variable(*lb, *ub);
+        start_times.push(start_time);
+        tasks.push(Task {
+            start_time,
+            duration: *duration,
+            resource_usage: *resource_usage,
+        })
     }
     let constraint_tag = solver.new_constraint_tag();
 
     let result = solver.new_propagator(CumulativeConstructor {
-        start_times: start_times.clone().into(),
-        durations: durations.into(),
-        resource_usages: resource_usages.into(),
+        tasks: tasks.into(),
         capacity,
         constraint_tag,
         conflict_detection_only,

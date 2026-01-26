@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -12,6 +13,8 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+
+use crate::propagators::circuit::CircuitChecker;
 
 declare_inference_label!(CircuitForwardCheck);
 
@@ -37,6 +40,15 @@ where
             _inference_code: InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
             phantom_data: PhantomData,
         }
+    }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
+            Box::new(CircuitChecker {
+                successors: self.successors.to_vec(),
+            }),
+        );
     }
 }
 

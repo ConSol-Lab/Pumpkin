@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use implementation::propagators::cumulative::Task;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
@@ -439,10 +440,23 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
+    assert_eq!(start_times.len(), durations.len());
+    assert_eq!(durations.len(), resource_requirements.len());
+
     let post_result = pumpkin_constraints::cumulative(
-        start_times.iter().copied(),
-        durations.iter().copied(),
-        resource_requirements.iter().copied(),
+        start_times
+            .iter()
+            .zip(&*durations)
+            .zip(&*resource_requirements)
+            .map(|((start_time, duration), resource_requirement)| Task {
+                start_time: *start_time,
+                duration: (*duration)
+                    .try_into()
+                    .expect("Expected duration to be unsigned"),
+                resource_usage: (*resource_requirement)
+                    .try_into()
+                    .expect("Expected resource usage to be unsigned"),
+            }),
         resource_capacity,
         constraint_tag,
         options.cumulative_conflict_only,

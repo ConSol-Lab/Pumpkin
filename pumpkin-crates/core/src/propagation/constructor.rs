@@ -1,6 +1,8 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use pumpkin_checking::InferenceChecker;
+
 use super::Domains;
 use super::LocalId;
 use super::Propagator;
@@ -18,10 +20,13 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
+use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -33,8 +38,57 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
+    /// Add inference checkers to the solver if applicable.
+    ///
+    /// If the `check-propagations` feature is turned on, then the inference checker will be used
+    /// to verify the propagations done by this propagator are correct.
+    ///
+    /// See [`InferenceChecker`] for more information.
+    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
+
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
+}
+
+/// Interface used to add [`InferenceChecker`]s to the [`State`].
+#[derive(Debug)]
+pub struct InferenceCheckers<'state> {
+    state: &'state mut State,
+    reification_literal: Option<Literal>,
+}
+
+impl<'state> InferenceCheckers<'state> {
+    #[cfg(feature = "check-propagations")]
+    pub(crate) fn new(state: &'state mut State) -> Self {
+        InferenceCheckers {
+            state,
+            reification_literal: None,
+        }
+    }
+}
+
+impl InferenceCheckers<'_> {
+    /// Forwards to [`State::add_inference_checker`].
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        if let Some(reification_literal) = self.reification_literal {
+            let reification_checker = ReifiedChecker {
+                inner: checker.into(),
+                reification_literal,
+            };
+            self.state
+                .add_inference_checker(inference_code, Box::new(reification_checker));
+        } else {
+            self.state.add_inference_checker(inference_code, checker);
+        }
+    }
+
+    pub fn with_reification_literal(&mut self, literal: Literal) {
+        self.reification_literal = Some(literal)
+    }
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.
@@ -177,6 +231,18 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
+    /// Add an inference checker for inferences produced by the propagator.
+    ///
+    /// If the `check-propagations` feature is not enabled, adding an [`InferenceChecker`] will not
+    /// do anything.
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        self.state.add_inference_checker(inference_code, checker);
+    }
+
     /// Set the next local id to be at least one more than the largest encountered local id.
     fn update_next_local_id(&mut self, local_id: LocalId) {
         let next_local_id = (*self.next_local_id.deref()).max(LocalId::from(local_id.unpack() + 1));
@@ -187,9 +253,19 @@ impl PropagatorConstructorContext<'_> {
 
 impl Drop for PropagatorConstructorContext<'_> {
     fn drop(&mut self) {
-        if let RefOrOwned::Owned(did_register) = self.did_register
-            && !did_register
-        {
+        if std::thread::panicking() {
+            // If we are already unwinding due to a panic, we do not want to trigger another one.
+            return;
+        }
+
+        let did_register = match self.did_register {
+            // If we are in a reborrowed context, we do not want to enforce registration.
+            RefOrOwned::Ref(_) => return,
+
+            RefOrOwned::Owned(did_register) => did_register,
+        };
+
+        if !did_register {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );

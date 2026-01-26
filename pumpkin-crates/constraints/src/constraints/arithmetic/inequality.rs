@@ -140,7 +140,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         LinearConstructor {
             x: self.terms,
-            c: self.rhs,
+            bound: self.rhs,
             constraint_tag: self.constraint_tag,
             conflict_detection_only: self.conflict_detection_only,
         }
@@ -154,7 +154,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     ) -> Result<(), ConstraintOperationError> {
         LinearConstructor {
             x: self.terms,
-            c: self.rhs,
+            bound: self.rhs,
             constraint_tag: self.constraint_tag,
             conflict_detection_only: self.conflict_detection_only,
         }

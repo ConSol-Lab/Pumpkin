@@ -35,7 +35,7 @@ fn set_up_linear_leq_state(
     let constraint_tag = solver.new_constraint_tag();
     let result = solver.new_propagator(LinearConstructor {
         x: variables.clone().into(),
-        c,
+        bound: c,
         constraint_tag,
         conflict_detection_only,
     });

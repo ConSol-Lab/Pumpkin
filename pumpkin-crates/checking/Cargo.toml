@@ -1,0 +1,13 @@
+[package]
+name = "pumpkin-checking"
+version = "0.2.2"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+dyn-clone = "1.0.20"
+
+[lints]
+workspace = true

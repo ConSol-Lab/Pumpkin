@@ -1,3 +1,6 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -5,6 +8,7 @@ use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::Domains;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -32,6 +36,16 @@ where
     BVar: IntegerVariable + 'static,
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, BinaryNotEquals),
+            Box::new(BinaryNotEqualsChecker {
+                lhs: self.a.clone(),
+                rhs: self.b.clone(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let BinaryNotEqualsPropagatorArgs {
@@ -165,6 +179,30 @@ where
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryNotEqualsChecker<Lhs, Rhs> {
+    pub lhs: Lhs,
+    pub rhs: Rhs,
+}
+
+impl<Lhs, Rhs, Atomic> InferenceChecker<Atomic> for BinaryNotEqualsChecker<Lhs, Rhs>
+where
+    Atomic: AtomicConstraint,
+    Lhs: CheckerVariable<Atomic>,
+    Rhs: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        _: &[Atomic],
+        _: Option<&Atomic>,
+    ) -> bool {
+        // There is a conflict if both variables are fixed to the same values.
+
+        self.lhs.induced_fixed_value(&state) == self.rhs.induced_fixed_value(&state)
     }
 }
 

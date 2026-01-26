@@ -1,3 +1,5 @@
+use pumpkin_checking::AtomicConstraint;
+
 use crate::engine::Assignments;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -228,6 +230,31 @@ impl std::fmt::Display for Predicate {
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self}")
+    }
+}
+
+impl AtomicConstraint for Predicate {
+    type Identifier = DomainId;
+
+    fn identifier(&self) -> Self::Identifier {
+        self.get_domain()
+    }
+
+    fn comparison(&self) -> pumpkin_checking::Comparison {
+        match self.get_predicate_type() {
+            PredicateType::LowerBound => pumpkin_checking::Comparison::GreaterEqual,
+            PredicateType::UpperBound => pumpkin_checking::Comparison::LessEqual,
+            PredicateType::NotEqual => pumpkin_checking::Comparison::NotEqual,
+            PredicateType::Equal => pumpkin_checking::Comparison::Equal,
+        }
+    }
+
+    fn value(&self) -> i32 {
+        self.get_right_hand_side()
+    }
+
+    fn negate(&self) -> Self {
+        !*self
     }
 }
 

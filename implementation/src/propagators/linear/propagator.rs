@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -13,12 +14,14 @@ use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
+use crate::propagators::linear::LinearChecker;
+
 declare_inference_label!(LinearBounds);
 
 #[derive(Clone, Debug)]
 pub struct LinearConstructor<Var> {
     pub x: Box<[Var]>,
-    pub c: i32,
+    pub bound: i32,
     pub constraint_tag: ConstraintTag,
     pub conflict_detection_only: bool,
 }
@@ -39,6 +42,16 @@ where
             _inference_code: InferenceCode::new(self.constraint_tag, LinearBounds),
             phantom_data: PhantomData,
         }
+    }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, LinearBounds),
+            Box::new(LinearChecker {
+                x: self.x.to_vec(),
+                bound: self.bound,
+            }),
+        );
     }
 }
 

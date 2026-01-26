@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
@@ -12,6 +13,8 @@ use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
+
+use crate::propagators::all_different::AllDifferentChecker;
 
 declare_inference_label!(AllDifferentSimple);
 
@@ -38,6 +41,13 @@ where
             phantom_data: PhantomData,
         }
     }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, AllDifferentSimple),
+            Box::new(AllDifferentChecker { x: self.x.to_vec() }),
+        );
+    }
 }
 
 /// Propagator for the Circuit constraint.
@@ -59,7 +69,7 @@ where
     }
 
     fn name(&self) -> &str {
-        "Circuit"
+        "AllDifferent"
     }
 
     fn propagate_from_scratch(&self, mut _context: PropagationContext) -> PropagationStatusCP {

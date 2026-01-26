@@ -10,5 +10,7 @@ mod theta_tree;
 pub use disjunctive_propagator::DisjunctiveConstructor;
 pub use disjunctive_propagator::DisjunctivePropagator;
 pub use disjunctive_task::ArgDisjunctiveTask;
+pub(crate) mod checker;
+pub use checker::*;
 
 declare_inference_label!(DisjunctiveEdgeFinding);

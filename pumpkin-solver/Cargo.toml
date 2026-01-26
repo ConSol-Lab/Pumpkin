@@ -18,6 +18,7 @@ pumpkin-constraints = {version = "0.2.2", path = "../pumpkin-crates/constraints/
 pumpkin-propagators = {version = "0.2.2", path = "../pumpkin-crates/propagators/", features=["clap"]}
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
+implementation = {version = "0.2.2", path="../implementation"}
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
@@ -33,6 +34,7 @@ workspace = true
 
 [features]
 debug-checks = ["pumpkin-core/debug-checks"]
+check-propagations = ["pumpkin-core/check-propagations"]
 
 [build-dependencies]
 cc = "1.1.30"
