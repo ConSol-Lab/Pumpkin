@@ -23,6 +23,8 @@ use crate::proof::InferenceCode;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::HasAssignments;
+use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -203,7 +205,11 @@ impl Propagator for NogoodPropagator {
         Priority::High
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        _: NotificationContext,
+        predicate_id: PredicateId,
+    ) -> EnqueueDecision {
         self.updated_predicate_ids.push(predicate_id);
         EnqueueDecision::Enqueue
     }

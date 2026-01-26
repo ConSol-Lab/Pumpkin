@@ -1,10 +1,11 @@
 use crate::basic_types::PredicateId;
+use crate::basic_types::RefOrOwned;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::notifications::PredicateIdAssignments;
+use crate::engine::notifications::PredicateNotifier;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -30,25 +31,84 @@ use crate::pumpkin_assert_simple;
 pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
-    pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
+    pub(crate) predicate_notifier: &'a mut PredicateNotifier,
+
+    predicates_to_watch: RefOrOwned<'a, Vec<PredicateId>>,
+    predicates_to_unwatch: RefOrOwned<'a, Vec<PredicateId>>,
+}
+
+impl Drop for NotificationContext<'_> {
+    fn drop(&mut self) {
+        assert!(
+            self.predicates_to_watch.is_empty(),
+            "losing predicates that should be watched"
+        );
+        assert!(
+            self.predicates_to_unwatch.is_empty(),
+            "losing predicates that should be unwatched"
+        );
+    }
 }
 
 impl<'a> NotificationContext<'a> {
     pub(crate) fn new(
         trailed_values: &'a mut TrailedValues,
         assignments: &'a Assignments,
-        predicate_id_assignments: &'a PredicateIdAssignments,
+        predicate_notifier: &'a mut PredicateNotifier,
     ) -> Self {
         Self {
             trailed_values,
             assignments,
-            predicate_id_assignments,
+            predicate_notifier,
+            predicates_to_watch: vec![].into(),
+            predicates_to_unwatch: vec![].into(),
         }
+    }
+
+    /// Returns true if the given predicate ID is assigned to true.
+    pub fn is_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
+        self.predicate_notifier
+            .predicate_id_assignments
+            .is_satisfied(
+                predicate_id,
+                self.assignments,
+                &mut self.predicate_notifier.predicate_to_id,
+            )
     }
 
     /// Get the current domains.
     pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
+    }
+
+    /// Start watching the given predicate.
+    pub fn watch_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        let predicate_id = self.predicate_notifier.predicate_to_id.get_id(predicate);
+        self.predicates_to_watch.push(predicate_id);
+        predicate_id
+    }
+
+    /// Stop watching the given predicate.
+    pub fn unwatch_predicate(&mut self, predicate_id: PredicateId) {
+        self.predicates_to_unwatch.push(predicate_id);
+    }
+
+    pub fn reborrow(&mut self) -> NotificationContext<'_> {
+        NotificationContext {
+            trailed_values: self.trailed_values,
+            assignments: self.assignments,
+            predicate_notifier: self.predicate_notifier,
+            predicates_to_watch: self.predicates_to_watch.reborrow(),
+            predicates_to_unwatch: self.predicates_to_unwatch.reborrow(),
+        }
+    }
+
+    pub(crate) fn drain_predicates_to_watch(&mut self) -> impl Iterator<Item = PredicateId> {
+        self.predicates_to_watch.drain(..)
+    }
+
+    pub(crate) fn drain_predicates_to_unwatch(&mut self) -> impl Iterator<Item = PredicateId> {
+        self.predicates_to_unwatch.drain(..)
     }
 }
 

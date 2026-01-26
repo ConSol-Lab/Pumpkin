@@ -94,20 +94,12 @@ pub struct ReifiedPropagator<WrappedPropagator> {
 impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         if local_id < self.reification_literal_id {
-            let decision = self.propagator.notify(
-                NotificationContext::new(
-                    context.trailed_values,
-                    context.assignments,
-                    context.predicate_id_assignments,
-                ),
-                local_id,
-                event,
-            );
+            let decision = self.propagator.notify(context.reborrow(), local_id, event);
             self.filter_enqueue_decision(context, decision)
         } else {
             pumpkin_assert_simple!(local_id == self.reification_literal_id);
