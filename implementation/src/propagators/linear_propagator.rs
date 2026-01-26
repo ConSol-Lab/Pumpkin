@@ -8,6 +8,8 @@ use pumpkin_core::propagation::PropagationContext;
 use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
+#[allow(unused, reason = "Will be used in the assignments")]
+use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -31,6 +33,7 @@ where
         // Register for events
 
         LinearLessOrEqualPropagator {
+            x: self.x.to_vec(),
             // TODO
             conflict_detection_only: self.conflict_detection_only,
             _inference_code: InferenceCode::new(self.constraint_tag, LinearBounds),
@@ -42,6 +45,7 @@ where
 /// Propagator for the constraint `\sum x_i <= c`.
 #[derive(Clone, Debug)]
 pub struct LinearLessOrEqualPropagator<Var> {
+    pub x: Vec<Var>,
     // TODO
     conflict_detection_only: bool,
     _inference_code: InferenceCode,
