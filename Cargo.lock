@@ -749,7 +749,6 @@ dependencies = [
  "pumpkin-conflict-resolvers",
  "pumpkin-core",
  "pumpkin-propagators",
- "pumpkin-solver",
 ]
 
 [[package]]
@@ -775,7 +774,6 @@ dependencies = [
  "once_cell",
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
- "pumpkin-solver",
  "rand",
  "thiserror",
  "wasm-bindgen-test",

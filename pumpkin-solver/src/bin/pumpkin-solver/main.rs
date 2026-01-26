@@ -43,7 +43,6 @@ use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
 use pumpkin_solver::core::termination::TimeBudget;
-use pumpkin_solver::default_conflict_resolver;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -657,7 +656,7 @@ fn cnf_problem(
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher();
-    let mut resolver = default_conflict_resolver();
+    let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {

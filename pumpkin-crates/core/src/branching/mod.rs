@@ -18,12 +18,7 @@
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use pumpkin_core::results::ProblemSolution;
-//! # #[cfg(not(target_arch = "wasm32"))]
-//! # use pumpkin_solver::default_conflict_resolver;
-//! # #[cfg(target_arch = "wasm32")]
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
-//! # #[cfg(target_arch = "wasm32")]
-//! # use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 //! let mut solver = Solver::default();
 //!
 //! let variables = vec![solver.new_literal()];
@@ -31,11 +26,8 @@
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
 //!
-//! #[cfg(not(target_arch = "wasm32"))]
 //! // Then we create a conflict resolver
-//! let mut resolver = default_conflict_resolver();
-//! #[cfg(target_arch = "wasm32")]
-//! let mut resolver = ResolutionResolver::new(AnalysisMode::OneUIP, true, false);
+//! let mut resolver = ResolutionResolver::default();
 //!
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //! if let SatisfactionResult::Satisfiable(satisfiable) = result {
@@ -58,12 +50,7 @@
 //! # use pumpkin_core::termination::Indefinite;
 //! # use pumpkin_core::results::SatisfactionResult;
 //! # use crate::pumpkin_core::results::ProblemSolution;
-//! # #[cfg(not(target_arch = "wasm32"))]
-//! # use pumpkin_solver::default_conflict_resolver;
-//! # #[cfg(target_arch = "wasm32")]
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
-//! # #[cfg(target_arch = "wasm32")]
-//! # use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 //! let mut solver = Solver::default();
 //!
 //! let literals = vec![solver.new_literal()];
@@ -71,11 +58,8 @@
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
 //!
-//! #[cfg(not(target_arch = "wasm32"))]
 //! // Then we create a conflict resolver
-//! let mut resolver = default_conflict_resolver();
-//! #[cfg(target_arch = "wasm32")]
-//! let mut resolver = ResolutionResolver::new(AnalysisMode::OneUIP, true, false);
+//! let mut resolver = ResolutionResolver::default();
 //!
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //! if let SatisfactionResult::Satisfiable(satisfiable) = result {

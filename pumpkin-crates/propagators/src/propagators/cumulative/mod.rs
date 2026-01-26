@@ -46,7 +46,7 @@
 //! # use pumpkin_core::constraints;
 //! # use pumpkin_core::constraints::Constraint;
 //! # use pumpkin_core::results::ProblemSolution;
-//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
@@ -71,7 +71,7 @@
 //!
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher();
-//! let mut resolver = default_conflict_resolver();
+//! let mut resolver = ResolutionResolver::default();
 //!
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //!

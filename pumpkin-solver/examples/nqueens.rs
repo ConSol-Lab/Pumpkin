@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::proof::ProofLog;
@@ -8,7 +9,6 @@ use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::variables::TransformableVariable;
-use pumpkin_solver::default_conflict_resolver;
 
 #[derive(Parser)]
 struct Cli {
@@ -88,7 +88,7 @@ fn main() {
         .post();
 
     let mut brancher = solver.default_brancher();
-    let mut resolver = default_conflict_resolver();
+    let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {

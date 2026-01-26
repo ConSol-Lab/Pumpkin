@@ -52,12 +52,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_core::predicate;
     /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::constraints::Constraint;
-    /// # #[cfg(not(target_arch = "wasm32"))]
-    /// # use pumpkin_solver::default_conflict_resolver;
-    /// # #[cfg(target_arch = "wasm32")]
     /// # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
-    /// # #[cfg(target_arch = "wasm32")]
-    /// # use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///
@@ -77,11 +72,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// // And we create a search strategy (in this case, simply the default)
     /// let mut brancher = solver.default_brancher();
     ///
-    ///  #[cfg(not(target_arch = "wasm32"))]
-    /// // Then we create a conflict resolver
-    /// let mut resolver = default_conflict_resolver();
-    ///  #[cfg(target_arch = "wasm32")]
-    /// let mut resolver = ResolutionResolver::new(AnalysisMode::OneUIP, true, false);
+    /// let mut resolver = ResolutionResolver::default();
     ///
     /// // Then we solve to satisfaction
     /// let assumptions = vec![

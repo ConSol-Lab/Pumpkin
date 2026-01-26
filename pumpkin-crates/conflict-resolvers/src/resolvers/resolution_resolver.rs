@@ -67,6 +67,12 @@ pub struct ResolutionResolver {
     should_minimise: bool,
 }
 
+impl Default for ResolutionResolver {
+    fn default() -> Self {
+        ResolutionResolver::new(AnalysisMode::OneUIP, true)
+    }
+}
+
 create_statistics_struct!(
     /// The statistics related to clause learning
     LearnedNogoodStatistics {

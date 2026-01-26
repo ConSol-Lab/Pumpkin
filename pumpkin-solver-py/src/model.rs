@@ -26,7 +26,6 @@ use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
 use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::default_conflict_resolver;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -203,7 +202,7 @@ impl Model {
     #[pyo3(signature = (timeout=None))]
     fn satisfy(&mut self, timeout: Option<f32>) -> SatisfactionResult {
         let mut termination = get_termination(timeout);
-        let mut resolver = default_conflict_resolver();
+        let mut resolver = ResolutionResolver::default();
 
         match self
             .solver
@@ -228,7 +227,7 @@ impl Model {
         timeout: Option<f32>,
     ) -> SatisfactionUnderAssumptionsResult {
         let mut termination = get_termination(timeout);
-        let mut resolver = default_conflict_resolver();
+        let mut resolver = ResolutionResolver::default();
 
         let solver_assumptions = assumptions
             .iter()
@@ -293,7 +292,7 @@ impl Model {
         warm_start: HashMap<IntExpression, i32>,
     ) -> PyResult<OptimisationResult> {
         let mut termination = get_termination(timeout);
-        let mut resolver = default_conflict_resolver();
+        let mut resolver = ResolutionResolver::default();
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,

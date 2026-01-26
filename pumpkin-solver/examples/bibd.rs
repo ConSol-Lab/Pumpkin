@@ -13,12 +13,12 @@
 //!
 //! Hence, the problem is defined in terms of v, k, and l.
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::default_conflict_resolver;
 
 struct Bibd {
     /// The number of rows in the matrix.
@@ -146,7 +146,7 @@ fn main() {
     }
 
     let mut brancher = solver.default_brancher();
-    let mut resolver = default_conflict_resolver();
+    let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {

@@ -67,14 +67,14 @@
 //! ```rust
 //! # use pumpkin_solver::Solver;
 //! # use pumpkin_solver::core::termination::Indefinite;
-//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
 //! let mut brancher = solver.default_brancher();
 //! // Finally, we create a default conflict resolver
-//! let mut resolver = default_conflict_resolver();
+//! let mut resolver = ResolutionResolver::default();
 //! ```
 //!
 //! **Finding a solution** to this problem can be done by using [`Solver::satisfy`]:
@@ -85,7 +85,7 @@
 //! # use pumpkin_solver::core::results::ProblemSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -95,7 +95,7 @@
 //! # solver.add_constraint(pumpkin_constraints::equals(vec![x, y, z], 17, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
-//! # let mut resolver = default_conflict_resolver();
+//! # let mut resolver = ResolutionResolver::default();
 //! // Then we find a solution to the problem
 //! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
 //!
@@ -147,7 +147,6 @@
 //! # use crate::pumpkin_solver::core::optimisation::OptimisationProcedure;
 //! # use pumpkin_solver::core::results::SolutionReference;
 //! # use pumpkin_solver::core::DefaultBrancher;
-//! # use pumpkin_solver::default_conflict_resolver;
 //! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -159,7 +158,7 @@
 //! # solver.add_constraint(pumpkin_constraints::maximum(vec![x, y, z], objective, c1)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher();
-//! # let mut resolver = default_conflict_resolver();
+//! # let mut resolver = ResolutionResolver::default();
 //!
 //! let callback = |_: &Solver, _: SolutionReference, _: &DefaultBrancher, _: &ResolutionResolver| -> ControlFlow<()> {
 //!     return ControlFlow::Continue(());
@@ -206,7 +205,7 @@
 //! # use pumpkin_solver::core::results::solution_iterator::IteratedSolution;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -224,7 +223,7 @@
 //! // And we create a search strategy (in this case, simply the default)
 //! let mut brancher = solver.default_brancher();
 //! // Finally, we create a default conflict resolver
-//! let mut resolver = default_conflict_resolver();
+//! let mut resolver = ResolutionResolver::default();
 //!
 //! // Then we solve to satisfaction
 //! let mut solution_iterator =
@@ -281,7 +280,7 @@
 //! # use pumpkin_solver::core::predicate;
 //! # use pumpkin_solver::core::constraints;
 //! # use pumpkin_solver::core::constraints::Constraint;
-//! # use pumpkin_solver::default_conflict_resolver;
+//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -301,7 +300,7 @@
 //! // And we create a search strategy (in this case, simply the default)
 //! let mut brancher = solver.default_brancher();
 //! // Finally, we create a default conflict resolver
-//! let mut resolver = default_conflict_resolver();
+//! let mut resolver = ResolutionResolver::default();
 //!
 //! // Then we solve to satisfaction
 //! let assumptions = vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)];
@@ -353,14 +352,7 @@ pub mod core {
     pub use pumpkin_core::*;
 }
 
-use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
-use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 pub use pumpkin_constraints::*;
 pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
-
-/// Returns a default [`ConflictResolver`].
-pub fn default_conflict_resolver() -> ResolutionResolver {
-    ResolutionResolver::new(AnalysisMode::OneUIP, true)
-}

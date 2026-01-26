@@ -8,9 +8,9 @@ pub(crate) use encoders::PseudoBooleanEncoding;
 use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::termination::TimeBudget;
-use pumpkin_solver::default_conflict_resolver;
 
 use crate::parsers::dimacs::SolverArgs;
 use crate::parsers::dimacs::SolverDimacsSink;
@@ -34,7 +34,7 @@ pub(crate) fn wcnf_problem(
 
     let brancher = solver.default_brancher();
     let mut termination = time_limit.map(TimeBudget::starting_now);
-    let resolver = default_conflict_resolver();
+    let resolver = ResolutionResolver::default();
 
     let mut solver = OptimisationSolver::new(solver, objective, LinearSearch::new(encoding));
 
