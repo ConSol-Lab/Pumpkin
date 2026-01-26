@@ -42,12 +42,18 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
         let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
 
-        let last_idx = hypercube_predicates.len() - 1;
-        let watched_predicates = [
-            context.register_predicate(hypercube_predicates[0.min(last_idx)]),
-            context.register_predicate(hypercube_predicates[1.min(last_idx)]),
-            context.register_predicate(hypercube_predicates[2.min(last_idx)]),
-        ];
+        let watched_predicates = if hypercube_predicates.is_empty() {
+            let true_predicate = Predicate::trivially_true();
+            let true_predicate_id = context.register_predicate(true_predicate);
+            [true_predicate_id; 3]
+        } else {
+            let last_idx = hypercube_predicates.len() - 1;
+            [
+                context.register_predicate(hypercube_predicates[0.min(last_idx)]),
+                context.register_predicate(hypercube_predicates[1.min(last_idx)]),
+                context.register_predicate(hypercube_predicates[2.min(last_idx)]),
+            ]
+        };
 
         HypercubeLinearPropagator {
             hypercube,
@@ -272,6 +278,36 @@ mod tests {
         assert!(state.propagate_to_fixed_point().is_ok());
         let _ = state.post(predicate![y >= 2]).expect("domain not empty");
         let _ = state.post(predicate![z <= 3]).expect("domain not empty");
+        assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn empty_hypercube_simplifies_to_linear_conflict() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(2, 10, Some("x".into()));
+        let y = state.new_interval_variable(2, 10, Some("y".into()));
+        let z = state.new_interval_variable(2, 5, Some("z".into()));
+
+        let hypercube = Hypercube::new([]).expect("not inconsistent");
+        // x + y + z <= 5.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), x),
+                (NonZero::new(1).unwrap(), y),
+                (NonZero::new(1).unwrap(), z),
+            ],
+            5,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
         assert!(state.propagate_to_fixed_point().is_err());
     }
 }
