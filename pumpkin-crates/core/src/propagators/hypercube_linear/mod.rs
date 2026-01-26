@@ -8,6 +8,7 @@ use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
@@ -21,6 +22,7 @@ use crate::pumpkin_assert_eq_advanced;
 use crate::results::PropagationStatusCP;
 use crate::state::Conflict;
 use crate::state::PropagatorConflict;
+use crate::variables::TransformableVariable;
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
@@ -178,13 +180,26 @@ impl Propagator for HypercubeLinearPropagator {
         }
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
-        let is_hypercube_satisfied = self
+    fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
+        if self
             .hypercube_predicates
             .iter()
-            .all(|&predicate| context.evaluate_predicate(predicate) == Some(true));
+            .any(|&predicate| context.evaluate_predicate(predicate) == Some(false))
+        {
+            // If the hypercube contains at least one false predicate, the propagator will not do
+            // anything.
+            return Ok(());
+        }
 
-        if !is_hypercube_satisfied {
+        // Get the predicates that are not assigned to true.
+        let unsatisfied_predicates_in_hypercubes = self
+            .hypercube_predicates
+            .iter()
+            .filter(|&&predicate| context.evaluate_predicate(predicate) != Some(true))
+            .collect::<Vec<_>>();
+
+        if unsatisfied_predicates_in_hypercubes.len() > 1 {
+            // If more than one predicate remains unassigned, we cannot do anything.
             return Ok(());
         }
 
@@ -194,7 +209,36 @@ impl Propagator for HypercubeLinearPropagator {
             .map(|term| i64::from(context.lower_bound(&term)))
             .sum::<i64>();
 
-        if lower_bound_terms > i64::from(self.linear.bound()) {
+        let slack = i64::from(self.linear.bound()) - lower_bound_terms;
+
+        if unsatisfied_predicates_in_hypercubes.len() == 1 {
+            let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
+
+            if let Some(weight) = self.linear.weight_of(unassigned_predicate.get_domain()) {
+                let term = unassigned_predicate.get_domain().scaled(weight.get());
+                let term_lower_bound = context.lower_bound(&term);
+                let new_upper_bound = match i32::try_from(slack + i64::from(term_lower_bound)) {
+                    Ok(bound) => bound,
+                    Err(_) => return Ok(()),
+                };
+
+                let reason = self
+                    .linear
+                    .terms()
+                    .filter(|&t| t != term)
+                    .map(|term| predicate![term >= context.lower_bound(&term)])
+                    .chain(self.hypercube.iter_predicates())
+                    .collect::<PropositionalConjunction>();
+
+                context.post(
+                    predicate![term <= new_upper_bound],
+                    reason,
+                    &InferenceCode::new(self.constraint_tag, HypercubeLinear),
+                )?;
+            } else {
+                todo!()
+            };
+        } else if slack < 0 {
             let conjunction = self
                 .linear
                 .terms()
@@ -202,13 +246,13 @@ impl Propagator for HypercubeLinearPropagator {
                 .chain(self.hypercube.iter_predicates())
                 .collect();
 
-            Err(Conflict::Propagator(PropagatorConflict {
+            return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction,
                 inference_code: InferenceCode::new(self.constraint_tag, HypercubeLinear),
-            }))
-        } else {
-            Ok(())
+            }));
         }
+
+        Ok(())
     }
 }
 
@@ -309,5 +353,39 @@ mod tests {
         });
 
         assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn propagate_weaker_than_unassigned_predicate_in_hypercube() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(2, 5, Some("y".into()));
+        let z = state.new_interval_variable(0, 10, Some("z".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        // x + y + z <= 5.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), x),
+                (NonZero::new(1).unwrap(), y),
+                (NonZero::new(1).unwrap(), z),
+            ],
+            5,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert_eq!(3, state.upper_bound(x));
     }
 }

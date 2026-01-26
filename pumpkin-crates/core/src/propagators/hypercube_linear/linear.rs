@@ -59,6 +59,17 @@ impl LinearInequality {
     pub fn bound(&self) -> i32 {
         self.bound
     }
+
+    /// Get the weight of the given domain in the linear.
+    pub fn weight_of(&self, domain: DomainId) -> Option<NonZero<i32>> {
+        self.terms().find_map(|view| {
+            if view.inner == domain {
+                Some(NonZero::new(view.scale).expect("AffineView cannot be scaled by 0"))
+            } else {
+                None
+            }
+        })
+    }
 }
 
 #[cfg(test)]
