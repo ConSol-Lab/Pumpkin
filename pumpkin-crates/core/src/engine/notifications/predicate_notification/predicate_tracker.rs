@@ -322,30 +322,25 @@ impl PredicateTracker {
         let value = predicate.get_right_hand_side();
 
         // We check whether it is already tracked
-        if let Some(index) = self.get_index_of_value(value) {
+        if let Some((index, tracked_value)) = self.values.get_full_mut2(&value) {
             // Then we check whether this particular predicate type has already been tracked
-            if !self.values[index].does_track_predicate_type(predicate.get_predicate_type()) {
-                let existing_predicate_types =
-                    self.values[index].get_predicate_types().collect::<Vec<_>>();
+            if !tracked_value.does_track_predicate_type(predicate.get_predicate_type()) {
+                let current_mask = TrackedValue::get_mask(predicate.get_predicate_type());
 
                 // We keep the predicate ids in the same order as they are returned by the
                 // TrackedValue
-                match existing_predicate_types.binary_search_by_key(
-                    &TrackedValue::get_mask(predicate.get_predicate_type()),
-                    |x| TrackedValue::get_mask(*x),
-                ) {
-                    Ok(_) => {
-                        unreachable!()
-                    }
-                    Err(pos) => {
-                        self.ids[index].insert(pos, predicate_id);
-                    }
+                if let Some(pos) = tracked_value
+                    .get_predicate_types()
+                    .position(|predicate_type| {
+                        TrackedValue::get_mask(predicate_type) > current_mask
+                    })
+                {
+                    self.ids[index].insert(pos, predicate_id);
+                } else {
+                    self.ids[index].push(predicate_id);
                 }
 
-                self.values
-                    .get_index_mut2(index)
-                    .unwrap()
-                    .track_predicate_type(predicate.get_predicate_type());
+                tracked_value.track_predicate_type(predicate.get_predicate_type());
 
                 return true;
             }
