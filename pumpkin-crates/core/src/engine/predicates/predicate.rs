@@ -1,3 +1,4 @@
+use enumset::EnumSetType;
 use pumpkin_checking::AtomicConstraint;
 
 use crate::engine::Assignments;
@@ -16,10 +17,10 @@ pub struct Predicate {
     value: i32,
 }
 
-const LOWER_BOUND_CODE: u8 = 1;
-const UPPER_BOUND_CODE: u8 = 2;
-const EQUAL_CODE: u8 = 0;
-const NOT_EQUAL_CODE: u8 = 3;
+const LOWER_BOUND_CODE: u8 = 0;
+const UPPER_BOUND_CODE: u8 = 1;
+const NOT_EQUAL_CODE: u8 = 2;
+const EQUAL_CODE: u8 = 3;
 
 impl Predicate {
     /// Creates a new [`Predicate`] (also known as atomic constraint) which represents a domain
@@ -44,13 +45,15 @@ impl Predicate {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
+#[derive(Debug, Hash, EnumSetType)]
 #[repr(u8)]
 pub enum PredicateType {
-    LowerBound = LOWER_BOUND_CODE,
-    UpperBound = UPPER_BOUND_CODE,
-    NotEqual = NOT_EQUAL_CODE,
-    Equal = EQUAL_CODE,
+    // Should correspond with the codes defined previously; `EnumSetType` requires that literals
+    // are used and not expressions
+    LowerBound = 0,
+    UpperBound = 1,
+    NotEqual = 2,
+    Equal = 3,
 }
 impl PredicateType {
     pub fn is_lower_bound(&self) -> bool {

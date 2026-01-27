@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use enumset::EnumSet;
 use fnv::FnvBuildHasher;
 use indexmap::Equivalent;
 use indexmap::IndexSet;
@@ -69,63 +70,29 @@ pub(crate) struct PredicateTracker {
 }
 
 // A value tracked by the [`PredicateTracker`], keeps track of the values in the lowest 4 bits.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct TrackedValue {
     value: i32,
-    flags: u8,
+    flags: EnumSet<PredicateType>,
 }
-
-impl Debug for TrackedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TrackedValue")
-            .field("value", &self.get_value())
-            .field(
-                "PredicateTypes",
-                &self.get_predicate_types().collect::<Vec<_>>(),
-            )
-            .finish()
-    }
-}
-
-/// The offset corresponding to a lower-bound predicate
-const LOWER_BOUND_SHIFT: usize = 0;
-const LOWER_BOUND_MASK: u8 = 1 << LOWER_BOUND_SHIFT;
-
-/// The offset corresponding to an upper-bound predicate
-const UPPER_BOUND_SHIFT: usize = 1;
-const UPPER_BOUND_MASK: u8 = 1 << UPPER_BOUND_SHIFT;
-
-/// The offset corresponding to a disequality predicate
-const NOT_EQUAL_SHIFT: usize = 2;
-const NOT_EQUAL_MASK: u8 = 1 << NOT_EQUAL_SHIFT;
-
-/// The offset corresponding to an equality predicate
-const EQUAL_SHIFT: usize = 3;
-const EQUAL_MASK: u8 = 1 << EQUAL_SHIFT;
 
 impl TrackedValue {
     /// Creates a new [`TrackedValue`].
     fn new(value: i32) -> Self {
-        Self { value, flags: 0 }
-    }
-
-    fn get_mask(predicate_type: PredicateType) -> u8 {
-        match predicate_type {
-            PredicateType::LowerBound => LOWER_BOUND_MASK,
-            PredicateType::UpperBound => UPPER_BOUND_MASK,
-            PredicateType::NotEqual => NOT_EQUAL_MASK,
-            PredicateType::Equal => EQUAL_MASK,
+        Self {
+            value,
+            flags: EnumSet::new(),
         }
     }
 
     /// Store the provided [`PredicateType`] in the [`TrackedValue`].
     fn track_predicate_type(&mut self, predicate_type: PredicateType) {
-        self.flags |= Self::get_mask(predicate_type);
+        self.flags |= predicate_type;
     }
 
     /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValue`].
     fn does_track_predicate_type(&self, predicate_type: PredicateType) -> bool {
-        (self.flags & Self::get_mask(predicate_type)) > 0
+        self.flags.contains(predicate_type)
     }
 
     /// Return the [`PredicateType`]s which are stored in this [`TrackedValue`].
@@ -133,14 +100,7 @@ impl TrackedValue {
     /// These are always returned in a pre-defined order, not the order in which they were
     /// inserted.
     fn get_predicate_types(&self) -> impl Iterator<Item = PredicateType> {
-        [
-            PredicateType::LowerBound,
-            PredicateType::UpperBound,
-            PredicateType::NotEqual,
-            PredicateType::Equal,
-        ]
-        .into_iter()
-        .filter(|&predicate_type| self.does_track_predicate_type(predicate_type))
+        self.flags.iter()
     }
 
     /// Returns the value which is stored in this [`TrackedValue`].
@@ -325,15 +285,13 @@ impl PredicateTracker {
         if let Some((index, tracked_value)) = self.values.get_full_mut2(&value) {
             // Then we check whether this particular predicate type has already been tracked
             if !tracked_value.does_track_predicate_type(predicate.get_predicate_type()) {
-                let current_mask = TrackedValue::get_mask(predicate.get_predicate_type());
+                let current_mask = predicate.get_predicate_type() as u8;
 
                 // We keep the predicate ids in the same order as they are returned by the
                 // TrackedValue
                 if let Some(pos) = tracked_value
                     .get_predicate_types()
-                    .position(|predicate_type| {
-                        TrackedValue::get_mask(predicate_type) > current_mask
-                    })
+                    .position(|predicate_type| predicate_type as u8 > current_mask)
                 {
                     self.ids[index].insert(pos, predicate_id);
                 } else {
@@ -722,7 +680,10 @@ mod tests {
         let mut value = TrackedValue::new(x);
 
         assert_eq!(value.get_value(), x);
-        assert_eq!(value.get_predicate_types().collect::<Vec<_>>(), vec![]);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            Vec::<PredicateType>::new()
+        );
 
         value.track_predicate_type(PredicateType::Equal);
         assert_eq!(
@@ -769,7 +730,10 @@ mod tests {
         let mut value = TrackedValue::new(x);
 
         assert_eq!(value.get_value(), x);
-        assert_eq!(value.get_predicate_types().collect::<Vec<_>>(), vec![]);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            Vec::<PredicateType>::new()
+        );
 
         value.track_predicate_type(PredicateType::Equal);
         assert_eq!(
