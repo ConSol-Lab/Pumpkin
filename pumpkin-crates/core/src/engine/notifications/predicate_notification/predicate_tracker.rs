@@ -292,6 +292,44 @@ impl PredicateTracker {
         let value = predicate.get_right_hand_side();
 
         if predicate.is_lower_bound_predicate() {
+            let mut greater_strict =
+                self.greater[trailed_values.read(self.min_assigned_strict) as usize];
+            while greater_strict != i64::MAX && value > self.values[greater_strict as usize] {
+                for (predicate_index, predicate_type) in self.predicate_types
+                    [greater_strict as usize]
+                    .iter()
+                    .enumerate()
+                {
+                    match predicate_type {
+                        PredicateType::UpperBound | PredicateType::Equal => {
+                            self.predicate_has_been_falsified(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                        PredicateType::NotEqual => {
+                            self.predicate_has_been_satisfied(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                        PredicateType::LowerBound => {
+                            self.predicate_has_been_satisfied(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                    }
+                }
+                trailed_values.assign(self.min_assigned_strict, greater_strict);
+                trailed_values.assign(self.min_assigned, greater_strict);
+
+                greater_strict = self.greater[greater_strict as usize];
+            }
+
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
             while greater != i64::MAX && value >= self.values[greater as usize] {
                 if let Some(predicate_index) = self.predicate_types[greater as usize]
@@ -299,7 +337,7 @@ impl PredicateTracker {
                     .position(|predicate_type| *predicate_type == PredicateType::LowerBound)
                 {
                     self.predicate_has_been_satisfied(
-                        greater as usize,
+                        greater_strict as usize,
                         predicate_index,
                         predicate_id_assignments,
                     );
@@ -307,34 +345,45 @@ impl PredicateTracker {
                 trailed_values.assign(self.min_assigned, greater);
                 greater = self.greater[greater as usize];
             }
-
-            let mut larger = self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while larger != i64::MAX && value > self.values[larger as usize] {
-                for (predicate_index, predicate_type) in
-                    self.predicate_types[larger as usize].iter().enumerate()
+        } else if predicate.is_upper_bound_predicate() {
+            let mut smaller_strict =
+                self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
+            while smaller_strict != i64::MAX && value < self.values[smaller_strict as usize] {
+                for (predicate_index, predicate_type) in self.predicate_types
+                    [smaller_strict as usize]
+                    .iter()
+                    .enumerate()
                 {
                     match predicate_type {
-                        PredicateType::UpperBound | PredicateType::Equal => {
+                        PredicateType::LowerBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
-                                larger as usize,
+                                smaller_strict as usize,
                                 predicate_index,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
-                                larger as usize,
+                                smaller_strict as usize,
                                 predicate_index,
                                 predicate_id_assignments,
                             );
                         }
-                        _ => {}
+                        PredicateType::UpperBound => {
+                            self.predicate_has_been_satisfied(
+                                smaller_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
                     }
                 }
-                trailed_values.assign(self.min_assigned_strict, larger);
-                larger = self.greater[larger as usize];
+                trailed_values.assign(self.max_assigned_strict, smaller_strict);
+                trailed_values.assign(self.max_assigned, smaller_strict);
+
+                smaller_strict = self.smaller[smaller_strict as usize];
             }
-        } else if predicate.is_upper_bound_predicate() {
+
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
             while smaller != i64::MAX && value <= self.values[smaller as usize] {
                 if let Some(predicate_index) = self.predicate_types[smaller as usize]
@@ -348,33 +397,6 @@ impl PredicateTracker {
                     );
                 }
                 trailed_values.assign(self.max_assigned, smaller);
-                smaller = self.smaller[smaller as usize];
-            }
-
-            let mut smaller = self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller != i64::MAX && value < self.values[smaller as usize] {
-                for (predicate_index, predicate_type) in
-                    self.predicate_types[smaller as usize].iter().enumerate()
-                {
-                    match predicate_type {
-                        PredicateType::LowerBound | PredicateType::Equal => {
-                            self.predicate_has_been_falsified(
-                                smaller as usize,
-                                predicate_index,
-                                predicate_id_assignments,
-                            );
-                        }
-                        PredicateType::NotEqual => {
-                            self.predicate_has_been_satisfied(
-                                smaller as usize,
-                                predicate_index,
-                                predicate_id_assignments,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-                trailed_values.assign(self.max_assigned_strict, smaller);
                 smaller = self.smaller[smaller as usize];
             }
         } else if predicate.is_not_equal_predicate() {
@@ -414,6 +436,45 @@ impl PredicateTracker {
                 }
             }
         } else if predicate.is_equality_predicate() {
+            // First update the lower-bound if necessary
+            let mut greater_strict =
+                self.greater[trailed_values.read(self.min_assigned_strict) as usize];
+            while greater_strict != i64::MAX && value > self.values[greater_strict as usize] {
+                for (predicate_index, predicate_type) in self.predicate_types
+                    [greater_strict as usize]
+                    .iter()
+                    .enumerate()
+                {
+                    match predicate_type {
+                        PredicateType::UpperBound | PredicateType::Equal => {
+                            self.predicate_has_been_falsified(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                        PredicateType::NotEqual => {
+                            self.predicate_has_been_satisfied(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                        PredicateType::LowerBound => {
+                            self.predicate_has_been_satisfied(
+                                greater_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
+                    }
+                }
+                trailed_values.assign(self.min_assigned_strict, greater_strict);
+                trailed_values.assign(self.min_assigned, greater_strict);
+
+                greater_strict = self.greater[greater_strict as usize];
+            }
+
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
             while greater != i64::MAX && value >= self.values[greater as usize] {
                 if let Some(predicate_index) = self.predicate_types[greater as usize]
@@ -421,7 +482,7 @@ impl PredicateTracker {
                     .position(|predicate_type| *predicate_type == PredicateType::LowerBound)
                 {
                     self.predicate_has_been_satisfied(
-                        greater as usize,
+                        greater_strict as usize,
                         predicate_index,
                         predicate_id_assignments,
                     );
@@ -430,31 +491,43 @@ impl PredicateTracker {
                 greater = self.greater[greater as usize];
             }
 
-            let mut larger = self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while larger != i64::MAX && value > self.values[larger as usize] {
-                for (predicate_index, predicate_type) in
-                    self.predicate_types[larger as usize].iter().enumerate()
+            // Then the upper-bound if necessary
+            let mut smaller_strict =
+                self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
+            while smaller_strict != i64::MAX && value < self.values[smaller_strict as usize] {
+                for (predicate_index, predicate_type) in self.predicate_types
+                    [smaller_strict as usize]
+                    .iter()
+                    .enumerate()
                 {
                     match predicate_type {
-                        PredicateType::UpperBound | PredicateType::Equal => {
+                        PredicateType::LowerBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
-                                larger as usize,
+                                smaller_strict as usize,
                                 predicate_index,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
-                                larger as usize,
+                                smaller_strict as usize,
                                 predicate_index,
                                 predicate_id_assignments,
                             );
                         }
-                        _ => {}
+                        PredicateType::UpperBound => {
+                            self.predicate_has_been_satisfied(
+                                smaller_strict as usize,
+                                predicate_index,
+                                predicate_id_assignments,
+                            );
+                        }
                     }
                 }
-                trailed_values.assign(self.min_assigned_strict, larger);
-                larger = self.greater[larger as usize];
+                trailed_values.assign(self.max_assigned_strict, smaller_strict);
+                trailed_values.assign(self.max_assigned, smaller_strict);
+
+                smaller_strict = self.smaller[smaller_strict as usize];
             }
 
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
@@ -470,33 +543,6 @@ impl PredicateTracker {
                     );
                 }
                 trailed_values.assign(self.max_assigned, smaller);
-                smaller = self.smaller[smaller as usize];
-            }
-
-            let mut smaller = self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller != i64::MAX && value < self.values[smaller as usize] {
-                for (predicate_index, predicate_type) in
-                    self.predicate_types[smaller as usize].iter().enumerate()
-                {
-                    match predicate_type {
-                        PredicateType::LowerBound | PredicateType::Equal => {
-                            self.predicate_has_been_falsified(
-                                smaller as usize,
-                                predicate_index,
-                                predicate_id_assignments,
-                            );
-                        }
-                        PredicateType::NotEqual => {
-                            self.predicate_has_been_satisfied(
-                                smaller as usize,
-                                predicate_index,
-                                predicate_id_assignments,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-                trailed_values.assign(self.max_assigned_strict, smaller);
                 smaller = self.smaller[smaller as usize];
             }
 
