@@ -60,6 +60,11 @@ impl LinearInequality {
         self.bound
     }
 
+    /// Tests whether the left-hand side simplifies to 0 and the right-hand side is less than 0.
+    pub fn is_trivially_false(&self) -> bool {
+        self.terms.is_empty() && self.bound < 0
+    }
+
     /// Get the term for the given domain.
     pub fn term_for_domain(&self, domain: DomainId) -> Option<AffineView<DomainId>> {
         self.terms().find(|view| view.inner == domain)

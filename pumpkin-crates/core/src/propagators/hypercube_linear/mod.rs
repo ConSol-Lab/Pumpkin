@@ -23,8 +23,8 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_advanced;
+use crate::pumpkin_assert_simple;
 use crate::results::PropagationStatusCP;
-use crate::state::Conflict;
 use crate::state::PropagatorConflict;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
@@ -121,6 +121,72 @@ impl HypercubeLinearPropagator {
             .iter()
             .position(|&pid| !context.is_predicate_id_satisfied(pid))
     }
+
+    /// Propagates the linear inequality of the hypercube linear.
+    ///
+    /// Does _not_ check that the hypercube is satisfied.
+    fn propagate_linear_inequality(
+        &self,
+        mut context: PropagationContext<'_>,
+        slack: i64,
+    ) -> PropagationStatusCP {
+        if self.linear.is_trivially_false() {
+            // In this case the terms iterator is empty so the loop-body below is never executed.
+            // Therefore we explicitly check for this case, and trigger a conflict. If the linear
+            // is not trivially false, the conflict check is unnecessary as the propagation will
+            // also trigger a conflict.
+
+            let conjunction = self
+                .linear
+                .terms()
+                .map(|term| predicate![term >= context.lower_bound(&term)])
+                .chain(self.hypercube.iter_predicates())
+                .collect::<PropositionalConjunction>();
+
+            return Err(crate::state::Conflict::Propagator(PropagatorConflict {
+                conjunction,
+                inference_code: self.inference_code.clone(),
+            }));
+        }
+
+        println!("======");
+
+        for term in self.linear.terms() {
+            dbg!(term);
+
+            let term_lower_bound = i64::from(context.lower_bound(&term));
+            let term_upper_bound_i64 = slack + term_lower_bound;
+            let term_upper_bound = match i32::try_from(term_upper_bound_i64) {
+                Ok(bound) => bound,
+                Err(_) if term_upper_bound_i64.is_negative() => {
+                    todo!("wanting to tighten the upper bound to a value smaller than i32::MIN")
+                }
+                // If we want to set the upper bound to a value larger than i32::MAX,
+                // it can never tighten the existing bound of `term_to_propagate`.
+                Err(_) => return Ok(()),
+            };
+
+            let reason = self
+                .linear
+                .terms()
+                .filter(|&t| t != term)
+                .map(|term| predicate![term >= context.lower_bound(&term)])
+                .chain(self.hypercube.iter_predicates())
+                .collect::<PropositionalConjunction>();
+
+            dbg!(predicate![term <= term_upper_bound]);
+
+            context.post(
+                predicate![term <= term_upper_bound],
+                reason,
+                &self.inference_code,
+            )?;
+        }
+
+        println!("======");
+
+        Ok(())
+    }
 }
 
 impl Propagator for HypercubeLinearPropagator {
@@ -177,29 +243,37 @@ impl Propagator for HypercubeLinearPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        dbg!(self.linear.bound());
+
         let satisfied_watchers = self
             .watched_predicates
             .iter()
             .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
             .count();
 
+        dbg!(satisfied_watchers);
+
         if satisfied_watchers < 2 {
             return Ok(());
         }
 
         let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
+        dbg!(unassigned_watcher_index);
 
         let lower_bound_terms = self
             .linear
             .terms()
             .map(|term| i64::from(context.lower_bound(&term)))
             .sum::<i64>();
+        dbg!(lower_bound_terms);
 
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
+        dbg!(slack);
 
         match unassigned_watcher_index {
             Some(index) => {
                 let predicate_in_hypercube = self.hypercube_predicates[index];
+                dbg!(predicate_in_hypercube);
 
                 let maybe_term = self
                     .linear
@@ -264,25 +338,7 @@ impl Propagator for HypercubeLinearPropagator {
             None => {
                 // All watchers are true. Propagate the linear inequality.
 
-                let lower_bound_terms = self
-                    .linear
-                    .terms()
-                    .map(|term| i64::from(context.lower_bound(&term)))
-                    .sum::<i64>();
-
-                if lower_bound_terms > i64::from(self.linear.bound()) {
-                    let conjunction = self
-                        .linear
-                        .terms()
-                        .map(|term| predicate![term >= context.lower_bound(&term)])
-                        .chain(self.hypercube.iter_predicates())
-                        .collect();
-
-                    return Err(Conflict::Propagator(PropagatorConflict {
-                        conjunction,
-                        inference_code: self.inference_code.clone(),
-                    }));
-                }
+                self.propagate_linear_inequality(context, slack)?;
             }
         }
 
@@ -361,18 +417,9 @@ impl Propagator for HypercubeLinearPropagator {
                     &self.inference_code,
                 )?;
             }
-        } else if slack < 0 {
-            let conjunction = self
-                .linear
-                .terms()
-                .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube.iter_predicates())
-                .collect();
-
-            return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction,
-                inference_code: self.inference_code.clone(),
-            }));
+        } else {
+            pumpkin_assert_simple!(unsatisfied_predicates_in_hypercubes.is_empty());
+            self.propagate_linear_inequality(context, slack)?;
         }
 
         Ok(())
@@ -546,5 +593,50 @@ mod tests {
         assert!(state.propagate_to_fixed_point().is_ok());
 
         assert_eq!(3, state.upper_bound(x));
+    }
+
+    #[test]
+    fn linear_component_propagates_if_hypercube_is_satisfied() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+        let z1 = state.new_interval_variable(0, 10, Some("z1".into()));
+        let z2 = state.new_interval_variable(0, 10, Some("z2".into()));
+        let z3 = state.new_interval_variable(0, 10, Some("z3".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        // z1 + z2 + z3 <= 10.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), z1),
+                (NonZero::new(1).unwrap(), z2),
+                (NonZero::new(1).unwrap(), z3),
+            ],
+            10,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert!(state.post(predicate![x >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert!(state.post(predicate![y >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert!(state.post(predicate![z1 >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(z2), 8);
+        assert_eq!(state.upper_bound(z3), 6);
     }
 }
