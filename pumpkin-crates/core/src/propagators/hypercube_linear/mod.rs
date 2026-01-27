@@ -191,44 +191,59 @@ impl Propagator for HypercubeLinearPropagator {
                     .linear
                     .term_for_domain(self.hypercube_predicates[index].get_domain());
 
-                match maybe_term {
-                    Some(term_to_propagate) => {
-                        if !could_propagate_weaker_predicate(
-                            predicate_in_hypercube,
-                            term_to_propagate,
-                        ) {
-                            return Ok(());
-                        }
+                if slack < 0 {
+                    // We have one unassigned predicate in the hypercube over a variable that
+                    // does not appear in the linear inequality. Since the slack is negative, we
+                    // can propagate that predicate to false.
 
-                        let bound_i64 = slack + i64::from(context.lower_bound(&term_to_propagate));
-                        let bound = match i32::try_from(bound_i64) {
-                            Ok(bound) => bound,
-                            Err(_) if bound_i64.is_negative() => todo!(
-                                "wanting to tighten the upper bound to a value smaller than i32::MIN"
-                            ),
-                            // If we want to set the upper bound to a value larger than i32::MAX,
-                            // it can never tighten the existing bound of `term_to_propagate`.
-                            Err(_) => return Ok(()),
-                        };
+                    let conjunction: PropositionalConjunction = self
+                        .linear
+                        .terms()
+                        .map(|term| predicate![term >= context.lower_bound(&term)])
+                        .chain(
+                            self.hypercube
+                                .iter_predicates()
+                                .filter(|&predicate| predicate != predicate_in_hypercube),
+                        )
+                        .collect();
 
-                        let conjunction: PropositionalConjunction = self
-                            .linear
-                            .terms()
-                            .map(|term| predicate![term >= context.lower_bound(&term)])
-                            .chain(
-                                self.hypercube
-                                    .iter_predicates()
-                                    .filter(|&predicate| predicate != predicate_in_hypercube),
-                            )
-                            .collect();
+                    context.post(!predicate_in_hypercube, conjunction, &self.inference_code)?;
+                } else if let Some(term_to_propagate) = maybe_term {
+                    // The slack is at least 0, but it may be that the linear could propagate
+                    // something weaker than `!predicate_in_hypercube`.
 
-                        context.post(
-                            predicate![term_to_propagate <= bound],
-                            conjunction,
-                            &self.inference_code,
-                        )?;
+                    if !could_propagate_weaker_predicate(predicate_in_hypercube, term_to_propagate)
+                    {
+                        return Ok(());
                     }
-                    None => todo!(),
+
+                    let bound_i64 = slack + i64::from(context.lower_bound(&term_to_propagate));
+                    let bound = match i32::try_from(bound_i64) {
+                        Ok(bound) => bound,
+                        Err(_) if bound_i64.is_negative() => todo!(
+                            "wanting to tighten the upper bound to a value smaller than i32::MIN"
+                        ),
+                        // If we want to set the upper bound to a value larger than i32::MAX,
+                        // it can never tighten the existing bound of `term_to_propagate`.
+                        Err(_) => return Ok(()),
+                    };
+
+                    let conjunction: PropositionalConjunction = self
+                        .linear
+                        .terms()
+                        .map(|term| predicate![term >= context.lower_bound(&term)])
+                        .chain(
+                            self.hypercube
+                                .iter_predicates()
+                                .filter(|&predicate| predicate != predicate_in_hypercube),
+                        )
+                        .collect();
+
+                    context.post(
+                        predicate![term_to_propagate <= bound],
+                        conjunction,
+                        &self.inference_code,
+                    )?;
                 }
             }
 
@@ -276,6 +291,7 @@ impl Propagator for HypercubeLinearPropagator {
             .hypercube_predicates
             .iter()
             .filter(|&&predicate| context.evaluate_predicate(predicate) != Some(true))
+            .copied()
             .collect::<Vec<_>>();
 
         if unsatisfied_predicates_in_hypercubes.len() > 1 {
@@ -294,7 +310,20 @@ impl Propagator for HypercubeLinearPropagator {
         if unsatisfied_predicates_in_hypercubes.len() == 1 {
             let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
 
-            if let Some(term) = self
+            if slack < 0 {
+                let reason = self
+                    .linear
+                    .terms()
+                    .map(|term| predicate![term >= context.lower_bound(&term)])
+                    .chain(
+                        self.hypercube
+                            .iter_predicates()
+                            .filter(|&p| p != unassigned_predicate),
+                    )
+                    .collect::<PropositionalConjunction>();
+
+                context.post(!unassigned_predicate, reason, &self.inference_code)?;
+            } else if let Some(term) = self
                 .linear
                 .term_for_domain(unassigned_predicate.get_domain())
             {
@@ -317,9 +346,7 @@ impl Propagator for HypercubeLinearPropagator {
                     reason,
                     &self.inference_code,
                 )?;
-            } else {
-                todo!()
-            };
+            }
         } else if slack < 0 {
             let conjunction = self
                 .linear
@@ -441,6 +468,36 @@ mod tests {
         });
 
         assert!(state.propagate_to_fixed_point().is_err());
+    }
+
+    #[test]
+    fn conflicting_linear_propagates_last_unassigned_hypercube_bound_to_false() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(2, 5, Some("y".into()));
+        let z = state.new_interval_variable(2, 10, Some("z".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        // y + z <= 3.
+        let linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), y), (NonZero::new(1).unwrap(), z)],
+            3,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert_eq!(1, state.upper_bound(x));
     }
 
     #[test]

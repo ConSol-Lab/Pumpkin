@@ -14,7 +14,7 @@ use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
-#[derive(Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Clone, PartialEq, Eq, Copy, Hash, PartialOrd, Ord)]
 pub struct DomainId {
     id: u32,
 }
