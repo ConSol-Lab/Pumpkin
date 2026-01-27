@@ -119,7 +119,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         self.propagator.priority()
     }
 
-    fn synchronise(&mut self, context: Domains) {
+    fn synchronise(&mut self, context: NotificationContext<'_>) {
         self.propagator.synchronise(context);
     }
 

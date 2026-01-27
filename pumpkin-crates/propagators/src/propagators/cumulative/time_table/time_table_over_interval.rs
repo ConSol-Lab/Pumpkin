@@ -166,9 +166,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         )
     }
 
-    fn synchronise(&mut self, context: Domains) {
+    fn synchronise(&mut self, mut context: NotificationContext<'_>) {
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
     }
 
     fn notify(

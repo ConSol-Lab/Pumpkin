@@ -6,6 +6,7 @@ use pumpkin_checking::InferenceChecker;
 
 use super::PropagatorQueue;
 use crate::containers::KeyGenerator;
+use crate::containers::StorageKey;
 use crate::engine::EmptyDomain;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
@@ -17,9 +18,9 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorId;
@@ -347,14 +348,33 @@ impl TestSolver {
         );
         self.state.trailed_values.synchronise(level);
 
-        self.state
-            .propagators
-            .iter_propagators_mut()
-            .for_each(|propagator| {
-                propagator.synchronise(Domains::new(
-                    &self.state.assignments,
+        for (idx, propagator) in self.state.propagators.iter_propagators_mut().enumerate() {
+            let propagator_id = PropagatorId::create_from_index(idx);
+
+            let mut context = NotificationContext::new(
+                &mut self.state.trailed_values,
+                &self.state.assignments,
+                &mut self.state.notification_engine.predicate_notifier,
+            );
+
+            propagator.synchronise(context.reborrow());
+
+            let mut watch_changes = context.take_watch_changes();
+
+            for predicate_id in watch_changes.start_watching_predicates.drain(..) {
+                self.state.notification_engine.watch_predicate_id(
+                    predicate_id,
+                    propagator_id,
                     &mut self.state.trailed_values,
-                ))
-            })
+                    &self.state.assignments,
+                );
+            }
+
+            for predicate_id in watch_changes.stop_watching_predicates.drain(..) {
+                self.state
+                    .notification_engine
+                    .unwatch_predicate(predicate_id, propagator_id);
+            }
+        }
     }
 }

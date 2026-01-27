@@ -539,12 +539,12 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         }
     }
 
-    fn synchronise(&mut self, context: Domains) {
+    fn synchronise(&mut self, mut context: NotificationContext<'_>) {
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {
             self.updatable_structures
-                .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+                .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters);
             // If the time-table is already empty then backtracking will not cause it to become
             // outdated
             if !self.time_table.is_empty() {
@@ -552,7 +552,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             }
         } else if SYNCHRONISE {
             self.updatable_structures
-                .remove_fixed(context, &self.parameters);
+                .remove_fixed(context.domains(), &self.parameters);
         }
     }
 

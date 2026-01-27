@@ -42,6 +42,7 @@ pub struct NotificationContext<'a> {
 
     predicates_to_watch: RefOrOwned<'a, Vec<PredicateId>>,
     predicates_to_unwatch: RefOrOwned<'a, Vec<PredicateId>>,
+    unregister_domain_events: RefOrOwned<'a, Vec<LocalId>>,
 }
 
 impl Drop for NotificationContext<'_> {
@@ -69,6 +70,7 @@ impl<'a> NotificationContext<'a> {
             predicate_notifier,
             predicates_to_watch: vec![].into(),
             predicates_to_unwatch: vec![].into(),
+            unregister_domain_events: vec![].into(),
         }
     }
 
@@ -100,6 +102,11 @@ impl<'a> NotificationContext<'a> {
         self.predicates_to_unwatch.push(predicate_id);
     }
 
+    /// Unregister for all events
+    pub fn unregister_domain_event(&mut self, local_id: LocalId) {
+        self.unregister_domain_events.push(local_id);
+    }
+
     pub fn reborrow(&mut self) -> NotificationContext<'_> {
         NotificationContext {
             trailed_values: self.trailed_values,
@@ -107,15 +114,39 @@ impl<'a> NotificationContext<'a> {
             predicate_notifier: self.predicate_notifier,
             predicates_to_watch: self.predicates_to_watch.reborrow(),
             predicates_to_unwatch: self.predicates_to_unwatch.reborrow(),
+            unregister_domain_events: self.unregister_domain_events.reborrow(),
         }
     }
 
-    pub(crate) fn drain_predicates_to_watch(&mut self) -> impl Iterator<Item = PredicateId> {
-        self.predicates_to_watch.drain(..)
+    pub(crate) fn take_watch_changes(mut self) -> WatchChanges {
+        WatchChanges {
+            start_watching_predicates: std::mem::take(&mut self.predicates_to_watch),
+            stop_watching_predicates: std::mem::take(&mut self.predicates_to_unwatch),
+            unregister_domain_events: std::mem::take(&mut self.unregister_domain_events),
+        }
     }
+}
 
-    pub(crate) fn drain_predicates_to_unwatch(&mut self) -> impl Iterator<Item = PredicateId> {
-        self.predicates_to_unwatch.drain(..)
+pub(crate) struct WatchChanges {
+    pub(crate) start_watching_predicates: Vec<PredicateId>,
+    pub(crate) stop_watching_predicates: Vec<PredicateId>,
+    pub(crate) unregister_domain_events: Vec<LocalId>,
+}
+
+impl Drop for WatchChanges {
+    fn drop(&mut self) {
+        assert!(
+            self.start_watching_predicates.is_empty(),
+            "losing predicates that should be watched"
+        );
+        assert!(
+            self.stop_watching_predicates.is_empty(),
+            "losing predicates that should be unwatched"
+        );
+        assert!(
+            self.unregister_domain_events.is_empty(),
+            "unregister for domain events"
+        );
     }
 }
 

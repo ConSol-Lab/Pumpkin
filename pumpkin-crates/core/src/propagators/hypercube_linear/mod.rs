@@ -247,6 +247,20 @@ impl Propagator for HypercubeLinearPropagator {
         }
     }
 
+    fn synchronise(&mut self, mut context: NotificationContext<'_>) {
+        let satisfied_watchers = self
+            .watched_predicates
+            .iter()
+            .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
+            .count();
+
+        if satisfied_watchers < NUM_WATCHED_PREDICATES {
+            for (idx, _) in self.linear.terms().enumerate() {
+                context.unregister_domain_event(LocalId::from(idx as u32));
+            }
+        }
+    }
+
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         let satisfied_watchers = self
             .watched_predicates
@@ -639,5 +653,58 @@ mod tests {
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.upper_bound(z2), 8);
         assert_eq!(state.upper_bound(z3), 8);
+    }
+
+    #[test]
+    fn backtracking_does_not_break_the_propagator() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+        let z1 = state.new_interval_variable(0, 10, Some("z1".into()));
+        let z2 = state.new_interval_variable(0, 10, Some("z2".into()));
+        let z3 = state.new_interval_variable(0, 10, Some("z3".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        // z1 + z2 + z3 <= 10.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), z1),
+                (NonZero::new(1).unwrap(), z2),
+                (NonZero::new(1).unwrap(), z3),
+            ],
+            10,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        state.new_checkpoint();
+
+        assert!(state.post(predicate![x >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!(state.post(predicate![y >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert!(state.post(predicate![z1 >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        let _ = state.restore_to(0);
+
+        assert!(state.post(predicate![x >= 2]).expect("not empty domain"));
+        assert!(state.post(predicate![y >= 2]).expect("not empty domain"));
+        assert!(state.post(predicate![z1 >= 4]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert_eq!(state.upper_bound(z2), 6);
+        assert_eq!(state.upper_bound(z3), 6);
     }
 }

@@ -223,7 +223,7 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn synchronise(&mut self, _context: Domains) {
+    fn synchronise(&mut self, _context: NotificationContext<'_>) {
         // Recall that we need to ensure that the stored removed values could now be inaccurate
         self.has_backtracked = true;
     }

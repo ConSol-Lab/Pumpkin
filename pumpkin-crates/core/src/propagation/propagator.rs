@@ -160,7 +160,7 @@ pub trait Propagator: Downcast + DynClone {
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
-    fn synchronise(&mut self, _domains: Domains) {}
+    fn synchronise(&mut self, _context: NotificationContext<'_>) {}
 
     /// Returns the [`Priority`] of the propagator, used for determining the order in which
     /// propagators are called.
