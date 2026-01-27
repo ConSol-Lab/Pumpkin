@@ -109,7 +109,7 @@ impl TrackedValue {
         Self { value, flags: 0 }
     }
 
-    fn get_mask(&self, predicate_type: PredicateType) -> u8 {
+    fn get_mask(predicate_type: PredicateType) -> u8 {
         match predicate_type {
             PredicateType::LowerBound => LOWER_BOUND_MASK,
             PredicateType::UpperBound => UPPER_BOUND_MASK,
@@ -120,12 +120,12 @@ impl TrackedValue {
 
     /// Store the provided [`PredicateType`] in the [`TrackedValue`].
     fn track_predicate_type(&mut self, predicate_type: PredicateType) {
-        self.flags |= self.get_mask(predicate_type);
+        self.flags |= Self::get_mask(predicate_type);
     }
 
     /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValue`].
     fn does_track_predicate_type(&self, predicate_type: PredicateType) -> bool {
-        (self.flags & self.get_mask(predicate_type)) > 0
+        (self.flags & Self::get_mask(predicate_type)) > 0
     }
 
     /// Return the [`PredicateType`]s which are stored in this [`TrackedValue`].
@@ -331,18 +331,8 @@ impl PredicateTracker {
                 // We keep the predicate ids in the same order as they are returned by the
                 // TrackedValue
                 match existing_predicate_types.binary_search_by_key(
-                    &match predicate.get_predicate_type() {
-                        PredicateType::LowerBound => LOWER_BOUND_SHIFT,
-                        PredicateType::UpperBound => UPPER_BOUND_SHIFT,
-                        PredicateType::NotEqual => NOT_EQUAL_SHIFT,
-                        PredicateType::Equal => EQUAL_SHIFT,
-                    },
-                    |x| match x {
-                        PredicateType::LowerBound => LOWER_BOUND_SHIFT,
-                        PredicateType::UpperBound => UPPER_BOUND_SHIFT,
-                        PredicateType::NotEqual => NOT_EQUAL_SHIFT,
-                        PredicateType::Equal => EQUAL_SHIFT,
-                    },
+                    &TrackedValue::get_mask(predicate.get_predicate_type()),
+                    |x| TrackedValue::get_mask(*x),
                 ) {
                     Ok(_) => {
                         unreachable!()
