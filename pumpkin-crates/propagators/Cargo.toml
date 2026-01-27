@@ -20,7 +20,6 @@ clap = { version = "4.5.40", optional = true, features=["derive"]}
 
 [dev-dependencies]
 pumpkin-constraints = { version = "0.2.2", path = "../constraints" }
-pumpkin-conflict-resolvers = {version = "0.2.2", path = "../conflict-resolvers/"}
 pumpkin-solver = { version = "0.2.2", path="../../pumpkin-solver"}
 
 [features]

@@ -737,18 +737,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumpkin-conflict-resolvers"
-version = "0.2.2"
-dependencies = [
- "pumpkin-core",
-]
-
-[[package]]
 name = "pumpkin-constraints"
 version = "0.2.2"
 dependencies = [
  "implementation",
- "pumpkin-conflict-resolvers",
  "pumpkin-core",
  "pumpkin-propagators",
 ]
@@ -775,7 +767,6 @@ dependencies = [
  "num",
  "once_cell",
  "pumpkin-checking",
- "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "rand",
  "thiserror",
@@ -803,7 +794,6 @@ dependencies = [
  "convert_case",
  "enumset",
  "pumpkin-checking",
- "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-solver",
@@ -820,7 +810,6 @@ dependencies = [
  "implementation",
  "log",
  "pumpkin-checker",
- "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
  "pumpkin-macros",

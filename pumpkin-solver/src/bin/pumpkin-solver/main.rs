@@ -1,49 +1,33 @@
 mod file_format;
 mod flatzinc;
-mod maxsat;
 mod os_signal_termination;
-mod parsers;
 mod result;
 use std::fmt::Debug;
-use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
 use file_format::FileFormat;
-use log::Level;
+use implementation::resolvers::NoLearningResolver;
+use implementation::resolvers::ResolutionResolver;
 use log::LevelFilter;
 use log::error;
 use log::info;
 use log::warn;
-use maxsat::PseudoBooleanEncoding;
-use parsers::dimacs::SolverArgs;
-use parsers::dimacs::SolverDimacsSink;
-use parsers::dimacs::parse_cnf;
-use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
-use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
-use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::convert_case::Case;
 use pumpkin_solver::core::optimisation::OptimisationStrategy;
 use pumpkin_solver::core::options::*;
 use pumpkin_solver::core::proof::ProofLog;
-use pumpkin_solver::core::pumpkin_assert_simple;
 use pumpkin_solver::core::rand::SeedableRng;
 use pumpkin_solver::core::rand::rngs::SmallRng;
-use pumpkin_solver::core::results::ProblemSolution;
-use pumpkin_solver::core::results::SatisfactionResult;
-use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::configure_statistic_logging;
-use pumpkin_solver::core::termination::TimeBudget;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
-use crate::maxsat::wcnf_problem;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -337,17 +321,6 @@ struct Args {
     #[arg(long = "omit-call-site", default_value_t = false, verbatim_doc_comment)]
     omit_call_site: bool,
 
-    /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
-    ///
-    /// - The "generalised-totalizer" value specifies that the solver should use the Generalized
-    ///   Totalizer Encoding (see "Generalized totalizer encoding for pseudo-boolean constraints -
-    ///   Saurabh et al. (2015)")
-    /// - The "cardinality-network" value specifies that the solver should use the Cardinality
-    ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
-    ///   al. (2011)").
-    #[arg(long, value_enum, default_value_t)]
-    upper_bound_encoding: PseudoBooleanEncoding,
-
     /// Determines that no restarts are allowed by the solver.
     ///
     /// Possible values: bool
@@ -386,13 +359,10 @@ fn configure_logging(
     file_format: FileFormat,
     verbose: bool,
     log_statistics: bool,
-    omit_timestamp: bool,
-    omit_call_site: bool,
+    _omit_timestamp: bool,
+    _omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
-        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine => {
-            configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
-        }
         FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
     }
 }
@@ -434,45 +404,6 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
     Ok(())
 }
 
-fn configure_logging_sat(
-    verbose: bool,
-    log_statistics: bool,
-    omit_timestamp: bool,
-    omit_call_site: bool,
-) -> std::io::Result<()> {
-    if log_statistics {
-        configure_statistic_logging("c STAT", None, None, None);
-    }
-    let level_filter = if verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
-
-    env_logger::Builder::new()
-        .format(move |buf, record| {
-            write!(buf, "c ")?;
-            if record.level() != Level::Info && !omit_timestamp {
-                write!(buf, "{} ", buf.timestamp())?;
-            }
-            write!(buf, "{} ", record.level())?;
-            if record.level() != Level::Info && !omit_call_site {
-                write!(
-                    buf,
-                    "[{}:{}] ",
-                    record.file().unwrap_or("unknown"),
-                    record.line().unwrap_or(0)
-                )?;
-            }
-            writeln!(buf, "{}", record.args())
-        })
-        .filter_level(level_filter)
-        .target(env_logger::Target::Stdout)
-        .init();
-    info!("Logging successfully configured");
-    Ok(())
-}
-
 fn main() {
     match run() {
         Ok(()) => {}
@@ -487,8 +418,6 @@ fn run() -> PumpkinResult<()> {
     let args = Args::parse();
 
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
-        Some("cnf") => FileFormat::CnfDimacsPLine,
-        Some("wcnf") => FileFormat::WcnfDimacsPLine,
         Some("fzn") => FileFormat::FlatZinc,
         _ => {
             configure_logging_unknown()?;
@@ -515,10 +444,6 @@ fn run() -> PumpkinResult<()> {
 
     let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
         match file_format {
-            FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
-            FileFormat::WcnfDimacsPLine => {
-                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()));
-            }
             FileFormat::FlatZinc => ProofLog::cp(path_buf, args.proof_type == ProofType::Full)?,
         }
     } else {
@@ -569,13 +494,6 @@ fn run() -> PumpkinResult<()> {
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
     match file_format {
-        FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
-        FileFormat::WcnfDimacsPLine => wcnf_problem(
-            solver_options,
-            time_limit,
-            instance_path,
-            args.upper_bound_encoding,
-        )?,
         FileFormat::FlatZinc => match args.conflict_resolver {
             ConflictResolverType::NoLearning => flatzinc::solve(
                 Solver::with_options(solver_options),
@@ -609,82 +527,12 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
+                ResolutionResolver::new(should_minimise_nogoods),
             )?,
         },
     }
 
     Ok(())
-}
-
-fn cnf_problem(
-    solver_options: SolverOptions,
-    time_limit: Option<Duration>,
-    instance_path: impl AsRef<Path>,
-) -> Result<(), PumpkinError> {
-    let instance_file = File::open(instance_path)?;
-    let mut solver =
-        parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?.solver;
-
-    let mut termination =
-        TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = solver.default_brancher();
-    let mut resolver = ResolutionResolver::default();
-
-    match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
-        SatisfactionResult::Satisfiable(satisfiable) => {
-            satisfiable.solver().log_statistics(
-                satisfiable.brancher(),
-                satisfiable.conflict_resolver(),
-                true,
-            );
-            println!("s SATISFIABLE");
-            println!(
-                "v {}",
-                stringify_solution(
-                    satisfiable.solution(),
-                    satisfiable.solution().num_domains(),
-                    true
-                )
-            );
-        }
-        SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
-            solver.log_statistics(brancher, resolver, true);
-
-            println!("s UNSATISFIABLE");
-        }
-        SatisfactionResult::Unknown(solver, brancher, resolver) => {
-            solver.log_statistics(brancher, resolver, true);
-            println!("s UNKNOWN");
-        }
-    }
-
-    Ok(())
-}
-
-fn stringify_solution(
-    solution: SolutionReference,
-    number_of_variables: usize,
-    terminate_with_zero: bool,
-) -> String {
-    solution
-        .get_domains()
-        .take(number_of_variables)
-        .map(|domain_id| {
-            let value = solution.get_integer_value(domain_id);
-            pumpkin_assert_simple!((0..=1).contains(&value));
-            if value == 1 {
-                format!("{} ", domain_id.id())
-            } else {
-                format!("-{} ", domain_id.id())
-            }
-        })
-        .chain(if terminate_with_zero {
-            std::iter::once(String::from("0"))
-        } else {
-            std::iter::once(String::new())
-        })
-        .collect::<String>()
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]

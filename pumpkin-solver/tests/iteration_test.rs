@@ -1,6 +1,6 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
-use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use implementation::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::solution_iterator::IteratedSolution;

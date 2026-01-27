@@ -330,16 +330,6 @@
 //! - `debug-checks`: Enable expensive assertions in the solver. Turning this on slows down the
 //!   solver by several orders of magnitude, so it is turned off by default.
 
-pub mod conflict_resolvers {
-    //! Contains the implementations of [`ConflictResolver`]s, and
-    //! [`NogoodMinimiser`]s.
-    #[cfg(doc)]
-    use pumpkin_conflict_resolvers::minimisers::NogoodMinimiser;
-    pub use pumpkin_conflict_resolvers::*;
-    #[cfg(doc)]
-    use pumpkin_core::conflict_resolving::ConflictResolver;
-}
-
 pub mod propagators {
     //! Contains the implementations of [`Propagator`]s.
     #[cfg(doc)]

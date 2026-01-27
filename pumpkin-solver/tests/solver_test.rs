@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use implementation::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::predicate;

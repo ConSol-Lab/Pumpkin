@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use implementation::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::proof::ProofLog;
