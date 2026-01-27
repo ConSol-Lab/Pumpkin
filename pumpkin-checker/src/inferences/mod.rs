@@ -58,6 +58,7 @@ pub enum InvalidInference {
     Unsound,
 }
 
+#[allow(unused, reason = "Will be used in the assignments")]
 pub(crate) fn verify_inference(
     model: &Model,
     inference: &drcp_format::Inference<std::rc::Rc<str>, i32, std::rc::Rc<str>>,
