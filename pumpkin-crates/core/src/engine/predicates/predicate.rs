@@ -47,6 +47,7 @@ impl Predicate {
 
 #[derive(Debug, Hash, EnumSetType)]
 #[repr(u8)]
+#[enumset(repr = "u8")]
 pub enum PredicateType {
     // Should correspond with the codes defined previously; `EnumSetType` requires that literals
     // are used and not expressions
