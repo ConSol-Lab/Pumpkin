@@ -1,5 +1,11 @@
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use fnv::FnvBuildHasher;
+use indexmap::Equivalent;
 use indexmap::IndexSet;
+use indexmap::set::MutableValues;
 
 use super::PredicateIdAssignments;
 use super::PredicateValue;
@@ -56,12 +62,126 @@ pub(crate) struct PredicateTracker {
     /// membership queries while also allowing us to index into the set.
     ///
     /// Note that these values are not sorted in any way.
-    values: IndexSet<i32, FnvBuildHasher>,
+    values: IndexSet<TrackedValue, FnvBuildHasher>,
     /// The [`PredicateId`]s corresponding to the predicates for each value in
     /// [`PredicateTracker::values`].
-    ids: Vec<Vec<PredicateId>>,
-    /// The [`PredicateType`]s for each predicate attached to a value.
-    predicate_types: Vec<Vec<PredicateType>>,
+    ids: Vec<Vec<(PredicateType, PredicateId)>>,
+}
+
+// A value tracked by the [`PredicateTracker`], keeps track of the values in the lowest 4 bits.
+#[derive(Clone, Copy)]
+struct TrackedValue {
+    value: i32,
+}
+
+impl Debug for TrackedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrackedValue")
+            .field("value", &self.get_value())
+            .field(
+                "PredicateTypes",
+                &self.get_predicate_types().collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
+
+/// The number of extra bits stored
+const EXTRA_BITS: usize = 4;
+
+/// The offset corresponding to a lower-bound predicate
+const LOWER_BOUND_SHIFT: usize = 0;
+/// The offset corresponding to an upper-bound predicate
+const UPPER_BOUND_SHIFT: usize = 1;
+/// The offset corresponding to a disequality predicate
+const NOT_EQUAL_SHIFT: usize = 2;
+/// The offset corresponding to an equality predicate
+const EQUAL_SHIFT: usize = 3;
+
+impl TrackedValue {
+    /// Creates a new [`TrackedValue`]; if more than 27 bits are required to represent the number,
+    /// then this method will panic.
+    fn new(value: i32) -> Self {
+        pumpkin_assert_simple!(
+            (-(1 << (31 - EXTRA_BITS))..(1 << (31 - EXTRA_BITS))).contains(&value),
+            "Value should fit into the {} bits but value was {value} ({value:b})",
+            31 - EXTRA_BITS
+        );
+        Self {
+            value: value << EXTRA_BITS, // We make space for the extra bits
+        }
+    }
+
+    /// Store the provided [`PredicateType`] in the [`TrackedValue`].
+    fn track_predicate_type(&mut self, predicate_type: PredicateType) {
+        self.value = match predicate_type {
+            PredicateType::LowerBound => self.value | (1 << LOWER_BOUND_SHIFT),
+            PredicateType::UpperBound => self.value | (1 << UPPER_BOUND_SHIFT),
+            PredicateType::NotEqual => self.value | (1 << NOT_EQUAL_SHIFT),
+            PredicateType::Equal => self.value | (1 << EQUAL_SHIFT),
+        };
+    }
+
+    /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValue`].
+    fn does_track_predicate_type(&self, predicate_type: PredicateType) -> bool {
+        (match predicate_type {
+            PredicateType::LowerBound => self.value & (1 << LOWER_BOUND_SHIFT),
+            PredicateType::UpperBound => self.value & (1 << UPPER_BOUND_SHIFT),
+            PredicateType::NotEqual => self.value & (1 << NOT_EQUAL_SHIFT),
+            PredicateType::Equal => self.value & (1 << EQUAL_SHIFT),
+        }) > 0
+    }
+
+    /// Return the [`PredicateType`]s which are stored in this [`TrackedValue`].
+    fn get_predicate_types(&self) -> impl Iterator<Item = PredicateType> {
+        (0..EXTRA_BITS).filter_map(|shift| {
+            let present = self.value & (1 << shift) > 0;
+            present.then(|| match shift {
+                LOWER_BOUND_SHIFT => PredicateType::LowerBound,
+                UPPER_BOUND_SHIFT => PredicateType::UpperBound,
+                NOT_EQUAL_SHIFT => PredicateType::NotEqual,
+                EQUAL_SHIFT => PredicateType::Equal,
+                _ => unreachable!(),
+            })
+        })
+    }
+
+    /// Returns the value which is stored in this [`TrackedValue`].
+    fn get_value(&self) -> i32 {
+        self.value >> EXTRA_BITS
+    }
+}
+
+impl PartialEq for TrackedValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_value().eq(&other.get_value())
+    }
+}
+
+impl Eq for TrackedValue {}
+
+impl PartialOrd for TrackedValue {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TrackedValue {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.get_value().cmp(&other.get_value())
+    }
+}
+
+impl Hash for TrackedValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.get_value().hash(state)
+    }
+}
+
+impl Equivalent<TrackedValue> for i32 {
+    fn equivalent(&self, key: &TrackedValue) -> bool {
+        *self == key.get_value()
+    }
 }
 
 impl PredicateTracker {
@@ -77,7 +197,6 @@ impl PredicateTracker {
             greater: Vec::default(),
             values: Default::default(),
             ids: Vec::default(),
-            predicate_types: Vec::default(),
         }
     }
 
@@ -111,10 +230,6 @@ impl PredicateTracker {
         self.ids.push(vec![]);
         self.ids.push(vec![]);
 
-        // These should never be queried so we provide a placeholder
-        self.predicate_types.push(vec![]);
-        self.predicate_types.push(vec![]);
-
         // Then we place the sentinels into the `smaller` structure
         //
         // For the first element (containing the lower-bound), there is no smaller element
@@ -143,7 +258,7 @@ impl PredicateTracker {
     /// Inserts the value into the internal structures.
     fn insert_value(&mut self, value: i32) -> usize {
         let index = self.values.len();
-        let result = self.values.insert(value);
+        let result = self.values.insert(TrackedValue::new(value));
         assert!(result);
 
         index
@@ -152,7 +267,7 @@ impl PredicateTracker {
     /// Returns the value at the provided index.
     ///
     /// If the index is out of bounds, this method will panic.
-    fn get_value_at_index(&self, index: usize) -> i32 {
+    fn get_value_at_index(&self, index: usize) -> TrackedValue {
         *self
             .values
             .get_index(index)
@@ -160,7 +275,7 @@ impl PredicateTracker {
     }
 
     /// Returns all of the values currently present.
-    fn get_all_values(&self) -> impl Iterator<Item = i32> {
+    fn get_all_values(&self) -> impl Iterator<Item = TrackedValue> {
         self.values.iter().copied()
     }
 
@@ -173,10 +288,14 @@ impl PredicateTracker {
     fn predicate_has_been_satisfied(
         &self,
         index: usize,
-        predicate_index: usize,
+        predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_index];
+        let predicate_id = self.ids[index]
+            .iter()
+            .filter_map(|(x, y)| (*x == predicate_type).then_some(*y))
+            .next()
+            .unwrap();
         if predicate_id.id == u32::MAX {
             // If it is a placeholder then we ignore it
             return;
@@ -188,10 +307,14 @@ impl PredicateTracker {
     fn predicate_has_been_falsified(
         &self,
         index: usize,
-        predicate_index: usize,
+        predicate_type: PredicateType,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        let predicate_id = self.ids[index][predicate_index];
+        let predicate_id = self.ids[index]
+            .iter()
+            .filter_map(|(x, y)| (*x == predicate_type).then_some(*y))
+            .next()
+            .unwrap();
         if predicate_id.id == u32::MAX {
             return;
         }
@@ -212,9 +335,12 @@ impl PredicateTracker {
         // We check whether it is already tracked
         if let Some(index) = self.get_index_of_value(value) {
             // Then we check whether this particular predicate type has already been tracked
-            if !self.predicate_types[index].contains(&predicate.get_predicate_type()) {
-                self.predicate_types[index].push(predicate.get_predicate_type());
-                self.ids[index].push(predicate_id);
+            if !self.values[index].does_track_predicate_type(predicate.get_predicate_type()) {
+                self.values
+                    .get_index_mut2(index)
+                    .unwrap()
+                    .track_predicate_type(predicate.get_predicate_type());
+                self.ids[index].push((predicate.get_predicate_type(), predicate_id));
                 return true;
             }
             return false;
@@ -234,10 +360,10 @@ impl PredicateTracker {
         let mut index = 1;
         loop {
             let index_value = self.get_value_at_index(index);
-            pumpkin_assert_simple!(index_value != value);
+            pumpkin_assert_simple!(index_value.get_value() != value,);
 
             // As soon as we have found a value smaller than the to track value, we can stop
-            if index_value < value {
+            if index_value.get_value() < value {
                 index_largest_value_smaller_than = index as i64;
 
                 index_smallest_value_larger_than = self.greater[index];
@@ -250,19 +376,23 @@ impl PredicateTracker {
         pumpkin_assert_eq_simple!(
             self.get_value_at_index(index_largest_value_smaller_than as usize),
             self.get_all_values()
-                .filter(|&stored_value| stored_value < value)
+                .filter(|&stored_value| stored_value.get_value() < value)
                 .max()
                 .unwrap(),
         );
         pumpkin_assert_eq_simple!(
             self.get_value_at_index(index_smallest_value_larger_than as usize),
             self.get_all_values()
-                .filter(|&stored_value| stored_value > value)
+                .filter(|&stored_value| stored_value.get_value() > value)
                 .min()
                 .unwrap()
         );
 
         let new_index = self.insert_value(value);
+        self.values
+            .get_index_mut2(new_index)
+            .unwrap()
+            .track_predicate_type(predicate.get_predicate_type());
 
         self.greater[index_largest_value_smaller_than as usize] = new_index as i64;
         self.smaller[index_smallest_value_larger_than as usize] = new_index as i64;
@@ -270,9 +400,8 @@ impl PredicateTracker {
         // Then we update the other structures
         self.smaller.push(index_largest_value_smaller_than);
         self.greater.push(index_smallest_value_larger_than);
-        self.ids.push(vec![predicate_id]);
-        self.predicate_types
-            .push(vec![predicate.get_predicate_type()]);
+        self.ids
+            .push(vec![(predicate.get_predicate_type(), predicate_id)]);
 
         true
     }
@@ -294,31 +423,29 @@ impl PredicateTracker {
         if predicate.is_lower_bound_predicate() {
             let mut greater_strict =
                 self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while greater_strict != i64::MAX && value > self.values[greater_strict as usize] {
-                for (predicate_index, predicate_type) in self.predicate_types
-                    [greater_strict as usize]
-                    .iter()
-                    .enumerate()
-                {
+            while greater_strict != i64::MAX
+                && value > self.values[greater_strict as usize].get_value()
+            {
+                for predicate_type in self.values[greater_strict as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::UpperBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::LowerBound => {
                             self.predicate_has_been_satisfied(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
@@ -331,14 +458,13 @@ impl PredicateTracker {
             }
 
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
-            while greater != i64::MAX && value >= self.values[greater as usize] {
-                if let Some(predicate_index) = self.predicate_types[greater as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::LowerBound)
+            while greater != i64::MAX && value >= self.values[greater as usize].get_value() {
+                if self.values[greater as usize]
+                    .does_track_predicate_type(PredicateType::LowerBound)
                 {
                     self.predicate_has_been_satisfied(
                         greater_strict as usize,
-                        predicate_index,
+                        PredicateType::LowerBound,
                         predicate_id_assignments,
                     );
                 }
@@ -348,31 +474,29 @@ impl PredicateTracker {
         } else if predicate.is_upper_bound_predicate() {
             let mut smaller_strict =
                 self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller_strict != i64::MAX && value < self.values[smaller_strict as usize] {
-                for (predicate_index, predicate_type) in self.predicate_types
-                    [smaller_strict as usize]
-                    .iter()
-                    .enumerate()
-                {
+            while smaller_strict != i64::MAX
+                && value < self.values[smaller_strict as usize].get_value()
+            {
+                for predicate_type in self.values[smaller_strict as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::LowerBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::UpperBound => {
                             self.predicate_has_been_satisfied(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
@@ -385,14 +509,13 @@ impl PredicateTracker {
             }
 
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
-            while smaller != i64::MAX && value <= self.values[smaller as usize] {
-                if let Some(predicate_index) = self.predicate_types[smaller as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::UpperBound)
+            while smaller != i64::MAX && value <= self.values[smaller as usize].get_value() {
+                if self.values[smaller as usize]
+                    .does_track_predicate_type(PredicateType::UpperBound)
                 {
                     self.predicate_has_been_satisfied(
                         smaller as usize,
-                        predicate_index,
+                        PredicateType::UpperBound,
                         predicate_id_assignments,
                     );
                 }
@@ -402,35 +525,33 @@ impl PredicateTracker {
         } else if predicate.is_not_equal_predicate() {
             // If the right-hand side of the disequality predicate is smaller than the value
             // pointed to by `min_assigned` then no updates can take place
-            if value <= self.values[trailed_values.read(self.min_assigned_strict) as usize] {
+            if value
+                <= self.values[trailed_values.read(self.min_assigned_strict) as usize].get_value()
+            {
                 return;
             }
 
             // If the right-hand side of the disequality predicate is larger than the value
             // pointed to by `max_assigned` then no updates can take place
-            if value >= self.values[trailed_values.read(self.max_assigned_strict) as usize] {
+            if value
+                >= self.values[trailed_values.read(self.max_assigned_strict) as usize].get_value()
+            {
                 return;
             }
 
             if let Some(index) = self.get_index_of_value(value) {
-                if let Some(predicate_index) = self.predicate_types[index]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::Equal)
-                {
+                if self.values[index].does_track_predicate_type(PredicateType::Equal) {
                     self.predicate_has_been_falsified(
                         index,
-                        predicate_index,
+                        PredicateType::Equal,
                         predicate_id_assignments,
                     )
                 }
 
-                if let Some(predicate_index) = self.predicate_types[index]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::NotEqual)
-                {
+                if self.values[index].does_track_predicate_type(PredicateType::NotEqual) {
                     self.predicate_has_been_satisfied(
                         index,
-                        predicate_index,
+                        PredicateType::NotEqual,
                         predicate_id_assignments,
                     )
                 }
@@ -439,31 +560,29 @@ impl PredicateTracker {
             // First update the lower-bound if necessary
             let mut greater_strict =
                 self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while greater_strict != i64::MAX && value > self.values[greater_strict as usize] {
-                for (predicate_index, predicate_type) in self.predicate_types
-                    [greater_strict as usize]
-                    .iter()
-                    .enumerate()
-                {
+            while greater_strict != i64::MAX
+                && value > self.values[greater_strict as usize].get_value()
+            {
+                for predicate_type in self.values[greater_strict as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::UpperBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::LowerBound => {
                             self.predicate_has_been_satisfied(
                                 greater_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
@@ -476,14 +595,13 @@ impl PredicateTracker {
             }
 
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
-            while greater != i64::MAX && value >= self.values[greater as usize] {
-                if let Some(predicate_index) = self.predicate_types[greater as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::LowerBound)
+            while greater != i64::MAX && value >= self.values[greater as usize].get_value() {
+                if self.values[greater as usize]
+                    .does_track_predicate_type(PredicateType::LowerBound)
                 {
                     self.predicate_has_been_satisfied(
                         greater_strict as usize,
-                        predicate_index,
+                        PredicateType::LowerBound,
                         predicate_id_assignments,
                     );
                 }
@@ -494,31 +612,29 @@ impl PredicateTracker {
             // Then the upper-bound if necessary
             let mut smaller_strict =
                 self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller_strict != i64::MAX && value < self.values[smaller_strict as usize] {
-                for (predicate_index, predicate_type) in self.predicate_types
-                    [smaller_strict as usize]
-                    .iter()
-                    .enumerate()
-                {
+            while smaller_strict != i64::MAX
+                && value < self.values[smaller_strict as usize].get_value()
+            {
+                for predicate_type in self.values[smaller_strict as usize].get_predicate_types() {
                     match predicate_type {
                         PredicateType::LowerBound | PredicateType::Equal => {
                             self.predicate_has_been_falsified(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::NotEqual => {
                             self.predicate_has_been_satisfied(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
                         PredicateType::UpperBound => {
                             self.predicate_has_been_satisfied(
                                 smaller_strict as usize,
-                                predicate_index,
+                                predicate_type,
                                 predicate_id_assignments,
                             );
                         }
@@ -531,14 +647,13 @@ impl PredicateTracker {
             }
 
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
-            while smaller != i64::MAX && value <= self.values[smaller as usize] {
-                if let Some(predicate_index) = self.predicate_types[smaller as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::UpperBound)
+            while smaller != i64::MAX && value <= self.values[smaller as usize].get_value() {
+                if self.values[smaller as usize]
+                    .does_track_predicate_type(PredicateType::UpperBound)
                 {
                     self.predicate_has_been_satisfied(
                         smaller as usize,
-                        predicate_index,
+                        PredicateType::UpperBound,
                         predicate_id_assignments,
                     );
                 }
@@ -548,30 +663,125 @@ impl PredicateTracker {
 
             let greater = self.greater[trailed_values.read(self.min_assigned_strict) as usize];
             if greater == self.smaller[trailed_values.read(self.max_assigned_strict) as usize]
-                && self.values[greater as usize] == value
+                && self.values[greater as usize].get_value() == value
             {
-                if let Some(predicate_index) = self.predicate_types[greater as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::NotEqual)
+                if self.values[greater as usize].does_track_predicate_type(PredicateType::NotEqual)
                 {
                     self.predicate_has_been_falsified(
                         greater as usize,
-                        predicate_index,
+                        PredicateType::NotEqual,
                         predicate_id_assignments,
                     );
                 }
 
-                if let Some(predicate_index) = self.predicate_types[greater as usize]
-                    .iter()
-                    .position(|predicate_type| *predicate_type == PredicateType::Equal)
-                {
+                if self.values[greater as usize].does_track_predicate_type(PredicateType::Equal) {
                     self.predicate_has_been_satisfied(
                         greater as usize,
-                        predicate_index,
+                        PredicateType::Equal,
                         predicate_id_assignments,
                     );
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValue;
+    use crate::predicates::PredicateType;
+
+    #[test]
+    fn pack_negative_value() {
+        let x = -255;
+
+        let mut value = TrackedValue::new(x);
+
+        assert_eq!(value.get_value(), x);
+        assert_eq!(value.get_predicate_types().collect::<Vec<_>>(), vec![]);
+
+        value.track_predicate_type(PredicateType::Equal);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![PredicateType::Equal]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::LowerBound);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![PredicateType::LowerBound, PredicateType::Equal]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::NotEqual);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![
+                PredicateType::LowerBound,
+                PredicateType::NotEqual,
+                PredicateType::Equal
+            ]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::UpperBound);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![
+                PredicateType::LowerBound,
+                PredicateType::UpperBound,
+                PredicateType::NotEqual,
+                PredicateType::Equal
+            ]
+        );
+        assert_eq!(value.get_value(), x);
+    }
+
+    #[test]
+    fn pack_positive_value() {
+        let x = 255;
+
+        let mut value = TrackedValue::new(x);
+
+        assert_eq!(value.get_value(), x);
+        assert_eq!(value.get_predicate_types().collect::<Vec<_>>(), vec![]);
+
+        value.track_predicate_type(PredicateType::Equal);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![PredicateType::Equal]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::LowerBound);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![PredicateType::LowerBound, PredicateType::Equal]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::NotEqual);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![
+                PredicateType::LowerBound,
+                PredicateType::NotEqual,
+                PredicateType::Equal
+            ]
+        );
+        assert_eq!(value.get_value(), x);
+
+        value.track_predicate_type(PredicateType::UpperBound);
+        assert_eq!(
+            value.get_predicate_types().collect::<Vec<_>>(),
+            vec![
+                PredicateType::LowerBound,
+                PredicateType::UpperBound,
+                PredicateType::NotEqual,
+                PredicateType::Equal
+            ]
+        );
+        assert_eq!(value.get_value(), x);
     }
 }
