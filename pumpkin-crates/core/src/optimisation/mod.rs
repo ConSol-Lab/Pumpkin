@@ -4,6 +4,7 @@ use solution_callback::SolutionCallback;
 
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::results::OptimisationResult;
 use crate::termination::TerminationCondition;
 
@@ -11,11 +12,13 @@ pub mod linear_sat_unsat;
 pub mod linear_unsat_sat;
 pub mod solution_callback;
 
-pub trait OptimisationProcedure<B: Brancher, Callback: SolutionCallback<B>> {
+pub trait OptimisationProcedure<B: Brancher, R: ConflictResolver, Callback: SolutionCallback<B, R>>
+{
     fn optimise(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
+        resolver: &mut R,
         solver: &mut Solver,
     ) -> OptimisationResult<Callback::Stop>;
 }

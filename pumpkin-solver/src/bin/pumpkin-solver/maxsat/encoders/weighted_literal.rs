@@ -1,4 +1,4 @@
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::variables::Literal;
 
 #[derive(Copy, Clone, Debug)]
 /// A struct containing a literal, weight and (optionally) the bound which the literal represents

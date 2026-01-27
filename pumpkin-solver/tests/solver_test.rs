@@ -2,12 +2,13 @@
 
 use std::path::PathBuf;
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
 
 #[test]
 fn proof_with_reified_literals() {
@@ -37,8 +38,10 @@ fn proof_with_reified_literals() {
         .expect_err("unsat");
 
     let mut brancher = solver.default_brancher();
-    let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    let mut resolver = ResolutionResolver::default();
+
+    let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }
 
 #[test]
@@ -74,6 +77,8 @@ fn proof_with_equality_unit_nogood_step() {
         .expect_err("conflict");
 
     let mut brancher = solver.default_brancher();
-    let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    let mut resolver = ResolutionResolver::default();
+
+    let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }

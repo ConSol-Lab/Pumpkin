@@ -5,6 +5,7 @@ use super::OptimisationProcedure;
 use super::solution_callback::SolutionCallback;
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::proof::ConstraintTag;
@@ -39,16 +40,18 @@ impl<Var, Callback> LinearUnsatSat<Var, Callback> {
     }
 }
 
-impl<Var, B, Callback> OptimisationProcedure<B, Callback> for LinearUnsatSat<Var, Callback>
+impl<Var, B, R, Callback> OptimisationProcedure<B, R, Callback> for LinearUnsatSat<Var, Callback>
 where
     Var: IntegerVariable,
     B: Brancher,
-    Callback: SolutionCallback<B>,
+    R: ConflictResolver,
+    Callback: SolutionCallback<B, R>,
 {
     fn optimise(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
+        resolver: &mut R,
         solver: &mut Solver,
     ) -> OptimisationResult<Callback::Stop> {
         let objective = match self.direction {
@@ -57,16 +60,17 @@ where
         };
 
         // First we will solve the satisfaction problem without constraining the objective.
-        let primal_solution: Solution = match solver.satisfy(brancher, termination) {
+        let primal_solution: Solution = match solver.satisfy(brancher, termination, resolver) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_, _) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
+            SatisfactionResult::Unsatisfiable(_, _, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
         };
 
         let callback_result = self.solution_callback.on_solution_callback(
             solver,
             primal_solution.as_reference(),
             brancher,
+            resolver,
         );
 
         if let ControlFlow::Break(stop) = callback_result {
@@ -94,6 +98,7 @@ where
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
                     termination,
+                    resolver,
                     &[predicate![objective <= objective_lower_bound]],
                 );
 
@@ -118,6 +123,7 @@ where
                         solver,
                         primal_solution.as_reference(),
                         brancher,
+                        resolver,
                     );
 
                     solver

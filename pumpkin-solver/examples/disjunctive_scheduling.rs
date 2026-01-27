@@ -9,12 +9,13 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::variables::TransformableVariable;
 
 fn main() {
     let mut args = std::env::args();
@@ -88,13 +89,14 @@ fn main() {
     }
 
     let mut brancher = solver.default_brancher();
+    let mut resolver = ResolutionResolver::default();
     if matches!(
-        solver.satisfy(&mut brancher, &mut Indefinite),
-        SatisfactionResult::Unsatisfiable(_, _),
+        solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),
+        SatisfactionResult::Unsatisfiable(_, _, _),
     ) {
         panic!("Infeasibility Detected")
     }
-    match solver.satisfy(&mut brancher, &mut Indefinite) {
+    match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.solution();
 
@@ -121,7 +123,7 @@ fn main() {
                     .join(" - ")
             );
         }
-        SatisfactionResult::Unsatisfiable(_, _) => panic!("Infeasibility Detected"),
-        SatisfactionResult::Unknown(_, _) => println!("Timeout."),
+        SatisfactionResult::Unsatisfiable(_, _, _) => panic!("Infeasibility Detected"),
+        SatisfactionResult::Unknown(_, _, _) => println!("Timeout."),
     };
 }

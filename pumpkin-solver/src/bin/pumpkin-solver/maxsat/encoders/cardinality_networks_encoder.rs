@@ -1,10 +1,10 @@
 use std::time::Instant;
 
 use pumpkin_solver::Solver;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::pumpkin_assert_eq_simple;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::pumpkin_assert_eq_simple;
+use pumpkin_solver::core::pumpkin_assert_simple;
+use pumpkin_solver::core::variables::Literal;
 
 use super::PseudoBooleanConstraintEncoderInterface;
 use super::WeightedLiteral;

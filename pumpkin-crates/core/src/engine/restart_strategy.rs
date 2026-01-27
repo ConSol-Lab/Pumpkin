@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
-use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::moving_averages::WindowedMovingAverage;
 use crate::basic_types::sequence_generators::ConstantSequence;
 use crate::basic_types::sequence_generators::GeometricSequence;
 use crate::basic_types::sequence_generators::LubySequence;
 use crate::basic_types::sequence_generators::SequenceGenerator;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::pumpkin_assert_simple;
+use crate::statistics::moving_averages::CumulativeMovingAverage;
+use crate::statistics::moving_averages::MovingAverage;
+use crate::statistics::moving_averages::WindowedMovingAverage;
 
 /// The options which are used by the solver to determine when a restart should occur.
 ///

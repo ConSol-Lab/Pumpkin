@@ -7,7 +7,7 @@ use num::traits::NumAssign;
 use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
-pub(crate) struct CumulativeMovingAverage<Term> {
+pub struct CumulativeMovingAverage<Term> {
     sum: Term,
     num_terms: u64,
 }
@@ -46,7 +46,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::CumulativeMovingAverage;
-    use crate::basic_types::moving_averages::MovingAverage;
+    use crate::statistics::moving_averages::MovingAverage;
 
     #[test]
     fn test_constant_value() {

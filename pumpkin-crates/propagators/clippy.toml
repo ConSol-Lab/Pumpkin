@@ -1,6 +1,6 @@
 disallowed-types = [
-    { path = "std::collections::HashSet", reason = "use pumpkin_solver::containers::HashSet" },
-    { path = "std::collections::HashMap", reason = "use pumpkin_solver::containers::HashMap" },
+    { path = "std::collections::HashSet", reason = "use pumpkin_solver::core::containers::HashSet" },
+    { path = "std::collections::HashMap", reason = "use pumpkin_solver::core::containers::HashMap" },
     { path = "rand::RngCore", reason = "use pumpkin_solver::basic_types::Random" },
     { path = "rand::Rng", reason = "use pumpkin_solver::basic_types::Random" },
     { path = "rand::SeedableRng", reason = "use pumpkin_solver::basic_types::Random" },

@@ -1,21 +1,28 @@
 use std::fmt::Debug;
 
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use dyn_clone::DynClone;
+use dyn_clone::clone_trait_object;
+
+use crate::conflict_resolving::ConflictAnalysisContext;
+#[cfg(doc)]
+use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::engine::reason::ReasonStore;
+use crate::statistics::StatisticLogger;
+
+clone_trait_object!(ConflictResolver);
 
 /// A [`ConflictResolver`] is responsible for restoring the state of the solver so that search can
 /// continue after a conflict is encountered.
 ///
 /// See [`ConflictResolver::resolve_conflict`] for more information.
-pub(crate) trait ConflictResolver: Debug {
+pub trait ConflictResolver: Debug + DynClone {
     /// Resolve a conflicting state in the solver so that search can proceed.
     ///
     /// The state provided will be inconsistent. The last entry on the trail is the last
     /// _successful_ propagation, and the conflict information contains either an explicit conflict
     /// nogood or the predicate and reason that triggered a domain to become empty. The reason of
-    /// any propagation can be queried using [`ReasonStore::get_or_compute`]. An instance of
-    /// [`ReasonStore`] is provided in the context.
+    /// any propagation can be queried using [`ConflictAnalysisContext::get_propagation_reason`].
     ///
     /// Additionally, it is guaranteed that the conflict is not at the root-level. Such a conflict
     /// means that nothing could restore the solver, so resolving a root-level conflict is
@@ -34,4 +41,9 @@ pub(crate) trait ConflictResolver: Debug {
     /// Typically, implementations of this function will make an assignment that will prevent
     /// the solver from entering the same subtree again.
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext);
+
+    /// Logs statistics of the conflict resolver using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }

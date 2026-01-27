@@ -1,15 +1,15 @@
 use std::rc::Rc;
 
 use flatzinc::AnnExpr;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_solver::branching::branchers::warm_start::WarmStart;
-use pumpkin_solver::branching::value_selection::InDomainMax;
-use pumpkin_solver::branching::value_selection::InDomainMin;
-use pumpkin_solver::branching::variable_selection::InputOrder;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::branching::Brancher;
+use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::core::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_solver::core::branching::branchers::warm_start::WarmStart;
+use pumpkin_solver::core::branching::value_selection::InDomainMax;
+use pumpkin_solver::core::branching::value_selection::InDomainMin;
+use pumpkin_solver::core::branching::variable_selection::InputOrder;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;

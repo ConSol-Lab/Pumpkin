@@ -52,6 +52,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_core::predicate;
     /// # use pumpkin_core::constraints;
     /// # use pumpkin_core::constraints::Constraint;
+    /// # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
     ///
@@ -71,6 +72,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// // And we create a search strategy (in this case, simply the default)
     /// let mut brancher = solver.default_brancher();
     ///
+    /// let mut resolver = ResolutionResolver::default();
+    ///
     /// // Then we solve to satisfaction
     /// let assumptions = vec![
     ///     predicate!(x == 1),
@@ -78,7 +81,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     predicate!(y != 0),
     /// ];
     /// let result =
-    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &mut resolver, &assumptions);
     ///
     /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
     ///     mut unsatisfiable,
@@ -88,7 +91,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///         let core = unsatisfiable.extract_core();
     ///
     ///         // In this case, the core should be equal to all assumption predicates
-    ///         assert_eq!(core, vec![predicate!(y == 1), predicate!(x == 1)].into());
+    ///         assert_eq!(core, vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)].into());
     ///     }
     /// }
     ///  ```

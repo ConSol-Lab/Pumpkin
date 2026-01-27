@@ -8,6 +8,7 @@ use super::SatisfactionResult::Unsatisfiable;
 use super::SolutionReference;
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::results::ProblemSolution;
@@ -16,26 +17,37 @@ use crate::termination::TerminationCondition;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]
-pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
+pub struct SolutionIterator<'solver, 'brancher, 'termination, 'resolver, B, T, R> {
     solver: &'solver mut Solver,
     brancher: &'brancher mut B,
     termination: &'termination mut T,
+    resolver: &'resolver mut R,
+
     next_blocking_clause: Option<Vec<Predicate>>,
     has_solution: bool,
 }
 
-impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
-    SolutionIterator<'solver, 'brancher, 'termination, B, T>
+impl<
+    'solver,
+    'brancher,
+    'termination,
+    'resolver,
+    B: Brancher,
+    T: TerminationCondition,
+    R: ConflictResolver,
+> SolutionIterator<'solver, 'brancher, 'termination, 'resolver, B, T, R>
 {
     pub(crate) fn new(
         solver: &'solver mut Solver,
         brancher: &'brancher mut B,
         termination: &'termination mut T,
+        resolver: &'resolver mut R,
     ) -> Self {
         SolutionIterator {
             solver,
             brancher,
             termination,
+            resolver,
             next_blocking_clause: None,
             has_solution: false,
         }
@@ -43,7 +55,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
     /// Find a new solution by blocking the previous solution from being found. Also calls the
     /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
-    pub fn next_solution(&mut self) -> IteratedSolution<'_, B> {
+    pub fn next_solution(&mut self) -> IteratedSolution<'_, B, R> {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             // We do not care much about this tag, as the proof is nonsensical for
             // solution enumeration anyways.
@@ -57,26 +69,29 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             }
         }
 
-        let result = match self.solver.satisfy(self.brancher, self.termination) {
+        let result = match self
+            .solver
+            .satisfy(self.brancher, self.termination, self.resolver)
+        {
             Satisfiable(satisfiable) => {
                 let solution: Solution = satisfiable.solution().into();
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(solution.as_reference()));
                 IterationResult::Solution(solution)
             }
-            Unsatisfiable(_, _) => {
+            Unsatisfiable(_, _, _) => {
                 if self.has_solution {
                     IterationResult::Finished
                 } else {
                     IterationResult::Unsatisfiable
                 }
             }
-            Unknown(_, _) => IterationResult::Unknown,
+            Unknown(_, _, _) => IterationResult::Unknown,
         };
 
         match result {
             IterationResult::Solution(solution) => {
-                IteratedSolution::Solution(solution, self.solver, self.brancher)
+                IteratedSolution::Solution(solution, self.solver, self.brancher, self.resolver)
             }
             IterationResult::Finished => IteratedSolution::Finished,
             IterationResult::Unsatisfiable => IteratedSolution::Unsatisfiable,
@@ -113,9 +128,9 @@ fn get_blocking_clause(solution: SolutionReference) -> Vec<Predicate> {
     reason = "these will not be stored in bulk, so this is not an issue"
 )]
 #[derive(Debug)]
-pub enum IteratedSolution<'a, B> {
+pub enum IteratedSolution<'a, B, R> {
     /// A new solution was identified.
-    Solution(Solution, &'a Solver, &'a B),
+    Solution(Solution, &'a Solver, &'a B, &'a R),
 
     /// No more solutions exist.
     Finished,

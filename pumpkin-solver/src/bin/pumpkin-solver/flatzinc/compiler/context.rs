@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use log::warn;
 use pumpkin_solver::Solver;
-use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::containers::HashSet;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::containers::HashMap;
+use pumpkin_solver::core::containers::HashSet;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::Literal;
 
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;

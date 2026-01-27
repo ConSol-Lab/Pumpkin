@@ -20,9 +20,9 @@ use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use pumpkin_solver::Solver;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::variables::Literal;
 use thiserror::Error;
 
 use crate::maxsat::Function;
