@@ -669,9 +669,290 @@ impl PredicateTracker {
 }
 
 #[cfg(test)]
+#[allow(deprecated, reason = "Will be replaced by the state API")]
 mod tests {
+    use crate::engine::Assignments;
+    use crate::engine::TrailedValues;
+    use crate::engine::notifications::PredicateIdAssignments;
+    use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
     use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValue;
+    use crate::predicate;
+    use crate::predicates::PredicateIdGenerator;
     use crate::predicates::PredicateType;
+
+    #[test]
+    fn test_update_lower_bound() {
+        let mut assignments = Assignments::default();
+        let mut id_generator = PredicateIdGenerator::default();
+        let mut trailed_values = TrailedValues::default();
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+
+        let x = assignments.grow(0, 10);
+
+        let mut tracker = PredicateTracker::new();
+
+        tracker.initialise(x, 0, 10, &mut trailed_values);
+
+        let predicate = predicate!(x >= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(!added);
+
+        let predicate = predicate!(x <= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x != 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x == 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        tracker.on_update(
+            predicate!(x >= 5),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x >= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x != 5))));
+
+        tracker.on_update(
+            predicate!(x >= 6),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x >= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x <= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x == 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x != 5)),
+            &assignments,
+            &mut id_generator
+        ));
+    }
+
+    #[test]
+    fn test_update_upper_bound() {
+        let mut assignments = Assignments::default();
+        let mut id_generator = PredicateIdGenerator::default();
+        let mut trailed_values = TrailedValues::default();
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+
+        let x = assignments.grow(0, 10);
+
+        let mut tracker = PredicateTracker::new();
+
+        tracker.initialise(x, 0, 10, &mut trailed_values);
+
+        let predicate = predicate!(x >= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(!added);
+
+        let predicate = predicate!(x <= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x != 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x == 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        tracker.on_update(
+            predicate!(x <= 5),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x <= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x == 5))));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x != 5))));
+
+        tracker.on_update(
+            predicate!(x <= 4),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x <= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x >= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x == 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x != 5)),
+            &assignments,
+            &mut id_generator
+        ));
+    }
+
+    #[test]
+    fn test_update_not_equals() {
+        let mut assignments = Assignments::default();
+        let mut id_generator = PredicateIdGenerator::default();
+        let mut trailed_values = TrailedValues::default();
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+
+        let x = assignments.grow(0, 10);
+
+        let mut tracker = PredicateTracker::new();
+
+        tracker.initialise(x, 0, 10, &mut trailed_values);
+
+        let predicate = predicate!(x >= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(!added);
+
+        let predicate = predicate!(x <= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x != 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x == 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        tracker.on_update(
+            predicate!(x != 5),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x != 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x == 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x >= 5))));
+        assert!(predicate_id_assignments.is_unknown(id_generator.get_id(predicate!(x <= 5))));
+    }
+
+    #[test]
+    fn test_update_equals() {
+        let mut assignments = Assignments::default();
+        let mut id_generator = PredicateIdGenerator::default();
+        let mut trailed_values = TrailedValues::default();
+        let mut predicate_id_assignments = PredicateIdAssignments::default();
+
+        let x = assignments.grow(0, 10);
+
+        let mut tracker = PredicateTracker::new();
+
+        tracker.initialise(x, 0, 10, &mut trailed_values);
+
+        let predicate = predicate!(x >= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(!added);
+
+        let predicate = predicate!(x <= 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x != 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x == 5);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x == 6);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        let predicate = predicate!(x != 6);
+        let added = tracker.track(predicate, id_generator.get_id(predicate));
+        assert!(added);
+
+        tracker.on_update(
+            predicate!(x == 6),
+            &mut trailed_values,
+            &mut predicate_id_assignments,
+        );
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x == 6)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x != 6)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x != 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x == 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_satisfied(
+            id_generator.get_id(predicate!(x >= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+        assert!(predicate_id_assignments.is_falsified(
+            id_generator.get_id(predicate!(x <= 5)),
+            &assignments,
+            &mut id_generator
+        ));
+    }
 
     #[test]
     fn pack_negative_value() {

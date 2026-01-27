@@ -179,7 +179,8 @@ impl PredicateIdAssignments {
 
     /// Returns whether the status of the [`Predicate`] is unknown.
     pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
-        self.predicate_values[predicate_id].is_unknown()
+        predicate_id.index() >= self.predicate_values.len()
+            || self.predicate_values[predicate_id].is_unknown()
     }
 
     pub(crate) fn debug_empty_clone(&self) -> Self {
