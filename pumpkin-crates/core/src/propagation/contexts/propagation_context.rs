@@ -6,20 +6,27 @@ use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::PredicateNotifier;
+use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
+use crate::propagation::LocalId;
 #[cfg(doc)]
 use crate::propagation::Propagator;
+#[cfg(doc)]
+use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
+use crate::variables::IntegerVariable;
 
 /// Provided to the propagator when it is notified of a domain event.
 ///
@@ -183,6 +190,24 @@ impl<'a> PropagationContext<'a> {
             self.trailed_values,
             self.assignments,
         )
+    }
+
+    /// Subscribes the propagator to the given [`DomainEvents`].
+    ///
+    /// See [`PropagatorConstructorContext::register`] for more information.
+    pub fn register_domain_event(
+        &mut self,
+        var: impl IntegerVariable,
+        domain_events: DomainEvents,
+        local_id: LocalId,
+    ) {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        var.watch_all(&mut watchers, domain_events.events());
     }
 
     /// Get the [`Predicate`] for a given [`PredicateId`].

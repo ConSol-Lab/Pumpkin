@@ -147,6 +147,8 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
+    ///
+    /// Duplicate registrations are ignored.
     pub fn register(
         &mut self,
         var: impl IntegerVariable,

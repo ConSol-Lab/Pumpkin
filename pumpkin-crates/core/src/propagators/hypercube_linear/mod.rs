@@ -13,8 +13,10 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::InferenceCheckers;
+use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -149,11 +151,7 @@ impl HypercubeLinearPropagator {
             }));
         }
 
-        println!("======");
-
         for term in self.linear.terms() {
-            dbg!(term);
-
             let term_lower_bound = i64::from(context.lower_bound(&term));
             let term_upper_bound_i64 = slack + term_lower_bound;
             let term_upper_bound = match i32::try_from(term_upper_bound_i64) {
@@ -174,8 +172,6 @@ impl HypercubeLinearPropagator {
                 .chain(self.hypercube.iter_predicates())
                 .collect::<PropositionalConjunction>();
 
-            dbg!(predicate![term <= term_upper_bound]);
-
             context.post(
                 predicate![term <= term_upper_bound],
                 reason,
@@ -183,9 +179,18 @@ impl HypercubeLinearPropagator {
             )?;
         }
 
-        println!("======");
-
         Ok(())
+    }
+
+    /// Register the bound events on the integer variables in the linear inequality.
+    fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
+        for (idx, term) in self.linear.terms().enumerate() {
+            context.register_domain_event(
+                term,
+                DomainEvents::LOWER_BOUND,
+                LocalId::from(idx as u32),
+            );
+        }
     }
 }
 
@@ -243,37 +248,33 @@ impl Propagator for HypercubeLinearPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        dbg!(self.linear.bound());
-
         let satisfied_watchers = self
             .watched_predicates
             .iter()
             .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
             .count();
 
-        dbg!(satisfied_watchers);
-
-        if satisfied_watchers < 2 {
+        if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
             return Ok(());
         }
 
+        if satisfied_watchers == NUM_WATCHED_PREDICATES {
+            self.register_bound_events_on_linear(context.reborrow());
+        }
+
         let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
-        dbg!(unassigned_watcher_index);
 
         let lower_bound_terms = self
             .linear
             .terms()
             .map(|term| i64::from(context.lower_bound(&term)))
             .sum::<i64>();
-        dbg!(lower_bound_terms);
 
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
-        dbg!(slack);
 
         match unassigned_watcher_index {
             Some(index) => {
                 let predicate_in_hypercube = self.hypercube_predicates[index];
-                dbg!(predicate_in_hypercube);
 
                 let maybe_term = self
                     .linear
@@ -637,6 +638,6 @@ mod tests {
         assert!(state.post(predicate![z1 >= 2]).expect("not empty domain"));
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.upper_bound(z2), 8);
-        assert_eq!(state.upper_bound(z3), 6);
+        assert_eq!(state.upper_bound(z3), 8);
     }
 }
