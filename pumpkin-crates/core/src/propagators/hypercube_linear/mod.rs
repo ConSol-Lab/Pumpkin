@@ -18,11 +18,13 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
+use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_advanced;
 use crate::results::PropagationStatusCP;
 use crate::state::Conflict;
 use crate::state::PropagatorConflict;
-use crate::variables::TransformableVariable;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
@@ -63,7 +65,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
             hypercube_predicates,
             watched_predicates,
-            constraint_tag,
+            inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
         }
     }
 }
@@ -83,7 +85,7 @@ pub struct HypercubeLinearPropagator {
     /// `hypercube_predicates`.
     watched_predicates: [PredicateId; NUM_WATCHED_PREDICATES],
 
-    constraint_tag: ConstraintTag,
+    inference_code: InferenceCode,
 }
 
 impl HypercubeLinearPropagator {
@@ -95,6 +97,15 @@ impl HypercubeLinearPropagator {
             .iter()
             .position(|&pid| pid == predicate_id)
             .expect("can only get the watcher index for watched predicates")
+    }
+
+    /// Get the watcher index for the predicate that is unassigned.
+    ///
+    /// Assumes 0 or 1 watched predicates are/is unassigned.
+    fn unassigned_watcher_index(&self, mut context: PropagationContext<'_>) -> Option<usize> {
+        self.watched_predicates
+            .iter()
+            .position(|&pid| !context.is_predicate_id_satisfied(pid))
     }
 }
 
@@ -110,13 +121,17 @@ impl Propagator for HypercubeLinearPropagator {
     ) -> EnqueueDecision {
         let watcher_index = self.watcher_index_for(predicate_id);
 
+        pumpkin_assert_advanced!(watcher_index < NUM_WATCHED_PREDICATES);
+
         pumpkin_assert_eq_advanced!(
             Some(true),
             context.evaluate_predicate(self.hypercube_predicates[watcher_index])
         );
 
-        let next_predicate_to_watch = self.hypercube_predicates[NUM_WATCHED_PREDICATES..]
+        let next_predicate_to_watch = self
+            .hypercube_predicates
             .iter()
+            .skip(NUM_WATCHED_PREDICATES)
             .position(|&predicate| context.evaluate_predicate(predicate) != Some(true))
             .map(|index| index + NUM_WATCHED_PREDICATES);
 
@@ -147,15 +162,18 @@ impl Propagator for HypercubeLinearPropagator {
         }
     }
 
-    fn propagate(&mut self, context: PropagationContext) -> PropagationStatusCP {
-        let is_hypercube_satisfied = self
-            .hypercube_predicates
+    fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        let satisfied_watchers = self
+            .watched_predicates
             .iter()
-            .all(|&predicate| context.evaluate_predicate(predicate) == Some(true));
+            .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
+            .count();
 
-        if !is_hypercube_satisfied {
+        if satisfied_watchers < 2 {
             return Ok(());
         }
+
+        let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
 
         let lower_bound_terms = self
             .linear
@@ -163,21 +181,83 @@ impl Propagator for HypercubeLinearPropagator {
             .map(|term| i64::from(context.lower_bound(&term)))
             .sum::<i64>();
 
-        if lower_bound_terms > i64::from(self.linear.bound()) {
-            let conjunction = self
-                .linear
-                .terms()
-                .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube.iter_predicates())
-                .collect();
+        let slack = i64::from(self.linear.bound()) - lower_bound_terms;
 
-            Err(Conflict::Propagator(PropagatorConflict {
-                conjunction,
-                inference_code: InferenceCode::new(self.constraint_tag, HypercubeLinear),
-            }))
-        } else {
-            Ok(())
+        match unassigned_watcher_index {
+            Some(index) => {
+                let predicate_in_hypercube = self.hypercube_predicates[index];
+
+                let maybe_term = self
+                    .linear
+                    .term_for_domain(self.hypercube_predicates[index].get_domain());
+
+                match maybe_term {
+                    Some(term_to_propagate) => {
+                        if !could_propagate_weaker_predicate(
+                            predicate_in_hypercube,
+                            term_to_propagate,
+                        ) {
+                            return Ok(());
+                        }
+
+                        let bound_i64 = slack + i64::from(context.lower_bound(&term_to_propagate));
+                        let bound = match i32::try_from(bound_i64) {
+                            Ok(bound) => bound,
+                            Err(_) if bound_i64.is_negative() => todo!(
+                                "wanting to tighten the upper bound to a value smaller than i32::MIN"
+                            ),
+                            // If we want to set the upper bound to a value larger than i32::MAX,
+                            // it can never tighten the existing bound of `term_to_propagate`.
+                            Err(_) => return Ok(()),
+                        };
+
+                        let conjunction: PropositionalConjunction = self
+                            .linear
+                            .terms()
+                            .map(|term| predicate![term >= context.lower_bound(&term)])
+                            .chain(
+                                self.hypercube
+                                    .iter_predicates()
+                                    .filter(|&predicate| predicate != predicate_in_hypercube),
+                            )
+                            .collect();
+
+                        context.post(
+                            predicate![term_to_propagate <= bound],
+                            conjunction,
+                            &self.inference_code,
+                        )?;
+                    }
+                    None => todo!(),
+                }
+            }
+
+            None => {
+                // All watchers are true. Propagate the linear inequality.
+
+                let lower_bound_terms = self
+                    .linear
+                    .terms()
+                    .map(|term| i64::from(context.lower_bound(&term)))
+                    .sum::<i64>();
+
+                if lower_bound_terms > i64::from(self.linear.bound()) {
+                    let conjunction = self
+                        .linear
+                        .terms()
+                        .map(|term| predicate![term >= context.lower_bound(&term)])
+                        .chain(self.hypercube.iter_predicates())
+                        .collect();
+
+                    return Err(Conflict::Propagator(PropagatorConflict {
+                        conjunction,
+                        inference_code: self.inference_code.clone(),
+                    }));
+                }
+            }
         }
+
+        Ok(())
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -214,8 +294,10 @@ impl Propagator for HypercubeLinearPropagator {
         if unsatisfied_predicates_in_hypercubes.len() == 1 {
             let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
 
-            if let Some(weight) = self.linear.weight_of(unassigned_predicate.get_domain()) {
-                let term = unassigned_predicate.get_domain().scaled(weight.get());
+            if let Some(term) = self
+                .linear
+                .term_for_domain(unassigned_predicate.get_domain())
+            {
                 let term_lower_bound = context.lower_bound(&term);
                 let new_upper_bound = match i32::try_from(slack + i64::from(term_lower_bound)) {
                     Ok(bound) => bound,
@@ -233,7 +315,7 @@ impl Propagator for HypercubeLinearPropagator {
                 context.post(
                     predicate![term <= new_upper_bound],
                     reason,
-                    &InferenceCode::new(self.constraint_tag, HypercubeLinear),
+                    &self.inference_code,
                 )?;
             } else {
                 todo!()
@@ -248,12 +330,18 @@ impl Propagator for HypercubeLinearPropagator {
 
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction,
-                inference_code: InferenceCode::new(self.constraint_tag, HypercubeLinear),
+                inference_code: self.inference_code.clone(),
             }));
         }
 
         Ok(())
     }
+}
+
+/// Returns true if the given term could propagate a weaker predicate than the given one.
+fn could_propagate_weaker_predicate(predicate: Predicate, term: AffineView<DomainId>) -> bool {
+    (term.scale.is_positive() && predicate.is_lower_bound_predicate())
+        || (term.scale.is_negative() && predicate.is_upper_bound_predicate())
 }
 
 #[cfg(test)]

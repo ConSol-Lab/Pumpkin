@@ -234,6 +234,17 @@ impl<'a> PropagationContext<'a> {
     pub(crate) fn num_predicate_ids(&self) -> usize {
         self.notification_engine.num_predicate_ids()
     }
+
+    pub fn reborrow(&mut self) -> PropagationContext<'_> {
+        PropagationContext {
+            trailed_values: self.trailed_values,
+            assignments: self.assignments,
+            reason_store: self.reason_store,
+            propagator_id: self.propagator_id,
+            notification_engine: self.notification_engine,
+            reification_literal: self.reification_literal,
+        }
+    }
 }
 
 impl PropagationContext<'_> {
