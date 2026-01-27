@@ -72,6 +72,7 @@ pub(crate) struct PredicateTracker {
 #[derive(Clone, Copy)]
 struct TrackedValue {
     value: i32,
+    flags: u8,
 }
 
 impl Debug for TrackedValue {
@@ -86,69 +87,65 @@ impl Debug for TrackedValue {
     }
 }
 
-/// The number of extra bits stored
-const EXTRA_BITS: usize = 4;
-
 /// The offset corresponding to a lower-bound predicate
 const LOWER_BOUND_SHIFT: usize = 0;
+const LOWER_BOUND_MASK: u8 = 1 << LOWER_BOUND_SHIFT;
+
 /// The offset corresponding to an upper-bound predicate
 const UPPER_BOUND_SHIFT: usize = 1;
+const UPPER_BOUND_MASK: u8 = 1 << UPPER_BOUND_SHIFT;
+
 /// The offset corresponding to a disequality predicate
 const NOT_EQUAL_SHIFT: usize = 2;
+const NOT_EQUAL_MASK: u8 = 1 << NOT_EQUAL_SHIFT;
+
 /// The offset corresponding to an equality predicate
 const EQUAL_SHIFT: usize = 3;
+const EQUAL_MASK: u8 = 1 << EQUAL_SHIFT;
 
 impl TrackedValue {
-    /// Creates a new [`TrackedValue`]; if more than 27 bits are required to represent the number,
-    /// then this method will panic.
+    /// Creates a new [`TrackedValue`].
     fn new(value: i32) -> Self {
-        pumpkin_assert_simple!(
-            (-(1 << (31 - EXTRA_BITS))..(1 << (31 - EXTRA_BITS))).contains(&value),
-            "Value should fit into the {} bits but value was {value} ({value:b})",
-            31 - EXTRA_BITS
-        );
-        Self {
-            value: value << EXTRA_BITS, // We make space for the extra bits
+        Self { value, flags: 0 }
+    }
+
+    fn get_mask(&self, predicate_type: PredicateType) -> u8 {
+        match predicate_type {
+            PredicateType::LowerBound => LOWER_BOUND_MASK,
+            PredicateType::UpperBound => UPPER_BOUND_MASK,
+            PredicateType::NotEqual => NOT_EQUAL_MASK,
+            PredicateType::Equal => EQUAL_MASK,
         }
     }
 
     /// Store the provided [`PredicateType`] in the [`TrackedValue`].
     fn track_predicate_type(&mut self, predicate_type: PredicateType) {
-        self.value = match predicate_type {
-            PredicateType::LowerBound => self.value | (1 << LOWER_BOUND_SHIFT),
-            PredicateType::UpperBound => self.value | (1 << UPPER_BOUND_SHIFT),
-            PredicateType::NotEqual => self.value | (1 << NOT_EQUAL_SHIFT),
-            PredicateType::Equal => self.value | (1 << EQUAL_SHIFT),
-        };
+        self.flags |= self.get_mask(predicate_type);
     }
 
     /// Returns whether the provided [`PredicateType`] is tracked by this [`TrackedValue`].
     fn does_track_predicate_type(&self, predicate_type: PredicateType) -> bool {
-        (match predicate_type {
-            PredicateType::LowerBound => self.value & (1 << LOWER_BOUND_SHIFT),
-            PredicateType::UpperBound => self.value & (1 << UPPER_BOUND_SHIFT),
-            PredicateType::NotEqual => self.value & (1 << NOT_EQUAL_SHIFT),
-            PredicateType::Equal => self.value & (1 << EQUAL_SHIFT),
-        }) > 0
+        (self.flags & self.get_mask(predicate_type)) > 0
     }
 
     /// Return the [`PredicateType`]s which are stored in this [`TrackedValue`].
+    ///
+    /// These are always returned in a pre-defined order, not the order in which they were
+    /// inserted.
     fn get_predicate_types(&self) -> impl Iterator<Item = PredicateType> {
-        (0..EXTRA_BITS).filter_map(|shift| {
-            let present = self.value & (1 << shift) > 0;
-            present.then(|| match shift {
-                LOWER_BOUND_SHIFT => PredicateType::LowerBound,
-                UPPER_BOUND_SHIFT => PredicateType::UpperBound,
-                NOT_EQUAL_SHIFT => PredicateType::NotEqual,
-                EQUAL_SHIFT => PredicateType::Equal,
-                _ => unreachable!(),
-            })
-        })
+        [
+            PredicateType::LowerBound,
+            PredicateType::UpperBound,
+            PredicateType::NotEqual,
+            PredicateType::Equal,
+        ]
+        .into_iter()
+        .filter(|&predicate_type| self.does_track_predicate_type(predicate_type))
     }
 
     /// Returns the value which is stored in this [`TrackedValue`].
     fn get_value(&self) -> i32 {
-        self.value >> EXTRA_BITS
+        self.value
     }
 }
 
