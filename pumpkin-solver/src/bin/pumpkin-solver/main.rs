@@ -10,6 +10,7 @@ use std::time::Duration;
 use clap::Parser;
 use clap::ValueEnum;
 use file_format::FileFormat;
+use implementation::resolvers::AllDecisionResolver;
 use implementation::resolvers::NoLearningResolver;
 use implementation::resolvers::ResolutionResolver;
 use log::LevelFilter;
@@ -528,6 +529,23 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(should_minimise_nogoods),
+            )?,
+            ConflictResolverType::AllDecision => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    linear_conflict_only: args.linear_conflict_only,
+                    circuit_conflict_only: args.circuit_conflict_only,
+                    cumulative_conflict_only: args.cumulative_conflict_only,
+                    all_different_conflict_only: args.all_different_conflict_only,
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                AllDecisionResolver::new(should_minimise_nogoods),
             )?,
         },
     }

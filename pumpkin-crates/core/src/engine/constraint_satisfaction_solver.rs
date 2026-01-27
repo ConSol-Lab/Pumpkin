@@ -145,6 +145,7 @@ pub enum ConflictResolverType {
     #[default]
     NoLearning,
     UIP,
+    AllDecision,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
