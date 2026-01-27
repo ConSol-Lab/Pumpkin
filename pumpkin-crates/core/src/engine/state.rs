@@ -783,11 +783,15 @@ impl State {
 
         let any_checker_accepts_inference = checkers.iter().any(|checker| {
             // Construct the variable state for the conflict check.
-            let variable_state =
-                VariableState::prepare_for_conflict_check(premises.clone(), consequent)
-                    .unwrap_or_else(|| {
-                        panic!("inconsistent atomics in inference by {inference_code:?}")
-                    });
+            let variable_state = VariableState::prepare_for_conflict_check(
+                premises.clone(),
+                consequent,
+            )
+            .unwrap_or_else(|domain| {
+                panic!(
+                    "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
+                )
+            });
 
             checker.check(variable_state, &premises, consequent.as_ref())
         });

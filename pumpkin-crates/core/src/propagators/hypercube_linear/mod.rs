@@ -1,6 +1,8 @@
+mod checker;
 mod hypercube;
 mod linear;
 
+pub use checker::*;
 pub use hypercube::*;
 pub use linear::*;
 
@@ -12,6 +14,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
+use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -36,6 +39,17 @@ pub struct HypercubeLinearConstructor {
 
 impl PropagatorConstructor for HypercubeLinearConstructor {
     type PropagatorImpl = HypercubeLinearPropagator;
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, HypercubeLinear),
+            Box::new(HypercubeLinearChecker {
+                hypercube: self.hypercube.iter_predicates().collect(),
+                terms: self.linear.terms().collect(),
+                bound: self.linear.bound(),
+            }),
+        );
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         let HypercubeLinearConstructor {
