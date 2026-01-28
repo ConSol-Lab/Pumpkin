@@ -282,6 +282,7 @@ impl Propagator for NogoodPropagator {
                         // this new predicate?
 
                         // Replace the current watcher with the new predicate watcher.
+                        context.unregister_predicate(nogood_predicates[1]);
                         nogood_predicates.swap(1, i);
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
