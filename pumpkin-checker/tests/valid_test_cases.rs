@@ -1,0 +1,25 @@
+#![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+#![allow(deprecated, reason = "the Command::cargo_bin function is fine for us")]
+
+macro_rules! accept_proof {
+    ($name:ident) => {
+        #[test]
+        fn $name() {
+            run_checker_on_proof(stringify!($name));
+        }
+    };
+}
+
+accept_proof!(ghoulomb_3_5_11);
+
+fn run_checker_on_proof(model: &str) {
+    let model_path = format!("{}/tests/proofs/{model}.fzn", env!("CARGO_MANIFEST_DIR"));
+    let proof_path = format!("{}/tests/proofs/{model}.drcp", env!("CARGO_MANIFEST_DIR"));
+
+    let _ = assert_cmd::Command::cargo_bin("pumpkin-checker")
+        .expect("could not find executable")
+        .arg(model_path)
+        .arg(proof_path)
+        .assert()
+        .success();
+}

@@ -19,5 +19,8 @@ thiserror = "2.0.16"
 fnv = "1.0.7"
 derive_more = { version = "2.1.1", features = ["from"] }
 
+[dev-dependencies]
+assert_cmd = "2.1.2"
+
 [lints]
 workspace = true
