@@ -157,6 +157,10 @@ impl IntegerVariable for DomainId {
         watchers.watch_all(*self, events);
     }
 
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        watchers.unwatch_all(*self);
+    }
+
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         watchers.watch_all_backtrack(*self, events);
     }

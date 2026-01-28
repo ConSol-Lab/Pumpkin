@@ -270,6 +270,10 @@ where
         self.inner.watch_all(watchers, events);
     }
 
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        self.inner.unwatch_all(watchers);
+    }
+
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
         let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
         let intersection = events.intersection(bound);

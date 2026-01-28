@@ -8,7 +8,6 @@ use pumpkin_checking::VariableState;
 use crate::basic_types::PropagatorConflict;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -563,9 +562,7 @@ impl State {
         // two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for (idx, propagator) in self.propagators.iter_propagators_mut().enumerate() {
-            let propagator_id = PropagatorId::create_from_index(idx);
-
+        for propagator in self.propagators.iter_propagators_mut() {
             let mut context = NotificationContext::new(
                 &mut self.trailed_values,
                 &self.assignments,
@@ -573,21 +570,6 @@ impl State {
             );
 
             propagator.synchronise(context.reborrow());
-            let mut watch_changes = context.take_watch_changes();
-
-            for predicate_id in watch_changes.start_watching_predicates.drain(..) {
-                self.notification_engine.watch_predicate_id(
-                    predicate_id,
-                    propagator_id,
-                    &mut self.trailed_values,
-                    &self.assignments,
-                );
-            }
-
-            for predicate_id in watch_changes.stop_watching_predicates.drain(..) {
-                self.notification_engine
-                    .unwatch_predicate(predicate_id, propagator_id);
-            }
         }
 
         let _ = self.notification_engine.process_backtrack_events(

@@ -132,6 +132,23 @@ impl NotificationEngine {
         }
     }
 
+    pub(crate) fn unwatch_all(&mut self, domain: DomainId, propagator_var: PropagatorVarId) {
+        let watchers = &mut self.watch_list_domain_events.watchers[domain];
+
+        let event_watchers = [
+            &mut watchers.forward_watcher.lower_bound_watchers,
+            &mut watchers.forward_watcher.upper_bound_watchers,
+            &mut watchers.forward_watcher.assign_watchers,
+            &mut watchers.forward_watcher.removal_watchers,
+        ];
+
+        for event_watcher in event_watchers {
+            if let Some(index) = event_watcher.iter().position(|pv| *pv == propagator_var) {
+                let _ = event_watcher.swap_remove(index);
+            }
+        }
+    }
+
     pub(crate) fn watch_predicate(
         &mut self,
         predicate: Predicate,
@@ -372,10 +389,6 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        let mut extend_watch_list = vec![];
-        let mut unwatch = vec![];
-        let mut unregister_domain_events = vec![];
-
         while let Some(predicate_id) = self.predicate_notifier.pop_satisfied_predicate() {
             if let Some(watch_list) = self.watch_list_predicate_id.get(predicate_id) {
                 let propagators_to_notify = watch_list.iter().copied();
@@ -394,35 +407,8 @@ impl NotificationEngine {
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
                     }
-
-                    let mut watch_changes = context.take_watch_changes();
-
-                    for predicate_id in watch_changes.start_watching_predicates.drain(..) {
-                        extend_watch_list.push((propagator_id, predicate_id));
-                    }
-
-                    for predicate_id in watch_changes.stop_watching_predicates.drain(..) {
-                        unwatch.push((propagator_id, predicate_id));
-                    }
-
-                    for local_id in watch_changes.unregister_domain_events.drain(..) {
-                        unregister_domain_events.push((propagator_id, local_id));
-                    }
                 }
             }
-        }
-
-        for (propagator_id, predicate_id) in extend_watch_list {
-            self.watch_list_predicate_id
-                .accomodate(predicate_id, vec![]);
-            self.watch_list_predicate_id[predicate_id].push(propagator_id);
-
-            self.predicate_notifier
-                .track_predicate(predicate_id, trailed_values, assignments);
-        }
-
-        for (propagator_id, predicate_id) in unwatch {
-            self.unwatch_predicate(predicate_id, propagator_id);
         }
     }
 

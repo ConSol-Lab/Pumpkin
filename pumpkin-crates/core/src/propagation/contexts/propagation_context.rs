@@ -1,5 +1,4 @@
 use crate::basic_types::PredicateId;
-use crate::basic_types::RefOrOwned;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -39,23 +38,6 @@ pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
     pub(crate) predicate_notifier: &'a mut PredicateNotifier,
-
-    predicates_to_watch: RefOrOwned<'a, Vec<PredicateId>>,
-    predicates_to_unwatch: RefOrOwned<'a, Vec<PredicateId>>,
-    unregister_domain_events: RefOrOwned<'a, Vec<LocalId>>,
-}
-
-impl Drop for NotificationContext<'_> {
-    fn drop(&mut self) {
-        assert!(
-            self.predicates_to_watch.is_empty(),
-            "losing predicates that should be watched"
-        );
-        assert!(
-            self.predicates_to_unwatch.is_empty(),
-            "losing predicates that should be unwatched"
-        );
-    }
 }
 
 impl<'a> NotificationContext<'a> {
@@ -68,9 +50,6 @@ impl<'a> NotificationContext<'a> {
             trailed_values,
             assignments,
             predicate_notifier,
-            predicates_to_watch: vec![].into(),
-            predicates_to_unwatch: vec![].into(),
-            unregister_domain_events: vec![].into(),
         }
     }
 
@@ -89,64 +68,12 @@ impl<'a> NotificationContext<'a> {
     pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
     }
-
-    /// Start watching the given predicate.
-    pub fn watch_predicate(&mut self, predicate: Predicate) -> PredicateId {
-        let predicate_id = self.predicate_notifier.predicate_to_id.get_id(predicate);
-        self.predicates_to_watch.push(predicate_id);
-        predicate_id
-    }
-
-    /// Stop watching the given predicate.
-    pub fn unwatch_predicate(&mut self, predicate_id: PredicateId) {
-        self.predicates_to_unwatch.push(predicate_id);
-    }
-
-    /// Unregister for all events
-    pub fn unregister_domain_event(&mut self, local_id: LocalId) {
-        self.unregister_domain_events.push(local_id);
-    }
-
     pub fn reborrow(&mut self) -> NotificationContext<'_> {
         NotificationContext {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
             predicate_notifier: self.predicate_notifier,
-            predicates_to_watch: self.predicates_to_watch.reborrow(),
-            predicates_to_unwatch: self.predicates_to_unwatch.reborrow(),
-            unregister_domain_events: self.unregister_domain_events.reborrow(),
         }
-    }
-
-    pub(crate) fn take_watch_changes(mut self) -> WatchChanges {
-        WatchChanges {
-            start_watching_predicates: std::mem::take(&mut self.predicates_to_watch),
-            stop_watching_predicates: std::mem::take(&mut self.predicates_to_unwatch),
-            unregister_domain_events: std::mem::take(&mut self.unregister_domain_events),
-        }
-    }
-}
-
-pub(crate) struct WatchChanges {
-    pub(crate) start_watching_predicates: Vec<PredicateId>,
-    pub(crate) stop_watching_predicates: Vec<PredicateId>,
-    pub(crate) unregister_domain_events: Vec<LocalId>,
-}
-
-impl Drop for WatchChanges {
-    fn drop(&mut self) {
-        assert!(
-            self.start_watching_predicates.is_empty(),
-            "losing predicates that should be watched"
-        );
-        assert!(
-            self.stop_watching_predicates.is_empty(),
-            "losing predicates that should be unwatched"
-        );
-        assert!(
-            self.unregister_domain_events.is_empty(),
-            "unregister for domain events"
-        );
     }
 }
 
@@ -223,6 +150,12 @@ impl<'a> PropagationContext<'a> {
         )
     }
 
+    /// Stop being enqueued for the given predicate.
+    pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
+        self.notification_engine
+            .unwatch_predicate(predicate_id, self.propagator_id);
+    }
+
     /// Subscribes the propagator to the given [`DomainEvents`].
     ///
     /// See [`PropagatorConstructorContext::register`] for more information.
@@ -239,6 +172,17 @@ impl<'a> PropagationContext<'a> {
 
         let mut watchers = Watchers::new(propagator_var, self.notification_engine);
         var.watch_all(&mut watchers, domain_events.events());
+    }
+
+    /// Stop being enqueued for events on the given integer variable.
+    pub fn unregister_domain_event(&mut self, var: impl IntegerVariable, local_id: LocalId) {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        var.unwatch_all(&mut watchers);
     }
 
     /// Get the [`Predicate`] for a given [`PredicateId`].

@@ -6,10 +6,8 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
-use crate::propagation::EnqueueDecision;
 use crate::propagation::InferenceCheckers;
 use crate::propagation::LocalId;
-use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -18,8 +16,6 @@ use crate::propagation::ReadDomains;
 use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::HypercubeLinearChecker;
 use crate::propagators::hypercube_linear::LinearInequality;
-use crate::pumpkin_assert_advanced;
-use crate::pumpkin_assert_eq_advanced;
 use crate::pumpkin_assert_simple;
 use crate::results::PropagationStatusCP;
 use crate::state::PropagatorConflict;
@@ -99,16 +95,6 @@ pub struct HypercubeLinearPropagator {
 }
 
 impl HypercubeLinearPropagator {
-    /// Get the index from [`Self::watched_predicates`] that corresponds to `predicate_id`.
-    ///
-    /// If no such index exists, a panic occurs.
-    fn watcher_index_for(&self, predicate_id: PredicateId) -> usize {
-        self.watched_predicates
-            .iter()
-            .position(|&pid| pid == predicate_id)
-            .expect("can only get the watcher index for watched predicates")
-    }
-
     /// Get the watcher index for the predicate that is unassigned.
     ///
     /// Assumes 0 or 1 watched predicates are/is unassigned.
@@ -179,6 +165,8 @@ impl HypercubeLinearPropagator {
     /// Register the bound events on the integer variables in the linear inequality.
     fn register_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
         for (idx, term) in self.linear.terms().enumerate() {
+            // The implementation of register_domain_event already handles duplicate registration,
+            // so we do not need to check whether we are already registered.
             context.register_domain_event(
                 term,
                 DomainEvents::LOWER_BOUND,
@@ -186,26 +174,26 @@ impl HypercubeLinearPropagator {
             );
         }
     }
-}
 
-impl Propagator for HypercubeLinearPropagator {
-    fn name(&self) -> &str {
-        "HypercubeLinear"
+    /// Stop being enqueued for the bound events on the terms in the linear inequality.
+    fn unregister_bound_events_on_linear(&self, mut context: PropagationContext<'_>) {
+        for (idx, term) in self.linear.terms().enumerate() {
+            // The implementation of register_domain_event already handles duplicate registration,
+            // so we do not need to check whether we are already registered.
+            context.unregister_domain_event(term, LocalId::from(idx as u32));
+        }
     }
 
-    fn notify_predicate_id_satisfied(
+    /// Updates the watched predicate at `watcher_index`.
+    ///
+    /// Returns true if a new unassigned predicate is now watched, or false if all other predicates
+    /// are already true. If false is returned, the state of `self` is unaltered.
+    fn find_new_watcher(
         &mut self,
-        mut context: NotificationContext,
-        predicate_id: PredicateId,
-    ) -> EnqueueDecision {
-        let watcher_index = self.watcher_index_for(predicate_id);
-
-        pumpkin_assert_advanced!(watcher_index < NUM_WATCHED_PREDICATES);
-
-        pumpkin_assert_eq_advanced!(
-            Some(true),
-            context.evaluate_predicate(self.hypercube_predicates[watcher_index])
-        );
+        mut context: PropagationContext<'_>,
+        watcher_index: usize,
+    ) -> bool {
+        let old_watcher = self.watched_predicates[watcher_index];
 
         let next_predicate_to_watch = self
             .hypercube_predicates
@@ -220,53 +208,54 @@ impl Propagator for HypercubeLinearPropagator {
 
             let next_predicate_to_watch = self.hypercube_predicates[predicate_index];
 
-            context.unwatch_predicate(predicate_id);
-            let new_predicate_id = context.watch_predicate(next_predicate_to_watch);
+            context.unregister_predicate(old_watcher);
+            let new_predicate_id = context.register_predicate(next_predicate_to_watch);
 
             self.hypercube_predicates
                 .swap(watcher_index, predicate_index);
             self.watched_predicates[watcher_index] = new_predicate_id;
-        }
 
-        let satisfied_watchers = self
-            .watched_predicates
-            .iter()
-            .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
-            .count();
-
-        if satisfied_watchers >= NUM_WATCHED_PREDICATES - 1 {
-            EnqueueDecision::Enqueue
+            true
         } else {
-            EnqueueDecision::Skip
+            false
         }
     }
 
-    fn synchronise(&mut self, mut context: NotificationContext<'_>) {
-        let satisfied_watchers = self
-            .watched_predicates
-            .iter()
-            .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
-            .count();
+    /// Update the watched predicates of the hypercube.
+    ///
+    /// Returns the number of satisfied watchers, having tried replacing them with unassigned
+    /// predicates.
+    fn update_watched_predicates(&mut self, mut context: PropagationContext<'_>) -> usize {
+        let mut satisfied_watchers = 0;
 
-        if satisfied_watchers < NUM_WATCHED_PREDICATES {
-            for (idx, _) in self.linear.terms().enumerate() {
-                context.unregister_domain_event(LocalId::from(idx as u32));
+        for watcher_index in 0..self.watched_predicates.len() {
+            let watched_predicate = self.watched_predicates[watcher_index];
+
+            if context.is_predicate_id_satisfied(watched_predicate) {
+                satisfied_watchers +=
+                    usize::from(!self.find_new_watcher(context.reborrow(), watcher_index));
             }
         }
+
+        satisfied_watchers
+    }
+}
+
+impl Propagator for HypercubeLinearPropagator {
+    fn name(&self) -> &str {
+        "HypercubeLinear"
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        let satisfied_watchers = self
-            .watched_predicates
-            .iter()
-            .filter(|&&predicate_id| context.is_predicate_id_satisfied(predicate_id))
-            .count();
+        let satisfied_watchers = self.update_watched_predicates(context.reborrow());
 
         if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
+            self.unregister_bound_events_on_linear(context.reborrow());
+            // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());
-        }
-
-        if satisfied_watchers == NUM_WATCHED_PREDICATES {
+        } else if satisfied_watchers == NUM_WATCHED_PREDICATES {
+            // The hypercube is satisfied, so we should be registered to bound events on the terms
+            // of the linear inequality.
             self.register_bound_events_on_linear(context.reborrow());
         }
 
