@@ -8,13 +8,18 @@ use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::branching::value_selection::RandomSplitter;
 use crate::branching::variable_selection::RandomSelector;
+use crate::containers::HashSet;
 use crate::containers::KeyValueHeap;
+use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
+use crate::predicates::PredicateType;
 use crate::propagation::ReadDomains;
-use crate::results::Solution;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
+use crate::results::ProblemSolution;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::statistics::moving_averages::CumulativeMovingAverage;
@@ -84,7 +89,8 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// The decay factor is constant.
     decay_factor: f64,
     /// Contains the best-known solution or [`None`] if no solution has been found.
-    best_known_solution: Option<Solution>,
+    #[allow(clippy::type_complexity, reason = "Will be refactored")]
+    best_known_solution: Option<KeyedVec<DomainId, (i32, i32, HashSet<i32>)>>,
     /// If the heap does not contain any more unfixed predicates then this backup_brancher will be
     /// used instead.
     backup_brancher: BackupBrancher,
@@ -239,12 +245,12 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     fn determine_polarity(&self, predicate: Predicate) -> Predicate {
         if let Some(solution) = &self.best_known_solution {
             // We have a solution
-            if !solution.contains_domain_id(predicate.get_domain()) {
+            if predicate.get_domain().index() >= solution.len() {
                 // This can occur if an encoding is used
                 return predicate;
             }
             // Match the truth value according to the best solution.
-            if solution.evaluate_predicate(predicate) == Some(true) {
+            if self.evaluate_predicate(predicate) == Some(true) {
                 predicate
             } else {
                 !predicate
@@ -269,6 +275,118 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
 
             self.heap.restore_key(id);
         });
+    }
+
+    fn solution_from_solution_reference(
+        best_solution: &mut KeyedVec<DomainId, (i32, i32, HashSet<i32>)>,
+        solution: SolutionReference,
+    ) {
+        best_solution.accomodate(
+            DomainId::new(solution.num_domains() as u32),
+            (i32::MIN, i32::MAX, HashSet::default()),
+        );
+
+        for domain in solution.get_domains() {
+            let (lb, ub, holes) = &mut best_solution[domain];
+            *lb = solution.lower_bound(&domain);
+            *ub = solution.upper_bound(&domain);
+
+            holes.clear();
+            holes.extend(solution.get_holes(&domain))
+        }
+    }
+
+    fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
+        let solution = &self
+            .best_known_solution
+            .as_ref()
+            .expect("If evaluating predicate, then there should be a solution");
+
+        solution[domain_id].0
+    }
+
+    fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
+        let solution = self
+            .best_known_solution
+            .as_ref()
+            .expect("If evaluating predicate, then there should be a solution");
+
+        solution[domain_id].1
+    }
+
+    fn get_holes(&self, domain_id: DomainId) -> &HashSet<i32> {
+        let solution = self
+            .best_known_solution
+            .as_ref()
+            .expect("If evaluating predicate, then there should be a solution");
+
+        &solution[domain_id].2
+    }
+
+    fn get_assigned_value(&self, domain_id: &DomainId) -> Option<i32> {
+        (self.get_lower_bound(*domain_id) == self.get_upper_bound(*domain_id))
+            .then(|| self.get_lower_bound(*domain_id))
+    }
+
+    fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
+        let (lower_bound, upper_bound) = (
+            self.get_lower_bound(domain_id),
+            self.get_upper_bound(domain_id),
+        );
+
+        if value < lower_bound || value > upper_bound {
+            return false;
+        }
+
+        lower_bound <= value && value <= upper_bound && !self.get_holes(domain_id).contains(&value)
+    }
+
+    fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                if self.get_lower_bound(domain_id) >= value {
+                    Some(true)
+                } else if self.get_upper_bound(domain_id) < value {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::UpperBound => {
+                if self.get_upper_bound(domain_id) <= value {
+                    Some(true)
+                } else if self.get_lower_bound(domain_id) > value {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::NotEqual => {
+                if !self.is_value_in_domain(domain_id, value) {
+                    Some(true)
+                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(assigned_value == value);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::Equal => {
+                if !self.is_value_in_domain(domain_id, value) {
+                    Some(false)
+                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
+                    pumpkin_assert_moderate!(assigned_value == value);
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -316,7 +434,13 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
-        self.best_known_solution = Some(solution.into());
+        if let Some(best_known_solution) = &mut self.best_known_solution {
+            Self::solution_from_solution_reference(best_known_solution, solution);
+        } else {
+            let mut best_known_solution = KeyedVec::default();
+            Self::solution_from_solution_reference(&mut best_known_solution, solution);
+            self.best_known_solution = Some(best_known_solution);
+        }
         self.backup_brancher.on_solution(solution);
     }
 
