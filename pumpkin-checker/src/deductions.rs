@@ -132,92 +132,16 @@ pub fn verify_deduction(
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZero;
-
     use super::*;
-
-    fn constraint_id(id: u32) -> ConstraintId {
-        NonZero::new(id).expect("constraint id should be non-zero")
-    }
-
-    macro_rules! atomic {
-        (@to_comparison >=) => {
-            drcp_format::IntComparison::GreaterEqual
-        };
-        (@to_comparison <=) => {
-            drcp_format::IntComparison::LessEqual
-        };
-        (@to_comparison ==) => {
-            drcp_format::IntComparison::Equal
-        };
-        (@to_comparison !=) => {
-            drcp_format::IntComparison::NotEqual
-        };
-
-        ([$name:ident $comp:tt $value:expr]) => {
-            drcp_format::IntAtomic {
-                name: std::rc::Rc::from(stringify!($name)),
-                comparison: atomic!(@to_comparison $comp),
-                value: $value,
-            }
-        };
-
-        ([$name:ident string $comp:tt $value:expr]) => {
-            drcp_format::IntAtomic {
-                name: String::from(stringify!($name)),
-                comparison: atomic!(@to_comparison $comp),
-                value: $value,
-            }
-        };
-    }
-
-    macro_rules! fact {
-        // Case: consequent is an Atomic
-        (
-            $($prem:tt)&+ -> [$($cons:tt)+]
-        ) => {
-            Fact {
-                premises: vec![
-                    $( $crate::model::Atomic::IntAtomic(atomic!($prem)) ),+
-                ],
-                consequent: Some(
-                    $crate::model::Atomic::IntAtomic(atomic!([$($cons)+]))
-                ),
-            }
-        };
-
-        // Case: consequent is false (i.e., None)
-        (
-            $($prem:tt)&+ -> false
-        ) => {
-            Fact {
-                premises: vec![
-                    $( $crate::model::Atomic::IntAtomic(atomic!($prem)) ),+
-                ],
-                consequent: None,
-            }
-        };
-    }
+    use crate::atomic;
+    use crate::fact;
+    use crate::test_utils::constraint_id;
+    use crate::test_utils::deduction;
 
     macro_rules! facts {
         {$($k: expr => $v: expr),* $(,)?} => {
-            ::std::collections::BTreeMap::from([$((constraint_id($k), $v),)*])
+            ::std::collections::BTreeMap::from([$(($crate::test_utils::constraint_id($k), $v),)*])
         };
-    }
-
-    fn deduction(
-        id: u32,
-        premises: impl Into<Vec<IntAtomic<Rc<str>, i32>>>,
-        sequence: impl IntoIterator<Item = u32>,
-    ) -> drcp_format::Deduction<Rc<str>, i32> {
-        drcp_format::Deduction {
-            constraint_id: constraint_id(id),
-            premises: premises.into(),
-            sequence: sequence
-                .into_iter()
-                .map(|id| NonZero::new(id).expect("constraint ids should be non-zero"))
-                .collect(),
-        }
     }
 
     #[test]

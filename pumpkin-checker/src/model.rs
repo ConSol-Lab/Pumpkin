@@ -20,10 +20,11 @@ use pumpkin_checking::VariableState;
 use crate::math::div_ceil;
 use crate::math::div_floor;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_more::From)]
 pub enum Constraint {
     Nogood(Nogood),
     LinearLeq(Linear),
+    #[from(skip)]
     LinearEq(Linear),
     Cumulative(Cumulative),
     AllDifferent(AllDifferent),
@@ -427,8 +428,14 @@ impl Model {
     ///
     /// If a constraint with the given ID already exists, this returns false. Otherwise, the
     /// function returns true.
-    pub fn add_constraint(&mut self, constraint_id: ConstraintId, constraint: Constraint) -> bool {
-        self.constraints.insert(constraint_id, constraint).is_none()
+    pub fn add_constraint(
+        &mut self,
+        constraint_id: ConstraintId,
+        constraint: impl Into<Constraint>,
+    ) -> bool {
+        self.constraints
+            .insert(constraint_id, constraint.into())
+            .is_none()
     }
 
     /// Iterate over the constraints in the map, ordered by [`ConstraintId`].
