@@ -771,7 +771,6 @@ impl PredicateTracker {
 }
 
 #[cfg(test)]
-#[allow(deprecated, reason = "Will be replaced by the state API")]
 mod tests {
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
