@@ -66,7 +66,6 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         };
 
         HypercubeLinearPropagator {
-            hypercube,
             linear,
 
             hypercube_predicates,
@@ -83,7 +82,6 @@ const NUM_WATCHED_PREDICATES: usize = 2;
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
-    hypercube: Hypercube,
     linear: LinearInequality,
 
     hypercube_predicates: Box<[Predicate]>,
@@ -122,7 +120,7 @@ impl HypercubeLinearPropagator {
                 .linear
                 .terms()
                 .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube.iter_predicates())
+                .chain(self.hypercube_predicates.iter().copied())
                 .collect::<PropositionalConjunction>();
 
             return Err(crate::state::Conflict::Propagator(PropagatorConflict {
@@ -149,7 +147,7 @@ impl HypercubeLinearPropagator {
                 .terms()
                 .filter(|&t| t != term)
                 .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube.iter_predicates())
+                .chain(self.hypercube_predicates.iter().copied())
                 .collect::<PropositionalConjunction>();
 
             context.post(
@@ -287,8 +285,9 @@ impl Propagator for HypercubeLinearPropagator {
                         .terms()
                         .map(|term| predicate![term >= context.lower_bound(&term)])
                         .chain(
-                            self.hypercube
-                                .iter_predicates()
+                            self.hypercube_predicates
+                                .iter()
+                                .copied()
                                 .filter(|&predicate| predicate != predicate_in_hypercube),
                         )
                         .collect();
@@ -319,8 +318,9 @@ impl Propagator for HypercubeLinearPropagator {
                         .terms()
                         .map(|term| predicate![term >= context.lower_bound(&term)])
                         .chain(
-                            self.hypercube
-                                .iter_predicates()
+                            self.hypercube_predicates
+                                .iter()
+                                .copied()
                                 .filter(|&predicate| predicate != predicate_in_hypercube),
                         )
                         .collect();
@@ -384,8 +384,9 @@ impl Propagator for HypercubeLinearPropagator {
                     .terms()
                     .map(|term| predicate![term >= context.lower_bound(&term)])
                     .chain(
-                        self.hypercube
-                            .iter_predicates()
+                        self.hypercube_predicates
+                            .iter()
+                            .copied()
                             .filter(|&p| p != unassigned_predicate),
                     )
                     .collect::<PropositionalConjunction>();
@@ -406,7 +407,7 @@ impl Propagator for HypercubeLinearPropagator {
                     .terms()
                     .filter(|&t| t != term)
                     .map(|term| predicate![term >= context.lower_bound(&term)])
-                    .chain(self.hypercube.iter_predicates())
+                    .chain(self.hypercube_predicates.iter().copied())
                     .collect::<PropositionalConjunction>();
 
                 context.post(
