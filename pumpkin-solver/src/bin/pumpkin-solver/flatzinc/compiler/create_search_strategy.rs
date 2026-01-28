@@ -210,7 +210,13 @@ fn create_from_search_strategy(
             )),
             None => {}
         }
-        brancher.add_brancher(Box::new(context.solver.default_brancher()));
+        brancher.add_brancher(Box::new({
+            if matches!(strategy, Search::Unspecified) {
+                context.solver.default_brancher()
+            } else {
+                context.solver.default_brancher().is_default()
+            }
+        }));
     }
 
     Ok(brancher)

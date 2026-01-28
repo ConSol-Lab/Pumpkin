@@ -49,7 +49,7 @@ impl ArenaAllocator {
             nogoods: Vec::default(),
             nogood_id_to_index: HashMap::default(),
             current_index: 0,
-            capacity
+            capacity,
         }
     }
 

@@ -102,6 +102,7 @@ pub struct AutonomousSearch<BackupBrancher> {
     /// This is used to prevent unnecessary work when [`AutonomousSearch::synchronise`] is called
     /// multiple times in a row without a call to [`AutonomousSearch::next_decision`].
     should_synchronise: bool,
+    is_default: bool,
 }
 
 create_statistics_struct!(AutonomousSearchStatistics {
@@ -140,6 +141,7 @@ impl DefaultBrancher {
                 RandomSplitter,
             ),
             statistics: Default::default(),
+            is_default: false,
         }
     }
 
@@ -166,7 +168,14 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             should_synchronise: false,
             backup_brancher,
             statistics: Default::default(),
+            is_default: false,
         }
+    }
+
+    pub fn is_default(mut self) -> Self {
+        self.is_default = true;
+
+        self
     }
 
     /// Resizes the heap to accommodate for the id.
@@ -404,6 +413,7 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
             .next_candidate_predicate(context)
             .map(|predicate| self.determine_polarity(predicate));
         if result.is_none() && !context.are_all_variables_assigned() {
+            self.is_default = false;
             // There are variables for which we do not have a predicate, rely on the backup
             self.statistics.num_backup_called += 1;
             self.backup_brancher.next_decision(context)
@@ -428,24 +438,30 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     }
 
     fn on_conflict(&mut self) {
-        self.decay_activities();
+        if !self.is_default {
+            self.decay_activities();
+        }
         self.backup_brancher.on_conflict();
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
         // We store the best known solution
-        if let Some(best_known_solution) = &mut self.best_known_solution {
-            Self::solution_from_solution_reference(best_known_solution, solution);
-        } else {
-            let mut best_known_solution = KeyedVec::default();
-            Self::solution_from_solution_reference(&mut best_known_solution, solution);
-            self.best_known_solution = Some(best_known_solution);
+        if !self.is_default {
+            if let Some(best_known_solution) = &mut self.best_known_solution {
+                Self::solution_from_solution_reference(best_known_solution, solution);
+            } else {
+                let mut best_known_solution = KeyedVec::default();
+                Self::solution_from_solution_reference(&mut best_known_solution, solution);
+                self.best_known_solution = Some(best_known_solution);
+            }
         }
         self.backup_brancher.on_solution(solution);
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.bump_activity(predicate);
+        if !self.is_default {
+            self.bump_activity(predicate);
+        }
         self.backup_brancher
             .on_appearance_in_conflict_predicate(predicate);
     }
