@@ -67,6 +67,8 @@ pub(crate) struct PredicateTracker {
     /// The [`PredicateId`]s corresponding to the predicates for each value in
     /// [`PredicateTracker::values`].
     ids: Vec<Vec<PredicateId>>,
+    /// The [`PredicateType`]s tracked by this [`PredicateTracker`].
+    tracked: EnumSet<PredicateType>,
 }
 
 // A value tracked by the [`PredicateTracker`], keeps track of the values in the lowest 4 bits.
@@ -154,6 +156,7 @@ impl PredicateTracker {
             greater: Vec::default(),
             values: Default::default(),
             ids: Vec::default(),
+            tracked: EnumSet::default(),
         }
     }
 
@@ -164,7 +167,7 @@ impl PredicateTracker {
         initial_upper_bound: i32,
         trailed_values: &mut TrailedValues,
     ) {
-        if !self.is_empty() {
+        if !self.values.is_empty() {
             // The structures has been initialised previously
             return;
         }
@@ -204,12 +207,48 @@ impl PredicateTracker {
         self.greater.push(u32::MAX);
     }
 
-    /// Whether there are no values being tracked.
-    ///
-    /// Note that if [`Self::initialise`] has been called but no predicate is tracked, then this
-    /// method will return true.
-    fn is_empty(&self) -> bool {
-        self.values.is_empty()
+    /// Returns whether any [`PredicateType::Equal`] or [`PredicateType::NotEqual`] types are being
+    /// tracked.
+    pub(super) fn can_be_updated_by_disequality(&self) -> bool {
+        self.tracked.contains(PredicateType::Equal)
+            || self.tracked.contains(PredicateType::NotEqual)
+    }
+
+    /// Returns whether no more updates can take place due to the bounds not being able to be
+    /// moved.
+    pub(super) fn is_fixed(&self, trailed_values: &TrailedValues) -> bool {
+        if self.tracked.is_empty() {
+            // If it is empty, then it is trivially fixed
+            return true;
+        }
+
+        // The idea is to use the `min_assigned` and `max_assigned` fields to infer whether any
+        // updates can take place.
+        //
+        // Let's first look at an example for a variable `x`, imagine we have the following values
+        // [0, 10, 5, 2, 3, 1] where `x \in [0, 10]` (i.e. the first two values are fixed);
+        // we know that `min_assigned = 0` and `max_assigned = 1`; now we update the domain
+        // of `x` to be `[4, 4]`. We know that `min_assigned = 4` (pointing to value 3), and
+        // `max_assigned = 2` (pointing to value 5).
+        //
+        // If we now look at the successor of `min_assigned` (with index 2 and value 5) and the
+        // predecessor of `max_assigned` (with index 5 and value 3), then we can see that
+        // these are already assigned (according to `min_assigned` and `max_assigned`
+        // respectively).
+        //
+        // Thus, we simply need to check whether either:
+        // - The successor of `min_assigned` is equal to `max_assigned`
+        // - The predecessor of `max_assigned` is equal to `min_assigned`
+        let min_assigned_index = trailed_values.read(self.min_assigned) as usize;
+        let min_unassigned_index = self.greater[min_assigned_index] as usize;
+        pumpkin_assert_simple!(self.values[min_assigned_index] < self.values[min_unassigned_index]);
+
+        let max_assigned_index = trailed_values.read(self.max_assigned) as usize;
+        let max_unassigned_index = self.smaller[max_assigned_index] as usize;
+        pumpkin_assert_simple!(self.values[max_assigned_index] > self.values[max_unassigned_index]);
+
+        self.values[min_unassigned_index] >= self.values[max_assigned_index]
+            || self.values[max_unassigned_index] <= self.values[min_assigned_index]
     }
 
     /// Inserts the value into the internal structures.
@@ -275,9 +314,11 @@ impl PredicateTracker {
     /// Returns true if it was not already tracked and false otherwise.
     pub(super) fn track(&mut self, predicate: Predicate, predicate_id: PredicateId) -> bool {
         pumpkin_assert_simple!(
-            !self.is_empty(),
+            !self.values.is_empty(),
             "Initialise should have been called previously"
         );
+
+        self.tracked |= predicate.get_predicate_type();
 
         let value = predicate.get_right_hand_side();
 
@@ -370,9 +411,7 @@ impl PredicateTracker {
         trailed_values: &mut TrailedValues,
         predicate_id_assignments: &mut PredicateIdAssignments,
     ) {
-        // If there are <= 2 values being tracked, then the structure has not been asked to track
-        // any values.
-        if self.values.len() <= 2 {
+        if self.tracked.is_empty() {
             return;
         }
 

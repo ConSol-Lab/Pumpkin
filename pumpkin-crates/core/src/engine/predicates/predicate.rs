@@ -4,6 +4,7 @@ use pumpkin_checking::AtomicConstraint;
 use crate::engine::Assignments;
 use crate::engine::variables::DomainId;
 use crate::predicate;
+use crate::propagation::DomainEvent;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple
 /// ([`DomainId`], [`PredicateType`], value).
@@ -56,6 +57,18 @@ pub enum PredicateType {
     NotEqual = 2,
     Equal = 3,
 }
+
+impl From<DomainEvent> for PredicateType {
+    fn from(value: DomainEvent) -> Self {
+        match value {
+            DomainEvent::Assign => PredicateType::Equal,
+            DomainEvent::LowerBound => PredicateType::LowerBound,
+            DomainEvent::UpperBound => PredicateType::UpperBound,
+            DomainEvent::Removal => PredicateType::NotEqual,
+        }
+    }
+}
+
 impl PredicateType {
     pub fn is_lower_bound(&self) -> bool {
         matches!(self, PredicateType::LowerBound)

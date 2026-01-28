@@ -70,68 +70,32 @@ impl PredicateNotifier {
         event: DomainEvent,
         domain: DomainId,
     ) {
-        match event {
-            DomainEvent::Assign => {
-                self.on_update_predicate(domain, PredicateType::Equal, assignments, trailed_values);
-            }
-            DomainEvent::LowerBound => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::LowerBound,
-                    assignments,
-                    trailed_values,
-                );
-            }
-            DomainEvent::UpperBound => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::UpperBound,
-                    assignments,
-                    trailed_values,
-                );
-            }
-            DomainEvent::Removal => {
-                self.on_update_predicate(
-                    domain,
-                    PredicateType::NotEqual,
-                    assignments,
-                    trailed_values,
-                );
-            }
-        }
-    }
-
-    /// Method which is called when an update to a [`DomainId`] has taken place (provided in the
-    /// form of a [Predicate]).
-    ///
-    /// This method will pass it along to the correct [`PredicateNotifier::on_update`]
-    /// corresponding to the [`DomainId`] for which the update took place.
-    fn on_update_predicate(
-        &mut self,
-        domain: DomainId,
-        predicate_type: PredicateType,
-        assignments: &Assignments,
-        trailed_values: &mut TrailedValues,
-    ) {
         if self.domain_id_to_predicate_tracker.len() <= domain.index() {
             // If no predicate has been registered for this domain id then we do nothing
             return;
         }
 
-        if predicate_type.is_disequality() {
-            for removed_value in assignments.get_holes_at_current_checkpoint(domain) {
-                let predicate =
-                    predicate_type.into_predicate(domain, assignments, Some(removed_value));
+        let predicate_type: PredicateType = event.into();
 
-                self.domain_id_to_predicate_tracker[domain].on_update(
-                    predicate,
-                    trailed_values,
-                    &mut self.predicate_id_assignments,
-                );
+        let predicate_tracker = &mut self.domain_id_to_predicate_tracker[domain];
+        if predicate_type.is_disequality() {
+            if predicate_tracker.can_be_updated_by_disequality()
+                && !predicate_tracker.is_fixed(trailed_values)
+            {
+                for removed_value in assignments.get_holes_at_current_checkpoint(domain) {
+                    let predicate =
+                        predicate_type.into_predicate(domain, assignments, Some(removed_value));
+
+                    predicate_tracker.on_update(
+                        predicate,
+                        trailed_values,
+                        &mut self.predicate_id_assignments,
+                    );
+                }
             }
         } else {
             // Otherwise we update the structures
-            self.domain_id_to_predicate_tracker[domain].on_update(
+            predicate_tracker.on_update(
                 predicate_type.into_predicate(domain, assignments, None),
                 trailed_values,
                 &mut self.predicate_id_assignments,
