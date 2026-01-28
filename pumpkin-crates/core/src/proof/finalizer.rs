@@ -6,6 +6,7 @@ use super::InferenceCode;
 use super::ProofLog;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::engine::State;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
@@ -26,6 +27,8 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
+    let mut explained_predicates = HashSet::default();
+
     let final_nogood = context
         .conflict
         .into_iter()
@@ -37,6 +40,7 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
                     state: context.state,
                 },
                 predicate,
+                &mut explained_predicates,
             )
         })
         .collect::<Vec<_>>();
@@ -45,6 +49,7 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
         final_nogood,
         &context.state.variable_names,
         &mut context.state.constraint_tags,
+        &context.state.assignments,
     );
 }
 
@@ -68,7 +73,8 @@ pub(crate) fn explain_root_assignment(
         return;
     }
 
-    let _ = get_required_assumptions(context, predicate);
+    let mut explained_predicates = HashSet::default();
+    let _ = get_required_assumptions(context, predicate, &mut explained_predicates);
 }
 
 /// Returns the predicates that should be assumed are true to make the given predicate true. It may
@@ -81,7 +87,12 @@ pub(crate) fn explain_root_assignment(
 fn get_required_assumptions(
     context: &mut RootExplanationContext<'_>,
     predicate: Predicate,
+    explained_predicates: &mut HashSet<Predicate>,
 ) -> Vec<Predicate> {
+    if !explained_predicates.insert(predicate) {
+        return vec![];
+    }
+
     if context.state.assignments.is_decision_predicate(&predicate) {
         return vec![predicate];
     }
@@ -92,6 +103,7 @@ fn get_required_assumptions(
             predicate,
             &context.state.variable_names,
             &mut context.state.constraint_tags,
+            &context.state.assignments,
         );
         return vec![];
     }
@@ -104,6 +116,7 @@ fn get_required_assumptions(
             [],
             Some(predicate),
             &context.state.variable_names,
+            &context.state.assignments,
         );
         return vec![];
     }
@@ -122,6 +135,6 @@ fn get_required_assumptions(
     // Here we combine all the required assumptions of recursive reasons.
     reason
         .into_iter()
-        .flat_map(|predicate| get_required_assumptions(context, predicate))
+        .flat_map(|predicate| get_required_assumptions(context, predicate, explained_predicates))
         .collect()
 }
