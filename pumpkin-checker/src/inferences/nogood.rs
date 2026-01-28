@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 use pumpkin_core::propagators::nogoods::NogoodChecker;
@@ -22,7 +20,7 @@ pub(crate) fn verify_nogood(
     };
 
     let checker = NogoodChecker {
-        nogood: nogood.deref().into(),
+        nogood: nogood.iter().cloned().collect(),
     };
 
     if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
