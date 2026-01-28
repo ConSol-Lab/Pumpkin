@@ -563,11 +563,7 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let mut context = NotificationContext::new(
-                &mut self.trailed_values,
-                &self.assignments,
-                &mut self.notification_engine.predicate_notifier,
-            );
+            let mut context = NotificationContext::new(&mut self.trailed_values, &self.assignments);
 
             propagator.synchronise(context.reborrow());
         }

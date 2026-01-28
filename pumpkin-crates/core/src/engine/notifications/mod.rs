@@ -325,7 +325,6 @@ impl NotificationEngine {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
                 Self::notify_propagator(
-                    &mut self.predicate_notifier,
                     propagator_id,
                     local_id,
                     event,
@@ -389,16 +388,12 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        while let Some(predicate_id) = self.predicate_notifier.pop_satisfied_predicate() {
+        for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
             if let Some(watch_list) = self.watch_list_predicate_id.get(predicate_id) {
                 let propagators_to_notify = watch_list.iter().copied();
 
                 for propagator_id in propagators_to_notify {
-                    let mut context = NotificationContext::new(
-                        trailed_values,
-                        assignments,
-                        &mut self.predicate_notifier,
-                    );
+                    let mut context = NotificationContext::new(trailed_values, assignments);
 
                     let propagator = &mut propagators[propagator_id];
                     let enqueue_decision =
@@ -414,7 +409,6 @@ impl NotificationEngine {
 
     #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     fn notify_propagator(
-        predicate_notifier: &mut PredicateNotifier,
         propagator_id: PropagatorId,
         local_id: LocalId,
         event: DomainEvent,
@@ -423,7 +417,7 @@ impl NotificationEngine {
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
     ) {
-        let context = NotificationContext::new(trailed_values, assignments, predicate_notifier);
+        let context = NotificationContext::new(trailed_values, assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
@@ -481,7 +475,6 @@ impl NotificationEngine {
                 let propagator_id = propagator_var.propagator;
                 let local_id = propagator_var.variable;
                 Self::notify_propagator(
-                    &mut self.predicate_notifier,
                     propagator_id,
                     local_id,
                     event,

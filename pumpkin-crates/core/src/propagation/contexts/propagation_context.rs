@@ -4,7 +4,6 @@ use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::notifications::PredicateNotifier;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -37,42 +36,25 @@ use crate::variables::IntegerVariable;
 pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
-    pub(crate) predicate_notifier: &'a mut PredicateNotifier,
 }
 
 impl<'a> NotificationContext<'a> {
-    pub(crate) fn new(
-        trailed_values: &'a mut TrailedValues,
-        assignments: &'a Assignments,
-        predicate_notifier: &'a mut PredicateNotifier,
-    ) -> Self {
+    pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
         Self {
             trailed_values,
             assignments,
-            predicate_notifier,
         }
-    }
-
-    /// Returns true if the given predicate ID is assigned to true.
-    pub fn is_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> bool {
-        self.predicate_notifier
-            .predicate_id_assignments
-            .is_satisfied(
-                predicate_id,
-                self.assignments,
-                &mut self.predicate_notifier.predicate_to_id,
-            )
     }
 
     /// Get the current domains.
     pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
     }
+
     pub fn reborrow(&mut self) -> NotificationContext<'_> {
         NotificationContext {
             trailed_values: self.trailed_values,
             assignments: self.assignments,
-            predicate_notifier: self.predicate_notifier,
         }
     }
 }

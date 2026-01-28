@@ -348,11 +348,8 @@ impl TestSolver {
         self.state.trailed_values.synchronise(level);
 
         for propagator in self.state.propagators.iter_propagators_mut() {
-            let mut context = NotificationContext::new(
-                &mut self.state.trailed_values,
-                &self.state.assignments,
-                &mut self.state.notification_engine.predicate_notifier,
-            );
+            let mut context =
+                NotificationContext::new(&mut self.state.trailed_values, &self.state.assignments);
 
             propagator.synchronise(context.reborrow());
         }

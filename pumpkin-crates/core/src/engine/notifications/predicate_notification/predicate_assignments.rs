@@ -64,8 +64,8 @@ impl PredicateIdAssignments {
     }
 
     /// Pop a newly satisfied predicate.
-    pub(crate) fn pop_satisfied_predicate(&mut self) -> Option<PredicateId> {
-        self.satisfied_predicates.pop()
+    pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
+        self.satisfied_predicates.drain(..)
     }
 
     pub(crate) fn new_checkpoint(&mut self) {
