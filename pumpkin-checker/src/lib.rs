@@ -377,9 +377,13 @@ fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>
         };
 
         match conclusion {
-            drcp_format::Conclusion::Unsat => nogood.as_ref().is_empty(),
+            drcp_format::Conclusion::Unsat => nogood.iter().next().is_none(),
             drcp_format::Conclusion::DualBound(atomic) => {
-                nogood.as_ref() == [Atomic::from(!atomic.clone())]
+                let expected_nogood = [Atomic::from(!atomic.clone())]
+                    .into_iter()
+                    .collect::<Nogood>();
+
+                nogood == &expected_nogood
             }
         }
     })

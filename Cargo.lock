@@ -722,6 +722,7 @@ dependencies = [
  "clap",
  "drcp-format",
  "flate2",
+ "fnv",
  "fzn-rs",
  "pumpkin-checking",
  "pumpkin-core",

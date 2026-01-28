@@ -4,11 +4,11 @@
 
 use std::collections::BTreeMap;
 use std::num::NonZero;
-use std::ops::Deref;
 use std::rc::Rc;
 
 use drcp_format::ConstraintId;
 use drcp_format::IntAtomic;
+use fnv::FnvHashSet;
 use fzn_rs::VariableExpr;
 use fzn_rs::ast::Domain;
 use pumpkin_checking::AtomicConstraint;
@@ -92,8 +92,17 @@ impl AtomicConstraint for Atomic {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Nogood(Vec<Atomic>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Nogood(FnvHashSet<Atomic>);
+
+impl<A> FromIterator<A> for Nogood
+where
+    A: Into<Atomic>,
+{
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        Nogood(iter.into_iter().map(Into::into).collect())
+    }
+}
 
 impl<T, A> From<T> for Nogood
 where
@@ -105,11 +114,9 @@ where
     }
 }
 
-impl Deref for Nogood {
-    type Target = [Atomic];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Nogood {
+    pub fn iter(&self) -> impl Iterator<Item = &Atomic> + '_ {
+        self.0.iter()
     }
 }
 
