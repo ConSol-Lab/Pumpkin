@@ -124,8 +124,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     let c_max = context.upper_bound(c);
 
     if a_min >= 0 && b_min >= 0 {
-        let new_max_c = a_max * b_max;
-        let new_min_c = a_min * b_min;
+        let new_max_c = a_max.saturating_mul(b_max);
+        let new_min_c = a_min.saturating_mul(b_min);
 
         // c is smaller than the maximum value that a * b can take
         //
