@@ -29,10 +29,10 @@ pub(crate) struct PredicateTracker {
     domain_id: DomainId,
     /// `smaller[i]` is the index of the element with the largest value such that it is smaller
     /// than `values[i]`
-    smaller: Vec<i64>,
+    smaller: Vec<u32>,
     /// `greater[i]` is the index of the element with the smallest value such that it is larger
     /// than `values[i]`
-    greater: Vec<i64>,
+    greater: Vec<u32>,
     /// A [`TrailedInteger`] which points to the largest lowest value which is assigned.
     ///
     /// For example, if we have the values `x in [1, 5, 7, 9]` and we know that `[x >= 6]` holds,
@@ -190,7 +190,7 @@ impl PredicateTracker {
         // Then we place the sentinels into the `smaller` structure
         //
         // For the first element (containing the lower-bound), there is no smaller element
-        self.smaller.push(i64::MAX);
+        self.smaller.push(u32::MAX);
         // For the second element (containing the upper-bound), the smaller element will currently
         // point to the lower-bound element
         self.smaller.push(0);
@@ -201,7 +201,7 @@ impl PredicateTracker {
         // point to the upper-bound element
         self.greater.push(1);
         // For the second element (containing the upper-bound), there is no greater element
-        self.greater.push(i64::MAX);
+        self.greater.push(u32::MAX);
     }
 
     /// Whether there are no values being tracked.
@@ -323,7 +323,7 @@ impl PredicateTracker {
 
             // As soon as we have found a value smaller than the to track value, we can stop
             if index_value.get_value() < value {
-                index_largest_value_smaller_than = index as i64;
+                index_largest_value_smaller_than = index as u32;
 
                 index_smallest_value_larger_than = self.greater[index];
                 break;
@@ -353,8 +353,8 @@ impl PredicateTracker {
             .unwrap()
             .track_predicate_type(predicate.get_predicate_type());
 
-        self.greater[index_largest_value_smaller_than as usize] = new_index as i64;
-        self.smaller[index_smallest_value_larger_than as usize] = new_index as i64;
+        self.greater[index_largest_value_smaller_than as usize] = new_index as u32;
+        self.smaller[index_smallest_value_larger_than as usize] = new_index as u32;
 
         // Then we update the other structures
         self.smaller.push(index_largest_value_smaller_than);
@@ -381,7 +381,7 @@ impl PredicateTracker {
         if predicate.is_lower_bound_predicate() {
             let mut greater_strict =
                 self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while greater_strict != i64::MAX
+            while greater_strict != u32::MAX
                 && value > self.values[greater_strict as usize].get_value()
             {
                 for (predicate_index, predicate_type) in self.values[greater_strict as usize]
@@ -412,14 +412,14 @@ impl PredicateTracker {
                         }
                     }
                 }
-                trailed_values.assign(self.min_assigned_strict, greater_strict);
-                trailed_values.assign(self.min_assigned, greater_strict);
+                trailed_values.assign(self.min_assigned_strict, greater_strict as i64);
+                trailed_values.assign(self.min_assigned, greater_strict as i64);
 
                 greater_strict = self.greater[greater_strict as usize];
             }
 
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
-            while greater != i64::MAX && value >= self.values[greater as usize].get_value() {
+            while greater != u32::MAX && value >= self.values[greater as usize].get_value() {
                 if let Some(predicate_index) = self.values[greater as usize]
                     .get_predicate_types()
                     .position(|predicate_type| predicate_type == PredicateType::LowerBound)
@@ -430,13 +430,13 @@ impl PredicateTracker {
                         predicate_id_assignments,
                     );
                 }
-                trailed_values.assign(self.min_assigned, greater);
+                trailed_values.assign(self.min_assigned, greater as i64);
                 greater = self.greater[greater as usize];
             }
         } else if predicate.is_upper_bound_predicate() {
             let mut smaller_strict =
                 self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller_strict != i64::MAX
+            while smaller_strict != u32::MAX
                 && value < self.values[smaller_strict as usize].get_value()
             {
                 for (predicate_index, predicate_type) in self.values[smaller_strict as usize]
@@ -467,14 +467,14 @@ impl PredicateTracker {
                         }
                     }
                 }
-                trailed_values.assign(self.max_assigned_strict, smaller_strict);
-                trailed_values.assign(self.max_assigned, smaller_strict);
+                trailed_values.assign(self.max_assigned_strict, smaller_strict as i64);
+                trailed_values.assign(self.max_assigned, smaller_strict as i64);
 
                 smaller_strict = self.smaller[smaller_strict as usize];
             }
 
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
-            while smaller != i64::MAX && value <= self.values[smaller as usize].get_value() {
+            while smaller != u32::MAX && value <= self.values[smaller as usize].get_value() {
                 if let Some(predicate_index) = self.values[smaller as usize]
                     .get_predicate_types()
                     .position(|predicate_type| predicate_type == PredicateType::UpperBound)
@@ -485,7 +485,7 @@ impl PredicateTracker {
                         predicate_id_assignments,
                     );
                 }
-                trailed_values.assign(self.max_assigned, smaller);
+                trailed_values.assign(self.max_assigned, smaller as i64);
                 smaller = self.smaller[smaller as usize];
             }
         } else if predicate.is_not_equal_predicate() {
@@ -528,7 +528,7 @@ impl PredicateTracker {
             // First update the lower-bound if necessary
             let mut greater_strict =
                 self.greater[trailed_values.read(self.min_assigned_strict) as usize];
-            while greater_strict != i64::MAX
+            while greater_strict != u32::MAX
                 && value > self.values[greater_strict as usize].get_value()
             {
                 for (predicate_index, predicate_type) in self.values[greater_strict as usize]
@@ -559,14 +559,14 @@ impl PredicateTracker {
                         }
                     }
                 }
-                trailed_values.assign(self.min_assigned_strict, greater_strict);
-                trailed_values.assign(self.min_assigned, greater_strict);
+                trailed_values.assign(self.min_assigned_strict, greater_strict as i64);
+                trailed_values.assign(self.min_assigned, greater_strict as i64);
 
                 greater_strict = self.greater[greater_strict as usize];
             }
 
             let mut greater = self.greater[trailed_values.read(self.min_assigned) as usize];
-            while greater != i64::MAX && value >= self.values[greater as usize].get_value() {
+            while greater != u32::MAX && value >= self.values[greater as usize].get_value() {
                 if let Some(predicate_index) = self.values[greater as usize]
                     .get_predicate_types()
                     .position(|predicate_type| predicate_type == PredicateType::LowerBound)
@@ -577,14 +577,14 @@ impl PredicateTracker {
                         predicate_id_assignments,
                     );
                 }
-                trailed_values.assign(self.min_assigned, greater);
+                trailed_values.assign(self.min_assigned, greater as i64);
                 greater = self.greater[greater as usize];
             }
 
             // Then the upper-bound if necessary
             let mut smaller_strict =
                 self.smaller[trailed_values.read(self.max_assigned_strict) as usize];
-            while smaller_strict != i64::MAX
+            while smaller_strict != u32::MAX
                 && value < self.values[smaller_strict as usize].get_value()
             {
                 for (predicate_index, predicate_type) in self.values[smaller_strict as usize]
@@ -615,14 +615,14 @@ impl PredicateTracker {
                         }
                     }
                 }
-                trailed_values.assign(self.max_assigned_strict, smaller_strict);
-                trailed_values.assign(self.max_assigned, smaller_strict);
+                trailed_values.assign(self.max_assigned_strict, smaller_strict as i64);
+                trailed_values.assign(self.max_assigned, smaller_strict as i64);
 
                 smaller_strict = self.smaller[smaller_strict as usize];
             }
 
             let mut smaller = self.smaller[trailed_values.read(self.max_assigned) as usize];
-            while smaller != i64::MAX && value <= self.values[smaller as usize].get_value() {
+            while smaller != u32::MAX && value <= self.values[smaller as usize].get_value() {
                 if let Some(predicate_index) = self.values[smaller as usize]
                     .get_predicate_types()
                     .position(|predicate_type| predicate_type == PredicateType::UpperBound)
@@ -633,7 +633,7 @@ impl PredicateTracker {
                         predicate_id_assignments,
                     );
                 }
-                trailed_values.assign(self.max_assigned, smaller);
+                trailed_values.assign(self.max_assigned, smaller as i64);
                 smaller = self.smaller[smaller as usize];
             }
 
