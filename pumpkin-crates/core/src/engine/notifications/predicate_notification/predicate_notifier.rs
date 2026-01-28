@@ -46,6 +46,8 @@ impl PredicateNotifier {
             .debug_create_from_assignments(assignments, &mut self.predicate_to_id);
     }
 
+    /// Returns the satisfied predicates; note that this structure will be cleared once it is
+    /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.predicate_id_assignments.drain_satisfied_predicates()
     }

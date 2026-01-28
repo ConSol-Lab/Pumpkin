@@ -63,7 +63,8 @@ impl PredicateIdAssignments {
         self.predicate_values.keys()
     }
 
-    /// Pop a newly satisfied predicate.
+    /// Returns the satisfied predicates; note that this structure will be cleared once it is
+    /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.satisfied_predicates.drain(..)
     }
