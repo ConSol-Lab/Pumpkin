@@ -31,6 +31,7 @@ use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
 #[cfg(feature = "check-propagations")]
 use crate::propagation::InferenceCheckers;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -562,8 +563,9 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let context = Domains::new(&self.assignments, &mut self.trailed_values);
-            propagator.synchronise(context);
+            let mut context = NotificationContext::new(&mut self.trailed_values, &self.assignments);
+
+            propagator.synchronise(context.reborrow());
         }
 
         let _ = self.notification_engine.process_backtrack_events(
@@ -783,11 +785,15 @@ impl State {
 
         let any_checker_accepts_inference = checkers.iter().any(|checker| {
             // Construct the variable state for the conflict check.
-            let variable_state =
-                VariableState::prepare_for_conflict_check(premises.clone(), consequent)
-                    .unwrap_or_else(|| {
-                        panic!("inconsistent atomics in inference by {inference_code:?}")
-                    });
+            let variable_state = VariableState::prepare_for_conflict_check(
+                premises.clone(),
+                consequent,
+            )
+            .unwrap_or_else(|domain| {
+                panic!(
+                    "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
+                )
+            });
 
             checker.check(variable_state, &premises, consequent.as_ref())
         });

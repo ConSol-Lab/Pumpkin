@@ -168,6 +168,10 @@ impl IntegerVariable for Literal {
         self.integer_variable.watch_all(watchers, events)
     }
 
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        self.integer_variable.unwatch_all(watchers)
+    }
+
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         self.integer_variable.unpack_event(event)
     }

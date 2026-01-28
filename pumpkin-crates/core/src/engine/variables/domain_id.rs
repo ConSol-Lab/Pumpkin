@@ -14,7 +14,7 @@ use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
-#[derive(Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Clone, PartialEq, Eq, Copy, Hash, PartialOrd, Ord)]
 pub struct DomainId {
     id: u32,
 }
@@ -155,6 +155,10 @@ impl IntegerVariable for DomainId {
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         watchers.watch_all(*self, events);
+    }
+
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        watchers.unwatch_all(*self);
     }
 
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {

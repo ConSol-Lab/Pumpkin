@@ -11,6 +11,7 @@ use super::PropagatorVarId;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::PredicateId;
+use crate::basic_types::RefOrOwned;
 use crate::engine::Assignments;
 use crate::engine::State;
 use crate::engine::TrailedValues;
@@ -146,6 +147,8 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
+    ///
+    /// Duplicate registrations are ignored.
     pub fn register(
         &mut self,
         var: impl IntegerVariable,
@@ -219,14 +222,8 @@ impl PropagatorConstructorContext<'_> {
     pub fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             propagator_id: self.propagator_id,
-            next_local_id: match &mut self.next_local_id {
-                RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
-                RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
-            },
-            did_register: match &mut self.did_register {
-                RefOrOwned::Ref(did_register) => RefOrOwned::Ref(did_register),
-                RefOrOwned::Owned(did_register) => RefOrOwned::Ref(did_register),
-            },
+            next_local_id: self.next_local_id.reborrow(),
+            did_register: self.did_register.reborrow(),
             state: self.state,
         }
     }
@@ -269,38 +266,6 @@ impl Drop for PropagatorConstructorContext<'_> {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
-        }
-    }
-}
-
-/// Either owns a value or has a mutable reference to a value.
-///
-/// Used to store data in a reborrowed context that needs to be 'shared' with the original context
-/// that was reborrowed from. For example, when dropping a reborrowed context, we want
-/// [`PropagatorConstructorContext::get_next_local_id`] in the original context to 'know' about the
-/// registered local ids in the reborrowed context.
-#[derive(Debug)]
-enum RefOrOwned<'a, T> {
-    Ref(&'a mut T),
-    Owned(T),
-}
-
-impl<T> Deref for RefOrOwned<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            RefOrOwned::Ref(reference) => reference,
-            RefOrOwned::Owned(value) => value,
-        }
-    }
-}
-
-impl<T> DerefMut for RefOrOwned<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            RefOrOwned::Ref(reference) => reference,
-            RefOrOwned::Owned(value) => value,
         }
     }
 }

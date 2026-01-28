@@ -712,7 +712,7 @@ impl PredicateTracker {
 mod tests {
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
-    use crate::engine::notifications::PredicateIdAssignments;
+    use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
     use crate::engine::notifications::predicate_notification::predicate_tracker::PredicateTracker;
     use crate::engine::notifications::predicate_notification::predicate_tracker::TrackedValue;
     use crate::predicate;

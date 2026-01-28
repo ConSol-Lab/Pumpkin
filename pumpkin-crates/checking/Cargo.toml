@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 dyn-clone = "1.0.20"
+fnv = "1.0.7"
 
 [lints]
 workspace = true

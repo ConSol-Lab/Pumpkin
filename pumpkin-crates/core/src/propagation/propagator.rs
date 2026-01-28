@@ -148,7 +148,11 @@ pub trait Propagator: Downcast + DynClone {
     /// [`PropagatorConstructor`] using [`PropagatorConstructorContext::register_predicate`]).
     ///
     /// By default, the propagator will be enqueued.
-    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) -> EnqueueDecision {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        _context: NotificationContext,
+        _predicate_id: PredicateId,
+    ) -> EnqueueDecision {
         EnqueueDecision::Enqueue
     }
 
@@ -156,7 +160,7 @@ pub trait Propagator: Downcast + DynClone {
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
-    fn synchronise(&mut self, _domains: Domains) {}
+    fn synchronise(&mut self, _context: NotificationContext<'_>) {}
 
     /// Returns the [`Priority`] of the propagator, used for determining the order in which
     /// propagators are called.

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::hash::Hash;
+
+use fnv::FnvHashMap;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
@@ -16,7 +16,7 @@ use crate::IntExt;
 /// variable is infinite.
 #[derive(Clone, Debug)]
 pub struct VariableState<Atomic: AtomicConstraint> {
-    domains: HashMap<Atomic::Identifier, Domain>,
+    domains: FnvHashMap<Atomic::Identifier, Domain>,
 }
 
 impl<Atomic: AtomicConstraint> Default for VariableState<Atomic> {
@@ -27,10 +27,9 @@ impl<Atomic: AtomicConstraint> Default for VariableState<Atomic> {
     }
 }
 
-impl<Ident, Atomic> VariableState<Atomic>
+impl<Atomic> VariableState<Atomic>
 where
-    Ident: Hash + Eq,
-    Atomic: AtomicConstraint<Identifier = Ident>,
+    Atomic: AtomicConstraint,
 {
     /// Create a variable state that applies all the premises and, if present, the negation of the
     /// consequent.
@@ -42,25 +41,33 @@ where
     pub fn prepare_for_conflict_check(
         premises: impl IntoIterator<Item = Atomic>,
         consequent: Option<Atomic>,
-    ) -> Option<Self> {
+    ) -> Result<Self, Atomic::Identifier> {
         let mut variable_state = VariableState::default();
 
         let negated_consequent = consequent.as_ref().map(AtomicConstraint::negate);
 
         // Apply all the premises and the negation of the consequent to the state.
-        if !premises
+        if let Some(premise) = premises
             .into_iter()
             .chain(negated_consequent)
-            .all(|premise| variable_state.apply(&premise))
+            .find(|premise| !variable_state.apply(premise))
         {
-            return None;
+            return Err(premise.identifier());
         }
 
-        Some(variable_state)
+        Ok(variable_state)
+    }
+
+    /// The domains for which at least one atomic is applied.
+    pub fn domains<'this>(&'this self) -> impl Iterator<Item = &'this Atomic::Identifier> + 'this
+    where
+        Atomic::Identifier: 'this,
+    {
+        self.domains.keys()
     }
 
     /// Get the lower bound of a variable.
-    pub fn lower_bound(&self, identifier: &Ident) -> IntExt {
+    pub fn lower_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
         self.domains
             .get(identifier)
             .map(|domain| domain.lower_bound)
@@ -68,7 +75,7 @@ where
     }
 
     /// Get the upper bound of a variable.
-    pub fn upper_bound(&self, identifier: &Ident) -> IntExt {
+    pub fn upper_bound(&self, identifier: &Atomic::Identifier) -> IntExt {
         self.domains
             .get(identifier)
             .map(|domain| domain.upper_bound)
@@ -76,7 +83,7 @@ where
     }
 
     /// Tests whether the given value is in the domain of the variable.
-    pub fn contains(&self, identifier: &Ident, value: i32) -> bool {
+    pub fn contains(&self, identifier: &Atomic::Identifier, value: i32) -> bool {
         self.domains
             .get(identifier)
             .map(|domain| {
@@ -88,9 +95,9 @@ where
     }
 
     /// Get the holes within the lower and upper bound of the variable expression.
-    pub fn holes<'a>(&'a self, identifier: &Ident) -> impl Iterator<Item = i32> + 'a
+    pub fn holes<'a>(&'a self, identifier: &Atomic::Identifier) -> impl Iterator<Item = i32> + 'a
     where
-        Ident: 'a,
+        Atomic::Identifier: 'a,
     {
         self.domains
             .get(identifier)
@@ -100,7 +107,7 @@ where
     }
 
     /// Get the fixed value of this variable, if it is fixed.
-    pub fn fixed_value(&self, identifier: &Ident) -> Option<i32> {
+    pub fn fixed_value(&self, identifier: &Atomic::Identifier) -> Option<i32> {
         let domain = self.domains.get(identifier)?;
 
         if domain.lower_bound == domain.upper_bound {
@@ -119,9 +126,9 @@ where
     /// Obtain an iterator over the domain of the variable.
     ///
     /// If the domain is unbounded, then `None` is returned.
-    pub fn iter_domain<'a>(&'a self, identifier: &Ident) -> Option<DomainIterator<'a>>
+    pub fn iter_domain<'a>(&'a self, identifier: &Atomic::Identifier) -> Option<DomainIterator<'a>>
     where
-        Ident: 'a,
+        Atomic::Identifier: 'a,
     {
         let domain = self.domains.get(identifier)?;
 
