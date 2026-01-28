@@ -27,6 +27,7 @@ pub(crate) struct ArenaAllocator {
     /// The current index for the next [`NogoodId`] which is entered; see
     /// [`ArenaAllocator::nogood_id_to_index`].
     current_index: u32,
+    capacity: usize,
 }
 
 #[derive(Clone, Copy, Debug, Hash)]
@@ -45,15 +46,19 @@ impl StorageKey for NogoodIndex {
 impl ArenaAllocator {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
-            nogoods: Vec::with_capacity(capacity),
+            nogoods: Vec::default(),
             nogood_id_to_index: HashMap::default(),
             current_index: 0,
+            capacity
         }
     }
 
     /// Inserts the nogood consisting of [`PredicateId`]s and returns its corresponding
     /// [`NogoodId`].
     pub(crate) fn insert(&mut self, nogood: Vec<PredicateId>) -> NogoodId {
+        if self.nogoods.is_empty() {
+            self.nogoods.reserve(self.capacity);
+        }
         let nogood_id = NogoodId::create_from_index(self.nogoods.len());
 
         // We store the NogoodId with its index.
