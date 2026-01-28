@@ -54,14 +54,21 @@ fn check_explanation(
             .is_some_and(|value| value)
     });
     if !all_predicates_hold {
-        eprintln!("Not all predicates hold in the explanation for {explained_predicate:?}")
+        eprintln!(
+            "Not all predicates hold in the explanation {explanation:?} -> {explained_predicate:?}"
+        )
     }
     let at_least_one_element_from_current_level = explanation.iter().any(|&predicate| {
         context.get_checkpoint_for_predicate(predicate).unwrap() == context.get_checkpoint()
     });
     if !at_least_one_element_from_current_level {
         eprintln!(
-            "At least one predicate in the explanation for {explained_predicate:?} should be from the current decision level"
+            "At least one predicate in the explanation {explanation:?} -> {explained_predicate:?} should be from the current decision level {}\n{:?}",
+            context.get_checkpoint(),
+            explanation
+                .iter()
+                .map(|&predicate| context.get_checkpoint_for_predicate(predicate).unwrap())
+                .collect::<Vec<_>>()
         )
     }
 
@@ -241,14 +248,11 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 let predicate = predicate![propagating_task.start_variable >= profile.end + 1];
-                pumpkin_assert_extreme!(check_explanation(
-                    predicate,
-                    &explanation,
-                    context.domains()
-                ));
-
                 let mut reason = (*explanation).clone();
                 reason.push(lower_bound_predicate_propagating_task);
+
+                pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
+
                 context.post(predicate, reason, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
@@ -296,14 +300,11 @@ impl CumulativePropagationHandler {
                     propagating_task.start_variable
                         <= profile.start - propagating_task.processing_time
                 ];
-                pumpkin_assert_extreme!(check_explanation(
-                    predicate,
-                    &explanation,
-                    context.domains()
-                ));
-
                 let mut reason = (*explanation).clone();
                 reason.push(upper_bound_predicate_propagating_task);
+
+                pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
+
                 context.post(predicate, reason, &self.inference_code)
             }
             CumulativeExplanationType::Pointwise => {
