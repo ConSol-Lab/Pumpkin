@@ -60,13 +60,12 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         let watched_predicates = if hypercube_predicates.is_empty() {
             let true_predicate = Predicate::trivially_true();
             let true_predicate_id = context.register_predicate(true_predicate);
-            [true_predicate_id; 3]
+            [true_predicate_id; NUM_WATCHED_PREDICATES]
         } else {
             let last_idx = hypercube_predicates.len() - 1;
             [
                 context.register_predicate(hypercube_predicates[0.min(last_idx)]),
                 context.register_predicate(hypercube_predicates[1.min(last_idx)]),
-                context.register_predicate(hypercube_predicates[2.min(last_idx)]),
             ]
         };
 
@@ -83,7 +82,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
 declare_inference_label!(HypercubeLinear);
 
-const NUM_WATCHED_PREDICATES: usize = 3;
+const NUM_WATCHED_PREDICATES: usize = 2;
 
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
