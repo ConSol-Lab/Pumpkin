@@ -546,4 +546,58 @@ mod tests {
             })
             .expect("No empty domains");
     }
+
+    #[test]
+    fn a_unbounded_does_not_panic() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(i32::MIN, i32::MAX);
+        let b = solver.new_variable(12, 12);
+        let c = solver.new_variable(144, 144);
+
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
+            .expect("No empty domains");
+    }
+
+    #[test]
+    fn c_unbounded_does_not_panic() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(12, 12);
+        let b = solver.new_variable(12, 12);
+        let c = solver.new_variable(i32::MIN, i32::MAX);
+
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
+            .expect("No empty domains");
+    }
+
+    #[test]
+    fn all_unbounded_does_not_panic() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(i32::MIN, i32::MAX);
+        let b = solver.new_variable(i32::MIN, i32::MAX);
+        let c = solver.new_variable(i32::MIN, i32::MAX);
+
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
+            .expect("No empty domains");
+    }
 }
