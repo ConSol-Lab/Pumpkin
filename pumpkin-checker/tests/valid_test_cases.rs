@@ -10,7 +10,20 @@ macro_rules! accept_proof {
     };
 }
 
-accept_proof!(ghoulomb_3_5_11);
+accept_proof!(market_split_u3_01);
+accept_proof!(market_split_u3_02);
+accept_proof!(market_split_u3_03);
+accept_proof!(market_split_u3_04);
+
+accept_proof!(rcpsp00);
+accept_proof!(rcpsp01);
+accept_proof!(rcpsp02);
+accept_proof!(rcpsp03);
+
+accept_proof!(sudoku_p0);
+accept_proof!(sudoku_p1);
+accept_proof!(sudoku_p16);
+accept_proof!(sudoku_p17);
 
 fn run_checker_on_proof(model: &str) {
     let model_path = format!("{}/tests/proofs/{model}.fzn", env!("CARGO_MANIFEST_DIR"));

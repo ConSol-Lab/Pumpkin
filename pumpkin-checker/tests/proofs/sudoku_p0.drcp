@@ -1,0 +1,1239 @@
+a 1 [X_INTRODUCED_74_ >= 3]
+a 2 [X_INTRODUCED_73_ <= 7]
+a 3 [X_INTRODUCED_72_ >= 8]
+a 4 [X_INTRODUCED_71_ >= 6]
+a 5 [X_INTRODUCED_70_ >= 9]
+a 6 [X_INTRODUCED_69_ <= 1]
+a 7 [X_INTRODUCED_68_ >= 4]
+a 8 [X_INTRODUCED_67_ <= 5]
+a 9 [X_INTRODUCED_66_ <= 6]
+a 10 [X_INTRODUCED_65_ >= 8]
+a 11 [X_INTRODUCED_64_ <= 1]
+a 12 [X_INTRODUCED_63_ >= 4]
+a 13 [X_INTRODUCED_62_ <= 2]
+a 14 [X_INTRODUCED_60_ <= 4]
+a 15 [X_INTRODUCED_59_ <= 7]
+a 16 [X_INTRODUCED_58_ >= 3]
+a 17 [X_INTRODUCED_57_ >= 5]
+a 18 [X_INTRODUCED_56_ >= 8]
+a 19 [X_INTRODUCED_54_ <= 7]
+a 20 [X_INTRODUCED_53_ >= 3]
+a 21 [X_INTRODUCED_52_ <= 8]
+a 22 [X_INTRODUCED_51_ >= 6]
+a 23 [X_INTRODUCED_50_ >= 5]
+a 24 [X_INTRODUCED_49_ >= 8]
+a 25 [X_INTRODUCED_48_ <= 5]
+a 26 [X_INTRODUCED_47_ >= 4]
+a 27 [X_INTRODUCED_45_ <= 1]
+a 28 [X_INTRODUCED_44_ >= 6]
+a 29 [X_INTRODUCED_43_ <= 2]
+a 30 [X_INTRODUCED_42_ >= 3]
+a 31 [X_INTRODUCED_41_ >= 3]
+a 32 [X_INTRODUCED_40_ >= 5]
+a 33 [X_INTRODUCED_39_ <= 4]
+a 34 [X_INTRODUCED_38_ >= 2]
+a 35 [X_INTRODUCED_37_ <= 8]
+a 36 [X_INTRODUCED_36_ >= 7]
+a 37 [X_INTRODUCED_35_ >= 7]
+a 38 [X_INTRODUCED_34_ >= 5]
+a 39 [X_INTRODUCED_33_ >= 2]
+a 40 [X_INTRODUCED_32_ <= 3]
+a 41 [X_INTRODUCED_30_ >= 6]
+a 42 [X_INTRODUCED_29_ <= 4]
+a 43 [X_INTRODUCED_26_ >= 7]
+a 44 [X_INTRODUCED_25_ <= 2]
+a 45 [X_INTRODUCED_24_ <= 5]
+a 46 [X_INTRODUCED_23_ >= 9]
+a 47 [X_INTRODUCED_22_ <= 2]
+a 48 [X_INTRODUCED_20_ >= 5]
+a 49 [X_INTRODUCED_19_ >= 3]
+a 50 [X_INTRODUCED_18_ <= 4]
+a 51 [X_INTRODUCED_17_ >= 7]
+a 52 [objective >= -3]
+i 29 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 0 52 c:28 l:linear_bounds
+a 53 [X_INTRODUCED_74_ >= 1]
+i 30 0 53 l:initial_domain
+a 54 [X_INTRODUCED_69_ != 5]
+a 55 [X_INTRODUCED_69_ != 4]
+a 56 [X_INTRODUCED_69_ != 7]
+a 57 [X_INTRODUCED_69_ != 6]
+a 58 [X_INTRODUCED_69_ != 3]
+a 59 [X_INTRODUCED_69_ != 2]
+a 60 [X_INTRODUCED_69_ != 9]
+a 61 [X_INTRODUCED_69_ != 8]
+a 62 [X_INTRODUCED_74_ != 1]
+i 31 6 54 55 56 57 58 59 60 61 0 62 c:1 l:all_different
+a 63 [X_INTRODUCED_69_ >= 1]
+i 32 0 63 l:initial_domain
+a 64 [X_INTRODUCED_69_ <= 9]
+i 33 0 64 l:initial_domain
+a 65 [X_INTRODUCED_57_ >= 3]
+a 66 [X_INTRODUCED_57_ <= 8]
+a 67 [X_INTRODUCED_57_ != 4]
+a 68 [X_INTRODUCED_57_ != 7]
+a 69 [X_INTRODUCED_57_ != 6]
+a 70 [X_INTRODUCED_57_ != 9]
+a 71 [X_INTRODUCED_57_ != 1]
+a 72 [X_INTRODUCED_57_ != 2]
+a 73 [X_INTRODUCED_70_ >= 3]
+a 74 [X_INTRODUCED_70_ != 5]
+a 75 [X_INTRODUCED_70_ != 4]
+a 76 [X_INTRODUCED_70_ != 7]
+a 77 [X_INTRODUCED_70_ != 1]
+a 78 [X_INTRODUCED_70_ != 2]
+a 79 [X_INTRODUCED_68_ >= 3]
+a 80 [X_INTRODUCED_68_ <= 8]
+a 81 [X_INTRODUCED_68_ != 5]
+a 82 [X_INTRODUCED_68_ != 1]
+a 83 [X_INTRODUCED_68_ != 9]
+a 84 [X_INTRODUCED_68_ != 2]
+a 85 [X_INTRODUCED_56_ >= 3]
+a 86 [X_INTRODUCED_56_ <= 8]
+a 87 [X_INTRODUCED_56_ != 7]
+a 88 [X_INTRODUCED_56_ != 6]
+a 89 [X_INTRODUCED_56_ != 9]
+a 90 [X_INTRODUCED_56_ != 1]
+a 91 [X_INTRODUCED_56_ != 2]
+i 34 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 0 60 c:21 l:all_different
+a 92 [X_INTRODUCED_57_ >= 1]
+i 35 0 92 l:initial_domain
+i 36 0 71 c:14 l:all_different
+i 37 0 72 c:5 l:all_different
+a 93 [X_INTRODUCED_57_ <= 9]
+i 38 0 93 l:initial_domain
+i 39 0 70 c:5 l:all_different
+i 40 0 67 c:14 l:all_different
+i 41 0 68 c:14 l:all_different
+i 42 0 69 c:5 l:all_different
+a 94 [X_INTRODUCED_70_ >= 1]
+i 43 0 94 l:initial_domain
+i 44 0 77 c:14 l:all_different
+i 45 0 78 c:1 l:all_different
+a 95 [X_INTRODUCED_70_ <= 9]
+i 46 0 95 l:initial_domain
+i 47 0 74 c:1 l:all_different
+i 48 0 75 c:14 l:all_different
+i 49 0 76 c:14 l:all_different
+a 96 [X_INTRODUCED_68_ >= 1]
+i 50 0 96 l:initial_domain
+i 51 0 82 c:18 l:all_different
+i 52 0 84 c:1 l:all_different
+a 97 [X_INTRODUCED_68_ <= 9]
+i 53 0 97 l:initial_domain
+i 54 0 83 c:18 l:all_different
+i 55 0 81 c:1 l:all_different
+a 98 [X_INTRODUCED_56_ >= 1]
+i 56 0 98 l:initial_domain
+i 57 0 90 c:18 l:all_different
+i 58 0 91 c:5 l:all_different
+a 99 [X_INTRODUCED_56_ <= 9]
+i 59 0 99 l:initial_domain
+i 60 0 89 c:5 l:all_different
+a 100 [X_INTRODUCED_59_ >= 7]
+a 101 [X_INTRODUCED_59_ != 5]
+a 102 [X_INTRODUCED_59_ != 4]
+a 103 [X_INTRODUCED_59_ != 6]
+a 104 [X_INTRODUCED_59_ != 1]
+a 105 [X_INTRODUCED_59_ != 3]
+a 106 [X_INTRODUCED_59_ != 2]
+a 107 [X_INTRODUCED_59_ != 9]
+a 108 [X_INTRODUCED_59_ != 8]
+i 61 100 15 101 102 103 104 105 106 107 108 0 87 c:5 l:all_different
+a 109 [X_INTRODUCED_59_ >= 1]
+i 62 0 109 l:initial_domain
+a 110 [X_INTRODUCED_64_ <= 8]
+a 111 [X_INTRODUCED_64_ != 9]
+a 112 [X_INTRODUCED_64_ != 3]
+a 113 [X_INTRODUCED_64_ != 7]
+a 114 [X_INTRODUCED_65_ <= 8]
+a 115 [X_INTRODUCED_65_ != 4]
+a 116 [X_INTRODUCED_65_ != 7]
+a 117 [X_INTRODUCED_65_ != 6]
+a 118 [X_INTRODUCED_65_ != 9]
+a 119 [X_INTRODUCED_65_ != 3]
+a 120 [X_INTRODUCED_65_ != 2]
+a 121 [X_INTRODUCED_63_ <= 6]
+a 122 [X_INTRODUCED_63_ != 5]
+a 123 [X_INTRODUCED_63_ != 7]
+a 124 [X_INTRODUCED_63_ != 9]
+a 125 [X_INTRODUCED_63_ != 8]
+a 126 [X_INTRODUCED_63_ != 3]
+a 127 [X_INTRODUCED_71_ != 5]
+a 128 [X_INTRODUCED_71_ != 7]
+a 129 [X_INTRODUCED_71_ != 2]
+a 130 [X_INTRODUCED_58_ <= 8]
+a 131 [X_INTRODUCED_58_ != 7]
+a 132 [X_INTRODUCED_58_ != 6]
+a 133 [X_INTRODUCED_58_ != 9]
+a 134 [X_INTRODUCED_58_ != 2]
+i 63 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 0 104 c:20 l:all_different
+a 135 [X_INTRODUCED_64_ >= 1]
+i 64 0 135 l:initial_domain
+a 136 [X_INTRODUCED_64_ <= 9]
+i 65 0 136 l:initial_domain
+i 66 0 111 c:3 l:all_different
+i 67 0 112 c:3 l:all_different
+i 68 0 113 c:3 l:all_different
+a 137 [X_INTRODUCED_65_ >= 1]
+i 69 0 137 l:initial_domain
+a 138 [X_INTRODUCED_65_ <= 9]
+i 70 0 138 l:initial_domain
+i 71 0 118 c:3 l:all_different
+i 72 0 115 c:8 l:all_different
+i 73 0 116 c:3 l:all_different
+i 74 0 117 c:8 l:all_different
+i 75 0 119 c:3 l:all_different
+i 76 0 120 c:8 l:all_different
+a 139 [X_INTRODUCED_63_ >= 1]
+i 77 0 139 l:initial_domain
+a 140 [X_INTRODUCED_63_ <= 9]
+i 78 0 140 l:initial_domain
+i 79 0 124 c:3 l:all_different
+i 80 0 125 c:12 l:all_different
+i 81 0 123 c:3 l:all_different
+i 82 0 122 c:12 l:all_different
+i 83 0 126 c:3 l:all_different
+a 141 [X_INTRODUCED_71_ >= 1]
+i 84 0 141 l:initial_domain
+a 142 [X_INTRODUCED_71_ <= 9]
+i 85 0 142 l:initial_domain
+i 86 0 127 c:1 l:all_different
+i 87 0 128 c:10 l:all_different
+i 88 0 129 c:1 l:all_different
+a 143 [X_INTRODUCED_58_ >= 1]
+i 89 0 143 l:initial_domain
+a 144 [X_INTRODUCED_58_ <= 9]
+i 90 0 144 l:initial_domain
+i 91 0 133 c:5 l:all_different
+i 92 0 131 c:10 l:all_different
+i 93 0 132 c:5 l:all_different
+i 94 0 134 c:5 l:all_different
+i 95 0 106 c:5 l:all_different
+i 96 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 0 105 c:20 l:all_different
+i 97 0 102 c:8 l:all_different
+i 98 0 101 c:20 l:all_different
+i 99 0 103 c:5 l:all_different
+a 145 [X_INTRODUCED_59_ <= 9]
+i 100 0 145 l:initial_domain
+i 101 0 107 c:5 l:all_different
+i 102 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 0 108 c:20 l:all_different
+i 103 0 88 c:5 l:all_different
+i 104 0 61 c:16 l:all_different
+i 105 0 56 c:21 l:all_different
+i 106 0 57 c:16 l:all_different
+i 107 0 54 c:1 l:all_different
+i 108 65 66 67 68 69 70 71 72 79 80 81 82 83 84 85 86 87 88 89 90 91 0 55 c:21 l:all_different
+i 109 0 58 c:16 l:all_different
+i 110 0 59 c:1 l:all_different
+a 146 [X_INTRODUCED_74_ != 2]
+i 111 0 146 c:1 l:all_different
+a 147 [X_INTRODUCED_73_ <= 9]
+i 112 0 147 l:initial_domain
+a 148 [X_INTRODUCED_73_ != 9]
+i 113 0 148 c:4 l:all_different
+a 149 [X_INTRODUCED_73_ != 8]
+i 114 0 149 c:4 l:all_different
+a 150 [X_INTRODUCED_72_ >= 1]
+i 115 0 150 l:initial_domain
+a 151 [X_INTRODUCED_72_ != 1]
+i 116 6 54 55 56 57 58 59 60 61 0 151 c:1 l:all_different
+a 152 [X_INTRODUCED_72_ != 2]
+i 117 0 152 c:1 l:all_different
+a 153 [X_INTRODUCED_72_ != 3]
+i 118 0 153 c:6 l:all_different
+a 154 [X_INTRODUCED_60_ >= 4]
+a 155 [X_INTRODUCED_60_ != 5]
+a 156 [X_INTRODUCED_60_ != 7]
+a 157 [X_INTRODUCED_60_ != 6]
+a 158 [X_INTRODUCED_60_ != 1]
+a 159 [X_INTRODUCED_60_ != 3]
+a 160 [X_INTRODUCED_60_ != 2]
+a 161 [X_INTRODUCED_60_ != 9]
+a 162 [X_INTRODUCED_60_ != 8]
+a 163 [X_INTRODUCED_72_ != 4]
+i 119 154 14 155 156 157 158 159 160 161 162 0 163 c:19 l:all_different
+a 164 [X_INTRODUCED_60_ >= 1]
+i 120 0 164 l:initial_domain
+a 165 [X_INTRODUCED_55_ <= 1]
+a 166 [X_INTRODUCED_55_ != 5]
+a 167 [X_INTRODUCED_55_ != 4]
+a 168 [X_INTRODUCED_55_ != 7]
+a 169 [X_INTRODUCED_55_ != 6]
+a 170 [X_INTRODUCED_55_ != 3]
+a 171 [X_INTRODUCED_55_ != 2]
+a 172 [X_INTRODUCED_55_ != 9]
+a 173 [X_INTRODUCED_55_ != 8]
+i 121 165 166 167 168 169 170 171 172 173 0 158 c:4 l:all_different
+a 174 [X_INTRODUCED_55_ >= 1]
+i 122 0 174 l:initial_domain
+a 175 [X_INTRODUCED_55_ <= 9]
+i 123 0 175 l:initial_domain
+i 124 0 172 c:4 l:all_different
+i 125 0 173 c:4 l:all_different
+a 176 [X_INTRODUCED_52_ >= 8]
+a 177 [X_INTRODUCED_52_ != 5]
+a 178 [X_INTRODUCED_52_ != 4]
+a 179 [X_INTRODUCED_52_ != 7]
+a 180 [X_INTRODUCED_52_ != 6]
+a 181 [X_INTRODUCED_52_ != 1]
+a 182 [X_INTRODUCED_52_ != 3]
+a 183 [X_INTRODUCED_52_ != 2]
+a 184 [X_INTRODUCED_52_ != 9]
+a 185 [X_INTRODUCED_54_ >= 5]
+a 186 [X_INTRODUCED_54_ <= 8]
+a 187 [X_INTRODUCED_54_ != 4]
+a 188 [X_INTRODUCED_54_ != 6]
+a 189 [X_INTRODUCED_54_ != 9]
+a 190 [X_INTRODUCED_54_ != 1]
+a 191 [X_INTRODUCED_54_ != 3]
+a 192 [X_INTRODUCED_54_ != 2]
+a 193 [X_INTRODUCED_50_ <= 7]
+a 194 [X_INTRODUCED_50_ != 1]
+a 195 [X_INTRODUCED_50_ != 4]
+a 196 [X_INTRODUCED_50_ != 6]
+a 197 [X_INTRODUCED_50_ != 9]
+a 198 [X_INTRODUCED_50_ != 8]
+a 199 [X_INTRODUCED_50_ != 3]
+a 200 [X_INTRODUCED_50_ != 2]
+i 126 176 21 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 23 193 194 195 196 197 198 199 200 0 168 c:7 l:all_different
+a 201 [X_INTRODUCED_52_ >= 1]
+i 127 0 201 l:initial_domain
+a 202 [X_INTRODUCED_39_ >= 2]
+a 203 [X_INTRODUCED_39_ != 5]
+a 204 [X_INTRODUCED_39_ != 7]
+a 205 [X_INTRODUCED_39_ != 6]
+a 206 [X_INTRODUCED_39_ != 1]
+a 207 [X_INTRODUCED_39_ != 9]
+a 208 [X_INTRODUCED_39_ != 3]
+a 209 [X_INTRODUCED_39_ != 8]
+a 210 [X_INTRODUCED_45_ <= 4]
+a 211 [X_INTRODUCED_45_ != 5]
+a 212 [X_INTRODUCED_45_ != 7]
+a 213 [X_INTRODUCED_45_ != 6]
+a 214 [X_INTRODUCED_45_ != 9]
+a 215 [X_INTRODUCED_45_ != 8]
+a 216 [X_INTRODUCED_45_ != 3]
+a 217 [X_INTRODUCED_38_ <= 4]
+a 218 [X_INTRODUCED_38_ != 5]
+a 219 [X_INTRODUCED_38_ != 7]
+a 220 [X_INTRODUCED_38_ != 6]
+a 221 [X_INTRODUCED_38_ != 1]
+a 222 [X_INTRODUCED_38_ != 9]
+a 223 [X_INTRODUCED_38_ != 8]
+a 224 [X_INTRODUCED_38_ != 3]
+i 128 202 33 203 204 205 206 207 208 209 210 211 212 213 214 215 216 34 217 218 219 220 221 222 223 224 0 181 c:23 l:all_different
+a 225 [X_INTRODUCED_39_ >= 1]
+i 129 0 225 l:initial_domain
+i 130 0 206 c:11 l:all_different
+a 226 [X_INTRODUCED_39_ <= 9]
+i 131 0 226 l:initial_domain
+i 132 0 207 c:11 l:all_different
+a 227 [X_INTRODUCED_37_ >= 8]
+a 228 [X_INTRODUCED_37_ != 5]
+a 229 [X_INTRODUCED_37_ != 4]
+a 230 [X_INTRODUCED_37_ != 7]
+a 231 [X_INTRODUCED_37_ != 6]
+a 232 [X_INTRODUCED_37_ != 1]
+a 233 [X_INTRODUCED_37_ != 3]
+a 234 [X_INTRODUCED_37_ != 2]
+a 235 [X_INTRODUCED_37_ != 9]
+i 133 227 35 228 229 230 231 232 233 234 235 0 209 c:11 l:all_different
+a 236 [X_INTRODUCED_37_ >= 1]
+i 134 0 236 l:initial_domain
+i 135 0 232 c:11 l:all_different
+a 237 [X_INTRODUCED_43_ >= 2]
+a 238 [X_INTRODUCED_43_ <= 5]
+a 239 [X_INTRODUCED_43_ != 7]
+a 240 [X_INTRODUCED_43_ != 6]
+a 241 [X_INTRODUCED_43_ != 1]
+a 242 [X_INTRODUCED_43_ != 8]
+a 243 [X_INTRODUCED_43_ != 3]
+a 244 [X_INTRODUCED_43_ != 9]
+a 245 [X_INTRODUCED_36_ >= 2]
+a 246 [X_INTRODUCED_36_ <= 7]
+a 247 [X_INTRODUCED_36_ != 6]
+a 248 [X_INTRODUCED_36_ != 1]
+a 249 [X_INTRODUCED_36_ != 9]
+a 250 [X_INTRODUCED_36_ != 3]
+a 251 [X_INTRODUCED_36_ != 8]
+i 136 237 238 239 240 241 242 243 244 23 193 194 195 196 197 198 199 200 245 246 247 248 249 250 251 0 234 c:24 l:all_different
+a 252 [X_INTRODUCED_43_ >= 1]
+i 137 0 252 l:initial_domain
+i 138 6 54 55 56 57 58 59 60 61 0 241 c:16 l:all_different
+a 253 [X_INTRODUCED_43_ <= 9]
+i 139 0 253 l:initial_domain
+a 254 [X_INTRODUCED_46_ >= 9]
+a 255 [X_INTRODUCED_46_ != 5]
+a 256 [X_INTRODUCED_46_ != 4]
+a 257 [X_INTRODUCED_46_ != 7]
+a 258 [X_INTRODUCED_46_ != 6]
+a 259 [X_INTRODUCED_46_ != 1]
+a 260 [X_INTRODUCED_46_ != 3]
+a 261 [X_INTRODUCED_46_ != 2]
+a 262 [X_INTRODUCED_46_ != 8]
+i 140 254 255 256 257 258 259 260 261 262 0 244 c:9 l:all_different
+a 263 [X_INTRODUCED_46_ >= 1]
+i 141 0 263 l:initial_domain
+a 264 [X_INTRODUCED_40_ >= 3]
+a 265 [X_INTRODUCED_40_ <= 8]
+a 266 [X_INTRODUCED_40_ != 4]
+a 267 [X_INTRODUCED_40_ != 7]
+a 268 [X_INTRODUCED_40_ != 6]
+a 269 [X_INTRODUCED_40_ != 1]
+a 270 [X_INTRODUCED_40_ != 9]
+a 271 [X_INTRODUCED_40_ != 2]
+a 272 [X_INTRODUCED_53_ <= 8]
+a 273 [X_INTRODUCED_53_ != 4]
+a 274 [X_INTRODUCED_53_ != 7]
+a 275 [X_INTRODUCED_53_ != 6]
+a 276 [X_INTRODUCED_53_ != 9]
+a 277 [X_INTRODUCED_53_ != 2]
+a 278 [X_INTRODUCED_51_ <= 7]
+a 279 [X_INTRODUCED_51_ != 5]
+a 280 [X_INTRODUCED_51_ != 4]
+a 281 [X_INTRODUCED_51_ != 9]
+a 282 [X_INTRODUCED_51_ != 8]
+a 283 [X_INTRODUCED_51_ != 2]
+a 284 [X_INTRODUCED_38_ <= 7]
+a 285 [X_INTRODUCED_39_ <= 8]
+i 142 264 265 266 267 268 269 270 271 210 211 212 213 214 215 272 273 274 275 276 277 278 279 280 281 282 283 21 178 179 184 183 34 284 218 220 221 222 223 202 285 204 205 206 207 0 259 c:23 l:all_different
+a 286 [X_INTRODUCED_40_ >= 1]
+i 143 0 286 l:initial_domain
+i 144 0 269 c:11 l:all_different
+i 145 0 271 c:8 l:all_different
+a 287 [X_INTRODUCED_40_ <= 9]
+i 146 0 287 l:initial_domain
+i 147 0 270 c:11 l:all_different
+i 148 0 266 c:8 l:all_different
+i 149 100 15 101 102 103 104 105 106 107 108 0 267 c:8 l:all_different
+i 150 0 268 c:8 l:all_different
+a 288 [X_INTRODUCED_45_ >= 1]
+i 151 0 288 l:initial_domain
+a 289 [X_INTRODUCED_45_ <= 9]
+i 152 0 289 l:initial_domain
+i 153 0 214 c:12 l:all_different
+i 154 0 215 c:12 l:all_different
+i 155 0 212 c:9 l:all_different
+a 290 [X_INTRODUCED_44_ <= 6]
+a 291 [X_INTRODUCED_44_ != 5]
+a 292 [X_INTRODUCED_44_ != 4]
+a 293 [X_INTRODUCED_44_ != 7]
+a 294 [X_INTRODUCED_44_ != 1]
+a 295 [X_INTRODUCED_44_ != 3]
+a 296 [X_INTRODUCED_44_ != 2]
+a 297 [X_INTRODUCED_44_ != 9]
+a 298 [X_INTRODUCED_44_ != 8]
+i 156 28 290 291 292 293 294 295 296 297 298 0 213 c:9 l:all_different
+a 299 [X_INTRODUCED_44_ >= 1]
+i 157 0 299 l:initial_domain
+i 158 0 294 c:14 l:all_different
+a 300 [X_INTRODUCED_37_ >= 2]
+a 301 [X_INTRODUCED_70_ != 6]
+a 302 [X_INTRODUCED_70_ != 3]
+a 303 [X_INTRODUCED_70_ != 8]
+a 304 [X_INTRODUCED_57_ != 3]
+a 305 [X_INTRODUCED_19_ >= 2]
+a 306 [X_INTRODUCED_19_ != 4]
+a 307 [X_INTRODUCED_19_ != 7]
+a 308 [X_INTRODUCED_19_ != 6]
+a 309 [X_INTRODUCED_19_ != 1]
+a 310 [X_INTRODUCED_19_ != 8]
+a 311 [X_INTRODUCED_25_ >= 2]
+a 312 [X_INTRODUCED_25_ != 4]
+a 313 [X_INTRODUCED_25_ != 7]
+a 314 [X_INTRODUCED_25_ != 6]
+a 315 [X_INTRODUCED_25_ != 1]
+a 316 [X_INTRODUCED_25_ != 8]
+a 317 [X_INTRODUCED_25_ != 3]
+i 159 300 35 229 230 231 232 235 5 74 75 76 301 77 302 78 303 17 66 67 68 69 70 71 304 72 305 306 307 308 309 310 311 312 313 314 315 316 317 0 296 c:14 l:all_different
+a 318 [X_INTRODUCED_37_ <= 9]
+i 160 0 318 l:initial_domain
+i 161 0 235 c:11 l:all_different
+i 162 0 229 c:14 l:all_different
+i 163 0 230 c:14 l:all_different
+i 164 0 231 c:11 l:all_different
+i 165 0 302 c:21 l:all_different
+i 166 0 301 c:21 l:all_different
+i 167 65 66 67 68 69 70 71 72 79 80 81 82 83 84 85 86 87 88 89 90 91 0 303 c:21 l:all_different
+i 168 0 304 c:21 l:all_different
+a 319 [X_INTRODUCED_19_ >= 1]
+i 169 0 319 l:initial_domain
+i 170 0 309 c:14 l:all_different
+a 320 [X_INTRODUCED_19_ <= 9]
+i 171 0 320 l:initial_domain
+i 172 0 306 c:14 l:all_different
+i 173 0 307 c:14 l:all_different
+i 174 0 308 c:17 l:all_different
+i 175 0 310 c:17 l:all_different
+a 321 [X_INTRODUCED_25_ >= 1]
+i 176 0 321 l:initial_domain
+i 177 0 315 c:14 l:all_different
+a 322 [X_INTRODUCED_25_ <= 9]
+i 178 0 322 l:initial_domain
+i 179 0 312 c:14 l:all_different
+i 180 0 313 c:14 l:all_different
+i 181 0 314 c:15 l:all_different
+i 182 0 316 c:15 l:all_different
+i 183 0 317 c:15 l:all_different
+i 184 300 35 229 230 231 232 235 5 74 75 76 301 77 302 78 303 17 66 67 68 69 70 71 304 72 305 306 307 308 309 310 311 312 313 314 315 316 317 0 295 c:14 l:all_different
+i 185 0 292 c:14 l:all_different
+i 186 300 35 229 230 231 232 235 5 74 75 76 301 77 302 78 303 17 66 67 68 69 70 71 304 72 305 306 307 308 309 310 311 312 313 314 315 316 317 0 291 c:14 l:all_different
+a 323 [X_INTRODUCED_44_ <= 9]
+i 187 0 323 l:initial_domain
+i 188 5 74 75 76 301 77 302 78 303 0 297 c:14 l:all_different
+i 189 300 35 229 230 231 232 235 5 74 75 76 301 77 302 78 303 17 66 67 68 69 70 71 304 72 305 306 307 308 309 310 311 312 313 314 315 316 317 0 298 c:14 l:all_different
+i 190 0 293 c:9 l:all_different
+i 191 0 211 c:12 l:all_different
+a 324 [X_INTRODUCED_53_ >= 1]
+i 192 0 324 l:initial_domain
+a 325 [X_INTRODUCED_53_ <= 9]
+i 193 0 325 l:initial_domain
+i 194 0 276 c:7 l:all_different
+i 195 0 273 c:7 l:all_different
+i 196 100 15 101 102 103 104 105 106 107 108 0 274 c:8 l:all_different
+i 197 0 275 c:8 l:all_different
+i 198 0 277 c:7 l:all_different
+a 326 [X_INTRODUCED_51_ >= 1]
+i 199 0 326 l:initial_domain
+a 327 [X_INTRODUCED_51_ <= 9]
+i 200 0 327 l:initial_domain
+i 201 0 281 c:7 l:all_different
+i 202 0 282 c:12 l:all_different
+i 203 0 279 c:12 l:all_different
+i 204 0 280 c:7 l:all_different
+i 205 0 283 c:7 l:all_different
+a 328 [X_INTRODUCED_52_ <= 9]
+i 206 0 328 l:initial_domain
+i 207 0 184 c:7 l:all_different
+i 208 0 178 c:7 l:all_different
+i 209 0 179 c:10 l:all_different
+i 210 0 183 c:7 l:all_different
+a 329 [X_INTRODUCED_38_ >= 1]
+i 211 0 329 l:initial_domain
+i 212 0 221 c:11 l:all_different
+a 330 [X_INTRODUCED_38_ <= 9]
+i 213 0 330 l:initial_domain
+i 214 0 222 c:11 l:all_different
+i 215 0 223 c:12 l:all_different
+i 216 0 218 c:12 l:all_different
+i 217 0 220 c:11 l:all_different
+i 218 0 204 c:10 l:all_different
+i 219 0 205 c:11 l:all_different
+i 220 0 261 c:8 l:all_different
+i 221 264 265 266 267 268 269 270 271 210 211 212 213 214 215 272 273 274 275 276 277 278 279 280 281 282 283 21 178 179 184 183 34 284 218 220 221 222 223 202 285 204 205 206 207 0 260 c:23 l:all_different
+i 222 0 256 c:8 l:all_different
+i 223 264 265 266 267 268 269 270 271 210 211 212 213 214 215 272 273 274 275 276 277 278 279 280 281 282 283 21 178 179 184 183 34 284 218 220 221 222 223 202 285 204 205 206 207 0 255 c:23 l:all_different
+i 224 0 258 c:8 l:all_different
+i 225 0 257 c:9 l:all_different
+i 226 264 265 266 267 268 269 270 271 210 211 212 213 214 215 272 273 274 275 276 277 278 279 280 281 282 283 21 178 179 184 183 34 284 218 220 221 222 223 202 285 204 205 206 207 0 262 c:23 l:all_different
+a 331 [X_INTRODUCED_46_ <= 9]
+i 227 0 331 l:initial_domain
+i 228 0 242 c:16 l:all_different
+i 229 0 239 c:9 l:all_different
+i 230 0 240 c:16 l:all_different
+i 231 0 243 c:16 l:all_different
+a 332 [X_INTRODUCED_50_ >= 1]
+i 232 0 332 l:initial_domain
+i 233 6 54 55 56 57 58 59 60 61 0 194 c:16 l:all_different
+i 234 0 200 c:7 l:all_different
+i 235 0 199 c:16 l:all_different
+i 236 0 195 c:7 l:all_different
+a 333 [X_INTRODUCED_50_ <= 9]
+i 237 0 333 l:initial_domain
+i 238 0 197 c:7 l:all_different
+i 239 0 198 c:16 l:all_different
+i 240 0 196 c:16 l:all_different
+a 334 [X_INTRODUCED_36_ >= 1]
+i 241 0 334 l:initial_domain
+i 242 0 248 c:11 l:all_different
+a 335 [X_INTRODUCED_36_ <= 9]
+i 243 0 335 l:initial_domain
+i 244 0 249 c:11 l:all_different
+i 245 0 251 c:16 l:all_different
+i 246 0 247 c:11 l:all_different
+i 247 0 250 c:16 l:all_different
+a 336 [X_INTRODUCED_42_ <= 3]
+a 337 [X_INTRODUCED_42_ != 5]
+a 338 [X_INTRODUCED_42_ != 4]
+a 339 [X_INTRODUCED_42_ != 7]
+a 340 [X_INTRODUCED_42_ != 6]
+a 341 [X_INTRODUCED_42_ != 1]
+a 342 [X_INTRODUCED_42_ != 2]
+a 343 [X_INTRODUCED_42_ != 9]
+a 344 [X_INTRODUCED_42_ != 8]
+i 248 30 336 337 338 339 340 341 342 343 344 0 233 c:24 l:all_different
+a 345 [X_INTRODUCED_42_ >= 1]
+i 249 0 345 l:initial_domain
+i 250 0 341 c:18 l:all_different
+a 346 [X_INTRODUCED_62_ >= 2]
+a 347 [X_INTRODUCED_62_ != 5]
+a 348 [X_INTRODUCED_62_ != 4]
+a 349 [X_INTRODUCED_62_ != 7]
+a 350 [X_INTRODUCED_62_ != 6]
+a 351 [X_INTRODUCED_62_ != 1]
+a 352 [X_INTRODUCED_62_ != 3]
+a 353 [X_INTRODUCED_62_ != 9]
+a 354 [X_INTRODUCED_62_ != 8]
+i 251 346 13 347 348 349 350 351 352 353 354 0 342 c:18 l:all_different
+a 355 [X_INTRODUCED_62_ >= 1]
+i 252 0 355 l:initial_domain
+i 253 0 351 c:18 l:all_different
+a 356 [X_INTRODUCED_62_ <= 9]
+i 254 0 356 l:initial_domain
+i 255 0 353 c:3 l:all_different
+a 357 [X_INTRODUCED_64_ != 5]
+a 358 [X_INTRODUCED_64_ != 2]
+a 359 [X_INTRODUCED_65_ != 5]
+a 360 [X_INTRODUCED_63_ != 2]
+a 361 [X_INTRODUCED_67_ <= 8]
+a 362 [X_INTRODUCED_67_ != 7]
+a 363 [X_INTRODUCED_67_ != 6]
+a 364 [X_INTRODUCED_67_ != 9]
+a 365 [X_INTRODUCED_67_ != 3]
+a 366 [X_INTRODUCED_67_ != 2]
+a 367 [X_INTRODUCED_66_ <= 8]
+a 368 [X_INTRODUCED_66_ != 7]
+a 369 [X_INTRODUCED_66_ != 9]
+a 370 [X_INTRODUCED_66_ != 3]
+a 371 [X_INTRODUCED_66_ != 2]
+i 256 110 357 113 111 112 358 114 359 115 116 117 118 119 120 121 122 123 124 125 126 360 361 362 363 364 365 366 367 368 369 370 371 0 354 c:3 l:all_different
+i 257 0 357 c:20 l:all_different
+i 258 0 358 c:20 l:all_different
+i 259 0 359 c:20 l:all_different
+i 260 0 360 c:20 l:all_different
+a 372 [X_INTRODUCED_67_ >= 1]
+i 261 0 372 l:initial_domain
+a 373 [X_INTRODUCED_67_ <= 9]
+i 262 0 373 l:initial_domain
+i 263 0 364 c:3 l:all_different
+i 264 0 362 c:3 l:all_different
+i 265 0 363 c:2 l:all_different
+i 266 0 365 c:3 l:all_different
+i 267 0 366 c:2 l:all_different
+a 374 [X_INTRODUCED_66_ >= 1]
+i 268 0 374 l:initial_domain
+a 375 [X_INTRODUCED_66_ <= 9]
+i 269 0 375 l:initial_domain
+i 270 0 369 c:3 l:all_different
+i 271 0 368 c:3 l:all_different
+i 272 0 370 c:3 l:all_different
+i 273 0 371 c:6 l:all_different
+i 274 0 349 c:3 l:all_different
+i 275 110 357 113 111 112 358 114 359 115 116 117 118 119 120 121 122 123 124 125 126 360 361 362 363 364 365 366 367 368 369 370 371 0 350 c:3 l:all_different
+i 276 110 357 113 111 112 358 114 359 115 116 117 118 119 120 121 122 123 124 125 126 360 361 362 363 364 365 366 367 368 369 370 371 0 347 c:3 l:all_different
+i 277 110 357 113 111 112 358 114 359 115 116 117 118 119 120 121 122 123 124 125 126 360 361 362 363 364 365 366 367 368 369 370 371 0 348 c:3 l:all_different
+i 278 0 352 c:3 l:all_different
+a 376 [X_INTRODUCED_42_ <= 9]
+i 279 0 376 l:initial_domain
+i 280 0 343 c:18 l:all_different
+a 377 [X_INTRODUCED_68_ != 7]
+a 378 [X_INTRODUCED_68_ != 6]
+a 379 [X_INTRODUCED_68_ != 3]
+a 380 [X_INTRODUCED_56_ >= 4]
+a 381 [X_INTRODUCED_56_ != 3]
+a 382 [X_INTRODUCED_17_ <= 7]
+a 383 [X_INTRODUCED_17_ != 5]
+a 384 [X_INTRODUCED_17_ != 4]
+a 385 [X_INTRODUCED_17_ != 6]
+a 386 [X_INTRODUCED_17_ != 1]
+a 387 [X_INTRODUCED_17_ != 3]
+a 388 [X_INTRODUCED_17_ != 2]
+a 389 [X_INTRODUCED_17_ != 9]
+a 390 [X_INTRODUCED_17_ != 8]
+a 391 [X_INTRODUCED_24_ >= 5]
+a 392 [X_INTRODUCED_24_ <= 7]
+a 393 [X_INTRODUCED_24_ != 2]
+a 394 [X_INTRODUCED_24_ != 4]
+a 395 [X_INTRODUCED_24_ != 6]
+a 396 [X_INTRODUCED_24_ != 1]
+a 397 [X_INTRODUCED_24_ != 8]
+a 398 [X_INTRODUCED_24_ != 3]
+a 399 [X_INTRODUCED_24_ != 9]
+i 281 7 80 81 377 378 82 83 379 84 380 86 87 88 89 90 381 91 51 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 0 344 c:18 l:all_different
+i 282 0 379 c:21 l:all_different
+i 283 0 377 c:21 l:all_different
+i 284 0 378 c:21 l:all_different
+i 285 0 381 c:21 l:all_different
+a 400 [X_INTRODUCED_17_ >= 1]
+i 286 0 400 l:initial_domain
+i 287 0 386 c:18 l:all_different
+i 288 346 13 347 348 349 350 351 352 353 354 0 388 c:18 l:all_different
+a 401 [X_INTRODUCED_20_ != 4]
+a 402 [X_INTRODUCED_20_ != 7]
+a 403 [X_INTRODUCED_20_ != 6]
+a 404 [X_INTRODUCED_20_ != 8]
+a 405 [X_INTRODUCED_20_ != 2]
+a 406 [X_INTRODUCED_19_ <= 5]
+a 407 [X_INTRODUCED_19_ != 9]
+a 408 [X_INTRODUCED_19_ != 2]
+a 409 [X_INTRODUCED_23_ != 5]
+a 410 [X_INTRODUCED_23_ != 4]
+a 411 [X_INTRODUCED_23_ != 7]
+a 412 [X_INTRODUCED_23_ != 6]
+a 413 [X_INTRODUCED_23_ != 1]
+a 414 [X_INTRODUCED_23_ != 3]
+a 415 [X_INTRODUCED_23_ != 2]
+a 416 [X_INTRODUCED_23_ != 8]
+a 417 [X_INTRODUCED_21_ <= 1]
+a 418 [X_INTRODUCED_21_ != 5]
+a 419 [X_INTRODUCED_21_ != 4]
+a 420 [X_INTRODUCED_21_ != 7]
+a 421 [X_INTRODUCED_21_ != 6]
+a 422 [X_INTRODUCED_21_ != 3]
+a 423 [X_INTRODUCED_21_ != 2]
+a 424 [X_INTRODUCED_21_ != 9]
+a 425 [X_INTRODUCED_21_ != 8]
+i 289 401 402 403 404 405 49 406 306 307 308 309 310 407 408 46 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 0 387 c:17 l:all_different
+a 426 [X_INTRODUCED_20_ >= 1]
+i 290 0 426 l:initial_domain
+a 427 [X_INTRODUCED_20_ <= 9]
+i 291 0 427 l:initial_domain
+a 428 [X_INTRODUCED_18_ >= 4]
+a 429 [X_INTRODUCED_18_ != 5]
+a 430 [X_INTRODUCED_18_ != 7]
+a 431 [X_INTRODUCED_18_ != 6]
+a 432 [X_INTRODUCED_18_ != 1]
+a 433 [X_INTRODUCED_18_ != 3]
+a 434 [X_INTRODUCED_18_ != 2]
+a 435 [X_INTRODUCED_18_ != 9]
+a 436 [X_INTRODUCED_18_ != 8]
+i 292 428 50 429 430 431 432 433 434 435 436 0 401 c:17 l:all_different
+a 437 [X_INTRODUCED_18_ >= 1]
+i 293 0 437 l:initial_domain
+i 294 6 54 55 56 57 58 59 60 61 0 432 c:16 l:all_different
+a 438 [X_INTRODUCED_22_ >= 2]
+a 439 [X_INTRODUCED_22_ != 5]
+a 440 [X_INTRODUCED_22_ != 4]
+a 441 [X_INTRODUCED_22_ != 7]
+a 442 [X_INTRODUCED_22_ != 6]
+a 443 [X_INTRODUCED_22_ != 1]
+a 444 [X_INTRODUCED_22_ != 3]
+a 445 [X_INTRODUCED_22_ != 9]
+a 446 [X_INTRODUCED_22_ != 8]
+i 295 438 47 439 440 441 442 443 444 445 446 0 434 c:17 l:all_different
+a 447 [X_INTRODUCED_22_ >= 1]
+i 296 0 447 l:initial_domain
+a 448 [X_INTRODUCED_48_ != 7]
+a 449 [X_INTRODUCED_48_ != 6]
+a 450 [X_INTRODUCED_48_ != 9]
+a 451 [X_INTRODUCED_48_ != 8]
+a 452 [X_INTRODUCED_48_ != 2]
+a 453 [X_INTRODUCED_55_ <= 7]
+a 454 [X_INTRODUCED_41_ <= 7]
+a 455 [X_INTRODUCED_41_ != 6]
+a 456 [X_INTRODUCED_41_ != 9]
+a 457 [X_INTRODUCED_41_ != 8]
+a 458 [X_INTRODUCED_41_ != 1]
+a 459 [X_INTRODUCED_41_ != 2]
+a 460 [X_INTRODUCED_73_ >= 3]
+a 461 [X_INTRODUCED_73_ != 5]
+a 462 [X_INTRODUCED_73_ != 6]
+a 463 [X_INTRODUCED_73_ != 1]
+a 464 [X_INTRODUCED_73_ != 2]
+a 465 [X_INTRODUCED_60_ <= 5]
+i 297 25 448 449 450 451 452 453 167 169 172 173 171 31 454 455 456 457 458 459 460 2 461 462 148 149 463 464 465 156 157 161 162 160 0 443 c:4 l:all_different
+a 466 [X_INTRODUCED_48_ >= 1]
+i 298 0 466 l:initial_domain
+a 467 [X_INTRODUCED_48_ <= 9]
+i 299 0 467 l:initial_domain
+i 300 0 450 c:4 l:all_different
+i 301 0 451 c:4 l:all_different
+i 302 0 448 c:9 l:all_different
+i 303 0 449 c:4 l:all_different
+i 304 0 452 c:22 l:all_different
+i 305 0 167 c:7 l:all_different
+i 306 0 169 c:4 l:all_different
+i 307 0 171 c:7 l:all_different
+a 468 [X_INTRODUCED_41_ >= 1]
+i 308 0 468 l:initial_domain
+i 309 0 458 c:11 l:all_different
+i 310 0 459 c:22 l:all_different
+a 469 [X_INTRODUCED_41_ <= 9]
+i 311 0 469 l:initial_domain
+i 312 0 456 c:4 l:all_different
+i 313 0 457 c:4 l:all_different
+i 314 0 455 c:4 l:all_different
+a 470 [X_INTRODUCED_73_ >= 1]
+i 315 0 470 l:initial_domain
+i 316 6 54 55 56 57 58 59 60 61 0 463 c:1 l:all_different
+i 317 0 464 c:1 l:all_different
+i 318 0 461 c:1 l:all_different
+i 319 0 462 c:4 l:all_different
+a 471 [X_INTRODUCED_60_ <= 9]
+i 320 0 471 l:initial_domain
+i 321 0 161 c:4 l:all_different
+i 322 0 162 c:4 l:all_different
+i 323 100 15 101 102 103 104 105 106 107 108 0 156 c:5 l:all_different
+i 324 0 157 c:4 l:all_different
+i 325 0 160 c:5 l:all_different
+a 472 [X_INTRODUCED_22_ <= 9]
+i 326 0 472 l:initial_domain
+i 327 0 445 c:4 l:all_different
+i 328 0 446 c:4 l:all_different
+i 329 25 448 449 450 451 452 453 167 169 172 173 171 31 454 455 456 457 458 459 460 2 461 462 148 149 463 464 465 156 157 161 162 160 0 441 c:4 l:all_different
+i 330 0 442 c:4 l:all_different
+i 331 25 448 449 450 451 452 453 167 169 172 173 171 31 454 455 456 457 458 459 460 2 461 462 148 149 463 464 465 156 157 161 162 160 0 439 c:4 l:all_different
+i 332 25 448 449 450 451 452 453 167 169 172 173 171 31 454 455 456 457 458 459 460 2 461 462 148 149 463 464 465 156 157 161 162 160 0 440 c:4 l:all_different
+i 333 25 448 449 450 451 452 453 167 169 172 173 171 31 454 455 456 457 458 459 460 2 461 462 148 149 463 464 465 156 157 161 162 160 0 444 c:4 l:all_different
+i 334 0 433 c:16 l:all_different
+a 473 [X_INTRODUCED_18_ <= 9]
+i 335 0 473 l:initial_domain
+a 474 [X_INTRODUCED_43_ != 4]
+a 475 [X_INTRODUCED_31_ >= 2]
+a 476 [X_INTRODUCED_31_ != 4]
+a 477 [X_INTRODUCED_31_ != 6]
+a 478 [X_INTRODUCED_31_ != 1]
+a 479 [X_INTRODUCED_31_ != 8]
+a 480 [X_INTRODUCED_31_ != 3]
+a 481 [X_INTRODUCED_36_ != 4]
+i 336 237 238 474 239 240 241 242 243 244 23 193 194 195 196 197 198 199 200 475 476 477 478 479 480 245 246 481 247 248 249 250 251 0 435 c:16 l:all_different
+i 337 0 474 c:24 l:all_different
+a 482 [X_INTRODUCED_31_ >= 1]
+i 338 0 482 l:initial_domain
+i 339 0 478 c:13 l:all_different
+a 483 [X_INTRODUCED_31_ <= 9]
+i 340 0 483 l:initial_domain
+i 341 0 476 c:13 l:all_different
+i 342 0 477 c:16 l:all_different
+i 343 0 479 c:13 l:all_different
+i 344 0 480 c:16 l:all_different
+i 345 0 481 c:24 l:all_different
+i 346 0 436 c:16 l:all_different
+i 347 23 193 194 195 196 197 198 199 200 237 238 474 239 240 241 242 243 244 245 246 481 247 248 249 250 251 0 430 c:16 l:all_different
+i 348 0 431 c:16 l:all_different
+i 349 237 238 474 239 240 241 242 243 244 245 246 481 247 248 249 250 251 23 193 194 195 196 197 198 199 200 0 429 c:16 l:all_different
+i 350 0 402 c:10 l:all_different
+i 351 0 403 c:17 l:all_different
+i 352 0 404 c:17 l:all_different
+i 353 438 47 439 440 441 442 443 444 445 446 0 405 c:17 l:all_different
+i 354 438 47 439 440 441 442 443 444 445 446 0 408 c:17 l:all_different
+i 355 5 74 75 76 301 77 302 78 303 0 407 c:14 l:all_different
+a 484 [X_INTRODUCED_23_ >= 1]
+i 356 0 484 l:initial_domain
+a 485 [X_INTRODUCED_35_ >= 3]
+a 486 [X_INTRODUCED_35_ <= 7]
+a 487 [X_INTRODUCED_35_ != 4]
+a 488 [X_INTRODUCED_35_ != 6]
+a 489 [X_INTRODUCED_35_ != 1]
+a 490 [X_INTRODUCED_35_ != 8]
+a 491 [X_INTRODUCED_35_ != 9]
+a 492 [X_INTRODUCED_35_ != 2]
+a 493 [X_INTRODUCED_34_ <= 7]
+a 494 [X_INTRODUCED_34_ != 8]
+a 495 [X_INTRODUCED_34_ != 4]
+a 496 [X_INTRODUCED_34_ != 6]
+a 497 [X_INTRODUCED_34_ != 9]
+a 498 [X_INTRODUCED_34_ != 1]
+a 499 [X_INTRODUCED_34_ != 3]
+a 500 [X_INTRODUCED_34_ != 2]
+a 501 [X_INTRODUCED_21_ <= 7]
+i 357 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 501 419 421 424 425 422 423 0 413 c:25 l:all_different
+a 502 [X_INTRODUCED_35_ >= 1]
+i 358 0 502 l:initial_domain
+i 359 0 489 c:13 l:all_different
+i 360 0 492 c:2 l:all_different
+a 503 [X_INTRODUCED_35_ <= 9]
+i 361 0 503 l:initial_domain
+a 504 [X_INTRODUCED_31_ >= 9]
+a 505 [X_INTRODUCED_31_ != 5]
+a 506 [X_INTRODUCED_31_ != 7]
+a 507 [X_INTRODUCED_31_ != 2]
+i 362 504 505 476 506 477 478 480 507 479 0 491 c:13 l:all_different
+i 363 237 238 474 239 240 241 242 243 244 245 246 481 247 248 249 250 251 23 193 194 195 196 197 198 199 200 0 507 c:16 l:all_different
+i 364 237 238 474 239 240 241 242 243 244 245 246 481 247 248 249 250 251 23 193 194 195 196 197 198 199 200 0 505 c:16 l:all_different
+i 365 23 193 194 195 196 197 198 199 200 237 238 474 239 240 241 242 243 244 245 246 481 247 248 249 250 251 0 506 c:16 l:all_different
+i 366 0 490 c:13 l:all_different
+i 367 0 487 c:13 l:all_different
+i 368 0 488 c:2 l:all_different
+a 508 [X_INTRODUCED_34_ >= 1]
+i 369 0 508 l:initial_domain
+i 370 0 498 c:13 l:all_different
+i 371 0 500 c:6 l:all_different
+i 372 0 499 c:6 l:all_different
+i 373 0 495 c:13 l:all_different
+a 509 [X_INTRODUCED_34_ <= 9]
+i 374 0 509 l:initial_domain
+i 375 0 497 c:6 l:all_different
+i 376 0 494 c:13 l:all_different
+a 510 [X_INTRODUCED_30_ <= 6]
+a 511 [X_INTRODUCED_30_ != 5]
+a 512 [X_INTRODUCED_30_ != 4]
+a 513 [X_INTRODUCED_30_ != 7]
+a 514 [X_INTRODUCED_30_ != 1]
+a 515 [X_INTRODUCED_30_ != 3]
+a 516 [X_INTRODUCED_30_ != 2]
+a 517 [X_INTRODUCED_30_ != 9]
+a 518 [X_INTRODUCED_30_ != 8]
+i 377 41 510 511 512 513 514 515 516 517 518 0 496 c:13 l:all_different
+a 519 [X_INTRODUCED_30_ >= 1]
+i 378 0 519 l:initial_domain
+i 379 0 514 c:13 l:all_different
+i 380 346 13 347 348 349 350 351 352 353 354 0 516 c:18 l:all_different
+a 520 [X_INTRODUCED_42_ <= 8]
+a 521 [X_INTRODUCED_17_ >= 3]
+a 522 [X_INTRODUCED_24_ >= 4]
+i 381 30 520 339 340 341 343 342 7 80 81 377 378 82 83 379 84 380 86 87 88 89 90 381 91 521 382 385 386 390 389 388 522 392 393 395 396 397 398 399 0 515 c:18 l:all_different
+i 382 0 339 c:9 l:all_different
+i 383 28 290 291 292 293 294 295 296 297 298 0 340 c:9 l:all_different
+a 523 [X_INTRODUCED_17_ <= 9]
+i 384 0 523 l:initial_domain
+i 385 0 389 c:18 l:all_different
+i 386 0 390 c:17 l:all_different
+i 387 0 385 c:17 l:all_different
+a 524 [X_INTRODUCED_24_ >= 1]
+i 388 0 524 l:initial_domain
+i 389 0 396 c:18 l:all_different
+i 390 346 13 347 348 349 350 351 352 353 354 0 393 c:18 l:all_different
+i 391 0 398 c:15 l:all_different
+a 525 [X_INTRODUCED_24_ <= 9]
+i 392 0 525 l:initial_domain
+i 393 0 399 c:18 l:all_different
+i 394 0 397 c:15 l:all_different
+i 395 0 395 c:15 l:all_different
+i 396 0 512 c:13 l:all_different
+i 397 30 520 339 340 341 343 342 7 80 81 377 378 82 83 379 84 380 86 87 88 89 90 381 91 521 382 385 386 390 389 388 522 392 393 395 396 397 398 399 0 511 c:18 l:all_different
+a 526 [X_INTRODUCED_30_ <= 9]
+i 398 0 526 l:initial_domain
+i 399 0 517 c:18 l:all_different
+i 400 0 518 c:13 l:all_different
+i 401 30 520 339 340 341 343 342 7 80 81 377 378 82 83 379 84 380 86 87 88 89 90 381 91 521 382 385 386 390 389 388 522 392 393 395 396 397 398 399 0 513 c:18 l:all_different
+a 527 [X_INTRODUCED_21_ >= 1]
+i 402 0 527 l:initial_domain
+a 528 [X_INTRODUCED_21_ <= 9]
+i 403 0 528 l:initial_domain
+i 404 0 424 c:6 l:all_different
+i 405 0 425 c:17 l:all_different
+i 406 428 50 429 430 431 432 433 434 435 436 0 419 c:17 l:all_different
+i 407 0 421 c:17 l:all_different
+i 408 0 422 c:6 l:all_different
+i 409 0 423 c:6 l:all_different
+i 410 0 415 c:2 l:all_different
+i 411 0 414 c:25 l:all_different
+i 412 428 50 429 430 431 432 433 434 435 436 0 410 c:17 l:all_different
+i 413 38 493 494 495 496 497 498 499 500 485 486 487 488 489 490 491 492 0 409 c:25 l:all_different
+i 414 0 412 c:2 l:all_different
+i 415 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 0 411 c:25 l:all_different
+i 416 0 416 c:17 l:all_different
+a 529 [X_INTRODUCED_23_ <= 9]
+i 417 0 529 l:initial_domain
+i 418 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 0 420 c:25 l:all_different
+i 419 38 493 494 495 496 497 498 499 500 485 486 487 488 489 490 491 492 0 418 c:25 l:all_different
+i 420 428 50 429 430 431 432 433 434 435 436 0 384 c:17 l:all_different
+i 421 401 402 403 404 405 49 406 306 307 308 309 310 407 408 46 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 0 383 c:17 l:all_different
+a 530 [X_INTRODUCED_29_ >= 4]
+a 531 [X_INTRODUCED_29_ != 5]
+a 532 [X_INTRODUCED_29_ != 7]
+a 533 [X_INTRODUCED_29_ != 6]
+a 534 [X_INTRODUCED_29_ != 1]
+a 535 [X_INTRODUCED_29_ != 3]
+a 536 [X_INTRODUCED_29_ != 2]
+a 537 [X_INTRODUCED_29_ != 9]
+a 538 [X_INTRODUCED_29_ != 8]
+i 422 530 42 531 532 533 534 535 536 537 538 0 394 c:15 l:all_different
+a 539 [X_INTRODUCED_29_ >= 1]
+i 423 0 539 l:initial_domain
+i 424 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 501 419 421 424 425 422 423 0 534 c:25 l:all_different
+i 425 0 536 c:2 l:all_different
+i 426 0 535 c:15 l:all_different
+a 540 [X_INTRODUCED_29_ <= 9]
+i 427 0 540 l:initial_domain
+i 428 410 412 416 415 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 501 419 421 424 425 422 423 0 537 c:25 l:all_different
+i 429 0 538 c:15 l:all_different
+i 430 485 486 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 0 532 c:25 l:all_different
+i 431 0 533 c:2 l:all_different
+i 432 38 493 494 495 496 497 498 499 500 485 486 487 488 489 490 491 492 0 531 c:25 l:all_different
+i 433 237 238 239 240 241 242 243 244 23 193 194 195 196 197 198 199 200 245 246 247 248 249 250 251 0 337 c:24 l:all_different
+i 434 0 338 c:24 l:all_different
+i 435 237 238 239 240 241 242 243 244 23 193 194 195 196 197 198 199 200 245 246 247 248 249 250 251 0 228 c:24 l:all_different
+a 541 [X_INTRODUCED_40_ <= 5]
+a 542 [X_INTRODUCED_40_ != 8]
+a 543 [X_INTRODUCED_53_ <= 5]
+a 544 [X_INTRODUCED_53_ != 1]
+a 545 [X_INTRODUCED_53_ != 8]
+i 436 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 203 c:23 l:all_different
+a 546 [X_INTRODUCED_28_ <= 1]
+a 547 [X_INTRODUCED_28_ != 5]
+a 548 [X_INTRODUCED_28_ != 4]
+a 549 [X_INTRODUCED_28_ != 7]
+a 550 [X_INTRODUCED_28_ != 6]
+a 551 [X_INTRODUCED_28_ != 3]
+a 552 [X_INTRODUCED_28_ != 2]
+a 553 [X_INTRODUCED_28_ != 9]
+a 554 [X_INTRODUCED_28_ != 8]
+i 437 546 547 548 549 550 551 552 553 554 114 359 115 116 117 118 119 120 0 542 c:8 l:all_different
+a 555 [X_INTRODUCED_28_ >= 1]
+i 438 0 555 l:initial_domain
+a 556 [X_INTRODUCED_28_ <= 9]
+i 439 0 556 l:initial_domain
+i 440 254 255 256 257 258 259 260 261 262 0 553 c:8 l:all_different
+i 441 0 554 c:15 l:all_different
+i 442 100 15 101 102 103 104 105 106 107 108 0 549 c:8 l:all_different
+i 443 0 550 c:8 l:all_different
+a 557 [X_INTRODUCED_24_ != 7]
+i 444 391 45 394 557 395 396 398 393 399 397 0 547 c:15 l:all_different
+i 445 51 382 383 384 385 386 387 388 389 390 0 557 c:18 l:all_different
+i 446 0 548 c:8 l:all_different
+i 447 0 551 c:15 l:all_different
+i 448 0 552 c:8 l:all_different
+i 449 546 547 548 549 550 551 552 553 554 0 544 c:8 l:all_different
+i 450 546 547 548 549 550 551 552 553 554 114 359 115 116 117 118 119 120 0 545 c:8 l:all_different
+i 451 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 208 c:23 l:all_different
+i 452 30 336 337 338 339 340 341 342 343 344 0 216 c:9 l:all_different
+i 453 0 219 c:23 l:all_different
+i 454 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 224 c:23 l:all_different
+i 455 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 182 c:23 l:all_different
+i 456 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 177 c:23 l:all_different
+a 558 [X_INTRODUCED_51_ <= 6]
+a 559 [X_INTRODUCED_51_ != 7]
+a 560 [X_INTRODUCED_51_ != 3]
+i 457 210 211 212 213 214 215 216 558 279 280 559 281 282 560 283 34 217 218 219 220 221 222 223 224 202 33 203 204 205 206 207 208 209 0 180 c:23 l:all_different
+i 458 0 559 c:23 l:all_different
+i 459 264 541 266 267 268 269 270 542 271 20 543 273 274 275 276 544 545 277 0 560 c:23 l:all_different
+a 561 [X_INTRODUCED_54_ >= 1]
+i 460 0 561 l:initial_domain
+i 461 417 418 419 420 421 422 423 424 425 0 190 c:6 l:all_different
+i 462 0 192 c:6 l:all_different
+i 463 0 191 c:6 l:all_different
+i 464 0 187 c:7 l:all_different
+a 562 [X_INTRODUCED_54_ <= 9]
+i 465 0 562 l:initial_domain
+i 466 0 189 c:6 l:all_different
+i 467 0 188 c:22 l:all_different
+i 468 176 21 177 178 179 180 181 182 183 184 23 193 194 195 196 197 198 199 200 185 186 187 188 189 190 191 192 0 166 c:7 l:all_different
+i 469 176 21 177 178 179 180 181 182 183 184 20 543 273 274 275 276 544 545 277 185 186 187 188 189 190 191 192 23 193 194 195 196 197 198 199 200 0 170 c:7 l:all_different
+a 563 [X_INTRODUCED_41_ <= 3]
+a 564 [X_INTRODUCED_41_ != 5]
+a 565 [X_INTRODUCED_41_ != 4]
+a 566 [X_INTRODUCED_41_ != 7]
+i 470 31 563 564 565 566 455 458 459 456 457 0 159 c:4 l:all_different
+a 567 [X_INTRODUCED_48_ >= 4]
+a 568 [X_INTRODUCED_48_ != 1]
+a 569 [X_INTRODUCED_48_ != 3]
+a 570 [X_INTRODUCED_49_ >= 5]
+a 571 [X_INTRODUCED_49_ <= 8]
+a 572 [X_INTRODUCED_49_ != 4]
+a 573 [X_INTRODUCED_49_ != 7]
+a 574 [X_INTRODUCED_49_ != 6]
+a 575 [X_INTRODUCED_49_ != 9]
+a 576 [X_INTRODUCED_49_ != 1]
+a 577 [X_INTRODUCED_49_ != 3]
+a 578 [X_INTRODUCED_49_ != 2]
+a 579 [X_INTRODUCED_47_ <= 8]
+a 580 [X_INTRODUCED_47_ != 7]
+a 581 [X_INTRODUCED_47_ != 6]
+a 582 [X_INTRODUCED_47_ != 9]
+a 583 [X_INTRODUCED_47_ != 1]
+a 584 [X_INTRODUCED_47_ != 3]
+a 585 [X_INTRODUCED_47_ != 2]
+a 586 [X_INTRODUCED_54_ != 8]
+i 471 567 25 568 448 449 450 451 569 452 570 571 572 573 574 575 576 577 578 26 579 580 581 582 583 584 585 185 19 586 187 188 189 190 191 192 0 566 c:22 l:all_different
+a 587 [X_INTRODUCED_45_ != 4]
+a 588 [X_INTRODUCED_45_ != 2]
+i 472 27 211 587 212 213 216 588 214 215 0 568 c:9 l:all_different
+i 473 34 217 218 219 220 221 222 223 224 202 33 203 204 205 206 207 208 209 0 587 c:23 l:all_different
+i 474 202 33 203 204 205 206 207 208 209 34 217 218 219 220 221 222 223 224 0 588 c:23 l:all_different
+i 475 30 336 337 338 339 340 341 342 343 344 0 569 c:9 l:all_different
+a 589 [X_INTRODUCED_49_ >= 1]
+i 476 0 589 l:initial_domain
+i 477 27 211 587 212 213 216 588 214 215 0 576 c:9 l:all_different
+i 478 0 578 c:2 l:all_different
+i 479 30 336 337 338 339 340 341 342 343 344 0 577 c:9 l:all_different
+i 480 530 42 531 532 533 534 535 536 537 538 0 572 c:2 l:all_different
+a 590 [X_INTRODUCED_49_ <= 9]
+i 481 0 590 l:initial_domain
+i 482 0 575 c:22 l:all_different
+i 483 0 573 c:9 l:all_different
+i 484 0 574 c:2 l:all_different
+a 591 [X_INTRODUCED_47_ >= 1]
+i 485 0 591 l:initial_domain
+i 486 417 418 419 420 421 422 423 424 425 0 583 c:6 l:all_different
+i 487 0 585 c:6 l:all_different
+i 488 0 584 c:6 l:all_different
+a 592 [X_INTRODUCED_47_ <= 9]
+i 489 0 592 l:initial_domain
+i 490 0 582 c:6 l:all_different
+i 491 0 580 c:9 l:all_different
+i 492 28 290 291 292 293 294 295 296 297 298 0 581 c:9 l:all_different
+i 493 176 21 177 178 179 180 181 182 183 184 0 586 c:7 l:all_different
+i 494 567 25 568 448 449 450 451 569 452 26 579 580 581 582 583 584 585 570 571 572 573 574 575 576 577 578 0 564 c:22 l:all_different
+i 495 202 285 203 204 205 206 207 208 227 35 228 229 230 231 232 233 234 235 34 217 218 219 220 221 222 223 224 0 565 c:11 l:all_different
+a 593 [X_INTRODUCED_57_ <= 5]
+a 594 [X_INTRODUCED_57_ != 8]
+i 496 17 593 67 68 69 71 304 72 70 594 0 155 c:5 l:all_different
+a 595 [X_INTRODUCED_56_ != 5]
+i 497 380 86 595 87 88 89 90 381 91 7 80 81 377 378 82 83 379 84 0 594 c:21 l:all_different
+i 498 51 382 383 384 385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 0 595 c:18 l:all_different
+a 596 [X_INTRODUCED_72_ != 5]
+i 499 0 596 c:1 l:all_different
+a 597 [X_INTRODUCED_54_ >= 7]
+a 598 [X_INTRODUCED_54_ != 5]
+a 599 [X_INTRODUCED_66_ >= 5]
+a 600 [X_INTRODUCED_66_ != 8]
+a 601 [X_INTRODUCED_66_ != 4]
+a 602 [X_INTRODUCED_66_ != 1]
+a 603 [X_INTRODUCED_72_ != 6]
+i 500 38 493 494 495 496 497 498 499 500 597 19 598 187 188 190 191 192 189 586 599 9 600 601 368 369 602 370 371 0 603 c:6 l:all_different
+i 501 567 25 568 448 449 450 451 569 452 26 579 580 581 582 583 584 585 570 571 572 573 574 575 576 577 578 0 598 c:22 l:all_different
+i 502 417 418 419 420 421 422 423 424 425 0 602 c:6 l:all_different
+a 604 [X_INTRODUCED_63_ <= 4]
+a 605 [X_INTRODUCED_63_ != 6]
+a 606 [X_INTRODUCED_63_ != 1]
+i 503 12 604 122 123 605 606 126 360 124 125 0 601 c:3 l:all_different
+i 504 27 211 587 212 213 216 588 214 215 0 606 c:12 l:all_different
+a 607 [X_INTRODUCED_51_ != 1]
+i 505 22 558 279 280 559 607 560 283 281 282 0 605 c:12 l:all_different
+i 506 202 33 203 204 205 206 207 208 209 210 211 212 213 214 215 216 34 217 218 219 220 221 222 223 224 0 607 c:23 l:all_different
+a 608 [X_INTRODUCED_65_ != 1]
+i 507 10 114 359 115 116 117 608 119 120 118 0 600 c:3 l:all_different
+i 508 546 547 548 549 550 551 552 553 554 0 608 c:8 l:all_different
+a 609 [X_INTRODUCED_72_ != 7]
+i 509 597 19 598 187 188 190 191 192 189 586 0 609 c:6 l:all_different
+a 610 [X_INTRODUCED_71_ != 1]
+i 510 6 54 55 56 57 58 59 60 61 0 610 c:1 l:all_different
+a 611 [X_INTRODUCED_74_ <= 8]
+a 612 [X_INTRODUCED_74_ != 5]
+a 613 [X_INTRODUCED_74_ != 4]
+a 614 [X_INTRODUCED_74_ != 6]
+a 615 [X_INTRODUCED_74_ != 9]
+a 616 [X_INTRODUCED_72_ >= 4]
+a 617 [X_INTRODUCED_72_ <= 8]
+a 618 [X_INTRODUCED_72_ != 9]
+a 619 [X_INTRODUCED_71_ != 3]
+i 511 1 611 612 613 614 615 62 146 616 617 596 609 603 618 151 153 152 460 2 461 462 148 149 463 464 7 80 81 377 378 82 83 379 84 0 619 c:1 l:all_different
+a 620 [X_INTRODUCED_74_ <= 9]
+i 512 0 620 l:initial_domain
+i 513 0 615 c:19 l:all_different
+i 514 0 612 c:1 l:all_different
+i 515 530 42 531 532 533 534 535 536 537 538 0 613 c:2 l:all_different
+i 516 0 614 c:2 l:all_different
+a 621 [X_INTRODUCED_72_ <= 9]
+i 517 0 621 l:initial_domain
+i 518 0 618 c:6 l:all_different
+a 622 [X_INTRODUCED_39_ >= 4]
+a 623 [X_INTRODUCED_39_ != 2]
+a 624 [X_INTRODUCED_71_ != 4]
+i 519 622 33 203 204 205 206 208 623 207 209 0 624 c:10 l:all_different
+a 625 [X_INTRODUCED_38_ <= 2]
+a 626 [X_INTRODUCED_38_ != 4]
+i 520 34 625 218 626 219 220 221 224 222 223 0 623 c:23 l:all_different
+i 521 27 211 587 212 213 216 588 214 215 22 558 279 280 559 607 560 283 281 282 121 122 123 124 125 126 360 0 626 c:12 l:all_different
+a 627 [X_INTRODUCED_67_ != 8]
+i 522 10 114 359 115 116 117 608 119 120 118 0 627 c:3 l:all_different
+a 628 [X_INTRODUCED_64_ != 8]
+i 523 10 114 359 115 116 117 608 119 120 118 0 628 c:3 l:all_different
+a 629 [X_INTRODUCED_66_ >= 6]
+a 630 [X_INTRODUCED_66_ != 5]
+a 631 [X_INTRODUCED_64_ != 6]
+i 524 629 9 630 601 368 602 370 371 369 600 0 631 c:3 l:all_different
+i 525 38 493 494 495 496 497 498 499 500 597 19 598 187 188 190 191 192 189 586 0 630 c:6 l:all_different
+a 632 [X_INTRODUCED_64_ != 4]
+i 526 622 33 203 204 205 206 208 623 207 209 0 632 c:10 l:all_different
+a 633 [X_INTRODUCED_61_ >= 1]
+i 527 0 633 l:initial_domain
+a 634 [X_INTRODUCED_58_ != 1]
+i 528 11 357 632 113 631 112 358 111 628 0 634 c:10 l:all_different
+a 635 [X_INTRODUCED_56_ != 4]
+i 529 154 14 155 156 157 158 159 160 161 162 0 635 c:5 l:all_different
+a 636 [X_INTRODUCED_48_ >= 5]
+a 637 [X_INTRODUCED_48_ != 4]
+a 638 [X_INTRODUCED_49_ != 5]
+i 530 636 25 637 448 449 568 569 452 450 451 0 638 c:22 l:all_different
+a 639 [X_INTRODUCED_60_ >= 3]
+i 531 31 563 564 565 566 455 458 459 456 457 639 14 155 156 157 161 162 158 160 0 637 c:4 l:all_different
+a 640 [X_INTRODUCED_36_ >= 5]
+a 641 [X_INTRODUCED_36_ != 2]
+a 642 [X_INTRODUCED_43_ != 5]
+i 532 23 193 194 195 196 197 198 199 200 640 246 641 481 247 248 249 250 251 0 642 c:24 l:all_different
+i 533 202 285 203 204 205 206 207 208 227 35 228 229 230 231 232 233 234 235 34 217 218 219 220 221 222 223 224 0 641 c:11 l:all_different
+a 643 [X_INTRODUCED_53_ <= 3]
+a 644 [X_INTRODUCED_53_ != 5]
+a 645 [X_INTRODUCED_40_ != 3]
+i 534 20 643 644 273 274 275 544 277 276 545 0 645 c:23 l:all_different
+i 535 176 21 177 178 179 180 181 182 183 184 23 193 194 195 196 197 198 199 200 185 186 187 188 189 190 191 192 0 644 c:7 l:all_different
+a 646 [X_INTRODUCED_36_ != 5]
+i 536 32 541 266 267 268 269 645 271 270 542 0 646 c:11 l:all_different
+a 647 [X_INTRODUCED_35_ != 3]
+i 537 0 647 c:25 l:all_different
+a 648 [X_INTRODUCED_34_ <= 5]
+a 649 [X_INTRODUCED_34_ != 7]
+a 650 [X_INTRODUCED_35_ != 5]
+i 538 38 648 495 649 496 498 499 500 497 494 0 650 c:13 l:all_different
+i 539 597 19 598 187 188 190 191 192 189 586 0 649 c:6 l:all_different
+a 651 [X_INTRODUCED_33_ >= 1]
+i 540 0 651 l:initial_domain
+a 652 [X_INTRODUCED_33_ != 1]
+i 541 0 652 c:13 l:all_different
+a 653 [X_INTRODUCED_32_ <= 9]
+i 542 0 653 l:initial_domain
+a 654 [X_INTRODUCED_32_ != 9]
+i 543 0 654 c:12 l:all_different
+a 655 [X_INTRODUCED_32_ != 8]
+i 544 0 655 c:12 l:all_different
+a 656 [X_INTRODUCED_35_ >= 5]
+a 657 [X_INTRODUCED_32_ != 7]
+i 545 38 493 494 495 496 497 498 499 500 656 486 647 487 488 489 490 491 492 0 657 c:13 l:all_different
+a 658 [X_INTRODUCED_32_ != 6]
+i 546 41 510 511 512 513 514 515 516 517 518 0 658 c:13 l:all_different
+a 659 [X_INTRODUCED_32_ != 5]
+i 547 0 659 c:12 l:all_different
+a 660 [X_INTRODUCED_32_ != 4]
+i 548 0 660 c:13 l:all_different
+a 661 [X_INTRODUCED_27_ <= 9]
+i 549 0 661 l:initial_domain
+a 662 [X_INTRODUCED_26_ >= 1]
+i 550 0 662 l:initial_domain
+a 663 [X_INTRODUCED_32_ >= 2]
+a 664 [X_INTRODUCED_32_ != 1]
+a 665 [X_INTRODUCED_26_ != 1]
+i 551 210 211 212 213 214 215 558 279 280 559 281 282 283 663 40 659 660 657 658 654 655 664 34 217 218 219 220 221 222 223 121 122 123 124 125 126 360 0 665 c:12 l:all_different
+a 666 [X_INTRODUCED_32_ >= 1]
+i 552 0 666 l:initial_domain
+i 553 0 664 c:13 l:all_different
+a 667 [X_INTRODUCED_25_ != 5]
+a 668 [X_INTRODUCED_25_ != 9]
+a 669 [X_INTRODUCED_26_ != 2]
+i 554 311 44 667 312 313 314 315 317 668 316 0 669 c:15 l:all_different
+i 555 5 74 75 76 301 77 302 78 303 0 668 c:14 l:all_different
+a 670 [X_INTRODUCED_37_ >= 3]
+i 556 670 35 228 229 230 231 232 235 234 49 406 306 307 308 309 310 407 408 17 66 67 68 69 70 71 304 72 0 667 c:14 l:all_different
+a 671 [X_INTRODUCED_26_ != 3]
+i 557 0 671 c:15 l:all_different
+a 672 [X_INTRODUCED_26_ != 4]
+i 558 530 42 531 532 533 534 535 536 537 538 0 672 c:15 l:all_different
+a 673 [X_INTRODUCED_26_ != 5]
+i 559 0 673 c:12 l:all_different
+a 674 [X_INTRODUCED_26_ != 6]
+i 560 0 674 c:15 l:all_different
+a 675 [X_INTRODUCED_20_ != 1]
+i 561 417 418 419 420 421 422 423 424 425 0 675 c:17 l:all_different
+a 676 [X_INTRODUCED_33_ <= 3]
+a 677 [X_INTRODUCED_33_ != 5]
+a 678 [X_INTRODUCED_33_ != 4]
+a 679 [X_INTRODUCED_33_ != 7]
+a 680 [X_INTRODUCED_33_ != 6]
+a 681 [X_INTRODUCED_33_ != 8]
+a 682 [X_INTRODUCED_33_ != 9]
+a 683 [X_INTRODUCED_71_ >= 3]
+a 684 [X_INTRODUCED_71_ <= 6]
+a 685 [X_INTRODUCED_71_ != 9]
+a 686 [X_INTRODUCED_71_ != 8]
+a 687 [X_INTRODUCED_58_ <= 4]
+a 688 [X_INTRODUCED_58_ != 5]
+a 689 [X_INTRODUCED_58_ != 8]
+a 690 [X_INTRODUCED_64_ <= 6]
+a 691 [X_INTRODUCED_20_ != 3]
+i 562 39 676 677 678 679 680 652 681 682 202 33 203 204 205 206 207 208 209 683 684 127 128 685 610 686 129 687 688 131 132 133 689 134 690 357 113 111 628 112 358 0 691 c:10 l:all_different
+a 692 [X_INTRODUCED_33_ <= 9]
+i 563 0 692 l:initial_domain
+i 564 504 505 476 506 477 478 480 507 479 0 682 c:13 l:all_different
+i 565 0 681 c:13 l:all_different
+i 566 0 679 c:10 l:all_different
+i 567 41 510 511 512 513 514 515 516 517 518 0 680 c:13 l:all_different
+i 568 656 486 647 487 488 489 490 491 492 38 493 494 495 496 497 498 499 500 0 677 c:13 l:all_different
+i 569 0 678 c:13 l:all_different
+i 570 0 685 c:20 l:all_different
+i 571 10 114 359 115 116 117 608 119 120 118 0 686 c:20 l:all_different
+i 572 10 114 359 115 116 117 608 119 120 118 0 689 c:20 l:all_different
+i 573 0 688 c:20 l:all_different
+n 574 0 573 572 571 570 569 568 567 566 565 564 563 562 561 560 559 558 557 556 555 554 553 552 551 550 549 548 547 546 545 544 543 542 541 540 539 538 537 536 535 534 533 532 531 530 529 528 527 526 525 524 523 522 521 520 519 518 517 516 515 514 513 512 511 510 509 508 507 506 505 504 503 502 501 500 499 498 497 496 495 494 493 492 491 490 489 488 487 486 485 484 483 482 481 480 479 478 477 476 475 474 473 472 471 470 469 468 467 466 465 464 463 462 461 460 459 458 457 456 455 454 453 452 451 450 449 448 447 446 445 444 443 442 441 440 439 438 437 436 435 434 433 432 431 430 429 428 427 426 425 424 423 422 421 420 419 418 417 416 415 414 413 412 411 410 409 408 407 406 405 404 403 402 401 400 399 398 397 396 395 394 393 392 391 390 389 388 387 386 385 384 383 382 381 380 379 378 377 376 375 374 373 372 371 370 369 368 367 366 365 364 363 362 361 360 359 358 357 356 355 354 353 352 351 350 349 348 347 346 345 344 343 342 341 340 339 338 337 336 335 334 333 332 331 330 329 328 327 326 325 324 323 322 321 320 319 318 317 316 315 314 313 312 311 310 309 308 307 306 305 304 303 302 301 300 299 298 297 296 295 294 293 292 291 290 289 288 287 286 285 284 283 282 281 280 279 278 277 276 275 274 273 272 271 270 269 268 267 266 265 264 263 262 261 260 259 258 257 256 255 254 253 252 251 250 249 248 247 246 245 244 243 242 241 240 239 238 237 236 235 234 233 232 231 230 229 228 227 226 225 224 223 222 221 220 219 218 217 216 215 214 213 212 211 210 209 208 207 206 205 204 203 202 201 200 199 198 197 196 195 194 193 192 191 190 189 188 187 186 185 184 183 182 181 180 179 178 177 176 175 174 173 172 171 170 169 168 167 166 165 164 163 162 161 160 159 158 157 156 155 154 153 152 151 150 149 148 147 146 145 144 143 142 141 140 139 138 137 136 135 134 133 132 131 130 129 128 127 126 125 124 123 122 121 120 119 118 117 116 115 114 113 112 111 110 109 108 107 106 105 104 103 102 101 100 99 98 97 96 95 94 93 92 91 90 89 88 87 86 85 84 83 82 81 80 79 78 77 76 75 74 73 72 71 70 69 68 67 66 65 64 63 62 61 60 59 58 57 56 55 54 53 52 51 50 49 48 47 46 45 44 43 42 41 40 39 38 37 36 35 34 33 32 31 30 29
+c 52
