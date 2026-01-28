@@ -400,7 +400,7 @@ mod tests {
     use crate::engine::Assignments;
     use crate::engine::TrailedValues;
     use crate::engine::notifications::NotificationEngine;
-    use crate::engine::notifications::PredicateIdAssignments;
+    use crate::engine::notifications::predicate_notification::PredicateIdAssignments;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTracker;
     use crate::engine::notifications::predicate_notification::predicate_trackers::DomainTrackerInformation;
     use crate::engine::notifications::predicate_notification::predicate_trackers::LowerBoundTracker;

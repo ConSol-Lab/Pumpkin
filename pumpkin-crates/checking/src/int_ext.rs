@@ -5,6 +5,7 @@ use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::Mul;
 use std::ops::Neg;
+use std::ops::Sub;
 
 /// An [`i32`] or positive/negative infinity.
 ///
@@ -194,6 +195,36 @@ impl<Int: Add<Output = Int> + Debug> Add for IntExt<Int> {
             (lhs @ IntExt::NegativeInf, rhs @ IntExt::PositiveInf)
             | (lhs @ IntExt::PositiveInf, rhs @ IntExt::NegativeInf) => {
                 panic!("the result of {lhs:?} + {rhs:?} is indeterminate")
+            }
+        }
+    }
+}
+
+impl Sub<IntExt<i64>> for i64 {
+    type Output = IntExt<i64>;
+
+    fn sub(self, rhs: IntExt<i64>) -> Self::Output {
+        IntExt::Int(self) - rhs
+    }
+}
+
+impl<Int: Sub<Output = Int> + Debug> Sub for IntExt<Int> {
+    type Output = IntExt<Int>;
+
+    fn sub(self, rhs: IntExt<Int>) -> Self::Output {
+        match (self, rhs) {
+            (IntExt::Int(lhs), IntExt::Int(rhs)) => IntExt::Int(lhs - rhs),
+
+            (IntExt::Int(_), Self::NegativeInf) => Self::PositiveInf,
+            (IntExt::Int(_), Self::PositiveInf) => Self::NegativeInf,
+            (Self::NegativeInf, IntExt::Int(_)) => Self::NegativeInf,
+            (Self::PositiveInf, IntExt::Int(_)) => Self::PositiveInf,
+
+            (lhs @ IntExt::NegativeInf, rhs @ IntExt::NegativeInf)
+            | (lhs @ IntExt::PositiveInf, rhs @ IntExt::PositiveInf)
+            | (lhs @ IntExt::NegativeInf, rhs @ IntExt::PositiveInf)
+            | (lhs @ IntExt::PositiveInf, rhs @ IntExt::NegativeInf) => {
+                panic!("the result of {lhs:?} - {rhs:?} is indeterminate")
             }
         }
     }

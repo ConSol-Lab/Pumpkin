@@ -10,7 +10,6 @@ use pumpkin_core::conjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvent;
-use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
@@ -157,9 +156,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         )
     }
 
-    fn synchronise(&mut self, context: Domains) {
+    fn synchronise(&mut self, mut context: NotificationContext<'_>) {
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context, &self.parameters)
+            .reset_all_bounds_and_remove_fixed(context.domains(), &self.parameters)
     }
 
     fn notify(
