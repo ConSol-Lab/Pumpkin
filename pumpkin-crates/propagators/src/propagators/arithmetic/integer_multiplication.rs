@@ -528,4 +528,22 @@ mod tests {
         let reason_ub = solver.get_reason_int(predicate![a <= 4]);
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), reason_ub);
     }
+
+    #[test]
+    fn b_unbounded_does_not_panic() {
+        let mut solver = TestSolver::default();
+        let a = solver.new_variable(12, 12);
+        let b = solver.new_variable(i32::MIN, i32::MAX);
+        let c = solver.new_variable(144, 144);
+
+        let constraint_tag = solver.new_constraint_tag();
+        let _ = solver
+            .new_propagator(IntegerMultiplicationArgs {
+                a,
+                b,
+                c,
+                constraint_tag,
+            })
+            .expect("No empty domains");
+    }
 }
