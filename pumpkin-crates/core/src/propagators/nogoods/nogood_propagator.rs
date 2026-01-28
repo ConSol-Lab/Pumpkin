@@ -299,6 +299,9 @@ impl Propagator for NogoodPropagator {
                 if found_new_watch {
                     // We remove the current watcher
                     let _ = self.watch_lists[predicate_id].swap_remove(index);
+                    if self.watch_lists[predicate_id].is_empty() {
+                        context.unregister_predicate(predicate_id);
+                    }
                     continue;
                 }
 
