@@ -1,5 +1,6 @@
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+
+use fnv::FnvHashMap;
 
 use crate::AtomicConstraint;
 use crate::Comparison;
@@ -15,7 +16,7 @@ use crate::IntExt;
 /// variable is infinite.
 #[derive(Clone, Debug)]
 pub struct VariableState<Atomic: AtomicConstraint> {
-    domains: BTreeMap<Atomic::Identifier, Domain>,
+    domains: FnvHashMap<Atomic::Identifier, Domain>,
 }
 
 impl<Atomic: AtomicConstraint> Default for VariableState<Atomic> {

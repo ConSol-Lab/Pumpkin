@@ -734,6 +734,7 @@ name = "pumpkin-checking"
 version = "0.2.2"
 dependencies = [
  "dyn-clone",
+ "fnv",
 ]
 
 [[package]]
