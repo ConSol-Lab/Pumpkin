@@ -26,8 +26,14 @@ accept_proof!(sudoku_p3);
 accept_proof!(sudoku_p17);
 
 fn run_checker_on_proof(model: &str) {
-    let model_path = format!("{}/tests/proofs/{model}.fzn", env!("CARGO_MANIFEST_DIR"));
-    let proof_path = format!("{}/tests/proofs/{model}.drcp", env!("CARGO_MANIFEST_DIR"));
+    let model_path = format!(
+        "{}/tests/valid_proofs/{model}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let proof_path = format!(
+        "{}/tests/valid_proofs/{model}.drcp",
+        env!("CARGO_MANIFEST_DIR")
+    );
 
     let _ = assert_cmd::Command::cargo_bin("pumpkin-checker")
         .expect("could not find executable")
