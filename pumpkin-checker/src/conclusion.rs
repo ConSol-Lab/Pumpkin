@@ -1,37 +1,12 @@
 use std::rc::Rc;
 
-use crate::model::Constraint;
 use crate::model::Model;
-use crate::model::Nogood;
 
 pub fn verify_conclusion(
-    model: &Model,
-    conclusion: &drcp_format::Conclusion<Rc<str>, i32>,
+    _model: &Model,
+    _conclusion: &drcp_format::Conclusion<Rc<str>, i32>,
 ) -> bool {
-    // First we ensure the conclusion type matches the solve item in the model.
-    match (&model.objective, conclusion) {
-        (Some(_), drcp_format::Conclusion::Unsat)
-        | (None, drcp_format::Conclusion::DualBound(_)) => return false,
-
-        _ => {}
-    }
-
-    // We iterate in reverse order, since it is likely that the conclusion is based on a constraint
-    // towards the end of the proof.
-    model.iter_constraints().rev().any(|(_, constraint)| {
-        let Constraint::Nogood(nogood) = constraint else {
-            return false;
-        };
-
-        match conclusion {
-            drcp_format::Conclusion::Unsat => nogood.iter().next().is_none(),
-            drcp_format::Conclusion::DualBound(atomic) => {
-                let expected_nogood = Nogood::from([!atomic.clone()]);
-
-                nogood == &expected_nogood
-            }
-        }
-    })
+    todo!()
 }
 
 #[cfg(test)]
@@ -41,6 +16,7 @@ mod tests {
     use super::*;
     use crate::atomic;
     use crate::model::Atomic;
+    use crate::model::Nogood;
     use crate::test_utils::constraint_id;
 
     #[test]
