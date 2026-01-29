@@ -22,7 +22,7 @@ accept_proof!(rcpsp03);
 
 accept_proof!(sudoku_p0);
 accept_proof!(sudoku_p1);
-accept_proof!(sudoku_p16);
+accept_proof!(sudoku_p3);
 accept_proof!(sudoku_p17);
 
 fn run_checker_on_proof(model: &str) {
