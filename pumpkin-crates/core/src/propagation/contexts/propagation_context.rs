@@ -4,21 +4,27 @@ use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::notifications::PredicateIdAssignments;
+use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
 use crate::engine::variables::Literal;
 use crate::proof::InferenceCode;
+use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
+use crate::propagation::LocalId;
 #[cfg(doc)]
 use crate::propagation::Propagator;
+#[cfg(doc)]
+use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::PropagatorVarId;
 #[cfg(doc)]
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
+use crate::variables::IntegerVariable;
 
 /// Provided to the propagator when it is notified of a domain event.
 ///
@@ -30,25 +36,26 @@ use crate::pumpkin_assert_simple;
 pub struct NotificationContext<'a> {
     pub(crate) trailed_values: &'a mut TrailedValues,
     pub(crate) assignments: &'a Assignments,
-    pub(crate) predicate_id_assignments: &'a PredicateIdAssignments,
 }
 
 impl<'a> NotificationContext<'a> {
-    pub(crate) fn new(
-        trailed_values: &'a mut TrailedValues,
-        assignments: &'a Assignments,
-        predicate_id_assignments: &'a PredicateIdAssignments,
-    ) -> Self {
+    pub(crate) fn new(trailed_values: &'a mut TrailedValues, assignments: &'a Assignments) -> Self {
         Self {
             trailed_values,
             assignments,
-            predicate_id_assignments,
         }
     }
 
     /// Get the current domains.
     pub fn domains(&mut self) -> Domains<'_> {
         Domains::new(self.assignments, self.trailed_values)
+    }
+
+    pub fn reborrow(&mut self) -> NotificationContext<'_> {
+        NotificationContext {
+            trailed_values: self.trailed_values,
+            assignments: self.assignments,
+        }
     }
 }
 
@@ -125,6 +132,41 @@ impl<'a> PropagationContext<'a> {
         )
     }
 
+    /// Stop being enqueued for the given predicate.
+    pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
+        self.notification_engine
+            .unwatch_predicate(predicate_id, self.propagator_id);
+    }
+
+    /// Subscribes the propagator to the given [`DomainEvents`].
+    ///
+    /// See [`PropagatorConstructorContext::register`] for more information.
+    pub fn register_domain_event(
+        &mut self,
+        var: impl IntegerVariable,
+        domain_events: DomainEvents,
+        local_id: LocalId,
+    ) {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        var.watch_all(&mut watchers, domain_events.events());
+    }
+
+    /// Stop being enqueued for events on the given integer variable.
+    pub fn unregister_domain_event(&mut self, var: impl IntegerVariable, local_id: LocalId) {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        var.unwatch_all(&mut watchers);
+    }
+
     /// Get the [`Predicate`] for a given [`PredicateId`].
     pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
         self.notification_engine.get_predicate(predicate_id)
@@ -173,6 +215,17 @@ impl<'a> PropagationContext<'a> {
     /// Returns the number of [`PredicateId`]s.
     pub(crate) fn num_predicate_ids(&self) -> usize {
         self.notification_engine.num_predicate_ids()
+    }
+
+    pub fn reborrow(&mut self) -> PropagationContext<'_> {
+        PropagationContext {
+            trailed_values: self.trailed_values,
+            assignments: self.assignments,
+            reason_store: self.reason_store,
+            propagator_id: self.propagator_id,
+            notification_engine: self.notification_engine,
+            reification_literal: self.reification_literal,
+        }
     }
 }
 

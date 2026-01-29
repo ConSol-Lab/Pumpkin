@@ -97,6 +97,7 @@ impl ConflictAnalysisContext<'_> {
                     conflict.conjunction.iter().copied(),
                     None,
                     &self.state.variable_names,
+                    &self.state.assignments,
                 );
 
                 conflict.conjunction
@@ -187,6 +188,7 @@ impl ConflictAnalysisContext<'_> {
                 premises,
                 &self.state.variable_names,
                 &mut self.state.constraint_tags,
+                &self.state.assignments,
             )
             .expect("Failed to write proof log")
     }
@@ -310,6 +312,7 @@ impl ConflictAnalysisContext<'_> {
                     [],
                     Some(predicate),
                     &state.variable_names,
+                    &state.assignments,
                 );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
@@ -319,6 +322,7 @@ impl ConflictAnalysisContext<'_> {
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                     &state.variable_names,
+                    &state.assignments,
                 );
             }
         }
@@ -353,6 +357,7 @@ impl ConflictAnalysisContext<'_> {
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
             &self.state.variable_names,
+            &self.state.assignments,
         );
 
         let old_lower_bound = self.state.lower_bound(conflict_domain);

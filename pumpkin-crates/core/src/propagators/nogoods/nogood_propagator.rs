@@ -20,9 +20,9 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::proof::InferenceCode;
-use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -203,7 +203,11 @@ impl Propagator for NogoodPropagator {
         Priority::High
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        _: NotificationContext,
+        predicate_id: PredicateId,
+    ) -> EnqueueDecision {
         self.updated_predicate_ids.push(predicate_id);
         EnqueueDecision::Enqueue
     }
@@ -295,6 +299,9 @@ impl Propagator for NogoodPropagator {
                 if found_new_watch {
                     // We remove the current watcher
                     let _ = self.watch_lists[predicate_id].swap_remove(index);
+                    if self.watch_lists[predicate_id].is_empty() {
+                        context.unregister_predicate(predicate_id);
+                    }
                     continue;
                 }
 
@@ -329,7 +336,7 @@ impl Propagator for NogoodPropagator {
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: Domains) {
+    fn synchronise(&mut self, _context: NotificationContext<'_>) {
         self.updated_predicate_ids.clear()
     }
 

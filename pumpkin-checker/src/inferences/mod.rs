@@ -96,7 +96,7 @@ pub(crate) fn verify_inference(
     // Setup the state for a conflict check.
     let variable_state =
         VariableState::prepare_for_conflict_check(fact.premises.clone(), fact.consequent.clone())
-            .ok_or(InvalidInference::InconsistentPremises)?;
+            .map_err(|_| InvalidInference::InconsistentPremises)?;
 
     // Get the constraint that generated the inference from the model.
     let generated_by_constraint_id = inference

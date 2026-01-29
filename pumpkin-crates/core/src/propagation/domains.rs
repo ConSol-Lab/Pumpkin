@@ -125,6 +125,9 @@ pub trait ReadDomains {
     /// a [`Predicate`] without a reason).
     fn is_decision_predicate(&self, predicate: Predicate) -> bool;
 
+    /// Returns whether the provided [`Predicate`] is an initial bound of its domain.
+    fn is_initial_bound(&self, predicate: Predicate) -> bool;
+
     /// If the provided [`Predicate`] is true, then this method returns the checkpoint at which it
     /// first become true; otherwise, it returns [`None`].
     fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize>;
@@ -221,6 +224,10 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn is_decision_predicate(&self, predicate: Predicate) -> bool {
         self.assignments().is_decision_predicate(&predicate)
+    }
+
+    fn is_initial_bound(&self, predicate: Predicate) -> bool {
+        self.assignments().is_initial_bound(predicate)
     }
 
     fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {

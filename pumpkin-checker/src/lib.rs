@@ -10,9 +10,13 @@ use std::time::Instant;
 use drcp_format::ConstraintId;
 use drcp_format::reader::ProofReader;
 
+pub mod conclusion;
 pub mod deductions;
 pub mod inferences;
 pub mod model;
+
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 pub(crate) mod math;
 

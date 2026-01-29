@@ -17,9 +17,9 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorId;
@@ -347,14 +347,11 @@ impl TestSolver {
         );
         self.state.trailed_values.synchronise(level);
 
-        self.state
-            .propagators
-            .iter_propagators_mut()
-            .for_each(|propagator| {
-                propagator.synchronise(Domains::new(
-                    &self.state.assignments,
-                    &mut self.state.trailed_values,
-                ))
-            })
+        for propagator in self.state.propagators.iter_propagators_mut() {
+            let mut context =
+                NotificationContext::new(&mut self.state.trailed_values, &self.state.assignments);
+
+            propagator.synchronise(context.reborrow());
+        }
     }
 }

@@ -2,10 +2,13 @@
 //!
 //! The other resolvers are not fit for this job.
 
+use std::collections::BTreeMap;
+
 use super::InferenceCode;
 use super::ProofLog;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::engine::State;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
@@ -26,26 +29,104 @@ pub(crate) struct FinalizingContext<'a> {
 /// predicate is propagated by a propagator, it would have been logged as a root-level propagation
 /// by the solver prior to reaching this function.
 pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
-    let final_nogood = context
-        .conflict
-        .into_iter()
-        .flat_map(|predicate| {
-            get_required_assumptions(
-                &mut RootExplanationContext {
-                    proof_log: context.proof_log,
-                    unit_nogood_inference_codes: context.unit_nogood_inference_codes,
-                    state: context.state,
-                },
-                predicate,
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut to_explain = BTreeMap::new();
+    to_explain.extend(context.conflict.iter().map(|&predicate| {
+        (
+            context
+                .state
+                .assignments
+                .get_trail_position(&predicate)
+                .expect("predicate is true"),
+            [predicate].into_iter().collect(),
+        )
+    }));
+
+    let final_nogood = finalize_proof_impl(
+        &mut RootExplanationContext {
+            proof_log: context.proof_log,
+            unit_nogood_inference_codes: context.unit_nogood_inference_codes,
+            state: context.state,
+        },
+        to_explain,
+    );
 
     let _ = context.proof_log.log_deduction(
         final_nogood,
         &context.state.variable_names,
         &mut context.state.constraint_tags,
+        &context.state.assignments,
     );
+}
+
+fn finalize_proof_impl(
+    context: &mut RootExplanationContext<'_>,
+    mut to_explain: BTreeMap<usize, HashSet<Predicate>>,
+) -> Vec<Predicate> {
+    let mut required_assumptions = vec![];
+
+    while let Some((current_trail_pos, predicates)) = to_explain.pop_last() {
+        for predicate in predicates {
+            // If the predicate is a root-level assignment, add the appropriate inference to the
+            // proof. No extra predicates need to be assumed.
+            //
+            // MUST be checked before `is_decision` as initial bounds are also marked as
+            // decisions by the assignments.
+            if context.state.assignments.is_initial_bound(predicate) {
+                let _ = context.proof_log.log_domain_inference(
+                    predicate,
+                    &context.state.variable_names,
+                    &mut context.state.constraint_tags,
+                    &context.state.assignments,
+                );
+                continue;
+            }
+
+            // If the predicate is a decision, then it should be assumed true.
+            if context.state.assignments.is_decision_predicate(&predicate) {
+                required_assumptions.push(predicate);
+                continue;
+            }
+
+            // If the predicate is a unit-nogood, we explain the root-level assignment.
+            if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
+                let _ = context.proof_log.log_inference(
+                    &mut context.state.constraint_tags,
+                    inference_code.clone(),
+                    [],
+                    Some(predicate),
+                    &context.state.variable_names,
+                    &context.state.assignments,
+                );
+                continue;
+            }
+
+            // There must be some combination of other factors.
+            let mut reason = vec![];
+            ConflictAnalysisContext::get_propagation_reason_inner(
+                predicate,
+                CurrentNogood::empty(),
+                context.proof_log,
+                context.unit_nogood_inference_codes,
+                &mut reason,
+                context.state,
+            );
+
+            // Look for the reasons of the propagation premise.
+            for predicate in reason {
+                let trail_pos = context
+                    .state
+                    .trail_position(predicate)
+                    .expect("predicate is true");
+
+                assert!(trail_pos <= current_trail_pos);
+
+                let predicates_at_position = to_explain.entry(trail_pos).or_default();
+                let _ = predicates_at_position.insert(predicate);
+            }
+        }
+    }
+
+    required_assumptions
 }
 
 pub(crate) struct RootExplanationContext<'a> {
@@ -68,60 +149,13 @@ pub(crate) fn explain_root_assignment(
         return;
     }
 
-    let _ = get_required_assumptions(context, predicate);
-}
+    let to_explain = BTreeMap::from([(
+        context
+            .state
+            .trail_position(predicate)
+            .expect("predicate is true"),
+        [predicate].into_iter().collect(),
+    )]);
 
-/// Returns the predicates that should be assumed are true to make the given predicate true. It may
-/// be that the given predicate is part of that list. Any propagations encountered along the way
-/// are logged to the proof.
-///
-/// Note this function is private, as we do not expect it to be called outside this file. Returning
-/// vectors will probably add allocations, but they will be small and this is not called in the
-/// solver's hot loop so it should be fine.
-fn get_required_assumptions(
-    context: &mut RootExplanationContext<'_>,
-    predicate: Predicate,
-) -> Vec<Predicate> {
-    if context.state.assignments.is_decision_predicate(&predicate) {
-        return vec![predicate];
-    }
-
-    // If the predicate is a root-level assignment, add the appropriate inference to the proof.
-    if context.state.assignments.is_initial_bound(predicate) {
-        let _ = context.proof_log.log_domain_inference(
-            predicate,
-            &context.state.variable_names,
-            &mut context.state.constraint_tags,
-        );
-        return vec![];
-    }
-
-    // If the predicate is a unit-nogood, we explain the root-level assignment.
-    if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
-        let _ = context.proof_log.log_inference(
-            &mut context.state.constraint_tags,
-            inference_code.clone(),
-            [],
-            Some(predicate),
-            &context.state.variable_names,
-        );
-        return vec![];
-    }
-
-    // There must be some combination of other factors.
-    let mut reason = vec![];
-    ConflictAnalysisContext::get_propagation_reason_inner(
-        predicate,
-        CurrentNogood::empty(),
-        context.proof_log,
-        context.unit_nogood_inference_codes,
-        &mut reason,
-        context.state,
-    );
-
-    // Here we combine all the required assumptions of recursive reasons.
-    reason
-        .into_iter()
-        .flat_map(|predicate| get_required_assumptions(context, predicate))
-        .collect()
+    let _ = finalize_proof_impl(context, to_explain);
 }
