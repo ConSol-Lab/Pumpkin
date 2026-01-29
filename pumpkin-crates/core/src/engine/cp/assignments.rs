@@ -221,21 +221,12 @@ impl Assignments {
 
     pub(crate) fn is_initial_bound(&self, predicate: Predicate) -> bool {
         let domain_id = predicate.get_domain();
-        let value = predicate.get_right_hand_side();
 
-        match predicate.get_predicate_type() {
-            PredicateType::LowerBound => value <= self.domains[domain_id].initial_lower_bound(),
-            PredicateType::UpperBound => value >= self.domains[domain_id].initial_upper_bound(),
-            PredicateType::NotEqual => {
-                self.get_trail_position(&predicate).unwrap_or_else(|| {
-                    panic!("Expected to be able to get trail entry of {predicate}")
-                }) <= self.domains[domain_id].initial_bounds_below_trail
-            }
-            PredicateType::Equal => {
-                value == self.domains[domain_id].initial_lower_bound()
-                    && value == self.domains[domain_id].initial_upper_bound()
-            }
-        }
+        let Some(trail_position) = self.get_trail_position(&predicate) else {
+            return false;
+        };
+
+        trail_position <= self.domains[domain_id].initial_bounds_below_trail
     }
 }
 
