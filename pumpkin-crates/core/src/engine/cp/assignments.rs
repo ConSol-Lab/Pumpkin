@@ -128,12 +128,14 @@ impl Assignments {
 
         let id = DomainId::new(self.num_domains());
 
+        let lower_bound_position = self.trail.len();
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate: predicate!(id >= lower_bound),
             old_lower_bound: lower_bound,
             old_upper_bound: upper_bound,
             reason: None,
         });
+        let upper_bound_position = self.trail.len();
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate: predicate!(id <= upper_bound),
             old_lower_bound: lower_bound,
@@ -143,7 +145,9 @@ impl Assignments {
 
         let _ = self.domains.push(IntegerDomain::new(
             lower_bound,
+            lower_bound_position,
             upper_bound,
+            upper_bound_position,
             id,
             self.trail.len() - 1,
         ));
@@ -877,7 +881,9 @@ struct IntegerDomain {
 impl IntegerDomain {
     fn new(
         lower_bound: i32,
+        lower_bound_position: usize,
         upper_bound: i32,
+        upper_bound_position: usize,
         id: DomainId,
         initial_bounds_below_trail: usize,
     ) -> IntegerDomain {
@@ -886,13 +892,13 @@ impl IntegerDomain {
         let lower_bound_updates = vec![BoundUpdateInfo {
             bound: lower_bound,
             checkpoint: 0,
-            trail_position: 0,
+            trail_position: lower_bound_position,
         }];
 
         let upper_bound_updates = vec![BoundUpdateInfo {
             bound: upper_bound,
             checkpoint: 0,
-            trail_position: 0,
+            trail_position: upper_bound_position,
         }];
 
         IntegerDomain {
@@ -1673,7 +1679,7 @@ mod tests {
 
     #[test]
     fn value_can_be_removed_from_domains() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(1, 1, 2);
 
         assert!(domain.contains(2));
@@ -1682,7 +1688,7 @@ mod tests {
 
     #[test]
     fn removing_the_lower_bound_updates_that_lower_bound() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(1, 1, 1);
         let _ = domain.remove_value(2, 1, 2);
 
@@ -1691,7 +1697,7 @@ mod tests {
 
     #[test]
     fn removing_the_upper_bound_updates_the_upper_bound() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(4, 0, 1);
         let _ = domain.remove_value(5, 0, 2);
 
@@ -1700,7 +1706,7 @@ mod tests {
 
     #[test]
     fn an_empty_domain_accepts_removal_operations() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(4, 0, 1);
         let _ = domain.remove_value(1, 0, 2);
         let _ = domain.remove_value(1, 0, 3);
@@ -1708,7 +1714,7 @@ mod tests {
 
     #[test]
     fn setting_lower_bound_rounds_up_to_nearest_value_in_domain() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(2, 1, 2);
         let _ = domain.remove_value(3, 1, 3);
         let _ = domain.set_lower_bound(2, 1, 4);
@@ -1718,7 +1724,7 @@ mod tests {
 
     #[test]
     fn setting_upper_bound_rounds_down_to_nearest_value_in_domain() {
-        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0), 0);
+        let mut domain = IntegerDomain::new(1, 0, 5, 1, DomainId::new(0), 0);
         let _ = domain.remove_value(4, 0, 1);
         let _ = domain.set_upper_bound(4, 0, 2);
 
@@ -1755,7 +1761,7 @@ mod tests {
 
     fn get_domain1() -> (DomainId, IntegerDomain) {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 100, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 100, 1, domain_id, 0);
         let _ = domain.set_lower_bound(1, 0, 1);
         let _ = domain.set_lower_bound(5, 1, 2);
         let _ = domain.set_lower_bound(10, 2, 10);
@@ -1943,7 +1949,7 @@ mod tests {
     #[test]
     fn inconsistent_bound_updates() {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 2, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 2, 1, domain_id, 0);
         let _ = domain.set_lower_bound(2, 1, 1);
         let _ = domain.set_upper_bound(1, 1, 2);
         assert!(domain.verify_consistency().is_err());
@@ -1952,7 +1958,7 @@ mod tests {
     #[test]
     fn inconsistent_domain_removals() {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 2, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 2, 1, domain_id, 0);
         let _ = domain.remove_value(1, 1, 1);
         let _ = domain.remove_value(2, 1, 2);
         let _ = domain.remove_value(0, 1, 3);
@@ -1962,7 +1968,7 @@ mod tests {
     #[test]
     fn domain_iterator_simple() {
         let domain_id = DomainId::new(0);
-        let domain = IntegerDomain::new(0, 5, domain_id, 0);
+        let domain = IntegerDomain::new(0, 0, 5, 1, domain_id, 0);
         let mut iter = domain.domain_iterator();
         assert_eq!(iter.next(), Some(0));
         assert_eq!(iter.next(), Some(1));
@@ -1976,7 +1982,7 @@ mod tests {
     #[test]
     fn domain_iterator_skip_holes() {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 5, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 5, 1, domain_id, 0);
         let _ = domain.remove_value(1, 0, 5);
         let _ = domain.remove_value(4, 0, 10);
 
@@ -1991,7 +1997,7 @@ mod tests {
     #[test]
     fn domain_iterator_removed_bounds() {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 5, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 5, 1, domain_id, 0);
         let _ = domain.remove_value(0, 0, 1);
         let _ = domain.remove_value(5, 0, 10);
 
@@ -2006,7 +2012,7 @@ mod tests {
     #[test]
     fn domain_iterator_removed_values_present_beyond_bounds() {
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomain::new(0, 10, domain_id, 0);
+        let mut domain = IntegerDomain::new(0, 0, 10, 1, domain_id, 0);
         let _ = domain.remove_value(7, 0, 1);
         let _ = domain.remove_value(9, 0, 5);
         let _ = domain.remove_value(2, 0, 10);
