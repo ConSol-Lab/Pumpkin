@@ -1,0 +1,5 @@
+binaries = []
+
+[[step]]
+name = "flatten"
+command = "minizinc --compile --fzn ./instance.fzn --ozn ./instance.ozn --solver pumpkin @bench:1 @bench:2"
