@@ -97,15 +97,11 @@ impl ProofLog {
             return Ok(inference_tag);
         };
 
-        if let Some(propagated) = propagated {
-            assert!(!assignments.is_initial_bound(propagated));
-        }
-
         let inference = Inference {
             constraint_id: inference_tag.into(),
             premises: premises
                 .into_iter()
-                .filter(|&predicate| !assignments.is_initial_bound(predicate))
+                .filter(|&predicate| !is_likely_a_constant(predicate, variable_names, assignments))
                 .map(|premise| proof_atomics.map_predicate_to_proof_atomic(premise, variable_names))
                 .collect(),
             consequent: propagated.map(|predicate| {
@@ -132,11 +128,7 @@ impl ProofLog {
     ) -> std::io::Result<Option<ConstraintTag>> {
         assert!(assignments.is_initial_bound(predicate));
 
-        let domain = predicate.get_domain();
-        if assignments.get_initial_lower_bound(domain)
-            == assignments.get_initial_upper_bound(domain)
-            && variable_names.get_int_name(domain).is_none()
-        {
+        if is_likely_a_constant(predicate, variable_names, assignments) {
             // The predicate is over a constant variable. We assume we do not want to
             // log these if they have no name.
 
@@ -214,7 +206,9 @@ impl ProofLog {
                     constraint_id: constraint_tag.into(),
                     premises: premises
                         .into_iter()
-                        .filter(|&predicate| assignments.is_initial_bound(predicate))
+                        .filter(|&predicate| {
+                            !is_likely_a_constant(predicate, variable_names, assignments)
+                        })
                         .map(|premise| {
                             proof_atomics.map_predicate_to_proof_atomic(premise, variable_names)
                         })
@@ -310,6 +304,22 @@ impl ProofLog {
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_proof.is_some()
     }
+}
+
+/// Returns `true` if the given predicate is likely a constant from the model that was unnamed.
+fn is_likely_a_constant(
+    predicate: Predicate,
+    variable_names: &VariableNames,
+    assignments: &Assignments,
+) -> bool {
+    let domain = predicate.get_domain();
+
+    let is_fixed =
+        assignments.get_initial_lower_bound(domain) == assignments.get_initial_upper_bound(domain);
+
+    let is_unnamed = variable_names.get_int_name(domain).is_none();
+
+    is_fixed && is_unnamed
 }
 
 /// A wrapper around either a file or a gzipped file.
