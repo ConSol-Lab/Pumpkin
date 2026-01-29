@@ -1,0 +1,6 @@
+binaries = ["pumpkin-solver"]
+
+[[step]]
+name = "solve"
+command = "@bin:pumpkin-solver -sa @bench:1"
+timeout = 300 # 5 minutes

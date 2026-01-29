@@ -1,0 +1,7 @@
+git-url = "../"
+
+compile = "cargo build --release -p pumpkin-solver"
+
+[[binary]]
+name = "pumpkin-solver"
+path = "target/release/pumpkin-solver"
