@@ -21,6 +21,7 @@ more-asserts = { version = "0.3.1" }
 
 [dev-dependencies]
 pumpkin-constraints = { version = "0.2.2", path = "../pumpkin-crates/constraints" }
+drcp-format = { version = "0.3.0", path = "../drcp-format" }
 
 [features]
 clap = ["dep:clap", "pumpkin-core/clap"]

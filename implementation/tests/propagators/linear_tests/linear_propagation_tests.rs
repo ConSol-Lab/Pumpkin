@@ -6,7 +6,12 @@
 
 use more_asserts::assert_le;
 
-use crate::propagators::linear_tests::set_up_linear_leq_state;
+use crate::{Instances, Propagator, propagators::linear_tests::set_up_linear_leq_state};
+
+#[test]
+fn linear_propagator_test() {
+    let instances = Instances::new(Propagator::Linear);
+}
 
 // rcpsp_simplified.mzn + 01.dzn
 #[test]

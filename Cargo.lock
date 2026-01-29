@@ -520,6 +520,7 @@ dependencies = [
  "bitfield-struct",
  "clap",
  "convert_case",
+ "drcp-format",
  "enumset",
  "more-asserts",
  "pumpkin-checking",
