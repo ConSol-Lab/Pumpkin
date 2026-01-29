@@ -10,9 +10,13 @@ use std::time::Instant;
 use drcp_format::ConstraintId;
 use drcp_format::reader::ProofReader;
 
+pub mod conclusion;
 pub mod deductions;
 pub mod inferences;
 pub mod model;
+
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 pub(crate) mod math;
 
@@ -350,7 +354,7 @@ pub fn verify_proof<Source: BufRead>(
             }
 
             drcp_format::Step::Conclusion(conclusion) => {
-                if verify_conclusion(&model, &conclusion) {
+                if conclusion::verify_conclusion(&model, &conclusion) {
                     return Ok(());
                 } else {
                     return Err(CheckError::InvalidConclusion);
@@ -358,29 +362,4 @@ pub fn verify_proof<Source: BufRead>(
             }
         }
     }
-}
-
-fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>, i32>) -> bool {
-    // First we ensure the conclusion type matches the solve item in the model.
-    match (&model.objective, conclusion) {
-        (Some(_), drcp_format::Conclusion::Unsat)
-        | (None, drcp_format::Conclusion::DualBound(_)) => return false,
-
-        _ => {}
-    }
-
-    // We iterate in reverse order, since it is likely that the conclusion is based on a constraint
-    // towards the end of the proof.
-    model.iter_constraints().rev().any(|(_, constraint)| {
-        let Constraint::Nogood(nogood) = constraint else {
-            return false;
-        };
-
-        match conclusion {
-            drcp_format::Conclusion::Unsat => nogood.as_ref().is_empty(),
-            drcp_format::Conclusion::DualBound(atomic) => {
-                nogood.as_ref() == [Atomic::from(!atomic.clone())]
-            }
-        }
-    })
 }

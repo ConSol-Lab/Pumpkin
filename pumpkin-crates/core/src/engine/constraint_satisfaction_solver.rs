@@ -848,6 +848,7 @@ impl ConstraintSatisfactionSolver {
                 inference_premises,
                 None,
                 &self.state.variable_names,
+                &self.state.assignments,
             );
 
             // Since inference steps are only related to the nogood they directly precede,
@@ -883,6 +884,7 @@ impl ConstraintSatisfactionSolver {
                 [!propagated],
                 &self.state.variable_names,
                 &mut self.state.constraint_tags,
+                &self.state.assignments,
             );
 
             if let Ok(constraint_tag) = constraint_tag {

@@ -50,6 +50,19 @@ impl Union {
         self.lower_bound <= value && value <= self.upper_bound && !self.all_holes.contains(&value)
     }
 
+    /// If the domain is finite, returns the number of elements.
+    pub fn size(&self) -> Option<usize> {
+        let IntExt::Int(lower_bound) = self.lower_bound else {
+            return None;
+        };
+        let IntExt::Int(upper_bound) = self.upper_bound else {
+            return None;
+        };
+
+        let size = upper_bound.abs_diff(lower_bound) as usize + 1 - self.all_holes.len();
+        Some(size)
+    }
+
     /// Rest the union to an empty state.
     pub fn reset(&mut self) {
         self.lower_bound = IntExt::PositiveInf;
@@ -72,8 +85,31 @@ impl Union {
             .filter(|&value| value < self.lower_bound || value > self.upper_bound);
 
         self.all_holes.extend(other_holes);
-        self.lower_bound = self.lower_bound.min(variable.induced_lower_bound(state));
-        self.upper_bound = self.upper_bound.max(variable.induced_upper_bound(state));
+
+        let variable_lb = variable.induced_lower_bound(state);
+        let variable_ub = variable.induced_upper_bound(state);
+
+        let additional_holes_below_self_lb = match (self.lower_bound, variable_ub) {
+            (IntExt::Int(self_lb), IntExt::Int(variable_ub)) if self_lb > variable_ub => {
+                variable_ub + 1..self_lb
+            }
+
+            _ => 0..0,
+        };
+
+        let additional_holes_above_self_ub = match (self.upper_bound, variable_lb) {
+            (IntExt::Int(self_ub), IntExt::Int(variable_lb)) if self_ub < variable_lb => {
+                self_ub + 1..variable_lb
+            }
+
+            _ => 0..0,
+        };
+
+        self.all_holes.extend(additional_holes_below_self_lb);
+        self.all_holes.extend(additional_holes_above_self_ub);
+
+        self.lower_bound = self.lower_bound.min(variable_lb);
+        self.upper_bound = self.upper_bound.max(variable_ub);
     }
 
     /// Returns `true` if the union contains no elements.
@@ -253,5 +289,39 @@ mod tests {
         assert_eq!(IntExt::<i32>::NegativeInf, union.lower_bound());
         assert_eq!(IntExt::<i32>::PositiveInf, union.upper_bound());
         assert_eq!(vec![5], union.holes().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn union_of_fixed_domains_with_gap() {
+        let state = VariableState::prepare_for_conflict_check(
+            [
+                TestAtomic {
+                    name: "x46",
+                    comparison: Equal,
+                    value: 4,
+                },
+                TestAtomic {
+                    name: "x42",
+                    comparison: Equal,
+                    value: 1,
+                },
+            ],
+            None,
+        )
+        .expect("not inconsistent");
+
+        let mut union = Union::empty();
+        assert_eq!(union.size(), None);
+
+        union.add(&state, &"x46");
+        assert_eq!(union.size(), Some(1));
+
+        union.add(&state, &"x42");
+
+        let holes = union.holes().collect::<BTreeSet<_>>();
+        assert_eq!(BTreeSet::from([2, 3]), holes);
+
+        assert_eq!(union.lower_bound(), IntExt::Int(1));
+        assert_eq!(union.upper_bound(), IntExt::Int(4));
     }
 }

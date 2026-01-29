@@ -100,7 +100,9 @@ impl RecursiveMinimiser {
         // If the predicate is a decision predicate, it cannot be a predicate from the original
         // learned nogood since those are labelled as part of initialisation.
         // Therefore the decision literal is labelled as poison and then return.
-        if context.is_decision_predicate(input_predicate) {
+        if context.is_decision_predicate(input_predicate)
+            || context.is_initial_bound(input_predicate)
+        {
             self.assign_predicate_label(input_predicate, Label::Poison);
             self.current_depth -= 1;
             return;
