@@ -50,8 +50,6 @@ pub(crate) fn finalize_proof(context: FinalizingContext<'_>) {
         to_explain,
     );
 
-    dbg!(&context.state.variable_names);
-
     let _ = context.proof_log.log_deduction(
         final_nogood,
         &context.state.variable_names,
@@ -68,14 +66,12 @@ fn finalize_proof_impl(
 
     while let Some((current_trail_pos, predicates)) = to_explain.pop_last() {
         for predicate in predicates {
-            dbg!(predicate);
             // If the predicate is a root-level assignment, add the appropriate inference to the
             // proof. No extra predicates need to be assumed.
             //
             // MUST be checked before `is_decision` as initial bounds are also marked as
             // decisions by the assignments.
             if context.state.assignments.is_initial_bound(predicate) {
-                println!("  is initial bound");
                 let _ = context.proof_log.log_domain_inference(
                     predicate,
                     &context.state.variable_names,
@@ -87,14 +83,12 @@ fn finalize_proof_impl(
 
             // If the predicate is a decision, then it should be assumed true.
             if context.state.assignments.is_decision_predicate(&predicate) {
-                println!("  is decision");
                 required_assumptions.push(predicate);
                 continue;
             }
 
             // If the predicate is a unit-nogood, we explain the root-level assignment.
             if let Some(inference_code) = context.unit_nogood_inference_codes.get(&predicate) {
-                println!("  is unit nogood");
                 let _ = context.proof_log.log_inference(
                     &mut context.state.constraint_tags,
                     inference_code.clone(),
@@ -116,8 +110,6 @@ fn finalize_proof_impl(
                 &mut reason,
                 context.state,
             );
-            println!("  is propagation");
-            dbg!(&reason);
 
             // Look for the reasons of the propagation premise.
             for predicate in reason {
