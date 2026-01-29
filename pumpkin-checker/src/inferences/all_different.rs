@@ -1,6 +1,5 @@
-use std::collections::HashSet;
-
 use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::Union;
 use pumpkin_checking::VariableState;
 
 use super::Fact;
@@ -27,24 +26,21 @@ pub(crate) fn verify_all_different(
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    // Collect all values present in at least one of the domains.
-    let union_of_domains = all_different
-        .variables
-        .iter()
-        .filter_map(|variable| variable.iter_induced_domain(&state))
-        .flatten()
-        .collect::<HashSet<_>>();
-
-    // Collect the variables mentioned in the fact. Here we ignore variables with a domain
-    // equal to all integers, as they are not mentioned in the fact. Therefore they do not
-    // contribute in the hall-set reasoning.
-    let num_variables = all_different
+    let variables = all_different
         .variables
         .iter()
         .filter(|variable| variable.iter_induced_domain(&state).is_some())
-        .count();
+        .collect::<Vec<_>>();
 
-    if union_of_domains.len() < num_variables {
+    // Collect all values present in at least one of the domains.
+    let mut union = Union::empty();
+    for &variable in &variables {
+        union.add(&state, variable);
+    }
+
+    if let Some(union_size) = union.size()
+        && union_size < variables.len()
+    {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)

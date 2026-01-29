@@ -21,6 +21,15 @@ pub enum IntExt<Int = i32> {
     PositiveInf,
 }
 
+impl<Int: Copy> IntExt<Int> {
+    pub fn as_int(&self) -> Option<Int> {
+        match self {
+            IntExt::Int(int) => Some(*int),
+            IntExt::NegativeInf | IntExt::PositiveInf => None,
+        }
+    }
+}
+
 impl IntExt<i32> {
     pub fn div_ceil(&self, other: IntExt<i32>) -> Option<IntExt<i32>> {
         let result = self.div(other).ceil();
