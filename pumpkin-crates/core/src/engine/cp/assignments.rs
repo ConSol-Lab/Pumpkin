@@ -298,7 +298,10 @@ impl Assignments {
     }
 
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
-        if let Some(trail_position) = self.get_trail_position(predicate) {
+        let domain = predicate.get_domain();
+        if let Some(trail_position) = self.get_trail_position(predicate)
+            && trail_position > self.domains[domain].initial_bounds_below_trail
+        {
             self.trail[trail_position].reason.is_none()
                 && self.trail[trail_position].predicate == *predicate
         } else {
@@ -453,9 +456,6 @@ impl Assignments {
         new_upper_bound: i32,
         reason: Option<AssignmentReason>,
     ) -> Result<bool, EmptyDomain> {
-        dbg!(&self.domains[domain_id].upper_bound_updates);
-        dbg!(self.get_upper_bound(domain_id));
-        dbg!(new_upper_bound);
         // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
             return self.domains[domain_id].verify_consistency();
@@ -1074,10 +1074,6 @@ impl IntegerDomain {
         checkpoint: usize,
         trail_position: usize,
     ) -> bool {
-        dbg!(&self.upper_bound_updates);
-        dbg!(checkpoint);
-        dbg!(trail_position);
-        dbg!(new_upper_bound);
         pumpkin_assert_moderate!(
             self.debug_is_valid_upper_bound_domain_update(checkpoint, trail_position)
         );
