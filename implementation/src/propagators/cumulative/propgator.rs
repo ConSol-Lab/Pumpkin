@@ -16,7 +16,7 @@ use pumpkin_core::variables::IntegerVariable;
 
 use crate::propagators::cumulative::CumulativeChecker;
 
-declare_inference_label!(CumulativeTimeTable);
+declare_inference_label!(TimeTable);
 
 #[derive(Clone, Debug)]
 pub struct CumulativeConstructor<Var> {
@@ -45,14 +45,14 @@ where
         CumulativeTimeTablePropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: InferenceCode::new(self.constraint_tag, CumulativeTimeTable),
+            _inference_code: InferenceCode::new(self.constraint_tag, TimeTable),
             phantom_data: PhantomData,
         }
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
         checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, CumulativeTimeTable),
+            InferenceCode::new(self.constraint_tag, TimeTable),
             Box::new(CumulativeChecker {
                 tasks: self.tasks.to_vec(),
                 capacity: self.capacity,

@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::num::NonZero;
+use std::path::Path;
 use std::rc::Rc;
 
 use drcp_format::ConstraintId;
 use drcp_format::IntAtomic;
-use fnv::FnvHashSet;
 use fzn_rs::VariableExpr;
 use fzn_rs::ast::Domain;
 use pumpkin_checking::AtomicConstraint;
@@ -12,22 +12,22 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::Comparison;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
-
-use crate::math::div_ceil;
-use crate::math::div_floor;
+use pumpkin_core::containers::HashSet;
 
 #[derive(Clone, Debug, derive_more::From)]
-pub enum Constraint {
+pub(crate) enum Constraint {
+    #[allow(unused, reason = "Could be used in the future")]
     Nogood(Nogood),
     LinearLeq(Linear),
     #[from(skip)]
     LinearEq(Linear),
     Cumulative(Cumulative),
     AllDifferent(AllDifferent),
+    Circuit(Circuit),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Atomic {
+pub(crate) enum Atomic {
     True,
     False,
     IntAtomic(IntAtomic<Rc<str>, i32>),
@@ -90,7 +90,7 @@ impl AtomicConstraint for Atomic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Nogood(FnvHashSet<Atomic>);
+pub(crate) struct Nogood(HashSet<Atomic>);
 
 impl<A> FromIterator<A> for Nogood
 where
@@ -112,14 +112,15 @@ where
 }
 
 impl Nogood {
-    pub fn iter(&self) -> impl Iterator<Item = &Atomic> + '_ {
+    #[allow(unused, reason = "Could be used in the future")]
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Atomic> + '_ {
         self.0.iter()
     }
 }
 
 /// A checker variable that can be used with [`pumpkin_checking::VariableState`].
 #[derive(Clone, Debug)]
-pub struct Variable(VariableExpr<i32>);
+pub(crate) struct Variable(VariableExpr<i32>);
 
 impl From<VariableExpr<i32>> for Variable {
     fn from(value: VariableExpr<i32>) -> Self {
@@ -252,13 +253,13 @@ impl CheckerVariable<Atomic> for Variable {
 }
 
 #[derive(Clone, Debug)]
-pub struct Linear {
+pub(crate) struct Linear {
     pub terms: Vec<Term>,
     pub bound: i32,
 }
 
 #[derive(Clone, Debug)]
-pub struct Term {
+pub(crate) struct Term {
     pub weight: NonZero<i32>,
     pub variable: Variable,
 }
@@ -384,39 +385,45 @@ impl CheckerVariable<Atomic> for Term {
 }
 
 #[derive(Clone, Debug)]
-pub struct Task {
-    pub start_time: Variable,
-    pub duration: i32,
-    pub resource_usage: i32,
+pub(crate) struct Task {
+    pub(crate) start_time: Variable,
+    pub(crate) duration: i32,
+    pub(crate) resource_usage: i32,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cumulative {
-    pub tasks: Vec<Task>,
-    pub capacity: i32,
+pub(crate) struct Cumulative {
+    pub(crate) tasks: Vec<Task>,
+    pub(crate) capacity: i32,
 }
 
 #[derive(Clone, Debug)]
-pub struct AllDifferent {
-    pub variables: Vec<Variable>,
+pub(crate) struct AllDifferent {
+    pub(crate) variables: Vec<Variable>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Objective {
+pub(crate) struct Circuit {
+    pub(crate) successors: Vec<Variable>,
+}
+
+#[allow(unused, reason = "Could be used in the future")]
+#[derive(Clone, Debug)]
+pub(crate) enum Objective {
     Maximize(Variable),
     Minimize(Variable),
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Model {
+pub(crate) struct Model {
     variables: BTreeMap<Rc<str>, Domain>,
     constraints: BTreeMap<ConstraintId, Constraint>,
-    pub objective: Option<Objective>,
+    pub(crate) objective: Option<Objective>,
 }
 
 impl Model {
     /// Add a new variable to the model.
-    pub fn add_variable(&mut self, name: Rc<str>, domain: Domain) {
+    pub(crate) fn add_variable(&mut self, name: Rc<str>, domain: Domain) {
         let _ = self.variables.insert(name, domain);
     }
 
@@ -424,7 +431,7 @@ impl Model {
     ///
     /// If a constraint with the given ID already exists, this returns false. Otherwise, the
     /// function returns true.
-    pub fn add_constraint(
+    pub(crate) fn add_constraint(
         &mut self,
         constraint_id: ConstraintId,
         constraint: impl Into<Constraint>,
@@ -435,21 +442,23 @@ impl Model {
     }
 
     /// Iterate over the constraints in the map, ordered by [`ConstraintId`].
-    pub fn iter_constraints(
+    #[allow(unused, reason = "Could be used in the future")]
+    pub(crate) fn iter_constraints(
         &self,
     ) -> std::collections::btree_map::Iter<'_, ConstraintId, Constraint> {
         self.constraints.iter()
     }
 
     /// Get the constraint with the given ID if it exists.
-    pub fn get_constraint(&self, constraint_id: ConstraintId) -> Option<&Constraint> {
+    pub(crate) fn get_constraint(&self, constraint_id: ConstraintId) -> Option<&Constraint> {
         self.constraints.get(&constraint_id)
     }
 
     /// Test whether the atomic is true in the initial domains of the variables.
     ///
     /// Returns false if the atomic is over a variable that is not in the model.
-    pub fn is_trivially_true(&self, atomic: &Atomic) -> bool {
+    #[allow(unused, reason = "Could be used in the future")]
+    pub(crate) fn is_trivially_true(&self, atomic: &Atomic) -> bool {
         let Some(domain) = self.variables.get(&atomic.identifier()) else {
             return false;
         };
@@ -482,4 +491,214 @@ impl Model {
             Domain::Bool => todo!("boolean variables are not yet supported"),
         }
     }
+}
+
+pub(crate) fn div_ceil(lhs: i32, other: i32) -> i32 {
+    // TODO: The source is taken from the standard library nightly implementation of this
+    // function and div_floor. Once they are stabilized, these definitions can be removed.
+    // Tracking issue: https://github.com/rust-lang/rust/issues/88581
+    let d = lhs / other;
+    let r = lhs % other;
+    if (r > 0 && other > 0) || (r < 0 && other < 0) {
+        d + 1
+    } else {
+        d
+    }
+}
+
+pub(crate) fn div_floor(lhs: i32, other: i32) -> i32 {
+    // TODO: See todo in `div_ceil`.
+    let d = lhs / other;
+    let r = lhs % other;
+    if (r > 0 && other < 0) || (r < 0 && other > 0) {
+        d - 1
+    } else {
+        d
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Fact {
+    pub premises: Vec<Atomic>,
+    pub consequent: Option<Atomic>,
+}
+
+impl Fact {
+    /// Create a fact `premises -> false`.
+    #[allow(unused, reason = "Could be used in the future")]
+    pub(crate) fn nogood(premises: Vec<Atomic>) -> Self {
+        Fact {
+            premises,
+            consequent: None,
+        }
+    }
+}
+
+type FlatZincModel = fzn_rs::TypedInstance<i32, FlatZincConstraints>;
+
+/// The constraints supported by the checker.
+#[derive(Debug, fzn_rs::FlatZincConstraint)]
+enum FlatZincConstraints {
+    #[name("int_lin_le")]
+    LinearLeq {
+        weights: fzn_rs::ArrayExpr<i32>,
+        variables: fzn_rs::ArrayExpr<VariableExpr<i32>>,
+        bound: i32,
+    },
+    #[name("int_lin_eq")]
+    LinearEq {
+        weights: fzn_rs::ArrayExpr<i32>,
+        variables: fzn_rs::ArrayExpr<VariableExpr<i32>>,
+        bound: i32,
+    },
+    #[name("pumpkin_cumulative")]
+    Cumulative {
+        start_times: fzn_rs::ArrayExpr<VariableExpr<i32>>,
+        durations: fzn_rs::ArrayExpr<i32>,
+        resource_usages: fzn_rs::ArrayExpr<i32>,
+        capacity: i32,
+    },
+    #[name("pumpkin_all_different")]
+    AllDifferent(fzn_rs::ArrayExpr<VariableExpr<i32>>),
+}
+
+/// Parse a FlatZinc file to a checker [`Model`].
+#[allow(clippy::field_reassign_with_default, reason = "Could be refactored")]
+pub(crate) fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
+    let model_source = std::fs::read_to_string(path)?;
+
+    // TODO: For now the error handling shortcuts here. Ideally the `FznError` type returns
+    // something that can be converted to an owned type, but for now we have to work around the
+    // error holding a reference to the source.
+    let fzn_ast = fzn_rs::fzn::parse(&model_source).map_err(|err| anyhow::anyhow!("{err}"))?;
+
+    let fzn_model = FlatZincModel::from_ast(fzn_ast)?;
+
+    let mut model = Model::default();
+    model.objective = match &fzn_model.solve.method.node {
+        fzn_rs::Method::Satisfy => None,
+        fzn_rs::Method::Optimize {
+            direction: fzn_rs::ast::OptimizationDirection::Minimize,
+            objective,
+        } => Some(Objective::Minimize(objective.clone().into())),
+        fzn_rs::Method::Optimize {
+            direction: fzn_rs::ast::OptimizationDirection::Maximize,
+            objective,
+        } => Some(Objective::Maximize(objective.clone().into())),
+    };
+
+    for (name, variable) in fzn_model.variables.iter() {
+        model.add_variable(Rc::clone(name), variable.domain.node.clone());
+    }
+
+    for (idx, annotated_constraint) in fzn_model.constraints.iter().enumerate() {
+        let constraint_id = NonZero::new(idx as u32 + 1).expect(
+            "we always add one, and idx is at least zero, constraint_id is always non-zero",
+        );
+
+        let constraint = match &annotated_constraint.constraint.node {
+            FlatZincConstraints::LinearLeq {
+                weights,
+                variables,
+                bound,
+            } => {
+                let weights = fzn_model.resolve_array(weights)?;
+                let variables = fzn_model.resolve_array(variables)?;
+
+                let mut terms = vec![];
+
+                for (weight, variable) in weights.zip(variables) {
+                    let weight = weight?;
+                    let variable = variable?;
+
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
+                }
+
+                Constraint::LinearLeq(Linear {
+                    terms,
+                    bound: *bound,
+                })
+            }
+
+            FlatZincConstraints::LinearEq {
+                weights,
+                variables,
+                bound,
+            } => {
+                let weights = fzn_model.resolve_array(weights)?;
+                let variables = fzn_model.resolve_array(variables)?;
+
+                let mut terms = vec![];
+
+                for (weight, variable) in weights.zip(variables) {
+                    let weight = weight?;
+                    let variable = variable?;
+
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
+                }
+
+                Constraint::LinearEq(Linear {
+                    terms,
+                    bound: *bound,
+                })
+            }
+
+            FlatZincConstraints::Cumulative {
+                start_times,
+                durations,
+                resource_usages,
+                capacity,
+            } => {
+                let start_times = fzn_model.resolve_array(start_times)?;
+                let durations = fzn_model.resolve_array(durations)?;
+                let resource_usages = fzn_model.resolve_array(resource_usages)?;
+
+                let tasks = start_times
+                    .zip(durations)
+                    .zip(resource_usages)
+                    .map(
+                        |((maybe_start_time, maybe_duration), maybe_resource_usage)| {
+                            let start_time = maybe_start_time?;
+                            let duration = maybe_duration?;
+                            let resource_usage = maybe_resource_usage?;
+
+                            Ok(Task {
+                                start_time: start_time.into(),
+                                duration,
+                                resource_usage,
+                            })
+                        },
+                    )
+                    .collect::<Result<Vec<_>, fzn_rs::InstanceError>>()?;
+
+                Constraint::Cumulative(Cumulative {
+                    tasks,
+                    capacity: *capacity,
+                })
+            }
+
+            FlatZincConstraints::AllDifferent(variables) => {
+                let variables = fzn_model
+                    .resolve_array(variables)?
+                    .map(|maybe_variable| maybe_variable.map(Variable::from))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Constraint::AllDifferent(AllDifferent { variables })
+            }
+        };
+
+        let _ = model.add_constraint(constraint_id, constraint);
+    }
+
+    Ok(model)
 }

@@ -16,7 +16,7 @@ use pumpkin_core::variables::IntegerVariable;
 
 use crate::propagators::circuit::CircuitChecker;
 
-declare_inference_label!(CircuitForwardCheck);
+declare_inference_label!(Circuit);
 
 #[derive(Clone, Debug)]
 pub struct CircuitConstructor<Var> {
@@ -37,14 +37,14 @@ where
         CircuitPropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
+            _inference_code: InferenceCode::new(self.constraint_tag, Circuit),
             phantom_data: PhantomData,
         }
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
         checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
+            InferenceCode::new(self.constraint_tag, Circuit),
             Box::new(CircuitChecker {
                 successors: self.successors.to_vec(),
             }),

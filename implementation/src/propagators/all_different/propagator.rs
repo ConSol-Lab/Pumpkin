@@ -16,7 +16,7 @@ use pumpkin_core::variables::IntegerVariable;
 
 use crate::propagators::all_different::AllDifferentChecker;
 
-declare_inference_label!(AllDifferentSimple);
+declare_inference_label!(AllDifferent);
 
 #[derive(Clone, Debug)]
 pub struct AllDifferentConstructor<Var> {
@@ -37,14 +37,14 @@ where
         AllDifferentPropagator {
             // TODO
             conflict_detection_only: self.conflict_detection_only,
-            _inference_code: InferenceCode::new(self.constraint_tag, AllDifferentSimple),
+            _inference_code: InferenceCode::new(self.constraint_tag, AllDifferent),
             phantom_data: PhantomData,
         }
     }
 
     fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
         checkers.add_inference_checker(
-            InferenceCode::new(self.constraint_tag, AllDifferentSimple),
+            InferenceCode::new(self.constraint_tag, AllDifferent),
             Box::new(AllDifferentChecker { x: self.x.to_vec() }),
         );
     }
