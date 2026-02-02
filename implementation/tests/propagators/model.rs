@@ -120,7 +120,7 @@ impl Nogood {
 
 /// A checker variable that can be used with [`pumpkin_checking::VariableState`].
 #[derive(Clone, Debug)]
-pub(crate) struct Variable(VariableExpr<i32>);
+pub(crate) struct Variable(pub(crate) VariableExpr<i32>);
 
 impl From<VariableExpr<i32>> for Variable {
     fn from(value: VariableExpr<i32>) -> Self {

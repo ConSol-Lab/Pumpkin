@@ -2,11 +2,13 @@
 
 use crate::Propagator;
 use crate::propagators::LINEAR_INSTANCES;
-use crate::run_instance;
+use crate::propagators::ProofTestRunner;
 
 #[test]
 fn linear_checker_test_0() {
-    let result = run_instance(LINEAR_INSTANCES[0], Propagator::Linear);
+    let runner = ProofTestRunner::new_runner(LINEAR_INSTANCES[0], Propagator::Linear);
+    let result = runner.run();
+
     if let Err(e) = result {
         panic!("Failed to check inference: {e:#?}");
     }
@@ -14,7 +16,9 @@ fn linear_checker_test_0() {
 
 #[test]
 fn linear_checker_test_1() {
-    let result = run_instance(LINEAR_INSTANCES[1], Propagator::Linear);
+    let runner = ProofTestRunner::new_runner(LINEAR_INSTANCES[1], Propagator::Linear);
+    let result = runner.run();
+
     if let Err(e) = result {
         panic!("Failed to check inference: {e:#?}");
     }
@@ -22,7 +26,9 @@ fn linear_checker_test_1() {
 
 #[test]
 fn linear_checker_test_2() {
-    let result = run_instance(LINEAR_INSTANCES[2], Propagator::Linear);
+    let runner = ProofTestRunner::new_runner(LINEAR_INSTANCES[2], Propagator::Linear);
+    let result = runner.run();
+
     if let Err(e) = result {
         panic!("Failed to check inference: {e:#?}");
     }
@@ -30,7 +36,9 @@ fn linear_checker_test_2() {
 
 #[test]
 fn linear_checker_test_3() {
-    let result = run_instance(LINEAR_INSTANCES[3], Propagator::Linear);
+    let runner = ProofTestRunner::new_runner(LINEAR_INSTANCES[3], Propagator::Linear);
+    let result = runner.run();
+
     if let Err(e) = result {
         panic!("Failed to check inference: {e:#?}");
     }

@@ -110,6 +110,11 @@ impl TestSolver {
         var.lower_bound(&self.state.assignments)
     }
 
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
+        assert_eq!(self.state.propagators.len(), 1);
+        self.state.post(predicate)
+    }
+
     pub fn remove_and_notify(
         &mut self,
         propagator: PropagatorId,

@@ -67,6 +67,10 @@ impl PropagatorStore {
         }
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.propagators.len()
+    }
+
     /// Get an exclusive reference to the propagator identified by the given handle.
     ///
     /// For more info, see [`Self::get_propagator`].
