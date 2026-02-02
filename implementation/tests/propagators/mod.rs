@@ -248,7 +248,7 @@ impl<'a> ProofTestRunner<'a> {
                                         }
                                     }
 
-                                    if self.check_conflicts && fact.consequent.is_none() {
+                                    if self.check_propagations && fact.consequent.is_none() {
                                         let try_upper_bound = Self::recreate_conflict_linear(
                                             self.instance,
                                             linear,
@@ -316,7 +316,11 @@ impl<'a> ProofTestRunner<'a> {
                                         }
                                     }
 
-                                    if self.check_conflicts {
+                                    if self.check_conflicts && fact.consequent.is_none() {
+                                        todo!()
+                                    }
+
+                                    if self.check_propagations && fact.consequent.is_some() {
                                         todo!()
                                     }
                                 }
@@ -346,7 +350,11 @@ impl<'a> ProofTestRunner<'a> {
                                         }
                                     }
 
-                                    if self.check_conflicts {
+                                    if self.check_conflicts && fact.consequent.is_none() {
+                                        todo!()
+                                    }
+
+                                    if self.check_propagations && fact.consequent.is_some() {
                                         todo!()
                                     }
                                 }
@@ -375,7 +383,11 @@ impl<'a> ProofTestRunner<'a> {
                                     }
                                 }
 
-                                if self.check_conflicts {
+                                if self.check_conflicts && fact.consequent.is_none() {
+                                    todo!()
+                                }
+
+                                if self.check_propagations && fact.consequent.is_some() {
                                     todo!()
                                 }
                             }
