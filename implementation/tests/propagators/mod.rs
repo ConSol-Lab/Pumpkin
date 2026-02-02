@@ -248,7 +248,7 @@ impl<'a> ProofTestRunner<'a> {
                                         }
                                     }
 
-                                    if self.check_propagations && fact.consequent.is_none() {
+                                    if self.check_conflicts && fact.consequent.is_none() {
                                         let try_upper_bound = Self::recreate_conflict_linear(
                                             self.instance,
                                             linear,
@@ -257,6 +257,28 @@ impl<'a> ProofTestRunner<'a> {
                                         );
 
                                         let try_lower_bound = Self::recreate_conflict_linear(
+                                            self.instance,
+                                            &inverted_linear,
+                                            &fact,
+                                            &model,
+                                        );
+
+                                        match (try_lower_bound, try_upper_bound) {
+                                            (Ok(_), Ok(_)) => panic!("This should not happen."),
+                                            (Ok(_), Err(_)) | (Err(_), Ok(_)) => {}
+                                            (error @ Err(_), Err(_)) => error?,
+                                        }
+                                    }
+
+                                    if self.check_propagations && fact.consequent.is_some() {
+                                        let try_upper_bound = Self::recreate_propagation_linear(
+                                            self.instance,
+                                            linear,
+                                            &fact,
+                                            &model,
+                                        );
+
+                                        let try_lower_bound = Self::recreate_propagation_linear(
                                             self.instance,
                                             &inverted_linear,
                                             &fact,
@@ -451,6 +473,7 @@ impl<'a> ProofTestRunner<'a> {
         let mut solver = TestSolver::default();
 
         let mut variables: HashMap<Rc<str>, DomainId> = HashMap::default();
+
         for atomic in &fact.premises {
             let identifier = atomic.identifier();
 
@@ -474,6 +497,24 @@ impl<'a> ProofTestRunner<'a> {
             let _ = solver
                 .post(atomic_predicate)
                 .expect("Expected that apply of predicate would not lead to a conflict");
+        }
+
+        if let Some(atomic) = &fact.consequent {
+            let identifier = atomic.identifier();
+
+            if !variables.contains_key(&identifier) {
+                let domain = model.get_domain(&identifier);
+
+                let var = match domain {
+                    fzn_rs::ast::Domain::UnboundedInt => unimplemented!(),
+                    fzn_rs::ast::Domain::Int(range_list) => solver.new_variable(
+                        (*range_list.lower_bound()) as i32,
+                        (*range_list.upper_bound()) as i32,
+                    ),
+                    fzn_rs::ast::Domain::Bool => solver.new_variable(0, 1),
+                };
+                let _ = variables.insert(Rc::clone(&identifier), var);
+            }
         }
 
         (solver, variables)
