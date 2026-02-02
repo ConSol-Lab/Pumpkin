@@ -332,6 +332,10 @@ impl TestSolver {
         );
     }
 
+    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
+        self.state.assignments.is_predicate_satisfied(predicate)
+    }
+
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
     }
