@@ -35,6 +35,7 @@ use crate::propagators::model::Atomic;
 use crate::propagators::model::Constraint;
 use crate::propagators::model::Fact;
 use crate::propagators::model::Linear;
+use crate::propagators::model::Model;
 use crate::propagators::model::Term;
 use crate::propagators::model::parse_model;
 
@@ -174,6 +175,7 @@ impl<'a> ProofTestRunner<'a> {
                                             self.instance,
                                             linear,
                                             &fact,
+                                            &model,
                                         )?;
                                     }
                                 }
@@ -220,12 +222,14 @@ impl<'a> ProofTestRunner<'a> {
                                             self.instance,
                                             linear,
                                             &fact,
+                                            &model,
                                         );
 
                                         let try_lower_bound = Self::recreate_conflict_linear(
                                             self.instance,
                                             &inverted_linear,
                                             &fact,
+                                            &model,
                                         );
 
                                         match (try_lower_bound, try_upper_bound) {
@@ -379,7 +383,10 @@ impl<'a> ProofTestRunner<'a> {
         }
     }
 
-    fn create_solver_for_fact(fact: &Fact) -> (TestSolver, HashMap<Rc<str>, DomainId>) {
+    fn create_solver_for_fact(
+        fact: &Fact,
+        model: &Model,
+    ) -> (TestSolver, HashMap<Rc<str>, DomainId>) {
         let mut solver = TestSolver::default();
 
         let mut variables: HashMap<Rc<str>, DomainId> = HashMap::default();
@@ -387,7 +394,16 @@ impl<'a> ProofTestRunner<'a> {
             let identifier = atomic.identifier();
 
             if !variables.contains_key(&identifier) {
-                let var = solver.new_variable(i32::MIN / 2, i32::MAX / 2);
+                let domain = model.get_domain(&identifier);
+
+                let var = match domain {
+                    fzn_rs::ast::Domain::UnboundedInt => unimplemented!(),
+                    fzn_rs::ast::Domain::Int(range_list) => solver.new_variable(
+                        (*range_list.lower_bound()) as i32,
+                        (*range_list.upper_bound()) as i32,
+                    ),
+                    fzn_rs::ast::Domain::Bool => solver.new_variable(0, 1),
+                };
                 let _ = variables.insert(Rc::clone(&identifier), var);
             }
 
@@ -421,9 +437,10 @@ impl<'a> ProofTestRunner<'a> {
         instance: &'a str,
         linear: &Linear,
         fact: &Fact,
+        model: &Model,
     ) -> Result<(), CheckerError<'a>> {
         assert!(fact.consequent.is_none());
-        let (mut solver, variables) = Self::create_solver_for_fact(fact);
+        let (mut solver, variables) = Self::create_solver_for_fact(fact, model);
         let constraint_tag = solver.new_constraint_tag();
 
         let x = linear

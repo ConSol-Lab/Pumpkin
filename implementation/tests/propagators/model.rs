@@ -427,6 +427,10 @@ impl Model {
         let _ = self.variables.insert(name, domain);
     }
 
+    pub(crate) fn get_domain(&self, name: &Rc<str>) -> &Domain {
+        self.variables.get(name).expect("Variable should exist")
+    }
+
     /// Add a new constraint to the model.
     ///
     /// If a constraint with the given ID already exists, this returns false. Otherwise, the
