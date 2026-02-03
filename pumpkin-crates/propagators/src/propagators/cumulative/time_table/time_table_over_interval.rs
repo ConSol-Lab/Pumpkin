@@ -390,6 +390,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                         inference_code,
                         &new_profile,
                         parameters.options.explanation_type,
+                        parameters.capacity,
                     ));
                 } else {
                     // We end the current profile, creating a profile from [start_of_interval,

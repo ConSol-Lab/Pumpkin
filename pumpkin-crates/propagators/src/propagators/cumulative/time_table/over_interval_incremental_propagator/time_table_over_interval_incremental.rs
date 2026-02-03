@@ -207,6 +207,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                             self.inference_code.as_ref().unwrap(),
                             &conflict_tasks,
                             self.parameters.options.explanation_type,
+                            self.parameters.capacity,
                         )
                         .into()));
                     }
@@ -370,6 +371,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         self.inference_code.as_ref().unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
+                        self.parameters.capacity,
                     )
                     .into());
                 }

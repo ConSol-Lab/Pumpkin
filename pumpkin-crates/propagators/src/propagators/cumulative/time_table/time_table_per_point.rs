@@ -259,6 +259,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                         inference_code,
                         current_profile,
                         parameters.options.explanation_type,
+                        parameters.capacity,
                     ));
                 }
             }

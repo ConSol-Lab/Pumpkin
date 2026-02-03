@@ -208,6 +208,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     self.inference_code.as_ref().unwrap(),
                     current_profile,
                     self.parameters.options.explanation_type,
+                    self.parameters.capacity,
                 )
                 .into()));
             }
@@ -399,6 +400,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         self.inference_code.as_ref().unwrap(),
                         conflicting_profile,
                         self.parameters.options.explanation_type,
+                        self.parameters.capacity,
                     )
                     .into());
                 }

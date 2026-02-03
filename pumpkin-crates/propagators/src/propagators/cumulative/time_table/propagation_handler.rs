@@ -452,19 +452,38 @@ pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
     inference_code: &InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
+    capacity: i32,
 ) -> PropagatorConflict
 where
     Var: IntegerVariable + 'static,
 {
+    let (minimal_profile_tasks, minimal_height) = conflict_profile.profile_tasks.iter().fold(
+        (Vec::new(), 0),
+        |(mut minimal_profile_tasks, minimal_height), task| {
+            if minimal_height <= capacity {
+                minimal_profile_tasks.push(Rc::clone(task));
+                (minimal_profile_tasks, minimal_height + task.resource_usage)
+            } else {
+                (minimal_profile_tasks, minimal_height)
+            }
+        },
+    );
+    let minimal_profile = ResourceProfile {
+        start: conflict_profile.start,
+        end: conflict_profile.end,
+        profile_tasks: minimal_profile_tasks,
+        height: minimal_height,
+    };
+
     let conjunction = match explanation_type {
         CumulativeExplanationType::Naive => {
-            create_naive_conflict_explanation(conflict_profile, context)
+            create_naive_conflict_explanation(&minimal_profile, context)
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_conflict_explanation(conflict_profile)
+            create_big_step_conflict_explanation(&minimal_profile)
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_conflict_explanation(conflict_profile)
+            create_pointwise_conflict_explanation(&minimal_profile)
         }
     };
 
@@ -530,7 +549,7 @@ pub(crate) mod test_propagation_handler {
                 start: 15,
                 end: 17,
                 profile_tasks: vec![Rc::new(profile_task)],
-                height: 1,
+                height: 2,
             };
 
             let reason = create_conflict_explanation(
@@ -538,6 +557,7 @@ pub(crate) mod test_propagation_handler {
                 &self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
+                1,
             );
 
             (reason.conjunction, y)
