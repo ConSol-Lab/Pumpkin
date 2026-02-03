@@ -4,7 +4,6 @@
 )]
 mod model;
 use implementation::propagators::cumulative::Task;
-use implementation::propagators::linear::LinearConstructor;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
@@ -12,10 +11,7 @@ use pumpkin_core::TestSolver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::state::Conflict;
-use pumpkin_core::state::PropagatorId;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::TransformableVariable;
 
 mod circuit_tests;
 mod cumulative_tests;
@@ -34,6 +30,8 @@ use implementation::propagators::cumulative::CumulativeChecker;
 use implementation::propagators::linear::LinearChecker;
 pub use linear_tests::set_up_linear_leq_state;
 
+use crate::propagators::linear_tests::recreate_conflict_linear;
+use crate::propagators::linear_tests::recreate_propagation_linear;
 use crate::propagators::model::Atomic;
 use crate::propagators::model::Constraint;
 use crate::propagators::model::Fact;
@@ -193,7 +191,7 @@ impl<'a> ProofTestRunner<'a> {
                                     }
 
                                     if self.check_conflicts && fact.consequent.is_none() {
-                                        Self::recreate_conflict_linear(
+                                        recreate_conflict_linear(
                                             self.instance,
                                             linear,
                                             &fact,
@@ -202,7 +200,7 @@ impl<'a> ProofTestRunner<'a> {
                                     }
 
                                     if self.check_propagations && fact.consequent.is_some() {
-                                        Self::recreate_propagation_linear(
+                                        recreate_propagation_linear(
                                             self.instance,
                                             linear,
                                             &fact,
@@ -249,14 +247,14 @@ impl<'a> ProofTestRunner<'a> {
                                     }
 
                                     if self.check_conflicts && fact.consequent.is_none() {
-                                        let try_upper_bound = Self::recreate_conflict_linear(
+                                        let try_upper_bound = recreate_conflict_linear(
                                             self.instance,
                                             linear,
                                             &fact,
                                             &model,
                                         );
 
-                                        let try_lower_bound = Self::recreate_conflict_linear(
+                                        let try_lower_bound = recreate_conflict_linear(
                                             self.instance,
                                             &inverted_linear,
                                             &fact,
@@ -271,14 +269,14 @@ impl<'a> ProofTestRunner<'a> {
                                     }
 
                                     if self.check_propagations && fact.consequent.is_some() {
-                                        let try_upper_bound = Self::recreate_propagation_linear(
+                                        let try_upper_bound = recreate_propagation_linear(
                                             self.instance,
                                             linear,
                                             &fact,
                                             &model,
                                         );
 
-                                        let try_lower_bound = Self::recreate_propagation_linear(
+                                        let try_lower_bound = recreate_propagation_linear(
                                             self.instance,
                                             &inverted_linear,
                                             &fact,
@@ -518,91 +516,5 @@ impl<'a> ProofTestRunner<'a> {
         }
 
         (solver, variables)
-    }
-}
-
-/// Methods for checking conflicts and propagations linear
-impl<'a> ProofTestRunner<'a> {
-    fn add_linear_propagator(
-        solver: &mut TestSolver,
-        variables: &HashMap<Rc<str>, DomainId>,
-        linear: &Linear,
-        conflict_detection_only: bool,
-    ) -> Result<PropagatorId, Conflict> {
-        let x = linear
-            .terms
-            .iter()
-            .map(|term| {
-                let identifier = &term.variable.0;
-                match identifier {
-                    fzn_rs::VariableExpr::Identifier(ident) => variables
-                        .get(ident)
-                        .expect("Expected to be able to retrieve variable")
-                        .scaled(term.weight.into()),
-                    fzn_rs::VariableExpr::Constant(constant) => {
-                        solver.new_variable(*constant, *constant).scaled(1)
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let constraint_tag = solver.new_constraint_tag();
-        solver.new_propagator(LinearConstructor {
-            x: x.into(),
-            bound: linear.bound,
-            constraint_tag,
-            conflict_detection_only,
-        })
-    }
-
-    fn recreate_propagation_linear(
-        instance: &'a str,
-        linear: &Linear,
-        fact: &Fact,
-        model: &Model,
-    ) -> Result<(), CheckerError<'a>> {
-        assert!(fact.consequent.is_some());
-        let (mut solver, variables) = Self::create_solver_for_fact(fact, model);
-
-        let result = Self::add_linear_propagator(&mut solver, &variables, linear, false);
-
-        let var = variables
-            .get(&fact.consequent.as_ref().unwrap().identifier())
-            .expect("Expected variable to exist");
-        let consequent = Self::atomic_to_predicate(fact.consequent.as_ref().unwrap(), var);
-
-        if result.is_ok() && solver.is_predicate_satisfied(consequent) {
-            // We have been able to reproduce the conflict
-            Ok(())
-        } else {
-            Err(CheckerError::PropagationCouldNotBeReproduced {
-                fact: fact.clone(),
-                instance,
-                propagator: Propagator::Linear,
-            })
-        }
-    }
-
-    fn recreate_conflict_linear(
-        instance: &'a str,
-        linear: &Linear,
-        fact: &Fact,
-        model: &Model,
-    ) -> Result<(), CheckerError<'a>> {
-        assert!(fact.consequent.is_none());
-        let (mut solver, variables) = Self::create_solver_for_fact(fact, model);
-
-        let result = Self::add_linear_propagator(&mut solver, &variables, linear, true);
-
-        if result.is_err() {
-            // We have been able to reproduce the conflict
-            Ok(())
-        } else {
-            Err(CheckerError::ConflictCouldNotBeReproduced {
-                fact: fact.clone(),
-                instance,
-                propagator: Propagator::Linear,
-            })
-        }
     }
 }
