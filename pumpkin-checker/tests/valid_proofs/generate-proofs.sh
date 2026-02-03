@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INSTANCES=pumpkin-checker/tests/proofs
+INSTANCES=pumpkin-checker/tests/valid_proofs
 
 for instance_file in $INSTANCES/*.fzn; do
     proof_file="${file%.fzn}.drcp"

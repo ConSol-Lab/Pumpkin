@@ -11,8 +11,13 @@ use std::rc::Rc;
 use implementation::propagators::cumulative::CumulativeConstructor;
 use implementation::propagators::cumulative::Task;
 use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::Comparison;
+use pumpkin_core::Random;
 use pumpkin_core::TestSolver;
 use pumpkin_core::containers::HashMap;
+#[allow(clippy::disallowed_types, reason = "")]
+use pumpkin_core::rand::SeedableRng;
+use pumpkin_core::rand::rngs::SmallRng;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorId;
 use pumpkin_core::variables::DomainId;
@@ -136,4 +141,98 @@ pub(crate) fn recreate_conflict_cumulative<'a>(
             propagator: Propagator::Cumulative,
         })
     }
+}
+
+fn remove_mandatory_part(
+    rng: &mut SmallRng,
+    cumulative: &Cumulative,
+    fact: &mut Fact,
+    to_mutate_identifier: Rc<str>,
+) {
+    let mut mutatable_premises = fact
+        .premises
+        .iter()
+        .filter(|atomic| atomic.identifier() == to_mutate_identifier)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if mutatable_premises.len() == 1 {
+        let negate = fact.consequent.as_ref().unwrap().negate();
+        mutatable_premises.push(negate);
+    }
+
+    assert_eq!(mutatable_premises.len(), 2);
+    let est = mutatable_premises[0].value();
+    let lst = mutatable_premises[1].value();
+    let task = cumulative
+        .tasks
+        .iter()
+        .find(|task| match &task.start_time.0 {
+            fzn_rs::VariableExpr::Identifier(id) => *id == to_mutate_identifier,
+            fzn_rs::VariableExpr::Constant(_) => todo!(),
+        })
+        .unwrap();
+
+    if lst < est + task.duration {
+        let change = (est + task.duration) - lst;
+        if rng.generate_f64() <= 0.5 {
+            let mutatable_premise = fact
+                .premises
+                .iter_mut()
+                .find(|premise| {
+                    premise.identifier() == to_mutate_identifier
+                        && premise.comparison() == Comparison::GreaterEqual
+                })
+                .unwrap_or_else(|| fact.consequent.as_mut().unwrap());
+
+            match mutatable_premise {
+                crate::propagators::model::Atomic::IntAtomic(int_atomic) => {
+                    assert!((lst..int_atomic.value - change + task.duration).is_empty());
+                    int_atomic.value -= change
+                }
+                _ => panic!(),
+            }
+        } else {
+            let mutatable_premise = fact
+                .premises
+                .iter_mut()
+                .find(|premise| {
+                    premise.identifier() == to_mutate_identifier
+                        && premise.comparison() == Comparison::LessEqual
+                })
+                .unwrap_or_else(|| fact.consequent.as_mut().unwrap());
+
+            match mutatable_premise {
+                crate::propagators::model::Atomic::IntAtomic(int_atomic) => {
+                    assert!((int_atomic.value + change..est + task.duration).is_empty());
+                    int_atomic.value += change
+                }
+                _ => panic!(),
+            }
+        }
+    }
+}
+
+pub(crate) fn invalidate_cumulative_fact(cumulative: &Cumulative, fact: &mut Fact) {
+    // We create some random generator
+    let seed = cumulative.tasks.len() as u64
+        + fact.premises.len() as u64
+        + fact
+            .premises
+            .iter()
+            .map(|premise| premise.value().unsigned_abs() as u64)
+            .sum::<u64>();
+    let mut rng = SmallRng::seed_from_u64(seed);
+
+    let mut to_mutate_identifier =
+        fact.premises[rng.generate_usize_in_range(0..fact.premises.len())].identifier();
+    if let Some(consequent) = fact.consequent.clone() {
+        remove_mandatory_part(&mut rng, cumulative, fact, consequent.identifier());
+        while to_mutate_identifier == consequent.identifier() {
+            let random_index = rng.generate_usize_in_range(0..fact.premises.len());
+            to_mutate_identifier = fact.premises[random_index].identifier();
+        }
+    }
+
+    remove_mandatory_part(&mut rng, cumulative, fact, to_mutate_identifier);
 }

@@ -30,6 +30,7 @@ use implementation::propagators::cumulative::CumulativeChecker;
 use implementation::propagators::linear::LinearChecker;
 pub use linear_tests::set_up_linear_leq_state;
 
+use crate::propagators::cumulative_tests::invalidate_cumulative_fact;
 use crate::propagators::cumulative_tests::recreate_conflict_cumulative;
 use crate::propagators::cumulative_tests::recreate_propagation_cumulative;
 use crate::propagators::linear_tests::invalidate_linear_fact;
@@ -319,7 +320,6 @@ impl<'a> ProofTestRunner<'a> {
                                                 )
                                                 .expect("Premises were inconsistent");
 
-                                            println!("INVALID");
                                             let result = Self::verify_linear_inference(
                                                 linear,
                                                 &fact,
@@ -387,7 +387,7 @@ impl<'a> ProofTestRunner<'a> {
                         "time_table" if self.propagator == Propagator::Cumulative => {
                             match generated_by {
                                 Constraint::Cumulative(cumulative) => {
-                                    let fact = Fact {
+                                    let mut fact = Fact {
                                         premises: inference
                                             .premises
                                             .iter()
@@ -399,7 +399,7 @@ impl<'a> ProofTestRunner<'a> {
 
                                     if self.run_checker {
                                         if self.check_invalid_inferences {
-                                            todo!()
+                                            invalidate_cumulative_fact(cumulative, &mut fact);
                                         }
 
                                         let checker = CumulativeChecker {
@@ -432,14 +432,23 @@ impl<'a> ProofTestRunner<'a> {
                                             )
                                             .expect("Premises were inconsistent");
 
-                                        if checker.check(
+                                        let result = checker.check(
                                             variable_state,
                                             &fact.premises,
                                             fact.consequent.as_ref(),
-                                        ) {
-                                        } else {
+                                        );
+
+                                        if self.check_invalid_inferences {
+                                            if result {
+                                                return Err(CheckerError::CheckerDidNotReject {
+                                                    fact: fact.clone(),
+                                                    instance: self.instance,
+                                                    propagator: self.propagator,
+                                                });
+                                            }
+                                        } else if !result {
                                             return Err(CheckerError::CouldNotCheck {
-                                                fact,
+                                                fact: fact.clone(),
                                                 instance: self.instance,
                                                 propagator: self.propagator,
                                             });
