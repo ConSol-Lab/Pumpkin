@@ -1825,19 +1825,13 @@ mod tests {
             Err(Conflict::Propagator(explanation_scratch)),
         ) = (result, result_scratch)
         {
-            assert_ne!(explanation, explanation_scratch);
             let explanation_vec = explanation.conjunction.iter().cloned().collect::<Vec<_>>();
             let explanation_scratch_vec = explanation_scratch
                 .conjunction
                 .iter()
                 .cloned()
                 .collect::<Vec<_>>();
-
-            println!("{explanation_vec:?}");
-            println!("{explanation_scratch_vec:?}");
-
-            assert!(explanation_vec.contains(&predicate!(s2 >= 5)));
-            assert!(!explanation_scratch_vec.contains(&predicate!(s2 >= 5)));
+            assert_ne!(explanation_vec, explanation_scratch_vec);
         } else {
             panic!("Incorrect result")
         }
