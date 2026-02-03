@@ -8,6 +8,7 @@ use implementation::propagators::linear::LinearConstructor;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_core::TestSolver;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorId;
 use pumpkin_core::variables::AffineView;
@@ -132,6 +133,99 @@ pub(crate) fn recreate_conflict_linear<'a>(
             fact: fact.clone(),
             instance,
             propagator: Propagator::Linear,
+        })
+    }
+}
+
+pub(crate) fn invalidate_linear_fact(linear: &Linear, fact: &mut Fact, model: &Model) {
+    let (solver, variables) = ProofTestRunner::create_solver_for_fact(fact, model);
+
+    let lb: i32 = fact
+        .premises
+        .iter()
+        .map(|premise| solver.lower_bound(*variables.get(&premise.identifier()).unwrap()))
+        .sum();
+
+    if let Some(consequent) = &fact.consequent {
+        let consequent_var = variables.get(&consequent.identifier()).unwrap();
+        let slack = (linear.bound - (lb + solver.lower_bound(*consequent_var))).abs() + 1;
+        let reduction_per_var = (slack as f64 / fact.premises.len() as f64).ceil() as i32;
+
+        fact.premises.iter_mut().for_each(|premise| {
+            let term = linear
+                .terms
+                .iter()
+                .find(|term| match &term.variable.0 {
+                    fzn_rs::VariableExpr::Identifier(identifier) => {
+                        *identifier == premise.identifier()
+                    }
+                    fzn_rs::VariableExpr::Constant(constant) => {
+                        if premise.identifier().as_ref() == "true" {
+                            *constant == 1
+                        } else if premise.identifier().as_ref() == "false" {
+                            *constant == 0
+                        } else {
+                            false
+                        }
+                    }
+                })
+                .unwrap();
+            let id = premise.identifier();
+            if let super::model::Atomic::IntAtomic(int_atomic) = premise {
+                let var = variables.get(&id).unwrap().scaled(term.weight.into());
+                let predicate =
+                    var.lower_bound_predicate(solver.lower_bound(var) - reduction_per_var);
+
+                if predicate.get_right_hand_side() == int_atomic.value {
+                    if term.weight.is_positive() {
+                        int_atomic.value -= 1
+                    } else {
+                        int_atomic.value += 1
+                    }
+                } else {
+                    int_atomic.value = predicate.get_right_hand_side();
+                }
+            }
+        })
+    } else {
+        let slack = (linear.bound - lb).abs() + 1;
+        let reduction_per_var = (slack as f64 / fact.premises.len() as f64).ceil() as i32;
+
+        fact.premises.iter_mut().for_each(|premise| {
+            let term = linear
+                .terms
+                .iter()
+                .find(|term| match &term.variable.0 {
+                    fzn_rs::VariableExpr::Identifier(identifier) => {
+                        *identifier == premise.identifier()
+                    }
+                    fzn_rs::VariableExpr::Constant(constant) => {
+                        if premise.identifier().as_ref() == "true" {
+                            *constant == 1
+                        } else if premise.identifier().as_ref() == "false" {
+                            *constant == 0
+                        } else {
+                            false
+                        }
+                    }
+                })
+                .unwrap();
+            let id = premise.identifier();
+            if let super::model::Atomic::IntAtomic(int_atomic) = premise {
+                let var = variables.get(&id).unwrap().scaled(term.weight.into());
+                let predicate =
+                    var.lower_bound_predicate(solver.lower_bound(var) - reduction_per_var);
+
+                if predicate.get_right_hand_side() == int_atomic.value {
+                    if term.weight.is_positive() {
+                        int_atomic.value -= 1
+                    } else {
+                        int_atomic.value += 1
+                    }
+                } else {
+                    int_atomic.value = predicate.get_right_hand_side();
+                }
+            }
         })
     }
 }

@@ -30,6 +30,7 @@ use implementation::propagators::cumulative::CumulativeChecker;
 use implementation::propagators::linear::LinearChecker;
 pub use linear_tests::set_up_linear_leq_state;
 
+use crate::propagators::linear_tests::invalidate_linear_fact;
 use crate::propagators::linear_tests::recreate_conflict_linear;
 use crate::propagators::linear_tests::recreate_propagation_linear;
 use crate::propagators::model::Atomic;
@@ -45,6 +46,8 @@ struct ProofTestRunner<'a> {
     propagator: Propagator,
 
     run_checker: bool,
+    check_invalid_inferences: bool,
+
     check_conflicts: bool,
     check_propagations: bool,
 }
@@ -55,6 +58,14 @@ pub(crate) enum CheckerError<'a> {
         "The {propagator:?} checker was not able to check the inference {fact:#?} for instance {instance}"
     )]
     CouldNotCheck {
+        fact: Fact,
+        instance: &'a str,
+        propagator: Propagator,
+    },
+    #[error(
+        "The {propagator:?} checker did not reject the inference {fact:#?} for instance {instance}"
+    )]
+    CheckerDidNotReject {
         fact: Fact,
         instance: &'a str,
         propagator: Propagator,
@@ -102,13 +113,26 @@ impl<'a> ProofTestRunner<'a> {
             propagator,
 
             run_checker: true,
+            check_invalid_inferences: false,
             check_conflicts: false,
             check_propagations: false,
         }
     }
 
+    pub(crate) fn invalid_checks(mut self) -> Self {
+        self.run_checker = true;
+        self.check_invalid_inferences = true;
+
+        self.check_conflicts = false;
+        self.check_propagations = false;
+
+        self
+    }
+
     pub(crate) fn check_conflicts_only(mut self) -> Self {
         self.run_checker = false;
+        self.check_invalid_inferences = false;
+
         self.check_conflicts = true;
         self.check_propagations = false;
 
@@ -117,6 +141,8 @@ impl<'a> ProofTestRunner<'a> {
 
     pub(crate) fn check_propagations_only(mut self) -> Self {
         self.run_checker = false;
+        self.check_invalid_inferences = false;
+
         self.check_conflicts = false;
         self.check_propagations = true;
 
@@ -159,35 +185,53 @@ impl<'a> ProofTestRunner<'a> {
                         .get_constraint(generated_by_constraint_id)
                         .expect("all proofs are valid");
 
-                    let fact = Fact {
-                        premises: inference.premises.iter().cloned().map(Into::into).collect(),
-                        consequent: inference.consequent.clone().map(Into::into),
-                    };
-
-                    // Setup the state for a conflict check.
-                    let variable_state = VariableState::prepare_for_conflict_check(
-                        fact.premises.clone(),
-                        fact.consequent.clone(),
-                    )
-                    .expect("Premises were inconsistent");
-
                     match label.as_ref() {
                         "linear_bounds" if self.propagator == Propagator::Linear => {
                             match generated_by {
                                 Constraint::LinearLeq(linear) => {
+                                    let mut fact = Fact {
+                                        premises: inference
+                                            .premises
+                                            .iter()
+                                            .cloned()
+                                            .map(Into::into)
+                                            .collect(),
+                                        consequent: inference.consequent.clone().map(Into::into),
+                                    };
                                     if self.run_checker {
-                                        Self::verify_linear_inference(
+                                        if self.check_invalid_inferences {
+                                            invalidate_linear_fact(linear, &mut fact, &model);
+                                        }
+
+                                        // Setup the state for a conflict check.
+                                        let variable_state =
+                                            VariableState::prepare_for_conflict_check(
+                                                fact.premises.clone(),
+                                                fact.consequent.clone(),
+                                            )
+                                            .expect("Premises were inconsistent");
+
+                                        let result = Self::verify_linear_inference(
                                             linear,
                                             &fact,
                                             variable_state,
-                                        )
-                                        .map_err(|_| {
-                                            CheckerError::CouldNotCheck {
+                                        );
+
+                                        if self.check_invalid_inferences {
+                                            if result.is_ok() {
+                                                return Err(CheckerError::CheckerDidNotReject {
+                                                    fact: fact.clone(),
+                                                    instance: self.instance,
+                                                    propagator: self.propagator,
+                                                });
+                                            }
+                                        } else {
+                                            result.map_err(|_| CheckerError::CouldNotCheck {
                                                 fact: fact.clone(),
                                                 instance: self.instance,
                                                 propagator: self.propagator,
-                                            }
-                                        })?;
+                                            })?;
+                                        }
                                     }
 
                                     if self.check_conflicts && fact.consequent.is_none() {
@@ -221,6 +265,23 @@ impl<'a> ProofTestRunner<'a> {
                                         bound: -linear.bound,
                                     };
 
+                                    let mut fact = Fact {
+                                        premises: inference
+                                            .premises
+                                            .iter()
+                                            .cloned()
+                                            .map(Into::into)
+                                            .collect(),
+                                        consequent: inference.consequent.clone().map(Into::into),
+                                    };
+
+                                    // Setup the state for a conflict check.
+                                    let variable_state = VariableState::prepare_for_conflict_check(
+                                        fact.premises.clone(),
+                                        fact.consequent.clone(),
+                                    )
+                                    .expect("Premises were inconsistent");
+
                                     if self.run_checker {
                                         let try_upper_bound = Self::verify_linear_inference(
                                             linear,
@@ -233,12 +294,40 @@ impl<'a> ProofTestRunner<'a> {
                                             variable_state,
                                         );
 
-                                        match (try_lower_bound, try_upper_bound) {
+                                        let linear = match (try_lower_bound, try_upper_bound) {
                                             (Ok(_), Ok(_)) => panic!("This should not happen."),
-                                            (Ok(_), Err(_)) | (Err(_), Ok(_)) => {}
+                                            (Ok(_), Err(_)) => &inverted_linear,
+                                            (Err(_), Ok(_)) => linear,
                                             (Err(_), Err(_)) => {
                                                 return Err(CheckerError::CouldNotCheck {
                                                     fact,
+                                                    instance: self.instance,
+                                                    propagator: self.propagator,
+                                                });
+                                            }
+                                        };
+
+                                        if self.check_invalid_inferences {
+                                            invalidate_linear_fact(linear, &mut fact, &model);
+
+                                            // Setup the state for a conflict check.
+                                            let variable_state =
+                                                VariableState::prepare_for_conflict_check(
+                                                    fact.premises.clone(),
+                                                    fact.consequent.clone(),
+                                                )
+                                                .expect("Premises were inconsistent");
+
+                                            println!("INVALID");
+                                            let result = Self::verify_linear_inference(
+                                                linear,
+                                                &fact,
+                                                variable_state,
+                                            );
+
+                                            if result.is_ok() {
+                                                return Err(CheckerError::CheckerDidNotReject {
+                                                    fact: fact.clone(),
                                                     instance: self.instance,
                                                     propagator: self.propagator,
                                                 });
@@ -297,6 +386,16 @@ impl<'a> ProofTestRunner<'a> {
                         "time_table" if self.propagator == Propagator::Cumulative => {
                             match generated_by {
                                 Constraint::Cumulative(cumulative) => {
+                                    let fact = Fact {
+                                        premises: inference
+                                            .premises
+                                            .iter()
+                                            .cloned()
+                                            .map(Into::into)
+                                            .collect(),
+                                        consequent: inference.consequent.clone().map(Into::into),
+                                    };
+
                                     if self.run_checker {
                                         let checker = CumulativeChecker {
                                             tasks: cumulative
@@ -321,6 +420,12 @@ impl<'a> ProofTestRunner<'a> {
                                                 .try_into()
                                                 .expect("Expected non-negative capacity"),
                                         };
+                                        let variable_state =
+                                            VariableState::prepare_for_conflict_check(
+                                                fact.premises.clone(),
+                                                fact.consequent.clone(),
+                                            )
+                                            .expect("Premises were inconsistent");
 
                                         if checker.check(
                                             variable_state,
@@ -351,10 +456,27 @@ impl<'a> ProofTestRunner<'a> {
                         "all_different" if self.propagator == Propagator::AllDifferent => {
                             match generated_by {
                                 Constraint::AllDifferent(all_different) => {
+                                    let fact = Fact {
+                                        premises: inference
+                                            .premises
+                                            .iter()
+                                            .cloned()
+                                            .map(Into::into)
+                                            .collect(),
+                                        consequent: inference.consequent.clone().map(Into::into),
+                                    };
+
                                     if self.run_checker {
                                         let checker = AllDifferentChecker {
                                             x: all_different.variables.clone(),
                                         };
+
+                                        let variable_state =
+                                            VariableState::prepare_for_conflict_check(
+                                                fact.premises.clone(),
+                                                fact.consequent.clone(),
+                                            )
+                                            .expect("Premises were inconsistent");
 
                                         if checker.check(
                                             variable_state,
@@ -384,10 +506,26 @@ impl<'a> ProofTestRunner<'a> {
 
                         "circuit" if self.propagator == Propagator::Circuit => match generated_by {
                             Constraint::Circuit(circuit) => {
+                                let fact = Fact {
+                                    premises: inference
+                                        .premises
+                                        .iter()
+                                        .cloned()
+                                        .map(Into::into)
+                                        .collect(),
+                                    consequent: inference.consequent.clone().map(Into::into),
+                                };
+
                                 if self.run_checker {
                                     let checker = CircuitChecker {
                                         successors: circuit.successors.clone(),
                                     };
+
+                                    let variable_state = VariableState::prepare_for_conflict_check(
+                                        fact.premises.clone(),
+                                        fact.consequent.clone(),
+                                    )
+                                    .expect("Premises were inconsistent");
 
                                     if checker.check(
                                         variable_state,
