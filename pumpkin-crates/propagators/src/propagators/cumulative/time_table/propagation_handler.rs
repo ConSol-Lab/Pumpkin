@@ -457,17 +457,25 @@ pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
 where
     Var: IntegerVariable + 'static,
 {
-    let (minimal_profile_tasks, minimal_height) = conflict_profile.profile_tasks.iter().fold(
-        (Vec::new(), 0),
-        |(mut minimal_profile_tasks, minimal_height), task| {
-            if minimal_height <= capacity {
-                minimal_profile_tasks.push(Rc::clone(task));
-                (minimal_profile_tasks, minimal_height + task.resource_usage)
-            } else {
-                (minimal_profile_tasks, minimal_height)
-            }
-        },
-    );
+    // First we see whether we can remove any of the tasks; this is similar to core minimisation.
+    //
+    // Note that this is different from what is done for propagation, as propagations are more
+    // likely to occur frequently.
+    let mut minimal_profile_tasks = conflict_profile.profile_tasks.clone();
+    let mut minimal_height = conflict_profile.height;
+
+    let mut index = 0_usize;
+    while index < minimal_profile_tasks.len() {
+        let task_usage = minimal_profile_tasks[index].resource_usage;
+
+        if minimal_height - task_usage > capacity {
+            let _ = minimal_profile_tasks.swap_remove(index);
+            minimal_height -= task_usage
+        } else {
+            index += 1
+        }
+    }
+
     let minimal_profile = ResourceProfile {
         start: conflict_profile.start,
         end: conflict_profile.end,
