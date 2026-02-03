@@ -30,6 +30,8 @@ use implementation::propagators::cumulative::CumulativeChecker;
 use implementation::propagators::linear::LinearChecker;
 pub use linear_tests::set_up_linear_leq_state;
 
+use crate::propagators::cumulative_tests::recreate_conflict_cumulative;
+use crate::propagators::cumulative_tests::recreate_propagation_cumulative;
 use crate::propagators::linear_tests::invalidate_linear_fact;
 use crate::propagators::linear_tests::recreate_conflict_linear;
 use crate::propagators::linear_tests::recreate_propagation_linear;
@@ -103,8 +105,7 @@ const LINEAR_INSTANCES: [&str; 4] = [
     "market_split_u3_04",
 ];
 
-#[allow(unused, reason = "Could be used in the future")]
-const RCPSP_INSTANCE: [&str; 4] = ["rcpsp00", "rcpsp01", "rcpsp02", "rcpsp03"];
+const RCPSP_INSTANCES: [&str; 4] = ["rcpsp00", "rcpsp01", "rcpsp02", "rcpsp03"];
 
 impl<'a> ProofTestRunner<'a> {
     pub(crate) fn new_runner(instance: &'a str, propagator: Propagator) -> Self {
@@ -397,6 +398,10 @@ impl<'a> ProofTestRunner<'a> {
                                     };
 
                                     if self.run_checker {
+                                        if self.check_invalid_inferences {
+                                            todo!()
+                                        }
+
                                         let checker = CumulativeChecker {
                                             tasks: cumulative
                                                 .tasks
@@ -442,11 +447,21 @@ impl<'a> ProofTestRunner<'a> {
                                     }
 
                                     if self.check_conflicts && fact.consequent.is_none() {
-                                        todo!()
+                                        recreate_conflict_cumulative(
+                                            self.instance,
+                                            cumulative,
+                                            &fact,
+                                            &model,
+                                        )?;
                                     }
 
                                     if self.check_propagations && fact.consequent.is_some() {
-                                        todo!()
+                                        recreate_propagation_cumulative(
+                                            self.instance,
+                                            cumulative,
+                                            &fact,
+                                            &model,
+                                        )?;
                                     }
                                 }
                                 _ => unreachable!(),
@@ -467,6 +482,10 @@ impl<'a> ProofTestRunner<'a> {
                                     };
 
                                     if self.run_checker {
+                                        if self.check_invalid_inferences {
+                                            todo!()
+                                        }
+
                                         let checker = AllDifferentChecker {
                                             x: all_different.variables.clone(),
                                         };
@@ -517,6 +536,10 @@ impl<'a> ProofTestRunner<'a> {
                                 };
 
                                 if self.run_checker {
+                                    if self.check_invalid_inferences {
+                                        todo!()
+                                    }
+
                                     let checker = CircuitChecker {
                                         successors: circuit.successors.clone(),
                                     };

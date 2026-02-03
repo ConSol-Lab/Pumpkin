@@ -10,7 +10,7 @@ use std::hash::Hash;
 /// - and `value` is an integer.
 pub trait AtomicConstraint: Sized + Debug {
     /// The type of identifier used for variables.
-    type Identifier: Hash + Eq;
+    type Identifier: Hash + Eq + Debug;
 
     /// The identifier of this atomic constraint.
     fn identifier(&self) -> Self::Identifier;
