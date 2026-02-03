@@ -470,7 +470,7 @@ where
 
         if minimal_height - task_usage > capacity {
             let _ = minimal_profile_tasks.swap_remove(index);
-            minimal_height -= task_usage
+            minimal_height -= task_usage;
         } else {
             index += 1
         }
