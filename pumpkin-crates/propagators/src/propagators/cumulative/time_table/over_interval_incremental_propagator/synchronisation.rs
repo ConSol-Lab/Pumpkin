@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::ReadDomains;
@@ -94,28 +92,12 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
     // the ID if there is a tie
     sort_profile_based_on_upper_bound_and_id(conflicting_profile, context.reborrow());
 
-    let mut resource_usage = 0;
-    let mut index = 0;
-    let mut new_profile = Vec::new();
-
-    // Now we find the tasks in the profile which together overflow the resource
-    while resource_usage <= parameters.capacity {
-        let task = &conflicting_profile.profile_tasks[index];
-        resource_usage += task.resource_usage;
-        new_profile.push(Rc::clone(task));
-        index += 1;
-    }
-
     Err(create_conflict_explanation(
         context,
         inference_code,
-        &ResourceProfile {
-            start: conflicting_profile.start,
-            end: conflicting_profile.end,
-            profile_tasks: new_profile,
-            height: resource_usage,
-        },
+        conflicting_profile,
         parameters.options.explanation_type,
+        parameters.capacity,
     )
     .into())
 }

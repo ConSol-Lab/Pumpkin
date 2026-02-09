@@ -390,6 +390,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                         inference_code,
                         &new_profile,
                         parameters.options.explanation_type,
+                        parameters.capacity,
                     ));
                 } else {
                     // We end the current profile, creating a profile from [start_of_interval,
@@ -432,12 +433,9 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
                         !current_profile_tasks.contains(&event.task),
                         "Task is being added to the profile while it is already part of the contributing tasks"
                     );
-                    if !is_conflicting {
-                        // If the profile is already conflicting then we shouldn't add more tasks.
-                        // This could be changed in the future so that we can pick the tasks which
-                        // are used for the conflict explanation
-                        current_profile_tasks.push(event.task);
-                    }
+                    // We add the task even if we are already conflicting so that we can pick the
+                    // tasks which are used for the conflict explanation
+                    current_profile_tasks.push(event.task);
                 }
             }
         }

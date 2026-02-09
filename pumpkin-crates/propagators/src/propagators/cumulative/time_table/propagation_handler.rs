@@ -452,19 +452,46 @@ pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
     inference_code: &InferenceCode,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
+    capacity: i32,
 ) -> PropagatorConflict
 where
     Var: IntegerVariable + 'static,
 {
+    // First we see whether we can remove any of the tasks; this is similar to core minimisation.
+    //
+    // Note that this is different from what is done for propagation, as propagations are more
+    // likely to occur frequently.
+    let mut minimal_profile_tasks = conflict_profile.profile_tasks.clone();
+    let mut minimal_height = conflict_profile.height;
+
+    let mut index = 0_usize;
+    while index < minimal_profile_tasks.len() {
+        let task_usage = minimal_profile_tasks[index].resource_usage;
+
+        if minimal_height - task_usage > capacity {
+            let _ = minimal_profile_tasks.swap_remove(index);
+            minimal_height -= task_usage;
+        } else {
+            index += 1
+        }
+    }
+
+    let minimal_profile = ResourceProfile {
+        start: conflict_profile.start,
+        end: conflict_profile.end,
+        profile_tasks: minimal_profile_tasks,
+        height: minimal_height,
+    };
+
     let conjunction = match explanation_type {
         CumulativeExplanationType::Naive => {
-            create_naive_conflict_explanation(conflict_profile, context)
+            create_naive_conflict_explanation(&minimal_profile, context)
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_conflict_explanation(conflict_profile)
+            create_big_step_conflict_explanation(&minimal_profile)
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_conflict_explanation(conflict_profile)
+            create_pointwise_conflict_explanation(&minimal_profile)
         }
     };
 
@@ -530,7 +557,7 @@ pub(crate) mod test_propagation_handler {
                 start: 15,
                 end: 17,
                 profile_tasks: vec![Rc::new(profile_task)],
-                height: 1,
+                height: 2,
             };
 
             let reason = create_conflict_explanation(
@@ -538,6 +565,7 @@ pub(crate) mod test_propagation_handler {
                 &self.propagation_handler.inference_code,
                 &profile,
                 self.propagation_handler.explanation_type,
+                1,
             );
 
             (reason.conjunction, y)
