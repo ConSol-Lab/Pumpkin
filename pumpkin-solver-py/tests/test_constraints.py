@@ -69,11 +69,7 @@ def create_linear_model(request):
 
     if bool:
         args = [
-            model.boolean_as_integer(
-                model.new_boolean_variable(name=f"x[{i}]"),
-                model.new_constraint_tag(),
-            )
-            for i in range(3)
+            model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)
         ]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
@@ -109,11 +105,7 @@ def create_operator_model(request):
 
     if bool:
         args = [
-            model.boolean_as_integer(
-                model.new_boolean_variable(name=f"x[{i}]"),
-                model.new_constraint_tag(),
-            )
-            for i in range(3)
+            model.new_boolean_variable(name=f"x[{i}]").as_integer() for i in range(3)
         ]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
@@ -160,10 +152,7 @@ def create_global_model(request):
     if name == "alldiff":
         if bool:
             args = [
-                model.boolean_as_integer(
-                    model.new_boolean_variable(name=f"x[{i}]"),
-                    model.new_constraint_tag(),
-                )
+                model.new_boolean_variable(name=f"x[{i}]").as_integer()
                 for i in range(3)
             ]
         else:
