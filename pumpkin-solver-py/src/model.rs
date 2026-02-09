@@ -141,10 +141,9 @@ impl Model {
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     ///
-    /// The tag is not used, but is kept here for backward-compatibility reasons. It will never
-    /// show up in the proof.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression, _tag: Tag) -> IntExpression {
-        IntExpression(boolean.0.get_integer_variable())
+    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
+    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
+        boolean.as_integer()
     }
 
     /// Reify a predicate as an explicit boolean expression.
