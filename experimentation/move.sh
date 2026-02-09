@@ -16,6 +16,7 @@ touch "$2"
 > "$2"
 
 for i in $(find ./experiments/outputs -name \*.fzn); do
+    echo "$i"
     DIRPATH="$(dirname "$i")"
     DIRNAME="$(basename "$DIRPATH")"
 

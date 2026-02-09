@@ -35,6 +35,11 @@ Now that you have initialised the experiments (with the name `<EXPERIMENT_NAME>`
 uv run execute_experiment <EXPERIMENT_NAME>
 ```
 
+If you want to run multiple instances at the same time, then you can use the following command:
+```bash
+uv run execute_experiment --num-threads=<NUM_THREADS> <EXPERIMENT_NAME>
+```
+
 # Process Results
 You can generate statistics for the experiments using the following command:
 ```bash
