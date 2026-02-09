@@ -6,9 +6,9 @@ TEST_CASES_WITH_PERCENTAGE = {
     "propagators::linear_tests::linear_propagation_tests": 5.0 / 6.0,
     "propagators::linear_tests::linear_conflict_tests": 5.0 / 6.0,
     "propagators::linear_tests::linear_checker_tests": 5.0 / 6.0,
-    "propagators::circuit_tests::circuit_propagation_tests": 5.0 / 6.0,
-    "propagators::circuit_tests::circuit_conflict_tests": 5.0 / 6.0,
-    "propagators::circuit_tests::circuit_checker_tests": 5.0 / 6.0,
+    "propagators::cumulative_tests::cumulative_propagation_tests": 5.0 / 6.0,
+    "propagators::cumulative_tests::cumulative_conflict_tests": 5.0 / 6.0,
+    "propagators::cumulative_tests::cumulative_checker_tests": 5.0 / 6.0,
 }
 assert sum(TEST_CASES_WITH_PERCENTAGE.values()) == IMPLEMENTATION_GRADE_CONTRIBUTION
 
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    print(f"Building test cases...\n")
+    print(f"Compiling...\n")
     build_test_cases()
 
     result = 0.0

@@ -77,7 +77,12 @@ where
     fn propagate_from_scratch(&self, mut _context: PropagationContext) -> PropagationStatusCP {
         if self.conflict_detection_only {
             // TODO: Only perform conflict detection
-            todo!();
+
+            #[allow(
+                unreachable_code,
+                reason = "Should not be a warning after implementing"
+            )]
+            return todo!();
         }
 
         todo!()

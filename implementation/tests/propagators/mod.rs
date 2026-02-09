@@ -13,7 +13,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::variables::DomainId;
 
-mod circuit_tests;
 mod cumulative_tests;
 mod linear_tests;
 

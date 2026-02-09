@@ -1,5 +1,5 @@
 mod checker;
-mod propgator;
+mod propagator;
 
 pub use checker::*;
-pub use propgator::*;
+pub use propagator::*;
