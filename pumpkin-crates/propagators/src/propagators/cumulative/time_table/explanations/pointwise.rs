@@ -268,7 +268,8 @@ pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 's
 /// [`CumulativeExplanationType::PointWise`])
 pub(crate) fn create_pointwise_conflict_explanation<Var: IntegerVariable + 'static>(
     conflict_profile: &ResourceProfile<Var>,
-) -> PropositionalConjunction {
+    capacity: i32,
+) -> impl Iterator<Item = Predicate> {
     // As stated in improving scheduling by learning, we choose the middle point; this
     // could potentially be improved
     let middle_point = (conflict_profile.end - conflict_profile.start) / 2 + conflict_profile.start;
@@ -276,18 +277,16 @@ pub(crate) fn create_pointwise_conflict_explanation<Var: IntegerVariable + 'stat
         middle_point >= conflict_profile.start && middle_point <= conflict_profile.end
     );
 
-    conflict_profile
-        .profile_tasks
-        .iter()
-        .flat_map(|profile_task| {
+    get_minimal_profile(
+        conflict_profile,
+        move |task| {
             [
-                predicate!(
-                    profile_task.start_variable >= middle_point + 1 - profile_task.processing_time
-                ),
-                predicate!(profile_task.start_variable <= middle_point),
+                predicate!(task.start_variable >= middle_point + 1 - task.processing_time),
+                predicate!(task.start_variable <= middle_point),
             ]
-        })
-        .collect()
+        },
+        capacity,
+    )
 }
 
 pub(crate) fn create_pointwise_predicate_propagating_task_lower_bound_propagation<Var>(
