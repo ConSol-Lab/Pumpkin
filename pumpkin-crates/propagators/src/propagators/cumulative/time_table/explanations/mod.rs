@@ -11,7 +11,6 @@ use naive::create_naive_predicate_propagating_task_upper_bound_propagation;
 use pointwise::create_pointwise_predicate_propagating_task_lower_bound_propagation;
 use pointwise::create_pointwise_predicate_propagating_task_upper_bound_propagation;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -68,6 +67,33 @@ impl Display for CumulativeExplanationType {
     }
 }
 
+#[allow(
+    clippy::filter_map_bool_then,
+    reason = "Becomes messy with taking ownership of `minimal_height` otherwise"
+)]
+pub(crate) fn get_minimal_profile<Var: IntegerVariable + 'static, ConversionFunction>(
+    profile: &ResourceProfile<Var>,
+    convert_to_predicate: ConversionFunction,
+    capacity: i32,
+) -> impl Iterator<Item = Predicate>
+where
+    ConversionFunction: Fn(&Task<Var>) -> [Predicate; 2],
+{
+    let mut minimal_height = profile.height;
+    profile
+        .profile_tasks
+        .iter()
+        .filter_map(move |task| {
+            if minimal_height - task.resource_usage > capacity {
+                minimal_height -= task.resource_usage;
+                None
+            } else {
+                Some(convert_to_predicate(task))
+            }
+        })
+        .flatten()
+}
+
 /// Creates the lower-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
 pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     Var: IntegerVariable + 'static,
@@ -93,21 +119,22 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
 
 /// Adds the lower-bound predicate of the propagating task to the provided `explanation`.
 pub(crate) fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 'static>(
-    mut explanation: PropositionalConjunction,
+    explanation: impl Iterator<Item = Predicate>,
     explanation_type: CumulativeExplanationType,
     context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
-) -> PropositionalConjunction {
-    explanation.push(create_predicate_propagating_task_lower_bound_propagation(
-        explanation_type,
-        context,
-        task,
-        profile,
-        time_point,
-    ));
-    explanation
+) -> impl Iterator<Item = Predicate> {
+    explanation.chain(std::iter::once(
+        create_predicate_propagating_task_lower_bound_propagation(
+            explanation_type,
+            context,
+            task,
+            profile,
+            time_point,
+        ),
+    ))
 }
 
 /// Creates the upper-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
@@ -137,19 +164,20 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
 
 /// Adds the upper-bound predicate of the propagating task to the provided `explanation`.
 pub(crate) fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 'static>(
-    mut explanation: PropositionalConjunction,
+    explanation: impl Iterator<Item = Predicate>,
     explanation_type: CumulativeExplanationType,
     context: Domains,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
-) -> PropositionalConjunction {
-    explanation.push(create_predicate_propagating_task_upper_bound_propagation(
-        explanation_type,
-        context,
-        task,
-        profile,
-        time_point,
-    ));
-    explanation
+) -> impl Iterator<Item = Predicate> {
+    explanation.chain(std::iter::once(
+        create_predicate_propagating_task_upper_bound_propagation(
+            explanation_type,
+            context,
+            task,
+            profile,
+            time_point,
+        ),
+    ))
 }

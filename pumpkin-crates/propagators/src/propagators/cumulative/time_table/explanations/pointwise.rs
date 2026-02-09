@@ -14,6 +14,7 @@ use pumpkin_core::variables::IntegerVariable;
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
 use crate::cumulative::time_table::CumulativeExplanationType;
+use crate::cumulative::time_table::explanations::get_minimal_profile;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
 
@@ -22,6 +23,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: &InferenceCode,
+    capacity: i32,
 ) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
@@ -62,6 +64,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                 create_pointwise_propagation_explanation(
                     time_point,
                     profiles[current_profile_index],
+                    capacity,
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.domains(),
@@ -69,15 +72,19 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                 profiles[current_profile_index],
                 Some(time_point),
             );
+
+            let reason = explanation.collect::<PropositionalConjunction>();
+
             pumpkin_assert_extreme!(
-                explanation
+                reason
                     .iter()
                     .all(|predicate| context.evaluate_predicate(*predicate) == Some(true)),
                 "All of the predicates in the reason should hold"
             );
+
             context.post(
                 predicate![propagating_task.start_variable >= time_point + 1],
-                explanation,
+                reason,
                 inference_code,
             )?;
         }
@@ -131,6 +138,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
     profiles: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     inference_code: &InferenceCode,
+    capacity: i32,
 ) -> Result<(), EmptyDomainConflict> {
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
@@ -171,6 +179,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                 create_pointwise_propagation_explanation(
                     time_point,
                     profiles[current_profile_index],
+                    capacity,
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.domains(),
@@ -178,8 +187,11 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                 profiles[current_profile_index],
                 Some(time_point),
             );
+
+            let reason = explanation.collect::<PropositionalConjunction>();
+
             pumpkin_assert_extreme!(
-                explanation
+                reason
                     .iter()
                     .all(|predicate| context.evaluate_predicate(*predicate) == Some(true)),
                 "All of the predicates in the reason should hold"
@@ -189,7 +201,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                     propagating_task.start_variable
                         <= time_point - propagating_task.processing_time
                 ],
-                explanation,
+                reason,
                 inference_code,
             )?;
         }
@@ -238,19 +250,18 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
 pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 'static>(
     time_point: i32,
     profile: &ResourceProfile<Var>,
-) -> PropositionalConjunction {
-    profile
-        .profile_tasks
-        .iter()
-        .flat_map(move |profile_task| {
+    capacity: i32,
+) -> impl Iterator<Item = Predicate> {
+    get_minimal_profile(
+        profile,
+        move |task| {
             [
-                predicate!(
-                    profile_task.start_variable >= time_point + 1 - profile_task.processing_time
-                ),
-                predicate!(profile_task.start_variable <= time_point),
+                predicate!(task.start_variable >= time_point + 1 - task.processing_time),
+                predicate!(task.start_variable <= time_point),
             ]
-        })
-        .collect()
+        },
+        capacity,
+    )
 }
 
 /// Creates the conflict explanation using the point-wise approach (see

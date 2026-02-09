@@ -9,29 +9,25 @@ use pumpkin_core::variables::IntegerVariable;
 
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
+use crate::cumulative::time_table::explanations::get_minimal_profile;
 
 /// Creates the propagation explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
 pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     context: Domains,
-) -> PropositionalConjunction {
-    profile
-        .profile_tasks
-        .iter()
-        .flat_map(|profile_task| {
+    capacity: i32,
+) -> impl Iterator<Item = Predicate> {
+    get_minimal_profile(
+        profile,
+        move |task| {
             [
-                predicate!(
-                    profile_task.start_variable
-                        >= context.lower_bound(&profile_task.start_variable)
-                ),
-                predicate!(
-                    profile_task.start_variable
-                        <= context.upper_bound(&profile_task.start_variable)
-                ),
+                predicate!(task.start_variable >= context.lower_bound(&task.start_variable)),
+                predicate!(task.start_variable <= context.upper_bound(&task.start_variable)),
             ]
-        })
-        .collect()
+        },
+        capacity,
+    )
 }
 
 /// Creates the conflict explanation using the naive approach (see

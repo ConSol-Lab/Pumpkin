@@ -313,8 +313,12 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 profile,
                 parameters.capacity,
             ) {
-                let result = propagation_handler
-                    .propagate_lower_bound_with_explanations(context, profile, &task);
+                let result = propagation_handler.propagate_lower_bound_with_explanations(
+                    context,
+                    profile,
+                    &task,
+                    parameters.capacity,
+                );
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
                     result?;
@@ -326,8 +330,12 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 profile,
                 parameters.capacity,
             ) {
-                let result = propagation_handler
-                    .propagate_upper_bound_with_explanations(context, profile, &task);
+                let result = propagation_handler.propagate_upper_bound_with_explanations(
+                    context,
+                    profile,
+                    &task,
+                    parameters.capacity,
+                );
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
                     result?;
@@ -336,7 +344,12 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             if parameters.options.allow_holes_in_domain
                 && can_be_updated_by_profile(context.domains(), &task, profile, parameters.capacity)
             {
-                let result = propagation_handler.propagate_holes_in_domain(context, profile, &task);
+                let result = propagation_handler.propagate_holes_in_domain(
+                    context,
+                    profile,
+                    &task,
+                    parameters.capacity,
+                );
 
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
@@ -427,7 +440,12 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 {
                     // If we allow the propagation of holes in the domain then we simply let the
                     // propagation handler handle it
-                    propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                    propagation_handler.propagate_holes_in_domain(
+                        context,
+                        profile,
+                        task,
+                        parameters.capacity,
+                    )?;
                 }
             }
         }
@@ -488,6 +506,7 @@ fn sweep_forward<'a, Var: IntegerVariable + 'static>(
                 context,
                 profile_buffer,
                 task,
+                parameters.capacity,
             )?;
 
             // We have found an update and pushed the lower-bound to its maximum value, we can stop
@@ -555,6 +574,7 @@ fn sweep_backward<'a, Var: IntegerVariable + 'static>(
                 context,
                 profile_buffer,
                 task,
+                parameters.capacity,
             )?;
 
             // We have found an update and pushed the upper-bound to its minimum value, we can stop
