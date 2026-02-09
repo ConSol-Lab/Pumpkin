@@ -32,7 +32,11 @@ pub struct BoolExpression(pub Literal);
 
 #[pymethods]
 impl BoolExpression {
-    fn negate(&self) -> BoolExpression {
+    pub fn as_integer(&self) -> IntExpression {
+        IntExpression(self.0.get_integer_variable())
+    }
+
+    pub fn negate(&self) -> BoolExpression {
         BoolExpression(!self.0)
     }
 }

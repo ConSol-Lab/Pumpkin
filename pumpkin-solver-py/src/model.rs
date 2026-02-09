@@ -15,7 +15,6 @@ use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::core::options::SolverOptions;
-use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
@@ -142,21 +141,9 @@ impl Model {
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     ///
-    /// A tag should be provided for this link to be identifiable in the proof.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
-        let new_domain = self.solver.new_bounded_integer(0, 1);
-        self.brancher.default_brancher.add_domain(new_domain);
-
-        let boolean_true = boolean.0.get_true_predicate();
-
-        self.solver
-            .add_clause([predicate![new_domain != 1], boolean_true], tag.0)
-            .expect("created a new domain so this should never cause an empty domain");
-        self.solver
-            .add_clause([!boolean_true, predicate![new_domain == 1]], tag.0)
-            .expect("created a new domain so this should never cause an empty domain");
-
-        IntExpression::from(new_domain)
+    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
+    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
+        boolean.as_integer()
     }
 
     /// Reify a predicate as an explicit boolean expression.
