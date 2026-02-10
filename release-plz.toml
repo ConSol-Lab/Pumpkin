@@ -1,0 +1,11 @@
+[workspace]
+dependencies_update = true
+semver_check = true
+
+# Do not always publish packages. Instead only release when a release-pr has been merged.
+release_always = false
+
+repo_url = "https://github.com/consol-lab/pumpkin"
+
+pr_name = "chore: Release packages"
+pr_labels = ["release"]
