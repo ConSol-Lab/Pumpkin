@@ -7,12 +7,12 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.2.2", path = "../pumpkin-crates/core/" }
-pumpkin-checking = { version = "0.2.2", path = "../pumpkin-crates/checking/" }
-pumpkin-propagators = { version = "0.2.2", path = "../pumpkin-crates/propagators/" }
+pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/" }
+pumpkin-checking = { version = "0.3.0", path = "../pumpkin-crates/checking/" }
+pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/" }
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
-drcp-format = { version = "0.3.0", path = "../drcp-format" }
+drcp-format = { version = "0.3.1", path = "../drcp-format" }
 flate2 = "1.1.2"
 fzn-rs = { version = "0.1.0", path = "../fzn-rs" }
 thiserror = "2.0.16"

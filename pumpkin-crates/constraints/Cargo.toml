@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-constraints"
-version = "0.2.2"
+version = "0.3.0"
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,11 +11,11 @@ description = "The constraints of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.2.2", path = "../core" }
-pumpkin-propagators = {version = "0.2.2", path="../propagators"}
+pumpkin-core = { version = "0.3.0", path = "../core" }
+pumpkin-propagators = { version = "0.3.0", path="../propagators"}
 
 [dev-dependencies]
-pumpkin-conflict-resolvers = {version = "0.2.2", path = "../conflict-resolvers/"}
+pumpkin-conflict-resolvers = { version = "0.3.0", path = "../conflict-resolvers/"}
 
 [features]
 clap = ["pumpkin-core/clap", "pumpkin-propagators/clap"]
