@@ -67,10 +67,6 @@ impl Display for CumulativeExplanationType {
     }
 }
 
-#[allow(
-    clippy::filter_map_bool_then,
-    reason = "Becomes messy with taking ownership of `minimal_height` otherwise"
-)]
 /// Calculates a minimal set of tasks which overflows the capacity (*not* the minimum set of
 /// tasks) and applies the provided `convert_to_predicate` function.
 pub(crate) fn get_minimal_profile<Var: IntegerVariable + 'static, ConversionFunction>(
