@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.2.3](https://github.com/consol-lab/pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.2.3) - 2026-02-10
+
+### Added
+
+- *(pumpkin-core)* Propagator for the hypercube linear constraint ([#347](https://github.com/consol-lab/pumpkin/pull/347))
+- Extract conflict resolvers and nogood minimisation into a separate crate ([#341](https://github.com/consol-lab/pumpkin/pull/341))
+- *(pumpkin-core)* If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/consol-lab/pumpkin/pull/340))
+- *(pumpkin-solver-py)* Support warm starting for optimisation models ([#344](https://github.com/consol-lab/pumpkin/pull/344))
+- *(pumpkin-solver-py)* Add incrementality to python interface ([#315](https://github.com/consol-lab/pumpkin/pull/315))
+- Extract propagators into separate crate ([#337](https://github.com/consol-lab/pumpkin/pull/337))
+- *(pumpkin-core)* Crash if a propagator constructor does not register anything ([#338](https://github.com/consol-lab/pumpkin/pull/338))
+- *(pumpkin-core)* Make propagator API public ([#333](https://github.com/consol-lab/pumpkin/pull/333))
+- Add interface for nogood minimiser ([#326](https://github.com/consol-lab/pumpkin/pull/326))
+- Implement State API ([#319](https://github.com/consol-lab/pumpkin/pull/319))
+- *(pumpkin-core)* WebAssembly support for pumpkin-core ([#327](https://github.com/consol-lab/pumpkin/pull/327))
+
+### Fixed
+
+- Fix off-by-one error in initial bounds calculation ([#361](https://github.com/consol-lab/pumpkin/pull/361))
+- *(pumpkin-solver-py)* Forward brancher events in PythonBrancher ([#358](https://github.com/consol-lab/pumpkin/pull/358))
+- *(pumpkin-core)* Do not check for event registration when already panicking ([#346](https://github.com/consol-lab/pumpkin/pull/346))
+- Sign error in greater_than constraint ([#334](https://github.com/consol-lab/pumpkin/pull/334))
+- Generate constraint tags via State ([#335](https://github.com/consol-lab/pumpkin/pull/335))
+- *(pumpkin-core)* Allow propagators to register for predicates becoming true ([#331](https://github.com/consol-lab/pumpkin/pull/331))
+- Off-by-one error when explaining empty domain conflict ([#322](https://github.com/consol-lab/pumpkin/pull/322))
+- *(pumpkin-core)* Don't use binary equality when logging proof ([#320](https://github.com/consol-lab/pumpkin/pull/320))
+- *(pumpkin-core)* Declare solving after conflict resolution ([#317](https://github.com/consol-lab/pumpkin/pull/317))
+
+### Other
+
+- Calculate minimal explanation time-table propagation ([#356](https://github.com/consol-lab/pumpkin/pull/356))
+- *(pumpkin-checker)* Add test cases for verifiers ([#352](https://github.com/consol-lab/pumpkin/pull/352))
+- Stop watching predicates without any watchers in nogood propagator ([#351](https://github.com/consol-lab/pumpkin/pull/351))
+- Simplify predicate notification system ([#348](https://github.com/consol-lab/pumpkin/pull/348))
+- `InferenceCode` wraps constraint tag and inference label directory ([#339](https://github.com/consol-lab/pumpkin/pull/339))
+- *(pumpkin-core)* Explicitly register predicates in NogoodPropagator ([#332](https://github.com/consol-lab/pumpkin/pull/332))
+- *(pumpkin-solver)* Run proof checker on integration tests ([#329](https://github.com/consol-lab/pumpkin/pull/329))
+- *(pumpkin-core)* Use clippy to detect disallowed types ([#325](https://github.com/consol-lab/pumpkin/pull/325))
+- *(pumpkin-core)* Empty domain conflict is a predicate and reason ([#314](https://github.com/consol-lab/pumpkin/pull/314))
+- *(pumpkin-core)* Separate conflict resolvers further from solver ([#310](https://github.com/consol-lab/pumpkin/pull/310))
+- Update rust edition to 2024 ([#311](https://github.com/consol-lab/pumpkin/pull/311))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.1...pumpkin-core-v0.2.2) (2025-11-10)
 
 
