@@ -213,7 +213,7 @@ impl Assignments {
             }
 
             new_assignment.domains[new_domain_id].initial_bounds_below_trail =
-                new_assignment.trail.len();
+                new_assignment.trail.len() - 1;
         }
 
         new_assignment
@@ -878,8 +878,7 @@ impl IntegerDomain {
             upper_bound_updates,
             hole_updates: vec![],
             holes: Default::default(),
-            initial_bounds_below_trail: std::cmp::max(lower_bound_position, upper_bound_position)
-                + 1,
+            initial_bounds_below_trail: std::cmp::max(lower_bound_position, upper_bound_position),
         }
     }
 
