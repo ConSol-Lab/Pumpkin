@@ -274,7 +274,7 @@ mod tests {
         let minimal_profile = get_minimal_profile(
             &profile,
             |_| [Predicate::trivially_true(), Predicate::trivially_true()],
-            5,
+            4,
             None,
         );
 
