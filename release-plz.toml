@@ -10,6 +10,40 @@ repo_url = "https://github.com/consol-lab/pumpkin"
 pr_name = "chore: Release packages"
 pr_labels = ["release"]
 
+pr_body = """
+{% macro get_changes(releases, type="text") %}
+{%- for release in releases %}
+{%- if release.title and release.changelog %}{% if releases | length > 1 %}
+## `{{ release.package }}`
+{% endif %}
+<blockquote>
+
+## {{ release.title }}
+
+{{ release.changelog }}
+</blockquote>{% endif %}
+{% endfor %}
+{% endmacro -%}
+
+{% set changes = self::get_changes(releases=releases) %}
+
+## 🤖 New release
+{% for release in releases %}
+* `{{ release.package }}`: {% if release.previous_version and release.previous_version != release.next_version %}{{ release.previous_version }} -> {% endif %}{{ release.next_version }}{% if release.semver_check == "incompatible" %} (⚠ API breaking changes){% elif release.semver_check == "compatible" %} (✓ API compatible changes){% endif %}
+{%- endfor %}
+{%- for release in releases %}{% if release.breaking_changes %}
+
+### ⚠ `{{ release.package }}` breaking changes
+
+```text
+{{ release.breaking_changes }}
+```{% endif %}{% endfor %}
+</p></details>
+{% endif %}
+---
+This PR was generated with [release-plz](https://github.com/release-plz/release-plz/).
+"""
+
 [changelog]
 header = """# Changelog
 
