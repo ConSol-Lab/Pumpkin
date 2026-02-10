@@ -18,8 +18,6 @@ use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::CumulativeExplanationType;
-use super::explanations::add_propagating_task_predicate_lower_bound;
-use super::explanations::add_propagating_task_predicate_upper_bound;
 use super::explanations::big_step::create_big_step_conflict_explanation;
 use super::explanations::big_step::create_big_step_propagation_explanation;
 use super::explanations::create_predicate_propagating_task_lower_bound_propagation;
@@ -94,6 +92,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
+        capacity: i32,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -104,32 +103,41 @@ impl CumulativePropagationHandler {
                 let mut full_explanation = PropositionalConjunction::default();
 
                 for profile in profiles {
-                    let explanation = match self.explanation_type {
+                    match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.domains())
+                            let explanation = create_naive_propagation_explanation(
+                                profile,
+                                context.domains(),
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
+                            full_explanation =
+                                full_explanation.extend_and_remove_duplicates(explanation)
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            let explanation = create_big_step_propagation_explanation(
+                                profile,
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
+                            full_explanation =
+                                full_explanation.extend_and_remove_duplicates(explanation);
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!(
                                 "At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations"
                             )
                         }
-                    };
-
-                    full_explanation =
-                        full_explanation.extend_and_remove_duplicates(explanation.into_iter());
+                    }
                 }
 
-                let full_explanation = add_propagating_task_predicate_lower_bound(
-                    full_explanation,
+                full_explanation.push(create_predicate_propagating_task_lower_bound_propagation(
                     self.explanation_type,
                     context.domains(),
                     propagating_task,
                     profiles[0],
                     None,
-                );
+                ));
 
                 let predicate = predicate![
                     propagating_task.start_variable >= profiles[profiles.len() - 1].end + 1
@@ -147,6 +155,7 @@ impl CumulativePropagationHandler {
                     profiles,
                     propagating_task,
                     &self.inference_code,
+                    capacity,
                 )
             }
         }
@@ -159,6 +168,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
+        capacity: i32,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -170,32 +180,43 @@ impl CumulativePropagationHandler {
                 let mut full_explanation = PropositionalConjunction::default();
 
                 for profile in profiles {
-                    let explanation = match self.explanation_type {
+                    match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.domains())
+                            let explanation = create_naive_propagation_explanation(
+                                profile,
+                                context.domains(),
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
+
+                            full_explanation = full_explanation
+                                .extend_and_remove_duplicates(explanation.into_iter());
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            let explanation = create_big_step_propagation_explanation(
+                                profile,
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
+                            full_explanation = full_explanation
+                                .extend_and_remove_duplicates(explanation.into_iter());
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!(
                                 "At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations"
                             )
                         }
-                    };
-
-                    full_explanation =
-                        full_explanation.extend_and_remove_duplicates(explanation.into_iter());
+                    }
                 }
 
-                let full_explanation = add_propagating_task_predicate_upper_bound(
-                    full_explanation,
+                full_explanation.push(create_predicate_propagating_task_upper_bound_propagation(
                     self.explanation_type,
                     context.domains(),
                     propagating_task,
                     profiles[profiles.len() - 1],
                     None,
-                );
+                ));
+
                 let predicate = predicate![
                     propagating_task.start_variable
                         <= profiles[0].start - propagating_task.processing_time
@@ -213,6 +234,7 @@ impl CumulativePropagationHandler {
                     profiles,
                     propagating_task,
                     &self.inference_code,
+                    capacity,
                 )
             }
         }
@@ -224,6 +246,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
+        capacity: i32,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -238,7 +261,12 @@ impl CumulativePropagationHandler {
                 // `get_stored_profile_explanation_or_init` and
                 // `create_predicate_propagating_task_lower_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation = self.get_stored_profile_explanation_or_init(context, profile);
+                let explanation = self.get_stored_profile_explanation_or_init(
+                    context,
+                    profile,
+                    capacity,
+                    propagating_task,
+                );
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
@@ -261,6 +289,7 @@ impl CumulativePropagationHandler {
                     &[profile],
                     propagating_task,
                     &self.inference_code,
+                    capacity,
                 )
             }
         }
@@ -272,6 +301,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
+        capacity: i32,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -287,7 +317,12 @@ impl CumulativePropagationHandler {
                 // `get_stored_profile_explanation_or_init` and
                 // `create_predicate_propagating_task_upper_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation = self.get_stored_profile_explanation_or_init(context, profile);
+                let explanation = self.get_stored_profile_explanation_or_init(
+                    context,
+                    profile,
+                    capacity,
+                    propagating_task,
+                );
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
@@ -313,6 +348,7 @@ impl CumulativePropagationHandler {
                     &[profile],
                     propagating_task,
                     &self.inference_code,
+                    capacity,
                 )
             }
         }
@@ -325,6 +361,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
+        capacity: i32,
     ) -> Result<(), EmptyDomainConflict>
     where
         Var: IntegerVariable + 'static,
@@ -364,7 +401,12 @@ impl CumulativePropagationHandler {
                     // We use the same procedure for the explanation using naive and bigstep, note
                     // that `get_stored_profile_explanation_or_init` uses the
                     // explanation type to create the explanations.
-                    let explanation = self.get_stored_profile_explanation_or_init(context, profile);
+                    let explanation = self.get_stored_profile_explanation_or_init(
+                        context,
+                        profile,
+                        capacity,
+                        propagating_task,
+                    );
                     let predicate = predicate![propagating_task.start_variable != time_point];
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
@@ -397,7 +439,10 @@ impl CumulativePropagationHandler {
                     let explanation = create_pointwise_propagation_explanation(
                         corresponding_profile_explanation_point,
                         profile,
-                    );
+                        capacity,
+                        propagating_task.resource_usage,
+                    )
+                    .collect();
                     let predicate = predicate![propagating_task.start_variable != time_point];
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
@@ -415,7 +460,7 @@ impl CumulativePropagationHandler {
     /// Signifies that we are moving to another profile and we cannot re-use the cached explanation
     /// of [`CumulativePropagationHandler::stored_profile_explanation`].
     pub(crate) fn next_profile(&mut self) {
-        self.stored_profile_explanation = OnceCell::new();
+        let _ = self.stored_profile_explanation.take();
     }
 
     /// Either we get the stored stored profile explanation or we initialize it.
@@ -423,6 +468,8 @@ impl CumulativePropagationHandler {
         &mut self,
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
+        capacity: i32,
+        propagating_task: &Rc<Task<Var>>,
     ) -> Rc<PropositionalConjunction>
     where
         Var: IntegerVariable + 'static,
@@ -431,10 +478,10 @@ impl CumulativePropagationHandler {
             Rc::new(
                 match self.explanation_type {
                     CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, context.domains())
+                        create_naive_propagation_explanation(profile, context.domains(), capacity, propagating_task.resource_usage).collect()
                     },
                     CumulativeExplanationType::BigStep => {
-                        create_big_step_propagation_explanation(profile)
+                        create_big_step_propagation_explanation(profile, capacity, propagating_task.resource_usage).collect()
                     },
                     CumulativeExplanationType::Pointwise => {
                         unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -457,47 +504,31 @@ pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
 where
     Var: IntegerVariable + 'static,
 {
-    // First we see whether we can remove any of the tasks; this is similar to core minimisation.
-    //
-    // Note that this is different from what is done for propagation, as propagations are more
-    // likely to occur frequently.
-    let mut minimal_profile_tasks = conflict_profile.profile_tasks.clone();
-    let mut minimal_height = conflict_profile.height;
-
-    let mut index = 0_usize;
-    while index < minimal_profile_tasks.len() {
-        let task_usage = minimal_profile_tasks[index].resource_usage;
-
-        if minimal_height - task_usage > capacity {
-            let _ = minimal_profile_tasks.swap_remove(index);
-            minimal_height -= task_usage;
-        } else {
-            index += 1
-        }
-    }
-
-    let minimal_profile = ResourceProfile {
-        start: conflict_profile.start,
-        end: conflict_profile.end,
-        profile_tasks: minimal_profile_tasks,
-        height: minimal_height,
-    };
-
-    let conjunction = match explanation_type {
+    match explanation_type {
         CumulativeExplanationType::Naive => {
-            create_naive_conflict_explanation(&minimal_profile, context)
+            let conjunction =
+                create_naive_conflict_explanation(conflict_profile, context, capacity).collect();
+            PropagatorConflict {
+                conjunction,
+                inference_code: inference_code.clone(),
+            }
         }
         CumulativeExplanationType::BigStep => {
-            create_big_step_conflict_explanation(&minimal_profile)
+            let conjunction =
+                create_big_step_conflict_explanation(conflict_profile, capacity).collect();
+            PropagatorConflict {
+                conjunction,
+                inference_code: inference_code.clone(),
+            }
         }
         CumulativeExplanationType::Pointwise => {
-            create_pointwise_conflict_explanation(&minimal_profile)
+            let conjunction =
+                create_pointwise_conflict_explanation(conflict_profile, capacity).collect();
+            PropagatorConflict {
+                conjunction,
+                inference_code: inference_code.clone(),
+            }
         }
-    };
-
-    PropagatorConflict {
-        conjunction,
-        inference_code: inference_code.clone(),
     }
 }
 
@@ -549,7 +580,7 @@ pub(crate) mod test_propagation_handler {
             let profile_task = Task {
                 start_variable: y,
                 processing_time: 4,
-                resource_usage: 1,
+                resource_usage: 2,
                 id: LocalId::from(1),
             };
 
@@ -604,6 +635,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 19);
@@ -659,6 +691,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &[&profile_y, &profile_z],
                     &Rc::new(propagating_task),
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 22);
@@ -701,6 +734,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 10);
@@ -756,6 +790,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &[&profile_z, &profile_y],
                     &Rc::new(propagating_task),
+                    2,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 3);

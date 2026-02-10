@@ -3,51 +3,51 @@ use std::rc::Rc;
 
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::cumulative::ResourceProfile;
 use crate::cumulative::Task;
+use crate::cumulative::time_table::explanations::get_minimal_profile;
 
 /// Creates the propagation explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
 pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
-) -> PropositionalConjunction {
-    profile
-        .profile_tasks
-        .iter()
-        .flat_map(|profile_task| {
+    capacity: i32,
+    propagating_task_usage: i32,
+) -> impl Iterator<Item = Predicate> {
+    get_minimal_profile(
+        profile,
+        |task| {
             [
-                predicate!(
-                    profile_task.start_variable >= profile.end - profile_task.processing_time + 1
-                ),
-                predicate!(profile_task.start_variable <= profile.start),
+                predicate!(task.start_variable >= profile.end - task.processing_time + 1),
+                predicate!(task.start_variable <= profile.start),
             ]
-        })
-        .collect()
+        },
+        capacity,
+        Some(propagating_task_usage),
+    )
 }
 
 /// Creates the conflict explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
 pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'static>(
     conflict_profile: &ResourceProfile<Var>,
-) -> PropositionalConjunction {
-    conflict_profile
-        .profile_tasks
-        .iter()
-        .flat_map(|profile_task| {
+    capacity: i32,
+) -> impl Iterator<Item = Predicate> {
+    get_minimal_profile(
+        conflict_profile,
+        move |task| {
             [
-                predicate!(
-                    profile_task.start_variable
-                        >= conflict_profile.end - profile_task.processing_time + 1
-                ),
-                predicate!(profile_task.start_variable <= conflict_profile.start),
+                predicate!(task.start_variable >= conflict_profile.end - task.processing_time + 1),
+                predicate!(task.start_variable <= conflict_profile.start),
             ]
-        })
-        .collect()
+        },
+        capacity,
+        None,
+    )
 }
 
 pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<Var>(
