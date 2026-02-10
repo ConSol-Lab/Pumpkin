@@ -6,9 +6,6 @@ use std::time::Instant;
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::core::DefaultBrancher;
-use pumpkin_solver::core::branching::Brancher;
-use pumpkin_solver::core::branching::branchers::warm_start::WarmStart;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::StorageKey;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
@@ -23,11 +20,10 @@ use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
-use pumpkin_solver::core::variables::AffineView;
-use pumpkin_solver::core::variables::DomainId;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
+use crate::brancher::PythonBrancher;
 use crate::constraints::Constraint;
 use crate::optimisation::Direction;
 use crate::optimisation::OptimisationResult;
@@ -88,10 +84,7 @@ impl Model {
         };
 
         let solver = Solver::with_options(options);
-        let brancher = PythonBrancher {
-            warm_start: WarmStart::new(&[], &[]),
-            default_brancher: solver.default_brancher(),
-        };
+        let brancher = PythonBrancher::new(solver.default_brancher());
 
         Ok(Model { solver, brancher })
     }
@@ -111,7 +104,7 @@ impl Model {
             self.solver.new_bounded_integer(lower_bound, upper_bound)
         };
 
-        self.brancher.default_brancher.add_domain(domain_id);
+        self.brancher.add_domain(domain_id);
 
         domain_id.into()
     }
@@ -126,7 +119,6 @@ impl Model {
         };
 
         self.brancher
-            .default_brancher
             .add_domain(literal.get_true_predicate().get_domain());
 
         literal.into()
@@ -159,15 +151,17 @@ impl Model {
         let solver_predicate = predicate.into_solver_predicate();
         let Tag(tag) = tag;
 
-        if let Some(name) = name {
+        let literal = if let Some(name) = name {
             self.solver
                 .new_named_literal_for_predicate(solver_predicate, tag, name)
-                .into()
         } else {
-            self.solver
-                .new_literal_for_predicate(solver_predicate, tag)
-                .into()
-        }
+            self.solver.new_literal_for_predicate(solver_predicate, tag)
+        };
+
+        self.brancher
+            .add_domain(*literal.get_integer_variable().inner());
+
+        literal.into()
     }
 
     /// Add the given constraint to the model.
@@ -346,21 +340,7 @@ impl Model {
 impl Model {
     /// Update the warm start in the [`PythonBrancher`].
     fn update_warm_start(&mut self, warm_start: HashMap<IntExpression, i32>) {
-        // First create the slice of variables to give to the WarmStart brancher.
-        let warm_start_variables: Vec<_> = warm_start.keys().map(|variable| variable.0).collect();
-
-        // For every variable collect the value into another slice.
-        let warm_start_values: Vec<_> = warm_start_variables
-            .iter()
-            .map(|variable| {
-                warm_start
-                    .get(&IntExpression(*variable))
-                    .copied()
-                    .expect("all elements are keys")
-            })
-            .collect();
-
-        self.brancher.warm_start = WarmStart::new(&warm_start_variables, &warm_start_values);
+        self.brancher.with_warm_start(warm_start);
     }
 }
 
@@ -372,26 +352,4 @@ fn get_termination(end_time: Option<f32>) -> Box<dyn TerminationCondition> {
             Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
         })
         .unwrap_or(Box::new(Indefinite))
-}
-
-struct PythonBrancher {
-    warm_start: WarmStart<AffineView<DomainId>>,
-    default_brancher: DefaultBrancher,
-}
-
-impl Brancher for PythonBrancher {
-    fn next_decision(
-        &mut self,
-        context: &mut pumpkin_solver::core::branching::SelectionContext,
-    ) -> Option<pumpkin_solver::core::predicates::Predicate> {
-        if let Some(predicate) = self.warm_start.next_decision(context) {
-            return Some(predicate);
-        }
-
-        self.default_brancher.next_decision(context)
-    }
-
-    fn subscribe_to_events(&self) -> Vec<pumpkin_solver::core::branching::BrancherEvent> {
-        self.default_brancher.subscribe_to_events()
-    }
 }

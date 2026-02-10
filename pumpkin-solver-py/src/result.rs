@@ -48,7 +48,3 @@ impl Solution {
         self.0.get_literal_value(variable.0)
     }
 }
-
-#[pyclass]
-#[derive(Clone)]
-pub struct CoreExtractor {}
