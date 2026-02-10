@@ -277,7 +277,10 @@ impl PropagationContext<'_> {
     }
 }
 
-fn build_reason(reason: impl Into<Reason>, reification_literal: Option<Literal>) -> StoredReason {
+pub(crate) fn build_reason(
+    reason: impl Into<Reason>,
+    reification_literal: Option<Literal>,
+) -> StoredReason {
     match reason.into() {
         Reason::Eager(mut conjunction) => {
             conjunction.extend(
