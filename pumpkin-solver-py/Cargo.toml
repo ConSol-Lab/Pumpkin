@@ -17,7 +17,7 @@ doc = false
 
 [dependencies]
 pyo3 = { version = "0.25.1", features= ["extension-module"] }
-pumpkin-solver = { version = "0.2.2", path = "../pumpkin-solver" }
+pumpkin-solver = { version = "0.2.3", path = "../pumpkin-solver" }
 pumpkin-constraints = { version = "0.2.2", path = "../pumpkin-crates/constraints", features=["clap"] }
 pumpkin-conflict-resolvers = {version = "0.2.2", path = "../pumpkin-crates/conflict-resolvers/"}
 

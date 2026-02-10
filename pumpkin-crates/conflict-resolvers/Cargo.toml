@@ -11,4 +11,4 @@ description = "The conflict resolvers of the Pumpkin constraint programming solv
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.2.2", path = "../core" }
+pumpkin-core = { version = "0.2.3", path = "../core" }

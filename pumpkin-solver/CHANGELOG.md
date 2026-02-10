@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.2.3) - 2026-02-10
+
+### Added
+
+- Extract conflict resolvers and nogood minimisation into a separate crate ([#341](https://github.com/ConSol-Lab/Pumpkin/pull/341))
+- *(pumpkin-core)* If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/ConSol-Lab/Pumpkin/pull/340))
+- *(pumpkin-solver-py)* Support warm starting for optimisation models ([#344](https://github.com/ConSol-Lab/Pumpkin/pull/344))
+- Extract propagators into separate crate ([#337](https://github.com/ConSol-Lab/Pumpkin/pull/337))
+
+### Fixed
+
+- *(pumpkin-solver)* Stop search when a SIGTERM signal is received ([#324](https://github.com/ConSol-Lab/Pumpkin/pull/324))
+- Off-by-one error when explaining empty domain conflict ([#322](https://github.com/ConSol-Lab/Pumpkin/pull/322))
+
+### Other
+
+- *(pumpkin-core)* Explicitly register predicates in NogoodPropagator ([#332](https://github.com/ConSol-Lab/Pumpkin/pull/332))
+- *(pumpkin-solver)* Run proof checker on integration tests ([#329](https://github.com/ConSol-Lab/Pumpkin/pull/329))
+- Update rust edition to 2024 ([#311](https://github.com/ConSol-Lab/Pumpkin/pull/311))
+- Adjust versions python interface ([#313](https://github.com/ConSol-Lab/Pumpkin/pull/313))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-11-10)
 
 
