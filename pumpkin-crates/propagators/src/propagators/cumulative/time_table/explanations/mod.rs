@@ -268,7 +268,7 @@ mod tests {
                     id: LocalId::from(3),
                 }),
             ],
-            height: 7,
+            height: 6,
         };
 
         let minimal_profile = get_minimal_profile(
