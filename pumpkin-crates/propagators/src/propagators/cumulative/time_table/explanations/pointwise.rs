@@ -65,6 +65,7 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                     time_point,
                     profiles[current_profile_index],
                     capacity,
+                    propagating_task.resource_usage,
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.domains(),
@@ -180,6 +181,7 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                     time_point,
                     profiles[current_profile_index],
                     capacity,
+                    propagating_task.resource_usage,
                 ),
                 CumulativeExplanationType::Pointwise,
                 context.domains(),
@@ -251,6 +253,7 @@ pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 's
     time_point: i32,
     profile: &ResourceProfile<Var>,
     capacity: i32,
+    propagating_task_usage: i32,
 ) -> impl Iterator<Item = Predicate> {
     get_minimal_profile(
         profile,
@@ -261,6 +264,7 @@ pub(crate) fn create_pointwise_propagation_explanation<Var: IntegerVariable + 's
             ]
         },
         capacity,
+        Some(propagating_task_usage),
     )
 }
 
@@ -286,6 +290,7 @@ pub(crate) fn create_pointwise_conflict_explanation<Var: IntegerVariable + 'stat
             ]
         },
         capacity,
+        None,
     )
 }
 

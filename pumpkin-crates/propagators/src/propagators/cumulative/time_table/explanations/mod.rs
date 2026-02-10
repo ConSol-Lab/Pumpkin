@@ -77,11 +77,12 @@ pub(crate) fn get_minimal_profile<Var: IntegerVariable + 'static, ConversionFunc
     profile: &ResourceProfile<Var>,
     convert_to_predicate: ConversionFunction,
     capacity: i32,
+    propagating_task_usage: Option<i32>,
 ) -> impl Iterator<Item = Predicate>
 where
     ConversionFunction: Fn(&Task<Var>) -> [Predicate; 2],
 {
-    let mut minimal_height = profile.height;
+    let mut minimal_height = profile.height + propagating_task_usage.unwrap_or_default();
     profile
         .profile_tasks
         .iter()
@@ -235,7 +236,8 @@ mod tests {
         let minimal_profile = get_minimal_profile(
             &profile,
             |_| [Predicate::trivially_true(), Predicate::trivially_true()],
-            8,
+            9,
+            Some(1),
         );
 
         assert_eq!(minimal_profile.count() / 2, 2);

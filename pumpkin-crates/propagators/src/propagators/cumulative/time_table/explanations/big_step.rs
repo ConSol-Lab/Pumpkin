@@ -16,6 +16,7 @@ use crate::cumulative::time_table::explanations::get_minimal_profile;
 pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     capacity: i32,
+    propagating_task_usage: i32,
 ) -> impl Iterator<Item = Predicate> {
     get_minimal_profile(
         profile,
@@ -26,6 +27,7 @@ pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'st
             ]
         },
         capacity,
+        Some(propagating_task_usage),
     )
 }
 
@@ -44,6 +46,7 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
             ]
         },
         capacity,
+        None,
     )
 }
 

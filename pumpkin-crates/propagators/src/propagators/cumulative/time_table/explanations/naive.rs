@@ -16,6 +16,7 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
     profile: &ResourceProfile<Var>,
     context: Domains,
     capacity: i32,
+    propagating_task_usage: i32,
 ) -> impl Iterator<Item = Predicate> {
     get_minimal_profile(
         profile,
@@ -26,6 +27,7 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
             ]
         },
         capacity,
+        Some(propagating_task_usage),
     )
 }
 
@@ -48,6 +50,7 @@ where
             ]
         },
         capacity,
+        None,
     )
 }
 

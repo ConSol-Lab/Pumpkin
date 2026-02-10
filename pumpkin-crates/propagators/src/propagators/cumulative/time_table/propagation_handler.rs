@@ -109,13 +109,17 @@ impl CumulativePropagationHandler {
                                 profile,
                                 context.domains(),
                                 capacity,
+                                propagating_task.resource_usage,
                             );
                             full_explanation =
                                 full_explanation.extend_and_remove_duplicates(explanation)
                         }
                         CumulativeExplanationType::BigStep => {
-                            let explanation =
-                                create_big_step_propagation_explanation(profile, capacity);
+                            let explanation = create_big_step_propagation_explanation(
+                                profile,
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
                             full_explanation =
                                 full_explanation.extend_and_remove_duplicates(explanation);
                         }
@@ -182,14 +186,18 @@ impl CumulativePropagationHandler {
                                 profile,
                                 context.domains(),
                                 capacity,
+                                propagating_task.resource_usage,
                             );
 
                             full_explanation = full_explanation
                                 .extend_and_remove_duplicates(explanation.into_iter());
                         }
                         CumulativeExplanationType::BigStep => {
-                            let explanation =
-                                create_big_step_propagation_explanation(profile, capacity);
+                            let explanation = create_big_step_propagation_explanation(
+                                profile,
+                                capacity,
+                                propagating_task.resource_usage,
+                            );
                             full_explanation = full_explanation
                                 .extend_and_remove_duplicates(explanation.into_iter());
                         }
@@ -253,8 +261,12 @@ impl CumulativePropagationHandler {
                 // `get_stored_profile_explanation_or_init` and
                 // `create_predicate_propagating_task_lower_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation =
-                    self.get_stored_profile_explanation_or_init(context, profile, capacity);
+                let explanation = self.get_stored_profile_explanation_or_init(
+                    context,
+                    profile,
+                    capacity,
+                    propagating_task,
+                );
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
@@ -305,8 +317,12 @@ impl CumulativePropagationHandler {
                 // `get_stored_profile_explanation_or_init` and
                 // `create_predicate_propagating_task_upper_bound_propagation` both use the
                 // explanation type to create the explanations.
-                let explanation =
-                    self.get_stored_profile_explanation_or_init(context, profile, capacity);
+                let explanation = self.get_stored_profile_explanation_or_init(
+                    context,
+                    profile,
+                    capacity,
+                    propagating_task,
+                );
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
@@ -385,8 +401,12 @@ impl CumulativePropagationHandler {
                     // We use the same procedure for the explanation using naive and bigstep, note
                     // that `get_stored_profile_explanation_or_init` uses the
                     // explanation type to create the explanations.
-                    let explanation =
-                        self.get_stored_profile_explanation_or_init(context, profile, capacity);
+                    let explanation = self.get_stored_profile_explanation_or_init(
+                        context,
+                        profile,
+                        capacity,
+                        propagating_task,
+                    );
                     let predicate = predicate![propagating_task.start_variable != time_point];
                     pumpkin_assert_extreme!(check_explanation(
                         predicate,
@@ -420,6 +440,7 @@ impl CumulativePropagationHandler {
                         corresponding_profile_explanation_point,
                         profile,
                         capacity,
+                        propagating_task.resource_usage,
                     )
                     .collect();
                     let predicate = predicate![propagating_task.start_variable != time_point];
@@ -448,6 +469,7 @@ impl CumulativePropagationHandler {
         context: &mut PropagationContext,
         profile: &ResourceProfile<Var>,
         capacity: i32,
+        propagating_task: &Rc<Task<Var>>,
     ) -> Rc<PropositionalConjunction>
     where
         Var: IntegerVariable + 'static,
@@ -456,10 +478,10 @@ impl CumulativePropagationHandler {
             Rc::new(
                 match self.explanation_type {
                     CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, context.domains(), capacity).collect()
+                        create_naive_propagation_explanation(profile, context.domains(), capacity, propagating_task.resource_usage).collect()
                     },
                     CumulativeExplanationType::BigStep => {
-                        create_big_step_propagation_explanation(profile, capacity).collect()
+                        create_big_step_propagation_explanation(profile, capacity, propagating_task.resource_usage).collect()
                     },
                     CumulativeExplanationType::Pointwise => {
                         unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
