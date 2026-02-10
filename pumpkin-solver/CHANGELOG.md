@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.2.3) (2026-02-10)
+
+
+### Features
+
+* Extract conflict resolvers and nogood minimisation into a separate crate ([#341](https://github.com/ConSol-Lab/Pumpkin/issues/341)) ([5937883](https://github.com/ConSol-Lab/Pumpkin/commit/5937883015f70d498a32255504c4eb3162d035d5))
+* Extract propagators into separate crate ([#337](https://github.com/ConSol-Lab/Pumpkin/issues/337)) ([8153051](https://github.com/ConSol-Lab/Pumpkin/commit/8153051b408cd314661d0c6ca4a5837934360ed2))
+* **pumpkin-core:** If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/ConSol-Lab/Pumpkin/issues/340)) ([a136b40](https://github.com/ConSol-Lab/Pumpkin/commit/a136b40ffeb3b7303314b06822e3ae6921a60097))
+* **pumpkin-solver-py:** Support warm starting for optimisation models ([#344](https://github.com/ConSol-Lab/Pumpkin/issues/344)) ([04e6b96](https://github.com/ConSol-Lab/Pumpkin/commit/04e6b963c2bcebb0b179966f903c626912dbee5f))
+
+
+### Bug Fixes
+
+* Off-by-one error when explaining empty domain conflict ([#322](https://github.com/ConSol-Lab/Pumpkin/issues/322)) ([c3739c4](https://github.com/ConSol-Lab/Pumpkin/commit/c3739c427406f8f46a743c35233664028318f73f)), closes [#321](https://github.com/ConSol-Lab/Pumpkin/issues/321)
+* **pumpkin-solver:** Stop search when a SIGTERM signal is received ([#324](https://github.com/ConSol-Lab/Pumpkin/issues/324)) ([4f6b04c](https://github.com/ConSol-Lab/Pumpkin/commit/4f6b04c20d11e2f9eefb9a621422fb0df8b85424))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-11-10)
 
 
