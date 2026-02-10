@@ -915,8 +915,6 @@ dependencies = [
  "num",
  "once_cell",
  "pumpkin-checking",
- "pumpkin-conflict-resolvers",
- "pumpkin-constraints",
  "rand",
  "thiserror",
  "wasm-bindgen-test",
