@@ -34,6 +34,10 @@ impl<Inner> AffineView<Inner> {
         }
     }
 
+    pub fn inner(&self) -> &Inner {
+        &self.inner
+    }
+
     /// Apply the inverse transformation of this view on a value, to go from the value in the domain
     /// of `self` to a value in the domain of `self.inner`.
     fn invert(&self, value: i32, rounding: Rounding) -> i32 {

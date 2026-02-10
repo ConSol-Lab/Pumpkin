@@ -1,3 +1,4 @@
+mod brancher;
 mod constraints;
 mod model;
 mod optimisation;
