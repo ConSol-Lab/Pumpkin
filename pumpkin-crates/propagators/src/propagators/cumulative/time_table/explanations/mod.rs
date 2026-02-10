@@ -82,18 +82,26 @@ pub(crate) fn get_minimal_profile<Var: IntegerVariable + 'static, ConversionFunc
 where
     ConversionFunction: Fn(&Task<Var>) -> [Predicate; 2],
 {
-    let mut minimal_height = profile.height + propagating_task_usage.unwrap_or_default();
     profile
         .profile_tasks
         .iter()
-        .filter_map(move |task| {
-            if minimal_height - task.resource_usage > capacity {
-                minimal_height -= task.resource_usage;
-                None
-            } else {
-                Some(convert_to_predicate(task))
-            }
-        })
+        .scan(
+            profile.height + propagating_task_usage.unwrap_or_default(),
+            move |minimal_height, task| {
+                if *minimal_height - task.resource_usage > capacity {
+                    *minimal_height -= task.resource_usage;
+                    // We want to filter out this element because it can be removed.
+                    //
+                    // However, we do not want to stop iteration entirely, so we make use of the
+                    // fact that Option can be converted to an iterator
+                    Some(None)
+                } else {
+                    // We want to map this element and then return it
+                    Some(Some(convert_to_predicate(task)))
+                }
+            },
+        )
+        .flatten()
         .flatten()
 }
 
@@ -238,6 +246,46 @@ mod tests {
             |_| [Predicate::trivially_true(), Predicate::trivially_true()],
             9,
             Some(1),
+        );
+
+        assert_eq!(minimal_profile.count() / 2, 2);
+    }
+
+    #[test]
+    fn test_does_not_remove_both() {
+        let mut state = State::default();
+
+        let profile = ResourceProfile {
+            start: 5,
+            end: 10,
+            profile_tasks: vec![
+                Rc::new(Task {
+                    start_variable: state.new_interval_variable(5, 5, None),
+                    processing_time: 6,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                }),
+                Rc::new(Task {
+                    start_variable: state.new_interval_variable(5, 5, None),
+                    processing_time: 6,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                }),
+                Rc::new(Task {
+                    start_variable: state.new_interval_variable(5, 5, None),
+                    processing_time: 6,
+                    resource_usage: 4,
+                    id: LocalId::from(3),
+                }),
+            ],
+            height: 7,
+        };
+
+        let minimal_profile = get_minimal_profile(
+            &profile,
+            |_| [Predicate::trivially_true(), Predicate::trivially_true()],
+            5,
+            None,
         );
 
         assert_eq!(minimal_profile.count() / 2, 2);
