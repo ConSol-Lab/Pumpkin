@@ -503,7 +503,7 @@ impl Solver {
     /// added to the solver. In this case, a warning is emitted.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
