@@ -610,10 +610,6 @@ impl ConstraintSatisfactionSolver {
                     Err(flag) => return flag,
                     Ok(()) => {}
                 }
-
-                if let Err(flag) = branching_result {
-                    return flag;
-                }
             } else {
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();

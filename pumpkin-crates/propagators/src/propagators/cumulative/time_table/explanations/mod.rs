@@ -78,26 +78,20 @@ pub(crate) fn get_minimal_profile<Var: IntegerVariable + 'static, ConversionFunc
 where
     ConversionFunction: Fn(&Task<Var>) -> [Predicate; 2],
 {
+    // Note that the minimal height does not contain the final minimal height; the closure gets a
+    // copy of minimal height, but it passes a mutable reference in each iteration
+    let mut minimal_height = profile.height + propagating_task_usage.unwrap_or_default();
     profile
         .profile_tasks
         .iter()
-        .scan(
-            profile.height + propagating_task_usage.unwrap_or_default(),
-            move |minimal_height, task| {
-                if *minimal_height - task.resource_usage > capacity {
-                    *minimal_height -= task.resource_usage;
-                    // We want to filter out this element because it can be removed.
-                    //
-                    // However, we do not want to stop iteration entirely, so we make use of the
-                    // fact that Option can be converted to an iterator
-                    Some(None)
-                } else {
-                    // We want to map this element and then return it
-                    Some(Some(convert_to_predicate(task)))
-                }
-            },
-        )
-        .flatten()
+        .filter_map(move |task| {
+            if minimal_height - task.resource_usage > capacity {
+                minimal_height -= task.resource_usage;
+                None
+            } else {
+                Some(convert_to_predicate(task))
+            }
+        })
         .flatten()
 }
 
