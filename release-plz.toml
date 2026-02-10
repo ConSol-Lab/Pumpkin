@@ -3,7 +3,7 @@ dependencies_update = true
 semver_check = true
 
 # Do not always publish packages. Instead only release when a release-pr has been merged.
-release_always = false
+# release_always = false
 
 repo_url = "https://github.com/consol-lab/pumpkin"
 
@@ -37,3 +37,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 """
+
+[[package]]
+name = "fzn-rs-derive"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-core"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-checking"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-conflict-resolvers"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-propagators"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-constraints"
+git_release_enable = false
+git_tag_enable = false
