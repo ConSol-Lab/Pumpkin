@@ -941,10 +941,7 @@ dependencies = [
  "convert_case",
  "enumset",
  "pumpkin-checking",
- "pumpkin-conflict-resolvers",
- "pumpkin-constraints",
  "pumpkin-core",
- "pumpkin-solver",
 ]
 
 [[package]]

@@ -46,78 +46,40 @@
 //! # use pumpkin_core::constraints;
 //! # use pumpkin_core::constraints::Constraint;
 //! # use pumpkin_core::results::ProblemSolution;
-//! # use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+//! # use pumpkin_propagators::cumulative::ArgTask;
+//! # use pumpkin_propagators::cumulative::options::CumulativePropagatorOptions;
+//! # use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 //! let mut solver = Solver::default();
 //!
-//! let start_0 = solver.new_bounded_integer(0, 4);
-//! let start_1 = solver.new_bounded_integer(0, 4);
-//! let start_2 = solver.new_bounded_integer(0, 5);
+//! let tasks = [
+//!     ArgTask {
+//!         start_time: solver.new_bounded_integer(0, 4),
+//!         processing_time: 5,
+//!         resource_usage: 1,
+//!     },
+//!     ArgTask {
+//!         start_time: solver.new_bounded_integer(0, 4),
+//!         processing_time: 2,
+//!         resource_usage: 1,
+//!     },
+//!     ArgTask {
+//!         start_time: solver.new_bounded_integer(0, 4),
+//!         processing_time: 5,
+//!         resource_usage: 2,
+//!     },
+//! ];
 //!
-//! let start_times = [start_0, start_1, start_2];
-//! let durations = [5, 2, 5];
-//! let resource_requirements = [1, 1, 2];
 //! let resource_capacity = 2;
 //!
-//! let c1 = solver.new_constraint_tag();
-//! solver
-//!     .add_constraint(pumpkin_constraints::cumulative(
-//!         start_times.clone(),
-//!         durations.clone(),
-//!         resource_requirements.clone(),
-//!         resource_capacity,
-//!         c1,
-//!     ))
-//!     .post();
+//! let tag = solver.new_constraint_tag();
+//! let result = solver.add_propagator(TimeTablePerPointPropagator::new(
+//!     &tasks,
+//!     resource_capacity,
+//!     CumulativePropagatorOptions::default(),
+//!     tag,
+//! ));
 //!
-//! let mut termination = Indefinite;
-//! let mut brancher = solver.default_brancher();
-//! let mut resolver = ResolutionResolver::default();
-//!
-//! let result = solver.satisfy(&mut brancher, &mut termination, &mut resolver);
-//!
-//! // We check whether the result was feasible
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     let solution = satisfiable.solution();
-//!
-//!     let horizon = durations.iter().sum::<i32>();
-//!     let start_times = [start_0, start_1, start_2];
-//!
-//!     // Now we check whether the resource constraint is satisfied at each time-point t
-//!     assert!((0..=horizon).all(|t| {
-//!         // We gather all of the resource usages at the current time t
-//!         let resource_usage_at_t = start_times
-//!             .iter()
-//!             .enumerate()
-//!             .filter_map(|(task_index, start_time)| {
-//!                 if solution.get_integer_value(*start_time) <= t
-//!                     && solution.get_integer_value(*start_time) + durations[task_index] > t
-//!                 {
-//!                     Some(resource_requirements[task_index])
-//!                 } else {
-//!                     None
-//!                 }
-//!             })
-//!             .sum::<i32>();
-//!         // Then we check whether the resource usage at the current time point is lower than
-//!         // the resource capacity
-//!         resource_usage_at_t <= resource_capacity
-//!     }));
-//!
-//!     // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and
-//!     // Task 1 overlap
-//!     assert!(
-//!         solution.get_integer_value(start_2)
-//!             >= solution.get_integer_value(start_0) + durations[0]
-//!             && solution.get_integer_value(start_2)
-//!                 >= solution.get_integer_value(start_1) + durations[1]
-//!     );
-//!     assert!(
-//!         solution.get_integer_value(start_0)
-//!             < solution.get_integer_value(start_1) + durations[1]
-//!             && solution.get_integer_value(start_1)
-//!                 < solution.get_integer_value(start_0) + durations[0]
-//!     );
-//! }
+//! // ...
 //! ```
 pub mod options;
 pub mod time_table;
