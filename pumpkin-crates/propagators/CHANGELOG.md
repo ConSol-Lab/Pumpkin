@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Calculate minimal profile for explaining time-table conflict ([#353](https://github.com/consol-lab/pumpkin/pull/353))
+- Calculate minimal explanation time-table propagation ([#356](https://github.com/consol-lab/pumpkin/pull/356))
 - Extract propagators into separate crate ([#337](https://github.com/consol-lab/pumpkin/pull/337))
 
 ### Fixed

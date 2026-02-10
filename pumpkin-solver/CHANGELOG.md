@@ -7,24 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-solver-v0.2.2...pumpkin-solver-v0.3.0) - 2026-02-10
 
-### Added
-
-- Extract conflict resolvers and nogood minimisation into a separate crate ([#341](https://github.com/consol-lab/pumpkin/pull/341))
-- *(pumpkin-core)* If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/consol-lab/pumpkin/pull/340))
-- *(pumpkin-solver-py)* Support warm starting for optimisation models ([#344](https://github.com/consol-lab/pumpkin/pull/344))
-- Extract propagators into separate crate ([#337](https://github.com/consol-lab/pumpkin/pull/337))
-
 ### Fixed
 
-- *(pumpkin-solver)* Stop search when a SIGTERM signal is received ([#324](https://github.com/consol-lab/pumpkin/pull/324))
-- Off-by-one error when explaining empty domain conflict ([#322](https://github.com/consol-lab/pumpkin/pull/322))
+- Don't use binary equality when logging proof ([#320](https://github.com/consol-lab/pumpkin/pull/320))
 
 ### Other
 
-- *(pumpkin-core)* Explicitly register predicates in NogoodPropagator ([#332](https://github.com/consol-lab/pumpkin/pull/332))
-- *(pumpkin-solver)* Run proof checker on integration tests ([#329](https://github.com/consol-lab/pumpkin/pull/329))
 - Update rust edition to 2024 ([#311](https://github.com/consol-lab/pumpkin/pull/311))
-- Adjust versions python interface ([#313](https://github.com/consol-lab/pumpkin/pull/313))
+- Run proof checker on integration tests ([#329](https://github.com/consol-lab/pumpkin/pull/329))
 
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.2.1...pumpkin-solver-v0.2.2) (2025-11-10)
 
