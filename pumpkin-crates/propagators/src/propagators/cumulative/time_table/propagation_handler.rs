@@ -580,7 +580,7 @@ pub(crate) mod test_propagation_handler {
             let profile_task = Task {
                 start_variable: y,
                 processing_time: 4,
-                resource_usage: 1,
+                resource_usage: 2,
                 id: LocalId::from(1),
             };
 
@@ -635,7 +635,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
-                    0,
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 19);
@@ -691,7 +691,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &[&profile_y, &profile_z],
                     &Rc::new(propagating_task),
-                    0,
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.lower_bound(x), 22);
@@ -734,7 +734,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &profile,
                     &Rc::new(propagating_task),
-                    0,
+                    1,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 10);
@@ -790,7 +790,7 @@ pub(crate) mod test_propagation_handler {
                     &mut self.state.get_propagation_context(),
                     &[&profile_z, &profile_y],
                     &Rc::new(propagating_task),
-                    0,
+                    2,
                 );
             assert!(result.is_ok());
             assert_eq!(self.state.upper_bound(x), 3);
