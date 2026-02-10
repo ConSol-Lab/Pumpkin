@@ -14,6 +14,8 @@ use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::engine::DebugHelper;
 use crate::engine::EmptyDomain;
 use crate::engine::PropagatorQueue;
+#[cfg(test)]
+use crate::engine::Reason;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
@@ -487,6 +489,46 @@ impl State {
     pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
         self.assignments
             .post_predicate(predicate, None, &mut self.notification_engine)
+    }
+
+    #[cfg(test)]
+    fn post_with_reason(
+        &mut self,
+        predicate: Predicate,
+        reason: impl Into<Reason>,
+        inference_code: InferenceCode,
+        propagator_id: PropagatorId,
+    ) -> Result<(), EmptyDomainConflict> {
+        let slot = self.reason_store.new_slot();
+
+        let modification_result = self.assignments.post_predicate(
+            predicate,
+            Some((slot.reason_ref(), inference_code.clone())),
+            &mut self.notification_engine,
+        );
+
+        match modification_result {
+            Ok(false) => Ok(()),
+            Ok(true) => {
+                use crate::propagation::build_reason;
+
+                let _ = slot.populate(propagator_id, build_reason(reason, None));
+                Ok(())
+            }
+            Err(EmptyDomain) => {
+                use crate::propagation::build_reason;
+
+                let _ = slot.populate(propagator_id, build_reason(reason, None));
+                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                    self.assignments.remove_last_trail_element();
+
+                Err(EmptyDomainConflict {
+                    trigger_predicate,
+                    trigger_reason,
+                    trigger_inference_code,
+                })
+            }
+        }
     }
 
     /// Create a checkpoint of the current [`State`], that can be returned to with
@@ -1154,5 +1196,43 @@ impl State {
             &mut self.notification_engine,
             PropagatorId(0),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::conjunction;
+    use crate::containers::StorageKey;
+    use crate::declare_inference_label;
+    use crate::predicate;
+    use crate::proof::InferenceCode;
+    use crate::state::CurrentNogood;
+    use crate::state::PropagatorId;
+    use crate::state::State;
+
+    declare_inference_label!(TestLabel);
+
+    #[test]
+    fn reason_correct_after_creation_variable() {
+        let mut state = State::default();
+
+        let y = state.new_interval_variable(0, 10, None);
+        let x = state.new_interval_variable(0, 10, None);
+
+        let tag = state.new_constraint_tag();
+        let result = state.post_with_reason(
+            predicate!(x >= 5),
+            conjunction!([y >= 5]),
+            InferenceCode::new(tag, TestLabel),
+            PropagatorId::create_from_index(0),
+        );
+
+        assert_eq!(result, Ok(()));
+
+        let mut buffer = vec![];
+        let _ =
+            state.get_propagation_reason(predicate!(x >= 5), &mut buffer, CurrentNogood::empty());
+
+        assert_eq!(buffer, vec![predicate!(y >= 5)])
     }
 }
