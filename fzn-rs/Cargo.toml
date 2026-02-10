@@ -9,7 +9,7 @@ authors.workspace = true
 [dependencies]
 chumsky = { version = "0.10.1" }
 thiserror = "2.0.12"
-fzn-rs-derive = { path = "../fzn-rs-derive/" }
+fzn-rs-derive = { version = "0.1.0", path = "../fzn-rs-derive/" }
 
 [lints]
 workspace = true
