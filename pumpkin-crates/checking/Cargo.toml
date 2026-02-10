@@ -1,6 +1,7 @@
 [package]
 name = "pumpkin-checking"
 version = "0.3.0"
+description = "Types used by both pumpkin-core and pumpkin-checker"
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
