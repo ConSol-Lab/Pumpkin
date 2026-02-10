@@ -9,6 +9,7 @@ repo_url = "https://github.com/consol-lab/pumpkin"
 
 pr_name = "chore: Release packages"
 pr_labels = ["release"]
+pr_branch_prefix = "release/" # PR branch prefix
 
 pr_body = """
 ## 🤖 New release
