@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-conflict-resolvers"
-version = "0.2.2"
+version = "0.3.0"
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,4 +11,4 @@ description = "The conflict resolvers of the Pumpkin constraint programming solv
 workspace = true
 
 [dependencies]
-pumpkin-core = { version = "0.2.3", path = "../core" }
+pumpkin-core = { version = "0.3.0", path = "../core" }

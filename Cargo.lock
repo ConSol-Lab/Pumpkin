@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-checking"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "dyn-clone",
  "fnv",
@@ -879,14 +879,14 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-conflict-resolvers"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "pumpkin-core",
 ]
 
 [[package]]
 name = "pumpkin-constraints"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "pumpkin-conflict-resolvers",
  "pumpkin-core",
@@ -895,7 +895,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-core"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "bitfield",
  "bitfield-struct",
@@ -936,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-propagators"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "bitfield-struct",
  "clap",
@@ -951,7 +951,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-solver"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "cc",
  "clap",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-solver-py"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",

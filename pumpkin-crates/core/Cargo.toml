@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-core"
-version = "0.2.3"
+version = "0.3.0"
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,7 +11,7 @@ description = "The core of the Pumpkin constraint programming solver."
 workspace = true
 
 [dependencies]
-pumpkin-checking = { version = "0.2.2", path = "../checking" }
+pumpkin-checking = { version = "0.3.0", path = "../checking" }
 thiserror = "2.0.12"
 log = "0.4.17"
 bitfield = "0.14.0"
@@ -33,8 +33,8 @@ flate2 = { version = "1.1.2" }
 
 
 [dev-dependencies]
-pumpkin-constraints = { version = "0.2.2", path = "../constraints", features=["clap"] }
-pumpkin-conflict-resolvers = {version = "0.2.2", path = "../conflict-resolvers/"}
+pumpkin-constraints = { version = "0.3.0", path = "../constraints", features=["clap"] }
+pumpkin-conflict-resolvers = { version = "0.3.0", path = "../conflict-resolvers/"}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1.1"

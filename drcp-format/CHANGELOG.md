@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1](https://github.com/consol-lab/pumpkin/compare/drcp-format-v0.3.0...drcp-format-v0.3.1) - 2026-02-10
 
+### Features
+
+- Improve parser speed ([#293](https://github.com/consol-lab/pumpkin/pull/293))
+
 ### Other
 
 - Update rust edition to 2024 ([#311](https://github.com/consol-lab/pumpkin/pull/311))
-- *(drcp-format)* Update README
-- *(drcp-format)* Improve parser speed ([#293](https://github.com/consol-lab/pumpkin/pull/293))
 
 ## [0.3.0](https://github.com/ConSol-Lab/Pumpkin/compare/drcp-format-v0.2.1...drcp-format-v0.3.0) (2025-07-10)
 

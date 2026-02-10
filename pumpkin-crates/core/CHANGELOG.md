@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.3](https://github.com/consol-lab/pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.2.3) - 2026-02-10
+## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.3.0) - 2026-02-10
 
 ### Added
 

@@ -10,11 +10,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- *(pumpkin-core)* Propagator for the hypercube linear constraint ([#347](https://github.com/consol-lab/pumpkin/pull/347))
-- *(pumpkin-core)* If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/consol-lab/pumpkin/pull/340))
-- *(pumpkin-checker)* Introduce the uncertified proof checker ([#328](https://github.com/consol-lab/pumpkin/pull/328))
+- Introduce the uncertified proof checker ([#328](https://github.com/consol-lab/pumpkin/pull/328))
 
-### Other
-
-- *(pumpkin-checker)* Add test cases for verifiers ([#352](https://github.com/consol-lab/pumpkin/pull/352))
-- *(pumpkin-solver)* Run proof checker on integration tests ([#329](https://github.com/consol-lab/pumpkin/pull/329))
