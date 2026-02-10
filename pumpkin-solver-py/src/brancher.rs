@@ -50,11 +50,9 @@ impl PythonBrancher {
 
 impl Brancher for PythonBrancher {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
-        if let Some(predicate) = self.warm_start.next_decision(context) {
-            return Some(predicate);
-        }
-
-        self.default_brancher.next_decision(context)
+        self.warm_start
+            .next_decision(context)
+            .or_else(|| self.default_brancher.next_decision(context))
     }
 
     fn subscribe_to_events(&self) -> Vec<BrancherEvent> {
