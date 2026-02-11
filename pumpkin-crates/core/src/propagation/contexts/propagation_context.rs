@@ -170,6 +170,11 @@ impl<'a> PropagationContext<'a> {
             .is_predicate_id_satisfied(predicate_id, self.assignments)
     }
 
+    pub(crate) fn evaluate_predicate_id(&mut self, predicate_id: PredicateId) -> Option<bool> {
+        self.notification_engine
+            .evaluate_predicate_id(predicate_id, self.assignments)
+    }
+
     /// Returns the number of [`PredicateId`]s.
     pub(crate) fn num_predicate_ids(&self) -> usize {
         self.notification_engine.num_predicate_ids()

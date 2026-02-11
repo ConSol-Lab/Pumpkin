@@ -719,6 +719,7 @@ impl LearnedNogood {
         // We perform a linear scan to maintain the two invariants:
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
+
         let propagating_domain = match analysis_mode {
             AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => Some(
                 clean_nogood

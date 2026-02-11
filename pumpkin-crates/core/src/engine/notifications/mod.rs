@@ -488,6 +488,20 @@ impl NotificationEngine {
     }
 
     /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
+    /// satisfied.
+    pub(crate) fn evaluate_predicate_id(
+        &mut self,
+        predicate_id: PredicateId,
+        assignments: &Assignments,
+    ) -> Option<bool> {
+        self.predicate_notifier.predicate_id_assignments.evaluate(
+            predicate_id,
+            assignments,
+            &mut self.predicate_notifier.predicate_to_id,
+        )
+    }
+
+    /// Returns whether the [`Predicate`] corresponding to the provided [`PredicateId`] is
     /// falsified.
     pub(crate) fn is_predicate_id_falsified(
         &mut self,

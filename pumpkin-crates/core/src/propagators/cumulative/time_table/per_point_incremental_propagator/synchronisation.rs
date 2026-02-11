@@ -155,9 +155,7 @@ pub(crate) fn synchronise_time_table<'a, Var: IntegerVariable + 'static>(
 
 /// Sorts the provided `profile` on non-decreasing order of ID
 fn sort_profile_based_on_id<Var: IntegerVariable + 'static>(profile: &mut ResourceProfile<Var>) {
-    profile
-        .profile_tasks
-        .sort_by(|a, b| a.id.unpack().cmp(&b.id.unpack()));
+    profile.profile_tasks.sort_by_key(|a| a.id.unpack())
 }
 
 #[cfg(test)]
