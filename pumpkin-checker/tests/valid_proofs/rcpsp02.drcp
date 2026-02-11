@@ -1,0 +1,51 @@
+a 1 [X_INTRODUCED_44_ >= 14]
+a 2 [X_INTRODUCED_44_ <= 23]
+a 3 [X_INTRODUCED_56_ >= 15]
+a 4 [X_INTRODUCED_56_ <= 23]
+a 5 [X_INTRODUCED_59_ >= 14]
+a 6 [X_INTRODUCED_59_ <= 23]
+i 152 1 2 3 4 5 6 0 c:90 l:time_table
+a 7 [X_INTRODUCED_27_ >= 4]
+i 153 7 0 1 c:27 l:linear_bounds
+a 8 [X_INTRODUCED_16_ >= 0]
+i 154 8 0 7 c:2 l:linear_bounds
+i 155 0 8 l:initial_domain
+a 9 [X_INTRODUCED_32_ >= 13]
+a 10 [X_INTRODUCED_56_ >= 20]
+i 156 9 0 10 c:37 l:linear_bounds
+a 11 [X_INTRODUCED_20_ >= 7]
+i 157 11 0 9 c:12 l:linear_bounds
+a 12 [X_INTRODUCED_17_ >= 0]
+i 158 12 0 11 c:4 l:linear_bounds
+i 159 0 12 l:initial_domain
+a 13 [X_INTRODUCED_24_ >= 12]
+a 14 [X_INTRODUCED_59_ >= 16]
+i 160 13 0 14 c:20 l:linear_bounds
+a 15 [X_INTRODUCED_21_ >= 7]
+i 161 15 0 13 c:14 l:linear_bounds
+i 162 12 0 15 c:5 l:linear_bounds
+a 16 [X_INTRODUCED_58_ <= 31]
+a 17 [X_INTRODUCED_44_ <= 21]
+i 164 16 0 17 c:54 l:linear_bounds
+a 18 [X_INTRODUCED_66_ <= 32]
+i 165 18 0 16 c:72 l:linear_bounds
+i 166 18 0 4 c:70 l:linear_bounds
+a 19 [X_INTRODUCED_61_ <= 33]
+i 167 19 0 6 c:74 l:linear_bounds
+a 20 [X_INTRODUCED_68_ <= 38]
+i 168 20 0 18 c:81 l:linear_bounds
+a 21 [X_INTRODUCED_67_ <= 43]
+i 169 21 0 19 c:76 l:linear_bounds
+a 22 [X_INTRODUCED_71_ <= 46]
+i 170 22 0 20 c:83 l:linear_bounds
+a 23 [X_INTRODUCED_75_ <= 45]
+i 171 23 0 21 c:82 l:linear_bounds
+a 24 [X_INTRODUCED_74_ <= 49]
+i 172 24 0 22 c:86 l:linear_bounds
+a 25 [objective <= 52]
+i 173 25 0 23 c:151 l:linear_bounds
+i 174 25 0 24 c:150 l:linear_bounds
+n 175 25 0 174 173 172 171 170 169 168 167 166 165 164 159 162 161 160 158 157 156 155 154 153 152
+i 176 0 -25 c:175 l:nogood
+n 177 25 0 176
+c -25

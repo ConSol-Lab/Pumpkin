@@ -25,6 +25,7 @@ pub mod results {
     pub use crate::api::outputs::SolutionReference;
     pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
+    pub use crate::basic_types::PropagationStatusCP;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
@@ -48,20 +49,12 @@ pub mod variables {
     //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
     #[cfg(doc)]
     use crate::Solver;
+    pub use crate::engine::Reason;
     pub use crate::engine::variables::AffineView;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::Literal;
     pub use crate::engine::variables::TransformableVariable;
-}
-
-pub mod constraint_arguments {
-    //! Contains inputs to constraints.
-
-    pub use crate::propagators::ArgDisjunctiveTask;
-    pub use crate::propagators::CumulativeExplanationType;
-    pub use crate::propagators::CumulativeOptions;
-    pub use crate::propagators::CumulativePropagationMethod;
 }
 
 pub mod options {
@@ -74,10 +67,12 @@ pub mod options {
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
-    pub use crate::engine::ConflictResolver;
+    pub use crate::engine::AnalysisMode;
+    pub use crate::engine::ConflictResolverType;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::nogoods::LearningOptions;
+    pub use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
 }
 
 pub mod termination {
@@ -110,7 +105,9 @@ pub mod predicates {
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
+    pub use crate::basic_types::PredicateIdGenerator;
     pub use crate::basic_types::PropositionalConjunction;
+    pub use crate::engine::Lbd;
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate::PredicateType;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;

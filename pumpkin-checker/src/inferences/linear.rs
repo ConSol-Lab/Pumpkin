@@ -1,9 +1,13 @@
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::VariableState;
+use pumpkin_propagators::arithmetic::LinearLessOrEqualInferenceChecker;
+
 use crate::inferences::Fact;
 use crate::inferences::InvalidInference;
+use crate::model::Atomic;
 use crate::model::Constraint;
 use crate::model::Linear;
-use crate::state::I32Ext;
-use crate::state::VariableState;
+use crate::model::Term;
 
 /// Verify a `linear_bounds` inference.
 ///
@@ -11,22 +15,26 @@ use crate::state::VariableState;
 pub(super) fn verify_linear_bounds(
     fact: &Fact,
     generated_by: &Constraint,
+    state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
     match generated_by {
-        Constraint::LinearLeq(linear) => verify_linear_inference(linear, fact),
+        Constraint::LinearLeq(linear) => verify_linear_inference(linear, fact, state),
 
         Constraint::LinearEq(linear) => {
-            let try_upper_bound = verify_linear_inference(linear, fact);
+            let try_upper_bound = verify_linear_inference(linear, fact, state.clone());
 
             let inverted_linear = Linear {
                 terms: linear
                     .terms
                     .iter()
-                    .map(|(weight, variable)| (-weight, variable.clone()))
+                    .map(|term| Term {
+                        weight: -term.weight,
+                        variable: term.variable.clone(),
+                    })
                     .collect(),
                 bound: -linear.bound,
             };
-            let try_lower_bound = verify_linear_inference(&inverted_linear, fact);
+            let try_lower_bound = verify_linear_inference(&inverted_linear, fact, state);
 
             match (try_lower_bound, try_upper_bound) {
                 (Ok(_), Ok(_)) => panic!("This should not happen."),
@@ -39,35 +47,14 @@ pub(super) fn verify_linear_bounds(
     }
 }
 
-fn verify_linear_inference(linear: &Linear, fact: &Fact) -> Result<(), InvalidInference> {
-    let variable_state = VariableState::prepare_for_conflict_check(fact)
-        .ok_or(InvalidInference::InconsistentPremises)?;
+fn verify_linear_inference(
+    linear: &Linear,
+    fact: &Fact,
+    state: VariableState<Atomic>,
+) -> Result<(), InvalidInference> {
+    let checker = LinearLessOrEqualInferenceChecker::new(linear.terms.clone().into(), linear.bound);
 
-    // Next, we evaluate the linear inequality. The lower bound of the
-    // left-hand side must exceed the bound in the constraint.
-    let left_hand_side = linear.terms.iter().fold(None, |acc, (weight, variable)| {
-        let lower_bound = if *weight >= 0 {
-            variable_state.lower_bound(variable)
-        } else {
-            variable_state.upper_bound(variable)
-        };
-
-        match acc {
-            None => match lower_bound {
-                I32Ext::I32(value) => Some(weight * value),
-                I32Ext::NegativeInf => None,
-                I32Ext::PositiveInf => None,
-            },
-
-            Some(v1) => match lower_bound {
-                I32Ext::I32(v2) => Some(v1 + weight * v2),
-                I32Ext::NegativeInf => Some(v1),
-                I32Ext::PositiveInf => Some(v1),
-            },
-        }
-    });
-
-    if left_hand_side.is_some_and(|value| value > linear.bound) {
+    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
         Ok(())
     } else {
         Err(InvalidInference::Unsound)
@@ -76,6 +63,10 @@ fn verify_linear_inference(linear: &Linear, fact: &Fact) -> Result<(), InvalidIn
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+    use std::rc::Rc;
+
+    use drcp_format::IntAtomic;
     use drcp_format::IntComparison::*;
     use fzn_rs::VariableExpr::*;
 
@@ -86,21 +77,34 @@ mod tests {
     fn linear_1() {
         // x1 - x2 <= -7
         let linear = Linear {
-            terms: vec![(1, Identifier("x1".into())), (-1, Identifier("x2".into()))],
+            terms: vec![
+                Term {
+                    weight: NonZero::new(1).unwrap(),
+                    variable: Identifier(Rc::from("x1")).into(),
+                },
+                Term {
+                    weight: NonZero::new(-1).unwrap(),
+                    variable: Identifier(Rc::from("x2")).into(),
+                },
+            ],
             bound: -7,
         };
 
-        let premises = vec![Atomic {
+        let premises = vec![Atomic::IntAtomic(IntAtomic {
             name: "x2".into(),
             comparison: LessEqual,
             value: 37,
-        }];
+        })];
 
-        let consequent = Some(Atomic {
+        let consequent = Some(Atomic::IntAtomic(IntAtomic {
             name: "x1".into(),
             comparison: LessEqual,
             value: 30,
-        });
+        }));
+
+        let variable_state =
+            VariableState::prepare_for_conflict_check(premises.clone(), consequent.clone())
+                .expect("no mutually exclusive atomics");
 
         verify_linear_inference(
             &linear,
@@ -108,6 +112,7 @@ mod tests {
                 premises,
                 consequent,
             },
+            variable_state,
         )
         .expect("valid inference");
     }

@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 
 use enumset::EnumSet;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::IntExt;
 
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -17,9 +19,9 @@ use crate::math::num_ext::NumExt;
 /// domain of `x`.
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
-    inner: Inner,
-    scale: i32,
-    offset: i32,
+    pub(crate) inner: Inner,
+    pub(crate) scale: i32,
+    pub(crate) offset: i32,
 }
 
 impl<Inner> AffineView<Inner> {
@@ -30,6 +32,10 @@ impl<Inner> AffineView<Inner> {
             scale,
             offset,
         }
+    }
+
+    pub fn inner(&self) -> &Inner {
+        &self.inner
     }
 
     /// Apply the inverse transformation of this view on a value, to go from the value in the domain
@@ -45,6 +51,129 @@ impl<Inner> AffineView<Inner> {
 
     fn map(&self, value: i32) -> i32 {
         self.scale * value + self.offset
+    }
+}
+
+impl<Var: IntegerVariable> CheckerVariable<Predicate> for AffineView<Var> {
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
+        self.inner.does_atomic_constrain_self(atomic)
+    }
+
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self <= value]
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self >= value]
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self == value]
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self != value]
+    }
+
+    fn induced_lower_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> IntExt {
+        if self.scale.is_positive() {
+            match self.inner.induced_lower_bound(variable_state) {
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
+                bound => bound,
+            }
+        } else {
+            match self.inner.induced_upper_bound(variable_state) {
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
+                IntExt::NegativeInf => IntExt::PositiveInf,
+                IntExt::PositiveInf => IntExt::NegativeInf,
+            }
+        }
+    }
+
+    fn induced_upper_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> IntExt {
+        if self.scale.is_positive() {
+            match self.inner.induced_upper_bound(variable_state) {
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
+                bound => bound,
+            }
+        } else {
+            match self.inner.induced_lower_bound(variable_state) {
+                IntExt::Int(value) => IntExt::Int(self.map(value)),
+                IntExt::NegativeInf => IntExt::PositiveInf,
+                IntExt::PositiveInf => IntExt::NegativeInf,
+            }
+        }
+    }
+
+    fn induced_fixed_value(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<i32> {
+        self.inner
+            .induced_fixed_value(variable_state)
+            .map(|value| self.map(value))
+    }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        let translated_value = value - self.offset;
+
+        // If the translated value does not divide by scale, then the original value is not in the
+        // domain of this affine view.
+        if translated_value % self.scale != 0 {
+            return false;
+        }
+
+        let unscaled_value = translated_value / self.scale;
+
+        self.inner
+            .induced_domain_contains(variable_state, unscaled_value)
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        if self.scale == 1 || self.scale == -1 {
+            return self
+                .inner
+                .induced_holes(variable_state)
+                .map(|value| self.map(value));
+        }
+
+        todo!("how to iterate holes of a scaled domain");
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        self.inner
+            .iter_induced_domain(variable_state)
+            .map(|iter| iter.map(|value| self.map(value)))
     }
 }
 
@@ -143,6 +272,10 @@ where
             events = events.symmetrical_difference(bound);
         }
         self.inner.watch_all(watchers, events);
+    }
+
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        self.inner.unwatch_all(watchers);
     }
 
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {

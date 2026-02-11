@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
+use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::InferenceChecker;
+#[cfg(feature = "check-propagations")]
+use pumpkin_checking::VariableState;
+
 use crate::basic_types::PropagatorConflict;
+use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
-use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::engine::DebugHelper;
 use crate::engine::EmptyDomain;
 use crate::engine::PropagatorQueue;
+#[cfg(test)]
+use crate::engine::Reason;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
@@ -19,12 +26,14 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
+#[cfg(feature = "check-propagations")]
+use crate::propagation::InferenceCheckers;
+use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
@@ -67,17 +76,28 @@ pub struct State {
     /// and/or the polarity [Predicate]s
     pub(crate) notification_engine: NotificationEngine,
 
-    pub(crate) inference_codes: KeyedVec<InferenceCode, (ConstraintTag, Arc<str>)>,
     /// The [`ConstraintTag`]s generated for this proof.
     pub(crate) constraint_tags: KeyGenerator<ConstraintTag>,
 
     statistics: StateStatistics,
+
+    /// Inference checkers to run in the propagation loop.
+    checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
 }
 
 create_statistics_struct!(StateStatistics {
     num_propagators_called: usize,
     num_propagations: usize,
     num_conflicts: usize,
+    /// The number of levels which were backjumped.
+    ///
+    /// For an individual backtrack due to a learned nogood, this is calculated according to the
+    /// formula `CurrentDecisionLevel - 1 - BacktrackLevel` (i.e. how many levels (in total) has
+    /// the solver backtracked and not backjumped)
+    sum_of_backjumps: u64,
+    /// The number of times a backjump (i.e. backtracking more than a single decision level due to
+    /// a learned nogood) occurs.
+    num_backjumps: u64,
 });
 
 /// Information concerning the conflict returned by [`State::propagate_to_fixed_point`].
@@ -106,7 +126,7 @@ impl From<PropagatorConflict> for Conflict {
 }
 
 /// A conflict because a domain became empty.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
@@ -154,9 +174,9 @@ impl Default for State {
             propagators: PropagatorStore::default(),
             reason_store: ReasonStore::default(),
             notification_engine: NotificationEngine::default(),
-            inference_codes: KeyedVec::default(),
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
+            checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -197,18 +217,6 @@ impl State {
 
 /// Operations to create .
 impl State {
-    /// Create a new [`InferenceCode`] for a [`ConstraintTag`] and [`InferenceLabel`] combination.
-    ///
-    /// The inference codes are required to log inferences with [`ProofLog::log_inference`].
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.inference_codes
-            .push((constraint_tag, inference_label.to_str()))
-    }
-
     /// Create a new [`ConstraintTag`].
     pub fn new_constraint_tag(&mut self) -> ConstraintTag {
         self.constraint_tags.next_key()
@@ -336,6 +344,23 @@ impl State {
     pub(crate) fn trail_entry(&self, trail_index: usize) -> ConstraintProgrammingTrailEntry {
         self.assignments.get_trail_entry(trail_index)
     }
+
+    /// Returns whether the provided [`Predicate`] is explicitly on the trail.
+    ///
+    /// For example, if we post the [`Predicate`] [x >= v], then the predicate [x >= v - 1] is
+    /// not explicity on the trail.
+    pub fn is_on_trail(&self, predicate: Predicate) -> bool {
+        let trail_position = self.trail_position(predicate);
+
+        trail_position.is_some_and(|trail_position| {
+            self.assignments.trail[trail_position].predicate == predicate
+        })
+    }
+
+    /// Returns whether the trail position of the provided [`Predicate`].
+    pub fn trail_position(&self, predicate: Predicate) -> Option<usize> {
+        self.assignments.get_trail_position(&predicate)
+    }
 }
 
 /// Operations for adding constraints.
@@ -363,8 +388,12 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
+        #[cfg(feature = "check-propagations")]
+        constructor.add_inference_checkers(InferenceCheckers::new(self));
+
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
+
         let constructor_context =
             PropagatorConstructorContext::new(original_handle.propagator_id(), self);
         let propagator = constructor.create(constructor_context);
@@ -385,6 +414,22 @@ impl State {
         self.enqueue_propagator(handle);
 
         handle
+    }
+
+    /// Add an inference checker to the state.
+    ///
+    /// The inference checker will be used to check propagations performed during
+    /// [`Self::propagate_to_fixed_point`], if the `check-propagations` feature is enabled.
+    ///
+    /// Multiple inference checkers may be added for the same inference code. In that case, if
+    /// any checker accepts the inference, the inference is accepted.
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        let checkers = self.checkers.entry(inference_code).or_default();
+        checkers.push(BoxedChecker::from(checker));
     }
 }
 
@@ -446,6 +491,46 @@ impl State {
             .post_predicate(predicate, None, &mut self.notification_engine)
     }
 
+    #[cfg(test)]
+    fn post_with_reason(
+        &mut self,
+        predicate: Predicate,
+        reason: impl Into<Reason>,
+        inference_code: InferenceCode,
+        propagator_id: PropagatorId,
+    ) -> Result<(), EmptyDomainConflict> {
+        let slot = self.reason_store.new_slot();
+
+        let modification_result = self.assignments.post_predicate(
+            predicate,
+            Some((slot.reason_ref(), inference_code.clone())),
+            &mut self.notification_engine,
+        );
+
+        match modification_result {
+            Ok(false) => Ok(()),
+            Ok(true) => {
+                use crate::propagation::build_reason;
+
+                let _ = slot.populate(propagator_id, build_reason(reason, None));
+                Ok(())
+            }
+            Err(EmptyDomain) => {
+                use crate::propagation::build_reason;
+
+                let _ = slot.populate(propagator_id, build_reason(reason, None));
+                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                    self.assignments.remove_last_trail_element();
+
+                Err(EmptyDomainConflict {
+                    trigger_predicate,
+                    trigger_reason,
+                    trigger_inference_code,
+                })
+            }
+        }
+    }
+
     /// Create a checkpoint of the current [`State`], that can be returned to with
     /// [`State::restore_to`].
     ///
@@ -499,6 +584,11 @@ impl State {
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
+        self.statistics.sum_of_backjumps += (self.get_checkpoint() - 1 - checkpoint) as u64;
+        if self.get_checkpoint() - checkpoint > 1 {
+            self.statistics.num_backjumps += 1;
+        }
+
         if checkpoint == self.get_checkpoint() {
             return vec![];
         }
@@ -515,8 +605,9 @@ impl State {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
-            let context = Domains::new(&self.assignments, &mut self.trailed_values);
-            propagator.synchronise(context);
+            let mut context = NotificationContext::new(&mut self.trailed_values, &self.assignments);
+
+            propagator.synchronise(context.reborrow());
         }
 
         let _ = self.notification_engine.process_backtrack_events(
@@ -567,6 +658,9 @@ impl State {
             propagator.propagate(context)
         };
 
+        #[cfg(feature = "check-propagations")]
+        self.check_propagations(num_trail_entries_before);
+
         match propagation_status {
             Ok(_) => {
                 // Notify other propagators of the propagations and continue.
@@ -591,6 +685,9 @@ impl State {
                 );
             }
             Err(conflict) => {
+                #[cfg(feature = "check-propagations")]
+                self.check_conflict(&conflict);
+
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
@@ -607,6 +704,62 @@ impl State {
             }
         }
         Ok(())
+    }
+
+    /// Check the inference that triggered the given conflict.
+    ///
+    /// Does nothing when the conflict is an empty domain.
+    ///
+    /// Panics when the inference checker rejects the conflict.
+    #[cfg(feature = "check-propagations")]
+    fn check_conflict(&mut self, conflict: &Conflict) {
+        if let Conflict::Propagator(propagator_conflict) = conflict {
+            self.run_checker(
+                propagator_conflict.conjunction.clone(),
+                None,
+                &propagator_conflict.inference_code,
+            );
+        }
+    }
+
+    /// For every item on the trail starting at index `first_propagation_index`, run the
+    /// inference checker for it.
+    ///
+    /// This method should be called after every propagator invocation, so all elements on the
+    /// trail starting at `first_propagation_index` should be propagations. Otherwise this function
+    /// will panic.
+    ///
+    /// If the checker rejects the inference, this method panics.
+    #[cfg(feature = "check-propagations")]
+    pub(crate) fn check_propagations(&mut self, first_propagation_index: usize) {
+        let mut reason_buffer = vec![];
+
+        for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_index);
+
+            let (reason_ref, inference_code) = entry
+                .reason
+                .expect("propagations should only be checked after propagations");
+
+            reason_buffer.clear();
+            let reason_exists = self.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::without_working_nogood(
+                    &self.assignments,
+                    trail_index,
+                    &mut self.notification_engine,
+                ),
+                &mut self.propagators,
+                &mut reason_buffer,
+            );
+            assert!(reason_exists, "all propagations have reasons");
+
+            self.run_checker(
+                std::mem::take(&mut reason_buffer),
+                Some(entry.predicate),
+                &inference_code,
+            );
+        }
     }
 
     /// Performs fixed-point propagation using the propagators defined in the [`State`].
@@ -647,6 +800,53 @@ impl State {
         ));
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "check-propagations")]
+impl State {
+    /// Run the checker for the given inference code on the given inference.
+    fn run_checker(
+        &self,
+        premises: impl IntoIterator<Item = Predicate>,
+        consequent: Option<Predicate>,
+        inference_code: &InferenceCode,
+    ) {
+        let premises: Vec<_> = premises.into_iter().collect();
+
+        let checkers = self
+            .checkers
+            .get(inference_code)
+            .map(|vec| vec.as_slice())
+            .unwrap_or(&[]);
+
+        assert!(
+            !checkers.is_empty(),
+            "missing checker for inference code {inference_code:?}"
+        );
+
+        let any_checker_accepts_inference = checkers.iter().any(|checker| {
+            // Construct the variable state for the conflict check.
+            let variable_state = VariableState::prepare_for_conflict_check(
+                premises.clone(),
+                consequent,
+            )
+            .unwrap_or_else(|domain| {
+                panic!(
+                    "inconsistent atomics over domain {domain:?} in inference by {inference_code:?}"
+                )
+            });
+
+            checker.check(variable_state, &premises, consequent.as_ref())
+        });
+
+        assert!(
+            any_checker_accepts_inference,
+            "checker for inference code {:?} fails on inference {:?} -> {:?}",
+            inference_code,
+            premises.into_iter().collect::<Vec<_>>(),
+            consequent,
+        );
     }
 }
 
@@ -980,5 +1180,59 @@ impl State {
             };
             None
         }
+    }
+}
+
+impl State {
+    pub fn get_domains(&mut self) -> Domains<'_> {
+        Domains::new(&self.assignments, &mut self.trailed_values)
+    }
+
+    pub fn get_propagation_context(&mut self) -> PropagationContext<'_> {
+        PropagationContext::new(
+            &mut self.trailed_values,
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.notification_engine,
+            PropagatorId(0),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::conjunction;
+    use crate::containers::StorageKey;
+    use crate::declare_inference_label;
+    use crate::predicate;
+    use crate::proof::InferenceCode;
+    use crate::state::CurrentNogood;
+    use crate::state::PropagatorId;
+    use crate::state::State;
+
+    declare_inference_label!(TestLabel);
+
+    #[test]
+    fn reason_correct_after_creation_variable() {
+        let mut state = State::default();
+
+        let y = state.new_interval_variable(0, 10, None);
+        let x = state.new_interval_variable(0, 10, None);
+
+        let tag = state.new_constraint_tag();
+        let result = state.post_with_reason(
+            predicate!(x >= 5),
+            conjunction!([y >= 5]),
+            InferenceCode::new(tag, TestLabel),
+            PropagatorId::create_from_index(0),
+        );
+
+        assert_eq!(result, Ok(()));
+
+        let mut buffer = vec![];
+        let _ =
+            state.get_propagation_reason(predicate!(x >= 5), &mut buffer, CurrentNogood::empty());
+
+        assert_eq!(buffer, vec![predicate!(y >= 5)])
     }
 }

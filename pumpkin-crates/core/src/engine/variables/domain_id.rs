@@ -1,4 +1,5 @@
 use enumset::EnumSet;
+use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
 use crate::containers::StorageKey;
@@ -8,11 +9,12 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
 /// to a domain (hence the name).
-#[derive(Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Clone, PartialEq, Eq, Copy, Hash, PartialOrd, Ord)]
 pub struct DomainId {
     id: u32,
 }
@@ -25,6 +27,85 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl CheckerVariable<Predicate> for DomainId {
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
+        atomic.get_domain() == *self
+    }
+
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self <= value]
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self >= value]
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self == value]
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        use crate::predicate;
+
+        predicate![self != value]
+    }
+
+    fn induced_lower_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> pumpkin_checking::IntExt {
+        variable_state.lower_bound(self)
+    }
+
+    fn induced_upper_bound(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> pumpkin_checking::IntExt {
+        variable_state.upper_bound(self)
+    }
+
+    fn induced_fixed_value(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<i32> {
+        variable_state.fixed_value(self)
+    }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &pumpkin_checking::VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        variable_state.contains(self, value)
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        variable_state.holes(self)
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state pumpkin_checking::VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        variable_state.iter_domain(self)
     }
 }
 
@@ -74,6 +155,10 @@ impl IntegerVariable for DomainId {
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         watchers.watch_all(*self, events);
+    }
+
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        watchers.unwatch_all(*self);
     }
 
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {

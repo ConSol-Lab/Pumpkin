@@ -1,5 +1,4 @@
-use pumpkin_solver::constraints::Constraint;
-use pumpkin_solver::constraints::{self};
+use pumpkin_solver::core::constraints::Constraint;
 use pyo3::pyclass;
 use pyo3::pymethods;
 
@@ -30,10 +29,9 @@ macro_rules! python_constraint {
             pub fn post(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                variable_map: &VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-                constraints::$constraint_func(
-                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
+            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+                pumpkin_constraints::$constraint_func(
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
                 ).post(solver)
             }
@@ -41,11 +39,10 @@ macro_rules! python_constraint {
             pub fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::variables::Literal,
-                variable_map: &VariableMap,
-            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
-                constraints::$constraint_func(
-                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+ ,
+                reification_literal: pumpkin_solver::core::variables::Literal,
+            ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
+                pumpkin_constraints::$constraint_func(
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,
                     self.constraint_tag.0,
                 ).implied_by(solver, reification_literal)
             }

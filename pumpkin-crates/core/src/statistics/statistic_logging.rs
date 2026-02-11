@@ -21,7 +21,7 @@ pub struct StatisticOptions<'a> {
     // A closing line which is printed after all of the statistics have been printed
     after_statistics: Option<&'a str>,
     // The casing of the name of the statistic
-    statistics_casing: Option<Case>,
+    statistics_casing: Option<Case<'static>>,
     // The writer to which the statistics are written
     statistics_writer: Box<dyn Write + Send + Sync>,
 }
@@ -48,7 +48,7 @@ static STATISTIC_OPTIONS: OnceLock<RwLock<StatisticOptions>> = OnceLock::new();
 pub fn configure_statistic_logging(
     prefix: &'static str,
     after: Option<&'static str>,
-    casing: Option<Case>,
+    casing: Option<Case<'static>>,
     writer: Option<Box<dyn Write + Send + Sync>>,
 ) {
     let _ = STATISTIC_OPTIONS.get_or_init(|| {

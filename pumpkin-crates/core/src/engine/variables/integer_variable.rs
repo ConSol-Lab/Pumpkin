@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use enumset::EnumSet;
+use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -8,11 +9,16 @@ use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
+use crate::predicates::Predicate;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
 pub trait IntegerVariable:
-    Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView> + Debug
+    Clone
+    + PredicateConstructor<Value = i32>
+    + TransformableVariable<Self::AffineView>
+    + Debug
+    + CheckerVariable<Predicate>
 {
     type AffineView: IntegerVariable;
 
@@ -46,6 +52,9 @@ pub trait IntegerVariable:
 
     /// Register a watch for this variable on the given domain events.
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
+
+    /// Remove the watcher on this variable.
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>);
 
     fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 

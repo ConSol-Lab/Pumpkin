@@ -1,11 +1,12 @@
 use log::info;
-use pumpkin_solver::Function;
+use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::asserts::pumpkin_assert_moderate;
-use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::results::Solution;
-use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_solver::core::Function;
+use pumpkin_solver::core::asserts::pumpkin_assert_moderate;
+use pumpkin_solver::core::branching::Brancher;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::results::Solution;
+use pumpkin_solver::core::termination::TerminationCondition;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;
@@ -22,6 +23,7 @@ impl LinearSearch {
         LinearSearch { encoding }
     }
 
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     pub(crate) fn solve(
         &self,
         solver: &mut Solver,
@@ -30,6 +32,7 @@ impl LinearSearch {
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
         initial_solution: Solution,
+        resolver: &mut impl ConflictResolver,
     ) -> MaxSatOptimisationResult {
         brancher.on_solution(initial_solution.as_reference());
 
@@ -37,7 +40,12 @@ impl LinearSearch {
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
 
-        solver.log_statistics_with_objective(Some(&brancher), best_objective_value as i64, true);
+        solver.log_statistics_with_objective(
+            &brancher,
+            resolver,
+            best_objective_value as i64,
+            true,
+        );
         println!("o {best_objective_value}");
         info!(
             "Current objective is {} after {} seconds ({} ms)",
@@ -54,7 +62,8 @@ impl LinearSearch {
         loop {
             if best_objective_value == objective_function.get_constant_term() {
                 solver.log_statistics_with_objective(
-                    Some(&brancher),
+                    &brancher,
+                    resolver,
                     best_objective_value as i64,
                     true,
                 );
@@ -70,7 +79,8 @@ impl LinearSearch {
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
                 solver.log_statistics_with_objective(
-                    Some(&brancher),
+                    &brancher,
+                    resolver,
                     best_objective_value as i64,
                     true,
                 );
@@ -79,7 +89,7 @@ impl LinearSearch {
                 };
             }
 
-            let result = solver.satisfy(&mut brancher, termination);
+            let result = solver.satisfy(&mut brancher, termination, resolver);
 
             match result {
                 SatisfactionResult::Satisfiable(satisfiable) => {
@@ -98,7 +108,8 @@ impl LinearSearch {
                     best_solution = satisfiable.solution().into();
 
                     satisfiable.solver().log_statistics_with_objective(
-                        Some(satisfiable.brancher()),
+                        satisfiable.brancher(),
+                        satisfiable.conflict_resolver(),
                         best_objective_value as i64,
                         true,
                     );
@@ -111,9 +122,10 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                SatisfactionResult::Unsatisfiable(solver, brancher) => {
+                SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
                     solver.log_statistics_with_objective(
-                        Some(brancher),
+                        brancher,
+                        resolver,
                         best_objective_value as i64,
                         true,
                     );
@@ -122,9 +134,10 @@ impl LinearSearch {
                         solution: best_solution,
                     };
                 }
-                SatisfactionResult::Unknown(solver, brancher) => {
+                SatisfactionResult::Unknown(solver, brancher, resolver) => {
                     solver.log_statistics_with_objective(
-                        Some(brancher),
+                        brancher,
+                        resolver,
                         best_objective_value as i64,
                         true,
                     );

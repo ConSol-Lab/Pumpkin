@@ -9,13 +9,13 @@
 //! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
-use pumpkin_solver::constraints::NegatableConstraint;
-use pumpkin_solver::results::ProblemSolution;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::variables::TransformableVariable;
+use pumpkin_solver::core::results::ProblemSolution;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::variables::TransformableVariable;
 
 fn main() {
     let mut args = std::env::args();
@@ -69,7 +69,7 @@ fn main() {
             // equivelent to literal <=> (s_x - s_y <= -p_x)
             // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = constraints::less_than_or_equals(
+            let _ = pumpkin_constraints::less_than_or_equals(
                 variables,
                 -(processing_times[x] as i32),
                 constraint_tag,
@@ -88,13 +88,14 @@ fn main() {
     }
 
     let mut brancher = solver.default_brancher();
+    let mut resolver = ResolutionResolver::default();
     if matches!(
-        solver.satisfy(&mut brancher, &mut Indefinite),
-        SatisfactionResult::Unsatisfiable(_, _),
+        solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),
+        SatisfactionResult::Unsatisfiable(_, _, _),
     ) {
         panic!("Infeasibility Detected")
     }
-    match solver.satisfy(&mut brancher, &mut Indefinite) {
+    match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.solution();
 
@@ -121,7 +122,7 @@ fn main() {
                     .join(" - ")
             );
         }
-        SatisfactionResult::Unsatisfiable(_, _) => panic!("Infeasibility Detected"),
-        SatisfactionResult::Unknown(_, _) => println!("Timeout."),
+        SatisfactionResult::Unsatisfiable(_, _, _) => panic!("Infeasibility Detected"),
+        SatisfactionResult::Unknown(_, _, _) => println!("Timeout."),
     };
 }

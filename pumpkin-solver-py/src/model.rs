@@ -1,29 +1,30 @@
 use std::num::NonZero;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use pumpkin_solver::ConstraintOperationError;
-use pumpkin_solver::DefaultBrancher;
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::containers::KeyGenerator;
-use pumpkin_solver::containers::KeyedVec;
-use pumpkin_solver::containers::StorageKey;
-use pumpkin_solver::optimisation::OptimisationDirection;
-use pumpkin_solver::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_solver::optimisation::linear_unsat_sat::LinearUnsatSat;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::SolutionReference;
-use pumpkin_solver::termination::Indefinite;
-use pumpkin_solver::termination::TerminationCondition;
-use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::containers::HashMap;
+use pumpkin_solver::core::containers::StorageKey;
+use pumpkin_solver::core::optimisation::OptimisationDirection;
+use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
+use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::rand::SeedableRng;
+use pumpkin_solver::core::rand::rngs::SmallRng;
+use pumpkin_solver::core::results::SolutionReference;
+use pumpkin_solver::core::termination::Indefinite;
+use pumpkin_solver::core::termination::TerminationCondition;
+use pumpkin_solver::core::termination::TimeBudget;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::brancher::PythonBrancher;
 use crate::constraints::Constraint;
 use crate::optimisation::Direction;
 use crate::optimisation::OptimisationResult;
@@ -32,19 +33,13 @@ use crate::result::SatisfactionResult;
 use crate::result::SatisfactionUnderAssumptionsResult;
 use crate::result::Solution;
 use crate::variables::BoolExpression;
-use crate::variables::BoolVariable;
 use crate::variables::IntExpression;
-use crate::variables::IntVariable;
 use crate::variables::Predicate;
-use crate::variables::VariableMap;
 
-#[pyclass]
-#[derive(Default)]
+#[pyclass(unsendable)]
 pub struct Model {
-    integer_variables: KeyedVec<IntVariable, ModelIntVar>,
-    boolean_variables: KeyedVec<BoolVariable, ModelBoolVar>,
-    constraints: Vec<ModelConstraint>,
-    tags: KeyGenerator<Tag>,
+    solver: Solver,
+    brancher: PythonBrancher,
 }
 
 #[pyclass]
@@ -72,8 +67,28 @@ impl StorageKey for Tag {
 #[pymethods]
 impl Model {
     #[new]
-    fn new() -> Model {
-        Model::default()
+    #[pyo3(signature = (proof=None, seed=None))]
+    fn new(proof: Option<PathBuf>, seed: Option<u64>) -> PyResult<Model> {
+        let proof_log = proof
+            .map(|path| ProofLog::cp(&path, true))
+            .transpose()
+            .map(|proof| proof.unwrap_or_default())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let options = SolverOptions {
+            proof_log,
+            // TODO: The solver options should probably be refactored to accept a seed instead the
+            // the number generator instance. Now we cannot have a solver default that is shared
+            // between the rust and python interfaces without duplicating the default seed as done
+            // now.
+            random_generator: SmallRng::seed_from_u64(seed.unwrap_or(42)),
+            ..Default::default()
+        };
+
+        let solver = Solver::with_options(options);
+        let brancher = PythonBrancher::new(solver.default_brancher());
+
+        Ok(Model { solver, brancher })
     }
 
     /// Create a new integer variable.
@@ -83,73 +98,71 @@ impl Model {
         lower_bound: i32,
         upper_bound: i32,
         name: Option<&str>,
-    ) -> IntExpression {
-        let variable = ModelIntVar {
-            lower_bound,
-            upper_bound,
-            name: name.map(|n| n.to_owned()),
+    ) -> PyResult<IntExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create variable: solver is in an infeasible state",
+            ));
+        }
+
+        let domain_id = if let Some(name) = name {
+            self.solver
+                .new_named_bounded_integer(lower_bound, upper_bound, name)
+        } else {
+            self.solver.new_bounded_integer(lower_bound, upper_bound)
         };
 
-        self.integer_variables.push(variable).into()
+        self.brancher.add_domain(domain_id);
+
+        Ok(domain_id.into())
     }
 
     /// Create a new boolean variable.
     #[pyo3(signature = (name=None))]
-    fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
-        self.boolean_variables
-            .push(ModelBoolVar {
-                name: name.map(|n| n.to_owned()),
-                integer_equivalent: None,
-                predicate: None,
-            })
-            .into()
+    fn new_boolean_variable(&mut self, name: Option<&str>) -> PyResult<BoolExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create variable: solver is in an infeasible state",
+            ));
+        }
+
+        let literal = if let Some(name) = name {
+            self.solver.new_named_literal(name)
+        } else {
+            self.solver.new_literal()
+        };
+
+        self.brancher
+            .add_domain(literal.get_true_predicate().get_domain());
+
+        Ok(literal.into())
     }
 
     /// Create a new constraint tag.
-    fn new_constraint_tag(&mut self) -> Tag {
-        self.tags.next_key()
+    fn new_constraint_tag(&mut self) -> PyResult<Tag> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create constraint tag: solver is in an infeasible state",
+            ));
+        }
+        Ok(Tag(self.solver.new_constraint_tag()))
+    }
+
+    /// Return whether the solver is in an inconsistent (infeasible) state.
+    ///
+    /// The solver is inconsistent when propagation has detected that the current set of
+    /// constraints has no solution (e.g. a conflict at the root level, or a domain became empty).
+    fn is_inconsistent(&self) -> bool {
+        self.solver.is_inconsistent()
     }
 
     /// Get an integer variable for the given boolean.
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     ///
-    /// A tag should be provided for this link to be identifiable in the proof.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression, tag: Tag) -> IntExpression {
-        let bool_variable = boolean.get_variable();
-
-        let int_variable = match self.boolean_variables[bool_variable] {
-            // If there is already an integer associated with the boolean variable, don't create a
-            // new one.
-            ModelBoolVar {
-                integer_equivalent: Some((existing_equivalent, _)),
-                ..
-            } => existing_equivalent,
-
-            // Create a new integer variable which is equivalent to this boolean variable.
-            ModelBoolVar {
-                ref name,
-                integer_equivalent: None,
-                ..
-            } => self.integer_variables.push(ModelIntVar {
-                lower_bound: 0,
-                upper_bound: 1,
-                name: name.clone(),
-            }),
-        };
-
-        // Link the integer variable to the boolean variable.
-        self.boolean_variables[bool_variable].integer_equivalent = Some((int_variable, tag));
-
-        // Convert the integer variable to an appropriate integer expression based on the polarity
-        // of the boolean expression.
-        let polarity = boolean.get_polarity();
-
-        IntExpression {
-            variable: int_variable,
-            offset: if polarity { 0 } else { 1 },
-            scale: if polarity { 1 } else { -1 },
-        }
+    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
+    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
+        boolean.as_integer()
     }
 
     /// Reify a predicate as an explicit boolean expression.
@@ -161,58 +174,61 @@ impl Model {
         predicate: Predicate,
         tag: Tag,
         name: Option<&str>,
-    ) -> BoolExpression {
-        self.boolean_variables
-            .push(ModelBoolVar {
-                name: name.map(|n| n.to_owned()),
-                integer_equivalent: None,
-                predicate: Some((predicate, tag)),
-            })
-            .into()
+    ) -> PyResult<BoolExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot reify predicate: solver is in an infeasible state",
+            ));
+        }
+
+        let solver_predicate = predicate.into_solver_predicate();
+        let Tag(tag) = tag;
+
+        let literal = if let Some(name) = name {
+            self.solver
+                .new_named_literal_for_predicate(solver_predicate, tag, name)
+        } else {
+            self.solver.new_literal_for_predicate(solver_predicate, tag)
+        };
+
+        self.brancher
+            .add_domain(*literal.get_integer_variable().inner());
+
+        Ok(literal.into())
     }
 
     /// Add the given constraint to the model.
     #[pyo3(signature = (constraint))]
-    fn add_constraint(&mut self, constraint: Constraint) {
-        self.constraints.push(ModelConstraint {
-            constraint,
-            premise: None,
-        });
+    fn add_constraint(&mut self, constraint: Constraint) -> PyResult<()> {
+        constraint
+            .post(&mut self.solver)
+            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
     }
 
     /// Add `premise -> constraint` to the model.
     #[pyo3(signature = (constraint, premise))]
-    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) {
-        self.constraints.push(ModelConstraint {
-            constraint,
-            premise: Some(premise),
-        });
+    fn add_implication(&mut self, constraint: Constraint, premise: BoolExpression) -> PyResult<()> {
+        constraint
+            .implied_by(&mut self.solver, premise.0)
+            .map_err(|_| PyRuntimeError::new_err("inconsistency detected"))
     }
 
-    #[pyo3(signature = (timeout=None,proof=None))]
-    fn satisfy(&mut self, timeout: Option<f32>, proof: Option<PathBuf>) -> SatisfactionResult {
-        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
+    #[pyo3(signature = (timeout=None))]
+    fn satisfy(&mut self, timeout: Option<f32>) -> SatisfactionResult {
+        let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
-        let solver_setup = self.create_solver(proof);
-
-        let Ok((mut solver, variable_map)) = solver_setup else {
-            return SatisfactionResult::Unsatisfiable();
-        };
-
-        let mut brancher = solver.default_brancher();
-        let mut termination = get_termination(end_time);
-
-        match solver.satisfy(&mut brancher, &mut termination) {
-            pumpkin_solver::results::SatisfactionResult::Satisfiable(satisfiable) => {
-                SatisfactionResult::Satisfiable(Solution {
-                    solver_solution: satisfiable.solution().into(),
-                    variable_map,
-                })
+        match self
+            .solver
+            .satisfy(&mut self.brancher, &mut termination, &mut resolver)
+        {
+            pumpkin_solver::core::results::SatisfactionResult::Satisfiable(satisfiable) => {
+                SatisfactionResult::Satisfiable(Solution::from(satisfiable.solution()))
             }
-            pumpkin_solver::results::SatisfactionResult::Unsatisfiable(_, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unsatisfiable(_, _, _) => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResult::Unknown(_, _) => {
+            pumpkin_solver::core::results::SatisfactionResult::Unknown(_, _, _) => {
                 SatisfactionResult::Unknown()
             }
         }
@@ -224,29 +240,19 @@ impl Model {
         assumptions: Vec<Predicate>,
         timeout: Option<f32>,
     ) -> SatisfactionUnderAssumptionsResult {
-        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
-        let solver_setup = self.create_solver(None);
-
-        let Ok((mut solver, variable_map)) = solver_setup else {
-            return SatisfactionUnderAssumptionsResult::Unsatisfiable();
-        };
-
-        let mut brancher = solver.default_brancher();
-        let mut termination = get_termination(end_time);
+        let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
         let solver_assumptions = assumptions
             .iter()
-            .map(|pred| pred.to_solver_predicate(&variable_map))
+            .map(|pred| pred.into_solver_predicate())
             .collect::<Vec<_>>();
 
-        match solver.satisfy_under_assumptions(&mut brancher, &mut termination, &solver_assumptions) {
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
-                SatisfactionUnderAssumptionsResult::Satisfiable(Solution {
-                    solver_solution: satisfiable.solution().into(),
-                    variable_map,
-                })
+        match self.solver.satisfy_under_assumptions(&mut self.brancher, &mut termination, &mut resolver, &solver_assumptions) {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Satisfiable(satisfiable) => {
+                SatisfactionUnderAssumptionsResult::Satisfiable(satisfiable.solution().into())
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut result) => {
                 // Maarten: For now we assume that the core _must_ consist of the predicates that
                 //     were the input to the solve call. In general this is not the case, e.g. when
                 //     the assumptions can be semantically minized (the assumptions [y <= 1],
@@ -261,264 +267,122 @@ impl Model {
                     .iter()
                     .map(|predicate| assumptions
                          .iter()
-                         .find(|pred| pred.to_solver_predicate(&variable_map) == *predicate)
+                         .find(|pred| pred.into_solver_predicate() == *predicate)
                          .copied()
                          .expect("predicates in core must be part of the assumptions"))
                     .collect();
 
                 SatisfactionUnderAssumptionsResult::UnsatisfiableUnderAssumptions(core)
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unsatisfiable(_) => {
                 SatisfactionUnderAssumptionsResult::Unsatisfiable()
             }
-            pumpkin_solver::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
+            pumpkin_solver::core::results::SatisfactionResultUnderAssumptions::Unknown(_) => {
                 SatisfactionUnderAssumptionsResult::Unknown()
             }
         }
     }
 
-    #[pyo3(signature = (objective, optimiser=Optimiser::LinearSatUnsat, direction=Direction::Minimise, proof=None, timeout=None))]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "this is common in many Python APIs"
+    )]
+    #[pyo3(signature = (
+        objective,
+        optimiser=Optimiser::LinearSatUnsat,
+        direction=Direction::Minimise,
+        timeout=None,
+        on_solution=None,
+        warm_start=HashMap::default(),
+    ))]
     fn optimise(
         &mut self,
+        py: Python<'_>,
         objective: IntExpression,
         optimiser: Optimiser,
         direction: Direction,
-        proof: Option<PathBuf>,
         timeout: Option<f32>,
-    ) -> OptimisationResult {
-        let end_time = timeout.map(|secs| Instant::now() + Duration::from_secs_f32(secs));
-        let solver_setup = self.create_solver(proof);
-
-        let Ok((mut solver, variable_map)) = solver_setup else {
-            return OptimisationResult::Unsatisfiable();
-        };
-
-        let mut brancher = solver.default_brancher();
-        let mut termination = get_termination(end_time);
+        on_solution: Option<Py<PyAny>>,
+        warm_start: HashMap<IntExpression, i32>,
+    ) -> PyResult<OptimisationResult> {
+        let mut termination = get_termination(timeout);
+        let mut resolver = ResolutionResolver::default();
 
         let direction = match direction {
             Direction::Minimise => OptimisationDirection::Minimise,
             Direction::Maximise => OptimisationDirection::Maximise,
         };
 
-        let objective = objective.to_affine_view(&variable_map);
+        let objective = objective.0;
 
-        let callback: fn(&Solver, SolutionReference, &DefaultBrancher) = |_, _, _| {};
+        let callback = move |_: &Solver,
+                             solution: SolutionReference<'_>,
+                             _: &PythonBrancher,
+                             _: &ResolutionResolver| {
+            let python_solution = crate::result::Solution::from(solution);
+
+            // If there is a solution callback, unpack it.
+            let Some(on_solution_callback) = on_solution.as_ref() else {
+                return ControlFlow::Continue(());
+            };
+
+            // Call the callback, and if there is an error, unpack it.
+            let Err(err) = on_solution_callback.call(py, (python_solution,), None) else {
+                return ControlFlow::Continue(());
+            };
+
+            // Stop optimising and return the error.
+            ControlFlow::Break(err)
+        };
+
+        self.update_warm_start(warm_start);
 
         let result = match optimiser {
-            Optimiser::LinearSatUnsat => solver.optimise(
-                &mut brancher,
+            Optimiser::LinearSatUnsat => self.solver.optimise(
+                &mut self.brancher,
                 &mut termination,
+                &mut resolver,
                 LinearSatUnsat::new(direction, objective, callback),
             ),
-            Optimiser::LinearUnsatSat => solver.optimise(
-                &mut brancher,
+            Optimiser::LinearUnsatSat => self.solver.optimise(
+                &mut self.brancher,
                 &mut termination,
+                &mut resolver,
                 LinearUnsatSat::new(direction, objective, callback),
             ),
         };
 
         match result {
-            pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
-                OptimisationResult::Satisfiable(Solution {
-                    solver_solution: solution,
-                    variable_map,
-                })
+            pumpkin_solver::core::results::OptimisationResult::Stopped(_, err) => Err(err),
+            pumpkin_solver::core::results::OptimisationResult::Satisfiable(solution) => {
+                Ok(OptimisationResult::Satisfiable(solution.into()))
             }
-            pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
-                OptimisationResult::Optimal(Solution {
-                    solver_solution: solution,
-                    variable_map,
-                })
+            pumpkin_solver::core::results::OptimisationResult::Optimal(solution) => {
+                Ok(OptimisationResult::Optimal(solution.into()))
             }
-            pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
-                OptimisationResult::Unsatisfiable()
+            pumpkin_solver::core::results::OptimisationResult::Unsatisfiable => {
+                Ok(OptimisationResult::Unsatisfiable())
             }
-            pumpkin_solver::results::OptimisationResult::Unknown => OptimisationResult::Unknown(),
+            pumpkin_solver::core::results::OptimisationResult::Unknown => {
+                Ok(OptimisationResult::Unknown())
+            }
         }
     }
 }
 
-fn get_termination(end_time: Option<Instant>) -> Box<dyn TerminationCondition> {
+impl Model {
+    /// Update the warm start in the [`PythonBrancher`].
+    fn update_warm_start(&mut self, warm_start: HashMap<IntExpression, i32>) {
+        self.brancher.with_warm_start(warm_start);
+    }
+}
+
+fn get_termination(end_time: Option<f32>) -> Box<dyn TerminationCondition> {
     end_time
+        .map(|secs| Instant::now() + Duration::from_secs_f32(secs))
         .map(|end_time| end_time - Instant::now())
         .map(|duration| {
             Box::new(TimeBudget::starting_now(duration)) as Box<dyn TerminationCondition>
         })
         .unwrap_or(Box::new(Indefinite))
-}
-
-impl Model {
-    fn create_variable_map(
-        &self,
-        solver: &mut Solver,
-    ) -> Result<VariableMap, ConstraintOperationError> {
-        let mut map = VariableMap::default();
-
-        for model_int_var in self.integer_variables.iter() {
-            let _ = map
-                .integers
-                .push(model_int_var.create_domain(solver).into());
-        }
-
-        for model_bool_var in self.boolean_variables.iter() {
-            let _ = map
-                .booleans
-                .push(model_bool_var.create_literal(solver, &map)?);
-        }
-
-        Ok(map)
-    }
-
-    fn post_constraints(
-        &self,
-        solver: &mut Solver,
-        variable_map: &VariableMap,
-    ) -> Result<(), ConstraintOperationError> {
-        for constraint in self.constraints.iter() {
-            let ModelConstraint {
-                constraint,
-                premise,
-            } = constraint.clone();
-
-            if let Some(premise) = premise {
-                constraint.implied_by(solver, premise.to_literal(variable_map), variable_map)?;
-            } else {
-                constraint.post(solver, variable_map)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn create_solver(
-        &mut self,
-        proof: Option<PathBuf>,
-    ) -> Result<(Solver, VariableMap), ConstraintOperationError> {
-        let is_logging_proof = proof.is_some();
-
-        let proof_log = proof
-            .map(|path| ProofLog::cp(&path, true))
-            .transpose()
-            .map(|proof| proof.unwrap_or_default())
-            .expect("failed to create proof file");
-
-        let options = SolverOptions {
-            proof_log,
-            ..Default::default()
-        };
-
-        let mut solver = Solver::with_options(options);
-
-        let variable_map = self
-            .create_variable_map(&mut solver)
-            .and_then(|variable_map| {
-                self.post_constraints(&mut solver, &variable_map)?;
-                Ok(variable_map)
-            })?;
-
-        if is_logging_proof {
-            // Reserve the constraint tags that have been allocated in the model.
-            let max_tag = self.new_constraint_tag();
-            loop {
-                let next_solver_tag = solver.new_constraint_tag();
-                if NonZero::from(next_solver_tag) >= NonZero::from(max_tag.0) {
-                    break;
-                }
-            }
-        }
-
-        Ok((solver, variable_map))
-    }
-}
-
-#[derive(Clone)]
-struct ModelConstraint {
-    constraint: Constraint,
-    premise: Option<BoolExpression>,
-}
-
-struct ModelIntVar {
-    lower_bound: i32,
-    upper_bound: i32,
-    name: Option<String>,
-}
-
-impl ModelIntVar {
-    fn create_domain(&self, solver: &mut Solver) -> DomainId {
-        match self.name {
-            Some(ref name) => {
-                solver.new_named_bounded_integer(self.lower_bound, self.upper_bound, name)
-            }
-
-            None => solver.new_bounded_integer(self.lower_bound, self.upper_bound),
-        }
-    }
-}
-
-struct ModelBoolVar {
-    name: Option<String>,
-    /// If present, this is the 0-1 integer variable which is 1 if this boolean is `true`, and
-    /// 0 if this boolean is `false`. The `Tag` is the [`ConstraintTag`] which is used in the proof
-    /// log to maintain the consistency.
-    integer_equivalent: Option<(IntVariable, Tag)>,
-    /// If present, this boolean is true iff the predicate holds. The `Tag` is the
-    /// [`ConstraintTag`] which is used in the proof log to maintain the consistency between
-    /// the boolean and the predicate.
-    predicate: Option<(Predicate, Tag)>,
-}
-
-impl ModelBoolVar {
-    /// Convert a boolean variable to a solver literal.
-    fn create_literal(
-        &self,
-        solver: &mut Solver,
-        variable_map: &VariableMap,
-    ) -> Result<Literal, ConstraintOperationError> {
-        let literal = match self {
-            ModelBoolVar {
-                integer_equivalent: Some((int_var, tag_for_int)),
-                predicate: Some((predicate, tag_for_predicate)),
-                ..
-            } => {
-                // In case the boolean corresponds to both a predicate and a 0-1 integer, we have to
-                // enforce equality between the integer variable and the truth of the predicate.
-
-                let affine_view = variable_map.get_integer(*int_var);
-                let int_eq_1 = predicate![affine_view == 1];
-
-                let predicate_literal = predicate.to_solver_predicate(variable_map);
-
-                solver.add_clause([!predicate_literal, int_eq_1], tag_for_int.0)?;
-                solver.add_clause([predicate_literal, !int_eq_1], tag_for_int.0)?;
-
-                solver.new_literal_for_predicate(int_eq_1, tag_for_predicate.0)
-            }
-
-            ModelBoolVar {
-                integer_equivalent: Some((int_var, tag)),
-                predicate: None,
-                ..
-            } => {
-                let affine_view = variable_map.get_integer(*int_var);
-                solver.new_literal_for_predicate(predicate![affine_view == 1], tag.0)
-            }
-
-            ModelBoolVar {
-                predicate: Some((predicate, tag)),
-                integer_equivalent: None,
-                ..
-            } => {
-                solver.new_literal_for_predicate(predicate.to_solver_predicate(variable_map), tag.0)
-            }
-
-            ModelBoolVar {
-                name: Some(name), ..
-            } => solver.new_named_literal(name),
-
-            ModelBoolVar { name: None, .. } => solver.new_literal(),
-        };
-
-        Ok(literal)
-    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-solver"
-version = "0.2.2"
+version = "0.3.0"
 description = "The Pumpkin combinatorial optimisation solver library."
 readme = "../README.md"
 authors.workspace = true
@@ -13,7 +13,10 @@ clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
 flatzinc = "0.3.21"
 log = "0.4.27"
-pumpkin-core = { version = "0.2.2", path = "../pumpkin-crates/core/", features = ["clap"] }
+pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/", features = ["clap"] }
+pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints/"}
+pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/", features=["clap"]}
+pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
 
@@ -23,14 +26,15 @@ env_logger = "0.10.0"
 regex = "1.11.0"
 stringcase = "0.3.0"
 wait-timeout = "0.2.0"
-pumpkin-macros = { version = "0.1.0", path = "../pumpkin-macros"}
-pumpkin-checker = { version = "0.1.0", path = "../pumpkin-checker"}
+pumpkin-macros = { path = "../pumpkin-macros"}
+pumpkin-checker = { path = "../pumpkin-checker"}
 
 [lints]
 workspace = true
 
 [features]
 debug-checks = ["pumpkin-core/debug-checks"]
+check-propagations = ["pumpkin-core/check-propagations"]
 
 [build-dependencies]
 cc = "1.1.30"

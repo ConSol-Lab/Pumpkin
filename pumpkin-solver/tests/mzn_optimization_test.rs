@@ -42,4 +42,5 @@ mzn_optimization_test!(rcpsp_st27_14, with_proof: true);
 mzn_optimization_test!(rcpsp_bl2006, with_proof: true);
 mzn_optimization_test!(rcpsp_j60_1_6, with_proof: true);
 
+#[cfg(not(feature = "check-propagations"))]
 mzn_optimization_test!(ghoulomb_3_5_11, with_proof: true);

@@ -1,0 +1,15 @@
+[package]
+name = "pumpkin-checking"
+version = "0.3.0"
+description = "Types used by both pumpkin-core and pumpkin-checker"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+dyn-clone = "1.0.20"
+fnv = "1.0.7"
+
+[lints]
+workspace = true

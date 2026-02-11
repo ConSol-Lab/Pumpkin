@@ -1,0 +1,69 @@
+[workspace]
+dependencies_update = true
+semver_check = true
+
+# Do not always publish packages. Instead only release when a release-pr has been merged.
+# release_always = false
+
+repo_url = "https://github.com/consol-lab/pumpkin"
+
+pr_name = "chore: Release packages"
+pr_labels = ["release"]
+pr_branch_prefix = "release/" # PR branch prefix
+
+pr_body = """
+## 🤖 New release
+{% for release in releases %}
+* `{{ release.package }}`: {% if release.previous_version and release.previous_version != release.next_version %}{{ release.previous_version }} -> {% endif %}{{ release.next_version }}{% if release.semver_check == "incompatible" %} (⚠ API breaking changes){% elif release.semver_check == "compatible" %} (✓ API compatible changes){% endif %}
+{%- endfor %}
+{%- for release in releases %}{% if release.breaking_changes %}
+
+### ⚠ `{{ release.package }}` breaking changes
+
+```text
+{{ release.breaking_changes }}
+```{% endif %}{% endfor %}
+{% endif %}
+---
+This PR was generated with [release-plz](https://github.com/release-plz/release-plz/).
+"""
+
+[changelog]
+header = """# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+"""
+
+[[package]]
+name = "fzn-rs-derive"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-core"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-checking"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-conflict-resolvers"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-propagators"
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "pumpkin-constraints"
+git_release_enable = false
+git_tag_enable = false

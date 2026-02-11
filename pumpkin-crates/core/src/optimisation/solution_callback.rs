@@ -1,21 +1,68 @@
+use std::ops::ControlFlow;
+
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::results::SolutionReference;
 
-pub trait SolutionCallback<B: Brancher> {
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B);
+/// Called during optimisation with every encountered solution.
+///
+/// The callback can determine whether to proceed optimising or whether to stop by returning a
+/// [`ControlFlow`] value. When [`ControlFlow::Break`] is returned, a value of
+/// [`SolutionCallback::Stop`] can be supplied that will be forwarded to the result of the
+/// optimisation call.
+pub trait SolutionCallback<B: Brancher, R: ConflictResolver> {
+    /// The type of value to return if optimisation should stop.
+    type Stop;
+
+    /// Called when a solution is encountered.
+    fn on_solution_callback(
+        &mut self,
+        solver: &Solver,
+        solution: SolutionReference,
+        brancher: &B,
+        resolver: &R,
+    ) -> ControlFlow<Self::Stop>;
 }
 
-impl<T: Fn(&Solver, SolutionReference, &B), B: Brancher> SolutionCallback<B> for T {
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
-        (self)(solver, solution, brancher)
+impl<T, B, R, StopData> SolutionCallback<B, R> for T
+where
+    T: FnMut(&Solver, SolutionReference, &B, &R) -> ControlFlow<StopData>,
+    B: Brancher,
+    R: ConflictResolver,
+{
+    type Stop = StopData;
+
+    fn on_solution_callback(
+        &mut self,
+        solver: &Solver,
+        solution: SolutionReference,
+        brancher: &B,
+        resolver: &R,
+    ) -> ControlFlow<Self::Stop> {
+        (self)(solver, solution, brancher, resolver)
     }
 }
 
-impl<T: SolutionCallback<B>, B: Brancher> SolutionCallback<B> for Option<T> {
-    fn on_solution_callback(&self, solver: &Solver, solution: SolutionReference, brancher: &B) {
+impl<T, StopData, B, R> SolutionCallback<B, R> for Option<T>
+where
+    T: SolutionCallback<B, R, Stop = StopData>,
+    B: Brancher,
+    R: ConflictResolver,
+{
+    type Stop = StopData;
+
+    fn on_solution_callback(
+        &mut self,
+        solver: &Solver,
+        solution: SolutionReference,
+        brancher: &B,
+        resolver: &R,
+    ) -> ControlFlow<Self::Stop> {
         if let Some(callback) = self {
-            callback.on_solution_callback(solver, solution, brancher)
+            return callback.on_solution_callback(solver, solution, brancher, resolver);
         }
+
+        ControlFlow::Continue(())
     }
 }

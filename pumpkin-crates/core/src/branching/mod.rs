@@ -12,55 +12,6 @@
 //!   method.
 //!
 //! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], and [`Solver::optimise`]:
-//! ```rust
-//! # use pumpkin_core::Solver;
-//! # use pumpkin_core::variables::Literal;
-//! # use pumpkin_core::termination::Indefinite;
-//! # use pumpkin_core::results::SatisfactionResult;
-//! # use crate::pumpkin_core::results::ProblemSolution;
-//! let mut solver = Solver::default();
-//!
-//! let variables = vec![solver.new_literal()];
-//!
-//! let mut termination = Indefinite;
-//! let mut brancher = solver.default_brancher();
-//! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     // Getting the value of the literal in the solution should not panic
-//!     variables.into_iter().for_each(|variable| {
-//!         satisfiable.solution().get_literal_value(variable);
-//!     });
-//! } else {
-//!     panic!("Solving should have returned satsifiable")
-//! }
-//! ```
-//!
-//!
-//! A default implementation of a [`Brancher`]
-//! is provided using the method
-//! [`Solver::default_brancher`].
-//! ```rust
-//! # use pumpkin_core::Solver;
-//! # use pumpkin_core::variables::Literal;
-//! # use pumpkin_core::termination::Indefinite;
-//! # use pumpkin_core::results::SatisfactionResult;
-//! # use crate::pumpkin_core::results::ProblemSolution;
-//! let mut solver = Solver::default();
-//!
-//! let literals = vec![solver.new_literal()];
-//!
-//! let mut termination = Indefinite;
-//! let mut brancher = solver.default_brancher();
-//! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     // Getting the value of the literal in the solution should not panic
-//!     literals.into_iter().for_each(|literal| {
-//!         satisfiable.solution().get_literal_value(literal);
-//!     })
-//! } else {
-//!     panic!("Solving should have returned satsifiable")
-//! }
-//! ```
 //!
 //! \[1\] F. Rossi, P. Van Beek, and T. Walsh, Handbook of constraint programming. Elsevier, 2006.
 

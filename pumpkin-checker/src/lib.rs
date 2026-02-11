@@ -10,11 +10,15 @@ use std::time::Instant;
 use drcp_format::ConstraintId;
 use drcp_format::reader::ProofReader;
 
+pub mod conclusion;
 pub mod deductions;
 pub mod inferences;
-mod state;
-
 pub mod model;
+
+#[cfg(test)]
+pub(crate) mod test_utils;
+
+pub(crate) mod math;
 
 use model::*;
 
@@ -150,11 +154,11 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
         fzn_rs::Method::Optimize {
             direction: fzn_rs::ast::OptimizationDirection::Minimize,
             objective,
-        } => Some(Objective::Minimize(objective.clone())),
+        } => Some(Objective::Minimize(objective.clone().into())),
         fzn_rs::Method::Optimize {
             direction: fzn_rs::ast::OptimizationDirection::Maximize,
             objective,
-        } => Some(Objective::Maximize(objective.clone())),
+        } => Some(Objective::Maximize(objective.clone().into())),
     };
 
     for (name, variable) in fzn_model.variables.iter() {
@@ -181,7 +185,12 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                     let weight = weight?;
                     let variable = variable?;
 
-                    terms.push((weight, variable));
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
                 }
 
                 Constraint::LinearLeq(Linear {
@@ -204,7 +213,12 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                     let weight = weight?;
                     let variable = variable?;
 
-                    terms.push((weight, variable));
+                    terms.push(Term {
+                        weight: weight
+                            .try_into()
+                            .expect("flatzinc does not have 0-weight terms"),
+                        variable: variable.into(),
+                    });
                 }
 
                 Constraint::LinearEq(Linear {
@@ -233,7 +247,7 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
                             let resource_usage = maybe_resource_usage?;
 
                             Ok(Task {
-                                start_time,
+                                start_time: start_time.into(),
                                 duration,
                                 resource_usage,
                             })
@@ -250,6 +264,7 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<Model> {
             FlatZincConstraints::AllDifferent(variables) => {
                 let variables = fzn_model
                     .resolve_array(variables)?
+                    .map(|maybe_variable| maybe_variable.map(Variable::from))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Constraint::AllDifferent(AllDifferent { variables })
@@ -339,7 +354,7 @@ pub fn verify_proof<Source: BufRead>(
             }
 
             drcp_format::Step::Conclusion(conclusion) => {
-                if verify_conclusion(&model, &conclusion) {
+                if conclusion::verify_conclusion(&model, &conclusion) {
                     return Ok(());
                 } else {
                     return Err(CheckError::InvalidConclusion);
@@ -347,27 +362,4 @@ pub fn verify_proof<Source: BufRead>(
             }
         }
     }
-}
-
-fn verify_conclusion(model: &Model, conclusion: &drcp_format::Conclusion<Rc<str>, i32>) -> bool {
-    // First we ensure the conclusion type matches the solve item in the model.
-    match (&model.objective, conclusion) {
-        (Some(_), drcp_format::Conclusion::Unsat)
-        | (None, drcp_format::Conclusion::DualBound(_)) => return false,
-
-        _ => {}
-    }
-
-    // We iterate in reverse order, since it is likely that the conclusion is based on a constraint
-    // towards the end of the proof.
-    model.iter_constraints().rev().any(|(_, constraint)| {
-        let Constraint::Nogood(nogood) = constraint else {
-            return false;
-        };
-
-        match conclusion {
-            drcp_format::Conclusion::Unsat => nogood.as_ref().is_empty(),
-            drcp_format::Conclusion::DualBound(atomic) => nogood.as_ref() == [!atomic.clone()],
-        }
-    })
 }

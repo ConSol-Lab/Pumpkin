@@ -42,12 +42,16 @@ impl<Key, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
-    pub(crate) fn get(&self, key: Key) -> Option<&Value> {
+    pub fn get(&self, key: Key) -> Option<&Value> {
         self.elements.get(key.index())
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.elements.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.elements.is_empty()
     }
 
     /// Add a new value to the vector.
@@ -121,17 +125,17 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
-    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
+    pub fn accomodate(&mut self, key: Key, default_value: Value) {
         if key.index() >= self.elements.len() {
             self.elements.resize(key.index() + 1, default_value)
         }
     }
 
-    pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
+    pub fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.elements.clear();
     }
 }

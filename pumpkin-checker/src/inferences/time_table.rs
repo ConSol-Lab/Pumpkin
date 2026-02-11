@@ -1,9 +1,12 @@
-use std::collections::BTreeMap;
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::VariableState;
+use pumpkin_propagators::cumulative::time_table::CheckerTask;
+use pumpkin_propagators::cumulative::time_table::TimeTableChecker;
 
 use super::Fact;
 use crate::inferences::InvalidInference;
+use crate::model::Atomic;
 use crate::model::Constraint;
-use crate::state::VariableState;
 
 /// Verifies a `time_table` inference for the cumulative constraint.
 ///
@@ -12,37 +15,28 @@ use crate::state::VariableState;
 pub(crate) fn verify_time_table(
     fact: &Fact,
     constraint: &Constraint,
+    state: VariableState<Atomic>,
 ) -> Result<(), InvalidInference> {
     let Constraint::Cumulative(cumulative) = constraint else {
         return Err(InvalidInference::ConstraintLabelMismatch);
     };
 
-    let variable_state = VariableState::prepare_for_conflict_check(fact)
-        .ok_or(InvalidInference::InconsistentPremises)?;
+    let checker = TimeTableChecker {
+        tasks: cumulative
+            .tasks
+            .iter()
+            .map(|task| CheckerTask {
+                start_time: task.start_time.clone(),
+                resource_usage: task.resource_usage,
+                processing_time: task.duration,
+            })
+            .collect(),
+        capacity: cumulative.capacity,
+    };
 
-    // The profile is a key-value store. The keys correspond to time-points, and the values to the
-    // relative change in resource consumption. A BTreeMap is used to maintain a sorted order of
-    // the time points.
-    let mut profile = BTreeMap::new();
-
-    for task in cumulative.tasks.iter() {
-        let lst = variable_state.upper_bound(&task.start_time);
-        let ect = variable_state.lower_bound(&task.start_time) + task.duration;
-
-        if ect <= lst {
-            *profile.entry(ect).or_insert(0) += task.resource_usage;
-            *profile.entry(lst).or_insert(0) -= task.resource_usage;
-        }
+    if checker.check(state, &fact.premises, fact.consequent.as_ref()) {
+        Ok(())
+    } else {
+        Err(InvalidInference::Unsound)
     }
-
-    let mut usage = 0;
-    for delta in profile.values() {
-        usage += delta;
-
-        if usage > cumulative.capacity {
-            return Ok(());
-        }
-    }
-
-    Err(InvalidInference::Unsound)
 }

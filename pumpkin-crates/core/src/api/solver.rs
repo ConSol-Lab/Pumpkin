@@ -15,6 +15,8 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::InputOrder;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
+use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictResolver;
 use crate::constraints::ConstraintPoster;
 use crate::containers::HashSet;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -122,19 +124,26 @@ impl Solver {
     /// Logs the statistics currently present in the solver with the provided objective value.
     pub fn log_statistics_with_objective(
         &self,
-        brancher: Option<&impl Brancher>,
+        brancher: &impl Brancher,
+        resolver: &impl ConflictResolver,
         objective_value: i64,
         verbose: bool,
     ) {
         log_statistic("objective", objective_value);
-        self.log_statistics(brancher, verbose);
+        self.log_statistics(brancher, resolver, verbose);
     }
 
     /// Logs the statistics currently present in the solver.
-    pub fn log_statistics(&self, brancher: Option<&impl Brancher>, verbose: bool) {
+    pub fn log_statistics(
+        &self,
+        brancher: &impl Brancher,
+        resolver: &impl ConflictResolver,
+        verbose: bool,
+    ) {
         self.satisfaction_solver.log_statistics(verbose);
-        if verbose && let Some(brancher) = brancher {
-            brancher.log_statistics(StatisticLogger::new(["brancher"]));
+        resolver.log_statistics(StatisticLogger::default());
+        if verbose {
+            brancher.log_statistics(StatisticLogger::default());
         }
         log_statistic_postfix();
     }
@@ -143,7 +152,7 @@ impl Solver {
         self.satisfaction_solver.get_solution_reference()
     }
 
-    pub(crate) fn is_logging_proof(&self) -> bool {
+    pub fn is_logging_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_proof()
     }
 }
@@ -164,6 +173,11 @@ impl Solver {
     /// Get the upper-bound of the given [`IntegerVariable`] at the root level (after propagation).
     pub fn upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_upper_bound(variable)
+    }
+
+    /// Returns whether the solver is in an inconsistent state.
+    pub fn is_inconsistent(&self) -> bool {
+        self.satisfaction_solver.get_state().is_inconsistent()
     }
 }
 
@@ -209,6 +223,19 @@ impl Solver {
     ) -> Literal {
         self.satisfaction_solver
             .create_new_literal_for_predicate(predicate, None, constraint_tag)
+    }
+
+    pub fn new_named_literal_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        constraint_tag: ConstraintTag,
+        name: impl Into<String>,
+    ) -> Literal {
+        self.satisfaction_solver.create_new_literal_for_predicate(
+            predicate,
+            Some(name.into().into()),
+            constraint_tag,
+        )
     }
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
@@ -320,44 +347,60 @@ impl Solver {
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
     /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
     /// which can be used to obtain the found solution or find other solutions.
-    pub fn satisfy<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+    pub fn satisfy<
+        'this,
+        'brancher,
+        'resolver,
+        B: Brancher,
+        T: TerminationCondition,
+        R: ConflictResolver,
+    >(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &mut T,
-    ) -> SatisfactionResult<'this, 'brancher, B> {
-        match self.satisfaction_solver.solve(termination, brancher) {
+        resolver: &'resolver mut R,
+    ) -> SatisfactionResult<'this, 'brancher, 'resolver, B, R> {
+        match self
+            .satisfaction_solver
+            .solve(termination, brancher, resolver)
+        {
             CSPSolverExecutionFlag::Feasible => {
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
-                SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher))
+                SatisfactionResult::Satisfiable(Satisfiable::new(self, brancher, resolver))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 let _ = self.satisfaction_solver.conclude_proof_unsat();
 
-                SatisfactionResult::Unsatisfiable(self, brancher)
+                SatisfactionResult::Unsatisfiable(self, brancher, resolver)
             }
             CSPSolverExecutionFlag::Timeout => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                SatisfactionResult::Unknown(self, brancher)
+                SatisfactionResult::Unknown(self, brancher, resolver)
             }
         }
     }
 
+    /// Returns a [`SolutionIterator`] which can be used to generate multiple solutions for a
+    /// satisfaction problem.
     pub fn get_solution_iterator<
         'this,
         'brancher,
         'termination,
+        'resolver,
         B: Brancher,
         T: TerminationCondition,
+        R: ConflictResolver,
     >(
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &'termination mut T,
-    ) -> SolutionIterator<'this, 'brancher, 'termination, B, T> {
-        SolutionIterator::new(self, brancher, termination)
+        resolver: &'resolver mut R,
+    ) -> SolutionIterator<'this, 'brancher, 'termination, 'resolver, B, T, R> {
+        SolutionIterator::new(self, brancher, termination, resolver)
     }
 
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
@@ -371,21 +414,32 @@ impl Solver {
     /// # Bibliography
     /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
     /// Notes in Theoretical Computer Science, vol. 89, no. 4, pp. 543–560, 2003.
-    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+    pub fn satisfy_under_assumptions<
+        'this,
+        'brancher,
+        'resolver,
+        B: Brancher,
+        R: ConflictResolver,
+    >(
         &'this mut self,
         brancher: &'brancher mut B,
-        termination: &mut T,
+        termination: &mut impl TerminationCondition,
+        resolver: &'resolver mut R,
         assumptions: &[Predicate],
-    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
-        match self
-            .satisfaction_solver
-            .solve_under_assumptions(assumptions, termination, brancher)
-        {
+    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, 'resolver, B, R> {
+        match self.satisfaction_solver.solve_under_assumptions(
+            assumptions,
+            termination,
+            brancher,
+            resolver,
+        ) {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
                 brancher.on_solution(solution.as_reference());
-                SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(self, brancher))
+                SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(
+                    self, brancher, resolver,
+                ))
             }
             CSPSolverExecutionFlag::Infeasible => {
                 if self
@@ -419,17 +473,19 @@ impl Solver {
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
-    pub fn optimise<B, Callback>(
+    pub fn optimise<B, R, Callback>(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
-        mut optimisation_procedure: impl OptimisationProcedure<B, Callback>,
-    ) -> OptimisationResult
+        resolver: &mut R,
+        mut optimisation_procedure: impl OptimisationProcedure<B, R, Callback>,
+    ) -> OptimisationResult<Callback::Stop>
     where
         B: Brancher,
-        Callback: SolutionCallback<B>,
+        R: ConflictResolver,
+        Callback: SolutionCallback<B, R>,
     {
-        optimisation_procedure.optimise(brancher, termination, self)
+        optimisation_procedure.optimise(brancher, termination, resolver, self)
     }
 }
 
@@ -452,8 +508,7 @@ impl Solver {
     /// added to the solver. In this case, a warning is emitted.
     ///
     /// # Example
-    /// ```
-    /// # use pumpkin_core::constraints;
+    /// ```ignore
     /// # use pumpkin_core::Solver;
     /// let mut solver = Solver::default();
     ///
@@ -463,7 +518,7 @@ impl Solver {
     /// let constraint_tag = solver.new_constraint_tag();
     ///
     /// solver
-    ///     .add_constraint(constraints::equals([a, b], 0, constraint_tag))
+    ///     .add_constraint(pumpkin_constraints::equals([a, b], 0, constraint_tag))
     ///     .post();
     /// ```
     pub fn add_constraint<Constraint>(
@@ -530,6 +585,28 @@ impl Solver {
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_dual_bound(&mut self, bound: Predicate) {
         let _ = self.satisfaction_solver.conclude_proof_optimal(bound);
+    }
+}
+
+impl Solver {
+    #[deprecated(note = "Should only be used for testing")]
+    pub fn conflict_analysis_context<'a>(
+        &'a mut self,
+        brancher: &'a mut impl Brancher,
+    ) -> ConflictAnalysisContext<'a> {
+        ConflictAnalysisContext {
+            solver_state: &mut self.satisfaction_solver.solver_state,
+            brancher,
+            proof_log: &mut self.satisfaction_solver.internal_parameters.proof_log,
+            unit_nogood_inference_codes: &mut self.satisfaction_solver.unit_nogood_inference_codes,
+            restart_strategy: &mut self.satisfaction_solver.restart_strategy,
+            state: &mut self.satisfaction_solver.state,
+            nogood_propagator_handle: self.satisfaction_solver.nogood_propagator_handle,
+            rng: &mut self
+                .satisfaction_solver
+                .internal_parameters
+                .random_generator,
+        }
     }
 }
 

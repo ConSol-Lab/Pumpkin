@@ -1,9 +1,11 @@
 use std::num::NonZero;
+use std::ops::ControlFlow;
 
 use super::OptimisationProcedure;
 use super::solution_callback::SolutionCallback;
 use crate::Solver;
 use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
 use crate::optimisation::OptimisationDirection;
 use crate::predicate;
 use crate::proof::ConstraintTag;
@@ -38,35 +40,42 @@ impl<Var, Callback> LinearUnsatSat<Var, Callback> {
     }
 }
 
-impl<Var, B, Callback> OptimisationProcedure<B, Callback> for LinearUnsatSat<Var, Callback>
+impl<Var, B, R, Callback> OptimisationProcedure<B, R, Callback> for LinearUnsatSat<Var, Callback>
 where
     Var: IntegerVariable,
     B: Brancher,
-    Callback: SolutionCallback<B>,
+    R: ConflictResolver,
+    Callback: SolutionCallback<B, R>,
 {
     fn optimise(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
+        resolver: &mut R,
         solver: &mut Solver,
-    ) -> OptimisationResult {
+    ) -> OptimisationResult<Callback::Stop> {
         let objective = match self.direction {
             OptimisationDirection::Maximise => self.objective.scaled(-1),
             OptimisationDirection::Minimise => self.objective.scaled(1),
         };
 
         // First we will solve the satisfaction problem without constraining the objective.
-        let primal_solution: Solution = match solver.satisfy(brancher, termination) {
+        let primal_solution: Solution = match solver.satisfy(brancher, termination, resolver) {
             SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_, _) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_, _) => return OptimisationResult::Unknown,
+            SatisfactionResult::Unsatisfiable(_, _, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
         };
 
-        self.solution_callback.on_solution_callback(
+        let callback_result = self.solution_callback.on_solution_callback(
             solver,
             primal_solution.as_reference(),
             brancher,
+            resolver,
         );
+
+        if let ControlFlow::Break(stop) = callback_result {
+            return OptimisationResult::Stopped(primal_solution, stop);
+        }
 
         let primal_objective = primal_solution.get_integer_value(objective.clone());
 
@@ -89,6 +98,7 @@ where
                 let solve_result = solver.satisfy_under_assumptions(
                     brancher,
                     termination,
+                    resolver,
                     &[predicate![objective <= objective_lower_bound]],
                 );
 
@@ -108,10 +118,12 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    self.solution_callback.on_solution_callback(
+                    // Optimisation will stop regardless of the result of the callback.
+                    let _ = self.solution_callback.on_solution_callback(
                         solver,
                         primal_solution.as_reference(),
                         brancher,
+                        resolver,
                     );
 
                     solver

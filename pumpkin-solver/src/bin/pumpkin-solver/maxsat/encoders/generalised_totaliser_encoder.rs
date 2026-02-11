@@ -1,9 +1,9 @@
 use log::debug;
-use pumpkin_solver::containers::HashMap;
-use pumpkin_solver::proof::ConstraintTag;
-use pumpkin_solver::pumpkin_assert_moderate;
-use pumpkin_solver::pumpkin_assert_simple;
-use pumpkin_solver::variables::Literal;
+use pumpkin_solver::core::containers::HashMap;
+use pumpkin_solver::core::proof::ConstraintTag;
+use pumpkin_solver::core::pumpkin_assert_moderate;
+use pumpkin_solver::core::pumpkin_assert_simple;
+use pumpkin_solver::core::variables::Literal;
 
 use super::WeightedLiteral;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
@@ -33,7 +33,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
     ) -> Result<Self, EncodingError> {
         // a good heuristic is to sort the literals by weight with a stable ordering
         //  this reduces the size of the encoding significantly
-        weighted_literals.sort_by_key(|p1| p1.weight);
+        weighted_literals.sort_by_key(|lit| lit.weight);
 
         let mut encoder = GeneralisedTotaliserEncoder {
             index_last_added_weighted_literal: usize::MAX,

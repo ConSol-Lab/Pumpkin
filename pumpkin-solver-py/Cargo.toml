@@ -1,11 +1,12 @@
 [package]
 name = "pumpkin-solver-py"
-version = "0.2.2"
+version = "0.3.0"
 description = "The Python interface for the Pumpkin solver library."
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 repository.workspace = true
+publish = false
 
 
 [lib]
@@ -16,7 +17,9 @@ doc = false
 
 [dependencies]
 pyo3 = { version = "0.25.1", features= ["extension-module"] }
-pumpkin-solver = { version = "0.2.2", path = "../pumpkin-solver" }
+pumpkin-solver = { version = "0.3.0", path = "../pumpkin-solver" }
+pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints", features=["clap"] }
+pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
 
 [build-dependencies]
 pyo3-build-config = "0.25.1"

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.0](https://github.com/consol-lab/pumpkin/compare/pumpkin-core-v0.2.2...pumpkin-core-v0.3.0) - 2026-02-10
+
+### Added
+
+- Propagator for the hypercube linear constraint ([#347](https://github.com/consol-lab/pumpkin/pull/347))
+- If the `check-propagations` flag is enabled, the state will run inference checkers on all propagations immediately ([#340](https://github.com/consol-lab/pumpkin/pull/340))
+- Crash if a propagator constructor does not register anything ([#338](https://github.com/consol-lab/pumpkin/pull/338))
+- Make propagator API public ([#333](https://github.com/consol-lab/pumpkin/pull/333))
+- Add interface for nogood minimiser ([#326](https://github.com/consol-lab/pumpkin/pull/326))
+- Implement State API ([#319](https://github.com/consol-lab/pumpkin/pull/319))
+- WebAssembly support for pumpkin-core ([#327](https://github.com/consol-lab/pumpkin/pull/327))
+
+### Fixed
+
+- Fix off-by-one error in initial bounds calculation ([#361](https://github.com/consol-lab/pumpkin/pull/361))
+- Do not check for event registration when already panicking ([#346](https://github.com/consol-lab/pumpkin/pull/346))
+- Sign error in greater_than constraint ([#334](https://github.com/consol-lab/pumpkin/pull/334))
+- Generate constraint tags via State ([#335](https://github.com/consol-lab/pumpkin/pull/335))
+- Allow propagators to register for predicates becoming true ([#331](https://github.com/consol-lab/pumpkin/pull/331))
+- Off-by-one error when explaining empty domain conflict ([#322](https://github.com/consol-lab/pumpkin/pull/322))
+- Declare solving after conflict resolution ([#317](https://github.com/consol-lab/pumpkin/pull/317))
+
+### Other
+
+- Stop watching predicates without any watchers in nogood propagator ([#351](https://github.com/consol-lab/pumpkin/pull/351))
+- Simplify predicate notification system ([#348](https://github.com/consol-lab/pumpkin/pull/348))
+- `InferenceCode` wraps constraint tag and inference label directory ([#339](https://github.com/consol-lab/pumpkin/pull/339))
+- Explicitly register predicates in NogoodPropagator ([#332](https://github.com/consol-lab/pumpkin/pull/332))
+- Empty domain conflict is a predicate and reason ([#314](https://github.com/consol-lab/pumpkin/pull/314))
+- Separate conflict resolvers further from solver ([#310](https://github.com/consol-lab/pumpkin/pull/310))
+- Update rust edition to 2024 ([#311](https://github.com/consol-lab/pumpkin/pull/311))
+
 ## [0.2.2](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-core-v0.2.1...pumpkin-core-v0.2.2) (2025-11-10)
 
 

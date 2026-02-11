@@ -11,17 +11,13 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropagatorConflict;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
-use crate::basic_types::moving_averages::MovingAverage;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
-use crate::engine::SolverStatistics;
-use crate::engine::conflict_analysis::AnalysisMode;
-use crate::engine::conflict_analysis::SemanticMinimiser;
+use crate::engine::constraint_satisfaction_solver::AnalysisMode;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -29,10 +25,10 @@ use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::PredicateType;
 use crate::proof::InferenceCode;
-use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
+use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
 use crate::propagation::Propagator;
@@ -41,6 +37,7 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::propagators::nogoods::arena_allocator::ArenaAllocator;
 use crate::propagators::nogoods::arena_allocator::NogoodIndex;
+use crate::propagators::nogoods::semantic_minimiser::SemanticMinimiser;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
@@ -51,6 +48,8 @@ use crate::state::Conflict;
 use crate::state::PropagatorHandle;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
+use crate::statistics::moving_averages::CumulativeMovingAverage;
+use crate::statistics::moving_averages::MovingAverage;
 use crate::variables::DomainId;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
@@ -62,7 +61,7 @@ use crate::variables::DomainId;
 /// The idea for propagation is the two-watcher scheme; this is achieved by internally keeping
 /// track of watch lists.
 #[derive(Clone, Debug)]
-pub(crate) struct NogoodPropagator {
+pub struct NogoodPropagator {
     /// The [`PredicateId`]s of the nogoods.
     nogood_predicates: ArenaAllocator,
     /// The information corresponding to each nogood; including activity, and LBD.
@@ -251,14 +250,18 @@ impl Propagator for NogoodPropagator {
         Priority::High
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) -> EnqueueDecision {
+    fn notify_predicate_id_satisfied(
+        &mut self,
+        _: NotificationContext,
+        predicate_id: PredicateId,
+    ) -> EnqueueDecision {
         self.updated_predicate_ids.push(predicate_id);
         EnqueueDecision::Enqueue
     }
 
     fn notify(
         &mut self,
-        _context: crate::propagation::NotificationContext,
+        _context: NotificationContext,
         _local_id: crate::propagation::LocalId,
         _event: crate::propagation::OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -312,7 +315,7 @@ impl Propagator for NogoodPropagator {
                             continue;
                         }
 
-                        let inference_code = self.inference_codes
+                        let inference_code = &self.inference_codes
                             [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
                         let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
 
@@ -429,6 +432,10 @@ impl Propagator for NogoodPropagator {
                             pumpkin_assert_moderate!(
                                 !self.watch_lists[predicate_id].contains(&watcher)
                             );
+
+                            if self.watch_lists[predicate_id].is_empty() {
+                                context.unregister_predicate(predicate_id);
+                            }
                         }
 
                         if let Some(to_remove) = falsified_zeroth {
@@ -443,6 +450,10 @@ impl Propagator for NogoodPropagator {
                                 .expect("Expected to be able to retrieve watcher");
                             let _ =
                                 self.watch_lists[to_remove].swap_remove(index_in_zeroth_watchlist);
+
+                            if self.watch_lists[to_remove].is_empty() {
+                                context.unregister_predicate(to_remove);
+                            }
                         }
 
                         if found_new_watch || falsified_zeroth.is_some() {
@@ -513,7 +524,7 @@ impl Propagator for NogoodPropagator {
                             continue;
                         }
 
-                        let inference_code = self.inference_codes
+                        let inference_code = &self.inference_codes
                             [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)];
                         let nogood_predicates = &mut self.nogood_predicates[watcher.nogood_id];
 
@@ -604,6 +615,10 @@ impl Propagator for NogoodPropagator {
                         if found_new_watch {
                             // We remove the current watcher
                             let _ = self.watch_lists[predicate_id].swap_remove(index);
+                            if self.watch_lists[predicate_id].is_empty() {
+                                context.unregister_predicate(predicate_id);
+                            }
+
                             continue;
                         }
 
@@ -624,7 +639,7 @@ impl Propagator for NogoodPropagator {
                         let result = context.post(
                             predicate,
                             reason,
-                            self.inference_codes
+                            &self.inference_codes
                                 [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)],
                         );
                         // If the propagation lead to a conflict.
@@ -642,7 +657,7 @@ impl Propagator for NogoodPropagator {
         }
     }
 
-    fn synchronise(&mut self, _context: Domains) {
+    fn synchronise(&mut self, _context: NotificationContext<'_>) {
         self.updated_predicate_ids.clear()
     }
 
@@ -685,11 +700,9 @@ impl Propagator for NogoodPropagator {
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates (if it
             // did not then it should have propagated earlier).
-            let current_lbd = self.lbd_helper.compute_lbd(
-                &self.temp_nogood_reason,
-                #[allow(deprecated, reason = "should be refactored later")]
-                context.assignments(),
-            );
+            let current_lbd = self
+                .lbd_helper
+                .compute_lbd(&self.temp_nogood_reason, &context);
 
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogood_info[info_id].lbd {
@@ -750,7 +763,7 @@ impl NogoodPropagator {
         context: &mut PropagationContext,
         nogood: &[PredicateId],
         propagated_domain: DomainId,
-        inference_code: InferenceCode,
+        inference_code: &InferenceCode,
         statistics: &mut NogoodPropagatorStatistics,
     ) -> Result<(), Conflict> {
         statistics.num_extended_propagation_calls += 1;
@@ -837,7 +850,7 @@ impl NogoodPropagator {
 
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: reason,
-                inference_code,
+                inference_code: inference_code.clone(),
             }));
         }
 
@@ -1158,7 +1171,6 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         inference_code: InferenceCode,
         context: &mut PropagationContext,
-        statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
         // root-level; this is essentially the same as adding a predicate at the root level
@@ -1194,13 +1206,8 @@ impl NogoodPropagator {
                         .filter(|predicate| context.evaluate_predicate(**predicate).is_some())
                         .copied()
                         .collect::<Vec<_>>(),
-                    context.assignments(),
+                    context,
                 );
-
-                statistics
-                    .learned_clause_statistics
-                    .average_lbd
-                    .add_term(lbd as u64);
 
                 pumpkin_assert_moderate!(
                     context.get_checkpoint_for_predicate(nogood[1]).unwrap()
@@ -1262,7 +1269,7 @@ impl NogoodPropagator {
                 );
 
                 let inference_code =
-                    self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+                    &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
                 // Then we perform propagation; note that due to the nature of extended UIP, it
                 // could be the case that none of the predicates are assigned as a
@@ -1290,12 +1297,7 @@ impl NogoodPropagator {
                 // but will be assigned at the level of the predicate at index one.
                 let lbd = self
                     .lbd_helper
-                    .compute_lbd(&nogood.as_slice()[1..], context.assignments());
-
-                statistics
-                    .learned_clause_statistics
-                    .average_lbd
-                    .add_term(lbd as u64);
+                    .compute_lbd(&nogood.as_slice()[1..], context);
 
                 let nogood = nogood
                     .iter()
@@ -1335,7 +1337,7 @@ impl NogoodPropagator {
                 // asked for it
                 let reason = Reason::DynamicLazy(nogood_id.id as u64);
                 let inference_code =
-                    self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
+                    &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
                 let predicate = !context
                     .notification_engine
@@ -1463,30 +1465,94 @@ impl NogoodPropagator {
             context.post(
                 !nogood[0],
                 PropositionalConjunction::from(input_nogood),
-                inference_code,
+                &inference_code,
             )?;
-            return Ok(());
+            Ok(())
         }
+        // Standard case, nogood is of size at least two.
+        //
+        // The preprocessing ensures that all predicates are unassigned.
+        else {
+            match self.analysis_mode {
+                AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
+                    // We try to find a predicate with a different domain than the 0-th predicate;
+                    // this is the invariant that we maintain for the watchers
+                    let other = nogood
+                        .iter()
+                        .position(|predicate| predicate.get_domain() != nogood[0].get_domain());
 
-        match self.analysis_mode {
-            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
-                // We try to find a predicate with a different domain than the 0-th predicate; this
-                // is the invariant that we maintain for the watchers
-                let other = nogood
-                    .iter()
-                    .position(|predicate| predicate.get_domain() != nogood[0].get_domain());
+                    let first_domain = nogood[0].get_domain();
 
-                let first_domain = nogood[0].get_domain();
+                    let mut nogood = nogood
+                        .iter()
+                        .map(|predicate| context.get_id(*predicate))
+                        .collect::<Vec<_>>();
 
-                let mut nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
+                    if let Some(position) = other {
+                        // If we can find predicate which reasons over a different domain than the
+                        // 0th, then we proceed to add watchers
+                        nogood.swap(1, position);
 
-                if let Some(position) = other {
-                    // If we can find predicate which reasons over a different domain than the 0th,
-                    // then we proceed to add watchers
-                    nogood.swap(1, position);
+                        // Add the nogood to the database.
+                        //
+                        // Currently we always allocate a fresh ID
+                        let nogood_id = self.nogood_predicates.insert(nogood);
+                        let _ = self
+                            .nogood_info
+                            .push(NogoodInfo::new_permanent_nogood_info());
+                        let _ = self.inference_codes.push(inference_code);
+
+                        let watcher = Watcher {
+                            nogood_id,
+                            cached_predicate: self.nogood_predicates[nogood_id][0],
+                        };
+
+                        NogoodPropagator::add_watcher(
+                            context,
+                            self.nogood_predicates[nogood_id][0],
+                            watcher,
+                            &mut self.watch_lists,
+                        );
+
+                        NogoodPropagator::add_watcher(
+                            context,
+                            self.nogood_predicates[nogood_id][1],
+                            watcher,
+                            &mut self.watch_lists,
+                        );
+
+                        self.permanent_nogood_ids.push(nogood_id);
+
+                        Ok(())
+                    } else {
+                        // Otherwise, we treat it as a "unit" nogood and we perform propagation and
+                        // then do not add the nogood to the database.
+
+                        Self::propagate_extended_nogood(
+                            context,
+                            &nogood,
+                            first_domain,
+                            &inference_code,
+                            &mut self.statistics,
+                        )?;
+
+                        Ok(())
+                    }
+                }
+                AnalysisMode::OneUIP
+                | AnalysisMode::AllDecision
+                | AnalysisMode::HalfExtendedUIP => {
+                    #[cfg(feature = "check-propagations")]
+                    let nogood = input_nogood
+                        .iter()
+                        .map(|predicate| context.get_id(*predicate))
+                        .collect::<Vec<_>>();
+
+                    #[cfg(not(feature = "check-propagations"))]
+                    let nogood = nogood
+                        .iter()
+                        .map(|predicate| context.get_id(*predicate))
+                        .collect::<Vec<_>>();
 
                     // Add the nogood to the database.
                     //
@@ -1496,6 +1562,8 @@ impl NogoodPropagator {
                         .nogood_info
                         .push(NogoodInfo::new_permanent_nogood_info());
                     let _ = self.inference_codes.push(inference_code);
+
+                    self.permanent_nogood_ids.push(nogood_id);
 
                     let watcher = Watcher {
                         nogood_id,
@@ -1508,7 +1576,6 @@ impl NogoodPropagator {
                         watcher,
                         &mut self.watch_lists,
                     );
-
                     NogoodPropagator::add_watcher(
                         context,
                         self.nogood_predicates[nogood_id][1],
@@ -1516,60 +1583,8 @@ impl NogoodPropagator {
                         &mut self.watch_lists,
                     );
 
-                    self.permanent_nogood_ids.push(nogood_id);
-
-                    Ok(())
-                } else {
-                    // Otherwise, we treat it as a "unit" nogood and we perform propagation and
-                    // then do not add the nogood to the database.
-
-                    Self::propagate_extended_nogood(
-                        context,
-                        &nogood,
-                        first_domain,
-                        inference_code,
-                        &mut self.statistics,
-                    )?;
-
                     Ok(())
                 }
-            }
-            AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
-                let nogood = nogood
-                    .iter()
-                    .map(|predicate| context.get_id(*predicate))
-                    .collect::<Vec<_>>();
-
-                // Add the nogood to the database.
-                //
-                // Currently we always allocate a fresh ID
-                let nogood_id = self.nogood_predicates.insert(nogood);
-                let _ = self
-                    .nogood_info
-                    .push(NogoodInfo::new_permanent_nogood_info());
-                let _ = self.inference_codes.push(inference_code);
-
-                self.permanent_nogood_ids.push(nogood_id);
-
-                let watcher = Watcher {
-                    nogood_id,
-                    cached_predicate: self.nogood_predicates[nogood_id][0],
-                };
-
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][0],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-                NogoodPropagator::add_watcher(
-                    context,
-                    self.nogood_predicates[nogood_id][1],
-                    watcher,
-                    &mut self.watch_lists,
-                );
-
-                Ok(())
             }
         }
     }
@@ -2075,7 +2090,7 @@ impl NogoodPropagator {
         // This is an inefficient implementation for testing purposes
         let nogood = &self.nogood_predicates[nogood_id];
         let info_id = self.nogood_predicates.get_nogood_index(&nogood_id);
-        let inference_code = self.inference_codes[info_id];
+        let inference_code = &self.inference_codes[info_id];
 
         if self.nogood_info[info_id].is_deleted {
             // The nogood has already been deleted, meaning that it could be that the call to
@@ -2151,7 +2166,7 @@ impl NogoodPropagator {
                     .iter()
                     .map(|predicate_id| context.get_predicate(*predicate_id))
                     .collect::<PropositionalConjunction>(),
-                inference_code,
+                inference_code: inference_code.clone(),
             }
             .into());
         }
@@ -2241,17 +2256,21 @@ impl NogoodPropagator {
     }
 }
 
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
+    use crate::containers::StorageKey;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::proof::ConstraintTag;
+    use crate::proof::InferenceCode;
 
     #[test]
     fn ternary_nogood_propagate() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let dummy = solver.new_variable(0, 1);
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
@@ -2291,7 +2310,7 @@ mod tests {
     #[test]
     fn unsat() {
         let mut solver = TestSolver::default();
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
         let a = solver.new_variable(1, 3);
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);

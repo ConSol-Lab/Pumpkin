@@ -1,6 +1,10 @@
+use enumset::EnumSetType;
+use pumpkin_checking::AtomicConstraint;
+
 use crate::engine::Assignments;
 use crate::engine::variables::DomainId;
 use crate::predicate;
+use crate::propagation::DomainEvent;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple
 /// ([`DomainId`], [`PredicateType`], value).
@@ -14,10 +18,10 @@ pub struct Predicate {
     value: i32,
 }
 
-const LOWER_BOUND_CODE: u8 = 1;
-const UPPER_BOUND_CODE: u8 = 2;
-const EQUAL_CODE: u8 = 0;
-const NOT_EQUAL_CODE: u8 = 3;
+const LOWER_BOUND_CODE: u8 = 0;
+const UPPER_BOUND_CODE: u8 = 1;
+const NOT_EQUAL_CODE: u8 = 2;
+const EQUAL_CODE: u8 = 3;
 
 impl Predicate {
     /// Creates a new [`Predicate`] (also known as atomic constraint) which represents a domain
@@ -42,24 +46,39 @@ impl Predicate {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
+#[derive(Debug, Hash, EnumSetType)]
 #[repr(u8)]
+#[enumset(repr = "u8")]
 pub enum PredicateType {
-    LowerBound = LOWER_BOUND_CODE,
-    UpperBound = UPPER_BOUND_CODE,
-    NotEqual = NOT_EQUAL_CODE,
-    Equal = EQUAL_CODE,
+    // Should correspond with the codes defined previously; `EnumSetType` requires that literals
+    // are used and not expressions
+    LowerBound = 0,
+    UpperBound = 1,
+    NotEqual = 2,
+    Equal = 3,
 }
+
+impl From<DomainEvent> for PredicateType {
+    fn from(value: DomainEvent) -> Self {
+        match value {
+            DomainEvent::Assign => PredicateType::Equal,
+            DomainEvent::LowerBound => PredicateType::LowerBound,
+            DomainEvent::UpperBound => PredicateType::UpperBound,
+            DomainEvent::Removal => PredicateType::NotEqual,
+        }
+    }
+}
+
 impl PredicateType {
-    pub(crate) fn is_lower_bound(&self) -> bool {
+    pub fn is_lower_bound(&self) -> bool {
         matches!(self, PredicateType::LowerBound)
     }
 
-    pub(crate) fn is_upper_bound(&self) -> bool {
+    pub fn is_upper_bound(&self) -> bool {
         matches!(self, PredicateType::UpperBound)
     }
 
-    pub(crate) fn is_disequality(&self) -> bool {
+    pub fn is_disequality(&self) -> bool {
         matches!(self, PredicateType::NotEqual)
     }
 
@@ -228,6 +247,31 @@ impl std::fmt::Display for Predicate {
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self}")
+    }
+}
+
+impl AtomicConstraint for Predicate {
+    type Identifier = DomainId;
+
+    fn identifier(&self) -> Self::Identifier {
+        self.get_domain()
+    }
+
+    fn comparison(&self) -> pumpkin_checking::Comparison {
+        match self.get_predicate_type() {
+            PredicateType::LowerBound => pumpkin_checking::Comparison::GreaterEqual,
+            PredicateType::UpperBound => pumpkin_checking::Comparison::LessEqual,
+            PredicateType::NotEqual => pumpkin_checking::Comparison::NotEqual,
+            PredicateType::Equal => pumpkin_checking::Comparison::Equal,
+        }
+    }
+
+    fn value(&self) -> i32 {
+        self.get_right_hand_side()
+    }
+
+    fn negate(&self) -> Self {
+        !*self
     }
 }
 

@@ -1,6 +1,8 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use pumpkin_checking::InferenceChecker;
+
 use super::Domains;
 use super::LocalId;
 use super::Propagator;
@@ -9,6 +11,7 @@ use super::PropagatorVarId;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::PredicateId;
+use crate::basic_types::RefOrOwned;
 use crate::engine::Assignments;
 use crate::engine::State;
 use crate::engine::TrailedValues;
@@ -18,13 +21,13 @@ use crate::engine::variables::AffineView;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
-use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::InferenceLabel;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
+use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
 
 /// A propagator constructor creates a fully initialized instance of a [`Propagator`].
 ///
@@ -36,8 +39,57 @@ pub trait PropagatorConstructor {
     /// The propagator that is produced by this constructor.
     type PropagatorImpl: Propagator + Clone;
 
+    /// Add inference checkers to the solver if applicable.
+    ///
+    /// If the `check-propagations` feature is turned on, then the inference checker will be used
+    /// to verify the propagations done by this propagator are correct.
+    ///
+    /// See [`InferenceChecker`] for more information.
+    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
+
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
+}
+
+/// Interface used to add [`InferenceChecker`]s to the [`State`].
+#[derive(Debug)]
+pub struct InferenceCheckers<'state> {
+    state: &'state mut State,
+    reification_literal: Option<Literal>,
+}
+
+impl<'state> InferenceCheckers<'state> {
+    #[cfg(feature = "check-propagations")]
+    pub(crate) fn new(state: &'state mut State) -> Self {
+        InferenceCheckers {
+            state,
+            reification_literal: None,
+        }
+    }
+}
+
+impl InferenceCheckers<'_> {
+    /// Forwards to [`State::add_inference_checker`].
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        if let Some(reification_literal) = self.reification_literal {
+            let reification_checker = ReifiedChecker {
+                inner: checker.into(),
+                reification_literal,
+            };
+            self.state
+                .add_inference_checker(inference_code, Box::new(reification_checker));
+        } else {
+            self.state.add_inference_checker(inference_code, checker);
+        }
+    }
+
+    pub fn with_reification_literal(&mut self, literal: Literal) {
+        self.reification_literal = Some(literal)
+    }
 }
 
 /// [`PropagatorConstructorContext`] is used when [`Propagator`]s are initialised after creation.
@@ -95,6 +147,8 @@ impl PropagatorConstructorContext<'_> {
     ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
+    ///
+    /// Duplicate registrations are ignored.
     pub fn register(
         &mut self,
         var: impl IntegerVariable,
@@ -157,17 +211,6 @@ impl PropagatorConstructorContext<'_> {
         var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 
-    /// Create a new [`InferenceCode`]. These codes are required to identify specific propagations
-    /// in the solver and the proof.
-    pub(crate) fn create_inference_code(
-        &mut self,
-        constraint_tag: ConstraintTag,
-        inference_label: impl InferenceLabel,
-    ) -> InferenceCode {
-        self.state
-            .create_inference_code(constraint_tag, inference_label)
-    }
-
     /// Get a new [`LocalId`] which is guaranteed to be unused.
     pub(crate) fn get_next_local_id(&self) -> LocalId {
         *self.next_local_id.deref()
@@ -176,19 +219,25 @@ impl PropagatorConstructorContext<'_> {
     /// Reborrow the current context to a new value with a shorter lifetime. Should be used when
     /// passing `Self` to another function that takes ownership, but the value is still needed
     /// afterwards.
-    pub(crate) fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
+    pub fn reborrow(&mut self) -> PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             propagator_id: self.propagator_id,
-            next_local_id: match &mut self.next_local_id {
-                RefOrOwned::Ref(next_local_id) => RefOrOwned::Ref(next_local_id),
-                RefOrOwned::Owned(next_local_id) => RefOrOwned::Ref(next_local_id),
-            },
-            did_register: match &mut self.did_register {
-                RefOrOwned::Ref(did_register) => RefOrOwned::Ref(did_register),
-                RefOrOwned::Owned(did_register) => RefOrOwned::Ref(did_register),
-            },
+            next_local_id: self.next_local_id.reborrow(),
+            did_register: self.did_register.reborrow(),
             state: self.state,
         }
+    }
+
+    /// Add an inference checker for inferences produced by the propagator.
+    ///
+    /// If the `check-propagations` feature is not enabled, adding an [`InferenceChecker`] will not
+    /// do anything.
+    pub fn add_inference_checker(
+        &mut self,
+        inference_code: InferenceCode,
+        checker: Box<dyn InferenceChecker<Predicate>>,
+    ) {
+        self.state.add_inference_checker(inference_code, checker);
     }
 
     /// Set the next local id to be at least one more than the largest encountered local id.
@@ -201,44 +250,22 @@ impl PropagatorConstructorContext<'_> {
 
 impl Drop for PropagatorConstructorContext<'_> {
     fn drop(&mut self) {
-        if let RefOrOwned::Owned(did_register) = self.did_register
-            && !did_register
-        {
+        if std::thread::panicking() {
+            // If we are already unwinding due to a panic, we do not want to trigger another one.
+            return;
+        }
+
+        let did_register = match self.did_register {
+            // If we are in a reborrowed context, we do not want to enforce registration.
+            RefOrOwned::Ref(_) => return,
+
+            RefOrOwned::Owned(did_register) => did_register,
+        };
+
+        if !did_register {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
-        }
-    }
-}
-
-/// Either owns a value or has a mutable reference to a value.
-///
-/// Used to store data in a reborrowed context that needs to be 'shared' with the original context
-/// that was reborrowed from. For example, when dropping a reborrowed context, we want
-/// [`PropagatorConstructorContext::get_next_local_id`] in the original context to 'know' about the
-/// registered local ids in the reborrowed context.
-#[derive(Debug)]
-enum RefOrOwned<'a, T> {
-    Ref(&'a mut T),
-    Owned(T),
-}
-
-impl<T> Deref for RefOrOwned<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            RefOrOwned::Ref(reference) => reference,
-            RefOrOwned::Owned(value) => value,
-        }
-    }
-}
-
-impl<T> DerefMut for RefOrOwned<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            RefOrOwned::Ref(reference) => reference,
-            RefOrOwned::Owned(value) => value,
         }
     }
 }

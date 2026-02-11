@@ -81,6 +81,16 @@ macro_rules! pumpkin_assert_advanced {
 
 #[macro_export]
 #[doc(hidden)]
+macro_rules! pumpkin_assert_eq_advanced {
+    ($($arg:tt)*) => {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_ADVANCED {
+            assert_eq!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_extreme {
     ($($arg:tt)*) => {
         if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_EXTREME {

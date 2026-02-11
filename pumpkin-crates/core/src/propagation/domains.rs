@@ -4,6 +4,7 @@ use crate::engine::TrailedValues;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::ExplanationContext;
+use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 
@@ -124,6 +125,9 @@ pub trait ReadDomains {
     /// a [`Predicate`] without a reason).
     fn is_decision_predicate(&self, predicate: Predicate) -> bool;
 
+    /// Returns whether the provided [`Predicate`] is an initial bound of its domain.
+    fn is_initial_bound(&self, predicate: Predicate) -> bool;
+
     /// If the provided [`Predicate`] is true, then this method returns the checkpoint at which it
     /// first become true; otherwise, it returns [`None`].
     fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize>;
@@ -136,6 +140,21 @@ pub trait ReadDomains {
 
     /// Assigns the provided [`TrailedInteger`] to the provided `value`.
     fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64);
+
+    /// Returns the current checkpoint.
+    fn get_checkpoint(&self) -> usize;
+
+    /// Returns the lowest value in the domain of `var` at the time of its creation.
+    fn initial_lower_bound(&self, var: DomainId) -> i32;
+
+    /// Returns the highest value in the domain of `var` at the time of its creation.
+    fn initial_upper_bound(&self, var: DomainId) -> i32;
+
+    /// Returns all of the holes present at the time of thecreation of `var`.
+    fn initial_holes(&self, var: DomainId) -> Vec<i32>;
+
+    /// Returns the number of currently defined domains.
+    fn number_of_domains(&self) -> u32;
 }
 
 impl<T: HasAssignments> ReadDomains for T {
@@ -207,6 +226,10 @@ impl<T: HasAssignments> ReadDomains for T {
         self.assignments().is_decision_predicate(&predicate)
     }
 
+    fn is_initial_bound(&self, predicate: Predicate) -> bool {
+        self.assignments().is_initial_bound(predicate)
+    }
+
     fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments().get_checkpoint_for_predicate(&predicate)
     }
@@ -221,5 +244,25 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn write_trailed_integer(&mut self, trailed_integer: TrailedInteger, value: i64) {
         self.trailed_values_mut().assign(trailed_integer, value);
+    }
+
+    fn get_checkpoint(&self) -> usize {
+        self.assignments().get_checkpoint()
+    }
+
+    fn initial_lower_bound(&self, var: DomainId) -> i32 {
+        self.assignments().get_initial_lower_bound(var)
+    }
+
+    fn initial_upper_bound(&self, var: DomainId) -> i32 {
+        self.assignments().get_initial_upper_bound(var)
+    }
+
+    fn initial_holes(&self, var: DomainId) -> Vec<i32> {
+        self.assignments().get_initial_holes(var)
+    }
+
+    fn number_of_domains(&self) -> u32 {
+        self.assignments().num_domains()
     }
 }

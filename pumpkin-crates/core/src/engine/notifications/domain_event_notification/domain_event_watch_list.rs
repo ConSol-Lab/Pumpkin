@@ -107,6 +107,11 @@ impl<'a> Watchers<'a> {
             .watch_all(domain, events, self.propagator_var);
     }
 
+    pub(crate) fn unwatch_all(&mut self, domain: DomainId) {
+        self.notification_engine
+            .unwatch_all(domain, self.propagator_var);
+    }
+
     pub(crate) fn watch_all_backtrack(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {
         self.notification_engine
             .watch_all_backtrack(domain, events, self.propagator_var);

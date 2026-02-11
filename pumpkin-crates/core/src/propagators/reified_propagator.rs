@@ -1,3 +1,8 @@
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::BoxedChecker;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
@@ -5,6 +10,7 @@ use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::InferenceCheckers;
 use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
@@ -17,11 +23,11 @@ use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
 
-/// A [`PropagatorConstructor`] for the [`ReifiedPropagator`].
+/// A [`PropagatorConstructor`] for the reified propagator.
 #[derive(Clone, Debug)]
-pub(crate) struct ReifiedPropagatorArgs<WrappedArgs> {
-    pub(crate) propagator: WrappedArgs,
-    pub(crate) reification_literal: Literal,
+pub struct ReifiedPropagatorArgs<WrappedArgs> {
+    pub propagator: WrappedArgs,
+    pub reification_literal: Literal,
 }
 
 impl<WrappedArgs, WrappedPropagator> PropagatorConstructor for ReifiedPropagatorArgs<WrappedArgs>
@@ -56,6 +62,12 @@ where
             reason_buffer: vec![],
         }
     }
+
+    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+        checkers.with_reification_literal(self.reification_literal);
+
+        self.propagator.add_inference_checkers(checkers);
+    }
 }
 
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
@@ -66,7 +78,7 @@ where
 /// be used to propagate `r` to false. If that method is not implemented, `r` will never be
 /// propagated to false.
 #[derive(Clone, Debug)]
-pub(crate) struct ReifiedPropagator<WrappedPropagator> {
+pub struct ReifiedPropagator<WrappedPropagator> {
     propagator: WrappedPropagator,
     reification_literal: Literal,
     /// The formatted name of the propagator.
@@ -82,20 +94,12 @@ pub(crate) struct ReifiedPropagator<WrappedPropagator> {
 impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
-        context: NotificationContext,
+        mut context: NotificationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         if local_id < self.reification_literal_id {
-            let decision = self.propagator.notify(
-                NotificationContext::new(
-                    context.trailed_values,
-                    context.assignments,
-                    context.predicate_id_assignments,
-                ),
-                local_id,
-                event,
-            );
+            let decision = self.propagator.notify(context.reborrow(), local_id, event);
             self.filter_enqueue_decision(context, decision)
         } else {
             pumpkin_assert_simple!(local_id == self.reification_literal_id);
@@ -115,7 +119,7 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         self.propagator.priority()
     }
 
-    fn synchronise(&mut self, context: Domains) {
+    fn synchronise(&mut self, context: NotificationContext<'_>) {
         self.propagator.synchronise(context);
     }
 
@@ -183,7 +187,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
             context.post(
                 self.reification_literal.get_false_predicate(),
                 conflict.conjunction,
-                conflict.inference_code,
+                &conflict.inference_code,
             )?;
         }
 
@@ -221,6 +225,38 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ReifiedChecker<Atomic: AtomicConstraint, Var> {
+    pub inner: BoxedChecker<Atomic>,
+    pub reification_literal: Var,
+}
+
+impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceChecker<Atomic>
+    for ReifiedChecker<Atomic, Var>
+{
+    fn check(
+        &self,
+        state: pumpkin_checking::VariableState<Atomic>,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> bool {
+        if self.reification_literal.induced_domain_contains(&state, 0) {
+            return false;
+        }
+
+        if let Some(consequent) = consequent
+            && self
+                .reification_literal
+                .does_atomic_constrain_self(consequent)
+        {
+            self.inner.check(state, premises, None)
+        } else {
+            self.inner.check(state, premises, consequent)
+        }
+    }
+}
+
+#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,6 +266,7 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
     use crate::variables::DomainId;
 
@@ -245,7 +282,10 @@ mod tests {
         let t1 = triggered_conflict.clone();
         let t2 = triggered_conflict.clone();
 
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
+        let i1 = inference_code.clone();
+        let i2 = inference_code.clone();
 
         let _ = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -253,14 +293,14 @@ mod tests {
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: t1.clone(),
-                            inference_code,
+                            inference_code: i1.clone(),
                         }
                         .into())
                     },
                     move |_: Domains| {
                         Some(PropagatorConflict {
                             conjunction: t2.clone(),
-                            inference_code,
+                            inference_code: i2.clone(),
                         })
                     },
                 ),
@@ -288,7 +328,7 @@ mod tests {
                         ctx.post(
                             predicate![var >= 3],
                             conjunction!(),
-                            InferenceCode::create_from_index(0),
+                            &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
                         )?;
                         Ok(())
                     },
@@ -319,7 +359,8 @@ mod tests {
         let _ = solver.set_literal(reification_literal, true);
 
         let var = solver.new_variable(1, 1);
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
 
         let inconsistency = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -327,7 +368,7 @@ mod tests {
                     move |_: PropagationContext| {
                         Err(PropagatorConflict {
                             conjunction: conjunction!([var >= 1]),
-                            inference_code,
+                            inference_code: inference_code.clone(),
                         }
                         .into())
                     },
@@ -359,7 +400,8 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
-        let inference_code = solver.new_inference_code();
+        let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
+        solver.accept_inferences_by(inference_code.clone());
 
         let propagator = solver
             .new_propagator(ReifiedPropagatorArgs {
@@ -369,7 +411,7 @@ mod tests {
                         if context.is_fixed(&var) {
                             Some(PropagatorConflict {
                                 conjunction: conjunction!([var == 5]),
-                                inference_code,
+                                inference_code: inference_code.clone(),
                             })
                         } else {
                             None

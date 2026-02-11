@@ -1,10 +1,9 @@
-use pumpkin_solver::results::ProblemSolution;
+use pumpkin_solver::core::results::ProblemSolution;
 use pyo3::prelude::*;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
 use crate::variables::Predicate;
-use crate::variables::VariableMap;
 
 #[pyclass]
 #[allow(clippy::large_enum_variant)]
@@ -25,24 +24,27 @@ pub enum SatisfactionUnderAssumptionsResult {
 
 #[pyclass]
 #[derive(Clone)]
-pub struct Solution {
-    pub solver_solution: pumpkin_solver::results::Solution,
-    pub variable_map: VariableMap,
+pub struct Solution(pumpkin_solver::core::results::Solution);
+
+impl From<pumpkin_solver::core::results::Solution> for Solution {
+    fn from(value: pumpkin_solver::core::results::Solution) -> Self {
+        Solution(value)
+    }
+}
+
+impl From<pumpkin_solver::core::results::SolutionReference<'_>> for Solution {
+    fn from(value: pumpkin_solver::core::results::SolutionReference<'_>) -> Self {
+        Solution(value.into())
+    }
 }
 
 #[pymethods]
 impl Solution {
     fn int_value(&self, variable: IntExpression) -> i32 {
-        self.solver_solution
-            .get_integer_value(variable.to_affine_view(&self.variable_map))
+        self.0.get_integer_value(variable.0)
     }
 
     fn bool_value(&self, variable: BoolExpression) -> bool {
-        self.solver_solution
-            .get_literal_value(variable.to_literal(&self.variable_map))
+        self.0.get_literal_value(variable.0)
     }
 }
-
-#[pyclass]
-#[derive(Clone)]
-pub struct CoreExtractor {}

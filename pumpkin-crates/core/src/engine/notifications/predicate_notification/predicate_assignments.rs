@@ -80,9 +80,9 @@ impl PredicateIdAssignments {
     /// already stored; if it is not, then it will also store the [`Predicate`] for notification.
     pub(crate) fn store_predicate(&mut self, predicate_id: PredicateId, value: PredicateValue) {
         // First we make space for it if we have not seen the predicate yet
-        while predicate_id.index() >= self.predicate_values.len() {
-            let _ = self.predicate_values.push(PredicateValue::Unknown);
-        }
+        self.predicate_values
+            .accomodate(predicate_id, PredicateValue::Unknown);
+
         pumpkin_assert_extreme!(
             self.predicate_values[predicate_id] == PredicateValue::Unknown
                 || self.predicate_values[predicate_id] == value,
@@ -194,7 +194,8 @@ impl PredicateIdAssignments {
 
     /// Returns whether the status of the [`Predicate`] is unknown.
     pub(crate) fn is_unknown(&self, predicate_id: PredicateId) -> bool {
-        self.predicate_values[predicate_id].is_unknown()
+        predicate_id.index() >= self.predicate_values.len()
+            || self.predicate_values[predicate_id].is_unknown()
     }
 
     pub(crate) fn debug_empty_clone(&self) -> Self {

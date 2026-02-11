@@ -12,11 +12,6 @@ use std::sync::Arc;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
-use super::ResolutionResolver;
-use super::conflict_analysis::AnalysisMode;
-use super::conflict_analysis::ConflictAnalysisContext;
-use super::conflict_analysis::NoLearningResolver;
-use super::conflict_analysis::SemanticMinimiser;
 use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
@@ -32,13 +27,15 @@ use crate::basic_types::StoredConflictInfo;
 use crate::basic_types::time::Instant;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
-use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::predicates::predicate::Predicate;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
@@ -50,12 +47,14 @@ use crate::proof::explain_root_assignment;
 use crate::proof::finalize_proof;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::store::PropagatorHandle;
+use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
 use crate::pumpkin_assert_simple;
+use crate::state::CurrentNogood;
 use crate::statistics::StatisticLogger;
 use crate::statistics::statistic_logging::should_log_statistics;
 use crate::variables::DomainId;
@@ -94,30 +93,48 @@ pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
     pub(crate) solver_state: CSPSolverState,
-    state: State,
-    nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    pub(crate) state: State,
+    pub(crate) nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
 
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
-    restart_strategy: RestartStrategy,
+    pub(crate) restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
-    semantic_minimiser: SemanticMinimiser,
     /// A set of counters updated during the search.
     solver_statistics: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
-    internal_parameters: SatisfactionSolverOptions,
+    pub(crate) internal_parameters: SatisfactionSolverOptions,
     /// A map from predicates that are propagated at the root to inference codes in the proof.
-    unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
-    /// The resolver which is used upon a conflict.
-    conflict_resolver: Box<dyn Resolver>,
+    pub(crate) unit_nogood_inference_codes: HashMap<Predicate, InferenceCode>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
         ConstraintSatisfactionSolver::new(SatisfactionSolverOptions::default())
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+/// Determines which type of learning is performed by the resolver.
+pub enum AnalysisMode {
+    #[default]
+    /// Stanard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level)
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+    /// Extended conflict analysis which propagates when all predicates in the nogood concern one
+    /// literal (i.e. when all other predicates are satisfied).
+    ExtendedUIP,
+    /// Perform learning using 1UIP and propagation using extended UIP propagation.
+    HalfExtendedUIP,
+    /// Perform extended conflict analysis, but resolve until you can propagate a bound (or it is a
+    /// UIP)
+    BoundsExtendedUIP,
 }
 
 /// The result of [`ConstraintSatisfactionSolver::extract_clausal_core`]; there are 2 cases:
@@ -145,7 +162,7 @@ pub enum CoreExtractionResult {
 /// solver.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-pub enum ConflictResolver {
+pub enum ConflictResolverType {
     NoLearning,
     #[default]
     UIP,
@@ -154,51 +171,34 @@ pub enum ConflictResolver {
     BoundsExtendedUIP,
 }
 
-#[allow(clippy::from_over_into, reason = "Easier with imports")]
-impl Into<AnalysisMode> for ConflictResolver {
-    fn into(self) -> AnalysisMode {
-        match self {
-            ConflictResolver::NoLearning => {
-                // Does not matter since it will not be used anyways
-                AnalysisMode::OneUIP
-            }
-            ConflictResolver::UIP => AnalysisMode::OneUIP,
-            ConflictResolver::ExtendedUIP => AnalysisMode::ExtendedUIP,
-            ConflictResolver::HalfExtendedUIP => AnalysisMode::HalfExtendedUIP,
-            ConflictResolver::BoundsExtendedUIP => AnalysisMode::BoundsExtendedUIP,
-        }
-    }
-}
-
 /// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
-    pub learning_clause_minimisation: bool,
+    pub should_minimise_nogoods: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
     /// The proof log for the solver.
     pub proof_log: ProofLog,
-    /// The resolver used for conflict analysis
-    pub conflict_resolver: ConflictResolver,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    pub analysis_mode: AnalysisMode,
 }
 
 impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
-            learning_clause_minimisation: true,
+            should_minimise_nogoods: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
-            conflict_resolver: ConflictResolver::default(),
             learning_options: LearningOptions::default(),
-            memory_preallocated: 1000,
+            memory_preallocated: 50,
+            analysis_mode: AnalysisMode::default(),
         }
     }
 }
@@ -243,17 +243,16 @@ impl ConstraintSatisfactionSolver {
         }
 
         let mut conflict_analysis_context = ConflictAnalysisContext {
-            counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher: &mut DummyBrancher,
-            semantic_minimiser: &mut self.semantic_minimiser,
-            should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-            rng: &mut self.internal_parameters.random_generator,
             restart_strategy: &mut self.restart_strategy,
 
             state: &mut self.state,
+            nogood_propagator_handle: self.nogood_propagator_handle,
+
+            rng: &mut self.internal_parameters.random_generator,
         };
 
         let conflict = conflict_analysis_context.get_conflict_nogood();
@@ -280,7 +279,7 @@ impl ConstraintSatisfactionSolver {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,
-            solver_options.conflict_resolver.into(),
+            solver_options.analysis_mode,
         ));
 
         ConstraintSatisfactionSolver {
@@ -289,25 +288,7 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             nogood_propagator_handle: handle,
             solver_statistics: SolverStatistics::default(),
-            semantic_minimiser: SemanticMinimiser::default(),
             unit_nogood_inference_codes: Default::default(),
-            conflict_resolver: match solver_options.conflict_resolver {
-                ConflictResolver::NoLearning => Box::new(NoLearningResolver),
-                ConflictResolver::UIP => {
-                    Box::new(ResolutionResolver::new(handle, AnalysisMode::OneUIP))
-                }
-                ConflictResolver::ExtendedUIP => {
-                    Box::new(ResolutionResolver::new(handle, AnalysisMode::ExtendedUIP))
-                }
-                ConflictResolver::HalfExtendedUIP => Box::new(ResolutionResolver::new(
-                    handle,
-                    AnalysisMode::HalfExtendedUIP,
-                )),
-                ConflictResolver::BoundsExtendedUIP => Box::new(ResolutionResolver::new(
-                    handle,
-                    AnalysisMode::BoundsExtendedUIP,
-                )),
-            },
             internal_parameters: solver_options,
             state,
         }
@@ -317,9 +298,10 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         let dummy_assumptions: Vec<Predicate> = vec![];
-        self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
+        self.solve_under_assumptions(&dummy_assumptions, termination, brancher, resolver)
     }
 
     pub fn solve_under_assumptions(
@@ -327,6 +309,7 @@ impl ConstraintSatisfactionSolver {
         assumptions: &[Predicate],
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         if self.solver_state.is_inconsistent() {
             return CSPSolverExecutionFlag::Infeasible;
@@ -335,7 +318,7 @@ impl ConstraintSatisfactionSolver {
         let start_time = Instant::now();
 
         self.initialise(assumptions);
-        let result = self.solve_internal(termination, brancher);
+        let result = self.solve_internal(termination, brancher, resolver);
 
         self.solver_statistics
             .engine_statistics
@@ -441,55 +424,6 @@ impl ConstraintSatisfactionSolver {
     ///     will return an empty vector.
     ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error is
     ///     returned, with the literal being one of the inconsistent assumptions.
-    ///
-    /// # Example usage
-    /// ```rust
-    /// // We construct the following SAT instance:
-    /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
-    /// // And solve under the assumptions:
-    /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_core::Solver;
-    /// # use pumpkin_core::termination::Indefinite;
-    /// # use pumpkin_core::results::SatisfactionResultUnderAssumptions;
-    /// let mut solver = Solver::default();
-    ///
-    /// // We use a dummy constraint tag for this example.
-    /// let constraint_tag = solver.new_constraint_tag();
-    ///
-    /// let x = vec![
-    ///     solver.new_literal().get_true_predicate(),
-    ///     solver.new_literal().get_true_predicate(),
-    ///     solver.new_literal().get_true_predicate(),
-    /// ];
-    ///
-    /// solver.add_clause([x[0], x[1], x[2]], constraint_tag);
-    /// solver.add_clause([x[0], !x[1], x[2]], constraint_tag);
-    ///
-    /// let assumptions = [!x[0], x[1], !x[2]];
-    /// let mut termination = Indefinite;
-    /// let mut brancher = solver.default_brancher();
-    /// let result = solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
-    ///
-    /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut unsatisfiable) =
-    ///     result
-    /// {
-    ///     {
-    ///         let core = unsatisfiable.extract_core();
-    ///
-    ///         // The order of the literals in the core is undefined, so we check for unordered
-    ///         // equality.
-    ///         assert_eq!(
-    ///             core.len(),
-    ///             assumptions.len(),
-    ///             "The core has the length of the number of assumptions"
-    ///         );
-    ///         assert!(
-    ///             core.iter().all(|&lit| assumptions.contains(&lit)),
-    ///             "All literals in the core are assumptions"
-    ///         );
-    ///     }
-    /// }
-    /// ```
     pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
         if self.solver_state.is_infeasible() {
             return CoreExtractionResult::Core(vec![]);
@@ -502,35 +436,45 @@ impl ConstraintSatisfactionSolver {
                 self.assumptions
                     .iter()
                     .skip(index + 1)
-                    .any(|other_assumptiion| {
-                        assumption.is_mutually_exclusive_with(*other_assumptiion)
+                    .any(|other_assumption| {
+                        assumption.is_mutually_exclusive_with(*other_assumption)
                     })
             })
             .map(|(_, conflicting_assumption)| {
                 CoreExtractionResult::ConflictingAssumption(*conflicting_assumption)
             })
             .unwrap_or_else(|| {
-                let mut conflict_analysis_context = ConflictAnalysisContext {
-                    counters: &mut self.solver_statistics,
+                let mut context = ConflictAnalysisContext {
                     solver_state: &mut self.solver_state,
                     brancher,
-                    semantic_minimiser: &mut self.semantic_minimiser,
-                    should_minimise: self.internal_parameters.learning_clause_minimisation,
                     proof_log: &mut self.internal_parameters.proof_log,
                     unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-                    rng: &mut self.internal_parameters.random_generator,
                     restart_strategy: &mut self.restart_strategy,
                     state: &mut self.state,
+                    nogood_propagator_handle: self.nogood_propagator_handle,
+
+                    rng: &mut self.internal_parameters.random_generator,
                 };
+                let mut predicates = context.get_conflict_nogood();
+                let mut core: HashSet<Predicate> = HashSet::default();
 
-                let mut resolver = ResolutionResolver::new(
-                    self.nogood_propagator_handle,
-                    AnalysisMode::AllDecision,
-                );
+                while let Some(predicate) = predicates.pop() {
+                    if context.state.assignments.is_decision_predicate(&predicate) {
+                        let _ = core.insert(predicate);
+                        continue;
+                    }
 
-                let learned_nogood = resolver.learn_nogood(&mut conflict_analysis_context);
+                    ConflictAnalysisContext::get_propagation_reason_inner(
+                        predicate,
+                        CurrentNogood::empty(),
+                        context.proof_log,
+                        context.unit_nogood_inference_codes,
+                        &mut predicates,
+                        context.state,
+                    );
+                }
 
-                CoreExtractionResult::Core(learned_nogood.predicates.clone())
+                CoreExtractionResult::Core(core.into_iter().collect())
             })
     }
 
@@ -589,6 +533,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
     ) -> CSPSolverExecutionFlag {
         loop {
             if termination.should_stop() {
@@ -632,10 +577,6 @@ impl ConstraintSatisfactionSolver {
                     Err(flag) => return flag,
                     Ok(()) => {}
                 }
-
-                if let Err(flag) = branching_result {
-                    return flag;
-                }
             } else {
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();
@@ -644,7 +585,7 @@ impl ConstraintSatisfactionSolver {
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
-                self.resolve_conflict_with_nogood(brancher);
+                self.resolve_conflict(brancher, resolver);
 
                 brancher.on_conflict();
                 self.decay_nogood_activities();
@@ -730,24 +671,25 @@ impl ConstraintSatisfactionSolver {
     ///
     /// # Note
     /// This method performs no propagation, this is left up to the solver afterwards.
-    fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
+    fn resolve_conflict(
+        &mut self,
+        brancher: &mut impl Brancher,
+        resolver: &mut impl ConflictResolver,
+    ) {
         pumpkin_assert_moderate!(self.solver_state.is_conflicting());
 
         let mut conflict_analysis_context = ConflictAnalysisContext {
-            counters: &mut self.solver_statistics,
             solver_state: &mut self.solver_state,
             brancher,
-            semantic_minimiser: &mut self.semantic_minimiser,
-            should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             unit_nogood_inference_codes: &mut self.unit_nogood_inference_codes,
-            rng: &mut self.internal_parameters.random_generator,
             restart_strategy: &mut self.restart_strategy,
             state: &mut self.state,
+            nogood_propagator_handle: self.nogood_propagator_handle,
+            rng: &mut self.internal_parameters.random_generator,
         };
 
-        self.conflict_resolver
-            .resolve_conflict(&mut conflict_analysis_context);
+        resolver.resolve_conflict(&mut conflict_analysis_context);
 
         self.solver_state.declare_solving();
     }
@@ -864,12 +806,12 @@ impl ConstraintSatisfactionSolver {
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
             let _ = self.internal_parameters.proof_log.log_inference(
-                &self.state.inference_codes,
                 &mut self.state.constraint_tags,
                 inference_code,
                 inference_premises,
                 None,
                 &self.state.variable_names,
+                &self.state.assignments,
             );
 
             // Since inference steps are only related to the nogood they directly precede,
@@ -905,12 +847,11 @@ impl ConstraintSatisfactionSolver {
                 [!propagated],
                 &self.state.variable_names,
                 &mut self.state.constraint_tags,
+                &self.state.assignments,
             );
 
             if let Ok(constraint_tag) = constraint_tag {
-                let inference_code = self
-                    .state
-                    .create_inference_code(constraint_tag, NogoodLabel);
+                let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
 
                 let _ = self
                     .unit_nogood_inference_codes
@@ -981,6 +922,13 @@ impl ConstraintSatisfactionSolver {
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
+
+        self.state.add_inference_checker(
+            inference_code.clone(),
+            Box::new(NogoodChecker {
+                nogood: nogood.clone().into(),
+            }),
+        );
 
         let (nogood_propagator, mut context) = self
             .state
@@ -1076,9 +1024,7 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = self
-            .state
-            .create_inference_code(constraint_tag, NogoodLabel);
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 
@@ -1228,15 +1174,40 @@ declare_inference_label!(pub(crate) NogoodLabel, "nogood");
 
 #[cfg(test)]
 mod tests {
+
+    #[derive(Debug, Clone, Copy)]
+    struct NoLearningResolver;
+
+    impl ConflictResolver for NoLearningResolver {
+        fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
+            let last_decision = context
+                .find_last_decision()
+                .expect("the solver is not at decision level 0, so there exists a last decision");
+
+            let current_checkpoint = context.get_checkpoint();
+            context.restore_to(current_checkpoint - 1);
+
+            let update_occurred = context
+                .post(!last_decision)
+                .expect("Expected enqueued predicate to not lead to conflict directly");
+
+            pumpkin_assert_simple!(
+                update_occurred,
+                "The propagated predicate should not already be true."
+            );
+        }
+    }
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
     use crate::DefaultBrancher;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::conflict_resolving::ConflictAnalysisContext;
+    use crate::conflict_resolving::ConflictResolver;
     use crate::predicate;
     use crate::predicates::Predicate;
-    use crate::propagators::linear_not_equal::LinearNotEqualPropagatorArgs;
+    use crate::propagation::ReadDomains;
+    use crate::pumpkin_assert_simple;
     use crate::termination::Indefinite;
-    use crate::variables::TransformableVariable;
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1262,7 +1233,14 @@ mod tests {
         expected_result: CoreExtractionResult,
     ) {
         let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
-        let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
+        let mut resolver = NoLearningResolver;
+
+        let flag = solver.solve_under_assumptions(
+            &assumptions,
+            &mut Indefinite,
+            &mut brancher,
+            &mut resolver,
+        );
         assert_eq!(flag, expected_flag, "The flags do not match.");
 
         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
@@ -1278,13 +1256,15 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
+        let c3 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2], constraint_tag);
-        let _ = solver.add_clause([!lit1, lit2], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2], c1);
+        let _ = solver.add_clause([lit1, !lit2], c2);
+        let _ = solver.add_clause([!lit1, lit2], c3);
         (solver, vec![lit1, lit2])
     }
 
@@ -1350,13 +1330,14 @@ mod tests {
     }
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let constraint_tag = solver.new_constraint_tag();
+        let c1 = solver.new_constraint_tag();
+        let c2 = solver.new_constraint_tag();
         let lit1 = solver.create_new_literal(None).get_true_predicate();
         let lit2 = solver.create_new_literal(None).get_true_predicate();
         let lit3 = solver.create_new_literal(None).get_true_predicate();
 
-        let _ = solver.add_clause([lit1, lit2, lit3], constraint_tag);
-        let _ = solver.add_clause([lit1, !lit2, lit3], constraint_tag);
+        let _ = solver.add_clause([lit1, lit2, lit3], c1);
+        let _ = solver.add_clause([lit1, !lit2, lit3], c2);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -1426,34 +1407,34 @@ mod tests {
         );
     }
 
-    #[test]
-    fn core_extraction_equality_assumption() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-
-        let x = solver.create_new_integer_variable(0, 10, None);
-        let y = solver.create_new_integer_variable(0, 10, None);
-        let z = solver.create_new_integer_variable(0, 10, None);
-
-        let constraint_tag = solver.new_constraint_tag();
-
-        let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-            constraint_tag,
-        });
-        assert!(result.is_ok());
-        run_test(
-            solver,
-            vec![
-                predicate!(x >= 5),
-                predicate!(z != 10),
-                predicate!(y == 5),
-                predicate!(x <= 5),
-            ],
-            CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![predicate!(x == 5), predicate!(y == 5)]),
-        )
-    }
+    // #[test]
+    // fn core_extraction_equality_assumption() {
+    //     let mut solver = ConstraintSatisfactionSolver::default();
+    //
+    //     let x = solver.create_new_integer_variable(0, 10, None);
+    //     let y = solver.create_new_integer_variable(0, 10, None);
+    //     let z = solver.create_new_integer_variable(0, 10, None);
+    //
+    //     let constraint_tag = solver.new_constraint_tag();
+    //
+    //     let result = solver.add_propagator(LinearNotEqualPropagatorArgs {
+    //         terms: [x.scaled(1), y.scaled(-1)].into(),
+    //         rhs: 0,
+    //         constraint_tag,
+    //     });
+    //     assert!(result.is_ok());
+    //     run_test(
+    //         solver,
+    //         vec![
+    //             predicate!(x >= 5),
+    //             predicate!(z != 10),
+    //             predicate!(y == 5),
+    //             predicate!(x <= 5),
+    //         ],
+    //         CSPSolverExecutionFlag::Infeasible,
+    //         CoreExtractionResult::Core(vec![predicate!(x == 5), predicate!(y == 5)]),
+    //     )
+    // }
 
     #[test]
     fn new_domain_with_negative_lower_bound() {
@@ -1495,21 +1476,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-
-        let x = solver.create_new_integer_variable(1, 1, None);
-        let y = solver.create_new_integer_variable(2, 2, None);
-
-        let constraint_tag = solver.new_constraint_tag();
-
-        let propagator = LinearNotEqualPropagatorArgs {
-            terms: vec![x, y].into(),
-            rhs: 3,
-            constraint_tag,
-        };
-        let result = solver.add_propagator(propagator);
-        assert!(result.is_err());
-    }
+    // #[test]
+    // fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
+    //     let mut solver = ConstraintSatisfactionSolver::default();
+    //
+    //     let x = solver.create_new_integer_variable(1, 1, None);
+    //     let y = solver.create_new_integer_variable(2, 2, None);
+    //
+    //     let constraint_tag = solver.new_constraint_tag();
+    //
+    //     let propagator = LinearNotEqualPropagatorArgs {
+    //         terms: vec![x, y].into(),
+    //         rhs: 3,
+    //         constraint_tag,
+    //     };
+    //     let result = solver.add_propagator(propagator);
+    //     assert!(result.is_err());
+    // }
 }

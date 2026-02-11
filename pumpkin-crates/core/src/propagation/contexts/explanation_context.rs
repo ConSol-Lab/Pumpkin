@@ -117,7 +117,7 @@ pub struct CurrentNogood<'a> {
 }
 
 impl<'a> CurrentNogood<'a> {
-    pub(crate) fn new(
+    pub fn new(
         heap: &'a KeyValueHeap<PredicateId, u32>,
         visited: &'a [Predicate],
         ids: &'a PredicateIdGenerator,

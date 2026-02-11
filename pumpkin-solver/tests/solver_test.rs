@@ -2,13 +2,13 @@
 
 use std::path::PathBuf;
 
+use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
-use pumpkin_solver::constraints;
-use pumpkin_solver::options::SolverOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::proof::ProofLog;
-use pumpkin_solver::results::SatisfactionResult;
-use pumpkin_solver::termination::Indefinite;
+use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::proof::ProofLog;
+use pumpkin_solver::core::results::SatisfactionResult;
+use pumpkin_solver::core::termination::Indefinite;
 
 #[test]
 fn proof_with_reified_literals() {
@@ -23,18 +23,24 @@ fn proof_with_reified_literals() {
     let literal = solver.new_literal_for_predicate(predicate![variable == 5], constraint_tag);
 
     solver
-        .add_constraint(constraints::clause(vec![literal], constraint_tag))
+        .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))
         .post()
         .expect("no error");
 
     let _ = solver
-        .add_constraint(constraints::not_equals([variable], 5, constraint_tag))
+        .add_constraint(pumpkin_constraints::not_equals(
+            [variable],
+            5,
+            constraint_tag,
+        ))
         .post()
         .expect_err("unsat");
 
     let mut brancher = solver.default_brancher();
-    let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    let mut resolver = ResolutionResolver::default();
+
+    let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }
 
 #[test]
@@ -50,16 +56,26 @@ fn proof_with_equality_unit_nogood_step() {
     let x1 = solver.new_named_bounded_integer(1, 2, "x1");
     let x2 = solver.new_named_bounded_integer(1, 1, "x2");
     solver
-        .add_constraint(constraints::binary_not_equals(x1, x2, constraint_tag))
+        .add_constraint(pumpkin_constraints::binary_not_equals(
+            x1,
+            x2,
+            constraint_tag,
+        ))
         .post()
         .expect("no conflict");
 
     let _ = solver
-        .add_constraint(constraints::less_than_or_equals([x1], 1, constraint_tag))
+        .add_constraint(pumpkin_constraints::less_than_or_equals(
+            [x1],
+            1,
+            constraint_tag,
+        ))
         .post()
         .expect_err("conflict");
 
     let mut brancher = solver.default_brancher();
-    let result = solver.satisfy(&mut brancher, &mut Indefinite);
-    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _)));
+    let mut resolver = ResolutionResolver::default();
+
+    let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
+    assert!(matches!(result, SatisfactionResult::Unsatisfiable(_, _, _)));
 }
