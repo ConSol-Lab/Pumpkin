@@ -21,6 +21,7 @@ use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::SolverStatistics;
 use crate::engine::conflict_analysis::AnalysisMode;
+use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -96,6 +97,8 @@ pub(crate) struct NogoodPropagator {
 
     analysis_mode: AnalysisMode,
     statistics: NogoodPropagatorStatistics,
+
+    semantic_minimiser: SemanticMinimiser,
 }
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -152,6 +155,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
             analysis_mode: self.analysis_mode,
+            semantic_minimiser: Default::default(),
         }
     }
 }
@@ -1312,7 +1316,7 @@ impl NogoodPropagator {
         let mut input_nogood = nogood.clone();
 
         // Then we pre-process the nogood such that (among others) it does not contain duplicates
-        Self::preprocess_nogood(&mut nogood, context);
+        Self::preprocess_nogood(&mut nogood, context, &mut self.semantic_minimiser);
 
         // Unit nogoods are added as root assignments rather than as nogoods.
         if nogood.len() == 1 {
@@ -1951,7 +1955,11 @@ impl NogoodPropagator {
     ///     3. Detecting predicates falsified at the root. In that case, the nogood is preprocessed
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
-    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContext) {
+    fn preprocess_nogood(
+        nogood: &mut Vec<Predicate>,
+        context: &mut PropagationContext,
+        semantic_minimiser: &mut SemanticMinimiser,
+    ) {
         pumpkin_assert_simple!(context.get_checkpoint() == 0);
         // The code below is broken down into several parts
 
@@ -1959,6 +1967,7 @@ impl NogoodPropagator {
         // assigned predicates in the final nogood. This could happen since the root bound can
         // change since the initial time the semantic minimiser recorded it, so it would not know
         // that a previously nonroot bound is now actually a root bound.
+        semantic_minimiser.minimise_internal(context.assignments(), nogood);
 
         // We assume that duplicate predicates have been removed
 

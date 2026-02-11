@@ -3,6 +3,7 @@ use std::cmp;
 use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
+use crate::engine::Assignments;
 use crate::engine::conflict_analysis::MinimisationContext;
 use crate::engine::conflict_analysis::NogoodMinimiser;
 use crate::engine::predicates::predicate::PredicateType;
@@ -40,9 +41,13 @@ pub(crate) enum Mode {
     DisableEqualityMerging,
 }
 
-impl NogoodMinimiser for SemanticMinimiser {
-    fn minimise(&mut self, context: MinimisationContext, nogood: &mut Vec<Predicate>) {
-        self.accommodate(&context);
+impl SemanticMinimiser {
+    pub(crate) fn minimise_internal(
+        &mut self,
+        assignments: &Assignments,
+        nogood: &mut Vec<Predicate>,
+    ) {
+        self.accommodate(assignments);
         self.clean_up();
         self.apply_predicates(nogood);
 
@@ -62,6 +67,12 @@ impl NogoodMinimiser for SemanticMinimiser {
             );
         }
         *nogood = self.helper.clone();
+    }
+}
+
+impl NogoodMinimiser for SemanticMinimiser {
+    fn minimise(&mut self, context: MinimisationContext, nogood: &mut Vec<Predicate>) {
+        self.minimise_internal(context.assignments(), nogood);
     }
 }
 
@@ -102,14 +113,14 @@ impl SemanticMinimiser {
         }
     }
 
-    fn accommodate(&mut self, context: &MinimisationContext) {
+    fn accommodate(&mut self, context: &Assignments) {
         assert!(self.domains.len() == self.original_domains.len());
 
-        while (self.domains.len() as u32) < context.assignments().num_domains() {
+        while (self.domains.len() as u32) < context.num_domains() {
             let domain_id = DomainId::new(self.domains.len() as u32);
-            let lower_bound = context.assignments().get_initial_lower_bound(domain_id);
-            let upper_bound = context.assignments().get_initial_upper_bound(domain_id);
-            let holes = context.assignments().get_initial_holes(domain_id);
+            let lower_bound = context.get_initial_lower_bound(domain_id);
+            let upper_bound = context.get_initial_upper_bound(domain_id);
+            let holes = context.get_initial_holes(domain_id);
             self.grow(lower_bound, upper_bound, holes);
         }
     }
