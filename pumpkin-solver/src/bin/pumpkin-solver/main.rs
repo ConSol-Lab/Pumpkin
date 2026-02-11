@@ -399,7 +399,7 @@ struct Args {
     optimisation_strategy: OptimisationStrategy,
 
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
-    #[arg(long = "memory-preallocated", default_value_t = 1000)]
+    #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
 }
 
