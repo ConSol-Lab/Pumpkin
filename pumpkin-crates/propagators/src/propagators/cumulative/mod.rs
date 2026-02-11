@@ -48,7 +48,7 @@
 //! # use pumpkin_core::results::ProblemSolution;
 //! # use pumpkin_propagators::cumulative::ArgTask;
 //! # use pumpkin_propagators::cumulative::options::CumulativePropagatorOptions;
-//! # use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
+//! # use pumpkin_propagators::cumulative::time_table::TimeTableOverIntervalPropagator;
 //! let mut solver = Solver::default();
 //!
 //! let tasks = [
@@ -72,7 +72,7 @@
 //! let resource_capacity = 2;
 //!
 //! let tag = solver.new_constraint_tag();
-//! let result = solver.add_propagator(TimeTablePerPointPropagator::new(
+//! let result = solver.add_propagator(TimeTableOverIntervalPropagator::new(
 //!     &tasks,
 //!     resource_capacity,
 //!     CumulativePropagatorOptions::default(),
