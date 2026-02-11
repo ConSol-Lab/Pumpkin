@@ -7,6 +7,15 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+# These files are excluded because they make the crate extremely large, 
+# preventing the crate from being published on crates.io.
+exclude = [
+    "tests/invalid_proofs",
+    "tests/valid_proofs",
+    "tests/valid_test_cases.rs",
+    "tests/invalid_test_cases.rs",
+]
+
 [dependencies]
 pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/" }
 pumpkin-checking = { version = "0.3.0", path = "../pumpkin-crates/checking/" }
