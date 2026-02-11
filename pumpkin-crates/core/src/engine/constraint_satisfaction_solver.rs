@@ -172,7 +172,7 @@ impl Default for SatisfactionSolverOptions {
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
-            memory_preallocated: 25,
+            memory_preallocated: 50,
         }
     }
 }
