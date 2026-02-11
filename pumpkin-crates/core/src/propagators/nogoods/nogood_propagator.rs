@@ -48,7 +48,6 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
-use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
@@ -293,7 +292,7 @@ impl Propagator for NogoodPropagator {
 
                 // TODO: should drop all elements afterwards
                 for predicate_id in self.updated_predicate_ids.drain(..) {
-                    assert!(
+                    pumpkin_assert_moderate!(
                         {
                             let predicate = context.get_predicate(predicate_id);
                             context.evaluate_predicate(predicate) == Some(true)
@@ -427,7 +426,9 @@ impl Propagator for NogoodPropagator {
                         if found_new_watch {
                             // We remove the current watcher
                             let _ = self.watch_lists[predicate_id].swap_remove(index);
-                            assert!(!self.watch_lists[predicate_id].contains(&watcher));
+                            pumpkin_assert_moderate!(
+                                !self.watch_lists[predicate_id].contains(&watcher)
+                            );
                         }
 
                         if let Some(to_remove) = falsified_zeroth {
@@ -458,52 +459,12 @@ impl Propagator for NogoodPropagator {
 
                         // We can now propagate!
 
-                        // We find all of the unasssigned predicates and get their domains
-                        //
-                        // If there is a falsified predicate then we do not propagate; also, if
-                        // the nogood can be unit propagated, then
-                        // we do not propagate
-                        let mut is_falsified = false;
-                        let mut num_unassigned = 0;
-                        let unassigned_predicate_ids = nogood_predicates
-                            .iter()
-                            .filter_map(|predicate_id| {
-                                if context.is_predicate_id_falsified(*predicate_id) {
-                                    is_falsified = true;
-                                    None
-                                } else if context.is_predicate_id_satisfied(*predicate_id) {
-                                    None
-                                } else {
-                                    num_unassigned += 1;
-                                    let predicate = context.get_predicate(*predicate_id);
-                                    Some(predicate.get_domain())
-                                }
-                            })
-                            .collect::<HashSet<_>>();
-
-                        let reason = nogood_predicates
-                            .iter()
-                            .filter_map(|predicate_id| {
-                                (context.is_predicate_id_satisfied(*predicate_id))
-                                    .then(|| context.get_predicate(*predicate_id))
-                            })
-                            .collect::<PropositionalConjunction>();
-
-                        if num_unassigned == 0 && !is_falsified {
-                            return Err(Conflict::Propagator(PropagatorConflict {
-                                conjunction: reason,
-                                inference_code,
-                            }));
-                        }
-
-                        assert!(!is_falsified,);
-                        assert_eq!(unassigned_predicate_ids.len(), 1);
-
+                        let propagated_domain =
+                            context.get_predicate(nogood_predicates[0]).get_domain();
                         NogoodPropagator::propagate_extended_nogood(
                             &mut context,
                             nogood_predicates,
-                            *unassigned_predicate_ids.iter().next().unwrap(),
-                            reason,
+                            propagated_domain,
                             inference_code,
                             &mut self.statistics,
                         )?;
@@ -630,18 +591,10 @@ impl Propagator for NogoodPropagator {
                                 && !is_falsified
                                 && unassigned_predicate_ids.len() == 1
                             {
-                                let reason = nogood_predicates
-                                    .iter()
-                                    .filter_map(|predicate_id| {
-                                        (context.is_predicate_id_satisfied(*predicate_id))
-                                            .then(|| context.get_predicate(*predicate_id))
-                                    })
-                                    .collect::<PropositionalConjunction>();
                                 NogoodPropagator::propagate_extended_nogood(
                                     &mut context,
                                     nogood_predicates,
                                     *unassigned_predicate_ids.iter().next().unwrap(),
-                                    reason,
                                     inference_code,
                                     &mut self.statistics,
                                 )?;
@@ -777,6 +730,10 @@ impl Propagator for NogoodPropagator {
 
 /// Functions for adding nogoods
 impl NogoodPropagator {
+    #[allow(
+        clippy::filter_map_bool_then,
+        reason = "Would otherwise run into issues with borrowing"
+    )]
     /// Propagates a nogood using "extended" reasoning.
     ///
     /// If the nogood only contains unassigned predicates over a single variable, then the nogood
@@ -793,10 +750,9 @@ impl NogoodPropagator {
         context: &mut PropagationContext,
         nogood: &[PredicateId],
         propagated_domain: DomainId,
-        reason: PropositionalConjunction,
         inference_code: InferenceCode,
         statistics: &mut NogoodPropagatorStatistics,
-    ) -> Result<(), EmptyDomainConflict> {
+    ) -> Result<(), Conflict> {
         statistics.num_extended_propagation_calls += 1;
         info!(
             "Propagating {propagated_domain:?} in extended nogood with bounds [{}, {}]",
@@ -814,15 +770,34 @@ impl NogoodPropagator {
         let mut upper_bound = None;
 
         let mut num_describing_domain = 0;
-
         let mut last_describing_predicate = Predicate::trivially_false();
-
         let mut propagated = false;
+        let mut is_falsified = false;
 
         for predicate in nogood.iter().filter_map(|&predicate_id| {
             // First, we filter out all of the predicates which are currently satisfied and
             // which are not concerning the propagated domain id
             let predicate = context.get_predicate(predicate_id);
+
+            is_falsified |= context.is_predicate_id_falsified(predicate_id);
+
+            pumpkin_assert_moderate!(
+                predicate.get_domain() == propagated_domain
+                    || context.is_predicate_id_satisfied(predicate_id),
+                "Expected {predicate} to be unassigned with {propagated_domain:?}; nogood: {:?}",
+                nogood
+                    .iter()
+                    .map(|predicate_id| {
+                        let predicate = context.get_predicate(*predicate_id);
+
+                        (
+                            predicate,
+                            context.lower_bound(&predicate.get_domain()),
+                            context.upper_bound(&predicate.get_domain()),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            );
 
             (!context.is_predicate_id_satisfied(predicate_id)
                 && predicate.get_domain() == propagated_domain)
@@ -847,7 +822,24 @@ impl NogoodPropagator {
             }
         }
 
-        pumpkin_assert_simple!(num_describing_domain > 0);
+        if is_falsified {
+            return Ok(());
+        }
+
+        if num_describing_domain == 0 {
+            let reason = nogood
+                .iter()
+                .filter_map(|predicate_id| {
+                    (context.is_predicate_id_satisfied(*predicate_id))
+                        .then(|| context.get_predicate(*predicate_id))
+                })
+                .collect::<PropositionalConjunction>();
+
+            return Err(Conflict::Propagator(PropagatorConflict {
+                conjunction: reason,
+                inference_code,
+            }));
+        }
 
         statistics
             .average_num_predicates_describing_domain_when_propagating_extended
@@ -871,7 +863,17 @@ impl NogoodPropagator {
                     })
                     .collect::<Vec<_>>()
             );
-            return context.post(!last_describing_predicate, reason.clone(), inference_code);
+            let reason = nogood
+                .iter()
+                .filter_map(|predicate_id| {
+                    (context.is_predicate_id_satisfied(*predicate_id))
+                        .then(|| context.get_predicate(*predicate_id))
+                })
+                .collect::<PropositionalConjunction>();
+
+            return context
+                .post(!last_describing_predicate, reason.clone(), inference_code)
+                .map_err(|e| e.into());
         }
 
         info!(
@@ -950,8 +952,35 @@ impl NogoodPropagator {
             // inequality predicates (note that it can never be the case that there is an inequality
             // predicate with a value lower than the lower-bound predicate due to semantic
             // minimisation).
+
             if ub < context.upper_bound(&propagated_domain) {
                 propagated = true;
+
+                // The reason consists of:
+                // 1) All predicates which reason over a different domain than the propagated
+                //    predicate (which are all guaranteed to be satisfied)
+                // 2) All predicates which reason over the same domain as the propagated predicate,
+                //    but are *not* disequality predicates with a right-hand side larger than the
+                //    max exception
+                //
+                //    For example, if we have the nogood [x >= 5] /\ [x != 10] /\ [x != 7] /\ [x !=
+                // 15],    where the first two predicates are unassigned but the
+                // last two are    satisfied; then the fact that [x != 7] is true,
+                // does not matter for    the propagation of [x <= 10] to hold, but
+                // [x != 15] is required in the    explanation
+                let reason = nogood
+                    .iter()
+                    .filter_map(|predicate_id| {
+                        let predicate = context.get_predicate(*predicate_id);
+
+                        (context.is_predicate_id_satisfied(*predicate_id)
+                            && (predicate.get_domain() != propagated_domain
+                                || (predicate.is_not_equal_predicate()
+                                    && predicate.get_right_hand_side() > ub)))
+                            .then_some(predicate)
+                    })
+                    .collect::<PropositionalConjunction>();
+
                 statistics.num_extended_upper_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
@@ -992,6 +1021,32 @@ impl NogoodPropagator {
             // semantic minimisation).
             if lb > context.lower_bound(&propagated_domain) {
                 propagated = true;
+
+                // The reason consists of:
+                // 1) All predicates which reason over a different domain than the propagated
+                //    predicate (which are all guaranteed to be satisfied)
+                // 2) All predicates which reason over the same domain as the propagated predicate,
+                //    but are *not* disequality predicates with a right-hand side smaller than the
+                //    min exception
+                //
+                //    For example, if we have the nogood [x <= 15] /\ [x != 7] /\ [x != 10] /\ [x !=
+                //    5], where the first two predicates are unassigned but the
+                //    last two are satisfied; then the fact that [x != 10] is true,
+                //    does not matter for the propagation of [x >= 7] to hold, but
+                //    [x != 5] is required in the explanation
+                let reason = nogood
+                    .iter()
+                    .filter_map(|predicate_id| {
+                        let predicate = context.get_predicate(*predicate_id);
+
+                        (context.is_predicate_id_satisfied(*predicate_id)
+                            && (predicate.get_domain() != propagated_domain
+                                || (predicate.is_not_equal_predicate()
+                                    && predicate.get_right_hand_side() < lb)))
+                            .then_some(predicate)
+                    })
+                    .collect::<PropositionalConjunction>();
+
                 statistics.num_extended_lower_bound_propagations += 1;
                 info!(
                     "\tPosting {reason:?} -> {:?}",
@@ -1049,6 +1104,18 @@ impl NogoodPropagator {
         // Hence, we iterate over the range that we have created, removing the values while *not*
         // removing the values for which there is an inequality predicate.
         info!("Iterating from [{lb}, {ub}]");
+
+        // The reason consists of:
+        // 1) All predicates which reason over a different domain than the propagated predicate
+        //    (which are all guaranteed to be satisfied)
+        let reason = nogood
+            .iter()
+            .filter_map(|predicate_id| {
+                let predicate = context.get_predicate(*predicate_id);
+
+                (predicate.get_domain() != propagated_domain).then_some(predicate)
+            })
+            .collect::<PropositionalConjunction>();
         for value_in_domain in lb..=ub {
             if !exceptions.contains(&value_in_domain)
                 && context.contains(&propagated_domain, value_in_domain)
@@ -1135,6 +1202,28 @@ impl NogoodPropagator {
                     .average_lbd
                     .add_term(lbd as u64);
 
+                pumpkin_assert_moderate!(
+                    context.get_checkpoint_for_predicate(nogood[1]).unwrap()
+                        >= nogood
+                            .iter()
+                            .skip(2)
+                            .filter(|predicate| predicate.get_domain() != nogood[0].get_domain())
+                            .map(|predicate| context
+                                .get_checkpoint_for_predicate(*predicate)
+                                .unwrap())
+                            .max()
+                            .unwrap_or(0),
+                    "Backtrack level: {} - {:?}",
+                    context.get_checkpoint(),
+                    nogood
+                        .iter()
+                        .map(|predicate| (
+                            predicate,
+                            context.get_checkpoint_for_predicate(*predicate)
+                        ))
+                        .collect::<Vec<_>>()
+                );
+
                 let nogood = nogood
                     .iter()
                     .map(|predicate| context.get_id(*predicate))
@@ -1142,15 +1231,6 @@ impl NogoodPropagator {
 
                 let propagated_predicate = context.get_predicate(nogood[0]);
                 let propagated_domain = propagated_predicate.get_domain();
-
-                // We calculate the reason as all of the predicates which are currently satisfied
-                let reason = nogood
-                    .iter()
-                    .filter_map(|predicate_id| {
-                        (context.is_predicate_id_satisfied(*predicate_id))
-                            .then(|| context.get_predicate(*predicate_id))
-                    })
-                    .collect::<PropositionalConjunction>();
 
                 // Add the nogood to the database.
                 //
@@ -1191,7 +1271,6 @@ impl NogoodPropagator {
                     context,
                     &self.nogood_predicates[nogood_id],
                     propagated_domain,
-                    reason,
                     inference_code,
                     &mut self.statistics,
                 );
@@ -1443,19 +1522,11 @@ impl NogoodPropagator {
                 } else {
                     // Otherwise, we treat it as a "unit" nogood and we perform propagation and
                     // then do not add the nogood to the database.
-                    let reason = nogood
-                        .iter()
-                        .filter_map(|predicate_id| {
-                            (context.is_predicate_id_satisfied(*predicate_id))
-                                .then(|| context.get_predicate(*predicate_id))
-                        })
-                        .collect::<PropositionalConjunction>();
 
                     Self::propagate_extended_nogood(
                         context,
                         &nogood,
                         first_domain,
-                        reason,
                         inference_code,
                         &mut self.statistics,
                     )?;
@@ -2022,6 +2093,45 @@ impl NogoodPropagator {
         // If at least one predicate is false, then the nogood can be skipped
         if has_falsified_predicate {
             return Ok(());
+        }
+
+        match self.analysis_mode {
+            AnalysisMode::ExtendedUIP
+            | AnalysisMode::BoundsExtendedUIP
+            | AnalysisMode::HalfExtendedUIP => {
+                // We find all of the unasssigned predicates and get their domains
+                //
+                // If there is a falsified predicate then we do not propagate; also, if
+                // the nogood can be unit propagated, then
+                // we do not propagate
+                let mut is_falsified = false;
+                let mut num_unassigned = 0;
+                let unassigned_predicate_ids = nogood
+                    .iter()
+                    .filter_map(|predicate_id| {
+                        if context.is_predicate_id_falsified(*predicate_id) {
+                            is_falsified = true;
+                            None
+                        } else if context.is_predicate_id_satisfied(*predicate_id) {
+                            None
+                        } else {
+                            num_unassigned += 1;
+                            let predicate = context.get_predicate(*predicate_id);
+                            Some(predicate.get_domain())
+                        }
+                    })
+                    .collect::<HashSet<_>>();
+                if num_unassigned > 1 && !is_falsified && unassigned_predicate_ids.len() == 1 {
+                    NogoodPropagator::propagate_extended_nogood(
+                        context,
+                        nogood,
+                        *unassigned_predicate_ids.iter().next().unwrap(),
+                        inference_code,
+                        &mut NogoodPropagatorStatistics::default(),
+                    )?;
+                }
+            }
+            AnalysisMode::OneUIP | AnalysisMode::AllDecision => {}
         }
 
         let num_satisfied_predicates = nogood

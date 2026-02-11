@@ -749,7 +749,9 @@ impl LearnedNogood {
 
             if dl == context.state.get_checkpoint() {
                 clean_nogood.swap(0, index);
-                if propagating_domain.is_none() {
+                if propagating_domain.is_none()
+                    || clean_nogood[0].get_domain() != clean_nogood[index].get_domain()
+                {
                     index -= 1;
                 }
             } else if dl > highest_level_below_current
