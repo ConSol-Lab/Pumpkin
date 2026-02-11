@@ -174,6 +174,11 @@ impl Solver {
     pub fn upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_upper_bound(variable)
     }
+
+    /// Returns whether the solver is in an inconsistent state.
+    pub fn is_inconsistent(&self) -> bool {
+        self.satisfaction_solver.get_state().is_inconsistent()
+    }
 }
 
 /// Functions to create and retrieve integer and propositional variables.

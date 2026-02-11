@@ -21,6 +21,7 @@ use pumpkin_solver::core::termination::Indefinite;
 use pumpkin_solver::core::termination::TerminationCondition;
 use pumpkin_solver::core::termination::TimeBudget;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::brancher::PythonBrancher;
@@ -71,7 +72,8 @@ impl Model {
         let proof_log = proof
             .map(|path| ProofLog::cp(&path, true))
             .transpose()
-            .map(|proof| proof.unwrap_or_default())?;
+            .map(|proof| proof.unwrap_or_default())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         let options = SolverOptions {
             proof_log,
@@ -96,7 +98,13 @@ impl Model {
         lower_bound: i32,
         upper_bound: i32,
         name: Option<&str>,
-    ) -> IntExpression {
+    ) -> PyResult<IntExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create variable: solver is in an infeasible state",
+            ));
+        }
+
         let domain_id = if let Some(name) = name {
             self.solver
                 .new_named_bounded_integer(lower_bound, upper_bound, name)
@@ -106,12 +114,18 @@ impl Model {
 
         self.brancher.add_domain(domain_id);
 
-        domain_id.into()
+        Ok(domain_id.into())
     }
 
     /// Create a new boolean variable.
     #[pyo3(signature = (name=None))]
-    fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
+    fn new_boolean_variable(&mut self, name: Option<&str>) -> PyResult<BoolExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create variable: solver is in an infeasible state",
+            ));
+        }
+
         let literal = if let Some(name) = name {
             self.solver.new_named_literal(name)
         } else {
@@ -121,12 +135,25 @@ impl Model {
         self.brancher
             .add_domain(literal.get_true_predicate().get_domain());
 
-        literal.into()
+        Ok(literal.into())
     }
 
     /// Create a new constraint tag.
-    fn new_constraint_tag(&mut self) -> Tag {
-        Tag(self.solver.new_constraint_tag())
+    fn new_constraint_tag(&mut self) -> PyResult<Tag> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot create constraint tag: solver is in an infeasible state",
+            ));
+        }
+        Ok(Tag(self.solver.new_constraint_tag()))
+    }
+
+    /// Return whether the solver is in an inconsistent (infeasible) state.
+    ///
+    /// The solver is inconsistent when propagation has detected that the current set of
+    /// constraints has no solution (e.g. a conflict at the root level, or a domain became empty).
+    fn is_inconsistent(&self) -> bool {
+        self.solver.is_inconsistent()
     }
 
     /// Get an integer variable for the given boolean.
@@ -147,7 +174,13 @@ impl Model {
         predicate: Predicate,
         tag: Tag,
         name: Option<&str>,
-    ) -> BoolExpression {
+    ) -> PyResult<BoolExpression> {
+        if self.solver.is_inconsistent() {
+            return Err(PyValueError::new_err(
+                "Cannot reify predicate: solver is in an infeasible state",
+            ));
+        }
+
         let solver_predicate = predicate.into_solver_predicate();
         let Tag(tag) = tag;
 
@@ -161,7 +194,7 @@ impl Model {
         self.brancher
             .add_domain(*literal.get_integer_variable().inner());
 
-        literal.into()
+        Ok(literal.into())
     }
 
     /// Add the given constraint to the model.
