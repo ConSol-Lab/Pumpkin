@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use log::debug;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
@@ -582,6 +583,8 @@ impl State {
     ///
     /// See [`State::new_checkpoint`] for an example.
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
+        debug!("Restoring to checkpoint {checkpoint}");
+
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
         self.statistics.sum_of_backjumps += (self.get_checkpoint() - 1 - checkpoint) as u64;

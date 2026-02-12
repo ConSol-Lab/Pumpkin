@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use clap::ValueEnum;
+use clap_verbosity_flag::Verbosity;
 use file_format::FileFormat;
 use log::Level;
 use log::LevelFilter;
@@ -290,15 +291,14 @@ struct Args {
     )]
     random_seed: u64,
 
-    /// Enables log message output from the solver.
+    /// Controls the log level of the solver.
     ///
-    /// For printing statistics see the option "--log-statistics", and for printing all solutions
-    /// (in case of a satisfaction problem) or printing solutions of increasing quality (in case of
-    /// an optimization problem) see the option "--all-solutions".
-    ///
-    /// Possible values: bool
-    #[arg(short = 'v', long = "verbose", verbatim_doc_comment)]
-    verbose: bool,
+    /// show warnings: -v / --verbose
+    /// show info: -vv / --verbose --verbose
+    /// show debug: -vvv / --verbose --verbose --verbose
+    /// show trace: -vvvv / --verbose --verbose --verbose --verbose
+    #[command(flatten)]
+    verbosity: Verbosity,
 
     /// Enables logging of statistics from the solver.
     ///
@@ -406,16 +406,16 @@ struct Args {
 
 fn configure_logging(
     file_format: FileFormat,
-    verbose: bool,
+    verbosity: Verbosity,
     log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
         FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine => {
-            configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
+            configure_logging_sat(verbosity, log_statistics, omit_timestamp, omit_call_site)
         }
-        FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
+        FileFormat::FlatZinc => configure_logging_minizinc(verbosity, log_statistics),
     }
 }
 
@@ -428,7 +428,7 @@ fn configure_logging_unknown() -> std::io::Result<()> {
     Ok(())
 }
 
-fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
+fn configure_logging_minizinc(verbosity: Verbosity, log_statistics: bool) -> std::io::Result<()> {
     if log_statistics {
         configure_statistic_logging(
             "%%%mzn-stat:",
@@ -437,11 +437,6 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
             None,
         );
     }
-    let level_filter = if verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
 
     env_logger::Builder::new()
         .format(move |buf, record| {
@@ -449,7 +444,7 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
 
             writeln!(buf, "{}", record.args())
         })
-        .filter_level(level_filter)
+        .filter_level(verbosity.log_level_filter())
         .target(env_logger::Target::Stdout)
         .init();
     info!("Logging successfully configured");
@@ -457,7 +452,7 @@ fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::R
 }
 
 fn configure_logging_sat(
-    verbose: bool,
+    verbosity: Verbosity,
     log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
@@ -465,11 +460,6 @@ fn configure_logging_sat(
     if log_statistics {
         configure_statistic_logging("c STAT", None, None, None);
     }
-    let level_filter = if verbose {
-        LevelFilter::Debug
-    } else {
-        LevelFilter::Warn
-    };
 
     env_logger::Builder::new()
         .format(move |buf, record| {
@@ -488,7 +478,7 @@ fn configure_logging_sat(
             }
             writeln!(buf, "{}", record.args())
         })
-        .filter_level(level_filter)
+        .filter_level(verbosity.log_level_filter())
         .target(env_logger::Target::Stdout)
         .init();
     info!("Logging successfully configured");
@@ -520,7 +510,7 @@ fn run() -> PumpkinResult<()> {
 
     configure_logging(
         file_format,
-        args.verbose,
+        args.verbosity,
         args.log_statistics,
         args.omit_timestamp,
         args.omit_call_site,
@@ -615,7 +605,7 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbosity.log_level_filter() > LevelFilter::Error,
                 },
                 NoLearningResolver,
             )?,
@@ -635,7 +625,7 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbosity.log_level_filter() > LevelFilter::Error,
                 },
                 ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
             )?,
@@ -655,7 +645,7 @@ fn run() -> PumpkinResult<()> {
                     ),
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
-                    verbose: args.verbose,
+                    verbose: args.verbosity.log_level_filter() > LevelFilter::Error,
                 },
                 HypercubeLinearResolver::default(),
             )?,
