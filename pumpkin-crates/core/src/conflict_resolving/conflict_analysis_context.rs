@@ -61,6 +61,19 @@ impl Debug for ConflictAnalysisContext<'_> {
 }
 
 impl ConflictAnalysisContext<'_> {
+    pub fn reborrow(&mut self) -> ConflictAnalysisContext<'_> {
+        ConflictAnalysisContext {
+            solver_state: self.solver_state,
+            brancher: self.brancher,
+            proof_log: self.proof_log,
+            unit_nogood_inference_codes: self.unit_nogood_inference_codes,
+            restart_strategy: self.restart_strategy,
+            state: self.state,
+            nogood_propagator_handle: self.nogood_propagator_handle,
+            rng: self.rng,
+        }
+    }
+
     pub fn get_state(&self) -> &State {
         self.state
     }

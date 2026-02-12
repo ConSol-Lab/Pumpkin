@@ -17,6 +17,7 @@ enumset = "1.1.2"
 bitfield-struct = "0.9.2"
 convert_case = "0.8.0"
 clap = { version = "4.5.40", optional = true, features=["derive"]}
+log = "0.4.29"
 
 [features]
 clap = ["dep:clap", "pumpkin-core/clap"]

@@ -1,6 +1,10 @@
+use std::fmt::Display;
+use std::hash::Hash;
+
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
+use crate::engine::VariableNames;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -16,9 +20,23 @@ pub struct InconsistentHypercube(DomainId);
 /// A region in the solution space.
 ///
 /// The hypercube will always be consistent.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hypercube {
     state: VariableState<Predicate>,
+}
+
+impl Hash for Hypercube {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for predicate in self.iter_predicates() {
+            predicate.hash(state);
+        }
+    }
+}
+
+impl FromIterator<Predicate> for Result<Hypercube, InconsistentHypercube> {
+    fn from_iter<T: IntoIterator<Item = Predicate>>(iter: T) -> Self {
+        Hypercube::new(iter)
+    }
 }
 
 impl Hypercube {
@@ -35,6 +53,33 @@ impl Hypercube {
             .map_err(InconsistentHypercube)?;
 
         Ok(Hypercube { state })
+    }
+
+    /// Add a predicate to the hypercube.
+    ///
+    /// This may cause the hypercube to become inconsistent, then an error is returned.
+    pub fn with_predicate(mut self, predicate: Predicate) -> Result<Self, InconsistentHypercube> {
+        if !self.state.apply(&predicate) {
+            return Err(InconsistentHypercube(predicate.get_domain()));
+        }
+
+        Ok(self)
+    }
+
+    /// Add multiple predicates to the hypercube.
+    ///
+    /// This may cause the hypercube to become inconsistent, then an error is returned.
+    pub fn with_predicates(
+        mut self,
+        predicates: impl IntoIterator<Item = Predicate>,
+    ) -> Result<Self, InconsistentHypercube> {
+        for predicate in predicates {
+            if !self.state.apply(&predicate) {
+                return Err(InconsistentHypercube(predicate.get_domain()));
+            }
+        }
+
+        Ok(self)
     }
 
     /// Get all predicates that define the hypercube.
@@ -62,6 +107,36 @@ impl Hypercube {
                         .map(|value| predicate![domain_id != value]),
                 )
         })
+    }
+
+    /// Print the hypercube in terms of its predicates in a human-friendly way.
+    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+        HDisplay {
+            hypercube: self,
+            names,
+        }
+    }
+}
+
+struct HDisplay<'h, 'names> {
+    hypercube: &'h Hypercube,
+    names: &'names VariableNames,
+}
+
+impl Display for HDisplay<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut predicates = self.hypercube.iter_predicates().collect::<Vec<_>>();
+        predicates.sort();
+
+        for (idx, &predicate) in predicates.iter().enumerate() {
+            write!(f, "{}", predicate.display(self.names))?;
+
+            if idx < predicates.len() - 1 {
+                write!(f, " & ")?;
+            }
+        }
+
+        Ok(())
     }
 }
 

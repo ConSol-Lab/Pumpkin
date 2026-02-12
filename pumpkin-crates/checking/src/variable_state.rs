@@ -14,7 +14,7 @@ use crate::IntExt;
 ///
 /// Domains can be reduced through [`VariableState::apply`]. By default, the domain of every
 /// variable is infinite.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariableState<Atomic: AtomicConstraint> {
     domains: FnvHashMap<Atomic::Identifier, Domain>,
 }
@@ -226,7 +226,7 @@ where
 }
 
 /// A domain inside the variable state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Domain {
     lower_bound: IntExt,
     upper_bound: IntExt,

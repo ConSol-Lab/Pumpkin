@@ -1,5 +1,8 @@
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::HypercubeLinearChecker;
+use crate::hypercube_linear::LinearInequality;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
@@ -13,9 +16,6 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
-use crate::propagators::hypercube_linear::Hypercube;
-use crate::propagators::hypercube_linear::HypercubeLinearChecker;
-use crate::propagators::hypercube_linear::LinearInequality;
 use crate::pumpkin_assert_simple;
 use crate::results::PropagationStatusCP;
 use crate::state::PropagatorConflict;
@@ -139,7 +139,7 @@ impl HypercubeLinearPropagator {
                 }
                 // If we want to set the upper bound to a value larger than i32::MAX,
                 // it can never tighten the existing bound of `term_to_propagate`.
-                Err(_) => return Ok(()),
+                Err(_) => continue,
             };
 
             let reason = self

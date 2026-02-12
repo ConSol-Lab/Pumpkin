@@ -11,7 +11,7 @@ use super::PropagatorVarId;
 #[cfg(doc)]
 use crate::Solver;
 use crate::basic_types::PredicateId;
-use crate::basic_types::RefOrOwned;
+use crate::basic_types::RefMutOrOwned;
 use crate::engine::Assignments;
 use crate::engine::State;
 use crate::engine::TrailedValues;
@@ -105,11 +105,11 @@ pub struct PropagatorConstructorContext<'a> {
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
-    next_local_id: RefOrOwned<'a, LocalId>,
+    next_local_id: RefMutOrOwned<'a, LocalId>,
 
     /// Marker to indicate whether the constructor registered for at least one domain event or
     /// predicate becoming assigned. If not, the [`Drop`] implementation will cause a panic.
-    did_register: RefOrOwned<'a, bool>,
+    did_register: RefMutOrOwned<'a, bool>,
 }
 
 impl PropagatorConstructorContext<'_> {
@@ -118,10 +118,10 @@ impl PropagatorConstructorContext<'_> {
         state: &'a mut State,
     ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
-            next_local_id: RefOrOwned::Owned(LocalId::from(0)),
+            next_local_id: RefMutOrOwned::Owned(LocalId::from(0)),
             propagator_id,
             state,
-            did_register: RefOrOwned::Owned(false),
+            did_register: RefMutOrOwned::Owned(false),
         }
     }
 
@@ -257,9 +257,9 @@ impl Drop for PropagatorConstructorContext<'_> {
 
         let did_register = match self.did_register {
             // If we are in a reborrowed context, we do not want to enforce registration.
-            RefOrOwned::Ref(_) => return,
+            RefMutOrOwned::Ref(_) => return,
 
-            RefOrOwned::Owned(did_register) => did_register,
+            RefMutOrOwned::Owned(did_register) => did_register,
         };
 
         if !did_register {

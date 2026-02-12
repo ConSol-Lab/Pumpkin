@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 use enumset::EnumSetType;
 use pumpkin_checking::AtomicConstraint;
 
 use crate::engine::Assignments;
+use crate::engine::VariableNames;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::propagation::DomainEvent;
@@ -44,6 +47,76 @@ impl Predicate {
     pub fn get_predicate_type(&self) -> PredicateType {
         (*self).into()
     }
+
+    /// Returns `self` if this implies `other`.
+    pub fn implies(&self, other: Predicate) -> bool {
+        if self.get_domain() != other.get_domain() {
+            // Predicates only imply other predicates on the same domain.
+            return false;
+        }
+
+        match self.get_predicate_type() {
+            PredicateType::LowerBound => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() > other.get_right_hand_side(),
+                PredicateType::UpperBound | PredicateType::Equal => false,
+            },
+            PredicateType::UpperBound => match other.get_predicate_type() {
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() < other.get_right_hand_side(),
+                PredicateType::LowerBound | PredicateType::Equal => false,
+            },
+            PredicateType::NotEqual => {
+                other.get_predicate_type() == PredicateType::NotEqual
+                    && self.get_right_hand_side() == other.get_right_hand_side()
+            }
+            PredicateType::Equal => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => {
+                    self.get_right_hand_side() != other.get_right_hand_side()
+                }
+                PredicateType::Equal => self.get_right_hand_side() == other.get_right_hand_side(),
+            },
+        }
+    }
+
+    /// Print the hypercube in terms of its predicates in a human-friendly way.
+    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+        PredicateDisplay {
+            predicate: *self,
+            names,
+        }
+    }
+}
+
+impl PartialOrd for Predicate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Predicate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.get_domain().cmp(&other.get_domain()) {
+            std::cmp::Ordering::Equal => match self.get_type_code().cmp(&other.get_type_code()) {
+                std::cmp::Ordering::Equal => {
+                    self.get_right_hand_side().cmp(&other.get_right_hand_side())
+                }
+                ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
+            },
+
+            ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
+        }
+    }
 }
 
 #[derive(Debug, Hash, EnumSetType)]
@@ -66,6 +139,19 @@ impl From<DomainEvent> for PredicateType {
             DomainEvent::UpperBound => PredicateType::UpperBound,
             DomainEvent::Removal => PredicateType::NotEqual,
         }
+    }
+}
+
+impl Display for PredicateType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            PredicateType::LowerBound => ">=",
+            PredicateType::UpperBound => "<=",
+            PredicateType::NotEqual => "!=",
+            PredicateType::Equal => "==",
+        };
+
+        write!(f, "{str}")
     }
 }
 
@@ -224,7 +310,7 @@ impl std::ops::Not for Predicate {
     }
 }
 
-impl std::fmt::Display for Predicate {
+impl Display for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if *self == Predicate::trivially_true() {
             write!(f, "[True]")
@@ -275,6 +361,38 @@ impl AtomicConstraint for Predicate {
     }
 }
 
+struct PredicateDisplay<'names> {
+    predicate: Predicate,
+    names: &'names VariableNames,
+}
+
+impl Display for PredicateDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.predicate == Predicate::trivially_true() {
+            write!(f, "[True]")
+        } else if self.predicate == Predicate::trivially_false() {
+            write!(f, "[False]")
+        } else {
+            let domain_id = self.predicate.get_domain();
+
+            write!(f, "[")?;
+            if let Some(name) = self.names.get_int_name(domain_id) {
+                write!(f, "{name}")?;
+            } else {
+                write!(f, "{domain_id}")?;
+            }
+            write!(
+                f,
+                "[ {} {}]",
+                self.predicate.get_predicate_type(),
+                self.predicate.get_right_hand_side()
+            )?;
+
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::Predicate;
@@ -320,5 +438,89 @@ mod test {
         let trivially_true = Predicate::trivially_true();
         let trivially_false = Predicate::trivially_false();
         assert!(!trivially_false == trivially_true);
+    }
+
+    #[test]
+    fn implies_on_lower_bound_predicate() {
+        let x = DomainId::new(0);
+
+        assert!(predicate![x >= 5].implies(predicate![x >= 4]));
+        assert!(predicate![x >= 5].implies(predicate![x >= 5]));
+        assert!(!predicate![x >= 5].implies(predicate![x >= 6]));
+
+        assert!(!predicate![x >= 5].implies(predicate![x == 4]));
+        assert!(!predicate![x >= 5].implies(predicate![x == 5]));
+        assert!(!predicate![x >= 5].implies(predicate![x == 6]));
+
+        assert!(!predicate![x >= 5].implies(predicate![x <= 4]));
+        assert!(!predicate![x >= 5].implies(predicate![x <= 5]));
+        assert!(!predicate![x >= 5].implies(predicate![x <= 6]));
+
+        assert!(predicate![x >= 5].implies(predicate![x != 4]));
+        assert!(!predicate![x >= 5].implies(predicate![x != 5]));
+        assert!(!predicate![x >= 5].implies(predicate![x != 6]));
+    }
+
+    #[test]
+    fn implies_on_upper_bound_predicate() {
+        let x = DomainId::new(0);
+
+        assert!(!predicate![x <= 5].implies(predicate![x >= 4]));
+        assert!(!predicate![x <= 5].implies(predicate![x >= 5]));
+        assert!(!predicate![x <= 5].implies(predicate![x >= 6]));
+
+        assert!(!predicate![x <= 5].implies(predicate![x == 4]));
+        assert!(!predicate![x <= 5].implies(predicate![x == 5]));
+        assert!(!predicate![x <= 5].implies(predicate![x == 6]));
+
+        assert!(!predicate![x <= 5].implies(predicate![x <= 4]));
+        assert!(predicate![x <= 5].implies(predicate![x <= 5]));
+        assert!(predicate![x <= 5].implies(predicate![x <= 6]));
+
+        assert!(!predicate![x <= 5].implies(predicate![x != 4]));
+        assert!(!predicate![x <= 5].implies(predicate![x != 5]));
+        assert!(predicate![x <= 5].implies(predicate![x != 6]));
+    }
+
+    #[test]
+    fn implies_on_not_equal_predicate() {
+        let x = DomainId::new(0);
+
+        assert!(!predicate![x != 5].implies(predicate![x >= 4]));
+        assert!(!predicate![x != 5].implies(predicate![x >= 5]));
+        assert!(!predicate![x != 5].implies(predicate![x >= 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x == 4]));
+        assert!(!predicate![x != 5].implies(predicate![x == 5]));
+        assert!(!predicate![x != 5].implies(predicate![x == 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x <= 4]));
+        assert!(!predicate![x != 5].implies(predicate![x <= 5]));
+        assert!(!predicate![x != 5].implies(predicate![x <= 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x != 4]));
+        assert!(predicate![x != 5].implies(predicate![x != 5]));
+        assert!(!predicate![x != 5].implies(predicate![x != 6]));
+    }
+
+    #[test]
+    fn implies_on_equal_predicate() {
+        let x = DomainId::new(0);
+
+        assert!(predicate![x == 5].implies(predicate![x >= 4]));
+        assert!(predicate![x == 5].implies(predicate![x >= 5]));
+        assert!(!predicate![x == 5].implies(predicate![x >= 6]));
+
+        assert!(!predicate![x == 5].implies(predicate![x == 4]));
+        assert!(predicate![x == 5].implies(predicate![x == 5]));
+        assert!(!predicate![x == 5].implies(predicate![x == 6]));
+
+        assert!(!predicate![x == 5].implies(predicate![x <= 4]));
+        assert!(predicate![x == 5].implies(predicate![x <= 5]));
+        assert!(predicate![x == 5].implies(predicate![x <= 6]));
+
+        assert!(predicate![x == 5].implies(predicate![x != 4]));
+        assert!(!predicate![x == 5].implies(predicate![x != 5]));
+        assert!(predicate![x == 5].implies(predicate![x != 6]));
     }
 }
