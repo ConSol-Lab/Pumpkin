@@ -719,7 +719,7 @@ fn propositional_resolution(
         .filter(|&predicate| {
             // Only keep predicates that are not the propagated predicate or its
             // opposite.
-            !pivot_predicate.implies(predicate) && !pivot_predicate.implies(!predicate)
+            predicate != pivot_predicate && !predicate != pivot_predicate
         })
         .filter(|predicate| {
             // Ignore predicates that are true at the root.
@@ -1054,4 +1054,72 @@ fn gcd(a: i32, b: i32) -> i32 {
         }
     }
     m << shift
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn propositional_resolution_of_two_clauses() {
+        // applying propositional resolution on [X_INTRODUCED_36_ >= 43]
+        //   - [X_INTRODUCED_36_ >= 43] & [X_INTRODUCED_36_ <= 43] & [X_INTRODUCED_42_ >= 37] &
+        //     [X_INTRODUCED_42_ <= 43] -> 0 <= -1
+        //     - weakened: [X_INTRODUCED_36_ >= 43] & [X_INTRODUCED_36_ <= 43] & [X_INTRODUCED_42_
+        //       >= 37] & [X_INTRODUCED_42_ <= 43] -> 0 <= -1
+        //   - [X_INTRODUCED_36_ >= 42] & [X_INTRODUCED_36_ <= 42] & [X_INTRODUCED_42_ >= 36] &
+        //     [X_INTRODUCED_42_ <= 42] -> 0 <= -1
+        // result = [X_INTRODUCED_36_ <= 43] & [X_INTRODUCED_42_ >= 37] & [X_INTRODUCED_42_ <= 42]
+        // -> 0 <= -1
+
+        let mut state = State::default();
+        let x1 = state.new_interval_variable(1, 100, Some("x1".into()));
+        let x2 = state.new_interval_variable(1, 100, Some("x2".into()));
+
+        state.new_checkpoint();
+        assert!(state.post(predicate![x1 == 43]).expect("no empty domain"));
+        assert!(state.post(predicate![x2 >= 37]).expect("no empty domain"));
+        assert!(state.post(predicate![x2 <= 42]).expect("no empty domain"));
+
+        let l1 = HypercubeLinearExplanation {
+            hypercube: Cow::Owned(
+                Hypercube::new([
+                    predicate![x1 == 43],
+                    predicate![x2 >= 37],
+                    predicate![x2 <= 43],
+                ])
+                .expect("no inconsistent predicates"),
+            ),
+            linear: Cow::Owned(LinearInequality::trivially_false()),
+        };
+
+        let l2 = HypercubeLinearExplanation {
+            hypercube: Cow::Owned(
+                Hypercube::new([
+                    predicate![x1 == 42],
+                    predicate![x2 >= 36],
+                    predicate![x2 <= 42],
+                ])
+                .expect("no inconsistent predicates"),
+            ),
+            linear: Cow::Owned(LinearInequality::trivially_false()),
+        };
+
+        let resolvent = propositional_resolution(&state, l1, l2, predicate![x1 >= 43]);
+
+        let expected = HypercubeLinearExplanation {
+            hypercube: Cow::Owned(
+                Hypercube::new([
+                    predicate![x1 >= 42],
+                    predicate![x1 <= 43],
+                    predicate![x2 >= 37],
+                    predicate![x2 <= 42],
+                ])
+                .expect("no inconsistent predicates"),
+            ),
+            linear: Cow::Owned(LinearInequality::trivially_false()),
+        };
+
+        assert_eq!(resolvent, expected);
+    }
 }
