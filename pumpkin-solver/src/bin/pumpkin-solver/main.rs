@@ -27,6 +27,7 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::hypercube_linear::HypercubeLinearResolver;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -637,6 +638,26 @@ fn run() -> PumpkinResult<()> {
                     verbose: args.verbose,
                 },
                 ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
+            )?,
+            ConflictResolverType::HypercubeLinear => flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        !args.cumulative_single_profiles,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                    ),
+                    optimisation_strategy: args.optimisation_strategy,
+                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    verbose: args.verbose,
+                },
+                HypercubeLinearResolver::default(),
             )?,
         },
     }
