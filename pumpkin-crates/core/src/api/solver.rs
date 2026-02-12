@@ -535,7 +535,7 @@ impl Solver {
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        clause: impl IntoIterator<Item = Predicate>,
+        clause: impl IntoIterator<Item = Predicate> + Clone,
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver.add_clause(clause, constraint_tag)

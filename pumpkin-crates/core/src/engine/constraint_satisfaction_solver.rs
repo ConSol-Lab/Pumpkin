@@ -5,7 +5,9 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use itertools::Itertools;
 use log::debug;
+use log::trace;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -967,9 +969,18 @@ impl ConstraintSatisfactionSolver {
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        predicates: impl IntoIterator<Item = Predicate>,
+        predicates: impl IntoIterator<Item = Predicate> + Clone,
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
+        trace!(
+            "adding clause {}",
+            predicates
+                .clone()
+                .into_iter()
+                .map(|p| p.display(&self.state.variable_names))
+                .format(" & ")
+        );
+
         pumpkin_assert_simple!(
             self.get_checkpoint() == 0,
             "Clauses can only be added in the root"

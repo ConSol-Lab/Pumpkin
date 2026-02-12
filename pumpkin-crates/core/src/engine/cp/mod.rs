@@ -17,6 +17,7 @@ mod tests {
     use crate::conjunction;
     use crate::containers::StorageKey;
     use crate::engine::TrailedValues;
+    use crate::engine::VariableNames;
     use crate::engine::cp::assignments;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::reason::ReasonStore;
@@ -30,6 +31,8 @@ mod tests {
     fn test_no_update_reason_store_if_no_update_lower_bound() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
+        let names = VariableNames::default();
+
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
@@ -42,6 +45,7 @@ mod tests {
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &names,
             );
 
             let result = context.post(
@@ -58,6 +62,7 @@ mod tests {
     fn test_no_update_reason_store_if_no_update_upper_bound() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
+        let names = VariableNames::default();
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
@@ -71,6 +76,7 @@ mod tests {
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &names,
             );
 
             let result = context.post(
@@ -87,6 +93,8 @@ mod tests {
     fn test_no_update_reason_store_if_no_update_remove() {
         let mut assignments = Assignments::default();
         let mut trailed_values = TrailedValues::default();
+        let names = VariableNames::default();
+
         let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
@@ -100,6 +108,7 @@ mod tests {
                 &mut reason_store,
                 &mut notification_engine,
                 PropagatorId(0),
+                &names,
             );
 
             let result = context.post(

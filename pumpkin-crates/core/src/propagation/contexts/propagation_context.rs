@@ -1,8 +1,11 @@
+use log::trace;
+
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
 use crate::engine::TrailedValues;
+use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
@@ -84,6 +87,7 @@ pub struct PropagationContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
+    variable_names: &'a VariableNames,
     reification_literal: Option<Literal>,
 }
 
@@ -108,6 +112,7 @@ impl<'a> PropagationContext<'a> {
         reason_store: &'a mut ReasonStore,
         notification_engine: &'a mut NotificationEngine,
         propagator_id: PropagatorId,
+        variable_names: &'a VariableNames,
     ) -> Self {
         PropagationContext {
             trailed_values,
@@ -115,6 +120,7 @@ impl<'a> PropagationContext<'a> {
             reason_store,
             propagator_id,
             notification_engine,
+            variable_names,
             reification_literal: None,
         }
     }
@@ -224,6 +230,7 @@ impl<'a> PropagationContext<'a> {
             reason_store: self.reason_store,
             propagator_id: self.propagator_id,
             notification_engine: self.notification_engine,
+            variable_names: self.variable_names,
             reification_literal: self.reification_literal,
         }
     }
@@ -253,6 +260,7 @@ impl PropagationContext<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
+                trace!("Propagated {}", predicate.display(self.variable_names));
                 let _ = slot.populate(
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),

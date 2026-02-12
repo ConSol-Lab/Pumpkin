@@ -85,33 +85,27 @@ impl Hypercube {
     /// Get all predicates that define the hypercube.
     pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.state.domains().flat_map(|domain_id| {
-            if let Some(value) = self.state.fixed_value(domain_id) {
-                itertools::Either::Left(std::iter::once(predicate![domain_id == value]))
-            } else {
-                let lower_bound_predicate =
-                    if let IntExt::Int(lower_bound) = self.state.lower_bound(domain_id) {
-                        Some(predicate![domain_id >= lower_bound])
-                    } else {
-                        None
-                    };
-                let upper_bound_predicate =
-                    if let IntExt::Int(upper_bound) = self.state.upper_bound(domain_id) {
-                        Some(predicate![domain_id <= upper_bound])
-                    } else {
-                        None
-                    };
+            let lower_bound_predicate =
+                if let IntExt::Int(lower_bound) = self.state.lower_bound(domain_id) {
+                    Some(predicate![domain_id >= lower_bound])
+                } else {
+                    None
+                };
+            let upper_bound_predicate =
+                if let IntExt::Int(upper_bound) = self.state.upper_bound(domain_id) {
+                    Some(predicate![domain_id <= upper_bound])
+                } else {
+                    None
+                };
 
-                let predicates = [lower_bound_predicate, upper_bound_predicate]
-                    .into_iter()
-                    .flatten()
-                    .chain(
-                        self.state
-                            .holes(domain_id)
-                            .map(|value| predicate![domain_id != value]),
-                    );
-
-                itertools::Either::Right(predicates)
-            }
+            [lower_bound_predicate, upper_bound_predicate]
+                .into_iter()
+                .flatten()
+                .chain(
+                    self.state
+                        .holes(domain_id)
+                        .map(|value| predicate![domain_id != value]),
+                )
         })
     }
 
