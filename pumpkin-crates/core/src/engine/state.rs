@@ -486,6 +486,7 @@ impl State {
                 &mut self.reason_store,
                 &mut self.notification_engine,
                 handle.propagator_id(),
+                &self.variable_names,
             ),
         )
     }
@@ -685,6 +686,7 @@ impl State {
                 &mut self.reason_store,
                 &mut self.notification_engine,
                 propagator_id,
+                &self.variable_names,
             );
             propagator.propagate(context)
         };
@@ -710,7 +712,8 @@ impl State {
                         &self.assignments,
                         &mut self.reason_store,
                         &mut self.propagators,
-                        &self.notification_engine
+                        &self.notification_engine,
+                        &self.variable_names,
                     ),
                     "Checking the propagations performed by the propagator led to inconsistencies!"
                 );
@@ -727,7 +730,8 @@ impl State {
                         &inner.conjunction,
                         &self.propagators[propagator_id],
                         propagator_id,
-                        &self.notification_engine
+                        &self.notification_engine,
+                        &self.variable_names,
                     ));
                 }
 
@@ -827,7 +831,8 @@ impl State {
             &self.trailed_values,
             &self.assignments,
             &self.propagators,
-            &self.notification_engine
+            &self.notification_engine,
+            &self.variable_names,
         ));
 
         Ok(())
@@ -1224,6 +1229,7 @@ impl State {
             &mut self.reason_store,
             &mut self.notification_engine,
             PropagatorId(0),
+            &self.variable_names,
         )
     }
 }

@@ -238,6 +238,7 @@ impl TestSolver {
             &mut self.state.reason_store,
             &mut self.state.notification_engine,
             propagator,
+            &self.state.variable_names,
         );
         self.state.propagators[propagator].propagate(context)
     }
@@ -257,6 +258,7 @@ impl TestSolver {
                     &mut self.state.reason_store,
                     &mut self.state.notification_engine,
                     propagator,
+                    &self.state.variable_names,
                 );
                 self.state.propagators[propagator].propagate(context)?;
                 self.notify_propagator(propagator);

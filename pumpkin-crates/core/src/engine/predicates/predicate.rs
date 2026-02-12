@@ -90,7 +90,10 @@ impl Predicate {
     }
 
     /// Print the hypercube in terms of its predicates in a human-friendly way.
-    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+    pub(crate) fn display<'names>(
+        &self,
+        names: &'names VariableNames,
+    ) -> impl Display + use<'names> {
         PredicateDisplay {
             predicate: *self,
             names,

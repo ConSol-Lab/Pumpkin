@@ -1,3 +1,8 @@
+#![allow(
+    clippy::too_many_arguments,
+    reason = "this file should be refactored, but for now it does not have priority"
+)]
+
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::iter::once;
@@ -9,6 +14,7 @@ use super::notifications::NotificationEngine;
 use super::predicates::predicate::Predicate;
 use super::reason::ReasonStore;
 use crate::basic_types::PropositionalConjunction;
+use crate::engine::VariableNames;
 use crate::engine::cp::Assignments;
 use crate::propagation::ExplanationContext;
 use crate::propagation::PropagationContext;
@@ -52,6 +58,7 @@ impl DebugHelper {
         assignments: &Assignments,
         propagators: &PropagatorStore,
         notification_engine: &NotificationEngine,
+        variable_names: &VariableNames,
     ) -> bool {
         let mut assignments_clone = assignments.clone();
         let mut trailed_values_clone = trailed_values.clone();
@@ -83,6 +90,7 @@ impl DebugHelper {
                 &mut reason_store,
                 &mut notification_engine_clone,
                 PropagatorId(propagator_id as u32),
+                variable_names,
             );
             let propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -124,6 +132,7 @@ impl DebugHelper {
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
         notification_engine: &NotificationEngine,
+        variable_names: &VariableNames,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             trailed_values,
@@ -132,6 +141,7 @@ impl DebugHelper {
             propagator,
             propagator_id,
             notification_engine,
+            variable_names,
         );
         true
     }
@@ -150,6 +160,7 @@ impl DebugHelper {
         reason_store: &mut ReasonStore,
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
+        variable_names: &VariableNames,
     ) -> bool {
         if propagators
             .as_propagator_handle::<NogoodPropagator>(propagator_id)
@@ -188,6 +199,7 @@ impl DebugHelper {
                 &propagators[propagator_id],
                 propagator_id,
                 notification_engine,
+                variable_names,
             );
         }
         result
@@ -201,6 +213,7 @@ impl DebugHelper {
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
         notification_engine: &NotificationEngine,
+        variable_names: &VariableNames,
     ) -> bool {
         if propagator.name() == "NogoodPropagator" {
             return true;
@@ -261,6 +274,7 @@ impl DebugHelper {
                     &mut reason_store,
                     &mut notification_engine_clone,
                     propagator_id,
+                    variable_names,
                 );
                 let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -376,6 +390,7 @@ impl DebugHelper {
                         &mut reason_store,
                         &mut notification_engine_clone,
                         propagator_id,
+                        variable_names,
                     );
                     let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
 
@@ -416,6 +431,7 @@ impl DebugHelper {
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
         notification_engine: &NotificationEngine,
+        variable_names: &VariableNames,
     ) {
         if propagator.name() == "NogoodPropagator" {
             return;
@@ -442,6 +458,7 @@ impl DebugHelper {
                 &mut reason_store,
                 &mut notification_engine_clone,
                 propagator_id,
+                variable_names,
             );
             let debug_propagation_status_cp = propagator.propagate_from_scratch(context);
             assert!(

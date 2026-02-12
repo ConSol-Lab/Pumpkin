@@ -83,7 +83,7 @@ impl HypercubeLinearResolver {
     /// linear.
     fn compute_conflicting_hypercube_linear(
         &mut self,
-        context: ConflictAnalysisContext<'_>,
+        mut context: ConflictAnalysisContext<'_>,
     ) -> HypercubeLinearExplanation<'static> {
         let StoredConflictInfo::EmptyDomain(EmptyDomainConflict {
             trigger_reason,
@@ -95,6 +95,15 @@ impl HypercubeLinearResolver {
                 "Cannot start hypercube analysis from {:?}",
                 context.solver_state.get_conflict_info()
             );
+        };
+
+        let conflict_nogood = context.get_conflict_nogood();
+        let clausal_conflict = HypercubeLinearExplanation {
+            hypercube: Cow::Owned(
+                Hypercube::new(conflict_nogood)
+                    .expect("conflict contains mutually exclusive predicates"),
+            ),
+            linear: Cow::Owned(LinearInequality::trivially_false()),
         };
 
         let propagator_id = context.state.reason_store.get_propagator(trigger_reason);
@@ -114,10 +123,10 @@ impl HypercubeLinearResolver {
             {
                 hypercube_linear.into_owned()
             } else {
-                clausal_reason_as_hypercube(context.state, trigger_reason)
+                clausal_conflict
             }
         } else {
-            clausal_reason_as_hypercube(context.state, trigger_reason)
+            clausal_conflict
         }
     }
 
@@ -312,11 +321,18 @@ impl HypercubeLinearResolver {
             );
 
             let pivot_predicate = top_of_trail.predicate;
-            trace!("processing {}", pivot_predicate);
+            trace!(
+                "processing {}",
+                pivot_predicate.display(&state.variable_names)
+            );
 
             // Remove the top of trail from the reason set if it is in the reason set.
+            println!("=== Reason set");
             if !conflicting_hypercube_linear
                 .reason_set(&state.assignments)
+                .inspect(|p| {
+                    println!("{} ", p.display(&state.variable_names));
+                })
                 .any(|p| pivot_predicate.implies(p))
             {
                 trace!("  => skipping, does not contribute to conflict");
@@ -858,8 +874,6 @@ fn is_conflicting(
         .any(|predicate| {
             let predicate_value =
                 assignments.evaluate_predicate_at_trail_position(predicate, trail_position);
-            dbg!(predicate);
-            dbg!(predicate_value);
 
             predicate_value != Some(true)
         })
