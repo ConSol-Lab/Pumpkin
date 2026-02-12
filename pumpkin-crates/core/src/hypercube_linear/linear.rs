@@ -111,6 +111,10 @@ impl Display for LinearDisplay<'_, '_> {
             }
         }
 
+        if self.linear.terms.is_empty() {
+            write!(f, "0")?;
+        }
+
         write!(f, " <= {}", self.linear.bound)?;
 
         Ok(())

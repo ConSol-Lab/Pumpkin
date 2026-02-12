@@ -373,17 +373,10 @@ impl Display for PredicateDisplay<'_> {
         } else if self.predicate == Predicate::trivially_false() {
             write!(f, "[False]")
         } else {
-            let domain_id = self.predicate.get_domain();
-
-            write!(f, "[")?;
-            if let Some(name) = self.names.get_int_name(domain_id) {
-                write!(f, "{name}")?;
-            } else {
-                write!(f, "{domain_id}")?;
-            }
             write!(
                 f,
-                "[ {} {}]",
+                "[{} {} {}]",
+                self.predicate.get_domain().display(self.names),
                 self.predicate.get_predicate_type(),
                 self.predicate.get_right_hand_side()
             )?;
