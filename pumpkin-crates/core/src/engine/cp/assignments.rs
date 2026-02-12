@@ -229,9 +229,9 @@ impl Assignments {
         trail_position <= self.domains[domain_id].initial_bounds_below_trail
     }
 
-    pub(crate) fn get_trail_position_at_decision_level(&self, decision_level: usize) -> usize {
-        self.trail
-            .get_trail_position_at_decision_level(decision_level)
+    /// Get the last trail position that is on the given checkpoint.
+    pub(crate) fn get_trail_position_at_checkpoint(&self, checkpoint: usize) -> usize {
+        self.trail.get_trail_position_at_decision_level(checkpoint)
     }
 }
 

@@ -59,6 +59,15 @@ where
     Key: StorageKey + Copy,
     Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
 {
+    /// Accomodate the given key in the heap.
+    pub fn accomodate(&mut self, key: Key) {
+        while self.len() <= key.index() {
+            let next_id = Key::create_from_index(self.len());
+            self.grow(next_id, Value::default());
+            self.delete_key(next_id);
+        }
+    }
+
     /// Get the keys in the heap.
     ///
     /// The order in which the keys are yielded is unspecified.

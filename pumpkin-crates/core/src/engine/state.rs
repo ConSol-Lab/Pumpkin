@@ -358,6 +358,21 @@ impl State {
         })
     }
 
+    /// If the predicate is on the trail, return the trail entry.
+    pub(crate) fn trail_entry_for(
+        &self,
+        predicate: Predicate,
+    ) -> Option<ConstraintProgrammingTrailEntry> {
+        let trail_position = self.trail_position(predicate)?;
+
+        let entry = self.assignments.get_trail_entry(trail_position);
+        if entry.predicate == predicate {
+            Some(entry)
+        } else {
+            None
+        }
+    }
+
     /// Returns whether the trail position of the provided [`Predicate`].
     pub fn trail_position(&self, predicate: Predicate) -> Option<usize> {
         self.assignments.get_trail_position(&predicate)
