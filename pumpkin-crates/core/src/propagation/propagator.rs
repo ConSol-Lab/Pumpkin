@@ -15,6 +15,7 @@ use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::notifications::OpaqueDomainEvent;
+use crate::hypercube_linear::HypercubeLinearExplanation;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
@@ -203,6 +204,21 @@ pub trait Propagator: Downcast + DynClone {
                 self.name()
             )
         );
+    }
+
+    /// Hook which is called when a propagated [`Predicate`] should be explained using a hypercube
+    /// linear constraint.
+    ///
+    /// If the propagator cannot explain itself using a hypercube linear, then
+    /// [`Propagator::lazy_explanation`] is used as a fallback.
+    ///
+    /// See [`Propagator::lazy_explanation`] for information on explaining propagations.
+    fn explain_as_hypercube_linear(
+        &mut self,
+        _code: u64,
+        _context: ExplanationContext,
+    ) -> Option<HypercubeLinearExplanation<'_>> {
+        None
     }
 
     /// Logs statistics of the propagator using the provided [`StatisticLogger`].

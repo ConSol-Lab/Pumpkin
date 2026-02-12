@@ -1,12 +1,14 @@
+use std::fmt::Display;
 use std::num::NonZero;
 
 use crate::containers::HashMap;
+use crate::engine::VariableNames;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
 
 /// The linear inequality part of a hypercube linear constraint.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LinearInequality {
     terms: Box<[AffineView<DomainId>]>,
     bound: i32,
@@ -37,7 +39,7 @@ impl LinearInequality {
             *existing_weight += weight.get();
         }
 
-        let terms = domain_to_weight
+        let mut terms = domain_to_weight
             .into_iter()
             .filter(|&(_, weight)| weight != 0)
             .map(|(domain, weight)| domain.scaled(weight))
@@ -47,12 +49,22 @@ impl LinearInequality {
             return None;
         }
 
+        // We will always sort the terms by the domain ID to keep a consistent ordering.
+        // This is useful for debugging, and makes the equality and hash derives more
+        // robust.
+        terms.sort_by_key(|view| view.inner);
+
         Some(LinearInequality { terms, bound })
     }
 
     /// Iterate over the terms in the linear inequality.
-    pub fn terms(&self) -> impl Iterator<Item = AffineView<DomainId>> + '_ {
+    pub fn terms(&self) -> impl ExactSizeIterator<Item = AffineView<DomainId>> + '_ {
         self.terms.iter().copied()
+    }
+
+    /// Iterate over the terms in the linear inequality to mutate them.
+    pub fn terms_mut(&mut self) -> impl Iterator<Item = &mut AffineView<DomainId>> + '_ {
+        self.terms.iter_mut()
     }
 
     /// The bound of the linear inequality.
@@ -67,7 +79,41 @@ impl LinearInequality {
 
     /// Get the term for the given domain.
     pub fn term_for_domain(&self, domain: DomainId) -> Option<AffineView<DomainId>> {
-        self.terms().find(|view| view.inner == domain)
+        self.terms
+            .binary_search_by(|view| view.inner.cmp(&domain))
+            .ok()
+            .map(|index| self.terms[index])
+    }
+
+    /// Print the linear inequality.
+    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+        LinearDisplay {
+            linear: self,
+            names,
+        }
+    }
+}
+
+struct LinearDisplay<'l, 'names> {
+    linear: &'l LinearInequality,
+    names: &'names VariableNames,
+}
+
+impl Display for LinearDisplay<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let num_terms = self.linear.terms.len();
+
+        for (idx, term) in self.linear.terms().enumerate() {
+            write!(f, "{}*{}", term.scale, term.inner.display(self.names))?;
+
+            if idx < num_terms - 1 {
+                write!(f, " + ")?;
+            }
+        }
+
+        write!(f, " <= {}", self.linear.bound)?;
+
+        Ok(())
     }
 }
 

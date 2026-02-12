@@ -1,9 +1,12 @@
+use std::fmt::Display;
+
 use enumset::EnumSet;
 use pumpkin_checking::CheckerVariable;
 
 use super::TransformableVariable;
 use crate::containers::StorageKey;
 use crate::engine::Assignments;
+use crate::engine::VariableNames;
 use crate::engine::notifications::DomainEvent;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
@@ -27,6 +30,29 @@ impl DomainId {
 
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    /// Print the domain ID.
+    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+        DomainDisplay {
+            domain_id: *self,
+            names,
+        }
+    }
+}
+
+struct DomainDisplay<'names> {
+    domain_id: DomainId,
+    names: &'names VariableNames,
+}
+
+impl Display for DomainDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = self.names.get_int_name(self.domain_id) {
+            write!(f, "{name}")
+        } else {
+            write!(f, "unnamed({})", self.domain_id)
+        }
     }
 }
 
@@ -201,7 +227,7 @@ impl StorageKey for DomainId {
     }
 }
 
-impl std::fmt::Display for DomainId {
+impl Display for DomainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "x{}", self.id)
     }

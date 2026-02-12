@@ -39,6 +39,7 @@ getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen-test = "0.3"
 
 [features]
+hypercube-linear-assertions = []
 check-propagations = []
 debug-checks = []
 clap = ["dep:clap"]
