@@ -1,16 +1,18 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::num::NonZero;
 
 use log::debug;
 use log::trace;
 
 use crate::basic_types::StoredConflictInfo;
+use crate::branching::Brancher;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashSet;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
-use crate::engine::reason::ReasonRef;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::HypercubeLinearExplanation;
@@ -44,12 +46,62 @@ create_statistics_struct!(HypercubeLinearResolutionStatistics {
 
 #[derive(Clone, Debug, Default)]
 pub struct HypercubeLinearResolver {
+    /// Heap containing the predicates which still need to be processed. The maximum element needs
+    /// to be explained first.
+    to_process_heap: BTreeSet<PredicateToExplain>,
+    /// Statistics about all learned hypercube linear constraints.
     statistics: HypercubeLinearResolutionStatistics,
     /// Used to check whether the same constraint is re-learned multiple times.
     ///
     /// This should never happen in a correct implementation, so this is used only for debugging
     /// purposes.
     learned_constraints: HashSet<HypercubeLinearExplanation<'static>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PredicateToExplain {
+    predicate: Predicate,
+    trail_position: usize,
+}
+
+impl PartialOrd for PredicateToExplain {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PredicateToExplain {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.trail_position.cmp(&other.trail_position) {
+            // If two predicates are from different trail entries, then their explaining order is
+            // the same as their trail position.
+            ordering @ (Ordering::Less | Ordering::Greater) => ordering,
+
+            // If two predicates are from the same trail entry, the stronger one needs to be
+            // explained last. Since the 'largest' `PredicateToExplain` is processed first, the
+            // stronger predicate is 'smaller' than the more specific one.
+            Ordering::Equal => {
+                assert_eq!(
+                    self.predicate.get_domain(),
+                    other.predicate.get_domain(),
+                    "two predicates on the same trail position must have the same domain"
+                );
+
+                if self.predicate.implies(other.predicate)
+                    && other.predicate.implies(self.predicate)
+                {
+                    assert_eq!(self.predicate, other.predicate);
+                    Ordering::Equal
+                } else if self.predicate.implies(other.predicate) {
+                    Ordering::Less
+                } else if other.predicate.implies(self.predicate) {
+                    Ordering::Greater
+                } else {
+                    unreachable!("two predicates over the same domain must be comparable")
+                }
+            }
+        }
+    }
 }
 
 impl ConflictResolver for HypercubeLinearResolver {
@@ -69,7 +121,7 @@ impl ConflictResolver for HypercubeLinearResolver {
 
         let conflicting_hypercube_linear = conflict_hypercube_linear.clone();
         let (learned_hypercube_linear, backump_level) =
-            self.learn_hypercube_linear(context.state, conflicting_hypercube_linear.clone());
+            self.learn_hypercube_linear(context.reborrow(), conflicting_hypercube_linear.clone());
 
         self.restore_solver(context.reborrow(), backump_level, learned_hypercube_linear);
     }
@@ -83,19 +135,48 @@ impl HypercubeLinearResolver {
     /// linear.
     fn compute_conflicting_hypercube_linear(
         &mut self,
-        mut context: ConflictAnalysisContext<'_>,
+        context: ConflictAnalysisContext<'_>,
     ) -> HypercubeLinearExplanation<'static> {
-        let StoredConflictInfo::EmptyDomain(EmptyDomainConflict {
+        match context.solver_state.get_conflict_info() {
+            StoredConflictInfo::Propagator(propagator_conflict) => {
+                trace!("Converting propagator conflict to hypercube");
+
+                HypercubeLinearExplanation {
+                    hypercube: Cow::Owned(
+                        Hypercube::new(propagator_conflict.conjunction)
+                            .expect("propagator conflict contains mutually exclusive predicates"),
+                    ),
+                    linear: Cow::Owned(LinearInequality::trivially_false()),
+                }
+            }
+            StoredConflictInfo::EmptyDomain(empty_domain_conflict) => self
+                .compute_conflicting_hypercube_linear_from_empty_domain(
+                    context,
+                    empty_domain_conflict,
+                ),
+
+            StoredConflictInfo::InconsistentAssumptions(_)
+            | StoredConflictInfo::RootLevelConflict(_) => {
+                unreachable!("will never resolve these conflicts")
+            }
+        }
+    }
+
+    fn compute_conflicting_hypercube_linear_from_empty_domain(
+        &mut self,
+        mut context: ConflictAnalysisContext<'_>,
+        empty_domain_conflict: EmptyDomainConflict,
+    ) -> HypercubeLinearExplanation<'static> {
+        let EmptyDomainConflict {
             trigger_reason,
             trigger_predicate,
             ..
-        }) = context.solver_state.get_conflict_info()
-        else {
-            panic!(
-                "Cannot start hypercube analysis from {:?}",
-                context.solver_state.get_conflict_info()
-            );
-        };
+        } = empty_domain_conflict;
+
+        trace!(
+            "{} caused an empty domain, computing conflict constraint",
+            trigger_predicate.display(&context.state.variable_names)
+        );
 
         let conflict_nogood = context.get_conflict_nogood();
         let clausal_conflict = HypercubeLinearExplanation {
@@ -108,7 +189,10 @@ impl HypercubeLinearResolver {
 
         let propagator_id = context.state.reason_store.get_propagator(trigger_reason);
 
-        trace!("conflicting predicate = {}", trigger_predicate);
+        trace!(
+            "conflicting predicate = {}",
+            trigger_predicate.display(&context.state.variable_names)
+        );
 
         if let Some(reason_code) = context.state.reason_store.get_lazy_code(trigger_reason) {
             let explanation_context = ExplanationContext::new(
@@ -258,7 +342,7 @@ impl HypercubeLinearResolver {
             conflicting_hypercube_linear = conflicting_hypercube_linear.weaken(pivot_predicate);
         }
 
-        if hypercube_models_bound(&conflicting_hypercube_linear, pivot_predicate) {
+        if predicate_makes_hypercube_true(&conflicting_hypercube_linear, pivot_predicate) {
             // Here we need to perform propositional resolution to eliminate the
             // variable from the hypercube.
 
@@ -269,7 +353,6 @@ impl HypercubeLinearResolver {
                 pivot_predicate,
             );
             conflicting_hypercube_linear = result;
-            elimination_happened = true;
             let new_slack = compute_slack_at_trail_position(
                 &conflicting_hypercube_linear.linear,
                 &state.assignments,
@@ -280,94 +363,179 @@ impl HypercubeLinearResolver {
             trace!("no propositional resolution");
         }
 
-        if !elimination_happened {
-            trace!(
-                "current conflict: {}",
-                conflicting_hypercube_linear.display(&state.variable_names)
-            );
-            panic!(
-                "if the predicate contributes to the conflict, an elimination should be possible"
-            );
-        }
-
         conflicting_hypercube_linear
+    }
+
+    /// Get the hypercube linear reason for the propagation.
+    ///
+    /// If the propagated predicate is an implied predicate, this will return nothing but modify
+    /// the to_process_heap.
+    fn hypercube_from_reason(
+        &mut self,
+        mut context: ConflictAnalysisContext<'_>,
+        propagated_predicate: Predicate,
+    ) -> Option<HypercubeLinearReason<'static>> {
+        let mut clausal_reason = vec![];
+
+        context.get_propagation_reason(
+            propagated_predicate,
+            CurrentNogood::empty(),
+            &mut clausal_reason,
+        );
+
+        let Some(trail_entry) = context.state.trail_entry_for(propagated_predicate) else {
+            // The propagated predicate is implied. We return nothing, as we cannot create a
+            // hypercube (the clausal reason for an implied predicate naturally contains
+            // inconsistent predicates).
+
+            self.should_process_predicates(context.state, context.brancher, clausal_reason);
+
+            return None;
+        };
+
+        self.should_process_predicates(
+            context.state,
+            context.brancher,
+            clausal_reason.iter().copied(),
+        );
+
+        clausal_reason.push(!propagated_predicate);
+        let clausal_reason_as_hl = HypercubeLinearExplanation {
+            hypercube: Cow::Owned(Hypercube::new(clausal_reason).expect(
+                "reason for a propagated predicate does not contain inconsistent premises",
+            )),
+            linear: Cow::Owned(LinearInequality::trivially_false()),
+        };
+
+        // If the propatated predicate is on the trail, we want to try to explain the propagation
+        // with a hypercube linear constraint.
+        let Some((reason_ref, _)) = trail_entry.reason else {
+            panic!("resolution should never reach the last decision");
+        };
+
+        let propagator_id = context.state.reason_store.get_propagator(reason_ref);
+
+        let hypercube_linear_reason =
+            if let Some(reason_code) = context.state.reason_store.get_lazy_code(reason_ref) {
+                let explanation_context = ExplanationContext::new(
+                    &context.state.assignments,
+                    CurrentNogood::empty(),
+                    context.state.trail_len() - 1,
+                    &mut context.state.notification_engine,
+                );
+
+                if let Some(original) = context.state.propagators[propagator_id]
+                    .explain_as_hypercube_linear(*reason_code, explanation_context)
+                {
+                    original.into_owned()
+                } else {
+                    clausal_reason_as_hl.clone()
+                }
+            } else {
+                clausal_reason_as_hl.clone()
+            };
+
+        trace!(
+            "hypercube linear reason = {}",
+            hypercube_linear_reason.display(&context.state.variable_names)
+        );
+        trace!(
+            "clausal reason = {}",
+            clausal_reason_as_hl.display(&context.state.variable_names)
+        );
+
+        Some(HypercubeLinearReason {
+            original: hypercube_linear_reason,
+            as_clause: clausal_reason_as_hl,
+        })
     }
 
     fn learn_hypercube_linear(
         &mut self,
-        state: &mut State,
+        mut context: ConflictAnalysisContext<'_>,
         mut conflicting_hypercube_linear: HypercubeLinearExplanation<'static>,
     ) -> (HypercubeLinearExplanation<'static>, usize) {
-        let mut trail_index = state.trail_len();
+        self.to_process_heap.clear();
 
-        // Iterate the trail backwards until a constraint is obtained that propagates at a
-        // previous decision level.
+        self.should_process_predicates(
+            context.state,
+            context.brancher,
+            conflicting_hypercube_linear.reason_set(&context.state.assignments),
+        );
+
         loop {
+            let PredicateToExplain {
+                predicate: predicate_to_explain,
+                trail_position,
+            } = self
+                .to_process_heap
+                .pop_last()
+                .expect("we reach the stopping criterion before all predicates are explained");
+
+            trace!(
+                "processing {} from trail position {trail_position}",
+                predicate_to_explain.display(&context.state.variable_names)
+            );
+
             assert_eq!(
                 is_conflicting(
                     &conflicting_hypercube_linear,
-                    trail_index,
-                    &state.assignments,
+                    trail_position,
+                    &context.state.assignments,
                 ),
                 ConflictingStatus::Conflicting
             );
 
-            trail_index -= 1;
-            let top_of_trail = state.trail_entry(trail_index);
-
-            assert!(
-                top_of_trail.predicate.is_lower_bound_predicate()
-                    || top_of_trail.predicate.is_upper_bound_predicate()
-            );
-
-            let pivot_predicate = top_of_trail.predicate;
-            trace!(
-                "processing {}",
-                pivot_predicate.display(&state.variable_names)
-            );
-
-            // Remove the top of trail from the reason set if it is in the reason set.
-            println!("=== Reason set");
-            if !conflicting_hypercube_linear
-                .reason_set(&state.assignments)
-                .inspect(|p| {
-                    println!("{} ", p.display(&state.variable_names));
-                })
-                .any(|p| pivot_predicate.implies(p))
+            let reason = match self.hypercube_from_reason(context.reborrow(), predicate_to_explain)
             {
-                trace!("  => skipping, does not contribute to conflict");
-                // The current top of trail is not in the reason set and therefore does not
-                // contribute to the conflict.
-                continue;
-            }
-
-            let Some((reason_ref, _)) = top_of_trail.reason else {
-                panic!("resolution should never reach the last decision");
+                Some(reason) => reason,
+                None => continue,
             };
-
-            let reason = hypercube_from_reason(state, reason_ref);
 
             conflicting_hypercube_linear = self.resolve(
                 conflicting_hypercube_linear,
                 reason,
-                state,
-                trail_index,
-                top_of_trail.predicate,
+                context.state,
+                trail_position,
+                predicate_to_explain,
             );
 
             if cfg!(feature = "hypercube-linear-assertions") {
                 assert!(
                     !conflicting_hypercube_linear
-                        .reason_set(&state.assignments)
-                        .any(|p| p == pivot_predicate),
+                        .reason_set(&context.state.assignments)
+                        .any(|p| p == predicate_to_explain),
                     "the pivot predicate is removed from the reason of the conflict"
                 );
             }
 
-            if let Some(backjump_dl) =
-                will_propagate_on_previous_dl(&conflicting_hypercube_linear, &state.assignments)
-            {
+            if let Some(backjump_dl) = will_propagate_on_previous_dl(
+                &conflicting_hypercube_linear,
+                &context.state.assignments,
+            ) {
                 return (conflicting_hypercube_linear, backjump_dl);
+            }
+        }
+    }
+
+    fn should_process_predicates(
+        &mut self,
+        state: &State,
+        brancher: &mut dyn Brancher,
+        predicates: impl IntoIterator<Item = Predicate>,
+    ) {
+        for predicate in predicates {
+            let trail_position = state
+                .trail_position(predicate)
+                .expect("predicates to explain are true");
+
+            let newly_inserted = self.to_process_heap.insert(PredicateToExplain {
+                predicate,
+                trail_position,
+            });
+
+            if newly_inserted {
+                brancher.on_appearance_in_conflict_predicate(predicate);
             }
         }
     }
@@ -383,9 +551,9 @@ fn will_propagate_on_previous_dl(
 
     for decision_level in decision_levels {
         trace!("  => testing dl = {decision_level}");
-        let trail_position = assignments.get_trail_position_at_decision_level(decision_level);
+        let trail_position = assignments.get_trail_position_at_checkpoint(decision_level);
 
-        if propagates_at(hypercube_linear, assignments, trail_position) {
+        if !propagates_at(hypercube_linear, assignments, trail_position) {
             trace!("    => does not propagate");
             // The initial assumption is that the hypercube linear is conflicting, so it will be
             // propagating at the current decision level. That means the first time it does not
@@ -519,14 +687,17 @@ fn propositional_resolution(
     reason: HypercubeLinearExplanation<'static>,
     pivot_predicate: Predicate,
 ) -> HypercubeLinearExplanation<'static> {
-    trace!("applying propositional resolution on {pivot_predicate}",);
+    trace!(
+        "applying propositional resolution on {}",
+        pivot_predicate.display(&state.variable_names)
+    );
 
     // Make sure that the pivot is not also contributing to the conflict in the linear part.
     trace!(
         "  - {}",
         conflicting_hypercube_linear.display(&state.variable_names)
     );
-    let mut weakened_conflict = conflicting_hypercube_linear.weaken(pivot_predicate);
+    let weakened_conflict = conflicting_hypercube_linear.weaken(pivot_predicate);
     trace!(
         "    - weakened: {}",
         weakened_conflict.display(&state.variable_names)
@@ -539,13 +710,31 @@ fn propositional_resolution(
         "the reason should be a clause"
     );
 
-    let hypercube = std::mem::take(weakened_conflict.hypercube.to_mut());
-    let new_hypercube = hypercube
-        .with_predicates(reason.hypercube.iter_predicates())
-        .expect("propositional resolution causes hypercube to become inconsistent");
+    let root_trail_position = state.assignments.get_trail_position_at_checkpoint(0);
+
+    let hypercube_predicates = weakened_conflict
+        .hypercube
+        .iter_predicates()
+        .chain(reason.hypercube.iter_predicates())
+        .filter(|&predicate| {
+            // Only keep predicates that are not the propagated predicate or its
+            // opposite.
+            !pivot_predicate.implies(predicate) && !pivot_predicate.implies(!predicate)
+        })
+        .filter(|predicate| {
+            // Ignore predicates that are true at the root.
+            let predicate_trail_position = state
+                .assignments
+                .get_trail_position(predicate)
+                .expect("all predicates in hypercube are true");
+            predicate_trail_position > root_trail_position
+        });
 
     let new_constraint = HypercubeLinearExplanation {
-        hypercube: Cow::Owned(new_hypercube),
+        hypercube: Cow::Owned(
+            Hypercube::new(hypercube_predicates)
+                .expect("propositional resolution results in consistent hypercube"),
+        ),
         linear: weakened_conflict.linear,
     };
 
@@ -554,7 +743,7 @@ fn propositional_resolution(
     new_constraint
 }
 
-fn hypercube_models_bound(
+fn predicate_makes_hypercube_true(
     hypercube_linear: &HypercubeLinearExplanation<'_>,
     predicate: Predicate,
 ) -> bool {
@@ -786,72 +975,6 @@ fn compute_tightly_propagating_reason<'a>(
 struct HypercubeLinearReason<'state> {
     original: HypercubeLinearExplanation<'state>,
     as_clause: HypercubeLinearExplanation<'static>,
-}
-
-fn clausal_reason_as_hypercube(
-    state: &mut State,
-    reason: ReasonRef,
-) -> HypercubeLinearExplanation<'static> {
-    let mut clausal_reason = Vec::new();
-    assert!(state.reason_store.get_or_compute(
-        reason,
-        ExplanationContext::new(
-            &state.assignments,
-            CurrentNogood::empty(),
-            0,
-            &mut state.notification_engine,
-        ),
-        &mut state.propagators,
-        &mut clausal_reason,
-    ));
-
-    HypercubeLinearExplanation {
-        hypercube: Cow::Owned(
-            Hypercube::new(clausal_reason)
-                .expect("reason does not contain inconsistent predicates"),
-        ),
-        linear: Cow::Owned(LinearInequality::trivially_false()),
-    }
-}
-
-/// Get the hypercube linear reason for the propagation.
-fn hypercube_from_reason(state: &mut State, reason: ReasonRef) -> HypercubeLinearReason<'static> {
-    let clausal_reason = clausal_reason_as_hypercube(state, reason);
-    let propagator_id = state.reason_store.get_propagator(reason);
-
-    let hypercube_linear_reason =
-        if let Some(reason_code) = state.reason_store.get_lazy_code(reason) {
-            let explanation_context = ExplanationContext::new(
-                &state.assignments,
-                CurrentNogood::empty(),
-                state.trail_len() - 1,
-                &mut state.notification_engine,
-            );
-
-            if let Some(original) = state.propagators[propagator_id]
-                .explain_as_hypercube_linear(*reason_code, explanation_context)
-            {
-                original.into_owned()
-            } else {
-                clausal_reason.clone()
-            }
-        } else {
-            clausal_reason.clone()
-        };
-
-    trace!(
-        "hypercube linear reason = {}",
-        hypercube_linear_reason.display(&state.variable_names)
-    );
-    trace!(
-        "clausal reason = {}",
-        clausal_reason.display(&state.variable_names)
-    );
-
-    HypercubeLinearReason {
-        original: hypercube_linear_reason,
-        as_clause: clausal_reason,
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

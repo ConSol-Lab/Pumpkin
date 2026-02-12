@@ -4,23 +4,35 @@ mod helpers;
 
 use helpers::TestType;
 use helpers::check_mzn_proof;
-use helpers::run_mzn_test;
+use helpers::run_mzn_test_with_options;
 
 macro_rules! mzn_optimization_test {
     ($name:ident, with_proof: $with_proof:literal) => {
         #[test]
         fn $name() {
-            let output = run_mzn_test::<false>(
+            let output_clausal = run_mzn_test_with_options::<false>(
                 stringify!($name),
                 "mzn_optimization",
                 $with_proof,
                 TestType::Optimality,
+                vec![],
+                "",
             );
-            assert!(output.ends_with("==========\n"));
+            assert!(output_clausal.ends_with("==========\n"));
 
             if $with_proof {
                 check_mzn_proof(stringify!($name), "mzn_optimization");
             }
+
+            let output_hypercube = run_mzn_test_with_options::<false>(
+                stringify!($name),
+                "mzn_optimization",
+                false,
+                TestType::Optimality,
+                vec!["--conflict-resolver".into(), "hypercube-linear".into()],
+                "",
+            );
+            assert!(output_hypercube.ends_with("==========\n"));
         }
     };
 

@@ -261,6 +261,7 @@ impl ResolutionResolver {
             // TODO: could improve the heap structure to be more user-friendly.
 
             // Here we manually adjust the size of the heap to accommodate new elements.
+            self.to_process_heap.accomodate(predicate_id);
             while self.to_process_heap.len() <= predicate_id.index() {
                 let next_id = PredicateId::create_from_index(self.to_process_heap.len());
                 self.to_process_heap.grow(next_id, 0);
