@@ -988,6 +988,7 @@ impl NogoodPropagator {
 
                         (context.is_predicate_id_satisfied(*predicate_id)
                             && (predicate.get_domain() != propagated_domain
+                                || predicate.is_upper_bound_predicate()
                                 || (predicate.is_not_equal_predicate()
                                     && predicate.get_right_hand_side() > ub)))
                             .then_some(predicate)
@@ -1054,6 +1055,7 @@ impl NogoodPropagator {
 
                         (context.is_predicate_id_satisfied(*predicate_id)
                             && (predicate.get_domain() != propagated_domain
+                                || predicate.is_lower_bound_predicate()
                                 || (predicate.is_not_equal_predicate()
                                     && predicate.get_right_hand_side() < lb)))
                             .then_some(predicate)
