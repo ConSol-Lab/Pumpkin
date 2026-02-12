@@ -19,6 +19,7 @@ pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators
 pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
 signal-hook = "0.3.18"
 thiserror = "2.0.12"
+clap-verbosity-flag = "3.0.4"
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }

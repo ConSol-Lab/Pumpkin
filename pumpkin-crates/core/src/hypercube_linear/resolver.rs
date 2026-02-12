@@ -856,8 +856,12 @@ fn is_conflicting(
         .hypercube
         .iter_predicates()
         .any(|predicate| {
-            assignments.evaluate_predicate_at_trail_position(predicate, trail_position)
-                != Some(true)
+            let predicate_value =
+                assignments.evaluate_predicate_at_trail_position(predicate, trail_position);
+            dbg!(predicate);
+            dbg!(predicate_value);
+
+            predicate_value != Some(true)
         })
     {
         return ConflictingStatus::PremisesNotTrue;

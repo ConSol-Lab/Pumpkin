@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use log::debug;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -515,9 +516,11 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
+            debug!("Propagating...");
             self.propagate();
 
             if self.solver_state.no_conflict() {
+                debug!("No conflict after propagation");
                 // Restarts should only occur after a new decision level has been declared to
                 // account for the fact that all assumptions should be assigned when restarts take
                 // place. Since one assumption is posted per decision level, all assumptions are
@@ -552,6 +555,7 @@ impl ConstraintSatisfactionSolver {
                     Ok(()) => {}
                 }
             } else {
+                debug!("Propagation identified conflict");
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();
                     self.solver_state.declare_infeasible();
@@ -586,6 +590,12 @@ impl ConstraintSatisfactionSolver {
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
             self.new_checkpoint();
 
+            debug!(
+                "Posting assumption {} (new dl = {})",
+                assumption_literal.display(&self.state.variable_names),
+                self.get_checkpoint(),
+            );
+
             let _ = self.state.post(assumption_literal).map_err(|_| {
                 self.solver_state
                     .declare_infeasible_under_assumptions(assumption_literal);
@@ -603,6 +613,8 @@ impl ConstraintSatisfactionSolver {
 
         // If there is a next decision, make the decision.
         let Some(decision_predicate) = brancher.next_decision(context) else {
+            debug!("No further decisions to be made.",);
+
             // Otherwise there are no more decisions to be made,
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
@@ -611,6 +623,12 @@ impl ConstraintSatisfactionSolver {
         };
 
         self.new_checkpoint();
+
+        debug!(
+            "Deciding {} (new dl = {})",
+            decision_predicate.display(&self.state.variable_names),
+            self.get_checkpoint(),
+        );
 
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of
