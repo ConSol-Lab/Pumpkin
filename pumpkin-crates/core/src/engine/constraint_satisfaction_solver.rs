@@ -145,6 +145,7 @@ pub enum ConflictResolverType {
     NoLearning,
     #[default]
     UIP,
+    HypercubeLinear,
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
