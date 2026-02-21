@@ -272,11 +272,12 @@ impl ConflictAnalysisContext<'_> {
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         state: &mut State,
     ) {
-        let trail_index = state.trail_position(predicate);
+        let inference_code = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
 
-        let _ = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
-
-        if let Some(trail_index) = trail_index {
+        if inference_code.is_some() {
+            let trail_index = state.trail_position(predicate).expect(
+                "an inference code is only present if the propagated predicate is on the trail",
+            );
             let trail_entry = state.assignments.get_trail_entry(trail_index);
             let Some((reason_ref, inference_code)) = trail_entry.reason else {
                 return;
