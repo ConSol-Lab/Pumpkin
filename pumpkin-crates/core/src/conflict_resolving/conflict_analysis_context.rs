@@ -32,7 +32,6 @@ use crate::propagation::HasAssignments;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
-use crate::state::EmptyDomain;
 use crate::state::PropagatorHandle;
 
 /// Used during conflict analysis to provide the necessary information.
@@ -70,8 +69,9 @@ impl ConflictAnalysisContext<'_> {
     /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
     /// already true.
     ///
-    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] error is returned.
-    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
+    /// If a domain becomes empty due to this operation, an [`EmptyDomainConflict`] error is
+    /// returned.
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomainConflict> {
         self.state.post(predicate)
     }
 
@@ -338,7 +338,7 @@ impl ConflictAnalysisContext<'_> {
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
         let _ = self.state.reason_store.get_or_compute(
-            conflict.trigger_reason,
+            conflict.trigger_reason.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
                 self.state.assignments.num_trail_entries(), // Note that we do not do a
@@ -353,7 +353,7 @@ impl ConflictAnalysisContext<'_> {
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &mut self.state.constraint_tags,
-            conflict.trigger_inference_code,
+            conflict.trigger_inference_code.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
             &self.state.variable_names,
