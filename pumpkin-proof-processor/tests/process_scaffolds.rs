@@ -36,18 +36,31 @@ fn run_processor_on_proof(model: &str) {
         env!("CARGO_MANIFEST_DIR")
     );
 
-    let _ = assert_cmd::Command::cargo_bin("pumpkin-proof-processor")
-        .expect("could not find executable")
+    let processor_status = escargot::CargoBuild::new()
+        .bin("pumpkin-proof-processor")
+        .current_target()
+        .current_release()
+        .run()
+        .unwrap()
+        .command()
         .arg(&model_path)
         .arg(&scaffold_path)
         .arg(&full_proof_path)
-        .assert()
-        .success();
+        .status()
+        .unwrap();
+    assert!(processor_status.success());
 
-    let _ = assert_cmd::Command::cargo_bin("pumpkin-checker")
-        .expect("could not find executable")
+    let checker_status = escargot::CargoBuild::new()
+        .package("pumpkin-checker")
+        .bin("pumpkin-checker")
+        .current_target()
+        .current_release()
+        .run()
+        .unwrap()
+        .command()
         .arg(&model_path)
         .arg(&full_proof_path)
-        .assert()
-        .success();
+        .status()
+        .unwrap();
+    assert!(checker_status.success());
 }
