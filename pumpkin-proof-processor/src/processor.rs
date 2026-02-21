@@ -23,7 +23,6 @@ use log::debug;
 use log::info;
 use log::trace;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
-use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::containers::StorageKey;
@@ -35,26 +34,20 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::PredicateId;
-use pumpkin_core::propagators::hypercube_linear::Hypercube;
-use pumpkin_core::propagators::hypercube_linear::HypercubeLinearConstructor;
-use pumpkin_core::propagators::hypercube_linear::LinearInequality;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::CurrentNogood;
-use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 
+use crate::deduction_propagator::DeductionPropagator;
+use crate::deduction_propagator::DeductionPropagatorArgs;
 use crate::variables::Variables;
-
-/// The checkpoint at which trimming is done in the state.
-const CHECKPOINT_DURING_TRIMMING: usize = 1;
 
 #[derive(Debug)]
 pub(crate) struct ProofProcessor {
     state: State,
     variables: Variables,
-
-    toggles: HashSet<Predicate>,
 
     /// Contains the proof that will be written to the output. Key note: this is in reverse order
     /// due to the backward trimming.
@@ -96,16 +89,13 @@ pub(crate) enum ProofProcessError {
 
     #[error("conclusion is not supported by any deduction")]
     InvalidConclusion,
-
-    #[error("deduction {0} contains inconsistent premises")]
-    InconsistentDeduction(ConstraintId),
 }
 
 /// A deduction that was posted to the solver.
 #[derive(Clone, Debug)]
 struct PostedDeduction {
     predicates: PropositionalConjunction,
-    toggle: Predicate,
+    handle: PropagatorHandle<DeductionPropagator>,
     marked: bool,
 }
 
@@ -116,7 +106,6 @@ impl ProofProcessor {
         ProofProcessor {
             state,
             variables,
-            toggles: HashSet::default(),
             output_proof: vec![],
             predicate_ids: PredicateIdGenerator::default(),
             to_process_heap: KeyValueHeap::default(),
@@ -144,21 +133,22 @@ impl ProofProcessor {
         // propagation. If so, a new proof-stage is created with the appropriate
         // inferences.
 
-        self.state.new_checkpoint();
-
-        assert_eq!(CHECKPOINT_DURING_TRIMMING, self.state.get_checkpoint());
-
         info!("Trimming deductions and determining inferences");
         while let Some((tag, maybe_deduction)) = nogood_stack.pop() {
-            let _ = self.state.restore_to(CHECKPOINT_DURING_TRIMMING);
-
             // Extract the nogood handle and whether the deduction is marked.
             let Some(posted_deduction) = maybe_deduction else {
                 continue;
             };
 
+            let new_checkpoint = self.state.get_checkpoint() - 1;
+            let _ = self.state.restore_to(new_checkpoint);
+            self.state
+                .get_propagator_mut(posted_deduction.handle)
+                .expect("all handles are valid")
+                .deactivate();
+
             debug!("Processing deduction {}", NonZero::from(tag));
-            trace!("  {:?}", posted_deduction.predicates);
+            trace!("  nogood: {:?}", posted_deduction.predicates);
 
             // If the deduction was never used, then we don't have to consider it
             // further.
@@ -166,9 +156,6 @@ impl ProofProcessor {
                 trace!("Deduction {} is not marked", NonZero::from(tag));
                 continue;
             }
-
-            // We enable all deductions that are still in the nogood stack.
-            self.post_deduction_toggles(&nogood_stack);
 
             // Now we add the predicates in the nogood as assumptions to kick-start the
             // propagation.
@@ -180,8 +167,6 @@ impl ProofProcessor {
                 return Err(ProofProcessError::DeductionDoesNotConflict(tag.into()));
             };
 
-            dbg!(&conflict);
-
             let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
             self.output_proof.push(ProofStage {
                 inferences,
@@ -189,7 +174,6 @@ impl ProofProcessor {
                 premises: convert_predicates_to_proof_atomic(
                     &self.variables,
                     &posted_deduction.predicates,
-                    &self.toggles,
                 ),
             });
         }
@@ -201,18 +185,8 @@ impl ProofProcessor {
         for stage in std::mem::take(&mut self.output_proof).into_iter().rev() {
             let mut sequence = Vec::with_capacity(stage.inferences.len());
 
-            for mut inference in stage.inferences.into_iter() {
+            for inference in stage.inferences.into_iter() {
                 sequence.push(inference.constraint_id);
-
-                // TODO: This is a bit of a hack, but it works for now. Should be
-                // removed lated. I am very sorry to whoever will run into the bug
-                // that is caused by this TODO once hypercube linear support is in the
-                // proof system.
-                let label = inference.label.as_ref().expect("all have labels").as_ref();
-                if label == "hypercube_linear" {
-                    inference.label = Some(Arc::from("nogood"));
-                }
-
                 proof_writer.log_inference(inference)?;
             }
 
@@ -287,32 +261,14 @@ impl ProofProcessor {
             let deduction = match step {
                 Step::Deduction(deduction) => deduction,
 
-                Step::Conclusion(conclusion) => {
-                    // We cannot declare a new checkpoint if we do not clear the
-                    // propagation queue.
-                    self.state.propagate_to_fixed_point().expect(
-                        "all added constraints are behind toggles so no propagation should happen",
-                    );
+                // A dual bound conclusion is encountered. This is of the form `true -> bound`.
+                // This means we have to find a nogood `!bound -> false` and mark it.
+                Step::Conclusion(Conclusion::DualBound(bound)) => {
+                    return self.prepare_trimming_for_dual_bound_conclusion(bound, nogood_stack);
+                }
 
-                    self.state.new_checkpoint();
-                    self.post_deduction_toggles(&nogood_stack);
-                    let maybe_conflict = self.state.propagate_to_fixed_point();
-
-                    match conclusion.clone() {
-                        Conclusion::Unsat => {
-                            let Err(conflict) = maybe_conflict else {
-                                return Err(ProofProcessError::DeductionsDoNotConflict);
-                            };
-
-                            self.prepare_trimming_for_unsat_conclusion(conflict, &mut nogood_stack)
-                        }
-                        Conclusion::DualBound(bound) => self
-                            .prepare_trimming_for_dual_bound_conclusion(bound, &mut nogood_stack)?,
-                    }
-
-                    let _ = self.state.restore_to(0);
-
-                    return Ok((conclusion, nogood_stack));
+                Step::Conclusion(Conclusion::Unsat) => {
+                    return Err(ProofProcessError::DeductionsDoNotConflict);
                 }
 
                 // We ignore inferences when doing proof processing. We will introduce our own
@@ -344,35 +300,34 @@ impl ProofProcessor {
             debug!("Adding deduction {}", deduction.constraint_id);
             trace!("    {nogood:?}");
 
-            let deduction_toggle_predicate = self.state.new_literal(None).get_true_predicate();
-
-            let _ = self.state.add_propagator(HypercubeLinearConstructor {
-                hypercube: Hypercube::new(
-                    nogood
-                        .iter()
-                        .copied()
-                        .chain(std::iter::once(deduction_toggle_predicate)),
-                )
-                .map_err(|_| ProofProcessError::InconsistentDeduction(deduction.constraint_id))?,
-                linear: LinearInequality::trivially_false(),
+            self.state.new_checkpoint();
+            let handle = self.state.add_propagator(DeductionPropagatorArgs {
+                nogood: nogood.iter().copied().collect(),
                 constraint_tag,
             });
 
             nogood_stack.accomodate(constraint_tag, None);
             nogood_stack[constraint_tag] = Some(PostedDeduction {
                 predicates: nogood,
-                toggle: deduction_toggle_predicate,
+                handle,
                 marked: false,
             });
-            let _ = self.toggles.insert(deduction_toggle_predicate);
+
+            if let Err(conflict) = self.state.propagate_to_fixed_point() {
+                trace!("Conflict identified");
+
+                // If we reach inconsistency through propagation alone, then it must mean that the
+                // proof is a proof of unsatisfiability and not a dual bound proof.
+                return self.repair_solver(conflict, constraint_tag, nogood_stack);
+            }
         }
     }
 
     fn prepare_trimming_for_dual_bound_conclusion(
         &mut self,
         bound: IntAtomic<Rc<str>, i32>,
-        nogood_stack: &mut DeductionStack,
-    ) -> Result<(), ProofProcessError> {
+        mut nogood_stack: DeductionStack,
+    ) -> Result<(Conclusion<Rc<str>, i32>, DeductionStack), ProofProcessError> {
         let predicate = convert_proof_atomic_to_predicate(&self.variables, &bound)?;
         info!("Found dual bound conclusion");
         trace!("bound = {predicate:?}");
@@ -387,19 +342,19 @@ impl ProofProcessor {
         // correct proof in that situation and short-circuit.
         if self.state.is_trivially_assigned(predicate) {
             self.add_predicate_to_explain(predicate);
-            let inferences = self.explain_predicates(nogood_stack, vec![]);
+            let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
 
             self.output_proof.push(ProofStage {
                 inferences,
                 constraint_id: deduction_id.into(),
-                premises: vec![
-                    convert_predicate_to_proof_atomic(&self.variables, !predicate, &self.toggles)
-                        .expect("toggles cannot be propagated"),
-                ],
+                premises: vec![convert_predicate_to_proof_atomic(
+                    &self.variables,
+                    !predicate,
+                )],
             });
 
-            return Ok(());
+            return Ok((Conclusion::DualBound(bound), nogood_stack));
         }
 
         let mut reason_buffer = vec![];
@@ -445,55 +400,39 @@ impl ProofProcessor {
             // In this case we have to explain by 'root propagation' and no deductions
             // were used. The predicate is propagated by a propagator.
             self.add_predicate_to_explain(predicate);
-            let inferences = self.explain_predicates(nogood_stack, vec![]);
+            let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
 
             self.output_proof.push(ProofStage {
                 inferences,
                 constraint_id: deduction_id.into(),
-                premises: vec![
-                    convert_predicate_to_proof_atomic(&self.variables, !predicate, &self.toggles)
-                        .expect("toggles cannot be propagated"),
-                ],
+                premises: vec![convert_predicate_to_proof_atomic(
+                    &self.variables,
+                    !predicate,
+                )],
             });
         }
 
-        Ok(())
+        Ok((Conclusion::DualBound(bound), nogood_stack))
     }
 
     /// Takes a solver that is in an inconsistent state because we have a proof of
     /// unsatisfiability, and removes the last added constraint. We mark all the deductions in the
     /// deduction stack that contributed to the conflict, and log the empty nogood step.
-    fn prepare_trimming_for_unsat_conclusion(
+    fn repair_solver(
         &mut self,
         conflict: Conflict,
-        nogood_stack: &mut DeductionStack,
-    ) {
-        let tag = match &conflict {
-            Conflict::EmptyDomain(EmptyDomainConflict {
-                trigger_inference_code,
-                ..
-            }) => trigger_inference_code
-                .as_ref()
-                .expect("we get here due to propagation")
-                .tag(),
-            Conflict::Propagator(_) => {
-                unreachable!("the hypercube linear propagator does not trigger explicit conflicts")
-            }
-        };
-
+        tag: ConstraintTag,
+        mut nogood_stack: DeductionStack,
+    ) -> Result<(Conclusion<Rc<str>, i32>, DeductionStack), ProofProcessError> {
         // Add the nogood that triggered the conflict to the nogood stack. Also mark it,
         // because obviously it is used.
-        nogood_stack.accomodate(tag, None);
-        nogood_stack[tag] = Some(PostedDeduction {
-            predicates: vec![].into(),
-            // This will never be posted, as this deduction will be immediately removed from the
-            // nogood stack.
-            toggle: Predicate::trivially_false(),
-            marked: true,
-        });
+        let posted_deduction = nogood_stack[tag]
+            .as_mut()
+            .expect("the deduction that triggered the conflict must be on the nogood stack");
+        posted_deduction.marked = true;
 
-        let inferences = self.explain_current_conflict(nogood_stack, conflict);
+        let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
 
         // Log the empty clause to the proof.
         self.output_proof.push(ProofStage {
@@ -501,6 +440,8 @@ impl ProofProcessor {
             constraint_id: self.state.new_constraint_tag().into(),
             premises: vec![],
         });
+
+        Ok((Conclusion::Unsat, nogood_stack))
     }
 
     /// Explain the current conflict and write to the output proof.
@@ -533,11 +474,7 @@ impl ProofProcessor {
 
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
-                    premises: convert_predicates_to_proof_atomic(
-                        &self.variables,
-                        &conjunction,
-                        &self.toggles,
-                    ),
+                    premises: convert_predicates_to_proof_atomic(&self.variables, &conjunction),
                     consequent: None,
                     generated_by: Some(generated_by.into()),
                     label: Some(label),
@@ -564,16 +501,11 @@ impl ProofProcessor {
                         premises: convert_predicates_to_proof_atomic(
                             &self.variables,
                             &predicates_to_explain,
-                            &self.toggles,
                         ),
-                        consequent: Some(
-                            convert_predicate_to_proof_atomic(
-                                &self.variables,
-                                empty_domain_confict.trigger_predicate,
-                                &self.toggles,
-                            )
-                            .expect("toggles cannot be propagated"),
-                        ),
+                        consequent: Some(convert_predicate_to_proof_atomic(
+                            &self.variables,
+                            empty_domain_confict.trigger_predicate,
+                        )),
                         generated_by: Some(generated_by.into()),
                         label: Some(label),
                     }));
@@ -627,14 +559,10 @@ impl ProofProcessor {
                         Some(Inference {
                             constraint_id,
                             premises: vec![],
-                            consequent: Some(
-                                convert_predicate_to_proof_atomic(
-                                    &self.variables,
-                                    predicate,
-                                    &self.toggles,
-                                )
-                                .expect("toggles cannot be propagated"),
-                            ),
+                            consequent: Some(convert_predicate_to_proof_atomic(
+                                &self.variables,
+                                predicate,
+                            )),
                             generated_by: None,
                             label: Some(Arc::from("initial_domain")),
                         })
@@ -666,19 +594,11 @@ impl ProofProcessor {
                 let label = inference_code.label();
                 inferences.push(Some(Inference {
                     constraint_id: self.state.new_constraint_tag().into(),
-                    premises: convert_predicates_to_proof_atomic(
+                    premises: convert_predicates_to_proof_atomic(&self.variables, &reason_buffer),
+                    consequent: Some(convert_predicate_to_proof_atomic(
                         &self.variables,
-                        &reason_buffer,
-                        &self.toggles,
-                    ),
-                    consequent: Some(
-                        convert_predicate_to_proof_atomic(
-                            &self.variables,
-                            predicate,
-                            &self.toggles,
-                        )
-                        .expect("toggle cannot be propagated"),
-                    ),
+                        predicate,
+                    )),
                     generated_by: Some(inference_code.tag().into()),
                     label: Some(label),
                 }));
@@ -702,10 +622,6 @@ impl ProofProcessor {
             Some(true),
             "predicate {predicate:?} does not evaluate to true",
         );
-
-        if self.toggles.contains(&predicate) {
-            return;
-        }
 
         // The first time we encounter the predicate, we initialise its value in the
         // heap.
@@ -772,27 +688,15 @@ impl ProofProcessor {
 
         Ok(())
     }
-
-    fn post_deduction_toggles(&mut self, deduction_stack: &DeductionStack) {
-        for deduction in deduction_stack.iter().flatten() {
-            let _ = self
-                .state
-                .post(deduction.toggle)
-                .expect("toggles are not used anywhere else so we can always post them");
-        }
-    }
 }
 
 /// Given a [`DeductionStack`], mark the constraint indicated by the inference code as used.
 fn mark_stack_entry(stack: &mut DeductionStack, inference_code: InferenceCode) {
     let used_constraint_tag = inference_code.tag();
 
-    let Some(stack_entry) = stack.get_mut(used_constraint_tag) else {
-        return;
-    };
-
     trace!("Marking constraint {}", NonZero::from(used_constraint_tag));
 
+    let stack_entry = &mut stack[used_constraint_tag];
     if let Some(posted_deduction) = stack_entry {
         posted_deduction.marked = true;
     }
@@ -802,26 +706,18 @@ fn mark_stack_entry(stack: &mut DeductionStack, inference_code: InferenceCode) {
 fn convert_predicates_to_proof_atomic(
     variables: &Variables,
     predicates: &[Predicate],
-    toggles: &HashSet<Predicate>,
 ) -> Vec<IntAtomic<String, i32>> {
     predicates
         .iter()
-        .filter_map(|predicate| convert_predicate_to_proof_atomic(variables, *predicate, toggles))
+        .map(|predicate| convert_predicate_to_proof_atomic(variables, *predicate))
         .collect()
 }
 
 /// Converts an atomic from the proofs representation to a solver [`Predicate`].
-///
-/// If the given predicate is a deduction toggle, then `None` is returned.
 fn convert_predicate_to_proof_atomic(
     variables: &Variables,
     predicate: Predicate,
-    toggles: &HashSet<Predicate>,
-) -> Option<IntAtomic<String, i32>> {
-    if toggles.contains(&predicate) {
-        return None;
-    }
-
+) -> IntAtomic<String, i32> {
     let name = variables
         .get_name_for_domain(predicate.get_domain())
         .unwrap()
@@ -837,11 +733,11 @@ fn convert_predicate_to_proof_atomic(
 
     let value = predicate.get_right_hand_side();
 
-    Some(IntAtomic {
+    IntAtomic {
         name,
         comparison,
         value,
-    })
+    }
 }
 
 /// Converts an atomic from the proofs representation to a solver [`Predicate`].

@@ -456,6 +456,17 @@ impl State {
         self.propagators.get_propagator_mut(handle)
     }
 
+    /// Convert the given propagator ID into a typed [`PropagatorHandle`].
+    ///
+    /// If the propagator ID does not correspond to a propagator of the expected type, then
+    /// `None` is returned.
+    pub fn as_propagator_handle<P: Propagator>(
+        &mut self,
+        propagator_id: PropagatorId,
+    ) -> Option<PropagatorHandle<P>> {
+        self.propagators.as_propagator_handle(propagator_id)
+    }
+
     /// Get an exclusive reference to the propagator identified by the given handle and a context
     /// which can be used for propagation.
     pub(crate) fn get_propagator_mut_with_context<P: Propagator>(
