@@ -10,7 +10,20 @@ macro_rules! accept_proof {
     };
 }
 
+accept_proof!(root_propagation_unsatisfiable);
+
 accept_proof!(rcpsp_00);
+
+accept_proof!(market_split_u3_01);
+accept_proof!(market_split_u3_02);
+accept_proof!(market_split_u3_03);
+accept_proof!(market_split_u3_04);
+accept_proof!(market_split_u3_05);
+accept_proof!(market_split_u3_06);
+accept_proof!(market_split_u3_07);
+accept_proof!(market_split_u3_08);
+accept_proof!(market_split_u3_09);
+accept_proof!(market_split_u3_10);
 
 fn run_processor_on_proof(model: &str) {
     let model_path = format!("{}/tests/scaffolds/{model}.fzn", env!("CARGO_MANIFEST_DIR"));
