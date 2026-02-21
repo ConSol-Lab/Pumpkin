@@ -1,3 +1,4 @@
+mod deduction_propagator;
 mod model;
 mod processor;
 mod variables;
