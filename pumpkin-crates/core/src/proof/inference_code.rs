@@ -69,8 +69,8 @@ impl InferenceCode {
     }
 
     /// Get the inference label.
-    pub fn label(&self) -> &str {
-        self.1.as_ref()
+    pub fn label(&self) -> Arc<str> {
+        Arc::clone(&self.1)
     }
 }
 
