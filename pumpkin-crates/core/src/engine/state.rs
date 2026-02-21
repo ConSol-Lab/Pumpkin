@@ -6,7 +6,6 @@ use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
 
 use crate::basic_types::PropagatorConflict;
-use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -26,7 +25,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -213,31 +211,6 @@ impl State {
                     index.to_string().as_str(),
                 ]));
             }
-        }
-    }
-
-    pub fn explain(
-        &mut self,
-        predicate: Predicate,
-        current_nogood: CurrentNogood,
-        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-    ) -> Option<InferenceCode> {
-        let index_on_trail = self.trail_position(predicate)?;
-        let trail_entry = self.trail_entry(index_on_trail);
-
-        ConflictAnalysisContext::get_propagation_reason_inner(
-            predicate,
-            current_nogood,
-            &mut ProofLog::default(),
-            &HashMap::default(),
-            reason_buffer,
-            self,
-        );
-
-        if trail_entry.predicate == predicate {
-            trail_entry.reason.map(|(_, inference_code)| inference_code)
-        } else {
-            None
         }
     }
 }
@@ -623,7 +596,7 @@ impl State {
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
-        self.statistics.sum_of_backjumps += (self.get_checkpoint() - 1 - checkpoint) as u64;
+        self.statistics.sum_of_backjumps += (self.get_checkpoint() - checkpoint) as u64;
         if self.get_checkpoint() - checkpoint > 1 {
             self.statistics.num_backjumps += 1;
         }
@@ -930,13 +903,12 @@ impl State {
     /// All the predicates in the returned slice will evaluate to `true`.
     ///
     /// If the provided predicate is not true, then this method will panic.
-    #[allow(unused, reason = "Will be part of public API")]
     pub fn get_propagation_reason(
         &mut self,
         predicate: Predicate,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         current_nogood: CurrentNogood<'_>,
-    ) -> Option<usize> {
+    ) -> Option<InferenceCode> {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
@@ -966,9 +938,7 @@ impl State {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let (reason_ref, inference_code) = trail_entry
-                .reason
-                .expect("Cannot be a null reason for propagation.");
+            let (reason_ref, inference_code) = trail_entry.reason?;
 
             let explanation_context = ExplanationContext::new(
                 &self.assignments,
@@ -986,7 +956,7 @@ impl State {
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            Some(trail_position)
+            Some(inference_code)
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.
         // It is necessary to further analyse what was the reason for setting the predicate true.
