@@ -20,6 +20,7 @@ thiserror = "2.0.18"
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
+escargot = "0.5.15"
 pumpkin-checker = { path = "../pumpkin-checker" }
 
 [lints]
