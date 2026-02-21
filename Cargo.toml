@@ -9,6 +9,7 @@ members = [
 
     "./pumpkin-crates/*", # Core libraries of the solver
     "./pumpkin-solver", # The solver binary
+    "./pumpkin-proof-processor", # The proof processor
     "./pumpkin-checker", # The uncertified proof checker
     "./pumpkin-solver-py", # The python interface
     "./pumpkin-macros", # Proc-macros used by the pumpkin source (unpublished)

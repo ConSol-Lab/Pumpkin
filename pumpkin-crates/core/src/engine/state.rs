@@ -12,7 +12,6 @@ use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::engine::DebugHelper;
-use crate::engine::EmptyDomain;
 use crate::engine::PropagatorQueue;
 #[cfg(test)]
 use crate::engine::Reason;
@@ -26,8 +25,6 @@ use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
-#[cfg(doc)]
-use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
@@ -130,10 +127,11 @@ impl From<PropagatorConflict> for Conflict {
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
+    /// The [`InferenceCode`] that accompanies triggered the conflict.
+    pub trigger_inference_code: Option<InferenceCode>,
+
     /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
-    pub(crate) trigger_reason: ReasonRef,
-    /// The [`InferenceCode`] that accompanies [`EmptyDomainConflict::trigger_reason`].
-    pub(crate) trigger_inference_code: InferenceCode,
+    pub(crate) trigger_reason: Option<ReasonRef>,
 }
 
 impl EmptyDomainConflict {
@@ -150,17 +148,19 @@ impl EmptyDomainConflict {
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         current_nogood: CurrentNogood,
     ) {
-        let _ = state.reason_store.get_or_compute(
-            self.trigger_reason,
-            ExplanationContext::new(
-                &state.assignments,
-                current_nogood,
-                state.trail_len(),
-                &mut state.notification_engine,
-            ),
-            &mut state.propagators,
-            reason_buffer,
-        );
+        if let Some(reason_ref) = self.trigger_reason {
+            let _ = state.reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::new(
+                    &state.assignments,
+                    current_nogood,
+                    state.trail_len(),
+                    &mut state.notification_engine,
+                ),
+                &mut state.propagators,
+                reason_buffer,
+            );
+        }
     }
 }
 
@@ -303,6 +303,12 @@ impl State {
     pub fn fixed_value<Var: IntegerVariable>(&self, variable: Var) -> Option<i32> {
         (self.lower_bound(variable.clone()) == self.upper_bound(variable.clone()))
             .then(|| self.lower_bound(variable))
+    }
+
+    /// Returns `true` if the given predicate is assigned simply by the initial domain of the
+    /// variable.
+    pub fn is_trivially_assigned(&self, predicate: Predicate) -> bool {
+        self.assignments.is_initial_bound(predicate)
     }
 
     /// Returns the truth value of the provided [`Predicate`].
@@ -450,6 +456,17 @@ impl State {
         self.propagators.get_propagator_mut(handle)
     }
 
+    /// Convert the given propagator ID into a typed [`PropagatorHandle`].
+    ///
+    /// If the propagator ID does not correspond to a propagator of the expected type, then
+    /// `None` is returned.
+    pub fn as_propagator_handle<P: Propagator>(
+        &mut self,
+        propagator_id: PropagatorId,
+    ) -> Option<PropagatorHandle<P>> {
+        self.propagators.as_propagator_handle(propagator_id)
+    }
+
     /// Get an exclusive reference to the propagator identified by the given handle and a context
     /// which can be used for propagation.
     pub(crate) fn get_propagator_mut_with_context<P: Propagator>(
@@ -476,7 +493,8 @@ impl State {
     /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
     /// already true.
     ///
-    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] error is returned.
+    /// If a domain becomes empty due to this operation, an [`EmptyDomainConflict`] error is
+    /// returned.
     ///
     /// This method does _not_ perform any propagation. For that, an explicit call to
     /// [`State::propagate_to_fixed_point`] is required. This allows the
@@ -486,9 +504,14 @@ impl State {
     /// was posted will undo the effect of that [`Predicate`]. See the documentation of
     /// [`State::new_checkpoint`] and
     /// [`State::restore_to`] for more information.
-    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomainConflict> {
         self.assignments
             .post_predicate(predicate, None, &mut self.notification_engine)
+            .map_err(|_| EmptyDomainConflict {
+                trigger_predicate: predicate,
+                trigger_inference_code: None,
+                trigger_reason: None,
+            })
     }
 
     #[cfg(test)]
@@ -515,7 +538,7 @@ impl State {
                 let _ = slot.populate(propagator_id, build_reason(reason, None));
                 Ok(())
             }
-            Err(EmptyDomain) => {
+            Err(_) => {
                 use crate::propagation::build_reason;
 
                 let _ = slot.populate(propagator_id, build_reason(reason, None));
@@ -524,8 +547,8 @@ impl State {
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,
-                    trigger_reason,
-                    trigger_inference_code,
+                    trigger_reason: Some(trigger_reason),
+                    trigger_inference_code: Some(trigger_inference_code),
                 })
             }
         }
@@ -584,7 +607,7 @@ impl State {
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
-        self.statistics.sum_of_backjumps += (self.get_checkpoint() - 1 - checkpoint) as u64;
+        self.statistics.sum_of_backjumps += (self.get_checkpoint() - checkpoint) as u64;
         if self.get_checkpoint() - checkpoint > 1 {
             self.statistics.num_backjumps += 1;
         }
@@ -891,13 +914,12 @@ impl State {
     /// All the predicates in the returned slice will evaluate to `true`.
     ///
     /// If the provided predicate is not true, then this method will panic.
-    #[allow(unused, reason = "Will be part of public API")]
     pub fn get_propagation_reason(
         &mut self,
         predicate: Predicate,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         current_nogood: CurrentNogood<'_>,
-    ) -> Option<usize> {
+    ) -> Option<InferenceCode> {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
@@ -927,9 +949,7 @@ impl State {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            let (reason_ref, inference_code) = trail_entry
-                .reason
-                .expect("Cannot be a null reason for propagation.");
+            let (reason_ref, inference_code) = trail_entry.reason?;
 
             let explanation_context = ExplanationContext::new(
                 &self.assignments,
@@ -947,7 +967,7 @@ impl State {
 
             assert!(reason_exists, "reason reference should not be stale");
 
-            Some(trail_position)
+            Some(inference_code)
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.
         // It is necessary to further analyse what was the reason for setting the predicate true.

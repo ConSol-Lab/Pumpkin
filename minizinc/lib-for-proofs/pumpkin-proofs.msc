@@ -1,0 +1,14 @@
+{
+  "id": "linear-solver",
+  "name": "General Purpose Linear Solver",
+  "version": "9.12.4544",
+  "mznlib": "./mznlib",
+  "executable": "../../../bin/fzn-gecode",
+  "stdFlags": ["-a", "-i", "-f", "-p", "-r", "-s", "-v"],
+  "supportsMzn": false,
+  "supportsFzn": true,
+  "needsSolns2Out": true,
+  "needsMznExecutable": false,
+  "needsStdlibDir": false,
+  "isGUIApplication": false
+}

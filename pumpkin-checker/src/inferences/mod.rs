@@ -46,7 +46,7 @@ pub enum InvalidInference {
     UndefinedConstraint,
 
     /// The inference does not state which constraint generated it.
-    #[error("missing constraint hint")]
+    #[error("the constraint hint points to an unknown constraint ID")]
     MissingConstraint,
 
     /// The premises of the inference are inconsistent.
