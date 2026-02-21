@@ -272,7 +272,9 @@ impl ConflictAnalysisContext<'_> {
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         state: &mut State,
     ) {
-        let trail_index = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
+        let trail_index = state.trail_position(predicate);
+
+        let _ = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
 
         if let Some(trail_index) = trail_index {
             let trail_entry = state.assignments.get_trail_entry(trail_index);

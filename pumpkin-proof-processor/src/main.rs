@@ -14,6 +14,7 @@ use std::rc::Rc;
 use clap::Parser;
 use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
+use pumpkin_core::containers::StorageKey;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::TransformableVariable;
@@ -73,8 +74,13 @@ fn parse_model(path: impl AsRef<Path>) -> anyhow::Result<ProofProcessor> {
         variable_map.add_variable(Rc::clone(name), domain_id);
     }
 
-    for annotated_constraint in fzn_model.constraints.iter() {
+    for (idx, annotated_constraint) in fzn_model.constraints.iter().enumerate() {
         let constraint_tag = state.new_constraint_tag();
+        assert_eq!(
+            idx,
+            constraint_tag.index(),
+            "constraint tags for model constraints must be consecutive"
+        );
 
         // If the solver is no-longer consistent, we still want to reserve constraint tags for the
         // remaining flatzinc constraints. The processor expects the empty nogood to have a
