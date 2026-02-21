@@ -46,14 +46,12 @@ fn basic_core_extraction() {
     if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut unsatisfiable) =
         result
     {
-        {
-            let core = unsatisfiable.extract_core();
+        let core = unsatisfiable.extract_core();
 
-            // In this case, the core should be equal to all assumption predicates
-            assert_eq!(
-                core,
-                vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)].into()
-            );
-        }
+        // In this case, the core should be equal to all assumption predicates
+        assert_eq!(
+            core,
+            vec![predicate!(x == 1), predicate!(y <= 1), predicate!(y != 0)].into()
+        );
     }
 }
