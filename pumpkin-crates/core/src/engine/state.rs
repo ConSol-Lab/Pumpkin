@@ -128,9 +128,13 @@ pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
     /// The [`InferenceCode`] that accompanies triggered the conflict.
+    ///
+    /// If the empty domain is not triggered by a propagation, this is [`None`].
     pub trigger_inference_code: Option<InferenceCode>,
 
     /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
+    ///
+    /// If the empty domain is not triggered by a propagation, this is [`None`].
     pub(crate) trigger_reason: Option<ReasonRef>,
 }
 
@@ -904,9 +908,10 @@ impl State {
             reason_buffer,
         );
     }
-    /// Get the reason for a predicate being true and store it in `reason_buffer`; additionally, if
-    /// the provided [`Predicate`] is explicitly on the trail, this method will return the
-    /// corresponding trail index.
+    /// Get the reason for a predicate being true and store it in `reason_buffer`.
+    ///
+    /// If the provided [`Predicate`] is explicitly on the trail, this method will return the
+    /// corresponding [`InferenceCode`] if the predicate is propagated by one.
     ///
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.
