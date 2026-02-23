@@ -41,7 +41,7 @@ use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 
 use crate::deduction_propagator::DeductionPropagator;
-use crate::deduction_propagator::DeductionPropagatorArgs;
+use crate::deduction_propagator::DeductionPropagatorConstructor;
 use crate::variables::Variables;
 
 #[derive(Debug)]
@@ -301,7 +301,7 @@ impl ProofProcessor {
             trace!("    {nogood:?}");
 
             self.state.new_checkpoint();
-            let handle = self.state.add_propagator(DeductionPropagatorArgs {
+            let handle = self.state.add_propagator(DeductionPropagatorConstructor {
                 nogood: nogood.iter().copied().collect(),
                 constraint_tag,
             });

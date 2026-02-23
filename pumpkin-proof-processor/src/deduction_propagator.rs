@@ -12,19 +12,22 @@ use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
 
+/// The [`PropagatorConstructor`] for the [`DeductionPropagator`].
 #[derive(Clone, Debug)]
-pub(crate) struct DeductionPropagatorArgs {
+pub(crate) struct DeductionPropagatorConstructor {
+    /// The nogood to propagate.
     pub(crate) nogood: PropositionalConjunction,
+    /// The constraint tag of the nogood.
     pub(crate) constraint_tag: ConstraintTag,
 }
 
-impl PropagatorConstructor for DeductionPropagatorArgs {
+impl PropagatorConstructor for DeductionPropagatorConstructor {
     type PropagatorImpl = DeductionPropagator;
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         declare_inference_label!(Nogood);
 
-        let DeductionPropagatorArgs {
+        let DeductionPropagatorConstructor {
             nogood,
             constraint_tag,
         } = self;
@@ -43,11 +46,26 @@ impl PropagatorConstructor for DeductionPropagatorArgs {
     }
 }
 
+/// A nogood propagator used to propagate deductions in the proof processor.
+///
+/// The main feature of this propagator is that it can be deactivated using
+/// [`DeductionPropagator::deactivate`]. The proof processor uses this during backward trimming to
+/// effectively remove constraints once it determined whether the constraint needs to be kept in
+/// the processed proof.
 #[derive(Clone, Debug)]
 pub(crate) struct DeductionPropagator {
+    /// The nogood to propagate.
     nogood: PropositionalConjunction,
+    /// The IDs for the predicates in the nogood.
+    ///
+    /// The order in this vector is unspecified. In particular, it is not true that the ID at index
+    /// i corresponds to the nogood at index i. This is fine since the IDs are only used to unwatch
+    /// the predicates when the propagator is deactivated.
     ids: Vec<PredicateId>,
+    /// If `true`, the propagator should propagate when enqueued. Otherwise, the propagator will do
+    /// nothing if invoked.
     active: bool,
+    /// The inference code for this propagator.
     inference_code: InferenceCode,
 }
 
