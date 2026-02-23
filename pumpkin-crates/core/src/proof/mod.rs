@@ -46,7 +46,7 @@ impl ProofLog {
     pub fn cp(file_path: &Path, log_hints: bool) -> std::io::Result<ProofLog> {
         let file = File::create(file_path)?;
 
-        let sink = if file_path.extension().is_some_and(|ext| ext == ".gz") {
+        let sink = if file_path.extension().is_some_and(|ext| ext == "gz") {
             Sink::GzippedFile(flate2::write::GzEncoder::new(
                 file,
                 flate2::Compression::fast(),
