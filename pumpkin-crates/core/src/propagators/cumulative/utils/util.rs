@@ -1,6 +1,7 @@
 //! Contains common methods for all of the propagators of the cumulative constraint; this includes
 //! methods for propagating but also methods related to creating the
 //! input parameters.
+use std::cmp::Reverse;
 use std::rc::Rc;
 
 use enumset::enum_set;
@@ -24,7 +25,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
-    ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
+    ordered_tasks.sort_by_key(|task| Reverse(task.resource_usage));
 
     let mut id = 0;
     ordered_tasks
