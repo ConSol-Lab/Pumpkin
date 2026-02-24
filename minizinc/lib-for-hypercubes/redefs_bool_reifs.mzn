@@ -175,4 +175,4 @@ predicate bool_lin_eq_reif(
   array [int] of var bool: x,
   int: d,
   var bool: b, %% No var int d, sorry
-) = aux_int_eq_iff_1(sum (i in index_set(x)) (c[i] * bool2int(x[i])), d, bool2int(b));
+) = int_lin_eq_reif(c, [bool2int(x_i) | x_i in x], d, b);

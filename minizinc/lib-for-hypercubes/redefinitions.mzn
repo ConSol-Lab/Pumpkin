@@ -34,10 +34,22 @@ include "options.mzn";
 include "redefs_bool_reifs.mzn";
 include "redefs_bool_imp.mzn";
 
-include "domain_encodings.mzn";
-include "redefs_lin_reifs.mzn";
-include "redefs_lin_imp.mzn";
 include "redefs_lin_halfreifs.mzn";
+
+include "domain_encodings.mzn";
+
+
+predicate int_lin_le_reif(array [int] of int: as, array [int] of var int: bs,
+                         int: c, var bool: r) =
+    let {
+        array [int] of int: negated_as = [-a | a in as];
+        int: negated_c = -c - 1;
+    } in
+    int_lin_le_imp(as, bs, c, r) /\ int_lin_le_imp(negated_as, bs, negated_c, not r);
+
+predicate int_lin_eq_reif(array [int] of int: as, array [int] of var int: bs,
+                         int: c, var bool: r) =
+    int_lin_eq_imp(as, bs, c, r) /\ int_lin_ne_imp(as, bs, c, not r);
 
 include "nosets.mzn"; %% For set_le, set_lt ... Usind std/nosets
 %% as long as the linearization is good.

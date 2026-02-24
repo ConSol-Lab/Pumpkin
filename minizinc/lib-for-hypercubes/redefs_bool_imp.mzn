@@ -1,5 +1,3 @@
-include "redefs_lin_halfreifs.mzn";
-
 % SIMPLE BOOLEAN LOGIC
 % TODO: why not check "is_fixed(r)" everywhere??
 
@@ -91,4 +89,4 @@ predicate bool_lin_eq_imp(
   array [int] of var bool: x,
   int: d,
   var bool: b :: promise_ctx_antitone,
-) = aux_int_eq_if_1(sum (i in index_set(x)) (c[i] * bool2int(x[i])), d, bool2int(b));
+) = int_lin_eq_imp(c, [bool2int(x_i) | x_i in x], d, b);
