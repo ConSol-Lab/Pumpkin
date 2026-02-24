@@ -311,7 +311,7 @@ impl State {
 
     /// Returns `true` if the given predicate is assigned simply by the initial domain of the
     /// variable.
-    pub fn is_trivially_assigned(&self, predicate: Predicate) -> bool {
+    pub fn is_implied_by_initial_domain(&self, predicate: Predicate) -> bool {
         self.assignments.is_initial_bound(predicate)
     }
 
@@ -611,7 +611,8 @@ impl State {
     pub fn restore_to(&mut self, checkpoint: usize) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(checkpoint <= self.get_checkpoint());
 
-        self.statistics.sum_of_backjumps += (self.get_checkpoint() - checkpoint) as u64;
+        self.statistics.sum_of_backjumps +=
+            (self.get_checkpoint().saturating_sub(1) - checkpoint) as u64;
         if self.get_checkpoint() - checkpoint > 1 {
             self.statistics.num_backjumps += 1;
         }
@@ -910,8 +911,8 @@ impl State {
     }
     /// Get the reason for a predicate being true and store it in `reason_buffer`.
     ///
-    /// If the provided [`Predicate`] is explicitly on the trail, this method will return the
-    /// corresponding [`InferenceCode`] if the predicate is propagated by one.
+    /// If the provided [`Predicate`] is propagated by a propagator, then the [`InferenceCode`]
+    /// accompanies the propagation is returned.
     ///
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.

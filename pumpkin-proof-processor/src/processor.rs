@@ -340,7 +340,7 @@ impl ProofProcessor {
 
         // If the dual bound is the initial bound on the objective variable, write the
         // correct proof in that situation and short-circuit.
-        if self.state.is_trivially_assigned(predicate) {
+        if self.state.is_implied_by_initial_domain(predicate) {
             self.add_predicate_to_explain(predicate);
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
@@ -543,7 +543,7 @@ impl ProofProcessor {
 
             // The predicate is either propagated or an initial bound. If it is an
             // initial bound, we dispatch that here.
-            if self.state.is_trivially_assigned(predicate) {
+            if self.state.is_implied_by_initial_domain(predicate) {
                 // The initial bound inference is either logged already, or still needs
                 // to be logged.
                 let inference = match initial_bound_indices.get(&predicate).copied() {
