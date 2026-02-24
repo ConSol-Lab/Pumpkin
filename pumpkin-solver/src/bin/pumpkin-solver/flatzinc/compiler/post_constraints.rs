@@ -108,54 +108,74 @@ pub(crate) fn run(
                 constraints::binary_not_equals,
             )?,
 
-            "int_lin_eq_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_imp",
-                constraint_tag,
-                constraints::equals,
-            )?,
-            "int_lin_ge_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ge_imp",
-                constraint_tag,
-                constraints::greater_than_or_equals,
-            )?,
-            "int_lin_gt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_gt_imp",
-                constraint_tag,
-                constraints::greater_than,
-            )?,
-            "int_lin_le_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_imp",
-                constraint_tag,
-                constraints::less_than_or_equals,
-            )?,
-            "int_lin_lt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_lt_imp",
-                constraint_tag,
-                constraints::less_than,
-            )?,
-            "int_lin_ne_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ne_imp",
-                constraint_tag,
-                constraints::not_equals,
-            )?,
+            "int_lin_eq_imp" => panic!("should be rewritten to int_lin_le_imp"),
+            // These should never appear
+            // "int_lin_ge_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ge_imp",
+            //     constraint_tag,
+            //     constraints::greater_than_or_equals,
+            // )?,
+            // "int_lin_gt_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_gt_imp",
+            //     constraint_tag,
+            //     constraints::greater_than,
+            // )?,
+            // "int_lin_lt_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_lt_imp",
+            //     constraint_tag,
+            //     constraints::less_than,
+            // )?,
+            // "int_lin_ne_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ne_imp",
+            //     constraint_tag,
+            //     constraints::not_equals,
+            // )?,
+
+            // Changed to use hypercube
+            // "int_lin_le_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_le_imp",
+            //     constraint_tag,
+            //     constraints::less_than_or_equals,
+            // )?,
+            "int_lin_le_imp" => {
+                let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+                let reif = context.resolve_bool_variable(&exprs[3])?;
+
+                let terms = vars
+                    .iter()
+                    .zip(weights.iter())
+                    .filter_map(|(&domain, &weight)| {
+                        NonZero::new(weight).map(|weight| (weight, domain))
+                    })
+                    .collect();
+
+                context
+                    .solver
+                    .add_constraint(hypercube_linear(
+                        HypercubeLinear::new(vec![reif.get_true_predicate()], terms, rhs)
+                            .expect("valid hypercube linear"),
+                        constraint_tag,
+                    ))
+                    .post()
+                    .is_ok()
+            }
 
             "int_lin_ne" => compile_int_lin_predicate(
                 context,
