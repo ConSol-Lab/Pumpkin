@@ -4,6 +4,7 @@
 //! inferences are sound w.r.t. an inference rule.
 
 mod atomic_constraint;
+mod deduction_checker;
 mod inference_checker;
 mod int_ext;
 mod union;
@@ -11,6 +12,7 @@ mod variable;
 mod variable_state;
 
 pub use atomic_constraint::*;
+pub use deduction_checker::*;
 pub use inference_checker::*;
 pub use int_ext::*;
 pub use union::*;
