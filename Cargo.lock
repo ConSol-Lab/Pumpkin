@@ -942,6 +942,7 @@ version = "0.3.0"
 dependencies = [
  "dyn-clone",
  "fnv",
+ "thiserror",
 ]
 
 [[package]]
