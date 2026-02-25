@@ -59,8 +59,8 @@ pub(crate) struct DeductionPropagator {
     /// The IDs for the predicates in the nogood.
     ///
     /// The order in this vector is unspecified. In particular, it is not true that the ID at index
-    /// i corresponds to the nogood at index i. This is fine since the IDs are only used to unwatch
-    /// the predicates when the propagator is deactivated.
+    /// i corresponds to the predicate at index i. This is fine since the IDs are only used to
+    /// unwatch the predicates when the propagator is deactivated.
     ids: Vec<PredicateId>,
     /// If `true`, the propagator should propagate when enqueued. Otherwise, the propagator will do
     /// nothing if invoked.
@@ -121,6 +121,9 @@ impl Propagator for DeductionPropagator {
                     .filter(|&predicate| predicate != unassigned_predicate)
                     .collect::<PropositionalConjunction>();
 
+                // This will never fail, as the predicate is known to be unassigned. So
+                // this propagator only returns explicit conflicts and never empty
+                // domain conflicts.
                 context.post(!unassigned_predicate, explanation, &self.inference_code)?;
             }
         }

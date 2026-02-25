@@ -1,7 +1,4 @@
 //! The proof processing facilities to turn a proof scaffold into a full DRCP proof.
-//!
-//! In future this should be moved to a separate crate, however, currently this depends on features
-//! that are not (and should not be) in the public API of the `pumpkin-core` crate.
 
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -57,13 +54,21 @@ pub(crate) struct ProofProcessor {
     predicate_ids: PredicateIdGenerator,
     /// Heap containing the predicates which still need to be processed; sorted non-increasing
     /// based on trail-index where implied predicates are processed first.
+    ///
+    /// Note that two predicates implied by the same trail index do not have an order between each
+    /// other.
     to_process_heap: KeyValueHeap<PredicateId, u32>,
 }
 
+/// A single proof stage for the proof.
 #[derive(Debug)]
 struct ProofStage {
-    inferences: Vec<Inference<String, i32, Arc<str>>>,
+    /// The ID of the constraint to introduce.
     constraint_id: ConstraintId,
+    /// The inferences for the proof stage.
+    inferences: Vec<Inference<String, i32, Arc<str>>>,
+    /// The atomic constraints to assume `true` such that a conflict is derived throught the
+    /// inferences.
     premises: Vec<IntAtomic<String, i32>>,
 }
 
@@ -102,6 +107,10 @@ struct PostedDeduction {
 type DeductionStack = KeyedVec<ConstraintTag, Option<PostedDeduction>>;
 
 impl ProofProcessor {
+    /// Creates a new [`ProofProcessor`] from a [`State`] and [`Variables`].
+    ///
+    /// The state is assumed to be set up with propagators. For every variable in the model, there
+    /// should be an entry in `variables` mapping the variable name to a domain in `state`.
     pub(crate) fn new(state: State, variables: Variables) -> Self {
         ProofProcessor {
             state,
@@ -112,6 +121,13 @@ impl ProofProcessor {
         }
     }
 
+    /// Process the given proof and write the result to the proof writer.
+    ///
+    /// To process a proof, only the deductions from `proof_reader` are considered. Deductions that
+    /// are redundant for proving the conclusion (determined by propagation) are removed. For the
+    /// deductions that remain, inferences are introduced to complete the proof.
+    ///
+    /// Note that if the input proof contains inferences, they are ignored.
     pub(crate) fn process<R: BufRead, W: Write>(
         mut self,
         proof_reader: ProofReader<R, i32>,
@@ -182,7 +198,7 @@ impl ProofProcessor {
 
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
-        for stage in std::mem::take(&mut self.output_proof).into_iter().rev() {
+        for stage in self.output_proof.drain(..).rev() {
             let mut sequence = Vec::with_capacity(stage.inferences.len());
 
             for inference in stage.inferences.into_iter() {
@@ -371,19 +387,7 @@ impl ProofProcessor {
         trace!("Marking reason for dual bound");
         trace!("  reason = {reason_buffer:?}",);
 
-        // TODO: if the predicate is implied, then `inference_code` will be `None`. In that case,
-        // we need to make sure to mark all the inferences that imply predicate, and not just the
-        // first one.
-        //
-        // For example, let's say we have the following proof:
-        // ```
-        // ...
-        // n <id1> [obj <= 5]
-        // ...
-        // n <id2> [obj != 5]
-        // c [obj >= 7]
-        // ```
-        // In this case, we have to mark both <id1> and <id2>.
+        // We expect the conclusion to be syntactally implied by one of the deductions.
         let used_constraint_tag = inference_code.expect("must be due to a propagation").tag();
         trace!("  constraint_tag = {}", NonZero::from(used_constraint_tag));
 
