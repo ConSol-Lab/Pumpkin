@@ -456,7 +456,7 @@ where
 impl<Lhs: WitnessedVariable, Rhs: WitnessedVariable> WitnessGenerator
     for BinaryEqualsChecker<Lhs, Rhs>
 {
-    fn support(&self, local_id: LocalId, value: ValueToWitness) -> Witness {
+    fn support(&self, _: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
         match local_id.unpack() {
             0 => {
                 let value = self.lhs.unpack_value(value);

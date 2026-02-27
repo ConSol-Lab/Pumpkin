@@ -25,7 +25,11 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::TrailedInteger;
+use pumpkin_core::propagation::checkers::BoundConsistencyChecker;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -52,14 +56,10 @@ where
     ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, LinearBounds),
-            Box::new(LinearLessOrEqualInferenceChecker::new(
-                self.x.clone(),
-                self.c,
-            )),
+            Box::new(LinearLessOrEqualChecker::new(self.x.clone(), self.c)),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for reified")]
-        pumpkin_core::propagation::checkers::DefaultChecker
+        BoundConsistencyChecker::new(LinearLessOrEqualChecker::new(self.x.clone(), self.c))
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -295,18 +295,18 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct LinearLessOrEqualInferenceChecker<Var> {
+pub struct LinearLessOrEqualChecker<Var> {
     terms: Box<[Var]>,
     bound: i32,
 }
 
-impl<Var> LinearLessOrEqualInferenceChecker<Var> {
+impl<Var> LinearLessOrEqualChecker<Var> {
     pub fn new(terms: Box<[Var]>, bound: i32) -> Self {
-        LinearLessOrEqualInferenceChecker { terms, bound }
+        LinearLessOrEqualChecker { terms, bound }
     }
 }
 
-impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualInferenceChecker<Var>
+impl<Var, Atomic> InferenceChecker<Atomic> for LinearLessOrEqualChecker<Var>
 where
     Var: CheckerVariable<Atomic>,
     Atomic: AtomicConstraint,
@@ -328,6 +328,16 @@ where
             .sum();
 
         left_hand_side > i64::from(self.bound)
+    }
+}
+
+impl<Var: IntegerVariable> WitnessGenerator for LinearLessOrEqualChecker<Var> {
+    fn support(&self, domains: &Domains<'_>, _: LocalId, _: ValueToWitness) -> Witness {
+        Witness::new(
+            self.terms
+                .iter()
+                .map(|term| term.assign(domains.lower_bound(term))),
+        )
     }
 }
 

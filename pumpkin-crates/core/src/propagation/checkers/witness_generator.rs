@@ -1,3 +1,4 @@
+use crate::propagation::Domains;
 use crate::propagation::LocalId;
 use crate::propagation::checkers::ValueToWitness;
 use crate::propagation::checkers::Witness;
@@ -12,5 +13,5 @@ pub trait WitnessGenerator {
     /// Create a [`Witness`] such that the variable identified by `local_id` is assigned to `value`.
     ///
     /// Use [`WitnessedVariable::unpack_value`] to convert the [`ValueToWitness`] to an `i32`.
-    fn support(&self, local_id: LocalId, value: ValueToWitness) -> Witness;
+    fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness;
 }

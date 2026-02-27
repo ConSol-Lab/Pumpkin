@@ -63,7 +63,9 @@ where
                     continue;
                 }
 
-                let witness = self.witness_generator.support(local_id, value.into());
+                let witness = self
+                    .witness_generator
+                    .support(&domains, local_id, value.into());
 
                 assert_eq!(
                     Some(value),
@@ -78,6 +80,11 @@ where
 
                 // Add all the assigned variables as supported values as well.
                 for (witness_domain_id, witness_value) in witness.iter() {
+                    assert!(
+                        domains.contains(&witness_domain_id, witness_value),
+                        "witness uses values outside domain"
+                    );
+
                     let supports = supported_values.entry(witness_domain_id).or_default();
                     supports.push(witness_value);
                 }
