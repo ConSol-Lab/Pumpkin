@@ -84,7 +84,7 @@ where
             }),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for reified")]
+        #[allow(deprecated, reason = "TODO to implement for division")]
         pumpkin_core::propagation::checkers::DefaultChecker
     }
 }

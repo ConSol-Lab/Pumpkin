@@ -63,7 +63,7 @@ where
             }),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for reified")]
+        #[allow(deprecated, reason = "TODO to implement for not equal")]
         pumpkin_core::propagation::checkers::DefaultChecker
     }
 

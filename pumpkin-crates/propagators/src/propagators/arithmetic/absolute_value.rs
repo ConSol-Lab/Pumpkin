@@ -8,7 +8,6 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
-use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -17,12 +16,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::checkers::BoundConsistencyChecker;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
-use pumpkin_core::propagation::checkers::ValueToWitness;
-use pumpkin_core::propagation::checkers::Witness;
-use pumpkin_core::propagation::checkers::WitnessGenerator;
-use pumpkin_core::propagation::checkers::WitnessedVariable;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -54,10 +48,8 @@ where
             }),
         );
 
-        BoundConsistencyChecker::new(AbsoluteValueChecker {
-            signed: self.signed.clone(),
-            absolute: self.absolute.clone(),
-        })
+        #[allow(deprecated, reason = "TODO to implement for int abs")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -217,24 +209,6 @@ where
 
         // The intervals should not match, otherwise there is no conflict.
         computed_signed_lower != absolute_lower || computed_signed_upper != absolute_upper
-    }
-}
-
-impl<VA: WitnessedVariable, VB: WitnessedVariable> WitnessGenerator
-    for AbsoluteValueChecker<VA, VB>
-{
-    fn support(&self, _: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
-        match local_id.unpack() {
-            0 => {
-                let value = self.signed.unpack_value(value);
-                Witness::new([self.signed.assign(value), self.absolute.assign(value)])
-            }
-            1 => {
-                let value = self.absolute.unpack_value(value);
-                Witness::new([self.signed.assign(value), self.absolute.assign(value)])
-            }
-            _ => unreachable!("absolute value does not register local id {local_id}"),
-        }
     }
 }
 
