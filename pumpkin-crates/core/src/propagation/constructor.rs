@@ -286,6 +286,13 @@ impl Drop for PropagatorConstructorContext<'_> {
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
         }
+
+        #[cfg(feature = "check-propagations")]
+        {
+            // Make sure to register the scope of this propagator with the state.
+            let scope = std::mem::take(self.scope_builder.deref_mut()).build();
+            let _ = self.state.scopes.insert(self.propagator_id, scope);
+        }
     }
 }
 
