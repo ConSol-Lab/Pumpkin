@@ -14,6 +14,9 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::math::num_ext::NumExt;
+use crate::propagation::checkers::SingleVariableAssignment;
+use crate::propagation::checkers::ValueToWitness;
+use crate::propagation::checkers::WitnessedVariable;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
 /// domain of `x`.
@@ -404,6 +407,20 @@ impl From<DomainId> for AffineView<DomainId> {
 enum Rounding {
     Up,
     Down,
+}
+
+impl<Inner: WitnessedVariable> WitnessedVariable for AffineView<Inner> {
+    fn unpack_value(&self, value: ValueToWitness) -> i32 {
+        let inner_value = self.inner.unpack_value(value);
+
+        self.map(inner_value)
+    }
+
+    fn assign(&self, value: i32) -> SingleVariableAssignment {
+        assert_eq!((value - self.offset) % self.scale, 0);
+        let inner_assignment = (value - self.offset) / self.scale;
+        self.inner.assign(inner_assignment)
+    }
 }
 
 #[cfg(test)]

@@ -10,6 +10,9 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
+use crate::propagation::checkers::SingleVariableAssignment;
+use crate::propagation::checkers::ValueToWitness;
+use crate::propagation::checkers::WitnessedVariable;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -188,6 +191,16 @@ impl TransformableVariable<AffineView<DomainId>> for DomainId {
 
     fn offset(&self, offset: i32) -> AffineView<DomainId> {
         AffineView::new(*self, 1, offset)
+    }
+}
+
+impl WitnessedVariable for DomainId {
+    fn unpack_value(&self, value: ValueToWitness) -> i32 {
+        value.unpack()
+    }
+
+    fn assign(&self, value: i32) -> SingleVariableAssignment {
+        SingleVariableAssignment::new(*self, value)
     }
 }
 

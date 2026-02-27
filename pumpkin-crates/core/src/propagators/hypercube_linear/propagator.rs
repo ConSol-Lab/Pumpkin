@@ -13,6 +13,9 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
+use crate::propagation::checkers::ConsistencyChecker;
+#[allow(deprecated, reason = "TODO to implement for reified")]
+use crate::propagation::checkers::DefaultChecker;
 use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::HypercubeLinearChecker;
 use crate::propagators::hypercube_linear::LinearInequality;
@@ -33,7 +36,10 @@ pub struct HypercubeLinearConstructor {
 impl PropagatorConstructor for HypercubeLinearConstructor {
     type PropagatorImpl = HypercubeLinearPropagator;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, HypercubeLinear),
             Box::new(HypercubeLinearChecker {
@@ -42,6 +48,9 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
                 bound: self.linear.bound(),
             }),
         );
+
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {

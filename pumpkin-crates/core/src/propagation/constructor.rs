@@ -25,6 +25,10 @@ use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
+use crate::propagation::checkers::ConsistencyChecker;
+#[allow(deprecated, reason = "TODO to implement for reified")]
+use crate::propagation::checkers::DefaultChecker;
+use crate::propagation::checkers::ScopeBuilder;
 use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -45,7 +49,13 @@ pub trait PropagatorConstructor {
     /// to verify the propagations done by this propagator are correct.
     ///
     /// See [`InferenceChecker`] for more information.
-    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
+    fn add_inference_checkers(
+        &self,
+        _checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        DefaultChecker
+    }
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
@@ -102,6 +112,9 @@ pub struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
+    /// The scope of the propagator that is being accumulated.
+    scope_builder: RefOrOwned<'a, ScopeBuilder>,
+
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
@@ -122,6 +135,7 @@ impl PropagatorConstructorContext<'_> {
             propagator_id,
             state,
             did_register: RefOrOwned::Owned(false),
+            scope_builder: RefOrOwned::Owned(ScopeBuilder::default()),
         }
     }
 
@@ -166,6 +180,10 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all(&mut watchers, domain_events.events());
+
+        // This is a bit hacky to get the domain, but it works for now.
+        let domain_id = crate::predicate![var == 1].get_domain();
+        self.scope_builder.add(local_id, domain_id);
     }
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
@@ -225,6 +243,7 @@ impl PropagatorConstructorContext<'_> {
             next_local_id: self.next_local_id.reborrow(),
             did_register: self.did_register.reborrow(),
             state: self.state,
+            scope_builder: self.scope_builder.reborrow(),
         }
     }
 

@@ -25,6 +25,7 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::TrailedInteger;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -45,7 +46,10 @@ where
 {
     type PropagatorImpl = LinearLessOrEqualPropagator<Var>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, LinearBounds),
             Box::new(LinearLessOrEqualInferenceChecker::new(
@@ -53,6 +57,9 @@ where
                 self.c,
             )),
         );
+
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
