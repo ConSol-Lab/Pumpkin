@@ -69,7 +69,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         } else {
             let last_idx = hypercube_predicates.len() - 1;
             [
-                context.register_predicate(hypercube_predicates[0.min(last_idx)]),
+                context.register_predicate(hypercube_predicates[0]),
                 context.register_predicate(hypercube_predicates[1.min(last_idx)]),
             ]
         };
