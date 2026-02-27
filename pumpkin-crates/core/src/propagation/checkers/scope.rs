@@ -14,6 +14,10 @@ impl Scope {
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (LocalId, DomainId)> {
         self.0.iter().copied()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 #[derive(Clone, Debug, Default)]

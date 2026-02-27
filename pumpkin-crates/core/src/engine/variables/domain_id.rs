@@ -10,6 +10,8 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
+use crate::propagation::LocalId;
+use crate::propagation::checkers::ScopeBuilder;
 use crate::propagation::checkers::SingleVariableAssignment;
 use crate::propagation::checkers::ValueToWitness;
 use crate::propagation::checkers::WitnessedVariable;
@@ -195,6 +197,10 @@ impl TransformableVariable<AffineView<DomainId>> for DomainId {
 }
 
 impl WitnessedVariable for DomainId {
+    fn add_to_scope(&self, scope: &mut ScopeBuilder, local_id: LocalId) {
+        scope.add(local_id, *self);
+    }
+
     fn unpack_value(&self, value: ValueToWitness) -> i32 {
         value.unpack()
     }

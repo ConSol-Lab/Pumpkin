@@ -171,6 +171,8 @@ impl PropagatorConstructorContext<'_> {
     ) {
         self.will_not_register_any_events();
 
+        var.add_to_scope(&mut self.scope_builder, local_id);
+
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -180,10 +182,6 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
         var.watch_all(&mut watchers, domain_events.events());
-
-        // This is a bit hacky to get the domain, but it works for now.
-        let domain_id = crate::predicate![var == 1].get_domain();
-        self.scope_builder.add(local_id, domain_id);
     }
 
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
@@ -289,8 +287,12 @@ impl Drop for PropagatorConstructorContext<'_> {
 
         #[cfg(feature = "check-propagations")]
         {
+            let RefOrOwned::Owned(scope_builder) = &mut self.scope_builder else {
+                unreachable!("other fields were already owned");
+            };
+
             // Make sure to register the scope of this propagator with the state.
-            let scope = std::mem::take(self.scope_builder.deref_mut()).build();
+            let scope = std::mem::take(scope_builder).build();
             let _ = self.state.scopes.insert(self.propagator_id, scope);
         }
     }

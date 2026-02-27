@@ -69,6 +69,8 @@ where
             constraint_tag,
         } = self;
 
+        dbg!(&x);
+
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 
@@ -333,6 +335,8 @@ where
 
 impl<Var: IntegerVariable> WitnessGenerator for LinearLessOrEqualChecker<Var> {
     fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
+        dbg!(self);
+
         let variable_index = local_id.unpack() as usize;
         let value = self.terms[variable_index].unpack_value(value);
 
