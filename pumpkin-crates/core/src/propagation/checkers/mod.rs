@@ -1,3 +1,4 @@
+mod bound_consistency_checker;
 mod consistency_checker;
 mod domain_consistency_checker;
 mod scope;
@@ -5,6 +6,7 @@ mod variable;
 mod witness;
 mod witness_generator;
 
+pub use bound_consistency_checker::*;
 pub use consistency_checker::*;
 pub use domain_consistency_checker::*;
 pub use scope::*;
