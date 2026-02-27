@@ -15,6 +15,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
+#[allow(deprecated, reason = "TODO to implement for reified")]
+use pumpkin_core::propagation::checkers::DefaultChecker;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -108,7 +111,10 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
         }
     }
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, DisjunctiveEdgeFinding),
             Box::new(DisjunctiveEdgeFindingChecker {
@@ -122,6 +128,9 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for DisjunctiveConstr
                     .collect(),
             }),
         );
+
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        DefaultChecker
     }
 }
 

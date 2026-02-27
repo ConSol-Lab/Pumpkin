@@ -31,6 +31,12 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::DomainConsistencyChecker;
+use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
+use pumpkin_core::propagation::checkers::WitnessedVariable;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -53,7 +59,10 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, BinaryEquals),
             Box::new(BinaryEqualsChecker {
@@ -61,6 +70,11 @@ where
                 rhs: self.b.clone(),
             }),
         );
+
+        DomainConsistencyChecker::new(BinaryEqualsChecker {
+            lhs: self.a.clone(),
+            rhs: self.b.clone(),
+        })
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -436,6 +450,24 @@ where
         }
 
         !consistent
+    }
+}
+
+impl<Lhs: WitnessedVariable, Rhs: WitnessedVariable> WitnessGenerator
+    for BinaryEqualsChecker<Lhs, Rhs>
+{
+    fn support(&self, _: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
+        match local_id.unpack() {
+            0 => {
+                let value = self.lhs.unpack_value(value);
+                Witness::new([self.lhs.assign(value), self.rhs.assign(value)])
+            }
+            1 => {
+                let value = self.lhs.unpack_value(value);
+                Witness::new([self.lhs.assign(value), self.rhs.assign(value)])
+            }
+            _ => unreachable!("Binary equals does not register variables with ID {local_id}"),
+        }
     }
 }
 

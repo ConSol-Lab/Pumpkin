@@ -39,6 +39,10 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+#[cfg(feature = "check-propagations")]
+use crate::propagation::checkers::BoxedConsistencyChecker;
+#[cfg(feature = "check-propagations")]
+use crate::propagation::checkers::Scope;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -83,6 +87,11 @@ pub struct State {
 
     /// Inference checkers to run in the propagation loop.
     checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    /// For every propagator identify what variables are associated with it.
+    #[cfg(feature = "check-propagations")]
+    pub(crate) scopes: HashMap<PropagatorId, Scope>,
+    #[cfg(feature = "check-propagations")]
+    consistency_checkers: HashMap<PropagatorId, BoxedConsistencyChecker>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -177,6 +186,10 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
+            #[cfg(feature = "check-propagations")]
+            scopes: HashMap::default(),
+            #[cfg(feature = "check-propagations")]
+            consistency_checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
@@ -389,7 +402,7 @@ impl State {
         Constructor::PropagatorImpl: 'static,
     {
         #[cfg(feature = "check-propagations")]
-        constructor.add_inference_checkers(InferenceCheckers::new(self));
+        let consistency_checker = constructor.add_inference_checkers(InferenceCheckers::new(self));
 
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
@@ -407,6 +420,23 @@ impl State {
 
         let slot = self.propagators.new_propagator();
         let handle = slot.populate(propagator);
+
+        #[cfg(feature = "check-propagations")]
+        {
+            use crate::propagation::checkers::ConsistencyChecker;
+
+            #[allow(trivial_casts, reason = "removing it causes a compiler error")]
+            let previous_checker = self.consistency_checkers.insert(
+                handle.propagator_id(),
+                BoxedConsistencyChecker::from(
+                    Box::new(consistency_checker) as Box<dyn ConsistencyChecker>
+                ),
+            );
+            assert!(
+                previous_checker.is_none(),
+                "somehow adding multiple consistency checkers to the same propagator"
+            );
+        }
 
         pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
 
@@ -788,6 +818,22 @@ impl State {
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop() {
             self.propagate(propagator_id)?;
+        }
+
+        #[cfg(feature = "check-propagations")]
+        for propagator in self.notification_engine.drain_notified_propagators() {
+            let checker = &self.consistency_checkers[&propagator];
+            let scope = &self.scopes[&propagator];
+
+            let propagator_name = self.propagators[propagator].name();
+
+            assert!(
+                checker.check_consistency(
+                    Domains::new(&self.assignments, &mut self.trailed_values),
+                    scope,
+                ),
+                "propagator {propagator_name} is not at its reported consistency"
+            );
         }
 
         // Only check fixed point propagation if there was no reported conflict,

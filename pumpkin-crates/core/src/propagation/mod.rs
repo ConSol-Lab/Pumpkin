@@ -72,6 +72,8 @@ mod domains;
 mod local_id;
 mod propagator;
 
+pub mod checkers;
+
 pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;

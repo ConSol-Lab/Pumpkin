@@ -19,6 +19,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -110,7 +111,10 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 {
     type PropagatorImpl = Self;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, TimeTable),
             Box::new(TimeTableChecker {
@@ -127,6 +131,8 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
                 capacity: self.parameters.capacity,
             }),
         );
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(mut self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
