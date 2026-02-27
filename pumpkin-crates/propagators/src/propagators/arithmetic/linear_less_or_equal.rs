@@ -332,12 +332,17 @@ where
 }
 
 impl<Var: IntegerVariable> WitnessGenerator for LinearLessOrEqualChecker<Var> {
-    fn support(&self, domains: &Domains<'_>, _: LocalId, _: ValueToWitness) -> Witness {
-        Witness::new(
-            self.terms
-                .iter()
-                .map(|term| term.assign(domains.lower_bound(term))),
-        )
+    fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
+        let variable_index = local_id.unpack() as usize;
+        let value = self.terms[variable_index].unpack_value(value);
+
+        Witness::new(self.terms.iter().enumerate().map(|(idx, term)| {
+            if idx == variable_index {
+                term.assign(value)
+            } else {
+                term.assign(domains.lower_bound(term))
+            }
+        }))
     }
 }
 
