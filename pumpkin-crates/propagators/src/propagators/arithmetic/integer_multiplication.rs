@@ -8,6 +8,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -16,7 +17,11 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::BoundConsistencyChecker;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -53,8 +58,11 @@ where
             }),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for multiplication")]
-        pumpkin_core::propagation::checkers::DefaultChecker
+        BoundConsistencyChecker::new(IntegerMultiplicationChecker {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            c: self.c.clone(),
+        })
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -421,6 +429,74 @@ where
         let computed_c_upper = x1y1.max(x1y2).max(x2y1).max(x2y2);
 
         computed_c_upper < c_lower || computed_c_lower > c_upper
+    }
+}
+
+impl<VA, VB, VC> WitnessGenerator for IntegerMultiplicationChecker<VA, VB, VC>
+where
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
+{
+    fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
+        dbg!(local_id);
+        match local_id.unpack() {
+            0 => {
+                let value_a = self.a.unpack_value(value);
+                let value_b = domains.lower_bound(&self.b);
+                let value_c = value_a * value_b;
+
+                Witness::new([
+                    self.a.assign(value_a),
+                    self.b.assign(value_b),
+                    self.c.assign(value_c),
+                ])
+            }
+            1 => {
+                let value_a = domains.lower_bound(&self.a);
+                let value_b = self.b.unpack_value(value);
+                let value_c = value_a * value_b;
+
+                Witness::new([
+                    self.a.assign(value_a),
+                    self.b.assign(value_b),
+                    self.c.assign(value_c),
+                ])
+            }
+            2 => {
+                let value_a = domains.lower_bound(&self.a);
+                let value_c = self.c.unpack_value(value);
+                let value_b = value_c / value_a;
+
+                println!(
+                    "a in [{}, {}]",
+                    domains.lower_bound(&self.a),
+                    domains.upper_bound(&self.a)
+                );
+                println!(
+                    "b in [{}, {}]",
+                    domains.lower_bound(&self.b),
+                    domains.upper_bound(&self.b)
+                );
+                println!(
+                    "c in [{}, {}]",
+                    domains.lower_bound(&self.c),
+                    domains.upper_bound(&self.c)
+                );
+                dbg!(value_a);
+                dbg!(value_b);
+                dbg!(value_c);
+
+                Witness::new([
+                    self.a.assign(value_a),
+                    self.b.assign(value_b),
+                    self.c.assign(value_c),
+                ])
+            }
+            _ => unreachable!(
+                "integer multiplication does not register a variable with ID {local_id}"
+            ),
+        }
     }
 }
 
