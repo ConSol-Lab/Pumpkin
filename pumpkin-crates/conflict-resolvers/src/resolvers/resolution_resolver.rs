@@ -1,3 +1,5 @@
+use pumpkin_checking::SupportingInference;
+use pumpkin_checking::verify_deduction;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -63,6 +65,10 @@ pub struct ResolutionResolver {
     semantic_minimiser: SemanticMinimiser,
 
     statistics: LearnedNogoodStatistics,
+
+    /// The inferences supporting the current deduction. Used for runtime verification of the
+    /// learned nogood.
+    used_inferences: Vec<SupportingInference<Predicate>>,
 
     should_minimise: bool,
 }
@@ -145,6 +151,7 @@ impl ResolutionResolver {
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
+            used_inferences: Default::default(),
             should_minimise,
         }
     }
@@ -191,7 +198,8 @@ impl ResolutionResolver {
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
-            context.get_propagation_reason(
+
+            let possible_inference_code = context.get_propagation_reason(
                 next_predicate,
                 CurrentNogood::new(
                     &self.to_process_heap,
@@ -204,9 +212,24 @@ impl ResolutionResolver {
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
             }
+
+            if cfg!(feature = "check-deductions") && possible_inference_code.is_some() {
+                self.used_inferences.push(SupportingInference {
+                    premises: self.reason_buffer.clone(),
+                    consequent: Some(next_predicate),
+                });
+            }
         }
 
-        self.extract_final_nogood(context)
+        self.extract_final_nogood(context);
+
+        if cfg!(feature = "check-deductions") {
+            verify_deduction(
+                self.processed_nogood_predicates.clone(),
+                std::mem::take(&mut self.used_inferences),
+            )
+            .expect("the deduction is valid");
+        }
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.

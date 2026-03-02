@@ -102,7 +102,7 @@ fn finalize_proof_impl(
 
             // There must be some combination of other factors.
             let mut reason = vec![];
-            ConflictAnalysisContext::get_propagation_reason_inner(
+            let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                 predicate,
                 CurrentNogood::empty(),
                 context.proof_log,

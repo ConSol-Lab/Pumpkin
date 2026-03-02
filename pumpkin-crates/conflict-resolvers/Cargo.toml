@@ -11,4 +11,8 @@ description = "The conflict resolvers of the Pumpkin constraint programming solv
 workspace = true
 
 [dependencies]
+pumpkin-checking = { version = "0.3.0", path = "../checking" }
 pumpkin-core = { version = "0.3.0", path = "../core" }
+
+[features]
+check-deductions = []

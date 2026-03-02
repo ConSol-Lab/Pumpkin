@@ -437,7 +437,7 @@ impl ConstraintSatisfactionSolver {
                         continue;
                     }
 
-                    ConflictAnalysisContext::get_propagation_reason_inner(
+                    let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                         predicate,
                         CurrentNogood::empty(),
                         context.proof_log,
