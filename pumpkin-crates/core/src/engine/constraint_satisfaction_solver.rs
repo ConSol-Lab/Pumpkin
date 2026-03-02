@@ -229,7 +229,7 @@ impl ConstraintSatisfactionSolver {
             rng: &mut self.internal_parameters.random_generator,
         };
 
-        let conflict = conflict_analysis_context.get_conflict_nogood();
+        let (conflict, _) = conflict_analysis_context.get_conflict_nogood();
 
         let context = FinalizingContext {
             conflict: conflict.into(),
@@ -428,7 +428,7 @@ impl ConstraintSatisfactionSolver {
 
                     rng: &mut self.internal_parameters.random_generator,
                 };
-                let mut predicates = context.get_conflict_nogood();
+                let (mut predicates, _) = context.get_conflict_nogood();
                 let mut core: HashSet<Predicate> = HashSet::default();
 
                 while let Some(predicate) = predicates.pop() {

@@ -160,7 +160,8 @@ impl ResolutionResolver {
     pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         self.clean_up();
 
-        let conflict_nogood = context.get_conflict_nogood();
+        let (conflict_nogood, supporting_inference) = context.get_conflict_nogood();
+        self.used_inferences.extend(supporting_inference);
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -227,20 +228,22 @@ impl ResolutionResolver {
         if cfg!(feature = "check-deductions") {
             match verify_deduction(
                 self.processed_nogood_predicates.clone(),
-                std::mem::take(&mut self.used_inferences),
+                self.used_inferences.drain(..).rev(),
             ) {
                 Ok(_) => {}
                 Err(error) => {
                     match error {
                         InvalidDeduction::NoConflict(ignored_inferences) => {
-                            for ignored_inference in ignored_inferences {
-                                eprintln!(
-                                    "{:?} -> {:?}",
-                                    ignored_inference.inference.premises,
-                                    ignored_inference.inference.consequent
-                                );
+                            if !ignored_inferences.is_empty() {
+                                eprintln!("Using inferences that cannot be applied:");
+                                for ignored_inference in ignored_inferences {
+                                    eprintln!(
+                                        "{:?} -> {:?}",
+                                        ignored_inference.inference.premises,
+                                        ignored_inference.inference.consequent
+                                    );
+                                }
                             }
-                            panic!("Using inferences that cannot be applied:");
                         }
                         InvalidDeduction::InconsistentPremises => {
                             eprintln!("Inconsistent predicates in learned nogood")
@@ -283,6 +286,13 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
+            if context.is_initial_bound(predicate) {
+                self.used_inferences.push(SupportingInference {
+                    premises: vec![],
+                    consequent: Some(predicate),
+                });
+            }
+
             context.explain_root_assignment(predicate);
         }
         // 1UIP
