@@ -1,3 +1,4 @@
+use pumpkin_checking::InvalidDeduction;
 use pumpkin_checking::SupportingInference;
 use pumpkin_checking::verify_deduction;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
@@ -224,11 +225,33 @@ impl ResolutionResolver {
         self.extract_final_nogood(context);
 
         if cfg!(feature = "check-deductions") {
-            verify_deduction(
+            match verify_deduction(
                 self.processed_nogood_predicates.clone(),
                 std::mem::take(&mut self.used_inferences),
-            )
-            .expect("the deduction is valid");
+            ) {
+                Ok(_) => {}
+                Err(error) => {
+                    match error {
+                        InvalidDeduction::NoConflict(ignored_inferences) => {
+                            for ignored_inference in ignored_inferences {
+                                eprintln!(
+                                    "{:?} -> {:?}",
+                                    ignored_inference.inference.premises,
+                                    ignored_inference.inference.consequent
+                                );
+                            }
+                            panic!("Using inferences that cannot be applied:");
+                        }
+                        InvalidDeduction::InconsistentPremises => {
+                            eprintln!("Inconsistent predicates in learned nogood")
+                        }
+                    }
+                    panic!(
+                        "Failed to verify deduction: {:?}",
+                        self.processed_nogood_predicates
+                    );
+                }
+            }
         }
     }
 
