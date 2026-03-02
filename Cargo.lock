@@ -959,6 +959,7 @@ dependencies = [
 name = "pumpkin-conflict-resolvers"
 version = "0.3.0"
 dependencies = [
+ "pumpkin-checking",
  "pumpkin-core",
 ]
 
