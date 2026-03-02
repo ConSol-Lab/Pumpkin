@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use pumpkin_checking::SupportingInference;
+
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -88,8 +90,10 @@ impl ConflictAnalysisContext<'_> {
 
     /// Returns a nogood which led to the conflict, excluding predicates from the root decision
     /// level.
-    pub fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
-        let conflict_nogood = match self.solver_state.get_conflict_info() {
+    pub fn get_conflict_nogood(
+        &mut self,
+    ) -> (Vec<Predicate>, Option<SupportingInference<Predicate>>) {
+        let (conflict_nogood, supporting_inference) = match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator(conflict) => {
                 let _ = self.proof_log.log_inference(
                     &mut self.state.constraint_tags,
@@ -100,14 +104,25 @@ impl ConflictAnalysisContext<'_> {
                     &self.state.assignments,
                 );
 
-                conflict.conjunction
+                (
+                    conflict.conjunction.clone(),
+                    Some(SupportingInference {
+                        premises: conflict.conjunction.to_vec(),
+                        consequent: None,
+                    }),
+                )
             }
-            StoredConflictInfo::EmptyDomain(conflict) => self.compute_conflict_nogood(conflict),
+            StoredConflictInfo::EmptyDomain(conflict) => {
+                let (conflict_nogood, supporting_inference) =
+                    self.compute_conflict_nogood(conflict);
+
+                (conflict_nogood, Some(supporting_inference))
+            }
             StoredConflictInfo::RootLevelConflict(_) => {
                 unreachable!("Should never attempt to learn a nogood from a root level conflict")
             }
             StoredConflictInfo::InconsistentAssumptions(predicate) => {
-                vec![predicate, !predicate].into()
+                (vec![predicate, !predicate].into(), None)
             }
         };
 
@@ -129,10 +144,12 @@ impl ConflictAnalysisContext<'_> {
             }
         }
 
-        conflict_nogood
+        let nogood = conflict_nogood
             .into_iter()
             .filter(|&p| self.state.get_checkpoint_for_predicate(p).unwrap() > 0)
-            .collect()
+            .collect();
+
+        (nogood, supporting_inference)
     }
 
     /// Compute the reason for `predicate` being true. The reason will be stored in
@@ -340,7 +357,7 @@ impl ConflictAnalysisContext<'_> {
     fn compute_conflict_nogood(
         &mut self,
         conflict: EmptyDomainConflict,
-    ) -> PropositionalConjunction {
+    ) -> (PropositionalConjunction, SupportingInference<Predicate>) {
         let conflict_domain = conflict.domain();
 
         // Look up the reason for the bound that changed.
@@ -368,6 +385,11 @@ impl ConflictAnalysisContext<'_> {
             &self.state.variable_names,
             &self.state.assignments,
         );
+
+        let supporting_inference = SupportingInference {
+            premises: empty_domain_reason.clone(),
+            consequent: Some(conflict.trigger_predicate),
+        };
 
         let old_lower_bound = self.state.lower_bound(conflict_domain);
         let old_upper_bound = self.state.upper_bound(conflict_domain);
@@ -427,7 +449,7 @@ impl ConflictAnalysisContext<'_> {
             }
         }
 
-        empty_domain_reason.into()
+        (empty_domain_reason.into(), supporting_inference)
     }
 }
 
