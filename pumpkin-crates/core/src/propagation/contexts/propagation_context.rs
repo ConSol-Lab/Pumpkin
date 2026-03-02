@@ -269,8 +269,8 @@ impl PropagationContext<'_> {
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,
-                    trigger_reason,
-                    trigger_inference_code,
+                    trigger_reason: Some(trigger_reason),
+                    trigger_inference_code: Some(trigger_inference_code),
                 })
             }
         }

@@ -26,6 +26,7 @@ use crate::propagation::PropagatorId;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::state::Conflict;
+use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -207,7 +208,7 @@ impl TestSolver {
         self.state.assignments.get_upper_bound(var)
     }
 
-    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
+    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomainConflict> {
         let _ = self.state.post(predicate!(var != value))?;
 
         Ok(())
