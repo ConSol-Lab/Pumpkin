@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
@@ -17,9 +18,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::propagation::checkers::BoundConsistencyChecker;
+use pumpkin_core::propagation::checkers::Consistency;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
-use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
 use pumpkin_core::propagation::checkers::Witness;
 use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
@@ -58,11 +59,14 @@ where
             }),
         );
 
-        BoundConsistencyChecker::new(IntegerMultiplicationChecker {
-            a: self.a.clone(),
-            b: self.b.clone(),
-            c: self.c.clone(),
-        })
+        StrongConsistencyChecker::new(
+            IntegerMultiplicationChecker {
+                a: self.a.clone(),
+                b: self.b.clone(),
+                c: self.c.clone(),
+            },
+            Consistency::Bounds,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -438,65 +442,23 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
-        dbg!(local_id);
-        match local_id.unpack() {
-            0 => {
-                let value_a = self.a.unpack_value(value);
-                let value_b = domains.lower_bound(&self.b);
-                let value_c = value_a * value_b;
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let lb_a = domains.lower_bound(&self.a);
+        let ub_a = domains.upper_bound(&self.a);
+        let lb_b = domains.lower_bound(&self.b);
+        let ub_b = domains.upper_bound(&self.b);
 
+        [lb_a, ub_a]
+            .into_iter()
+            .cartesian_product([lb_b, ub_b])
+            .map(|(bound_a, bound_b)| {
                 Witness::new([
-                    self.a.assign(value_a),
-                    self.b.assign(value_b),
-                    self.c.assign(value_c),
+                    self.a.assign(bound_a),
+                    self.b.assign(bound_b),
+                    self.c.assign(bound_a * bound_b),
                 ])
-            }
-            1 => {
-                let value_a = domains.lower_bound(&self.a);
-                let value_b = self.b.unpack_value(value);
-                let value_c = value_a * value_b;
-
-                Witness::new([
-                    self.a.assign(value_a),
-                    self.b.assign(value_b),
-                    self.c.assign(value_c),
-                ])
-            }
-            2 => {
-                let value_a = domains.lower_bound(&self.a);
-                let value_c = self.c.unpack_value(value);
-                let value_b = value_c / value_a;
-
-                println!(
-                    "a in [{}, {}]",
-                    domains.lower_bound(&self.a),
-                    domains.upper_bound(&self.a)
-                );
-                println!(
-                    "b in [{}, {}]",
-                    domains.lower_bound(&self.b),
-                    domains.upper_bound(&self.b)
-                );
-                println!(
-                    "c in [{}, {}]",
-                    domains.lower_bound(&self.c),
-                    domains.upper_bound(&self.c)
-                );
-                dbg!(value_a);
-                dbg!(value_b);
-                dbg!(value_c);
-
-                Witness::new([
-                    self.a.assign(value_a),
-                    self.b.assign(value_b),
-                    self.c.assign(value_c),
-                ])
-            }
-            _ => unreachable!(
-                "integer multiplication does not register a variable with ID {local_id}"
-            ),
-        }
+            })
+            .collect()
     }
 }
 

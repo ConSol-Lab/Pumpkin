@@ -25,9 +25,9 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::propagation::TrailedInteger;
-use pumpkin_core::propagation::checkers::BoundConsistencyChecker;
+use pumpkin_core::propagation::checkers::Consistency;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
-use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
 use pumpkin_core::propagation::checkers::Witness;
 use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
@@ -59,7 +59,10 @@ where
             Box::new(LinearLessOrEqualChecker::new(self.x.clone(), self.c)),
         );
 
-        BoundConsistencyChecker::new(LinearLessOrEqualChecker::new(self.x.clone(), self.c))
+        StrongConsistencyChecker::new(
+            LinearLessOrEqualChecker::new(self.x.clone(), self.c),
+            Consistency::Bounds,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -334,19 +337,20 @@ where
 }
 
 impl<Var: IntegerVariable> WitnessGenerator for LinearLessOrEqualChecker<Var> {
-    fn support(&self, domains: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
-        dbg!(self);
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let lower_bound_witness = Witness::new(
+            self.terms
+                .iter()
+                .map(|term| term.assign(domains.lower_bound(term))),
+        );
 
-        let variable_index = local_id.unpack() as usize;
-        let value = self.terms[variable_index].unpack_value(value);
+        let upper_bound_witness = Witness::new(
+            self.terms
+                .iter()
+                .map(|term| term.assign(domains.upper_bound(term))),
+        );
 
-        Witness::new(self.terms.iter().enumerate().map(|(idx, term)| {
-            if idx == variable_index {
-                term.assign(value)
-            } else {
-                term.assign(domains.lower_bound(term))
-            }
-        }))
+        vec![lower_bound_witness, upper_bound_witness]
     }
 }
 

@@ -31,12 +31,11 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::Consistency;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
-use pumpkin_core::propagation::checkers::DomainConsistencyChecker;
-use pumpkin_core::propagation::checkers::ValueToWitness;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
 use pumpkin_core::propagation::checkers::Witness;
 use pumpkin_core::propagation::checkers::WitnessGenerator;
-use pumpkin_core::propagation::checkers::WitnessedVariable;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -71,10 +70,13 @@ where
             }),
         );
 
-        DomainConsistencyChecker::new(BinaryEqualsChecker {
-            lhs: self.a.clone(),
-            rhs: self.b.clone(),
-        })
+        StrongConsistencyChecker::new(
+            BinaryEqualsChecker {
+                lhs: self.a.clone(),
+                rhs: self.b.clone(),
+            },
+            Consistency::Domain,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -453,21 +455,16 @@ where
     }
 }
 
-impl<Lhs: WitnessedVariable, Rhs: WitnessedVariable> WitnessGenerator
-    for BinaryEqualsChecker<Lhs, Rhs>
+impl<Lhs, Rhs> WitnessGenerator for BinaryEqualsChecker<Lhs, Rhs>
+where
+    Lhs: IntegerVariable,
+    Rhs: IntegerVariable,
 {
-    fn support(&self, _: &Domains<'_>, local_id: LocalId, value: ValueToWitness) -> Witness {
-        match local_id.unpack() {
-            0 => {
-                let value = self.lhs.unpack_value(value);
-                Witness::new([self.lhs.assign(value), self.rhs.assign(value)])
-            }
-            1 => {
-                let value = self.lhs.unpack_value(value);
-                Witness::new([self.lhs.assign(value), self.rhs.assign(value)])
-            }
-            _ => unreachable!("Binary equals does not register variables with ID {local_id}"),
-        }
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        domains
+            .iterate_domain(&self.lhs)
+            .map(|value| Witness::new([self.lhs.assign(value), self.rhs.assign(value)]))
+            .collect()
     }
 }
 

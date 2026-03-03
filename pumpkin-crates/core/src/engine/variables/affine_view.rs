@@ -17,7 +17,6 @@ use crate::math::num_ext::NumExt;
 use crate::propagation::LocalId;
 use crate::propagation::checkers::ScopeBuilder;
 use crate::propagation::checkers::SingleVariableAssignment;
-use crate::propagation::checkers::ValueToWitness;
 use crate::propagation::checkers::WitnessedVariable;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
@@ -414,12 +413,6 @@ enum Rounding {
 impl<Inner: WitnessedVariable> WitnessedVariable for AffineView<Inner> {
     fn add_to_scope(&self, scope: &mut ScopeBuilder, local_id: LocalId) {
         self.inner.add_to_scope(scope, local_id);
-    }
-
-    fn unpack_value(&self, value: ValueToWitness) -> i32 {
-        let inner_value = self.inner.unpack_value(value);
-
-        self.map(inner_value)
     }
 
     fn assign(&self, value: i32) -> SingleVariableAssignment {

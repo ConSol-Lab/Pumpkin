@@ -8,7 +8,8 @@ use crate::propagation::checkers::WitnessedVariable;
 /// used by consistency checkers to determine whether propagators are at their claimed level of
 /// consistency.
 pub trait WitnessGenerator {
-    /// Create a [`Witness`] such that the domain of every variable in the scope of the propagator is appropriately supported.
+    /// Create a [`Witness`] such that the domain of every variable in the scope of the propagator
+    /// is appropriately supported.
     ///
     /// Depending on whether a propagator is bounds or domain consistent this implementation will
     /// change.
