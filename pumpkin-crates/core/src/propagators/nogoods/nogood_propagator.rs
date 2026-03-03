@@ -247,7 +247,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn priority(&self) -> Priority {
-        Priority::High
+        Priority::VeryLow
     }
 
     fn notify_predicate_id_satisfied(
