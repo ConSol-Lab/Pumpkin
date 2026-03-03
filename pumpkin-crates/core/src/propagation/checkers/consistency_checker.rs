@@ -2,8 +2,7 @@ use std::fmt::Debug;
 
 use dyn_clone::DynClone;
 
-use crate::propagation::Domains;
-use crate::propagation::checkers::Scope;
+use crate::{propagation::Domains, variables::DomainId};
 
 /// A consistency checker ensures that a propagator is at a certain level of consistency.
 ///
@@ -12,7 +11,7 @@ use crate::propagation::checkers::Scope;
 pub trait ConsistencyChecker: Debug + DynClone {
     /// Returns `true` if the variables in `scope` are at the required consistency in
     /// `domains`.
-    fn check_consistency(&self, domains: Domains<'_>, scope: &Scope) -> bool;
+    fn check_consistency(&self, domains: Domains<'_>, scope: &[DomainId]) -> bool;
 }
 
 /// Wrapper around `Box<dyn ConsistencyChecker>` that implements [`Clone`].
@@ -33,7 +32,7 @@ impl From<Box<dyn ConsistencyChecker>> for BoxedConsistencyChecker {
 
 impl BoxedConsistencyChecker {
     /// See [`ConsistencyChecker::check_consistency`].
-    pub fn check_consistency(&self, domains: Domains<'_>, scope: &Scope) -> bool {
+    pub fn check_consistency(&self, domains: Domains<'_>, scope: &[DomainId]) -> bool {
         self.0.check_consistency(domains, scope)
     }
 }

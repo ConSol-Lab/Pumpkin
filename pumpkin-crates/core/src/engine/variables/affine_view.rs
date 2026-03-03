@@ -14,8 +14,6 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::math::num_ext::NumExt;
-use crate::propagation::LocalId;
-use crate::propagation::checkers::ScopeBuilder;
 use crate::propagation::checkers::SingleVariableAssignment;
 use crate::propagation::checkers::WitnessedVariable;
 
@@ -411,10 +409,6 @@ enum Rounding {
 }
 
 impl<Inner: WitnessedVariable> WitnessedVariable for AffineView<Inner> {
-    fn add_to_scope(&self, scope: &mut ScopeBuilder, local_id: LocalId) {
-        self.inner.add_to_scope(scope, local_id);
-    }
-
     fn assign(&self, value: i32) -> SingleVariableAssignment {
         assert_eq!((value - self.offset) % self.scale, 0);
         let inner_assignment = (value - self.offset) / self.scale;

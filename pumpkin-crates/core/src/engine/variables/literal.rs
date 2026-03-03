@@ -15,8 +15,6 @@ use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
-use crate::propagation::LocalId;
-use crate::propagation::checkers::ScopeBuilder;
 use crate::propagation::checkers::WitnessedVariable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -227,10 +225,6 @@ impl TransformableVariable<AffineView<Literal>> for Literal {
 }
 
 impl WitnessedVariable for Literal {
-    fn add_to_scope(&self, scope: &mut ScopeBuilder, local_id: LocalId) {
-        self.integer_variable.add_to_scope(scope, local_id);
-    }
-
     fn assign(&self, value: i32) -> crate::propagation::checkers::SingleVariableAssignment {
         self.integer_variable.assign(value)
     }

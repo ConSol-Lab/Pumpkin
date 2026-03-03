@@ -28,7 +28,6 @@ use crate::propagation::DomainEvents;
 use crate::propagation::checkers::ConsistencyChecker;
 #[allow(deprecated, reason = "TODO to implement for reified")]
 use crate::propagation::checkers::DefaultChecker;
-use crate::propagation::checkers::ScopeBuilder;
 use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -112,9 +111,6 @@ pub struct PropagatorConstructorContext<'a> {
     state: &'a mut State,
     pub(crate) propagator_id: PropagatorId,
 
-    /// The scope of the propagator that is being accumulated.
-    scope_builder: RefOrOwned<'a, ScopeBuilder>,
-
     /// A [`LocalId`] that is guaranteed not to be used to register any variables yet. This is
     /// either a reference or an owned value, to support
     /// [`PropagatorConstructorContext::reborrow`].
@@ -135,7 +131,6 @@ impl PropagatorConstructorContext<'_> {
             propagator_id,
             state,
             did_register: RefOrOwned::Owned(false),
-            scope_builder: RefOrOwned::Owned(ScopeBuilder::default()),
         }
     }
 
@@ -170,8 +165,6 @@ impl PropagatorConstructorContext<'_> {
         local_id: LocalId,
     ) {
         self.will_not_register_any_events();
-
-        var.add_to_scope(&mut self.scope_builder, local_id);
 
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
@@ -241,7 +234,6 @@ impl PropagatorConstructorContext<'_> {
             next_local_id: self.next_local_id.reborrow(),
             did_register: self.did_register.reborrow(),
             state: self.state,
-            scope_builder: self.scope_builder.reborrow(),
         }
     }
 
@@ -283,17 +275,6 @@ impl Drop for PropagatorConstructorContext<'_> {
             panic!(
                 "Propagator did not register to be enqueued. If this is intentional, call PropagatorConstructorContext::will_not_register_any_events()."
             );
-        }
-
-        #[cfg(feature = "check-propagations")]
-        {
-            let RefOrOwned::Owned(scope_builder) = &mut self.scope_builder else {
-                unreachable!("other fields were already owned");
-            };
-
-            // Make sure to register the scope of this propagator with the state.
-            let scope = std::mem::take(scope_builder).build();
-            let _ = self.state.scopes.insert(self.propagator_id, scope);
         }
     }
 }

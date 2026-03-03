@@ -8,7 +8,6 @@ use crate::propagation::Domains;
 use crate::propagation::ReadDomains;
 use crate::propagation::checkers::Consistency;
 use crate::propagation::checkers::ConsistencyChecker;
-use crate::propagation::checkers::Scope;
 use crate::propagation::checkers::Witness;
 use crate::propagation::checkers::WitnessGenerator;
 use crate::variables::DomainId;
@@ -74,7 +73,7 @@ impl<C> ConsistencyChecker for StrongConsistencyChecker<C>
 where
     C: WitnessGenerator + InferenceChecker<Predicate> + Clone,
 {
-    fn check_consistency(&self, mut domains: Domains<'_>, scope: &Scope) -> bool {
+    fn check_consistency(&self, mut domains: Domains<'_>, scope: &[DomainId]) -> bool {
         let mut supported_values: HashMap<DomainId, Vec<i32>> = HashMap::default();
         let witnesses = self.witness_generator.support(domains.reborrow());
 
@@ -90,7 +89,7 @@ where
             }
         }
 
-        scope.iter().all(|(_local_id, domain_id)| {
+        scope.iter().copied().all(|domain_id| {
             let supported_values_for_domain = &supported_values[&domain_id];
 
             match self.consistency {

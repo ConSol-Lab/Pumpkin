@@ -33,6 +33,7 @@ use crate::variables::DomainId;
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
     pub(crate) predicate_notifier: PredicateNotifier,
+    pub(crate) scopes: KeyedVec<PropagatorId, Vec<DomainId>>,
     /// The trail index for which the last notification took place.
     last_notified_trail_index: usize,
     /// Contains information on which propagator to notify upon
@@ -62,6 +63,7 @@ impl Default for NotificationEngine {
             backtrack_events: Default::default(),
             #[cfg(feature = "check-propagations")]
             notified_propagators: Default::default(),
+            scopes: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -125,6 +127,9 @@ impl NotificationEngine {
         events: EnumSet<DomainEvent>,
         propagator_var: PropagatorVarId,
     ) {
+        self.scopes.accomodate(propagator_var.propagator, vec![]);
+        self.scopes[propagator_var.propagator].push(domain);
+
         self.watch_list_domain_events.is_watching_anything = true;
         let watcher = &mut self.watch_list_domain_events.watchers[domain];
 

@@ -72,8 +72,6 @@ where
             constraint_tag,
         } = self;
 
-        dbg!(&x);
-
         let mut lower_bound_left_hand_side = 0_i64;
         let mut current_bounds = vec![];
 

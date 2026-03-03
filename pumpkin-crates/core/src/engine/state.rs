@@ -41,8 +41,6 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
 #[cfg(feature = "check-propagations")]
 use crate::propagation::checkers::BoxedConsistencyChecker;
-#[cfg(feature = "check-propagations")]
-use crate::propagation::checkers::Scope;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -88,8 +86,6 @@ pub struct State {
     /// Inference checkers to run in the propagation loop.
     checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
     /// For every propagator identify what variables are associated with it.
-    #[cfg(feature = "check-propagations")]
-    pub(crate) scopes: HashMap<PropagatorId, Scope>,
     #[cfg(feature = "check-propagations")]
     consistency_checkers: HashMap<PropagatorId, BoxedConsistencyChecker>,
 }
@@ -186,8 +182,6 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
-            #[cfg(feature = "check-propagations")]
-            scopes: HashMap::default(),
             #[cfg(feature = "check-propagations")]
             consistency_checkers: HashMap::default(),
         };
@@ -821,19 +815,26 @@ impl State {
         }
 
         #[cfg(feature = "check-propagations")]
-        for propagator in self.notification_engine.drain_notified_propagators() {
-            let checker = &self.consistency_checkers[&propagator];
-            let scope = &self.scopes[&propagator];
+        {
+            // Move the scopes out of the notification engine so we do not get borrow clashes. We
+            // give it back after checking the consistency of all propagators.
+            let scopes = std::mem::take(&mut self.notification_engine.scopes);
+            for propagator in self.notification_engine.drain_notified_propagators() {
+                let checker = &self.consistency_checkers[&propagator];
+                let scope = &scopes[&propagator];
 
-            let propagator_name = self.propagators[propagator].name();
+                let propagator_name = self.propagators[propagator].name();
 
-            assert!(
-                checker.check_consistency(
-                    Domains::new(&self.assignments, &mut self.trailed_values),
-                    scope,
-                ),
-                "propagator {propagator_name} is not at its reported consistency"
-            );
+                assert!(
+                    checker.check_consistency(
+                        Domains::new(&self.assignments, &mut self.trailed_values),
+                        scope,
+                    ),
+                    "propagator {propagator_name} is not at its reported consistency"
+                );
+            }
+            // Give back the scopes ownership.
+            self.notification_engine.scopes = scopes;
         }
 
         // Only check fixed point propagation if there was no reported conflict,

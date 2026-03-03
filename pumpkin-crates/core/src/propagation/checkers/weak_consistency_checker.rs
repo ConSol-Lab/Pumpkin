@@ -8,7 +8,6 @@ use crate::propagation::Domains;
 use crate::propagation::ReadDomains;
 use crate::propagation::checkers::Consistency;
 use crate::propagation::checkers::ConsistencyChecker;
-use crate::propagation::checkers::Scope;
 use crate::variables::DomainId;
 
 #[derive(Clone, Debug)]
@@ -76,11 +75,12 @@ impl<C> ConsistencyChecker for WeakConsistencyChecker<C>
 where
     C: InferenceChecker<Predicate> + Clone,
 {
-    fn check_consistency(&self, mut domains: Domains<'_>, scope: &Scope) -> bool {
+    fn check_consistency(&self, mut domains: Domains<'_>, scope: &[DomainId]) -> bool {
         // Get a description of the entire domain as the premise of a fact.
         let premises = scope
             .iter()
-            .flat_map(|(_, domain_id)| {
+            .copied()
+            .flat_map(|domain_id| {
                 let lower_bound = domains.lower_bound(&domain_id);
                 let upper_bound = domains.upper_bound(&domain_id);
 
@@ -96,7 +96,8 @@ where
 
         scope
             .iter()
-            .all(|(_local_id, domain_id)| match self.consistency {
+            .copied()
+            .all(|domain_id| match self.consistency {
                 Consistency::Domain => {
                     self.verify_domain_consistency(domains.reborrow(), &premises, domain_id)
                 }
