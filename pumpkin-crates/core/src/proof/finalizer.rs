@@ -102,7 +102,7 @@ fn finalize_proof_impl(
 
             // There must be some combination of other factors.
             let mut reason = vec![];
-            ConflictAnalysisContext::get_propagation_reason_inner(
+            let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                 predicate,
                 CurrentNogood::empty(),
                 context.proof_log,
@@ -145,7 +145,7 @@ pub(crate) fn explain_root_assignment(
         Some(0)
     );
 
-    if !context.proof_log.is_logging_inferences() {
+    if !context.proof_log.is_logging_inferences() && cfg!(not(feature = "check-deductions")) {
         return;
     }
 
