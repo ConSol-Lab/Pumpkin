@@ -2,7 +2,8 @@ use std::fmt::Debug;
 
 use dyn_clone::DynClone;
 
-use crate::{propagation::Domains, variables::DomainId};
+use crate::propagation::Domains;
+use crate::variables::DomainId;
 
 /// A consistency checker ensures that a propagator is at a certain level of consistency.
 ///

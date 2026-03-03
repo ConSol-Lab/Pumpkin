@@ -336,19 +336,22 @@ where
 
 impl<Var: IntegerVariable> WitnessGenerator for LinearLessOrEqualChecker<Var> {
     fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
-        let lower_bound_witness = Witness::new(
-            self.terms
-                .iter()
-                .map(|term| term.assign(domains.lower_bound(term))),
-        );
-
-        let upper_bound_witness = Witness::new(
-            self.terms
-                .iter()
-                .map(|term| term.assign(domains.upper_bound(term))),
-        );
-
-        vec![lower_bound_witness, upper_bound_witness]
+        (0..self.terms.len())
+            .map(|idx| {
+                Witness::new(
+                    self.terms
+                        .iter()
+                        .enumerate()
+                        .map(|(other_idx, other_term)| {
+                            if idx == other_idx {
+                                other_term.assign(domains.upper_bound(other_term))
+                            } else {
+                                other_term.assign(domains.lower_bound(other_term))
+                            }
+                        }),
+                )
+            })
+            .collect::<Vec<_>>()
     }
 }
 

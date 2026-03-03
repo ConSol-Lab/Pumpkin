@@ -12,7 +12,8 @@ pub use weak_consistency_checker::*;
 pub use witness::*;
 pub use witness_generator::*;
 
-use crate::{propagation::Domains, variables::DomainId};
+use crate::propagation::Domains;
+use crate::variables::DomainId;
 
 #[deprecated = "only here to aid refactoring"]
 #[doc(hidden)]

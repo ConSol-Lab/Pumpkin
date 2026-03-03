@@ -87,6 +87,7 @@ impl NotificationEngine {
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
             backtrack_events: Default::default(),
+            scopes: Default::default(),
             #[cfg(feature = "check-propagations")]
             notified_propagators: Default::default(),
         };
