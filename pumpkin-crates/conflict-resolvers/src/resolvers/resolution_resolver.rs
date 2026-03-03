@@ -1,6 +1,3 @@
-use pumpkin_checking::InvalidDeduction;
-use pumpkin_checking::SupportingInference;
-use pumpkin_checking::verify_deduction;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -66,10 +63,6 @@ pub struct ResolutionResolver {
     semantic_minimiser: SemanticMinimiser,
 
     statistics: LearnedNogoodStatistics,
-
-    /// The inferences supporting the current deduction. Used for runtime verification of the
-    /// learned nogood.
-    used_inferences: Vec<SupportingInference<Predicate>>,
 
     should_minimise: bool,
 }
@@ -152,7 +145,6 @@ impl ResolutionResolver {
             recursive_minimiser: Default::default(),
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
-            used_inferences: Default::default(),
             should_minimise,
         }
     }
@@ -160,8 +152,7 @@ impl ResolutionResolver {
     pub(crate) fn learn_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         self.clean_up();
 
-        let (conflict_nogood, supporting_inference) = context.get_conflict_nogood();
-        self.used_inferences.extend(supporting_inference);
+        let conflict_nogood = context.get_conflict_nogood();
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -201,7 +192,7 @@ impl ResolutionResolver {
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
 
-            let possible_inference_code = context.get_propagation_reason(
+            let _ = context.get_propagation_reason(
                 next_predicate,
                 CurrentNogood::new(
                     &self.to_process_heap,
@@ -214,48 +205,9 @@ impl ResolutionResolver {
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
             }
-
-            if cfg!(feature = "check-deductions") && possible_inference_code.is_some() {
-                self.used_inferences.push(SupportingInference {
-                    premises: self.reason_buffer.clone(),
-                    consequent: Some(next_predicate),
-                });
-            }
         }
 
         self.extract_final_nogood(context);
-
-        if cfg!(feature = "check-deductions") {
-            match verify_deduction(
-                self.processed_nogood_predicates.clone(),
-                self.used_inferences.drain(..).rev(),
-            ) {
-                Ok(_) => {}
-                Err(error) => {
-                    match error {
-                        InvalidDeduction::NoConflict(ignored_inferences) => {
-                            if !ignored_inferences.is_empty() {
-                                eprintln!("Using inferences that cannot be applied:");
-                                for ignored_inference in ignored_inferences {
-                                    eprintln!(
-                                        "{:?} -> {:?}",
-                                        ignored_inference.inference.premises,
-                                        ignored_inference.inference.consequent
-                                    );
-                                }
-                            }
-                        }
-                        InvalidDeduction::InconsistentPremises => {
-                            eprintln!("Inconsistent predicates in learned nogood")
-                        }
-                    }
-                    panic!(
-                        "Failed to verify deduction: {:?}",
-                        self.processed_nogood_predicates
-                    );
-                }
-            }
-        }
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.
@@ -286,13 +238,6 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
-            if context.is_initial_bound(predicate) {
-                self.used_inferences.push(SupportingInference {
-                    premises: vec![],
-                    consequent: Some(predicate),
-                });
-            }
-
             context.explain_root_assignment(predicate);
         }
         // 1UIP
@@ -388,6 +333,7 @@ impl ResolutionResolver {
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
+        //
 
         // First we obtain a semantically minimised nogood.
         //
