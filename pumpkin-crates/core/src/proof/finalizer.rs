@@ -145,7 +145,7 @@ pub(crate) fn explain_root_assignment(
         Some(0)
     );
 
-    if !context.proof_log.is_logging_inferences() {
+    if !context.proof_log.is_logging_inferences() && cfg!(not(feature = "check-deductions")) {
         return;
     }
 
