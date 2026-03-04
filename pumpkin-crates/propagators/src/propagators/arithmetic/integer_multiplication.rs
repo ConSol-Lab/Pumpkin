@@ -443,21 +443,102 @@ where
     VC: IntegerVariable,
 {
     fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
-        let lb_a = domains.lower_bound(&self.a);
-        let ub_a = domains.upper_bound(&self.a);
-        let lb_b = domains.lower_bound(&self.b);
-        let ub_b = domains.upper_bound(&self.b);
+        let a_min = domains.lower_bound(&self.a);
+        let a_max = domains.upper_bound(&self.a);
+        let b_min = domains.lower_bound(&self.b);
+        let b_max = domains.upper_bound(&self.b);
+        let c_min = domains.lower_bound(&self.c);
+        let c_max = domains.upper_bound(&self.c);
 
-        [lb_a, ub_a]
-            .into_iter()
-            .cartesian_product([lb_b, ub_b])
-            .map(|(bound_a, bound_b)| {
-                Witness::new([
-                    self.a.assign(bound_a),
-                    self.b.assign(bound_b),
-                    self.c.assign(bound_a * bound_b),
-                ])
+        dbg!(a_min);
+        dbg!(a_max);
+        dbg!(b_min);
+        dbg!(b_max);
+        dbg!(c_min);
+        dbg!(c_max);
+
+        let support_bounds_a = [a_min, a_max].into_iter().flat_map(|value_a| {
+            domains.iterate_domain(&self.b).find_map(|value_b| {
+                let value_c = value_a * value_b;
+                if domains.contains(&self.c, value_c) {
+                    Some(Witness::new([
+                        self.a.assign(value_a),
+                        self.b.assign(value_b),
+                        self.c.assign(value_c),
+                    ]))
+                } else {
+                    None
+                }
             })
+        });
+
+        dbg!(support_bounds_a.clone().collect::<Vec<_>>());
+
+        let support_bounds_b = [b_min, b_max].into_iter().flat_map(|value_b| {
+            domains.iterate_domain(&self.a).find_map(|value_a| {
+                let value_c = value_a * value_b;
+                if domains.contains(&self.c, value_c) {
+                    Some(Witness::new([
+                        self.a.assign(value_a),
+                        self.b.assign(value_b),
+                        self.c.assign(value_c),
+                    ]))
+                } else {
+                    None
+                }
+            })
+        });
+        dbg!(support_bounds_b.clone().collect::<Vec<_>>());
+
+        let support_bounds_c = [c_min, c_max].into_iter().flat_map(|value_c| {
+            domains
+                .iterate_domain(&self.a)
+                .find_map(|value_a| {
+                    if value_a != 0 && value_c % value_a == 0 {
+                        let value_b = value_c / value_a;
+
+                        if domains.contains(&self.b, value_b) {
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        }
+                    }
+
+                    None
+                })
+                .or_else(|| {
+                    if value_c == 0 {
+                        if domains.contains(&self.a, 0) {
+                            let value_a = 0;
+                            let value_b = domains.lower_bound(&self.b);
+
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        } else if domains.contains(&self.b, 0) {
+                            let value_a = domains.lower_bound(&self.a);
+                            let value_b = 0;
+
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        }
+                    }
+
+                    None
+                })
+        });
+        dbg!(support_bounds_c.clone().collect::<Vec<_>>());
+
+        support_bounds_a
+            .chain(support_bounds_b)
+            .chain(support_bounds_c)
             .collect()
     }
 }
