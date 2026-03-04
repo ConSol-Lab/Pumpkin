@@ -12,20 +12,27 @@ use crate::propagation::checkers::Witness;
 use crate::propagation::checkers::WitnessGenerator;
 use crate::variables::DomainId;
 
+/// Tests for domain or bound consistency given a `checker`.
+///
+/// The checker is responsible for two things:
+/// 1. It should generate the witnesses that support the values in the domain.
+/// 3. It should identify conflicts in an assignment if that assignment violates the constraint.
 #[derive(Clone, Debug)]
 pub struct StrongConsistencyChecker<C> {
-    witness_generator: C,
+    checker: C,
     consistency: Consistency,
 }
 
 impl<C> StrongConsistencyChecker<C> {
-    pub fn new(witness_generator: C, consistency: Consistency) -> Self {
+    /// Create a new [`StrongConsistencyChecker`].
+    pub fn new(checker: C, consistency: Consistency) -> Self {
         StrongConsistencyChecker {
-            witness_generator,
+            checker,
             consistency,
         }
     }
 
+    /// Verifies that all values in the domain of `domain_id` occur in `supported_values`.
     fn verify_domain_consistency(
         &self,
         domains: Domains<'_>,
@@ -37,6 +44,7 @@ impl<C> StrongConsistencyChecker<C> {
             .all(|value| supported_values.contains(&value))
     }
 
+    /// Verifies the bounds of the domain of `domain_id` occur in `supported_values`.
     fn verify_bounds_consistency(
         &self,
         domains: Domains<'_>,
@@ -54,6 +62,7 @@ impl<C> StrongConsistencyChecker<C>
 where
     C: InferenceChecker<Predicate>,
 {
+    /// Uses the checker to determine whether the given `witness` violates a constraint.
     fn validate_witness(&self, witness: &Witness) -> bool {
         let premises = witness
             .iter()
@@ -63,7 +72,7 @@ where
         let state = VariableState::prepare_for_conflict_check(premises.clone(), None)
             .expect("the witness is consistent by construction");
 
-        let state_is_conflicting = self.witness_generator.check(state, &premises, None);
+        let state_is_conflicting = self.checker.check(state, &premises, None);
 
         !state_is_conflicting
     }
@@ -75,7 +84,7 @@ where
 {
     fn check_consistency(&self, mut domains: Domains<'_>, scope: &[DomainId]) -> bool {
         let mut supported_values: HashMap<DomainId, Vec<i32>> = HashMap::default();
-        let witnesses = self.witness_generator.support(domains.reborrow());
+        let witnesses = self.checker.support(domains.reborrow());
 
         for witness in witnesses {
             assert!(
