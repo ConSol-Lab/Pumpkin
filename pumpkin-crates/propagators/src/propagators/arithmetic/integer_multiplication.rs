@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
