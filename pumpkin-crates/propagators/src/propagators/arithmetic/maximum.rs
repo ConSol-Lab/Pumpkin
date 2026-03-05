@@ -9,6 +9,7 @@ use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -17,7 +18,11 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::Consistency;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -49,8 +54,13 @@ where
             }),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for maximum")]
-        pumpkin_core::propagation::checkers::DefaultChecker
+        StrongConsistencyChecker::new(
+            MaximumChecker {
+                array: self.array.clone(),
+                rhs: self.rhs.clone(),
+            },
+            Consistency::Bounds,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -228,6 +238,120 @@ where
 
         lowest_maximum > self.rhs.induced_upper_bound(&state)
             || highest_maximum < self.rhs.induced_lower_bound(&state)
+    }
+}
+
+impl<ElementVar, Rhs> WitnessGenerator for MaximumChecker<ElementVar, Rhs>
+where
+    ElementVar: IntegerVariable,
+    Rhs: IntegerVariable,
+{
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let rhs_upper_bound = domains.upper_bound(&self.rhs);
+        let rhs_lower_bound = domains.lower_bound(&self.rhs);
+
+        // The witness for the upper bound of the rhs is every variable set to its upper
+        // bound. This also serves as the witness for the upper bounds of the variables in
+        // the array. That means we only need to handle the lower bound of the array
+        // elements after this.
+        let upper_bound_witness = Witness::new(
+            self.array
+                .iter()
+                .map(|element| {
+                    let upper_bound = domains.upper_bound(element);
+                    element.assign(upper_bound)
+                })
+                .chain(std::iter::once(self.rhs.assign(rhs_upper_bound))),
+        );
+
+        // If an element can take on the lower bound of the RHS, assign it. Otherwise,
+        // assign it to the element's lower bound.
+        let rhs_lower_bound_witness = Witness::new(
+            self.array
+                .iter()
+                .map(|element| {
+                    if domains.contains(element, rhs_lower_bound) {
+                        element.assign(rhs_lower_bound)
+                    } else {
+                        let element_lb = domains.lower_bound(element);
+                        element.assign(element_lb)
+                    }
+                })
+                .chain(std::iter::once(self.rhs.assign(rhs_lower_bound))),
+        );
+
+        let array_lower_bound_witnesses =
+            self.array.iter().enumerate().map(|(element_idx, element)| {
+                // Here we want to support the lower bound of element.
+                let element_lb = domains.lower_bound(element);
+
+                let others_below_element = self
+                    .array
+                    .iter()
+                    .enumerate()
+                    .filter(|&(other_idx, _)| element_idx != other_idx)
+                    .all(|(_, other_element)| domains.upper_bound(other_element) <= element_lb);
+
+                if others_below_element {
+                    // This element determines the max.
+                    // rhs = element_lb
+                    Witness::new(
+                        self.array
+                            .iter()
+                            .enumerate()
+                            .map(|(other_idx, other)| {
+                                if other_idx == element_idx {
+                                    other.assign(element_lb)
+                                } else {
+                                    // Other elements can take any value <= element_lb.
+                                    let ub = domains.upper_bound(other);
+                                    let v = ub.min(element_lb);
+                                    other.assign(v)
+                                }
+                            })
+                            .chain(std::iter::once(self.rhs.assign(element_lb))),
+                    )
+                } else {
+                    // Some other element dominates.
+                    // Find the dominating upper bound.
+                    let rhs_val = self
+                        .array
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(other_idx, other)| {
+                            if other_idx == element_idx {
+                                None
+                            } else {
+                                Some(domains.upper_bound(other))
+                            }
+                        })
+                        .max()
+                        .expect("at least one should dominate element");
+
+                    let assignments = self
+                        .array
+                        .iter()
+                        .enumerate()
+                        .map(|(j, other)| {
+                            if j == element_idx {
+                                // Support the lower bound of this element.
+                                other.assign(element_lb)
+                            } else {
+                                // Assign other elements to something <= dominating_ub.
+                                let ub = domains.upper_bound(other);
+                                let v = ub.min(rhs_val);
+                                other.assign(v)
+                            }
+                        })
+                        .chain(std::iter::once(self.rhs.assign(rhs_val)));
+
+                    Witness::new(assignments)
+                }
+            });
+
+        array_lower_bound_witnesses
+            .chain([upper_bound_witness, rhs_lower_bound_witness])
+            .collect()
     }
 }
 

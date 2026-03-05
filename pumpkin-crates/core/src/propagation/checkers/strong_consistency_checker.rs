@@ -87,10 +87,10 @@ where
         let witnesses = self.checker.support(domains.reborrow());
 
         for witness in witnesses {
-            assert!(
-                self.validate_witness(&witness),
-                "witness should satisfy the constraint"
-            );
+            if !self.validate_witness(&witness) {
+                dbg!(witness);
+                panic!("witness should satisfy the constraint");
+            }
 
             for (domain, value) in witness.iter() {
                 let values = supported_values.entry(domain).or_insert(vec![]);
