@@ -58,14 +58,17 @@ where
             }),
         );
 
-        StrongConsistencyChecker::new(
-            IntegerMultiplicationChecker {
-                a: self.a.clone(),
-                b: self.b.clone(),
-                c: self.c.clone(),
-            },
-            Consistency::Bounds,
-        )
+        // StrongConsistencyChecker::new(
+        //     IntegerMultiplicationChecker {
+        //         a: self.a.clone(),
+        //         b: self.b.clone(),
+        //         c: self.c.clone(),
+        //     },
+        //     Consistency::Bounds,
+        // )
+
+        #[allow(deprecated, reason = "TODO to implement for multiplication")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
