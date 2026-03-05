@@ -1,9 +1,17 @@
+#![allow(warnings, reason = "prototyping")]
+
+use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::InferenceChecker;
+use pumpkin_checking::VariableState;
+use pumpkin_core::conjunction;
 use pumpkin_core::containers::HashSet as Set;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -11,6 +19,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::Consistency;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::WeakConsistencyChecker;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -25,7 +36,6 @@ declare_inference_label!(CircuitForwardCheck);
 pub struct CircuitConstructor<Var> {
     pub successors: Box<[Var]>,
     pub constraint_tag: ConstraintTag,
-    pub conflict_detection_only: bool,
 }
 
 impl<Var> PropagatorConstructor for CircuitConstructor<Var>
@@ -33,6 +43,28 @@ where
     Var: IntegerVariable + 'static,
 {
     type PropagatorImpl = CircuitPropagator<Var>;
+
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
+        checkers.add_inference_checker(
+            InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
+            Box::new(CircuitForwardCheckChecker {
+                successors: self.successors.clone(),
+            }),
+        );
+
+        // WeakConsistencyChecker::new(
+        //     CircuitForwardCheckChecker {
+        //         successors: self.successors.clone(),
+        //     },
+        //     Consistency::Domain,
+        // )
+
+        #[allow(deprecated, reason = "TODO to implement for circuit")]
+        pumpkin_core::propagation::checkers::DefaultChecker
+    }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
         // Register for events
@@ -46,7 +78,6 @@ where
 
         CircuitPropagator {
             successors: self.successors,
-            conflict_detection_only: self.conflict_detection_only,
             inference_code: InferenceCode::new(self.constraint_tag, CircuitForwardCheck),
         }
     }
@@ -57,7 +88,6 @@ where
 pub struct CircuitPropagator<Var> {
     // TODO
     pub successors: Box<[Var]>,
-    conflict_detection_only: bool,
     inference_code: InferenceCode,
 }
 
@@ -83,6 +113,12 @@ where
                     .iterate_domain(var)
                     .map(|value| (value - VALUE_OFFSET) as usize),
             );
+
+            context.post(
+                predicate![var != index as i32 + VALUE_OFFSET],
+                conjunction!(),
+                &self.inference_code,
+            )?;
         }
 
         let graph = Graph::from_domains(&domains);
@@ -95,17 +131,13 @@ where
                 &graph,
                 &domains
             );
-            let reason = explanation.to_propositional_conjunction(&self.successors);
+            let reason =
+                explanation.to_propositional_conjunction(&self.successors, context.reborrow());
 
             return Err(Conflict::Propagator(PropagatorConflict {
                 conjunction: reason,
                 inference_code: self.inference_code.clone(),
             }));
-        }
-
-        if self.conflict_detection_only {
-            // TODO: Only perform conflict detection
-            return Ok(());
         }
 
         for inference in graph.circuit_prevent() {
@@ -116,7 +148,8 @@ where
             } = inference;
 
             debug_assert!(explanation.check_holds(&graph).is_ok());
-            let reason = explanation.to_propositional_conjunction(&self.successors);
+            let reason =
+                explanation.to_propositional_conjunction(&self.successors, context.reborrow());
             let (from, to) = inference;
             let var = &self.successors[from];
 
@@ -138,6 +171,8 @@ mod graph {
     use pumpkin_core::containers::HashSet as Set;
     use pumpkin_core::predicate;
     use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::PropagationContext;
+    use pumpkin_core::propagation::ReadDomains;
     use pumpkin_core::variables::IntegerVariable;
 
     use crate::propagators::circuit::VALUE_OFFSET;
@@ -183,6 +218,7 @@ mod graph {
         pub(crate) fn to_propositional_conjunction<Var: IntegerVariable + 'static>(
             &self,
             successors: &[Var],
+            context: PropagationContext,
         ) -> PropositionalConjunction {
             let mut reason = vec![];
             let Explanation {
@@ -197,6 +233,11 @@ mod graph {
             for (from, to) in excluded.iter().copied() {
                 let var = &successors[from];
                 reason.push(predicate!(var != to as i32 + VALUE_OFFSET));
+            }
+
+            for var in successors {
+                reason.push(predicate![var >= context.lower_bound(var)]);
+                reason.push(predicate![var <= context.upper_bound(var)]);
             }
 
             PropositionalConjunction::from(reason)
@@ -229,8 +270,7 @@ mod graph {
         edges: Map<usize, Set<usize>>,
     }
 
-    #[cfg(test)]
-    struct SccContext<'a> {
+    pub(super) struct SccContext<'a> {
         lowest_id: Vec<Option<usize>>,
         next_id: usize,
         node_id: Vec<Option<usize>>,
@@ -257,7 +297,6 @@ mod graph {
             graph
         }
 
-        #[cfg(test)]
         pub(crate) fn from_explanation(explanation: &Explanation) -> Self {
             let mut graph = Self {
                 node_len: explanation.node_len,
@@ -283,8 +322,7 @@ mod graph {
         /// Calculate strongly connected components (SCCs) of the graph.
         ///
         /// Returns the calculated SCCs in reverse topological order.
-        #[cfg(test)]
-        fn calculate_sccs(&self) -> Vec<Set<usize>> {
+        pub(super) fn calculate_sccs(&self) -> Vec<Set<usize>> {
             let mut context = SccContext {
                 lowest_id: vec![None; self.node_len],
                 next_id: 0,
@@ -469,7 +507,6 @@ mod graph {
         }
     }
 
-    #[cfg(test)]
     fn scc_dfs(current: usize, ctx: &mut SccContext) {
         ctx.stack.push(current);
         ctx.stack_set[current] = true;
@@ -753,6 +790,58 @@ mod graph {
     }
 }
 
+#[derive(Clone, Debug)]
+struct CircuitForwardCheckChecker<Var> {
+    successors: Box<[Var]>,
+}
+
+impl<Var, Atomic> InferenceChecker<Atomic> for CircuitForwardCheckChecker<Var>
+where
+    Atomic: AtomicConstraint,
+    Atomic::Identifier: std::fmt::Debug,
+    Var: CheckerVariable<Atomic>,
+{
+    fn check(
+        &self,
+        state: VariableState<Atomic>,
+        premises: &[Atomic],
+        consequent: Option<&Atomic>,
+    ) -> bool {
+        // There is a conflict if the graph in `state` contains a cycle.
+        //
+        dbg!(&state);
+        dbg!(premises);
+        dbg!(&consequent);
+
+        let Some(domains) = self
+            .successors
+            .iter()
+            .map(|successor| {
+                successor.iter_induced_domain(&state).map(|iter| {
+                    iter.map(|value| (value - VALUE_OFFSET) as usize)
+                        .collect::<Set<_>>()
+                })
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            // Not all domains are bounded. That means that this must be a trivial
+            // inference, removing a self-loop.
+
+            return self.successors.iter().enumerate().any(|(idx, successor)| {
+                successor
+                    .induced_fixed_value(&state)
+                    .is_some_and(|value| value - VALUE_OFFSET == idx as i32)
+            });
+        };
+
+        let graph = Graph::from_domains(&domains);
+
+        dbg!(graph.calculate_sccs());
+
+        graph.calculate_sccs().len() > 1
+    }
+}
+
 #[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
@@ -761,6 +850,7 @@ mod tests {
     use pumpkin_core::containers::HashSet as Set;
     use pumpkin_core::state::Conflict;
     use pumpkin_core::state::PropagatorId;
+    use pumpkin_core::state::State;
     use pumpkin_core::variables::DomainId;
 
     use crate::propagators::circuit::CircuitConstructor;
@@ -768,7 +858,6 @@ mod tests {
     fn set_up_circuit_state_simple(
         node_len: i32,
         set: &[(i32, i32)],
-        conflict_detection_only: bool,
     ) -> (TestSolver, Result<PropagatorId, Conflict>, Vec<DomainId>) {
         let mut solver = TestSolver::default();
         let map: Map<i32, i32> = Map::from_iter(set.iter().cloned());
@@ -788,7 +877,6 @@ mod tests {
         let result = solver.new_propagator(CircuitConstructor {
             successors: successors.clone().into(),
             constraint_tag,
-            conflict_detection_only,
         });
 
         (solver, result, successors)
@@ -796,7 +884,6 @@ mod tests {
 
     fn set_up_circuit_state_full(
         successors: &[Vec<i32>],
-        conflict_detection_only: bool,
     ) -> (TestSolver, Result<PropagatorId, Conflict>, Vec<DomainId>) {
         let mut solver = TestSolver::default();
 
@@ -817,7 +904,6 @@ mod tests {
         let result = solver.new_propagator(CircuitConstructor {
             successors: vars.clone().into(),
             constraint_tag,
-            conflict_detection_only,
         });
 
         (solver, result, vars)
@@ -825,15 +911,13 @@ mod tests {
 
     #[test]
     fn example_conflict() {
-        let (_, result, _) =
-            set_up_circuit_state_simple(6, &[(1, 2), (3, 4), (4, 5), (5, 3)], true);
+        let (_, result, _) = set_up_circuit_state_simple(6, &[(1, 2), (3, 4), (4, 5), (5, 3)]);
         assert!(result.is_err(), "{:#?}", result);
     }
 
     #[test]
     fn example_propagation() {
-        let (solver, result, variables) =
-            set_up_circuit_state_simple(6, &[(1, 2), (3, 4), (4, 5)], false);
+        let (solver, result, variables) = set_up_circuit_state_simple(6, &[(1, 2), (3, 4), (4, 5)]);
 
         assert!(result.is_ok(), "{:#?}", result);
         assert!(!solver.contains(variables[4], 3));
@@ -841,16 +925,13 @@ mod tests {
 
     #[test]
     fn failing_conflict_0() {
-        let (_, result, _) = set_up_circuit_state_full(
-            &[
-                vec![1, 5],
-                vec![2, 5, 3],
-                vec![5, 2, 4, 3],
-                vec![5, 4, 3],
-                vec![3],
-            ],
-            true,
-        );
+        let (_, result, _) = set_up_circuit_state_full(&[
+            vec![1, 5],
+            vec![2, 5, 3],
+            vec![5, 2, 4, 3],
+            vec![5, 4, 3],
+            vec![3],
+        ]);
 
         assert!(result.is_ok(), "{:#?}", result);
     }
@@ -858,14 +939,34 @@ mod tests {
     #[test]
     fn full_loop() {
         let (_, result, _) =
-            set_up_circuit_state_simple(5, &[(1, 2), (2, 3), (3, 4), (4, 5), (5, 1)], true);
+            set_up_circuit_state_simple(5, &[(1, 2), (2, 3), (3, 4), (4, 5), (5, 1)]);
         assert!(result.is_ok(), "{:#?}", result);
     }
 
     #[test]
     fn nearly_full_loop() {
-        let (_, result, _) =
-            set_up_circuit_state_simple(5, &[(1, 2), (2, 3), (3, 4), (4, 5)], true);
+        let (_, result, _) = set_up_circuit_state_simple(5, &[(1, 2), (2, 3), (3, 4), (4, 5)]);
         assert!(result.is_ok(), "{:#?}", result);
+    }
+
+    #[test]
+    fn removes_self_loops() {
+        let mut state = State::default();
+
+        let x1 = state.new_interval_variable(1, 3, None);
+        let x2 = state.new_interval_variable(1, 3, None);
+        let x3 = state.new_interval_variable(1, 3, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(CircuitConstructor {
+            successors: [x1, x2, x3].into(),
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        assert!(!state.contains(x1, 1));
+        assert!(!state.contains(x2, 2));
+        assert!(!state.contains(x3, 3));
     }
 }

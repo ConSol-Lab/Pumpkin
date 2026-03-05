@@ -37,7 +37,8 @@ impl<C: InferenceChecker<Predicate>> WeakConsistencyChecker<C> {
                 VariableState::prepare_for_conflict_check(premises.iter().copied(), consequent)
                     .expect("domain is not inconsistent");
 
-            self.witness_generator
+            !self
+                .witness_generator
                 .check(state, premises, consequent.as_ref())
         })
     }

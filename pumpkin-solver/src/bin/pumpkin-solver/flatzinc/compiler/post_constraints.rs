@@ -50,7 +50,6 @@ pub(crate) fn run(
                     .add_propagator(CircuitConstructor {
                         successors: next.as_ref().into(),
                         constraint_tag,
-                        conflict_detection_only: false,
                     })
                     .is_ok()
             }
