@@ -31,6 +31,11 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::Consistency;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::EmptyDomainConflict;
 use pumpkin_core::state::PropagatorConflict;
@@ -53,7 +58,10 @@ where
 {
     type PropagatorImpl = BinaryEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, BinaryEquals),
             Box::new(BinaryEqualsChecker {
@@ -61,6 +69,14 @@ where
                 rhs: self.b.clone(),
             }),
         );
+
+        StrongConsistencyChecker::new(
+            BinaryEqualsChecker {
+                lhs: self.a.clone(),
+                rhs: self.b.clone(),
+            },
+            Consistency::Domain,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -436,6 +452,19 @@ where
         }
 
         !consistent
+    }
+}
+
+impl<Lhs, Rhs> WitnessGenerator for BinaryEqualsChecker<Lhs, Rhs>
+where
+    Lhs: IntegerVariable,
+    Rhs: IntegerVariable,
+{
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        domains
+            .iterate_domain(&self.lhs)
+            .map(|value| Witness::new([self.lhs.assign(value), self.rhs.assign(value)]))
+            .collect()
     }
 }
 

@@ -15,6 +15,7 @@ use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
+use crate::propagation::checkers::WitnessedVariable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
@@ -220,5 +221,11 @@ impl TransformableVariable<AffineView<Literal>> for Literal {
 
     fn offset(&self, offset: i32) -> AffineView<Literal> {
         AffineView::new(*self, 1, offset)
+    }
+}
+
+impl WitnessedVariable for Literal {
+    fn assign(&self, value: i32) -> crate::propagation::checkers::SingleVariableAssignment {
+        self.integer_variable.assign(value)
     }
 }

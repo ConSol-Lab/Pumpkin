@@ -19,6 +19,7 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
+use crate::propagation::checkers::ConsistencyChecker;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::variables::Literal;
@@ -63,10 +64,17 @@ where
         }
     }
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.with_reification_literal(self.reification_literal);
 
-        self.propagator.add_inference_checkers(checkers);
+        // TODO: Handle consistency check in reified propagators.
+        let _ = self.propagator.add_inference_checkers(checkers);
+
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        crate::propagation::checkers::DefaultChecker
     }
 }
 

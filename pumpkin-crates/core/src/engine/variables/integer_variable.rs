@@ -10,6 +10,7 @@ use crate::engine::notifications::OpaqueDomainEvent;
 use crate::engine::notifications::Watchers;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::predicates::Predicate;
+use crate::propagation::checkers::WitnessedVariable;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
@@ -19,6 +20,7 @@ pub trait IntegerVariable:
     + TransformableVariable<Self::AffineView>
     + Debug
     + CheckerVariable<Predicate>
+    + WitnessedVariable
 {
     type AffineView: IntegerVariable;
 

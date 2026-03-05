@@ -8,6 +8,7 @@ use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
@@ -16,6 +17,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -39,7 +43,10 @@ where
 {
     type PropagatorImpl = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, IntegerMultiplication),
             Box::new(IntegerMultiplicationChecker {
@@ -48,6 +55,18 @@ where
                 c: self.c.clone(),
             }),
         );
+
+        // StrongConsistencyChecker::new(
+        //     IntegerMultiplicationChecker {
+        //         a: self.a.clone(),
+        //         b: self.b.clone(),
+        //         c: self.c.clone(),
+        //     },
+        //     Consistency::Bounds,
+        // )
+
+        #[allow(deprecated, reason = "TODO to implement for multiplication")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -414,6 +433,113 @@ where
         let computed_c_upper = x1y1.max(x1y2).max(x2y1).max(x2y2);
 
         computed_c_upper < c_lower || computed_c_lower > c_upper
+    }
+}
+
+impl<VA, VB, VC> WitnessGenerator for IntegerMultiplicationChecker<VA, VB, VC>
+where
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
+{
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let a_min = domains.lower_bound(&self.a);
+        let a_max = domains.upper_bound(&self.a);
+        let b_min = domains.lower_bound(&self.b);
+        let b_max = domains.upper_bound(&self.b);
+        let c_min = domains.lower_bound(&self.c);
+        let c_max = domains.upper_bound(&self.c);
+
+        dbg!(a_min);
+        dbg!(a_max);
+        dbg!(b_min);
+        dbg!(b_max);
+        dbg!(c_min);
+        dbg!(c_max);
+
+        let support_bounds_a = [a_min, a_max].into_iter().flat_map(|value_a| {
+            domains.iterate_domain(&self.b).find_map(|value_b| {
+                let value_c = value_a * value_b;
+                if domains.contains(&self.c, value_c) {
+                    Some(Witness::new([
+                        self.a.assign(value_a),
+                        self.b.assign(value_b),
+                        self.c.assign(value_c),
+                    ]))
+                } else {
+                    None
+                }
+            })
+        });
+
+        dbg!(support_bounds_a.clone().collect::<Vec<_>>());
+
+        let support_bounds_b = [b_min, b_max].into_iter().flat_map(|value_b| {
+            domains.iterate_domain(&self.a).find_map(|value_a| {
+                let value_c = value_a * value_b;
+                if domains.contains(&self.c, value_c) {
+                    Some(Witness::new([
+                        self.a.assign(value_a),
+                        self.b.assign(value_b),
+                        self.c.assign(value_c),
+                    ]))
+                } else {
+                    None
+                }
+            })
+        });
+        dbg!(support_bounds_b.clone().collect::<Vec<_>>());
+
+        let support_bounds_c = [c_min, c_max].into_iter().flat_map(|value_c| {
+            domains
+                .iterate_domain(&self.a)
+                .find_map(|value_a| {
+                    if value_a != 0 && value_c % value_a == 0 {
+                        let value_b = value_c / value_a;
+
+                        if domains.contains(&self.b, value_b) {
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        }
+                    }
+
+                    None
+                })
+                .or_else(|| {
+                    if value_c == 0 {
+                        if domains.contains(&self.a, 0) {
+                            let value_a = 0;
+                            let value_b = domains.lower_bound(&self.b);
+
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        } else if domains.contains(&self.b, 0) {
+                            let value_a = domains.lower_bound(&self.a);
+                            let value_b = 0;
+
+                            return Some(Witness::new([
+                                self.a.assign(value_a),
+                                self.b.assign(value_b),
+                                self.c.assign(value_c),
+                            ]));
+                        }
+                    }
+
+                    None
+                })
+        });
+        dbg!(support_bounds_c.clone().collect::<Vec<_>>());
+
+        support_bounds_a
+            .chain(support_bounds_b)
+            .chain(support_bounds_c)
+            .collect()
     }
 }
 

@@ -25,6 +25,9 @@ use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 use crate::propagation::DomainEvents;
+use crate::propagation::checkers::ConsistencyChecker;
+#[allow(deprecated, reason = "TODO to implement for reified")]
+use crate::propagation::checkers::DefaultChecker;
 use crate::propagators::reified_propagator::ReifiedChecker;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
@@ -45,7 +48,13 @@ pub trait PropagatorConstructor {
     /// to verify the propagations done by this propagator are correct.
     ///
     /// See [`InferenceChecker`] for more information.
-    fn add_inference_checkers(&self, _checkers: InferenceCheckers<'_>) {}
+    fn add_inference_checkers(
+        &self,
+        _checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
+        #[allow(deprecated, reason = "TODO to implement for reified")]
+        DefaultChecker
+    }
 
     /// Create the propagator instance from `Self`.
     fn create(self, context: PropagatorConstructorContext) -> Self::PropagatorImpl;
