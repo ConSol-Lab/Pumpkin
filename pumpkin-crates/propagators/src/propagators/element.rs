@@ -17,6 +17,7 @@ use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
+use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
 use pumpkin_core::propagation::LocalId;
@@ -26,9 +27,11 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::Consistency;
 use pumpkin_core::propagation::checkers::ConsistencyChecker;
-#[allow(deprecated, reason = "TODO to implement for reified")]
-use pumpkin_core::propagation::checkers::DefaultChecker;
+use pumpkin_core::propagation::checkers::StrongConsistencyChecker;
+use pumpkin_core::propagation::checkers::Witness;
+use pumpkin_core::propagation::checkers::WitnessGenerator;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Reason;
@@ -64,8 +67,10 @@ where
             )),
         );
 
-        #[allow(deprecated, reason = "TODO to implement for reified")]
-        DefaultChecker
+        StrongConsistencyChecker::new(
+            ElementChecker::new(self.array.clone(), self.index.clone(), self.rhs.clone()),
+            Consistency::Bounds,
+        )
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
@@ -405,6 +410,123 @@ where
             Domain::new(intersection_lower_bound, intersection_upper_bound, holes);
 
         !intersected_domain.is_consistent()
+    }
+}
+
+impl<VX, VI, VE> WitnessGenerator for ElementChecker<VX, VI, VE>
+where
+    VX: IntegerVariable,
+    VI: IntegerVariable,
+    VE: IntegerVariable,
+{
+    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let rhs_lb = domains.lower_bound(&self.rhs);
+        let rhs_ub = domains.upper_bound(&self.rhs);
+        let index_lb = domains.lower_bound(&self.index);
+        let index_ub = domains.upper_bound(&self.index);
+
+        // The witness that supports the lower bound on RHS and all the lower bounds of the
+        // variables in the array is the same. We can just assign all those variables to their
+        // lower bound and pick an appropriate value for the index, which should exist.
+        //
+        // Similar for the upper bound as well. That means after this we only need to support the
+        // lower and upper bound of the index.
+
+        // Support the lower bound of the rhs.
+        let index_of_element_where_lb_equals_rhs_lb = self
+            .array
+            .iter()
+            .enumerate()
+            .find_map(|(idx, element)| {
+                let idx = idx as i32;
+                if index_lb <= idx && idx <= index_ub && domains.lower_bound(element) == rhs_lb {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .expect("one of the variables supports the lower bound of rhs");
+        let index_of_element_where_ub_equals_rhs_ub = self
+            .array
+            .iter()
+            .enumerate()
+            .find_map(|(idx, element)| {
+                let idx = idx as i32;
+                // Note that using domains.contains is not appropriate here. Since the propagator
+                // may propagate more strongly, holes may exist.
+                if index_lb <= idx && idx <= index_ub && domains.upper_bound(element) == rhs_ub {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .expect("one of the variables supports the upper bound of rhs");
+
+        let rhs_lb_witness = Witness::new(
+            self.array
+                .iter()
+                .map(|element| element.assign(domains.lower_bound(element)))
+                .chain([
+                    self.rhs.assign(rhs_lb),
+                    self.index.assign(index_of_element_where_lb_equals_rhs_lb),
+                ]),
+        );
+
+        let rhs_ub_witness = Witness::new(
+            self.array
+                .iter()
+                .map(|element| element.assign(domains.upper_bound(element)))
+                .chain([
+                    self.rhs.assign(rhs_ub),
+                    self.index.assign(index_of_element_where_ub_equals_rhs_ub),
+                ]),
+        );
+
+        // Now what remains is to support the lower and upper bound of the index variable.
+        let lb_of_element_at_index_lb = domains.lower_bound(&self.array[index_lb as usize]);
+        let index_lb_witness = Witness::new(
+            self.array
+                .iter()
+                .enumerate()
+                .map(|(idx, element)| {
+                    let value = if idx == index_lb as usize {
+                        lb_of_element_at_index_lb.max(rhs_lb)
+                    } else {
+                        domains.lower_bound(element)
+                    };
+                    element.assign(value)
+                })
+                .chain([
+                    self.index.assign(index_lb),
+                    self.rhs.assign(lb_of_element_at_index_lb.max(rhs_lb)),
+                ]),
+        );
+
+        let ub_of_element_at_index_ub = domains.upper_bound(&self.array[index_ub as usize]);
+        let index_ub_witness = Witness::new(
+            self.array
+                .iter()
+                .enumerate()
+                .map(|(idx, element)| {
+                    let value = if idx == index_ub as usize {
+                        ub_of_element_at_index_ub.min(rhs_ub)
+                    } else {
+                        domains.lower_bound(element)
+                    };
+                    element.assign(value)
+                })
+                .chain([
+                    self.index.assign(index_ub),
+                    self.rhs.assign(ub_of_element_at_index_ub.min(rhs_ub)),
+                ]),
+        );
+
+        vec![
+            rhs_lb_witness,
+            rhs_ub_witness,
+            index_lb_witness,
+            index_ub_witness,
+        ]
     }
 }
 
