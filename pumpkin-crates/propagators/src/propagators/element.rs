@@ -379,6 +379,12 @@ where
             .map(|(_, element)| element)
             .collect();
 
+        if supported_elements.is_empty() {
+            // The index cannot be assigned such that an element is supported, so we have a
+            // conflict.
+            return true;
+        }
+
         for element in supported_elements {
             self.union.borrow_mut().add(&state, element);
         }
@@ -413,76 +419,18 @@ where
     }
 }
 
-impl<VX, VI, VE> WitnessGenerator for ElementChecker<VX, VI, VE>
+impl<VX, VI, VE> ElementChecker<VX, VI, VE>
 where
     VX: IntegerVariable,
     VI: IntegerVariable,
     VE: IntegerVariable,
 {
-    fn support(&self, domains: Domains<'_>) -> Vec<Witness> {
+    fn support_index(&self, domains: Domains<'_>) -> impl Iterator<Item = Witness> + '_ {
         let rhs_lb = domains.lower_bound(&self.rhs);
         let rhs_ub = domains.upper_bound(&self.rhs);
         let index_lb = domains.lower_bound(&self.index);
         let index_ub = domains.upper_bound(&self.index);
 
-        // The witness that supports the lower bound on RHS and all the lower bounds of the
-        // variables in the array is the same. We can just assign all those variables to their
-        // lower bound and pick an appropriate value for the index, which should exist.
-        //
-        // Similar for the upper bound as well. That means after this we only need to support the
-        // lower and upper bound of the index.
-
-        // Support the lower bound of the rhs.
-        let index_of_element_where_lb_equals_rhs_lb = self
-            .array
-            .iter()
-            .enumerate()
-            .find_map(|(idx, element)| {
-                let idx = idx as i32;
-                if index_lb <= idx && idx <= index_ub && domains.lower_bound(element) == rhs_lb {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
-            .expect("one of the variables supports the lower bound of rhs");
-        let index_of_element_where_ub_equals_rhs_ub = self
-            .array
-            .iter()
-            .enumerate()
-            .find_map(|(idx, element)| {
-                let idx = idx as i32;
-                // Note that using domains.contains is not appropriate here. Since the propagator
-                // may propagate more strongly, holes may exist.
-                if index_lb <= idx && idx <= index_ub && domains.upper_bound(element) == rhs_ub {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
-            .expect("one of the variables supports the upper bound of rhs");
-
-        let rhs_lb_witness = Witness::new(
-            self.array
-                .iter()
-                .map(|element| element.assign(domains.lower_bound(element)))
-                .chain([
-                    self.rhs.assign(rhs_lb),
-                    self.index.assign(index_of_element_where_lb_equals_rhs_lb),
-                ]),
-        );
-
-        let rhs_ub_witness = Witness::new(
-            self.array
-                .iter()
-                .map(|element| element.assign(domains.upper_bound(element)))
-                .chain([
-                    self.rhs.assign(rhs_ub),
-                    self.index.assign(index_of_element_where_ub_equals_rhs_ub),
-                ]),
-        );
-
-        // Now what remains is to support the lower and upper bound of the index variable.
         let lb_of_element_at_index_lb = domains.lower_bound(&self.array[index_lb as usize]);
         let index_lb_witness = Witness::new(
             self.array
@@ -521,12 +469,246 @@ where
                 ]),
         );
 
-        vec![
-            rhs_lb_witness,
-            rhs_ub_witness,
-            index_lb_witness,
-            index_ub_witness,
-        ]
+        [index_lb_witness, index_ub_witness].into_iter()
+    }
+
+    fn support_rhs(&self, domains: Domains<'_>) -> impl Iterator<Item = Witness> + '_ {
+        let rhs_lb = domains.lower_bound(&self.rhs);
+        let rhs_ub = domains.upper_bound(&self.rhs);
+        let index_lb = domains.lower_bound(&self.index);
+        let index_ub = domains.upper_bound(&self.index);
+
+        let index_of_element_supporting_rhs_lb = self
+            .array
+            .iter()
+            .enumerate()
+            .find_map(|(idx, element)| {
+                let idx = idx as i32;
+
+                let element_lb = domains.lower_bound(element);
+                let element_ub = domains.upper_bound(element);
+
+                if index_lb <= idx
+                    && idx <= index_ub
+                    && element_lb <= rhs_lb
+                    && rhs_lb <= element_ub
+                {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .expect("one of the variables supports the lower bound of rhs");
+        let index_of_element_supporting_rhs_ub = self
+            .array
+            .iter()
+            .enumerate()
+            .find_map(|(idx, element)| {
+                let idx = idx as i32;
+
+                let element_lb = domains.lower_bound(element);
+                let element_ub = domains.upper_bound(element);
+
+                // Note that using domains.contains is not appropriate here. Since the propagator
+                // may propagate more strongly, holes may exist.
+                if index_lb <= idx
+                    && idx <= index_ub
+                    && element_lb <= rhs_ub
+                    && rhs_ub <= element_ub
+                {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .expect("one of the variables supports the upper bound of rhs");
+
+        let rhs_lb_witness = Witness::new(
+            self.array
+                .iter()
+                .enumerate()
+                .map(|(idx, element)| {
+                    if idx == index_of_element_supporting_rhs_lb as usize {
+                        element.assign(rhs_lb)
+                    } else {
+                        element.assign(domains.lower_bound(element))
+                    }
+                })
+                .chain([
+                    self.rhs.assign(rhs_lb),
+                    self.index.assign(index_of_element_supporting_rhs_lb),
+                ]),
+        );
+
+        let rhs_ub_witness = Witness::new(
+            self.array
+                .iter()
+                .enumerate()
+                .map(|(idx, element)| {
+                    if idx == index_of_element_supporting_rhs_ub as usize {
+                        element.assign(rhs_ub)
+                    } else {
+                        element.assign(domains.upper_bound(element))
+                    }
+                })
+                .chain([
+                    self.rhs.assign(rhs_ub),
+                    self.index.assign(index_of_element_supporting_rhs_ub),
+                ]),
+        );
+
+        [rhs_lb_witness, rhs_ub_witness].into_iter()
+    }
+
+    fn support_array(&self, domains: Domains<'_>) -> Vec<Witness> {
+        let rhs_lb = domains.lower_bound(&self.rhs);
+        let rhs_ub = domains.upper_bound(&self.rhs);
+        let index_lb = domains.lower_bound(&self.index);
+        let index_ub = domains.upper_bound(&self.index);
+
+        assert_ne!(
+            index_lb, index_ub,
+            "only support array if index is not fixed"
+        );
+
+        // If the index is fixed, then the supports for RHS also support the variable. So we only
+        // construct witnesses if the index contains at least two values. In that case, there
+        // should be at least two elements in the array (within the range defined by index) whose
+        // domain intersects with RHS.
+        //
+        // Yes, this is ugly. Be my guest and refactor it.
+
+        (0..self.array.len())
+            .flat_map(move |idx| {
+                let element_lb = domains.lower_bound(&self.array[idx]);
+                let element_ub = domains.upper_bound(&self.array[idx]);
+
+                // Find values for index and rhs to assign when array[idx] is set to its lower
+                // bound.
+                let (index_value_for_lb, rhs_value_for_lb) = self
+                    .array
+                    .iter()
+                    .enumerate()
+                    .find_map(|(other_idx, other)| {
+                        let other_lb = domains.lower_bound(other);
+                        let other_ub = domains.upper_bound(other);
+
+                        if !(index_lb <= other_idx as i32 && other_idx as i32 <= index_ub) {
+                            // This is outside of the domain of index.
+                            return None;
+                        }
+
+                        if other_idx == idx {
+                            return (rhs_lb <= element_lb && element_lb <= rhs_ub)
+                                .then_some((other_idx, element_lb));
+                        }
+
+                        if rhs_lb <= other_lb && other_lb <= rhs_ub {
+                            return Some((other_idx, other_lb));
+                        }
+
+                        if other_lb <= rhs_lb && rhs_lb <= other_ub {
+                            return Some((other_idx, rhs_lb));
+                        }
+
+                        None
+                    })
+                    .unwrap_or_else(|| {
+                        panic!("at least one more support for rhs lb exists than idx {idx}")
+                    });
+
+                // Find values for index and rhs to assign when array[idx] is set to its upper
+                // bound.
+                let (index_value_for_ub, rhs_value_for_ub) = self
+                    .array
+                    .iter()
+                    .enumerate()
+                    .find_map(|(other_idx, other)| {
+                        let other_lb = domains.lower_bound(other);
+                        let other_ub = domains.upper_bound(other);
+
+                        if !(index_lb <= other_idx as i32 && other_idx as i32 <= index_ub) {
+                            // This is outside of the domain of index.
+                            return None;
+                        }
+
+                        if other_idx == idx {
+                            return (rhs_lb <= element_ub && element_ub <= rhs_ub)
+                                .then_some((other_idx, element_ub));
+                        }
+
+                        if rhs_lb <= other_ub && other_ub <= rhs_ub {
+                            return Some((other_idx, other_ub));
+                        }
+
+                        if other_lb <= rhs_ub && rhs_ub <= other_ub {
+                            return Some((other_idx, rhs_ub));
+                        }
+
+                        None
+                    })
+                    .unwrap_or_else(|| {
+                        panic!("at least one more support for rhs ub exists than idx {idx}")
+                    });
+
+                let lower_bound_support = Witness::new(
+                    self.array
+                        .iter()
+                        .enumerate()
+                        .map(|(other_idx, element)| {
+                            if other_idx == index_value_for_lb {
+                                element.assign(rhs_value_for_lb)
+                            } else {
+                                element.assign(domains.lower_bound(element))
+                            }
+                        })
+                        .chain([
+                            self.index.assign(index_value_for_lb as i32),
+                            self.rhs.assign(rhs_value_for_lb),
+                        ]),
+                );
+
+                let upper_bound_support = Witness::new(
+                    self.array
+                        .iter()
+                        .enumerate()
+                        .map(|(other_idx, element)| {
+                            if other_idx == index_value_for_ub {
+                                element.assign(rhs_value_for_ub)
+                            } else {
+                                element.assign(domains.upper_bound(element))
+                            }
+                        })
+                        .chain([
+                            self.index.assign(index_value_for_ub as i32),
+                            self.rhs.assign(rhs_value_for_ub),
+                        ]),
+                );
+
+                [lower_bound_support, upper_bound_support]
+            })
+            .collect()
+    }
+}
+
+impl<VX, VI, VE> WitnessGenerator for ElementChecker<VX, VI, VE>
+where
+    VX: IntegerVariable,
+    VI: IntegerVariable,
+    VE: IntegerVariable,
+{
+    fn support(&self, mut domains: Domains<'_>) -> Vec<Witness> {
+        let index_lb = domains.lower_bound(&self.index);
+        let index_ub = domains.upper_bound(&self.index);
+
+        self.support_rhs(domains.reborrow())
+            .chain(self.support_index(domains.reborrow()))
+            .chain(if index_lb == index_ub {
+                itertools::Either::Left(std::iter::empty())
+            } else {
+                itertools::Either::Right(self.support_array(domains.reborrow()).into_iter())
+            })
+            .collect()
     }
 }
 
@@ -536,6 +718,7 @@ mod tests {
     use pumpkin_checking::TestAtomic;
     use pumpkin_checking::VariableState;
     use pumpkin_core::TestSolver;
+    use pumpkin_core::state::State;
 
     use super::*;
 
@@ -707,5 +890,37 @@ mod tests {
         let checker = ElementChecker::new(vec!["x1", "x2"].into(), "x3", "x4");
 
         assert!(checker.check(state, &premises, consequent.as_ref()));
+    }
+
+    #[test]
+    fn consistency_check_scenario_1() {
+        let mut state = State::default();
+
+        let arr0 = state.new_interval_variable(25, 69, None);
+        let arr1 = state.new_interval_variable(16, 23, None);
+        let arr2 = state.new_interval_variable(38, 43, None);
+        let index = state.new_interval_variable(0, 2, None);
+        let rhs = state.new_interval_variable(41, 69, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(ElementArgs {
+            array: [arr0, arr1, arr2].into(),
+            index,
+            rhs,
+            constraint_tag,
+        });
+
+        state.propagate_to_fixed_point().expect("no conflict");
+
+        // let consistency_checker = StrongConsistencyChecker::new(
+        //     ElementChecker::new([arr0, arr1, arr2].into(), index, rhs),
+        //     Consistency::Bounds,
+        // );
+
+        // <StrongConsistencyChecker<_> as ConsistencyChecker>::check_consistency(
+        //     &consistency_checker,
+        //     Domains
+        //     &[arr0, arr1, arr2, index, rhs],
+        // );
     }
 }

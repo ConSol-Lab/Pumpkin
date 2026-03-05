@@ -12,7 +12,8 @@ use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::results::PropagationStatusCP;
-use pumpkin_core::state::{Conflict, PropagatorConflict};
+use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::propagators::circuit::graph::Graph;
@@ -133,12 +134,11 @@ where
 }
 
 mod graph {
-    use pumpkin_core::{
-        containers::{HashMap as Map, HashSet as Set},
-        predicate,
-        predicates::PropositionalConjunction,
-        variables::IntegerVariable,
-    };
+    use pumpkin_core::containers::HashMap as Map;
+    use pumpkin_core::containers::HashSet as Set;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::variables::IntegerVariable;
 
     use crate::propagators::circuit::VALUE_OFFSET;
 
@@ -175,13 +175,13 @@ mod graph {
                     .insert(inference.0, inference.1);
             }
 
-            return explanation_extended;
+            explanation_extended
         }
     }
 
     impl Explanation {
         pub(crate) fn to_propositional_conjunction<Var: IntegerVariable + 'static>(
-            self,
+            &self,
             successors: &[Var],
         ) -> PropositionalConjunction {
             let mut reason = vec![];
@@ -189,12 +189,12 @@ mod graph {
                 required, excluded, ..
             } = self;
 
-            for (from, to) in required {
+            for (&from, &to) in required.iter() {
                 let var = &successors[from];
                 reason.push(predicate!(var == to as i32 + VALUE_OFFSET));
             }
 
-            for (from, to) in excluded {
+            for (from, to) in excluded.iter().copied() {
                 let var = &successors[from];
                 reason.push(predicate!(var != to as i32 + VALUE_OFFSET));
             }
@@ -202,7 +202,6 @@ mod graph {
             PropositionalConjunction::from(reason)
         }
 
-        #[must_use]
         pub(crate) fn check_holds(&self, graph: &Graph) -> Result<(), (usize, usize)> {
             let Explanation {
                 required, excluded, ..
@@ -458,7 +457,7 @@ mod graph {
                     }
 
                     let inference = Inference {
-                        explanation: explanation,
+                        explanation,
                         inference: (last, first),
                         positive: false,
                     };
@@ -513,8 +512,10 @@ mod graph {
 
     #[cfg(test)]
     mod test {
+        use pumpkin_core::containers::HashMap as Map;
+        use pumpkin_core::containers::HashSet as Set;
+
         use crate::propagators::circuit::graph::Graph;
-        use pumpkin_core::containers::{HashMap as Map, HashSet as Set};
 
         fn create_graph(node_len: usize, links: impl IntoIterator<Item = (usize, usize)>) -> Graph {
             let mut g = Graph {
@@ -700,9 +701,8 @@ mod graph {
         }
 
         mod prevent {
-            use crate::propagators::circuit::graph::Explanation;
-
             use super::*;
+            use crate::propagators::circuit::graph::Explanation;
 
             #[test]
             fn no_propagation_2() {
@@ -756,14 +756,12 @@ mod graph {
 #[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::TestSolver;
     use pumpkin_core::containers::HashMap as Map;
     use pumpkin_core::containers::HashSet as Set;
-
-    use pumpkin_core::{
-        TestSolver,
-        state::{Conflict, PropagatorId},
-        variables::DomainId,
-    };
+    use pumpkin_core::state::Conflict;
+    use pumpkin_core::state::PropagatorId;
+    use pumpkin_core::variables::DomainId;
 
     use crate::propagators::circuit::CircuitConstructor;
 
