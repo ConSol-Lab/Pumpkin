@@ -40,5 +40,8 @@ wasm-bindgen-test = "0.3"
 
 [features]
 check-propagations = []
+check-consistency = []
+all-propagator-checks = ["check-propagations", "check-consistency"]
+
 debug-checks = []
 clap = ["dep:clap"]

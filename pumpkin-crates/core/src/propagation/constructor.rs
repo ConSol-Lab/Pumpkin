@@ -68,7 +68,6 @@ pub struct InferenceCheckers<'state> {
 }
 
 impl<'state> InferenceCheckers<'state> {
-    #[cfg(feature = "check-propagations")]
     pub(crate) fn new(state: &'state mut State) -> Self {
         InferenceCheckers {
             state,

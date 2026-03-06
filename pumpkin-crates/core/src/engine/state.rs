@@ -31,7 +31,6 @@ use crate::proof::ProofLog;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-#[cfg(feature = "check-propagations")]
 use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
@@ -39,8 +38,8 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
-#[cfg(feature = "check-propagations")]
 use crate::propagation::checkers::BoxedConsistencyChecker;
+use crate::propagation::checkers::ConsistencyChecker;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -85,8 +84,9 @@ pub struct State {
 
     /// Inference checkers to run in the propagation loop.
     checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
-    /// For every propagator identify what variables are associated with it.
-    #[cfg(feature = "check-propagations")]
+    /// The consistency checkers that are registered.
+    ///
+    /// These are only executed when the `check-consistency` feature is enabled.
     consistency_checkers: HashMap<PropagatorId, BoxedConsistencyChecker>,
 }
 
@@ -182,7 +182,6 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
-            #[cfg(feature = "check-propagations")]
             consistency_checkers: HashMap::default(),
         };
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -395,8 +394,15 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        #[cfg(feature = "check-propagations")]
-        let consistency_checker = constructor.add_inference_checkers(InferenceCheckers::new(self));
+        let consistency_checker: Box<dyn ConsistencyChecker> = if cfg!(any(
+            feature = "check-propagations",
+            feature = "check-consistency"
+        )) {
+            Box::new(constructor.add_inference_checkers(InferenceCheckers::new(self)))
+        } else {
+            #[allow(deprecated, reason = "its the fallback")]
+            Box::new(crate::propagation::checkers::DefaultChecker)
+        };
 
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
@@ -415,16 +421,10 @@ impl State {
         let slot = self.propagators.new_propagator();
         let handle = slot.populate(propagator);
 
-        #[cfg(feature = "check-propagations")]
-        {
-            use crate::propagation::checkers::ConsistencyChecker;
-
-            #[allow(trivial_casts, reason = "removing it causes a compiler error")]
+        if cfg!(feature = "check-consistency") {
             let previous_checker = self.consistency_checkers.insert(
                 handle.propagator_id(),
-                BoxedConsistencyChecker::from(
-                    Box::new(consistency_checker) as Box<dyn ConsistencyChecker>
-                ),
+                BoxedConsistencyChecker::from(consistency_checker),
             );
             assert!(
                 previous_checker.is_none(),
@@ -814,8 +814,7 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
-        #[cfg(feature = "check-propagations")]
-        {
+        if cfg!(feature = "check-consistency") {
             // Move the scopes out of the notification engine so we do not get borrow clashes. We
             // give it back after checking the consistency of all propagators.
             let scopes = std::mem::take(&mut self.notification_engine.scopes);
