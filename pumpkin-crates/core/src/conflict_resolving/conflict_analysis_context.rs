@@ -31,6 +31,7 @@ use crate::propagation::ExplanationContext;
 use crate::propagation::HasAssignments;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::SingleNogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
 use crate::state::PropagatorHandle;
 
@@ -239,23 +240,30 @@ impl ConflictAnalysisContext<'_> {
                 .insert(!learned_nogood[0], inference_code.clone());
         }
 
-        #[cfg(feature = "check-propagations")]
-        let trail_len_before_nogood = self.state.trail_len();
-
-        let (nogood_propagator, mut propagation_context) = self
+        let _ = self
             .state
-            .get_propagator_mut_with_context(self.nogood_propagator_handle);
-        let nogood_propagator =
-            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
+            .add_propagator(SingleNogoodPropagatorConstructor {
+                conjunction: learned_nogood.predicates.into(),
+                constraint_tag: inference_code.tag(),
+            });
 
-        nogood_propagator.add_asserting_nogood(
-            learned_nogood.to_vec(),
-            inference_code,
-            &mut propagation_context,
-        );
+        // #[cfg(feature = "check-propagations")]
+        // let trail_len_before_nogood = self.state.trail_len();
 
-        #[cfg(feature = "check-propagations")]
-        self.state.check_propagations(trail_len_before_nogood);
+        // let (nogood_propagator, mut propagation_context) = self
+        //     .state
+        //     .get_propagator_mut_with_context(self.nogood_propagator_handle);
+        // let nogood_propagator =
+        //     nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
+
+        // nogood_propagator.add_asserting_nogood(
+        //     learned_nogood.to_vec(),
+        //     inference_code,
+        //     &mut propagation_context,
+        // );
+
+        // #[cfg(feature = "check-propagations")]
+        // self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }

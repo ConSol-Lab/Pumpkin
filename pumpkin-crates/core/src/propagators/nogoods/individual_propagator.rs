@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::VariableState;
@@ -42,6 +43,8 @@ impl PropagatorConstructor for SingleNogoodPropagatorConstructor {
             conjunction,
             constraint_tag,
         } = self;
+
+        assert!(!conjunction.is_empty());
 
         let watched_predicates = if conjunction.is_empty() {
             let true_predicate = Predicate::trivially_true();
@@ -152,7 +155,7 @@ impl Propagator for SingleNogoodPropagatorPropagator {
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         let num_satisfied_watchers = self.update_watched_predicates(context.reborrow());
 
-        if num_satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
+        if self.conjunction.len() > 1 && num_satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
             return Ok(());
         }
 

@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use itertools::Itertools;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -50,6 +51,7 @@ use crate::propagation::store::PropagatorHandle;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::propagators::nogoods::NogoodPropagatorConstructor;
+use crate::propagators::nogoods::SingleNogoodPropagatorConstructor;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_moderate;
@@ -896,36 +898,44 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_eq_simple!(self.get_checkpoint(), 0);
         let num_trail_entries = self.state.trail_len();
 
-        self.state.add_inference_checker(
-            inference_code.clone(),
-            Box::new(NogoodChecker {
-                nogood: nogood.clone().into(),
-            }),
-        );
+        // self.state.add_inference_checker(
+        //     inference_code.clone(),
+        //     Box::new(NogoodChecker {
+        //         nogood: nogood.clone().into(),
+        //     }),
+        // );
 
-        let (nogood_propagator, mut context) = self
+        // let (nogood_propagator, mut context) = self
+        //     .state
+        //     .get_propagator_mut_with_context(self.nogood_propagator_handle);
+
+        // let nogood_propagator =
+        //     nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
+
+        // let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+
+        // if addition_status.is_err() || self.solver_state.is_conflicting() {
+        //     if let Err(conflict) = addition_status {
+        //         self.solver_state.declare_conflict(conflict.into());
+        //     }
+
+        //     self.handle_root_propagation(num_trail_entries);
+        //     self.complete_proof();
+        //     return Err(ConstraintOperationError::InfeasibleNogood);
+        // }
+
+        // self.handle_root_propagation(num_trail_entries);
+
+        // #[allow(deprecated, reason = "Will be refactored")]
+        // self.state.enqueue_propagator(self.nogood_propagator_handle);
+
+        let _ = self
             .state
-            .get_propagator_mut_with_context(self.nogood_propagator_handle);
+            .add_propagator(SingleNogoodPropagatorConstructor {
+                conjunction: nogood.into(),
+                constraint_tag: inference_code.tag(),
+            });
 
-        let nogood_propagator =
-            nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
-
-        let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
-
-        if addition_status.is_err() || self.solver_state.is_conflicting() {
-            if let Err(conflict) = addition_status {
-                self.solver_state.declare_conflict(conflict.into());
-            }
-
-            self.handle_root_propagation(num_trail_entries);
-            self.complete_proof();
-            return Err(ConstraintOperationError::InfeasibleNogood);
-        }
-
-        self.handle_root_propagation(num_trail_entries);
-
-        #[allow(deprecated, reason = "Will be refactored")]
-        self.state.enqueue_propagator(self.nogood_propagator_handle);
         let result = self.state.propagate_to_fixed_point();
         if let Err(conflict) = result {
             self.solver_state.declare_conflict(conflict.into());
