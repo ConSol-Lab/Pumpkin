@@ -19,9 +19,11 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
+use crate::propagation::checkers::BoxedConsistencyChecker;
 use crate::propagation::checkers::ConsistencyChecker;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
+use crate::variables::DomainId;
 use crate::variables::Literal;
 
 /// A [`PropagatorConstructor`] for the reified propagator.
@@ -70,11 +72,19 @@ where
     ) -> impl ConsistencyChecker + 'static {
         checkers.with_reification_literal(self.reification_literal);
 
-        // TODO: Handle consistency check in reified propagators.
-        let _ = self.propagator.add_inference_checkers(checkers);
+        let inner_consistency_checker = self.propagator.add_inference_checkers(checkers);
 
-        #[allow(deprecated, reason = "TODO to implement for reified")]
-        crate::propagation::checkers::DefaultChecker
+        ReifiedConsistencyChecker {
+            #[allow(trivial_casts, reason = "without it the type checker fails")]
+            // TODO: If the propagator constructor trait is refactored such that
+            // `add_inference_checkers` returns an associated type rather than an anonymous impl
+            // Trait, this can be refactored to not have a nested Box<dyn>.
+            inner_consistency_checker: BoxedConsistencyChecker::from(Box::new(
+                inner_consistency_checker,
+            )
+                as Box<dyn ConsistencyChecker>),
+            reification_literal: self.reification_literal,
+        }
     }
 }
 
@@ -260,6 +270,23 @@ impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceCh
             self.inner.check(state, premises, None)
         } else {
             self.inner.check(state, premises, consequent)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ReifiedConsistencyChecker {
+    inner_consistency_checker: BoxedConsistencyChecker,
+    reification_literal: Literal,
+}
+
+impl ConsistencyChecker for ReifiedConsistencyChecker {
+    fn check_consistency(&self, domains: Domains<'_>, scope: &[DomainId]) -> bool {
+        if domains.evaluate_literal(self.reification_literal) == Some(true) {
+            self.inner_consistency_checker
+                .check_consistency(domains, scope)
+        } else {
+            true
         }
     }
 }

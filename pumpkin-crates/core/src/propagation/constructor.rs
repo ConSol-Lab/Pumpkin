@@ -48,6 +48,8 @@ pub trait PropagatorConstructor {
     /// to verify the propagations done by this propagator are correct.
     ///
     /// See [`InferenceChecker`] for more information.
+    // TODO: The return impl seems great, but it is not very flexible. Better to make an associated
+    // type like `PropagatorImpl` so that additional bounds can be enforced by calling code.
     fn add_inference_checkers(
         &self,
         _checkers: InferenceCheckers<'_>,
