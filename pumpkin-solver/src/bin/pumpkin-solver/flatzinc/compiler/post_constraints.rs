@@ -345,6 +345,7 @@ pub(crate) fn run(
             "pumpkin_cumulative_var" => todo!(
                 "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
             ),
+            "pumpkin_circuit" => compile_circuit(context, exprs, options, constraint_tag)?,
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -416,6 +417,20 @@ fn compile_cumulative(
         constraint_tag,
     )
     .post(context.solver);
+    Ok(post_result.is_ok())
+}
+
+fn compile_circuit(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    _options: &FlatZincOptions,
+    constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 1, "pumpkin_circuit");
+
+    let successors = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+
+    let post_result = pumpkin_constraints::circuit(successors, constraint_tag).post(context.solver);
     Ok(post_result.is_ok())
 }
 
