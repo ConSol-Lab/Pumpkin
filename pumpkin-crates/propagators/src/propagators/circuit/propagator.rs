@@ -103,10 +103,23 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        self.check(context.domains())
+        self.check(context.domains())?;
+        self.prevent(context)
     }
 
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+        todo!()
+    }
+}
+
+impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
+    fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {}
+
+    fn create_prevent_explanation(
+        &self,
+        context: Domains,
+        path: &[usize],
+    ) -> PropositionalConjunction {
         todo!()
     }
 }
@@ -146,7 +159,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
 
                     // But if it is a cycle which contains all, then we should
                     return Err(Conflict::Propagator(PropagatorConflict {
-                        conjunction: self.create_conflict_explanation(context, &cycle),
+                        conjunction: self.create_check_explanation(context, &cycle),
                         inference_code: self.inference_code.clone(),
                     }));
                 }
@@ -171,7 +184,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         Ok(())
     }
 
-    fn create_conflict_explanation(
+    fn create_check_explanation(
         &self,
         context: Domains,
         cycle: &[usize],
