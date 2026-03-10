@@ -162,6 +162,10 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    /// The names of propagators to run the checkers for.
+    ///
+    /// If empty, all checkers are run.
+    pub filtered_propagator_checkers: HashSet<String>,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -173,6 +177,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
+            filtered_propagator_checkers: HashSet::default(),
         }
     }
 }
@@ -248,8 +253,11 @@ impl ConstraintSatisfactionSolver {
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
+    pub fn new(mut solver_options: SatisfactionSolverOptions) -> Self {
         let mut state = State::default();
+        state.propagator_checker_filter =
+            std::mem::take(&mut solver_options.filtered_propagator_checkers);
+
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,

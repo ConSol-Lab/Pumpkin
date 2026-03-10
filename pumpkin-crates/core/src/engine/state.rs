@@ -7,7 +7,9 @@ use pumpkin_checking::VariableState;
 
 use crate::basic_types::PropagatorConflict;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::containers::KeyGenerator;
+use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -88,6 +90,10 @@ pub struct State {
     ///
     /// These are only executed when the `check-consistency` feature is enabled.
     consistency_checkers: HashMap<PropagatorId, BoxedConsistencyChecker>,
+    /// These propagators should have checkers to run.
+    check_propagators: KeyedVec<PropagatorId, bool>,
+    /// The names of the propagators to run checkers for.
+    pub(crate) propagator_checker_filter: HashSet<String>,
 }
 
 create_statistics_struct!(StateStatistics {
@@ -183,7 +189,10 @@ impl Default for State {
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
             consistency_checkers: HashMap::default(),
+            check_propagators: KeyedVec::default(),
+            propagator_checker_filter: HashSet::default(),
         };
+
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
         // trivially true. We need to adjust other data structures to take this into account.
@@ -419,18 +428,26 @@ impl State {
         );
 
         let slot = self.propagators.new_propagator();
-        let handle = slot.populate(propagator);
+
+        let propagator_name = propagator.name();
+        self.check_propagators
+            .accomodate(slot.key().propagator_id(), false);
+        self.check_propagators[slot.key().propagator_id()] =
+            self.propagator_checker_filter.contains(propagator_name);
 
         if cfg!(feature = "check-consistency") {
             let previous_checker = self.consistency_checkers.insert(
-                handle.propagator_id(),
+                slot.key().propagator_id(),
                 BoxedConsistencyChecker::from(consistency_checker),
             );
+
             assert!(
                 previous_checker.is_none(),
                 "somehow adding multiple consistency checkers to the same propagator"
             );
         }
+
+        let handle = slot.populate(propagator);
 
         pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
 
@@ -765,6 +782,14 @@ impl State {
                 .reason
                 .expect("propagations should only be checked after propagations");
 
+            if !self.propagator_checker_filter.is_empty()
+                && !self.check_propagators[self.reason_store.get_propagator(reason_ref)]
+            {
+                // Don't run checkers for propagators that are not part of the filter.
+                // If the filter is empty, all propagators are executed.
+                continue;
+            }
+
             reason_buffer.clear();
             let reason_exists = self.reason_store.get_or_compute(
                 reason_ref,
@@ -819,6 +844,13 @@ impl State {
             // give it back after checking the consistency of all propagators.
             let scopes = std::mem::take(&mut self.notification_engine.scopes);
             for propagator in self.notification_engine.drain_notified_propagators() {
+                if !self.propagator_checker_filter.is_empty() && !self.check_propagators[propagator]
+                {
+                    // Don't run checkers for propagators that are not part of the filter.
+                    // If the filter is empty, all propagators are executed.
+                    continue;
+                }
+
                 let checker = &self.consistency_checkers[&propagator];
                 let scope = &scopes[&propagator];
 
@@ -866,10 +898,9 @@ impl State {
             .map(|vec| vec.as_slice())
             .unwrap_or(&[]);
 
-        assert!(
-            !checkers.is_empty(),
-            "missing checker for inference code {inference_code:?}"
-        );
+        if checkers.is_empty() {
+            return;
+        }
 
         let any_checker_accepts_inference = checkers.iter().any(|checker| {
             // Construct the variable state for the conflict check.

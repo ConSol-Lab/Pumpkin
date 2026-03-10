@@ -86,8 +86,8 @@ where
         let mut supported_values: HashMap<DomainId, Vec<i32>> = HashMap::default();
         let witnesses = self.checker.support(domains.reborrow());
 
-        for witness in witnesses {
-            if !self.validate_witness(&witness) {
+        for witness in witnesses.iter() {
+            if !self.validate_witness(witness) {
                 dbg!(witness);
                 panic!("witness should satisfy the constraint");
             }
@@ -99,7 +99,14 @@ where
         }
 
         scope.iter().copied().all(|domain_id| {
-            let supported_values_for_domain = &supported_values[&domain_id];
+            let supported_values_for_domain = match supported_values.get(&domain_id) {
+                Some(values) => values,
+                None => {
+                    dbg!(&witnesses);
+                    println!("Missing support for {domain_id:?}");
+                    return false;
+                }
+            };
 
             match self.consistency {
                 Consistency::Domain => self.verify_domain_consistency(

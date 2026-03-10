@@ -401,6 +401,11 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
+
+    /// The propagators to run the checkers for.
+    ///
+    /// If none are specified, all checkers are executed.
+    enable_propagator_checker: Vec<String>,
 }
 
 fn configure_logging(
@@ -581,6 +586,7 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
+        filtered_propagator_checkers: args.enable_propagator_checker.into_iter().collect(),
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

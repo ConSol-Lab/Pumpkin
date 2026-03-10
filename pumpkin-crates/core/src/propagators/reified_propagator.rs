@@ -282,9 +282,14 @@ struct ReifiedConsistencyChecker {
 
 impl ConsistencyChecker for ReifiedConsistencyChecker {
     fn check_consistency(&self, domains: Domains<'_>, scope: &[DomainId]) -> bool {
+        assert_eq!(
+            Some(self.reification_literal.get_true_predicate().get_domain()),
+            scope.last().copied(),
+        );
+
         if domains.evaluate_literal(self.reification_literal) == Some(true) {
             self.inner_consistency_checker
-                .check_consistency(domains, scope)
+                .check_consistency(domains, &scope[..scope.len() - 1])
         } else {
             true
         }
