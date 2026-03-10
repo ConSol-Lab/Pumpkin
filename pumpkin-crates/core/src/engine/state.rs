@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
@@ -94,6 +95,38 @@ pub struct State {
     check_propagators: KeyedVec<PropagatorId, bool>,
     /// The names of the propagators to run checkers for.
     pub(crate) propagator_checker_filter: HashSet<String>,
+    pub(crate) checkers_to_run: CheckersToRun,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum CheckersToRun {
+    #[default]
+    All,
+    Consistency,
+    Propagation,
+}
+
+impl CheckersToRun {
+    #[allow(dead_code, reason = "its behind feature flags")]
+    fn run_consistency(&self) -> bool {
+        matches!(self, CheckersToRun::All | CheckersToRun::Consistency)
+    }
+
+    #[allow(dead_code, reason = "its behind feature flags")]
+    fn run_propagation(&self) -> bool {
+        matches!(self, CheckersToRun::All | CheckersToRun::Propagation)
+    }
+}
+
+impl Display for CheckersToRun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CheckersToRun::All => write!(f, "all"),
+            CheckersToRun::Consistency => write!(f, "consistency"),
+            CheckersToRun::Propagation => write!(f, "propagation"),
+        }
+    }
 }
 
 create_statistics_struct!(StateStatistics {
@@ -191,6 +224,7 @@ impl Default for State {
             consistency_checkers: HashMap::default(),
             check_propagators: KeyedVec::default(),
             propagator_checker_filter: HashSet::default(),
+            checkers_to_run: Default::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -754,6 +788,10 @@ impl State {
     /// Panics when the inference checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
     fn check_conflict(&mut self, conflict: &Conflict) {
+        if !self.checkers_to_run.run_propagation() {
+            return;
+        }
+
         if let Conflict::Propagator(propagator_conflict) = conflict {
             self.run_checker(
                 propagator_conflict.conjunction.clone(),
@@ -773,6 +811,10 @@ impl State {
     /// If the checker rejects the inference, this method panics.
     #[cfg(feature = "check-propagations")]
     pub(crate) fn check_propagations(&mut self, first_propagation_index: usize) {
+        if !self.checkers_to_run.run_propagation() {
+            return;
+        }
+
         let mut reason_buffer = vec![];
 
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
@@ -839,7 +881,7 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
-        if cfg!(feature = "check-consistency") {
+        if cfg!(feature = "check-consistency") && self.checkers_to_run.run_consistency() {
             // Move the scopes out of the notification engine so we do not get borrow clashes. We
             // give it back after checking the consistency of all propagators.
             let scopes = std::mem::take(&mut self.notification_engine.scopes);

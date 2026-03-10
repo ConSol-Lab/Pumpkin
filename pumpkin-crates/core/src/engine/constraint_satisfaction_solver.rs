@@ -33,6 +33,7 @@ use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
 use crate::engine::Assignments;
+use crate::engine::CheckersToRun;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -166,6 +167,8 @@ pub struct SatisfactionSolverOptions {
     ///
     /// If empty, all checkers are run.
     pub filtered_propagator_checkers: HashSet<String>,
+    /// Which checker types to run.
+    pub checkers_to_run: CheckersToRun,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -178,6 +181,7 @@ impl Default for SatisfactionSolverOptions {
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
             filtered_propagator_checkers: HashSet::default(),
+            checkers_to_run: CheckersToRun::default(),
         }
     }
 }
@@ -257,6 +261,7 @@ impl ConstraintSatisfactionSolver {
         let mut state = State::default();
         state.propagator_checker_filter =
             std::mem::take(&mut solver_options.filtered_propagator_checkers);
+        state.checkers_to_run = solver_options.checkers_to_run;
 
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
