@@ -405,6 +405,7 @@ struct Args {
     /// The propagators to run the checkers for.
     ///
     /// If none are specified, all checkers are executed.
+    #[arg(long = "enable-propagator-checker")]
     enable_propagator_checker: Vec<String>,
 }
 
