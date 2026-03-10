@@ -45,7 +45,12 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
                     successor.clone(),
                     DomainEvents::ASSIGN,
                     LocalId::from(index as u32),
-                )
+                );
+                context.register_backtrack(
+                    successor.clone(),
+                    DomainEvents::ASSIGN,
+                    LocalId::from(index as u32),
+                );
             });
 
         let mut recently_fixed = FixedBitSet::with_capacity(self.successors.len());
@@ -102,9 +107,18 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
         EnqueueDecision::Enqueue
     }
 
+    fn notify_backtrack(
+        &mut self,
+        _context: Domains,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) {
+        self.recently_fixed.remove(local_id.unpack() as usize);
+    }
+
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        self.check(context.domains())?;
-        self.prevent(context)
+        self.check(context.domains())
+        // self.prevent(context)
     }
 
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
@@ -113,7 +127,9 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
-    fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {}
+    fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        todo!()
+    }
 
     fn create_prevent_explanation(
         &self,
@@ -126,22 +142,31 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
     fn check(&mut self, context: Domains) -> PropagationStatusCP {
-        let mut explored = FixedBitSet::with_capacity(self.successors.len());
+        // We keep track of:
+        // 1. `cycle` - The elements which are in the (potential) current cycle; these are used in
+        //    the explanation
+        // 2. `explored` - The elements which have been visited; once we encounter any of these
+        //    nodes, we can stop since we have already explored them
+        // 3. `explored_current_iteration` - The elements which have been visited as part of the
+        //    (potential) current cycle; used to detect when a cycle has occurred. Note that using
+        //    `explored` for this purpose would be incorrect and would lead to conflicts being
+        //    detected which are not actual cycles.
         let mut cycle = Vec::default();
+        let mut explored = FixedBitSet::with_capacity(self.successors.len());
+        let mut explored_current_iteration = FixedBitSet::with_capacity(self.successors.len());
 
         // We look at the variables which were recently fixed and use them as potential starts of
         // cycles
         while let Some(start) = self.recently_fixed.ones().next() {
             self.recently_fixed.remove(start);
 
-            // We have already seen this variable when attempting to explore a previous chain, but
-            // it did not lead to a conflict; we do not need to consider this variable as the start
-            // of a cycle again
+            // If we have already explored this node before, then we can continue
             if explored.contains(start) {
                 continue;
             }
 
             // We consider a new cycle
+            explored_current_iteration.clear();
             cycle.clear();
             let mut current = start;
 
@@ -149,8 +174,9 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
             loop {
                 let var = &self.successors[current];
 
-                // If we have seen this node before, then we can simply return here
-                if explored.contains(current) {
+                // If we have seen this node befor in the current iteration, then we can simply
+                // return here
+                if explored_current_iteration.contains(current) {
                     // Of course, if it is a cycle containing all nodes, then we do not need to
                     // report an error
                     if cycle.len() == self.successors.len() {
@@ -168,13 +194,22 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                 // to the next node; if not, then we can break from this loop, since it is not a
                 // cycle
                 if context.is_fixed(var) {
-                    // First, we mark the current node as explored and as part of the potential
+                    let next = (context.lower_bound(var) - 1) as usize;
+
+                    // If we have already encountered this node, then we know that a cycle cannot
+                    // be found from this node.
+                    if explored.contains(current) {
+                        break;
+                    }
+
+                    // Next, we mark the current node as explored and as part of the potential
                     // cycle
                     explored.insert(current);
-                    cycle.push(start);
+                    explored_current_iteration.insert(current);
+                    cycle.push(current);
 
                     // Then we move on to the next node
-                    current = (context.lower_bound(var) - 1) as usize;
+                    current = next;
                 } else {
                     break;
                 }
