@@ -1,5 +1,6 @@
 use fixedbitset::FixedBitSet;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
+use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::PropositionalConjunction;
@@ -117,6 +118,14 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        for (i, successor) in self.successors.iter().enumerate() {
+            context.post(
+                predicate!(successor != (i + 1) as i32),
+                conjunction!(),
+                &self.inference_code,
+            )?;
+        }
+
         self.check(context.domains())?;
         self.prevent(context)
     }

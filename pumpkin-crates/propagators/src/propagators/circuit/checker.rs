@@ -1,3 +1,4 @@
+use fixedbitset::FixedBitSet;
 use pumpkin_checking::AtomicConstraint;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
@@ -15,9 +16,32 @@ where
     fn check(
         &self,
         state: pumpkin_checking::VariableState<Atomic>,
-        premises: &[Atomic],
-        consequent: Option<&Atomic>,
+        _premises: &[Atomic],
+        _consequent: Option<&Atomic>,
     ) -> bool {
-        todo!()
+        let mut explored = FixedBitSet::with_capacity(self.successors.len()).clone();
+        let start = self
+            .successors
+            .iter()
+            .position(|var| var.induced_fixed_value(&state).is_some());
+
+        if start.is_none() {
+            return false;
+        }
+
+        let start = start.unwrap();
+
+        explored.insert(start);
+        let mut next = (self.successors[start].induced_fixed_value(&state).unwrap() - 1) as usize;
+
+        while let Some(next_fixed) = self.successors[next].induced_fixed_value(&state) {
+            if explored.contains(next) {
+                return true;
+            }
+            explored.insert(next);
+            next = (next_fixed - 1) as usize;
+        }
+
+        return false;
     }
 }
