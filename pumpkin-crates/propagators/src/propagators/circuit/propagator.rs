@@ -117,8 +117,8 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        self.check(context.domains())
-        // self.prevent(context)
+        self.check(context.domains())?;
+        self.prevent(context)
     }
 
     fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
@@ -128,7 +128,37 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
     fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        todo!()
+        let mut has_incoming_edge = FixedBitSet::with_capacity(self.successors.len());
+        for successor in self.successors.iter() {
+            if context.is_fixed(successor) {
+                let next = (context.lower_bound(successor) - 1) as usize;
+                has_incoming_edge.insert(next);
+            }
+        }
+
+        // Unmarked and fixed means that it is a beginning of a chain
+        for unmarked in has_incoming_edge
+            .zeroes()
+            .filter(|&index| context.is_fixed(&self.successors[index]))
+            .collect::<Vec<_>>()
+        {
+            let mut path = vec![unmarked];
+
+            let mut next = (context.lower_bound(&self.successors[unmarked]) - 1) as usize;
+            while context.is_fixed(&self.successors[next]) {
+                path.push(next);
+                next = (context.lower_bound(&self.successors[next]) - 1) as usize;
+            }
+
+            let reason = self.create_prevent_explanation(context.domains(), &path);
+            context.post(
+                predicate!(self.successors[next] != (unmarked + 1) as i32),
+                reason,
+                &self.inference_code,
+            )?;
+        }
+
+        Ok(())
     }
 
     fn create_prevent_explanation(
@@ -136,7 +166,15 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         context: Domains,
         path: &[usize],
     ) -> PropositionalConjunction {
-        todo!()
+        path.iter()
+            .map(|&index| {
+                let var = &self.successors[index];
+
+                pumpkin_assert_moderate!(context.is_fixed(var));
+
+                predicate!(var == context.lower_bound(var))
+            })
+            .collect()
     }
 }
 
