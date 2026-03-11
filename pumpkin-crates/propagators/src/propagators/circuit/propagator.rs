@@ -62,6 +62,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor for CircuitConstructo
         }
 
         CircuitPropagator {
+            first_iteration: true,
             successors: self.successors,
             inference_code: InferenceCode::new(self.constraint_tag, CircuitPrevent),
             recently_fixed,
@@ -82,6 +83,8 @@ declare_inference_label!(CircuitPrevent);
 
 #[derive(Debug, Clone)]
 pub struct CircuitPropagator<Var> {
+    first_iteration: bool,
+
     successors: Box<[Var]>,
     inference_code: InferenceCode,
 
@@ -118,12 +121,16 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        for (i, successor) in self.successors.iter().enumerate() {
-            context.post(
-                predicate!(successor != (i + 1) as i32),
-                conjunction!(),
-                &self.inference_code,
-            )?;
+        // If it is the first iteration, then we remove self-loops
+        if self.first_iteration {
+            self.first_iteration = false;
+            for (i, successor) in self.successors.iter().enumerate() {
+                context.post(
+                    predicate!(successor != (i + 1) as i32),
+                    conjunction!(),
+                    &self.inference_code,
+                )?;
+            }
         }
 
         self.check(context.domains())?;
