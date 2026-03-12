@@ -36,34 +36,21 @@ impl<Var, Callback> LinearSatUnsat<Var, Callback> {
             solution_callback,
         }
     }
-}
 
-impl<Var, Callback, B, R> OptimisationProcedure<B, R, Callback> for LinearSatUnsat<Var, Callback>
-where
-    Var: IntegerVariable,
-    B: Brancher,
-    R: ConflictResolver,
-    Callback: SolutionCallback<B, R>,
-{
-    fn optimise(
+    fn run_optimisation<B, R>(
         &mut self,
         brancher: &mut B,
         termination: &mut impl TerminationCondition,
         resolver: &mut R,
         solver: &mut Solver,
-    ) -> OptimisationResult<Callback::Stop> {
-        let objective = match self.direction {
-            OptimisationDirection::Maximise => self.objective.scaled(-1),
-            OptimisationDirection::Minimise => self.objective.scaled(1),
-        };
-
-        // First we will solve the satisfaction problem without constraining the objective.
-        let mut best_solution: Solution = match solver.satisfy(brancher, termination, resolver) {
-            SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
-            SatisfactionResult::Unsatisfiable(_, _, _) => return OptimisationResult::Unsatisfiable,
-            SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
-        };
-
+        objective: impl IntegerVariable,
+        mut best_solution: Solution,
+    ) -> OptimisationResult<Callback::Stop>
+    where
+        Callback: SolutionCallback<B, R>,
+        B: Brancher,
+        R: ConflictResolver,
+    {
         loop {
             let callback_result = self.solution_callback.on_solution_callback(
                 solver,
@@ -105,12 +92,66 @@ where
 
             match conclusion {
                 Some(OptimisationResult::Optimal(solution)) => {
-                    solver.conclude_proof_dual_bound(predicate![objective >= best_objective_value]);
                     return OptimisationResult::Optimal(solution);
                 }
                 Some(result) => return result,
                 None => {}
             }
+        }
+    }
+}
+
+impl<Var, Callback, B, R> OptimisationProcedure<B, R, Callback> for LinearSatUnsat<Var, Callback>
+where
+    Var: IntegerVariable,
+    B: Brancher,
+    R: ConflictResolver,
+    Callback: SolutionCallback<B, R>,
+    Callback::Stop: std::fmt::Debug,
+{
+    fn optimise(
+        &mut self,
+        brancher: &mut B,
+        termination: &mut impl TerminationCondition,
+        resolver: &mut R,
+        solver: &mut Solver,
+    ) -> OptimisationResult<Callback::Stop> {
+        let objective = match self.direction {
+            OptimisationDirection::Maximise => self.objective.scaled(-1),
+            OptimisationDirection::Minimise => self.objective.scaled(1),
+        };
+
+        // First we will solve the satisfaction problem without constraining the objective.
+        let initial_solution: Solution = match solver.satisfy(brancher, termination, resolver) {
+            SatisfactionResult::Satisfiable(satisfiable) => satisfiable.solution().into(),
+            SatisfactionResult::Unsatisfiable(_, _, _) => return OptimisationResult::Unsatisfiable,
+            SatisfactionResult::Unknown(_, _, _) => return OptimisationResult::Unknown,
+        };
+
+        let optimisation_result = self.run_optimisation(
+            brancher,
+            termination,
+            resolver,
+            solver,
+            objective.clone(),
+            initial_solution,
+        );
+
+        match optimisation_result {
+            OptimisationResult::Optimal(solution) => {
+                let objective_value = solution.get_integer_value(objective.clone());
+                solver.conclude_proof_dual_bound(predicate![objective >= objective_value]);
+
+                OptimisationResult::Optimal(solution)
+            }
+            OptimisationResult::Unsatisfiable => {
+                solver.conclude_proof_unsat();
+                OptimisationResult::Unsatisfiable
+            }
+
+            result @ (OptimisationResult::Satisfiable(_)
+            | OptimisationResult::Stopped(_, _)
+            | OptimisationResult::Unknown) => result,
         }
     }
 }

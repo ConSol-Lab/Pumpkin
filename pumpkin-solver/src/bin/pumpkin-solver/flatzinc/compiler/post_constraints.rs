@@ -45,13 +45,24 @@ pub(crate) fn run(
 
                 let next = context.resolve_integer_variable_array(&exprs[0])?;
 
-                context
+                let added_circuit = context
                     .solver
                     .add_propagator(CircuitConstructor {
                         successors: next.as_ref().into(),
                         constraint_tag,
                     })
-                    .is_ok()
+                    .is_ok();
+
+                let added_alldiff = context
+                    .solver
+                    .add_constraint(pumpkin_constraints::all_different(
+                        next.as_ref(),
+                        constraint_tag,
+                    ))
+                    .post()
+                    .is_ok();
+
+                added_circuit && added_alldiff
             }
             "pumpkin_disjunctive_strict" => {
                 compile_disjunctive_strict(context, exprs, constraint_tag)?

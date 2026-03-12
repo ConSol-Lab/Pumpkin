@@ -87,6 +87,7 @@ where
 
                 domains
                     .get_holes(&domain_id)
+                    .filter(|&hole| lower_bound <= hole && hole <= upper_bound)
                     .map(|hole| predicate![domain_id != hole])
                     .chain(conjunction!(
                         [domain_id >= lower_bound] & [domain_id <= upper_bound]

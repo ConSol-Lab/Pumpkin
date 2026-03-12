@@ -120,7 +120,8 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        self.recently_fixed.insert(local_id.unpack() as usize);
+        self.recently_fixed
+            .insert(usize::try_from(local_id.unpack()).unwrap());
         EnqueueDecision::Enqueue
     }
 
@@ -130,12 +131,11 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) {
-        self.recently_fixed.remove(local_id.unpack() as usize);
+        self.recently_fixed
+            .remove(local_id.unpack().try_into().unwrap());
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        dbg!(&self.recently_fixed);
-
         // If it is the first iteration, then we remove self-loops
         if self.first_iteration {
             self.first_iteration = false;
@@ -164,7 +164,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         let mut has_incoming_edge = FixedBitSet::with_capacity(self.successors.len());
         for successor in self.successors.iter() {
             if context.is_fixed(successor) {
-                let next = (context.lower_bound(successor) - 1) as usize;
+                let next = usize::try_from(context.lower_bound(successor) - 1).unwrap();
                 has_incoming_edge.insert(next);
             }
         }
@@ -177,18 +177,21 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         {
             let mut path = vec![unmarked];
 
-            let mut next = (context.lower_bound(&self.successors[unmarked]) - 1) as usize;
+            let mut next =
+                usize::try_from(context.lower_bound(&self.successors[unmarked]) - 1).unwrap();
             while context.is_fixed(&self.successors[next]) {
                 path.push(next);
-                next = (context.lower_bound(&self.successors[next]) - 1) as usize;
+                next = usize::try_from(context.lower_bound(&self.successors[next]) - 1).unwrap();
             }
 
-            let reason = self.create_prevent_explanation(context.domains(), &path);
-            context.post(
-                predicate!(self.successors[next] != (unmarked + 1) as i32),
-                reason,
-                &self.inference_code,
-            )?;
+            if context.contains(&self.successors[next], (unmarked + 1) as i32) {
+                let reason = self.create_prevent_explanation(context.domains(), &path);
+                context.post(
+                    predicate!(self.successors[next] != (unmarked + 1) as i32),
+                    reason,
+                    &self.inference_code,
+                )?;
+            }
         }
 
         Ok(())
@@ -229,13 +232,10 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
         // We look at the variables which were recently fixed and use them as potential starts of
         // cycles
         while let Some(start) = self.recently_fixed.ones().next() {
-            println!("processing {start}");
-
             self.recently_fixed.remove(start);
 
             // If we have already explored this node before, then we can continue
             if explored.contains(start) {
-                println!(" already explored");
                 continue;
             }
 
@@ -254,11 +254,9 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                     // Of course, if it is a cycle containing all nodes, then we do not need to
                     // report an error
                     if cycle.len() == self.successors.len() {
-                        println!("  cycle through all variables");
                         return Ok(());
                     }
 
-                    println!("  subcycle!");
                     // But if it is a cycle which contains all, then we should
                     return Err(Conflict::Propagator(PropagatorConflict {
                         conjunction: self.create_check_explanation(context, &cycle),
@@ -270,7 +268,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                 // to the next node; if not, then we can break from this loop, since it is not a
                 // cycle
                 if context.is_fixed(var) {
-                    let next = (context.lower_bound(var) - 1) as usize;
+                    let next = usize::try_from(context.lower_bound(var) - 1).unwrap();
 
                     // If we have already encountered this node, then we know that a cycle cannot
                     // be found from this node.
@@ -283,12 +281,10 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                     explored.insert(current);
                     explored_current_iteration.insert(current);
                     cycle.push(current);
-                    println!("  adding {current} to cycle");
 
                     // Then we move on to the next node
                     current = next;
                 } else {
-                    println!("  no cycle");
                     break;
                 }
             }

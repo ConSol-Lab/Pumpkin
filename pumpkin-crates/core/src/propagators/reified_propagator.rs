@@ -74,11 +74,11 @@ where
 
         let inner_consistency_checker = self.propagator.add_inference_checkers(checkers);
 
+        // TODO: If the propagator constructor trait is refactored such that
+        // `add_inference_checkers` returns an associated type rather than an anonymous impl
+        // Trait, this can be refactored to not have a nested Box<dyn>.
         ReifiedConsistencyChecker {
             #[allow(trivial_casts, reason = "without it the type checker fails")]
-            // TODO: If the propagator constructor trait is refactored such that
-            // `add_inference_checkers` returns an associated type rather than an anonymous impl
-            // Trait, this can be refactored to not have a nested Box<dyn>.
             inner_consistency_checker: BoxedConsistencyChecker::from(Box::new(
                 inner_consistency_checker,
             )

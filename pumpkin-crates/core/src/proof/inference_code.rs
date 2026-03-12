@@ -25,7 +25,7 @@ impl ConstraintTag {
     /// Create a new tag directly.
     ///
     /// *Note*: Be careful when doing this. Regular construction should only be done through the
-    /// constraint satisfaction solver. It is important that constraint tags remain unique.
+    /// state. It is important that constraint tags remain unique.
     pub(crate) fn from_non_zero(non_zero: NonZero<u32>) -> ConstraintTag {
         ConstraintTag(non_zero)
     }
@@ -69,9 +69,16 @@ impl InferenceCode {
     }
 
     /// Get the inference label.
-    pub fn label(&self) -> &str {
-        self.1.as_ref()
+    pub fn label(&self) -> Arc<str> {
+        Arc::clone(&self.1)
     }
+}
+
+#[doc(hidden)]
+pub fn convert_label_name(ident_str: &str) -> Arc<str> {
+    use convert_case::Casing;
+
+    ident_str.to_case(convert_case::Case::Snake).into()
 }
 
 /// Conveniently creates [`InferenceLabel`] for use in a propagator.
@@ -91,20 +98,14 @@ impl InferenceCode {
 #[macro_export]
 macro_rules! declare_inference_label {
     ($v:vis $name:ident) => {
-        declare_inference_label!($v $name, {
-            let ident_str = stringify!($name);
-            <&str as convert_case::Casing<&str>>::to_case(
-                &ident_str,
-                convert_case::Case::Snake,
-            )
-        });
+        declare_inference_label!($v $name, $crate::proof::convert_label_name(stringify!($name)));
     };
 
     ($v:vis $name:ident, $label:expr) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         $v struct $name;
 
-        declare_inference_label!(@impl_trait $name, $label);
+        declare_inference_label!(@impl_trait $name, std::sync::Arc::from($label));
     };
 
     (@impl_trait $name:ident, $label:expr) => {
@@ -112,9 +113,7 @@ macro_rules! declare_inference_label {
             fn to_str(&self) -> std::sync::Arc<str> {
                 static LABEL: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
 
-                let label = LABEL.get_or_init(|| {
-                    std::sync::Arc::from($label)
-                });
+                let label = LABEL.get_or_init(|| $label);
 
                 std::sync::Arc::clone(label)
             }
