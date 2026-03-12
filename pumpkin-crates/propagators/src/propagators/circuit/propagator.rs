@@ -1,5 +1,4 @@
 use fixedbitset::FixedBitSet;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::conjunction;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
@@ -124,54 +123,73 @@ impl<Var: IntegerVariable + 'static> Propagator for CircuitPropagator<Var> {
         // If it is the first iteration, then we remove self-loops
         if self.first_iteration {
             self.first_iteration = false;
-            for (i, successor) in self.successors.iter().enumerate() {
-                context.post(
-                    predicate!(successor != (i + 1) as i32),
-                    conjunction!(),
-                    &self.inference_code,
-                )?;
-            }
+            self.remove_self_loops(&mut context)?;
         }
 
         self.check(context.domains())?;
         self.prevent(context)
     }
 
-    fn propagate_from_scratch(&self, context: PropagationContext) -> PropagationStatusCP {
+    fn propagate_from_scratch(&self, _context: PropagationContext) -> PropagationStatusCP {
         todo!()
     }
 }
 
 impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
+    fn remove_self_loops(&self, context: &mut PropagationContext) -> PropagationStatusCP {
+        for (i, successor) in self.successors.iter().enumerate() {
+            context.post(
+                predicate!(successor != (i + 1) as i32),
+                conjunction!(),
+                &self.inference_code,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
     fn prevent(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
+        // First we identify the potential starts of chains; these are the variables which do not
+        // have any (fixed) incoming edge.
         let mut has_incoming_edge = FixedBitSet::with_capacity(self.successors.len());
         for successor in self.successors.iter() {
-            if context.is_fixed(successor) {
-                let next = (context.lower_bound(successor) - 1) as usize;
-                has_incoming_edge.insert(next);
+            if let Some(fixed_value) = context.fixed_value(successor) {
+                has_incoming_edge.insert(domain_value_to_index(fixed_value));
             }
         }
 
-        // Unmarked and fixed means that it is a beginning of a chain
-        for unmarked in has_incoming_edge
-            .zeroes()
-            .filter(|&index| context.is_fixed(&self.successors[index]))
-            .collect::<Vec<_>>()
-        {
-            let mut path = vec![unmarked];
+        // Now we go over all variables that are potential starts of chains.
+        for unmarked in has_incoming_edge.zeroes() {
+            // If they are not fixed, then we can continue
+            let Some(fixed_value) = context.fixed_value(&self.successors[unmarked]) else {
+                continue;
+            };
 
-            let mut next = (context.lower_bound(&self.successors[unmarked]) - 1) as usize;
-            while context.is_fixed(&self.successors[next]) {
-                path.push(next);
-                next = (context.lower_bound(&self.successors[next]) - 1) as usize;
+            // Now we keep track of the chain
+            let mut chain = vec![unmarked];
+
+            // Next we keep unfolding the chain until we run into a variable that is not fixed;
+            // note that it should not be possible to run into a cycle here since check has run
+            // before this.
+            let mut next = domain_value_to_index(fixed_value);
+            while let Some(fixed_value_next) = context.fixed_value(&self.successors[next]) {
+                // We add the next value to the chain
+                chain.push(next);
+                // And continue to unfold the chain from there
+                next = domain_value_to_index(fixed_value_next);
             }
 
-            let reason = self.create_prevent_explanation(context.domains(), &path);
-            context.post(
-                predicate!(self.successors[next] != (unmarked + 1) as i32),
-                reason,
-                &self.inference_code,
-            )?;
+            // We have found the chain, we remove the edge from the end of the chain to the
+            // beginning of the chain (if it exists)
+            if context.contains(&self.successors[next], index_to_domain_value(unmarked)) {
+                let reason = self.create_prevent_explanation(context.domains(), &chain);
+                context.post(
+                    predicate!(self.successors[next] != index_to_domain_value(unmarked)),
+                    reason,
+                    &self.inference_code,
+                )?;
+            }
         }
 
         Ok(())
@@ -186,9 +204,11 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
             .map(|&index| {
                 let var = &self.successors[index];
 
-                pumpkin_assert_moderate!(context.is_fixed(var));
-
-                predicate!(var == context.lower_bound(var))
+                predicate!(
+                    var == context
+                        .fixed_value(var)
+                        .expect("Expected every variable in the chain to be assigned")
+                )
             })
             .collect()
     }
@@ -247,9 +267,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                 // If the current variable is fixed, then we continue looking for a cycle by going
                 // to the next node; if not, then we can break from this loop, since it is not a
                 // cycle
-                if context.is_fixed(var) {
-                    let next = (context.lower_bound(var) - 1) as usize;
-
+                if let Some(fixed_value) = context.fixed_value(var) {
                     // If we have already encountered this node, then we know that a cycle cannot
                     // be found from this node.
                     if explored.contains(current) {
@@ -263,7 +281,7 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
                     cycle.push(current);
 
                     // Then we move on to the next node
-                    current = next;
+                    current = domain_value_to_index(fixed_value);
                 } else {
                     break;
                 }
@@ -283,12 +301,26 @@ impl<Var: IntegerVariable + 'static> CircuitPropagator<Var> {
             .map(|&index| {
                 let var = &self.successors[index];
 
-                pumpkin_assert_moderate!(context.is_fixed(var));
-
-                predicate!(var == context.lower_bound(var))
+                predicate!(
+                    var == context
+                        .fixed_value(var)
+                        .expect("Expected each variable in the cycle to be assigned")
+                )
             })
             .collect()
     }
+}
+
+const VALUE_OFFSET: usize = 1;
+
+#[inline]
+fn domain_value_to_index(domain_value: i32) -> usize {
+    domain_value as usize - VALUE_OFFSET
+}
+
+#[inline]
+fn index_to_domain_value(index: usize) -> i32 {
+    index as i32 + VALUE_OFFSET as i32
 }
 
 #[cfg(test)]
