@@ -27,6 +27,7 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::state::CheckersToRun;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -401,6 +402,16 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
+
+    /// The propagators to run the checkers for.
+    ///
+    /// If none are specified, all checkers are executed.
+    #[arg(long = "enable-propagator-checker")]
+    enable_propagator_checker: Vec<String>,
+
+    /// Only run propagation checkers.
+    #[arg(long = "checkers-to-run", default_value_t)]
+    checkers_to_run: CheckersToRun,
 }
 
 fn configure_logging(
@@ -581,6 +592,8 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
+        filtered_propagator_checkers: args.enable_propagator_checker.into_iter().collect(),
+        checkers_to_run: args.checkers_to_run,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

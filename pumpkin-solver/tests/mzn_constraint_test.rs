@@ -69,6 +69,10 @@ mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
 mzn_test!(bool_clause);
 
+mzn_test!(array_var_int_element);
+
+mzn_test!(circuit);
+
 cumulative!(time_table_per_point);
 cumulative!(time_table_per_point_incremental);
 cumulative!(time_table_per_point_incremental_synchronised);

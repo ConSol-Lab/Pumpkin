@@ -120,6 +120,7 @@ pub mod state {
     //! See [`State`] for more information.
     pub use crate::api::solver::PropagatorHandle;
     pub use crate::basic_types::PropagatorConflict;
+    pub use crate::engine::CheckersToRun;
     pub use crate::engine::Conflict;
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::EmptyDomainConflict;

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_propagators::circuit::CircuitConstructor;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -18,6 +19,18 @@ use crate::flatzinc::FlatZincOptions;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
 
+macro_rules! check_parameters {
+    ($exprs:ident, $num_parameters:expr, $name:expr) => {
+        if $exprs.len() != $num_parameters {
+            return Err(FlatZincError::IncorrectNumberOfArguments {
+                constraint_id: $name.into(),
+                expected: $num_parameters,
+                actual: $exprs.len(),
+            });
+        }
+    };
+}
+
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
@@ -27,6 +40,30 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
+            "pumpkin_circuit" => {
+                check_parameters!(exprs, 1, "pumpkin_circuit");
+
+                let next = context.resolve_integer_variable_array(&exprs[0])?;
+
+                let added_circuit = context
+                    .solver
+                    .add_propagator(CircuitConstructor {
+                        successors: next.as_ref().into(),
+                        constraint_tag,
+                    })
+                    .is_ok();
+
+                let added_alldiff = context
+                    .solver
+                    .add_constraint(pumpkin_constraints::all_different(
+                        next.as_ref(),
+                        constraint_tag,
+                    ))
+                    .post()
+                    .is_ok();
+
+                added_circuit && added_alldiff
+            }
             "pumpkin_disjunctive_strict" => {
                 compile_disjunctive_strict(context, exprs, constraint_tag)?
             }
@@ -354,18 +391,6 @@ pub(crate) fn run(
     }
 
     Ok(())
-}
-
-macro_rules! check_parameters {
-    ($exprs:ident, $num_parameters:expr, $name:expr) => {
-        if $exprs.len() != $num_parameters {
-            return Err(FlatZincError::IncorrectNumberOfArguments {
-                constraint_id: $name.into(),
-                expected: $num_parameters,
-                actual: $exprs.len(),
-            });
-        }
-    };
 }
 
 fn compile_disjunctive_strict(

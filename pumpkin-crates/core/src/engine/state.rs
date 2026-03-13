@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 
 use pumpkin_checking::BoxedChecker;
@@ -7,7 +8,9 @@ use pumpkin_checking::VariableState;
 
 use crate::basic_types::PropagatorConflict;
 use crate::containers::HashMap;
+use crate::containers::HashSet;
 use crate::containers::KeyGenerator;
+use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
@@ -28,7 +31,6 @@ use crate::proof::InferenceCode;
 use crate::propagation::CurrentNogood;
 use crate::propagation::Domains;
 use crate::propagation::ExplanationContext;
-#[cfg(feature = "check-propagations")]
 use crate::propagation::InferenceCheckers;
 use crate::propagation::NotificationContext;
 use crate::propagation::PropagationContext;
@@ -36,6 +38,8 @@ use crate::propagation::Propagator;
 use crate::propagation::PropagatorConstructor;
 use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::PropagatorId;
+use crate::propagation::checkers::BoxedConsistencyChecker;
+use crate::propagation::checkers::ConsistencyChecker;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_eq_simple;
@@ -80,6 +84,46 @@ pub struct State {
 
     /// Inference checkers to run in the propagation loop.
     checkers: HashMap<InferenceCode, Vec<BoxedChecker<Predicate>>>,
+    /// The consistency checkers that are registered.
+    ///
+    /// These are only executed when the `check-consistency` feature is enabled.
+    consistency_checkers: HashMap<PropagatorId, BoxedConsistencyChecker>,
+    /// These propagators should have checkers to run.
+    check_propagators: KeyedVec<PropagatorId, bool>,
+    /// The names of the propagators to run checkers for.
+    pub(crate) propagator_checker_filter: HashSet<String>,
+    pub(crate) checkers_to_run: CheckersToRun,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum CheckersToRun {
+    #[default]
+    All,
+    Consistency,
+    Propagation,
+}
+
+impl CheckersToRun {
+    #[allow(dead_code, reason = "its behind feature flags")]
+    fn run_consistency(&self) -> bool {
+        matches!(self, CheckersToRun::All | CheckersToRun::Consistency)
+    }
+
+    #[allow(dead_code, reason = "its behind feature flags")]
+    fn run_propagation(&self) -> bool {
+        matches!(self, CheckersToRun::All | CheckersToRun::Propagation)
+    }
+}
+
+impl Display for CheckersToRun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CheckersToRun::All => write!(f, "all"),
+            CheckersToRun::Consistency => write!(f, "consistency"),
+            CheckersToRun::Propagation => write!(f, "propagation"),
+        }
+    }
 }
 
 create_statistics_struct!(StateStatistics {
@@ -181,7 +225,12 @@ impl Default for State {
             statistics: StateStatistics::default(),
             constraint_tags: KeyGenerator::default(),
             checkers: HashMap::default(),
+            consistency_checkers: HashMap::default(),
+            check_propagators: KeyedVec::default(),
+            propagator_checker_filter: HashSet::default(),
+            checkers_to_run: Default::default(),
         };
+
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
         // trivially true. We need to adjust other data structures to take this into account.
@@ -398,8 +447,15 @@ impl State {
         Constructor: PropagatorConstructor,
         Constructor::PropagatorImpl: 'static,
     {
-        #[cfg(feature = "check-propagations")]
-        constructor.add_inference_checkers(InferenceCheckers::new(self));
+        let consistency_checker: Box<dyn ConsistencyChecker> = if cfg!(any(
+            feature = "check-propagations",
+            feature = "check-consistency"
+        )) {
+            Box::new(constructor.add_inference_checkers(InferenceCheckers::new(self)))
+        } else {
+            #[allow(deprecated, reason = "its the fallback")]
+            Box::new(crate::propagation::checkers::DefaultChecker)
+        };
 
         let original_handle: PropagatorHandle<Constructor::PropagatorImpl> =
             self.propagators.new_propagator().key();
@@ -416,6 +472,25 @@ impl State {
         );
 
         let slot = self.propagators.new_propagator();
+
+        let propagator_name = propagator.name();
+        self.check_propagators
+            .accomodate(slot.key().propagator_id(), false);
+        self.check_propagators[slot.key().propagator_id()] =
+            self.propagator_checker_filter.contains(propagator_name);
+
+        if cfg!(feature = "check-consistency") {
+            let previous_checker = self.consistency_checkers.insert(
+                slot.key().propagator_id(),
+                BoxedConsistencyChecker::from(consistency_checker),
+            );
+
+            assert!(
+                previous_checker.is_none(),
+                "somehow adding multiple consistency checkers to the same propagator"
+            );
+        }
+
         let handle = slot.populate(propagator);
 
         pumpkin_assert_eq_simple!(handle.propagator_id(), original_handle.propagator_id());
@@ -741,6 +816,10 @@ impl State {
     /// Panics when the inference checker rejects the conflict.
     #[cfg(feature = "check-propagations")]
     fn check_conflict(&mut self, conflict: &Conflict) {
+        if !self.checkers_to_run.run_propagation() {
+            return;
+        }
+
         if let Conflict::Propagator(propagator_conflict) = conflict {
             self.run_checker(
                 propagator_conflict.conjunction.clone(),
@@ -760,6 +839,10 @@ impl State {
     /// If the checker rejects the inference, this method panics.
     #[cfg(feature = "check-propagations")]
     pub(crate) fn check_propagations(&mut self, first_propagation_index: usize) {
+        if !self.checkers_to_run.run_propagation() {
+            return;
+        }
+
         let mut reason_buffer = vec![];
 
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
@@ -768,6 +851,14 @@ impl State {
             let (reason_ref, inference_code) = entry
                 .reason
                 .expect("propagations should only be checked after propagations");
+
+            if !self.propagator_checker_filter.is_empty()
+                && !self.check_propagators[self.reason_store.get_propagator(reason_ref)]
+            {
+                // Don't run checkers for propagators that are not part of the filter.
+                // If the filter is empty, all propagators are executed.
+                continue;
+            }
 
             reason_buffer.clear();
             let reason_exists = self.reason_store.get_or_compute(
@@ -818,6 +909,35 @@ impl State {
             self.propagate(propagator_id)?;
         }
 
+        if cfg!(feature = "check-consistency") && self.checkers_to_run.run_consistency() {
+            // Move the scopes out of the notification engine so we do not get borrow clashes. We
+            // give it back after checking the consistency of all propagators.
+            let scopes = std::mem::take(&mut self.notification_engine.scopes);
+            for propagator in self.notification_engine.drain_notified_propagators() {
+                if !self.propagator_checker_filter.is_empty() && !self.check_propagators[propagator]
+                {
+                    // Don't run checkers for propagators that are not part of the filter.
+                    // If the filter is empty, all propagators are executed.
+                    continue;
+                }
+
+                let checker = &self.consistency_checkers[&propagator];
+                let scope = &scopes[&propagator];
+
+                let propagator_name = self.propagators[propagator].name();
+
+                assert!(
+                    checker.check_consistency(
+                        Domains::new(&self.assignments, &mut self.trailed_values),
+                        scope,
+                    ),
+                    "propagator {propagator_name} is not at its reported consistency"
+                );
+            }
+            // Give back the scopes ownership.
+            self.notification_engine.scopes = scopes;
+        }
+
         // Only check fixed point propagation if there was no reported conflict,
         // since otherwise the state may be inconsistent.
         pumpkin_assert_extreme!(DebugHelper::debug_fixed_point_propagation(
@@ -848,10 +968,9 @@ impl State {
             .map(|vec| vec.as_slice())
             .unwrap_or(&[]);
 
-        assert!(
-            !checkers.is_empty(),
-            "missing checker for inference code {inference_code:?}"
-        );
+        if checkers.is_empty() {
+            return;
+        }
 
         let any_checker_accepts_inference = checkers.iter().any(|checker| {
             // Construct the variable state for the conflict check.

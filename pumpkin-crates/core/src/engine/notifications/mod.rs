@@ -11,6 +11,7 @@ use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use crate::basic_types::PredicateId;
+use crate::containers::HashSet;
 use crate::containers::KeyedVec;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
@@ -31,6 +32,7 @@ use crate::variables::DomainId;
 pub(crate) struct NotificationEngine {
     /// Responsible for the notification of predicates becoming either falsified or satisfied.
     pub(crate) predicate_notifier: PredicateNotifier,
+    pub(crate) scopes: KeyedVec<PropagatorId, Vec<DomainId>>,
     /// The trail index for which the last notification took place.
     last_notified_trail_index: usize,
     /// Contains information on which propagator to notify upon
@@ -43,6 +45,9 @@ pub(crate) struct NotificationEngine {
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
     /// place
     backtrack_events: EventSink,
+    /// All the propagators that have been notified since the last call to
+    /// [`Self::drain_notified_propagators`].
+    notified_propagators: HashSet<PropagatorId>,
 }
 
 impl Default for NotificationEngine {
@@ -54,6 +59,8 @@ impl Default for NotificationEngine {
             last_notified_trail_index: 0,
             events: Default::default(),
             backtrack_events: Default::default(),
+            notified_propagators: Default::default(),
+            scopes: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -77,6 +84,8 @@ impl NotificationEngine {
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
             backtrack_events: Default::default(),
+            scopes: Default::default(),
+            notified_propagators: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -115,6 +124,9 @@ impl NotificationEngine {
         events: EnumSet<DomainEvent>,
         propagator_var: PropagatorVarId,
     ) {
+        self.scopes.accomodate(propagator_var.propagator, vec![]);
+        self.scopes[propagator_var.propagator].push(domain);
+
         self.watch_list_domain_events.is_watching_anything = true;
         let watcher = &mut self.watch_list_domain_events.watchers[domain];
 
@@ -333,6 +345,10 @@ impl NotificationEngine {
                     assignments,
                     trailed_values,
                 );
+
+                if cfg!(feature = "check-propagations") {
+                    let _ = self.notified_propagators.insert(propagator_id);
+                }
             }
         }
 
@@ -578,5 +594,10 @@ impl NotificationEngine {
         self.predicate_notifier
             .predicate_id_assignments
             .synchronise(backtrack_level)
+    }
+
+    /// Get all propagagators that have been notified since the previous call to this function.
+    pub(crate) fn drain_notified_propagators(&mut self) -> impl Iterator<Item = PropagatorId> {
+        self.notified_propagators.drain()
     }
 }

@@ -87,3 +87,30 @@ impl AtomicConstraint for TestAtomic {
         }
     }
 }
+
+#[macro_export]
+macro_rules! test_atom {
+    [@to_comparison ==] => {
+        $crate::Comparison::Equal
+    };
+
+    [@to_comparison !=] => {
+        $crate::Comparison::NotEqual
+    };
+
+    [@to_comparison >=] => {
+        $crate::Comparison::GreaterEqual
+    };
+
+    [@to_comparison <=] => {
+        $crate::Comparison::LessEqual
+    };
+
+    [$name:ident $token:tt $bound:expr] => {
+        $crate::TestAtomic {
+            name: stringify!($name),
+            comparison: test_atom!(@to_comparison $token),
+            value: $bound,
+        }
+    };
+}

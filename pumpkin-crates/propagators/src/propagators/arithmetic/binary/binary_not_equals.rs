@@ -16,6 +16,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
+use pumpkin_core::propagation::checkers::ConsistencyChecker;
 use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
@@ -37,7 +38,10 @@ where
 {
     type PropagatorImpl = BinaryNotEqualsPropagator<AVar, BVar>;
 
-    fn add_inference_checkers(&self, mut checkers: InferenceCheckers<'_>) {
+    fn add_inference_checkers(
+        &self,
+        mut checkers: InferenceCheckers<'_>,
+    ) -> impl ConsistencyChecker + 'static {
         checkers.add_inference_checker(
             InferenceCode::new(self.constraint_tag, BinaryNotEquals),
             Box::new(BinaryNotEqualsChecker {
@@ -45,6 +49,9 @@ where
                 rhs: self.b.clone(),
             }),
         );
+
+        #[allow(deprecated, reason = "TODO to implement for binary not equal")]
+        pumpkin_core::propagation::checkers::DefaultChecker
     }
 
     fn create(self, mut context: PropagatorConstructorContext) -> Self::PropagatorImpl {
