@@ -8,7 +8,7 @@ use std::hash::Hash;
 /// - `identifier` identifies a variable,
 /// - `op` is a [`Comparison`],
 /// - and `value` is an integer.
-pub trait AtomicConstraint: Sized + Debug {
+pub trait AtomicConstraint: Clone + Debug + Sized {
     /// The type of identifier used for variables.
     type Identifier: Hash + Eq;
 
@@ -86,4 +86,35 @@ impl AtomicConstraint for TestAtomic {
             },
         }
     }
+}
+
+/// Create a [`TestAtomic`] using a DSL.
+///
+/// # Example
+/// ```
+/// pumpkin_checking::test_atomic!([x >= 5]);
+/// pumpkin_checking::test_atomic!([y != 10]);
+/// ```
+#[macro_export]
+macro_rules! test_atomic {
+    (@to_comparison >=) => {
+        $crate::Comparison::GreaterEqual
+    };
+    (@to_comparison <=) => {
+        $crate::Comparison::LessEqual
+    };
+    (@to_comparison ==) => {
+        $crate::Comparison::Equal
+    };
+    (@to_comparison !=) => {
+        $crate::Comparison::NotEqual
+    };
+
+    ([$name:ident $comp:tt $value:expr]) => {
+        $crate::TestAtomic {
+            name: stringify!($name),
+            comparison: $crate::test_atomic!(@to_comparison $comp),
+            value: $value,
+        }
+    };
 }

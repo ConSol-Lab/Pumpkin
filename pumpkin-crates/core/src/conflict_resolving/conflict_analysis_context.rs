@@ -100,7 +100,7 @@ impl ConflictAnalysisContext<'_> {
                     &self.state.assignments,
                 );
 
-                conflict.conjunction
+                conflict.conjunction.clone()
             }
             StoredConflictInfo::EmptyDomain(conflict) => self.compute_conflict_nogood(conflict),
             StoredConflictInfo::RootLevelConflict(_) => {
@@ -139,12 +139,14 @@ impl ConflictAnalysisContext<'_> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    ///
+    /// Returns the [`InferenceCode`] if one was attached to this reason.
     pub fn get_propagation_reason(
         &mut self,
         predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-    ) {
+    ) -> Option<InferenceCode> {
         Self::get_propagation_reason_inner(
             predicate,
             current_nogood,
@@ -152,7 +154,7 @@ impl ConflictAnalysisContext<'_> {
             self.unit_nogood_inference_codes,
             reason_buffer,
             self.state,
-        );
+        )
     }
 
     /// Returns the last decision which was made by the solver (if such a decision exists).
@@ -181,7 +183,7 @@ impl ConflictAnalysisContext<'_> {
     /// order.
     pub fn log_deduction(
         &mut self,
-        premises: impl IntoIterator<Item = Predicate>,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
     ) -> ConstraintTag {
         self.proof_log
             .log_deduction(
@@ -264,6 +266,8 @@ impl ConflictAnalysisContext<'_> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    ///
+    /// Returns the [`InferenceCode`] if one was attached to this reason.
     pub(crate) fn get_propagation_reason_inner(
         predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
@@ -271,7 +275,7 @@ impl ConflictAnalysisContext<'_> {
         unit_nogood_inference_codes: &HashMap<Predicate, InferenceCode>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         state: &mut State,
-    ) {
+    ) -> Option<InferenceCode> {
         let inference_code = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
 
         if inference_code.is_some() {
@@ -280,7 +284,7 @@ impl ConflictAnalysisContext<'_> {
             );
             let trail_entry = state.assignments.get_trail_entry(trail_index);
             let Some((reason_ref, inference_code)) = trail_entry.reason else {
-                return;
+                return inference_code;
             };
 
             let propagator_id = state.reason_store.get_propagator(reason_ref);
@@ -329,6 +333,8 @@ impl ConflictAnalysisContext<'_> {
                 );
             }
         }
+
+        inference_code
     }
 
     fn compute_conflict_nogood(

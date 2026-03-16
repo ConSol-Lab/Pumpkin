@@ -123,7 +123,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
-        context.get_propagation_reason(
+        let _ = context.get_propagation_reason(
             input_predicate,
             CurrentNogood::from(current_nogood),
             &mut reason,
