@@ -3,6 +3,7 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::ops::Not;
 use std::sync::Arc;
 
 use itertools::Itertools;
@@ -40,6 +41,9 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::LinearInequality;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;
@@ -973,7 +977,7 @@ impl ConstraintSatisfactionSolver {
         constraint_tag: ConstraintTag,
     ) -> Result<(), ConstraintOperationError> {
         trace!(
-            "adding clause {}",
+            "adding nogood {} -> false",
             predicates
                 .clone()
                 .into_iter()
@@ -989,6 +993,15 @@ impl ConstraintSatisfactionSolver {
         if self.solver_state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
+
+        return self
+            .add_propagator(HypercubeLinearConstructor {
+                hypercube: Hypercube::new(predicates.into_iter().map(Not::not))
+                    .map_err(|_| ConstraintOperationError::InfeasibleNogood)?,
+                linear: LinearInequality::trivially_false(),
+                constraint_tag,
+            })
+            .map(|_| ());
 
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <

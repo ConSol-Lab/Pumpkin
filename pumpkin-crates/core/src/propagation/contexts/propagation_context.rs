@@ -258,7 +258,14 @@ impl PropagationContext<'_> {
         );
 
         match modification_result {
-            Ok(false) => Ok(()),
+            Ok(false) => {
+                trace!(
+                    "Attempted {} @ {} already true",
+                    predicate.display(self.variable_names),
+                    self.assignments.get_checkpoint(),
+                );
+                Ok(())
+            }
             Ok(true) => {
                 trace!(
                     "Propagated {} @ {}",

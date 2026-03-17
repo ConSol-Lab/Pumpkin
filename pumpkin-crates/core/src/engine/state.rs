@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use log::debug;
+use log::trace;
 use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
@@ -693,6 +694,8 @@ impl State {
 
         let num_trail_entries_before = self.assignments.num_trail_entries();
 
+        trace!("Propagating {propagator_id:?}");
+
         let propagation_status = {
             let propagator = &mut self.propagators[propagator_id];
             let context = PropagationContext::new(
@@ -736,6 +739,8 @@ impl State {
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]
                 self.check_conflict(&conflict);
+
+                trace!("Conflict detected by {propagator_id:?}");
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {

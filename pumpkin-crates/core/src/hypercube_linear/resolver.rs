@@ -10,7 +10,7 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::conflict_resolving::ConflictResolver;
-use crate::containers::HashSet;
+use crate::containers::HashMap;
 use crate::create_statistics_struct;
 use crate::engine::Assignments;
 use crate::hypercube_linear::Hypercube;
@@ -21,6 +21,7 @@ use crate::math::num_ext::NumExt;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::proof::ConstraintTag;
 use crate::propagation::ExplanationContext;
 use crate::state::CurrentNogood;
 use crate::state::EmptyDomainConflict;
@@ -56,7 +57,7 @@ pub struct HypercubeLinearResolver {
     ///
     /// This should never happen in a correct implementation, so this is used only for debugging
     /// purposes.
-    learned_constraints: HashSet<HypercubeLinearExplanation<'static>>,
+    learned_constraints: HashMap<HypercubeLinearExplanation<'static>, ConstraintTag>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,8 +225,10 @@ impl HypercubeLinearResolver {
         decision_level: usize,
         learned_constraint: HypercubeLinearExplanation<'static>,
     ) {
+        let constraint_tag = context.state.new_constraint_tag();
         debug!(
-            "Learned {}",
+            "Learned c:{} = {}",
+            NonZero::from(constraint_tag),
             learned_constraint.display(&context.state.variable_names)
         );
         debug!(
@@ -233,8 +236,10 @@ impl HypercubeLinearResolver {
             context.state.get_checkpoint()
         );
 
-        assert!(
-            self.learned_constraints.insert(learned_constraint.clone()),
+        assert_eq!(
+            self.learned_constraints
+                .insert(learned_constraint.clone(), constraint_tag),
+            None,
             "learning the same constraint twice"
         );
 
@@ -259,7 +264,6 @@ impl HypercubeLinearResolver {
 
         let _ = context.state.restore_to(decision_level);
 
-        let constraint_tag = context.state.new_constraint_tag();
         let handle = context.state.add_propagator(HypercubeLinearConstructor {
             hypercube: learned_constraint.hypercube.into_owned(),
             linear: learned_constraint.linear.into_owned(),

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use log::trace;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -25,6 +26,8 @@ pub(crate) fn run(
 ) -> Result<(), FlatZincError> {
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
         let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
+
+        trace!("Adding fzn constraint {constraint_tag:?} ({id})");
 
         let is_satisfiable: bool = match id.as_str() {
             "pumpkin_disjunctive_strict" => {

@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use log::trace;
 
 use crate::basic_types::PredicateId;
@@ -21,6 +22,7 @@ use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::results::PropagationStatusCP;
 use crate::state::PropagatorConflict;
+use crate::state::PropagatorId;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 
@@ -66,6 +68,14 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             context.register_predicate(hypercube_predicates[0]),
             context.register_predicate(hypercube_predicates[1.min(last_idx)]),
         ];
+
+        // // TODO: Remove
+        // for predicate in hypercube_predicates.iter().copied() {
+        //     let _ = context.register_predicate(predicate);
+        // }
+        // for (idx, term) in linear.terms().enumerate() {
+        //     context.register(term, DomainEvents::LOWER_BOUND, LocalId::from(idx as u32));
+        // }
 
         HypercubeLinearPropagator {
             hypercube,
@@ -259,11 +269,16 @@ impl Propagator for HypercubeLinearPropagator {
 
         trace!("  {satisfied_watchers} satisfied watchers");
 
+        if context.propagator_id == PropagatorId(32) {
+            dbg!(&self.hypercube_predicates[..2]);
+        }
+
         if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
+            trace!("  nothing to do");
             self.unregister_bound_events_on_linear(context.reborrow());
             // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());
-        } else if satisfied_watchers == NUM_WATCHED_PREDICATES {
+        } else {
             // The hypercube is satisfied, so we should be registered to bound events on the terms
             // of the linear inequality.
             self.register_bound_events_on_linear(context.reborrow());
@@ -277,7 +292,10 @@ impl Propagator for HypercubeLinearPropagator {
             .map(|term| i64::from(context.lower_bound(&term)))
             .sum::<i64>();
 
+        trace!("  optimistic lower bound: {lower_bound_terms}");
+
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
+        trace!("  slack: {slack}");
 
         match unassigned_watcher_index {
             Some(index) => {
@@ -295,6 +313,10 @@ impl Propagator for HypercubeLinearPropagator {
                     // We have one unassigned predicate in the hypercube over a variable that
                     // does not appear in the linear inequality. Since the slack is negative, we
                     // can propagate that predicate to false.
+                    trace!(
+                        "  negative slack, propagating {}",
+                        (!predicate_in_hypercube).display(context.variable_names)
+                    );
 
                     let conjunction: PropositionalConjunction = self
                         .linear
