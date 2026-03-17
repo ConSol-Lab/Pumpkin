@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
 use crate::hypercube_linear::Hypercube;
@@ -66,6 +68,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         };
 
         HypercubeLinearPropagator {
+            hypercube,
             linear,
 
             hypercube_predicates,
@@ -82,6 +85,7 @@ const NUM_WATCHED_PREDICATES: usize = 2;
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
+    hypercube: Hypercube,
     linear: LinearInequality,
 
     hypercube_predicates: Box<[Predicate]>,
@@ -245,9 +249,18 @@ impl Propagator for HypercubeLinearPropagator {
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
-        let satisfied_watchers = self.update_watched_predicates(context.reborrow());
+        trace!(
+            "Propagating {} -> {}",
+            self.hypercube.display(context.variable_names),
+            self.linear.display(context.variable_names),
+        );
 
-        if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
+        let satisfied_watchers = self.update_watched_predicates(context.reborrow());
+        let unassigned_watchers = self.hypercube_predicates.len() - satisfied_watchers;
+
+        trace!("  {satisfied_watchers} satisfied watchers");
+
+        if unassigned_watchers < NUM_WATCHED_PREDICATES - 1 {
             self.unregister_bound_events_on_linear(context.reborrow());
             // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());

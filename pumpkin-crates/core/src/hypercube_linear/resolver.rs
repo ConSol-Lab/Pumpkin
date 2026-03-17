@@ -173,6 +173,9 @@ impl HypercubeLinearResolver {
             ..
         } = empty_domain_conflict;
 
+        let trigger_reason =
+            trigger_reason.expect("cannot resolve conflict that was triggered by an assumption");
+
         trace!(
             "{} caused an empty domain, computing conflict constraint",
             trigger_predicate.display(&context.state.variable_names)

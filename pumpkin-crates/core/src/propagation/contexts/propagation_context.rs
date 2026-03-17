@@ -87,7 +87,7 @@ pub struct PropagationContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) notification_engine: &'a mut NotificationEngine,
-    variable_names: &'a VariableNames,
+    pub(crate) variable_names: &'a VariableNames,
     reification_literal: Option<Literal>,
 }
 

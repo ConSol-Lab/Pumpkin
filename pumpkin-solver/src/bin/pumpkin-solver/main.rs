@@ -442,7 +442,7 @@ fn configure_logging_minizinc(verbosity: Verbosity, log_statistics: bool) -> std
         .format(move |buf, record| {
             write!(buf, "% ")?;
 
-            writeln!(buf, "{}", record.args())
+            writeln!(buf, "{}: {}", record.level(), record.args())
         })
         .filter_level(verbosity.log_level_filter())
         .target(env_logger::Target::Stdout)

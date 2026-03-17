@@ -1046,9 +1046,8 @@ version = "0.3.0"
 dependencies = [
  "cc",
  "clap",
- "env_logger 0.10.2",
  "clap-verbosity-flag",
- "env_logger",
+ "env_logger 0.10.2",
  "flatzinc",
  "log",
  "pumpkin-checker",
