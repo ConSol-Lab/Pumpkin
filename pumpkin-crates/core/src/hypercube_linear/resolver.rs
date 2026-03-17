@@ -20,6 +20,7 @@ use crate::hypercube_linear::LinearInequality;
 use crate::math::num_ext::NumExt;
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
 use crate::propagation::ExplanationContext;
 use crate::state::CurrentNogood;
 use crate::state::EmptyDomainConflict;
@@ -375,15 +376,23 @@ impl HypercubeLinearResolver {
     /// the to_process_heap.
     fn hypercube_from_reason(
         &mut self,
-        mut context: ConflictAnalysisContext<'_>,
+        context: ConflictAnalysisContext<'_>,
         propagated_predicate: Predicate,
     ) -> Option<HypercubeLinearReason<'static>> {
         let mut clausal_reason = vec![];
 
-        context.get_propagation_reason(
+        let _ = context.state.get_propagation_reason(
             propagated_predicate,
-            CurrentNogood::empty(),
             &mut clausal_reason,
+            CurrentNogood::empty(),
+        );
+
+        let mut clausal_reason = PropositionalConjunction::from(clausal_reason);
+
+        trace!(
+            "{} -> {}",
+            clausal_reason.display(&context.state.variable_names),
+            propagated_predicate.display(&context.state.variable_names),
         );
 
         let Some(trail_entry) = context.state.trail_entry_for(propagated_predicate) else {
@@ -392,6 +401,8 @@ impl HypercubeLinearResolver {
             // inconsistent predicates).
 
             self.should_process_predicates(context.state, context.brancher, clausal_reason);
+
+            trace!("predicate is implied");
 
             return None;
         };
@@ -528,9 +539,12 @@ impl HypercubeLinearResolver {
         predicates: impl IntoIterator<Item = Predicate>,
     ) {
         for predicate in predicates {
-            let trail_position = state
-                .trail_position(predicate)
-                .expect("predicates to explain are true");
+            let trail_position = state.trail_position(predicate).unwrap_or_else(|| {
+                panic!(
+                    "predicate {} is not assigned to true",
+                    predicate.display(&state.variable_names)
+                );
+            });
 
             let newly_inserted = self.to_process_heap.insert(PredicateToExplain {
                 predicate,

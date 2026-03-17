@@ -53,25 +53,25 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             constraint_tag,
         } = self;
 
-        let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
+        let mut hypercube_predicates = hypercube.iter_predicates().collect::<Vec<_>>();
 
-        let watched_predicates = if hypercube_predicates.is_empty() {
-            let true_predicate = Predicate::trivially_true();
-            let true_predicate_id = context.register_predicate(true_predicate);
-            [true_predicate_id; NUM_WATCHED_PREDICATES]
-        } else {
-            let last_idx = hypercube_predicates.len() - 1;
-            [
-                context.register_predicate(hypercube_predicates[0]),
-                context.register_predicate(hypercube_predicates[1.min(last_idx)]),
-            ]
-        };
+        while hypercube_predicates.len() < NUM_WATCHED_PREDICATES {
+            // Make sure there are at least two predicates by padding with trivially
+            // true predicates.
+            hypercube_predicates.push(Predicate::trivially_true());
+        }
+
+        let last_idx = hypercube_predicates.len() - 1;
+        let watched_predicates = [
+            context.register_predicate(hypercube_predicates[0]),
+            context.register_predicate(hypercube_predicates[1.min(last_idx)]),
+        ];
 
         HypercubeLinearPropagator {
             hypercube,
             linear,
 
-            hypercube_predicates,
+            hypercube_predicates: hypercube_predicates.into(),
             watched_predicates,
             inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
         }
@@ -256,11 +256,10 @@ impl Propagator for HypercubeLinearPropagator {
         );
 
         let satisfied_watchers = self.update_watched_predicates(context.reborrow());
-        let unassigned_watchers = self.hypercube_predicates.len() - satisfied_watchers;
 
         trace!("  {satisfied_watchers} satisfied watchers");
 
-        if unassigned_watchers < NUM_WATCHED_PREDICATES - 1 {
+        if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
             self.unregister_bound_events_on_linear(context.reborrow());
             // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());
@@ -283,6 +282,10 @@ impl Propagator for HypercubeLinearPropagator {
         match unassigned_watcher_index {
             Some(index) => {
                 let predicate_in_hypercube = self.hypercube_predicates[index];
+                trace!(
+                    "  only unassigned predicate: {}",
+                    predicate_in_hypercube.display(context.variable_names)
+                );
 
                 let maybe_term = self
                     .linear
@@ -348,6 +351,7 @@ impl Propagator for HypercubeLinearPropagator {
 
             None => {
                 // All watchers are true. Propagate the linear inequality.
+                trace!("  all watchers are true, propagating linear");
 
                 self.propagate_linear_inequality(context, slack)?;
             }
@@ -454,6 +458,8 @@ mod tests {
 
     #[test]
     fn conflict_detected() {
+        env_logger::init();
+
         let mut state = State::default();
 
         let x = state.new_interval_variable(2, 10, Some("x".into()));
@@ -703,5 +709,48 @@ mod tests {
 
         assert_eq!(state.upper_bound(z2), 6);
         assert_eq!(state.upper_bound(z3), 6);
+    }
+
+    #[test]
+    fn false_predicate_in_hypercube_prevents_propagation() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+        let z1 = state.new_interval_variable(0, 10, Some("z1".into()));
+        let z2 = state.new_interval_variable(0, 10, Some("z2".into()));
+        let z3 = state.new_interval_variable(0, 10, Some("z3".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+
+        // z1 + z2 + z3 <= 10.
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), z1),
+                (NonZero::new(1).unwrap(), z2),
+                (NonZero::new(1).unwrap(), z3),
+            ],
+            10,
+        )
+        .expect("not trivially true");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert!(state.post(predicate![x >= 2]).expect("not empty domain"));
+        assert!(state.post(predicate![y <= 1]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+
+        assert!(state.post(predicate![z1 >= 2]).expect("not empty domain"));
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(z2), 10);
+        assert_eq!(state.upper_bound(z3), 10);
     }
 }

@@ -1,9 +1,11 @@
+use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::Index;
 use std::ops::IndexMut;
 
 use itertools::Itertools;
 
+use crate::engine::VariableNames;
 use crate::engine::predicates::predicate::Predicate;
 
 /// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
@@ -124,7 +126,43 @@ impl From<Predicate> for PropositionalConjunction {
     }
 }
 
-impl std::fmt::Display for PropositionalConjunction {
+impl PropositionalConjunction {
+    /// Print the hypercube in terms of its predicates in a human-friendly way.
+    pub(crate) fn display(&self, names: &VariableNames) -> impl Display {
+        PDisplay {
+            conjunction: self,
+            names,
+        }
+    }
+}
+
+struct PDisplay<'h, 'names> {
+    conjunction: &'h PropositionalConjunction,
+    names: &'names VariableNames,
+}
+
+impl Display for PDisplay<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut predicates = self.conjunction.to_vec();
+        predicates.sort();
+
+        if predicates.is_empty() {
+            write!(f, "[empty conjunction]")?;
+        } else {
+            for (idx, &predicate) in predicates.iter().enumerate() {
+                write!(f, "{}", predicate.display(self.names))?;
+
+                if idx < predicates.len() - 1 {
+                    write!(f, " & ")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.predicates_in_conjunction.is_empty() {
             write!(f, "{{empty}}")

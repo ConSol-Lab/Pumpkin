@@ -260,7 +260,12 @@ impl PropagationContext<'_> {
         match modification_result {
             Ok(false) => Ok(()),
             Ok(true) => {
-                trace!("Propagated {}", predicate.display(self.variable_names));
+                trace!(
+                    "Propagated {} @ {}",
+                    predicate.display(self.variable_names),
+                    self.assignments.get_checkpoint(),
+                );
+
                 let _ = slot.populate(
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),
