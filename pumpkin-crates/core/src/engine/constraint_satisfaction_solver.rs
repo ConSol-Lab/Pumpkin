@@ -3,7 +3,6 @@
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::ops::Not;
 use std::sync::Arc;
 
 use itertools::Itertools;
@@ -41,9 +40,6 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
-use crate::hypercube_linear::Hypercube;
-use crate::hypercube_linear::HypercubeLinearConstructor;
-use crate::hypercube_linear::LinearInequality;
 use crate::options::LearningOptions;
 use crate::proof::ConstraintTag;
 use crate::proof::FinalizingContext;

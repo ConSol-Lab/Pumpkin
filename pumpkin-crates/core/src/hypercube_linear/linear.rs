@@ -140,21 +140,7 @@ pub struct Term {
     pub domain: DomainId,
 }
 
-enum Rounding {
-    Up,
-    Down,
-}
-
 impl Term {
-    /// Apply the inverse transformation of this view on a value, to go from the value in the domain
-    /// of `self` to a value in the domain of `self.inner`.
-    fn invert(&self, value: i32, rounding: Rounding) -> i32 {
-        match rounding {
-            Rounding::Up => <i32 as NumExt>::div_ceil(value, self.weight.get()),
-            Rounding::Down => <i32 as NumExt>::div_floor(value, self.weight.get()),
-        }
-    }
-
     fn map(&self, value: i32) -> i32 {
         self.weight.get() * value
     }
@@ -362,7 +348,7 @@ impl IntegerVariable for Term {
 
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         if value % self.weight.get() == 0 {
-            let inverted = self.invert(value, Rounding::Up);
+            let inverted = value / self.weight.get();
             self.domain.contains(assignment, inverted)
         } else {
             false
@@ -376,7 +362,7 @@ impl IntegerVariable for Term {
         trail_position: usize,
     ) -> bool {
         if value % self.weight.get() == 0 {
-            let inverted = self.invert(value, Rounding::Up);
+            let inverted = value / self.weight.get();
             self.domain
                 .contains_at_trail_position(assignment, inverted, trail_position)
         } else {

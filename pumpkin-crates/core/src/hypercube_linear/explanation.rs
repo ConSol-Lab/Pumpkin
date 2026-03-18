@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use std::num::NonZero;
 
 use crate::engine::Assignments;
 use crate::engine::VariableNames;

@@ -1,3 +1,4 @@
+#![allow(unused, reason = "under heavy development")]
 use itertools::Itertools;
 use log::trace;
 

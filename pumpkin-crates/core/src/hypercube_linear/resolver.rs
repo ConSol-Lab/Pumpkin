@@ -1,3 +1,4 @@
+#![allow(unused, reason = "under heavy development")]
 use std::num::NonZero;
 
 use log::debug;
@@ -205,7 +206,7 @@ impl HypercubeLinearResolver {
         let mut elimination_happened = false;
 
         match fourier_eliminate(
-            &state,
+            state,
             trail_index,
             &conflicting_hypercube_linear,
             &reason.original,
@@ -272,7 +273,7 @@ impl HypercubeLinearResolver {
                 );
 
                 conflicting_hypercube_linear = propositional_resolution(
-                    &state,
+                    state,
                     weakened_conflicting,
                     &reason.as_clause,
                     pivot_predicate,
@@ -298,7 +299,7 @@ impl HypercubeLinearResolver {
             // variable from the hypercube.
 
             conflicting_hypercube_linear = propositional_resolution(
-                &state,
+                state,
                 conflicting_hypercube_linear,
                 &reason.as_clause,
                 pivot_predicate,
@@ -847,7 +848,7 @@ fn fourier_eliminate(
     trace!(
         "  - slack a: {}",
         compute_hl_slack_at_trail_position(
-            &conflicting_hypercube_linear,
+            conflicting_hypercube_linear,
             &state.assignments,
             trail_position
         )
@@ -1145,7 +1146,7 @@ fn is_conflicting(
         return ConflictingStatus::PremisesNotTrue;
     }
 
-    if compute_hl_slack_at_trail_position(&hypercube_linear, assignments, trail_position) < 0 {
+    if compute_hl_slack_at_trail_position(hypercube_linear, assignments, trail_position) < 0 {
         ConflictingStatus::Conflicting
     } else {
         ConflictingStatus::NonNegativeSlack
@@ -1224,7 +1225,6 @@ fn compute_hl_slack_at_trail_position(
             let hypercube_lb = hypercube_linear
                 .hypercube
                 .lower_bound(term)
-                .map(i64::from)
                 .unwrap_or(i64::MIN);
 
             assignment_lb.max(hypercube_lb)
