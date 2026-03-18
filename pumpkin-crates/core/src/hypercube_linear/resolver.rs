@@ -39,6 +39,8 @@ create_statistics_struct!(HypercubeLinearResolutionStatistics {
     num_learned_hypercube_linear: usize,
     num_learned_clauses: usize,
     num_overflow_errors: usize,
+    num_propositional_resolutions: usize,
+    num_equal_linear_in_resh: usize,
 });
 
 #[derive(Clone, Debug, Default)]
@@ -272,7 +274,7 @@ impl HypercubeLinearResolver {
                     "weakening like this does not affect slack"
                 );
 
-                conflicting_hypercube_linear = propositional_resolution(
+                conflicting_hypercube_linear = self.propositional_resolution(
                     state,
                     weakened_conflicting,
                     &reason.as_clause,
@@ -298,7 +300,7 @@ impl HypercubeLinearResolver {
             // Here we need to perform propositional resolution to eliminate the
             // variable from the hypercube.
 
-            conflicting_hypercube_linear = propositional_resolution(
+            conflicting_hypercube_linear = self.propositional_resolution(
                 state,
                 conflicting_hypercube_linear,
                 &reason.as_clause,
@@ -471,6 +473,63 @@ impl HypercubeLinearResolver {
                 return (conflicting_hypercube_linear, backjump_dl);
             }
         }
+    }
+
+    fn propositional_resolution(
+        &mut self,
+        state: &State,
+        conflicting_hypercube_linear: HypercubeLinearExplanation,
+        reason: &HypercubeLinearExplanation,
+        pivot_predicate: Predicate,
+    ) -> HypercubeLinearExplanation {
+        self.statistics.num_propositional_resolutions += 1;
+
+        if conflicting_hypercube_linear.linear == reason.linear {
+            self.statistics.num_equal_linear_in_resh += 1;
+        }
+
+        trace!("applying propositional resolution on {pivot_predicate}",);
+
+        // Make sure that the pivot is not also contributing to the conflict in the linear part.
+        trace!(
+            "  - {}",
+            conflicting_hypercube_linear.display(&state.variable_names)
+        );
+        let weakened_conflict = conflicting_hypercube_linear.weaken(pivot_predicate);
+        trace!(
+            "    - weakened: {}",
+            weakened_conflict.display(&state.variable_names)
+        );
+
+        trace!("  - {}", reason.display(&state.variable_names));
+
+        assert!(
+            reason.linear.terms().next().is_none(),
+            "the reason should be a clause"
+        );
+
+        let hypercube = weakened_conflict
+            .hypercube
+            .iter_predicates()
+            .chain(reason.hypercube.iter_predicates())
+            .filter(|&predicate| {
+                // Only keep predicates that are not the propagated predicate or its
+                // opposite.
+                !pivot_predicate.implies(predicate) && !pivot_predicate.implies(!predicate)
+            })
+            .filter(|&predicate| {
+                // Ignore predicates that are true at the root.
+                state.get_checkpoint_for_predicate(predicate).unwrap() > 0
+            });
+
+        let new_constraint = HypercubeLinearExplanation {
+            hypercube: Hypercube::new(hypercube).expect("inconsistent hypercube"),
+            linear: weakened_conflict.linear.clone(),
+        };
+
+        trace!("result = {}", new_constraint.display(&state.variable_names));
+
+        new_constraint
     }
 }
 
@@ -711,56 +770,6 @@ fn explain_conflict(
             }));
 
     HypercubeLinearExplanation::nogood(hypercube).expect("inconsistent nogood")
-}
-
-fn propositional_resolution(
-    state: &State,
-    conflicting_hypercube_linear: HypercubeLinearExplanation,
-    reason: &HypercubeLinearExplanation,
-    pivot_predicate: Predicate,
-) -> HypercubeLinearExplanation {
-    trace!("applying propositional resolution on {pivot_predicate}",);
-
-    // Make sure that the pivot is not also contributing to the conflict in the linear part.
-    trace!(
-        "  - {}",
-        conflicting_hypercube_linear.display(&state.variable_names)
-    );
-    let weakened_conflict = conflicting_hypercube_linear.weaken(pivot_predicate);
-    trace!(
-        "    - weakened: {}",
-        weakened_conflict.display(&state.variable_names)
-    );
-
-    trace!("  - {}", reason.display(&state.variable_names));
-
-    assert!(
-        reason.linear.terms().next().is_none(),
-        "the reason should be a clause"
-    );
-
-    let hypercube = weakened_conflict
-        .hypercube
-        .iter_predicates()
-        .chain(reason.hypercube.iter_predicates())
-        .filter(|&predicate| {
-            // Only keep predicates that are not the propagated predicate or its
-            // opposite.
-            !pivot_predicate.implies(predicate) && !pivot_predicate.implies(!predicate)
-        })
-        .filter(|&predicate| {
-            // Ignore predicates that are true at the root.
-            state.get_checkpoint_for_predicate(predicate).unwrap() > 0
-        });
-
-    let new_constraint = HypercubeLinearExplanation {
-        hypercube: Hypercube::new(hypercube).expect("inconsistent hypercube"),
-        linear: weakened_conflict.linear.clone(),
-    };
-
-    trace!("result = {}", new_constraint.display(&state.variable_names));
-
-    new_constraint
 }
 
 fn hypercube_models_bound(
