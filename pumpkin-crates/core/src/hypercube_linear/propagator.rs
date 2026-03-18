@@ -453,7 +453,12 @@ impl Propagator for HypercubeLinearPropagator {
                     .terms()
                     .filter(|&t| t != term)
                     .map(|term| predicate![term >= context.lower_bound(&term)])
-                    .chain(self.hypercube_predicates.iter().copied())
+                    .chain(
+                        self.hypercube_predicates
+                            .iter()
+                            .copied()
+                            .filter(|&predicate| predicate != unassigned_predicate),
+                    )
                     .collect::<PropositionalConjunction>();
 
                 context.post(
@@ -524,6 +529,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_err());
@@ -548,6 +554,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
@@ -584,6 +591,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_err());
@@ -612,6 +620,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
@@ -646,6 +655,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
@@ -682,6 +692,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
@@ -727,6 +738,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
@@ -780,6 +792,7 @@ mod tests {
             hypercube,
             linear,
             constraint_tag,
+            is_learned: false,
         });
 
         assert!(state.propagate_to_fixed_point().is_ok());
