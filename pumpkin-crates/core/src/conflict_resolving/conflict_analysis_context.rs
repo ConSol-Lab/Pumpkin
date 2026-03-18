@@ -19,6 +19,9 @@ use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::NogoodLabel;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate::PredicateType;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::HypercubeLinearConstructor;
+use crate::hypercube_linear::LinearInequality;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
@@ -252,23 +255,31 @@ impl ConflictAnalysisContext<'_> {
                 .insert(!learned_nogood[0], inference_code.clone());
         }
 
-        #[cfg(feature = "check-propagations")]
-        let trail_len_before_nogood = self.state.trail_len();
+        let _ = self.state.add_propagator(HypercubeLinearConstructor {
+            hypercube: Hypercube::new(learned_nogood.predicates)
+                .expect("learned nogood not trivially unsatisfiable"),
+            linear: LinearInequality::trivially_false(),
+            constraint_tag,
+            is_learned: true,
+        });
 
-        let (nogood_propagator, mut propagation_context) = self
-            .state
-            .get_propagator_mut_with_context(self.nogood_propagator_handle);
-        let nogood_propagator =
-            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
+        // #[cfg(feature = "check-propagations")]
+        // let trail_len_before_nogood = self.state.trail_len();
 
-        nogood_propagator.add_asserting_nogood(
-            learned_nogood.to_vec(),
-            inference_code,
-            &mut propagation_context,
-        );
+        // let (nogood_propagator, mut propagation_context) = self
+        //     .state
+        //     .get_propagator_mut_with_context(self.nogood_propagator_handle);
+        // let nogood_propagator =
+        //     nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
 
-        #[cfg(feature = "check-propagations")]
-        self.state.check_propagations(trail_len_before_nogood);
+        // nogood_propagator.add_asserting_nogood(
+        //     learned_nogood.to_vec(),
+        //     inference_code,
+        //     &mut propagation_context,
+        // );
+
+        // #[cfg(feature = "check-propagations")]
+        // self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }

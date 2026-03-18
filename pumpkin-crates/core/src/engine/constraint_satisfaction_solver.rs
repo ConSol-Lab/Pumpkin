@@ -1000,6 +1000,7 @@ impl ConstraintSatisfactionSolver {
                     .map_err(|_| ConstraintOperationError::InfeasibleNogood)?,
                 linear: LinearInequality::trivially_false(),
                 constraint_tag,
+                is_learned: false,
             })
             .map(|_| ());
 

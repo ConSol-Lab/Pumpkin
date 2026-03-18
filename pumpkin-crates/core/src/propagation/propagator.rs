@@ -217,7 +217,7 @@ pub trait Propagator: Downcast + DynClone {
         &mut self,
         _code: u64,
         _context: ExplanationContext,
-    ) -> Option<HypercubeLinearExplanation<'_>> {
+    ) -> Option<HypercubeLinearExplanation> {
         None
     }
 

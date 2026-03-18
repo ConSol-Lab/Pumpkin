@@ -5,6 +5,7 @@ use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
 use crate::engine::VariableNames;
+use crate::hypercube_linear::Term;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -114,6 +115,32 @@ impl Hypercube {
             )
             //}
         })
+    }
+
+    pub fn lower_bound(&self, term: Term) -> Option<i64> {
+        if term.weight.is_positive() {
+            let IntExt::Int(lower_bound) = self.state.lower_bound(&term.domain) else {
+                return None;
+            };
+
+            if lower_bound == i32::MIN {
+                None
+            } else {
+                Some(lower_bound as i64 * term.weight.get() as i64)
+            }
+        } else if term.weight.is_negative() {
+            let IntExt::Int(upper_bound) = self.state.upper_bound(&term.domain) else {
+                return None;
+            };
+
+            if upper_bound == i32::MAX {
+                None
+            } else {
+                Some(upper_bound as i64 * term.weight.get() as i64)
+            }
+        } else {
+            unreachable!("term weight is never zero")
+        }
     }
 
     /// Print the hypercube in terms of its predicates in a human-friendly way.

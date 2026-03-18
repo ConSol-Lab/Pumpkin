@@ -1,10 +1,10 @@
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::num::NonZero;
 
 use crate::engine::Assignments;
 use crate::engine::VariableNames;
 use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::InconsistentHypercube;
 use crate::hypercube_linear::LinearInequality;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -12,12 +12,21 @@ use crate::variables::IntegerVariable;
 
 /// An explanation of a propagation as a hypercube linear constraint.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HypercubeLinearExplanation<'a> {
-    pub hypercube: Cow<'a, Hypercube>,
-    pub linear: Cow<'a, LinearInequality>,
+pub struct HypercubeLinearExplanation {
+    pub hypercube: Hypercube,
+    pub linear: LinearInequality,
 }
 
-impl<'a> HypercubeLinearExplanation<'a> {
+impl HypercubeLinearExplanation {
+    pub fn nogood(
+        predicates: impl IntoIterator<Item = Predicate>,
+    ) -> Result<Self, InconsistentHypercube> {
+        Ok(HypercubeLinearExplanation {
+            hypercube: Hypercube::new(predicates)?,
+            linear: LinearInequality::trivially_false(),
+        })
+    }
+
     /// Get the reason set for this hypercube linear.
     ///
     /// Only makes sense if the hypercube linear is conflicting w.r.t. the given assignments.
@@ -34,7 +43,7 @@ impl<'a> HypercubeLinearExplanation<'a> {
     ///
     /// It may be that weakening on the given predicate does nothing, in which case this is a
     /// no-op.
-    pub fn weaken(mut self, predicate: Predicate) -> HypercubeLinearExplanation<'a> {
+    pub fn weaken(self, predicate: Predicate) -> HypercubeLinearExplanation {
         let domain = predicate.get_domain();
         let value = predicate.get_right_hand_side();
 
@@ -43,19 +52,20 @@ impl<'a> HypercubeLinearExplanation<'a> {
         };
 
         let rhs_delta = if predicate.is_lower_bound_predicate()
-            && term_to_weaken.scale.is_positive()
-            || predicate.is_upper_bound_predicate() && term_to_weaken.scale.is_negative()
+            && term_to_weaken.weight.is_positive()
+            || predicate.is_upper_bound_predicate() && term_to_weaken.weight.is_negative()
         {
             term_to_weaken
-                .scale
+                .weight
+                .get()
                 .checked_mul(value)
                 .expect("integer overflow")
         } else {
             return self;
         };
 
-        let hypercube = std::mem::take(self.hypercube.to_mut());
-        let hypercube = hypercube
+        let hypercube = self
+            .hypercube
             .with_predicate(predicate)
             .expect("weakening causes inconsistent hypercube");
 
@@ -64,20 +74,14 @@ impl<'a> HypercubeLinearExplanation<'a> {
             .linear
             .terms()
             .filter(|&term| term != term_to_weaken)
-            .map(|view| {
-                let weight = NonZero::new(view.scale).expect("affine view scales are non-zero");
-                (weight, view.inner)
-            });
+            .map(|term| (term.weight, term.domain));
 
         let bound = self.linear.bound() - rhs_delta;
 
         let linear = LinearInequality::new(terms, bound)
             .expect("linear is not trivially satisfiable after weakening");
 
-        HypercubeLinearExplanation {
-            hypercube: Cow::Owned(hypercube),
-            linear: Cow::Owned(linear),
-        }
+        HypercubeLinearExplanation { hypercube, linear }
     }
 
     /// Write the hypercube linear constraint in a human-friendly way.
@@ -94,21 +98,14 @@ impl<'a> HypercubeLinearExplanation<'a> {
             variable_names,
         }
     }
-
-    pub fn into_owned(self) -> HypercubeLinearExplanation<'static> {
-        HypercubeLinearExplanation {
-            hypercube: Cow::Owned(self.hypercube.into_owned()),
-            linear: Cow::Owned(self.linear.into_owned()),
-        }
-    }
 }
 
-struct HLDisplay<'data, 'expl, 'names> {
-    explanation: &'expl HypercubeLinearExplanation<'data>,
+struct HLDisplay<'expl, 'names> {
+    explanation: &'expl HypercubeLinearExplanation,
     variable_names: &'names VariableNames,
 }
 
-impl Display for HLDisplay<'_, '_, '_> {
+impl Display for HLDisplay<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
