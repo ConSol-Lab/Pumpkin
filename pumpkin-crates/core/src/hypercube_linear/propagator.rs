@@ -12,6 +12,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
+use crate::propagation::ExplanationContext;
 use crate::propagation::InferenceCheckers;
 use crate::propagation::LocalId;
 use crate::propagation::PropagationContext;
@@ -25,6 +26,8 @@ use crate::state::PropagatorConflict;
 use crate::state::PropagatorId;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
+
+use super::HypercubeLinearExplanation;
 
 /// The [`PropagatorConstructor`] for the [`HypercubeLinearPropagator`].
 #[derive(Clone, Debug)]
@@ -465,6 +468,17 @@ impl Propagator for HypercubeLinearPropagator {
         }
 
         Ok(())
+    }
+
+    fn explain_as_hypercube_linear(
+        &mut self,
+        _code: u64,
+        _context: ExplanationContext,
+    ) -> Option<HypercubeLinearExplanation> {
+        Some(HypercubeLinearExplanation {
+            hypercube: self.hypercube.clone(),
+            linear: self.linear.clone(),
+        })
     }
 }
 
