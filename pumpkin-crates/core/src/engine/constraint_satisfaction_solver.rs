@@ -994,16 +994,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
-        return self
-            .add_propagator(HypercubeLinearConstructor {
-                hypercube: Hypercube::new(predicates.into_iter().map(Not::not))
-                    .map_err(|_| ConstraintOperationError::InfeasibleNogood)?,
-                linear: LinearInequality::trivially_false(),
-                constraint_tag,
-                is_learned: false,
-            })
-            .map(|_| ());
-
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`

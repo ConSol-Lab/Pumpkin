@@ -255,31 +255,23 @@ impl ConflictAnalysisContext<'_> {
                 .insert(!learned_nogood[0], inference_code.clone());
         }
 
-        let _ = self.state.add_propagator(HypercubeLinearConstructor {
-            hypercube: Hypercube::new(learned_nogood.predicates)
-                .expect("learned nogood not trivially unsatisfiable"),
-            linear: LinearInequality::trivially_false(),
-            constraint_tag,
-            is_learned: true,
-        });
+        #[cfg(feature = "check-propagations")]
+        let trail_len_before_nogood = self.state.trail_len();
 
-        // #[cfg(feature = "check-propagations")]
-        // let trail_len_before_nogood = self.state.trail_len();
+        let (nogood_propagator, mut propagation_context) = self
+            .state
+            .get_propagator_mut_with_context(self.nogood_propagator_handle);
+        let nogood_propagator =
+            nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
 
-        // let (nogood_propagator, mut propagation_context) = self
-        //     .state
-        //     .get_propagator_mut_with_context(self.nogood_propagator_handle);
-        // let nogood_propagator =
-        //     nogood_propagator.expect("nogood propagator handle should refer to nogood propagator");
+        nogood_propagator.add_asserting_nogood(
+            learned_nogood.to_vec(),
+            inference_code,
+            &mut propagation_context,
+        );
 
-        // nogood_propagator.add_asserting_nogood(
-        //     learned_nogood.to_vec(),
-        //     inference_code,
-        //     &mut propagation_context,
-        // );
-
-        // #[cfg(feature = "check-propagations")]
-        // self.state.check_propagations(trail_len_before_nogood);
+        #[cfg(feature = "check-propagations")]
+        self.state.check_propagations(trail_len_before_nogood);
 
         learned_nogood.backtrack_level
     }
