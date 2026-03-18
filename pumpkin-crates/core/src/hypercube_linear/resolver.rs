@@ -335,12 +335,14 @@ impl HypercubeLinearResolver {
         state: &mut State,
         mut conflicting_hypercube_linear: HypercubeLinearExplanation,
     ) -> (HypercubeLinearExplanation, usize) {
-        let mut conflicting_reason_set = HypercubeLinearExplanation::nogood(
-            conflicting_hypercube_linear.reason_set(&state.assignments),
-        )
-        .expect("conflict is not inconsistent");
         let conflict_dl = state.get_checkpoint();
         let mut trail_index = state.trail_len();
+
+        let mut conflicting_reason_set = explain_conflict(
+            &conflicting_hypercube_linear,
+            trail_index,
+            &state.assignments,
+        );
 
         // Iterate the trail backwards until a constraint is obtained that propagates at a
         // previous decision level.
@@ -358,25 +360,32 @@ impl HypercubeLinearResolver {
             //     );
             // }
 
+            dbg!(trail_index);
+            let unsatisfied_reason_set_predicates = conflicting_reason_set
+                .hypercube
+                .iter_predicates()
+                .filter(|&predicate| {
+                    let truth_value = state
+                        .assignments
+                        .evaluate_predicate_at_trail_position(predicate, trail_index);
+
+                    let domain = predicate.get_domain();
+                    println!(
+                        "{} -> {} in [{}, {}]",
+                        predicate.display(&state.variable_names),
+                        domain.display(&state.variable_names),
+                        domain.lower_bound_at_trail_position(&state.assignments, trail_index),
+                        domain.upper_bound_at_trail_position(&state.assignments, trail_index)
+                    );
+
+                    truth_value != Some(true)
+                })
+                .collect::<PropositionalConjunction>();
+
             assert!(
-                conflicting_reason_set
-                    .hypercube
-                    .iter_predicates()
-                    .all(|predicate| {
-                        let truth_value = state
-                            .assignments
-                            .evaluate_predicate_at_trail_position(predicate, trail_index);
-
-                        // let domain = predicate.get_domain();
-                        // println!(
-                        //     "{predicate} -> {} in [{}, {}]",
-                        //     domain,
-                        //     domain.lower_bound_at_trail_position(context.assignments, trail_index),
-                        //     domain.upper_bound_at_trail_position(context.assignments, trail_index)
-                        // );
-
-                        truth_value == Some(true)
-                    })
+                unsatisfied_reason_set_predicates.is_empty(),
+                "not all predicates in conflict RS are true: {}",
+                unsatisfied_reason_set_predicates.display(&state.variable_names),
             );
 
             // println!("Reasonset:");
@@ -396,7 +405,9 @@ impl HypercubeLinearResolver {
                 .collect::<Vec<_>>();
 
             trace!(
-                "reasons on conflict dl = {reasons_on_current_dl:?} (out of {})",
+                "reasons on conflict dl = {} (out of {})",
+                PropositionalConjunction::from(reasons_on_current_dl)
+                    .display(&state.variable_names),
                 conflicting_reason_set.hypercube.iter_predicates().count()
             );
 
@@ -425,7 +436,10 @@ impl HypercubeLinearResolver {
             );
 
             let pivot_predicate = top_of_trail.predicate;
-            trace!("processing {}", pivot_predicate);
+            trace!(
+                "processing {}",
+                pivot_predicate.display(&state.variable_names)
+            );
 
             // Remove the top of trail from the reason set if it is in the reason set.
             if !conflicting_reason_set
@@ -730,28 +744,6 @@ impl ConflictResolver for HypercubeLinearResolver {
         //     "learning should produce a new constraint"
         // );
     }
-}
-
-fn explain_initial_conflict(
-    hypercube_linear: &HypercubeLinearExplanation,
-    trail_position: usize,
-    assignments: &Assignments,
-    conflict_trigger: Predicate,
-) -> Vec<Predicate> {
-    hypercube_linear
-        .hypercube
-        .iter_predicates()
-        .chain(hypercube_linear.linear.terms().filter_map(|term| {
-            let term_lower_bound = term.lower_bound_at_trail_position(assignments, trail_position);
-            let predicate = predicate![term >= term_lower_bound];
-
-            if conflict_trigger.implies(predicate) {
-                None
-            } else {
-                Some(predicate)
-            }
-        }))
-        .collect()
 }
 
 fn explain_conflict(
