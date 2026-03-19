@@ -140,19 +140,10 @@ impl Display for Hypercube {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Term {
     pub weight: NonZero<i32>,
     pub domain: DomainId,
-}
-
-impl Debug for Term {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Term")
-            .field(&self.weight)
-            .field(&self.domain)
-            .finish()
-    }
 }
 
 impl Term {
@@ -355,6 +346,10 @@ impl HypercubeLinear {
 
     pub fn linear_rhs(&self) -> i32 {
         self.linear_rhs
+    }
+
+    pub fn linear_equals(&self, other: &HypercubeLinear) -> bool {
+        self.linear_terms == other.linear_terms && self.linear_rhs == other.linear_rhs
     }
 
     /// Get the weight for the given domain in the linear component of the hypercube linear.

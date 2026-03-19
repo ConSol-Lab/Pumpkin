@@ -35,6 +35,8 @@ create_statistics_struct!(HypercubeLinearResolutionStatistics {
     num_learned_hypercube_linear: usize,
     num_learned_clauses: usize,
     num_overflow_errors: usize,
+    num_propositional_resolutions: usize,
+    num_resolution_equal_linear: usize,
 });
 
 #[derive(Debug, Default)]
@@ -260,8 +262,9 @@ impl HypercubeLinearResolver {
                 conflicting_hypercube_linear = propositional_resolution(
                     context.assignments,
                     weakened_conflicting,
-                    &reason.as_clause,
+                    &reason,
                     pivot_predicate,
+                    &mut self.statistics,
                 );
 
                 elimination_happened = true;
@@ -292,8 +295,9 @@ impl HypercubeLinearResolver {
             conflicting_hypercube_linear = propositional_resolution(
                 context.assignments,
                 conflicting_hypercube_linear,
-                &reason.as_clause,
+                &reason,
                 pivot_predicate,
+                &mut self.statistics,
             );
             elimination_happened = true;
             let new_slack = conflicting_hypercube_linear
@@ -618,10 +622,12 @@ fn explain_conflict(
 fn propositional_resolution(
     assignments: &Assignments,
     conflicting_hypercube_linear: HypercubeLinear,
-    reason: &HypercubeLinear,
+    hl_reason: &HypercubeLinearReason,
     pivot_predicate: Predicate,
+    stats: &mut HypercubeLinearResolutionStatistics,
 ) -> HypercubeLinear {
     trace!("applying propositional resolution on {pivot_predicate}",);
+    stats.num_propositional_resolutions += 1;
 
     // Make sure that the pivot is not also contributing to the conflict in the linear part.
     trace!("  - {conflicting_hypercube_linear}");
@@ -629,11 +635,18 @@ fn propositional_resolution(
     let weakened_conflict = weakened_conflict.unwrap_or(conflicting_hypercube_linear);
     trace!("    - weakened: {weakened_conflict}");
 
+    let reason = if hl_reason.original.linear_equals(&weakened_conflict) {
+        stats.num_resolution_equal_linear += 1;
+        &hl_reason.original
+    } else {
+        &hl_reason.as_clause
+    };
+
     trace!("  - {reason}");
 
     assert!(
-        reason.iter_linear_terms().next().is_none(),
-        "the reason should be a clause"
+        reason.iter_linear_terms().next().is_none() || reason.linear_equals(&weakened_conflict),
+        "the reason should be a clause or the linear should equal the linear in the conflict"
     );
 
     let hypercube = weakened_conflict
