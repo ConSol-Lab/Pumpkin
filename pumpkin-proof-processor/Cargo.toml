@@ -23,6 +23,7 @@ thiserror = "2.0.18"
 assert_cmd = "2.1.2"
 escargot = "0.5.15"
 pumpkin-checker = { path = "../pumpkin-checker" }
+regex = "1.12.3"
 
 [lints]
 workspace = true

@@ -1025,6 +1025,7 @@ dependencies = [
  "pumpkin-checker",
  "pumpkin-core",
  "pumpkin-propagators",
+ "regex",
  "thiserror",
 ]
 
