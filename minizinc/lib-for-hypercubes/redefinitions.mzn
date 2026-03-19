@@ -1,3 +1,7 @@
+predicate int_lin_eq(array [int] of int: c, array [int] of var int: x, int: d) =
+    int_lin_le(c, x, d) /\
+    int_lin_le([-c[i] | i in index_set(x)], x, -d);
+
 /*
 % FlatZinc built-in redefinitions for linear solvers.
 %

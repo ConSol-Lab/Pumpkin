@@ -25,162 +25,45 @@ use crate::flatzinc::compiler::context::Set;
 pub(crate) fn run(
     _: &FlatZincAst,
     context: &mut CompilationContext,
-    options: &FlatZincOptions,
+    _options: &FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for (constraint_tag, constraint_item) in std::mem::take(&mut context.constraints) {
-        let flatzinc::ConstraintItem { id, exprs, annos } = &constraint_item;
+        let flatzinc::ConstraintItem {
+            id,
+            exprs,
+            annos: _,
+        } = &constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
-            "pumpkin_disjunctive_strict" => {
-                compile_disjunctive_strict(context, exprs, constraint_tag)?
-            }
-            "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,
-            "array_int_minimum" => compile_array_int_minimum(context, exprs, constraint_tag)?,
-            "int_max" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_max",
-                constraint_tag,
-                |a, b, c, constraint_tag| constraints::maximum([a, b], c, constraint_tag),
-            )?,
-            "int_min" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_min",
-                constraint_tag,
-                |a, b, c, constraint_tag| constraints::minimum([a, b], c, constraint_tag),
-            )?,
-
-            // We rewrite `array_int_element` to `array_var_int_element`.
-            "array_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
-            "array_var_int_element" => {
-                compile_array_var_int_element(context, exprs, constraint_tag)?
-            }
-
-            "int_eq_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_eq_imp",
-                constraint_tag,
-                constraints::binary_equals,
-            )?,
-            "int_ge_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_ge_imp",
-                constraint_tag,
-                constraints::binary_greater_than_or_equals,
-            )?,
-            "int_gt_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_gt_imp",
-                constraint_tag,
-                constraints::binary_greater_than,
-            )?,
-            "int_le_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_le_imp",
-                constraint_tag,
-                constraints::binary_less_than_or_equals,
-            )?,
-            "int_lt_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_lt_imp",
-                constraint_tag,
-                constraints::binary_less_than,
-            )?,
-            "int_ne_imp" => compile_binary_int_imp(
-                context,
-                exprs,
-                annos,
-                "int_ne_imp",
-                constraint_tag,
-                constraints::binary_not_equals,
-            )?,
-
-            "int_lin_eq_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_imp",
-                constraint_tag,
-                constraints::equals,
-            )?,
-            "int_lin_ge_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ge_imp",
-                constraint_tag,
-                constraints::greater_than_or_equals,
-            )?,
-            "int_lin_gt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_gt_imp",
-                constraint_tag,
-                constraints::greater_than,
-            )?,
-            "int_lin_le_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_imp",
-                constraint_tag,
-                constraints::less_than_or_equals,
-            )?,
-            "int_lin_lt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_lt_imp",
-                constraint_tag,
-                constraints::less_than,
-            )?,
-            "int_lin_ne_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ne_imp",
-                constraint_tag,
-                constraints::not_equals,
-            )?,
-
-            "int_lin_ne" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ne",
-                constraint_tag,
-                constraints::not_equals,
-            )?,
-            "int_lin_ne_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ne_reif",
-                constraint_tag,
-                constraints::not_equals,
-            )?,
-            // "int_lin_le" => compile_int_lin_predicate(
+            // "int_lin_le_imp" => compile_int_lin_imp_predicate(
             //     context,
             //     exprs,
             //     annos,
-            //     "int_lin_le",
+            //     "int_lin_le_imp",
             //     constraint_tag,
             //     constraints::less_than_or_equals,
             // )?,
+            "int_lin_le_imp" => {
+                let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+                let reif = context.resolve_bool_variable(&exprs[3])?;
+
+                let terms = vars
+                    .iter()
+                    .zip(weights.iter())
+                    .filter_map(|(&domain, &weight)| {
+                        NonZero::new(weight).map(|weight| (weight, domain))
+                    })
+                    .collect();
+
+                match HypercubeLinear::new(vec![reif.get_true_predicate()], terms, rhs) {
+                    Some(hl) => hypercube_linear(hl, constraint_tag)
+                        .post(context.solver)
+                        .is_ok(),
+                    None => true,
+                }
+            }
             "int_lin_le" => {
                 let weights = context.resolve_array_integer_constants(&exprs[0])?;
                 let vars = context.resolve_integer_variable_array(&exprs[1])?;
@@ -194,211 +77,324 @@ pub(crate) fn run(
                     })
                     .collect();
 
-                let constraint = hypercube_linear(
-                    HypercubeLinear::new(vec![], terms, rhs)
-                        .expect("flatzinc constraint is not trivially satisfiable"),
-                    constraint_tag,
-                );
-                constraint.post(context.solver).is_ok()
-            }
-            "int_lin_le_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_reif",
-                constraint_tag,
-                constraints::less_than_or_equals,
-            )?,
-            //"int_lin_eq" => {
-            //    compile_int_lin_predicate(context, exprs, annos, "int_lin_eq", constraint_tag,
-            // constraints::equals)?
-            //}
-            "int_lin_eq" => {
-                let weights = context.resolve_array_integer_constants(&exprs[0])?;
-                let vars = context.resolve_integer_variable_array(&exprs[1])?;
-                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
-
-                let terms = vars
-                    .iter()
-                    .zip(weights.iter())
-                    .filter_map(|(&domain, &weight)| {
-                        NonZero::new(weight).map(|weight| (weight, domain))
-                    })
-                    .collect();
-
-                let terms_negated = vars
-                    .iter()
-                    .zip(weights.iter())
-                    .filter_map(|(&domain, &weight)| {
-                        NonZero::new(-weight).map(|weight| (weight, domain))
-                    })
-                    .collect();
-
-                let c1 = hypercube_linear(
-                    HypercubeLinear::new(vec![], terms, rhs)
-                        .expect("flatzinc constraint is not trivially satisfiable"),
-                    constraint_tag,
-                );
-                let c2 = hypercube_linear(
-                    HypercubeLinear::new(vec![], terms_negated, -rhs)
-                        .expect("flatzinc constraint is not trivially satisfiable"),
-                    constraint_tag,
-                );
-
-                c1.post(context.solver).is_ok() && c2.post(context.solver).is_ok()
-            }
-            "int_lin_eq_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_reif",
-                constraint_tag,
-                constraints::equals,
-            )?,
-            "int_ne" => compile_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_ne",
-                constraint_tag,
-                constraints::binary_not_equals,
-            )?,
-            "int_ne_reif" => compile_reified_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_ne_reif",
-                constraint_tag,
-                constraints::binary_not_equals,
-            )?,
-            "int_eq" => compile_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_eq",
-                constraint_tag,
-                constraints::binary_equals,
-            )?,
-            "int_eq_reif" => compile_reified_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_eq_reif",
-                constraint_tag,
-                constraints::binary_equals,
-            )?,
-            "int_le" => compile_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_le",
-                constraint_tag,
-                constraints::binary_less_than_or_equals,
-            )?,
-            "int_le_reif" => compile_reified_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_le_reif",
-                constraint_tag,
-                constraints::binary_less_than_or_equals,
-            )?,
-            "int_lt" => compile_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lt",
-                constraint_tag,
-                constraints::binary_less_than,
-            )?,
-            "int_lt_reif" => compile_reified_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lt_reif",
-                constraint_tag,
-                constraints::binary_less_than,
-            )?,
-
-            "int_plus" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_plus",
-                constraint_tag,
-                constraints::plus,
-            )?,
-
-            "int_times" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_times",
-                constraint_tag,
-                constraints::times,
-            )?,
-            "int_div" => compile_ternary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_div",
-                constraint_tag,
-                constraints::division,
-            )?,
-            "int_abs" => compile_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_abs",
-                constraint_tag,
-                constraints::absolute,
-            )?,
-
-            "pumpkin_all_different" => {
-                compile_all_different(context, exprs, annos, constraint_tag)?
-            }
-            "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
-            "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
-
-            "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
-            "array_bool_element" => compile_array_var_bool_element(
-                context,
-                exprs,
-                "array_bool_element",
-                constraint_tag,
-            )?,
-            "array_var_bool_element" => compile_array_var_bool_element(
-                context,
-                exprs,
-                "array_var_bool_element",
-                constraint_tag,
-            )?,
-            "array_bool_or" => compile_bool_or(context, exprs, constraint_tag)?,
-            "pumpkin_bool_xor" => compile_bool_xor(context, exprs, constraint_tag)?,
-            "pumpkin_bool_xor_reif" => compile_bool_xor_reif(context, exprs, constraint_tag)?,
-
-            "bool2int" => compile_bool2int(context, exprs, constraint_tag)?,
-
-            "bool_lin_eq" => compile_bool_lin_eq_predicate(context, exprs, constraint_tag)?,
-
-            "bool_lin_le" => compile_bool_lin_le_predicate(context, exprs, constraint_tag)?,
-
-            "bool_and" => compile_bool_and(context, exprs, constraint_tag)?,
-            "bool_clause" => compile_bool_clause(context, exprs, constraint_tag)?,
-            "bool_eq" => compile_bool_eq(context, exprs, constraint_tag)?,
-            "bool_eq_reif" => compile_bool_eq_reif(context, exprs, constraint_tag)?,
-            "bool_not" => compile_bool_not(context, exprs, constraint_tag)?,
-            "set_in_reif" => compile_set_in_reif(context, exprs, constraint_tag)?,
-            "set_in" => {
-                // 'set_in' constraints are handled in pre-processing steps.
-                // TODO: remove it from the AST, so it does not need to be matched here
-                true
+                match HypercubeLinear::new(vec![], terms, rhs) {
+                    Some(hl) => hypercube_linear(hl, constraint_tag)
+                        .post(context.solver)
+                        .is_ok(),
+                    None => true,
+                }
             }
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
-            "pumpkin_cumulative_var" => todo!(
-                "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
-            ),
+            // "int_lin_le_reif" => compile_reified_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_le_reif",
+            //     constraint_tag,
+            //     constraints::less_than_or_equals,
+            // )?,
+            // "pumpkin_disjunctive_strict" => {
+            //     compile_disjunctive_strict(context, exprs, constraint_tag)?
+            // }
+            // "array_int_maximum" => compile_array_int_maximum(context, exprs, constraint_tag)?,
+            // "array_int_minimum" => compile_array_int_minimum(context, exprs, constraint_tag)?,
+            // "int_max" => compile_ternary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_max",
+            //     constraint_tag,
+            //     |a, b, c, constraint_tag| constraints::maximum([a, b], c, constraint_tag),
+            // )?,
+            // "int_min" => compile_ternary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_min",
+            //     constraint_tag,
+            //     |a, b, c, constraint_tag| constraints::minimum([a, b], c, constraint_tag),
+            // )?,
+
+            // // We rewrite `array_int_element` to `array_var_int_element`.
+            // "array_int_element" => compile_array_var_int_element(context, exprs, constraint_tag)?,
+            // "array_var_int_element" => {
+            //     compile_array_var_int_element(context, exprs, constraint_tag)?
+            // }
+
+            // "int_eq_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_eq_imp",
+            //     constraint_tag,
+            //     constraints::binary_equals,
+            // )?,
+            // "int_ge_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_ge_imp",
+            //     constraint_tag,
+            //     constraints::binary_greater_than_or_equals,
+            // )?,
+            // "int_gt_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_gt_imp",
+            //     constraint_tag,
+            //     constraints::binary_greater_than,
+            // )?,
+            // "int_le_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_le_imp",
+            //     constraint_tag,
+            //     constraints::binary_less_than_or_equals,
+            // )?,
+            // "int_lt_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lt_imp",
+            //     constraint_tag,
+            //     constraints::binary_less_than,
+            // )?,
+            // "int_ne_imp" => compile_binary_int_imp(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_ne_imp",
+            //     constraint_tag,
+            //     constraints::binary_not_equals,
+            // )?,
+
+            // "int_lin_eq_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_eq_imp",
+            //     constraint_tag,
+            //     constraints::equals,
+            // )?,
+            // "int_lin_ge_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ge_imp",
+            //     constraint_tag,
+            //     constraints::greater_than_or_equals,
+            // )?,
+            // "int_lin_gt_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_gt_imp",
+            //     constraint_tag,
+            //     constraints::greater_than,
+            // )?,
+            // "int_lin_lt_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_lt_imp",
+            //     constraint_tag,
+            //     constraints::less_than,
+            // )?,
+            // "int_lin_ne_imp" => compile_int_lin_imp_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ne_imp",
+            //     constraint_tag,
+            //     constraints::not_equals,
+            // )?,
+
+            // "int_lin_ne" => compile_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ne",
+            //     constraint_tag,
+            //     constraints::not_equals,
+            // )?,
+            // "int_lin_ne_reif" => compile_reified_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_ne_reif",
+            //     constraint_tag,
+            //     constraints::not_equals,
+            // )?,
+            // "int_lin_le" => compile_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_le",
+            //     constraint_tag,
+            //     constraints::less_than_or_equals,
+            // )?,
+            // "int_lin_eq" => compile_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_eq",
+            //     constraint_tag,
+            //     constraints::equals,
+            // )?,
+            // "int_lin_eq_reif" => compile_reified_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_eq_reif",
+            //     constraint_tag,
+            //     constraints::equals,
+            // )?,
+            // "int_ne" => compile_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_ne",
+            //     constraint_tag,
+            //     constraints::binary_not_equals,
+            // )?,
+            // "int_ne_reif" => compile_reified_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_ne_reif",
+            //     constraint_tag,
+            //     constraints::binary_not_equals,
+            // )?,
+            // "int_eq" => compile_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_eq",
+            //     constraint_tag,
+            //     constraints::binary_equals,
+            // )?,
+            // "int_eq_reif" => compile_reified_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_eq_reif",
+            //     constraint_tag,
+            //     constraints::binary_equals,
+            // )?,
+            // "int_le" => compile_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_le",
+            //     constraint_tag,
+            //     constraints::binary_less_than_or_equals,
+            // )?,
+            // "int_le_reif" => compile_reified_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_le_reif",
+            //     constraint_tag,
+            //     constraints::binary_less_than_or_equals,
+            // )?,
+            // "int_lt" => compile_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lt",
+            //     constraint_tag,
+            //     constraints::binary_less_than,
+            // )?,
+            // "int_lt_reif" => compile_reified_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lt_reif",
+            //     constraint_tag,
+            //     constraints::binary_less_than,
+            // )?,
+
+            // "int_plus" => compile_ternary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_plus",
+            //     constraint_tag,
+            //     constraints::plus,
+            // )?,
+
+            // "int_times" => compile_ternary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_times",
+            //     constraint_tag,
+            //     constraints::times,
+            // )?,
+            // "int_div" => compile_ternary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_div",
+            //     constraint_tag,
+            //     constraints::division,
+            // )?,
+            // "int_abs" => compile_binary_int_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_abs",
+            //     constraint_tag,
+            //     constraints::absolute,
+            // )?,
+
+            // "pumpkin_all_different" => {
+            //     compile_all_different(context, exprs, annos, constraint_tag)?
+            // }
+            // "pumpkin_table_int" => compile_table(context, exprs, annos, constraint_tag)?,
+            // "pumpkin_table_int_reif" => compile_table_reif(context, exprs, annos, constraint_tag)?,
+
+            // "array_bool_and" => compile_array_bool_and(context, exprs, constraint_tag)?,
+            // "array_bool_element" => compile_array_var_bool_element(
+            //     context,
+            //     exprs,
+            //     "array_bool_element",
+            //     constraint_tag,
+            // )?,
+            // "array_var_bool_element" => compile_array_var_bool_element(
+            //     context,
+            //     exprs,
+            //     "array_var_bool_element",
+            //     constraint_tag,
+            // )?,
+            // "array_bool_or" => compile_bool_or(context, exprs, constraint_tag)?,
+            // "pumpkin_bool_xor" => compile_bool_xor(context, exprs, constraint_tag)?,
+            // "pumpkin_bool_xor_reif" => compile_bool_xor_reif(context, exprs, constraint_tag)?,
+
+            // "bool2int" => compile_bool2int(context, exprs, constraint_tag)?,
+
+            // "bool_lin_eq" => compile_bool_lin_eq_predicate(context, exprs, constraint_tag)?,
+
+            // "bool_lin_le" => compile_bool_lin_le_predicate(context, exprs, constraint_tag)?,
+
+            // "bool_and" => compile_bool_and(context, exprs, constraint_tag)?,
+            // "bool_clause" => compile_bool_clause(context, exprs, constraint_tag)?,
+            // "bool_eq" => compile_bool_eq(context, exprs, constraint_tag)?,
+            // "bool_eq_reif" => compile_bool_eq_reif(context, exprs, constraint_tag)?,
+            // "bool_not" => compile_bool_not(context, exprs, constraint_tag)?,
+            // "set_in_reif" => compile_set_in_reif(context, exprs, constraint_tag)?,
+            // "set_in" => {
+            //     // 'set_in' constraints are handled in pre-processing steps.
+            //     // TODO: remove it from the AST, so it does not need to be matched here
+            //     true
+            // }
+
+            // "pumpkin_cumulative" => compile_cumulative(context, exprs, options, constraint_tag)?,
+            // "pumpkin_cumulative_var" => todo!(
+            //     "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
+            // ),
             unknown => todo!("unsupported constraint {unknown}"),
         };
 

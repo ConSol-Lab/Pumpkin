@@ -1,11 +1,16 @@
 % Additions for Pumpkin, original is preserved below.
-predicate int_le_reif(var int: x, var int: y, var bool: b);
+predicate int_le_reif(var int: x, var int: y, var bool: b) =
+    int_lin_le_reif([1, -1], [x, y], 0, b);
+
 predicate int_le_reif__NOPOST(var int: x, var int: y, var bool: b) =
     int_le_reif(x, y, b);
 
-predicate int_eq_reif(var int: x, var int: y, var bool: b);
+predicate int_eq_reif(var int: x, var int: y, var bool: b) =
+    int_lin_eq_reif([1, -1], [x, y], 0, b);
 
-predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+    int_lin_le_imp(c, x, d, b) /\ 
+    int_lin_le_imp([-c[i] | i in index_set(c)], x, -d - 11, not b);
 
 predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
     int_lin_eq_imp(c, x, d, b) /\ int_lin_ne_imp(c, x, d, not b);

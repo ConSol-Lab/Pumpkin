@@ -19,9 +19,10 @@ predicate int_gt_imp(var int: x, int: y, var bool: b) =
 predicate int_lin_eq_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
     int_lin_le_imp(c, x, d, b) /\ int_lin_le_imp([-c[i] | i in index_set(c)], x, -d, b);
 
-predicate int_lin_le_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+predicate int_le_imp(var int: x, var int: y, var bool: b) =
+    int_lin_le_imp([1, -1], [x, y], 0, b);
 
-predicate int_le_imp(var int: x, var int: y, var bool: b);
+predicate int_lin_le_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
 
 % %% var, var
 % predicate int_le_imp(var int: x, var int: y, var bool: b) =
