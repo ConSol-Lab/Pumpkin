@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use clap::Parser;
+use clap_verbosity_flag::InfoLevel;
+use clap_verbosity_flag::Verbosity;
 use drcp_format::reader::ProofReader;
 use drcp_format::writer::ProofWriter;
 use pumpkin_core::containers::StorageKey;
@@ -32,6 +34,9 @@ use crate::variables::Variables;
 
 #[derive(Parser)]
 struct Cli {
+    #[command(flatten)]
+    verbose: Verbosity<InfoLevel>,
+
     /// Path to the model file (.fzn).
     model_path: PathBuf,
 
@@ -43,9 +48,13 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
     let cli = Cli::parse();
+
+    env_logger::Builder::new()
+        .format_timestamp(None)
+        .format_target(false)
+        .filter_level(cli.verbose.log_level_filter())
+        .init();
 
     let proof_processor = parse_model(&cli.model_path)?;
     let proof_reader = create_proof_reader(&cli.scaffold_path)?;
