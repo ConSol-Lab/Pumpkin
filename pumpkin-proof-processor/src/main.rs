@@ -1,5 +1,6 @@
 mod deduction_propagator;
 mod model;
+mod predicate_heap;
 mod processor;
 mod variables;
 
