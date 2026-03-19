@@ -55,6 +55,7 @@ fn main() -> anyhow::Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .filter_level(cli.verbose.log_level_filter())
+        .target(env_logger::Target::Stdout)
         .init();
 
     let proof_processor = parse_model(&cli.model_path)?;
