@@ -43,6 +43,7 @@ fn run_processor_on_proof(model: &str) {
         .run()
         .unwrap()
         .command()
+        .arg("-qq")
         .arg(&model_path)
         .arg(&scaffold_path)
         .arg(&full_proof_path)
