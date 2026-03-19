@@ -116,15 +116,14 @@ int: nMZN__fSECcuts = if absent(nSECcuts) then 0 else deopt(nSECcuts) endif; %% 
 %%% __POST predicates to be declared to kick in.
 opt bool: fMIPDomains; %% unified decomposition constraints (...__POST) to FlatZinc
 opt bool: fMIPdomains; %% Can be defined from cmdline: -D "fMIPdomains=false"
-% bool: fPostprocessDomains = %% True to pass all domain-related
-%   if absent(fMIPdomains) /\ absent(fMIPDomains) then
-%     true
-%   elseif not absent(fMIPdomains) then
-%     deopt(fMIPdomains)
-%   else
-%     deopt(fMIPDomains)
-%   endif;
-bool: fPostprocessDomains = false;
+bool: fPostprocessDomains = %% True to pass all domain-related
+  if absent(fMIPdomains) /\ absent(fMIPDomains) then
+    true
+  elseif not absent(fMIPdomains) then
+    deopt(fMIPdomains)
+  else
+    deopt(fMIPDomains)
+  endif;
 opt bool: fMIPdomAux;
 bool: fPostproDom_AUX = if absent(fMIPdomAux) then false else deopt(fMIPdomAux) endif; %% Specialized for aux_ constr
 opt bool: fMIPdomDiff;
