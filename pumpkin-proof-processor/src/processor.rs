@@ -140,6 +140,9 @@ impl ProofProcessor {
         // constraint and process from there.
         let (conclusion, mut nogood_stack) = self.initialise(proof_reader)?;
 
+        info!("Processing a proof with {} stages", nogood_stack.len());
+        let mut num_inferences = 0;
+
         // Next, we will start the backward trimming procedure.
         //
         // Initialization will have marked the deductions that are used to derive the
@@ -184,6 +187,7 @@ impl ProofProcessor {
             };
 
             let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
+            num_inferences += inferences.len();
             self.output_proof.push(ProofStage {
                 inferences,
                 constraint_id: tag.into(),
@@ -194,7 +198,11 @@ impl ProofProcessor {
             });
         }
 
-        info!("Writing final proof to file");
+        info!(
+            "Writing proof with {} stages and {} inferences",
+            self.output_proof.len(),
+            num_inferences,
+        );
 
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
