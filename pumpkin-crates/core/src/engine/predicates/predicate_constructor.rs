@@ -1,6 +1,4 @@
 use super::predicate::Predicate;
-use super::predicate::PredicateType;
-use crate::engine::variables::DomainId;
 
 /// A trait which defines methods for creating a [`Predicate`].
 pub trait PredicateConstructor {
@@ -18,26 +16,6 @@ pub trait PredicateConstructor {
 
     /// Creates a disequality predicate (e.g. `[x != v]`).
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate;
-}
-
-impl PredicateConstructor for DomainId {
-    type Value = i32;
-
-    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::new(*self, PredicateType::Equal, bound)
-    }
-
-    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::new(*self, PredicateType::LowerBound, bound)
-    }
-
-    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::new(*self, PredicateType::UpperBound, bound)
-    }
-
-    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::new(*self, PredicateType::NotEqual, bound)
-    }
 }
 
 /// A macro which allows for the creation of a [`Predicate`].
@@ -92,7 +70,7 @@ macro_rules! predicate {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::variables::DomainId;
 
     #[test]
     fn macro_local_identifiers_are_matched() {
