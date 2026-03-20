@@ -374,11 +374,10 @@ impl<Var: IntegerVariable> ThetaLambdaTree<Var> {
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::LocalId;
+    use pumpkin_core::state::State;
 
     use crate::disjunctive::theta_lambda_tree::DisjunctiveTask;
     use crate::propagators::disjunctive::theta_lambda_tree::Node;
@@ -386,11 +385,11 @@ mod tests {
 
     #[test]
     fn tree_built_correctly() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 0);
-        let b = solver.new_variable(25, 25);
-        let c = solver.new_variable(30, 30);
-        let d = solver.new_variable(32, 32);
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 0, None);
+        let b = state.new_interval_variable(25, 25, None);
+        let c = state.new_interval_variable(30, 30, None);
+        let d = state.new_interval_variable(32, 32, None);
         let tasks = [
             DisjunctiveTask {
                 start_time: a,
@@ -416,12 +415,12 @@ mod tests {
 
         let mut tree = ThetaLambdaTree::new(&tasks);
 
-        tree.update(solver.state.get_domains());
+        tree.update(state.get_domains());
         for task in tasks.iter() {
-            tree.add_to_theta(task, solver.state.get_domains());
+            tree.add_to_theta(task, state.get_domains());
         }
         tree.remove_from_theta(&tasks[2]);
-        tree.add_to_lambda(&tasks[2], solver.state.get_domains());
+        tree.add_to_lambda(&tasks[2], state.get_domains());
 
         assert_eq!(
             tree.nodes[6],

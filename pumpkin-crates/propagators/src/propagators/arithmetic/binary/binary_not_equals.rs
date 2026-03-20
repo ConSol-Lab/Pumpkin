@@ -206,50 +206,55 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
-    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::State;
 
     use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
     #[test]
     fn detects_conflict() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 0);
-        let b = solver.new_variable(0, 0);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 0, None);
+        let b = state.new_interval_variable(0, 0, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
-            .expect_err("Expected conflict to be detected");
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        let result = state.propagate_to_fixed_point();
+
+        assert!(result.is_err(), "Expected conflict to be detected");
     }
 
     #[test]
     fn propagate_when_one_is_fixed() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 0);
-        let b = solver.new_variable(0, 1);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 0, None);
+        let b = state.new_interval_variable(0, 1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        solver.assert_bounds(b, 1, 1);
+        assert_eq!(state.lower_bound(b), 1);
+        assert_eq!(state.upper_bound(b), 1);
     }
 
+    #[allow(deprecated, reason = "Uses TestSolver for EnqueueDecision assertions")]
     #[test]
     fn incremental_propagation() {
+        use pumpkin_core::TestSolver;
+        use pumpkin_core::propagation::EnqueueDecision;
+
         let mut solver = TestSolver::default();
         let a = solver.new_variable(0, 0);
         let b = solver.new_variable(0, 10);
@@ -277,20 +282,23 @@ mod tests {
 
     #[test]
     fn non_overlapping_is_ok() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 5);
-        let b = solver.new_variable(6, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 5, None);
+        let b = state.new_interval_variable(6, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        solver.assert_bounds(a, 0, 5);
-        solver.assert_bounds(b, 6, 10);
+        assert_eq!(state.lower_bound(a), 0);
+        assert_eq!(state.upper_bound(a), 5);
+        assert_eq!(state.lower_bound(b), 6);
+        assert_eq!(state.upper_bound(b), 10);
     }
 }

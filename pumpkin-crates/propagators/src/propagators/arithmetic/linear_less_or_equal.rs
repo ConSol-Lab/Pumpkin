@@ -324,89 +324,95 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
     use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::state::State;
 
     use super::*;
 
     #[test]
     fn test_bounds_are_propagated() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: 7,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        solver.assert_bounds(x, 1, 5);
-        solver.assert_bounds(y, 0, 6);
+        assert_eq!(state.lower_bound(x), 1);
+        assert_eq!(state.upper_bound(x), 5);
+        assert_eq!(state.lower_bound(y), 0);
+        assert_eq!(state.upper_bound(y), 6);
     }
 
     #[test]
     fn test_explanations() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let x = state.new_interval_variable(1, 5, None);
+        let y = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: 7,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: 7,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        let reason = solver.get_reason_int(predicate![y <= 6]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![y <= 6],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into_iter().collect();
 
         assert_eq!(conjunction!([x >= 1]), reason);
     }
 
     #[test]
     fn overflow_leads_to_conflict() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x = solver.new_variable(i32::MAX, i32::MAX);
-        let y = solver.new_variable(1, 1);
-        let constraint_tag = solver.new_constraint_tag();
+        let x = state.new_interval_variable(i32::MAX, i32::MAX, None);
+        let y = state.new_interval_variable(1, 1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: i32::MAX,
-                constraint_tag,
-            })
-            .expect_err("Expected overflow to be detected");
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: i32::MAX,
+            constraint_tag,
+        });
+        let result = state.propagate_to_fixed_point();
+        assert!(result.is_err(), "Expected overflow to be detected");
     }
 
     #[test]
     fn underflow_leads_to_no_propagation() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x = solver.new_variable(i32::MIN, i32::MIN);
-        let y = solver.new_variable(-1, -1);
-        let constraint_tag = solver.new_constraint_tag();
+        let x = state.new_interval_variable(i32::MIN, i32::MIN, None);
+        let y = state.new_interval_variable(-1, -1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(LinearLessOrEqualPropagatorArgs {
-                x: [x, y].into(),
-                c: i32::MIN,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(LinearLessOrEqualPropagatorArgs {
+            x: [x, y].into(),
+            c: i32::MIN,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no error to be detected");
     }
 }
