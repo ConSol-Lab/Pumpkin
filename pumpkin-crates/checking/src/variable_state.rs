@@ -207,11 +207,11 @@ where
             }
 
             Comparison::NotEqual => {
-                if domain.lower_bound >= atomic.value() {
+                if domain.lower_bound > atomic.value() {
                     return true;
                 }
 
-                if domain.upper_bound <= atomic.value() {
+                if domain.upper_bound < atomic.value() {
                     return true;
                 }
 
