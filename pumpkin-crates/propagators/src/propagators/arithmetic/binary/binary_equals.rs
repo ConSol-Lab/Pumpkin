@@ -439,59 +439,67 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
-    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::State;
 
     use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     #[test]
     fn test_propagation_of_bounds() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 5);
-        let b = solver.new_variable(3, 7);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 5, None);
+        let b = state.new_interval_variable(3, 7, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let result = solver.new_propagator(BinaryEqualsPropagatorArgs {
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         });
+        let result = state.propagate_to_fixed_point();
 
         assert!(result.is_ok());
 
-        solver.assert_bounds(a, 3, 5);
-        solver.assert_bounds(b, 3, 5);
+        assert_eq!(state.lower_bound(a), 3);
+        assert_eq!(state.upper_bound(a), 5);
+        assert_eq!(state.lower_bound(b), 3);
+        assert_eq!(state.upper_bound(b), 5);
     }
 
     #[test]
     fn test_propagation_of_holes() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_sparse_variable(vec![2, 4, 6, 9]);
-        let b = solver.new_sparse_variable(vec![3, 4, 7, 9]);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_sparse_variable(vec![2, 4, 6, 9], None);
+        let b = state.new_sparse_variable(vec![3, 4, 7, 9], None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let result = solver.new_propagator(BinaryEqualsPropagatorArgs {
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
             a,
             b,
             constraint_tag,
         });
+        let result = state.propagate_to_fixed_point();
 
         assert!(result.is_ok());
 
-        solver.assert_bounds(a, 4, 9);
-        solver.assert_bounds(b, 4, 9);
+        assert_eq!(state.lower_bound(a), 4);
+        assert_eq!(state.upper_bound(a), 9);
+        assert_eq!(state.lower_bound(b), 4);
+        assert_eq!(state.upper_bound(b), 9);
 
         for i in 5..=8 {
-            assert!(!solver.contains(a, i));
-            assert!(!solver.contains(b, i));
+            assert!(!state.contains(a, i));
+            assert!(!state.contains(b, i));
         }
     }
 
+    #[allow(deprecated, reason = "Uses TestSolver for EnqueueDecision assertions")]
     #[test]
     fn test_propagation_of_holes_incremental() {
+        use pumpkin_core::TestSolver;
+        use pumpkin_core::propagation::EnqueueDecision;
+
         let mut solver = TestSolver::default();
         let a = solver.new_variable(2, 9);
         let b = solver.new_variable(3, 9);
@@ -527,17 +535,18 @@ mod tests {
 
     #[test]
     fn test_conflict() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 5);
-        let b = solver.new_variable(6, 9);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 5, None);
+        let b = state.new_interval_variable(6, 9, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
-            .expect_err("Expected result to be err");
+        let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        let result = state.propagate_to_fixed_point();
+
+        assert!(result.is_err());
     }
 }
