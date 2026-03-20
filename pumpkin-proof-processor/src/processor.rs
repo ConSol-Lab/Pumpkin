@@ -19,18 +19,13 @@ use drcp_format::writer::ProofWriter;
 use log::debug;
 use log::info;
 use log::trace;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
-use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::KeyedVec;
-use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
-use pumpkin_core::predicates::PredicateIdGenerator;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::predicates::PropositionalConjunction;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::proof::InferenceCode;
-use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::state::Conflict;
 use pumpkin_core::state::CurrentNogood;
 use pumpkin_core::state::PropagatorConflict;
@@ -39,6 +34,7 @@ use pumpkin_core::state::State;
 
 use crate::deduction_propagator::DeductionPropagator;
 use crate::deduction_propagator::DeductionPropagatorConstructor;
+use crate::predicate_heap::PredicateHeap;
 use crate::variables::Variables;
 
 #[derive(Debug)]
@@ -50,14 +46,11 @@ pub(crate) struct ProofProcessor {
     /// due to the backward trimming.
     output_proof: Vec<ProofStage>,
 
-    /// A mapping from predicates to predicate IDs.
-    predicate_ids: PredicateIdGenerator,
-    /// Heap containing the predicates which still need to be processed; sorted non-increasing
-    /// based on trail-index where implied predicates are processed first.
+    /// A queue of predicates that should still be explained.
     ///
-    /// Note that two predicates implied by the same trail index do not have an order between each
-    /// other.
-    to_process_heap: KeyValueHeap<PredicateId, u32>,
+    /// This is a re-usable heap, but its contents is specific to the processing of an
+    /// individual conflict.
+    to_process_heap: PredicateHeap,
 }
 
 /// A single proof stage for the proof.
@@ -116,8 +109,7 @@ impl ProofProcessor {
             state,
             variables,
             output_proof: vec![],
-            predicate_ids: PredicateIdGenerator::default(),
-            to_process_heap: KeyValueHeap::default(),
+            to_process_heap: PredicateHeap::default(),
         }
     }
 
@@ -139,6 +131,9 @@ impl ProofProcessor {
         // based on the conclusion is done in the stack, so we need to look for the last marked
         // constraint and process from there.
         let (conclusion, mut nogood_stack) = self.initialise(proof_reader)?;
+
+        info!("Processing a proof with {} stages", nogood_stack.len());
+        let mut num_inferences = 0;
 
         // Next, we will start the backward trimming procedure.
         //
@@ -184,6 +179,7 @@ impl ProofProcessor {
             };
 
             let inferences = self.explain_current_conflict(&mut nogood_stack, conflict);
+            num_inferences += inferences.len();
             self.output_proof.push(ProofStage {
                 inferences,
                 constraint_id: tag.into(),
@@ -194,7 +190,11 @@ impl ProofProcessor {
             });
         }
 
-        info!("Writing final proof to file");
+        info!(
+            "Writing proof with {} stages and {} inferences",
+            self.output_proof.len(),
+            num_inferences,
+        );
 
         // Finally, we write the output proof to the file. Since the proof stages are in
         // reverse order, we iterate from the end to the beginning.
@@ -357,7 +357,8 @@ impl ProofProcessor {
         // If the dual bound is the initial bound on the objective variable, write the
         // correct proof in that situation and short-circuit.
         if self.state.is_implied_by_initial_domain(predicate) {
-            self.add_predicate_to_explain(predicate);
+            self.to_process_heap.push(predicate, &self.state);
+
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
 
@@ -403,7 +404,7 @@ impl ProofProcessor {
         } else {
             // In this case we have to explain by 'root propagation' and no deductions
             // were used. The predicate is propagated by a propagator.
-            self.add_predicate_to_explain(predicate);
+            self.to_process_heap.push(predicate, &self.state);
             let inferences = self.explain_predicates(&mut nogood_stack, vec![]);
             let deduction_id = self.state.new_constraint_tag();
 
@@ -454,11 +455,7 @@ impl ProofProcessor {
         nogood_stack: &mut DeductionStack,
         conflict: Conflict,
     ) -> Vec<Inference<String, i32, Arc<str>>> {
-        assert_eq!(self.to_process_heap.num_nonremoved_elements(), 0);
-
-        // The implementation of key-value heap is buggy, but this `clear` seems to reset
-        // the internals properly.
-        self.to_process_heap.clear();
+        assert!(self.to_process_heap.is_empty());
 
         // The inferences in the current conflict ordered by closeness to the conflict.
         // Every element is an option, where `None` serves as a tombstone value.
@@ -526,7 +523,7 @@ impl ProofProcessor {
         // Then we add the conflict to the queue of predicates that need to be explained
         // through inferences.
         for predicate in predicates_to_explain {
-            self.add_predicate_to_explain(predicate);
+            self.to_process_heap.push(predicate, &self.state);
         }
 
         self.explain_predicates(nogood_stack, inferences)
@@ -542,9 +539,7 @@ impl ProofProcessor {
 
         // For every predicate in the queue, we will introduce appropriate inferences into
         // the proof.
-        while let Some(predicate_id) = self.to_process_heap.pop_max() {
-            let predicate = self.predicate_ids.get_predicate(predicate_id);
-
+        while let Some(predicate) = self.to_process_heap.pop() {
             // The predicate is either propagated or an initial bound. If it is an
             // initial bound, we dispatch that here.
             if self.state.is_implied_by_initial_domain(predicate) {
@@ -609,7 +604,7 @@ impl ProofProcessor {
             }
 
             for predicate in reason_buffer.drain(..) {
-                self.add_predicate_to_explain(predicate);
+                self.to_process_heap.push(predicate, &self.state);
             }
         }
 
@@ -617,72 +612,6 @@ impl ProofProcessor {
         // leafs rather than from the assumptions to the conflict. Also, filter out the
         // tombstone values.
         inferences.into_iter().rev().flatten().collect()
-    }
-
-    /// Add a predicate that still has to be explained.
-    fn add_predicate_to_explain(&mut self, predicate: Predicate) {
-        assert_eq!(
-            self.state.truth_value(predicate),
-            Some(true),
-            "predicate {predicate:?} does not evaluate to true",
-        );
-
-        // The first time we encounter the predicate, we initialise its value in the
-        // heap.
-        //
-        // Note that if the predicate is already in the heap, no action needs to be
-        // taken. It can happen that a predicate is returned
-        // multiple times as a reason for other predicates.
-
-        // Here we manually adjust the size of the heap to accommodate new elements.
-        let predicate_id = self.predicate_ids.get_id(predicate);
-        while self.to_process_heap.len() <= predicate_id.index() {
-            let next_id = PredicateId::create_from_index(self.to_process_heap.len());
-            self.to_process_heap.grow(next_id, 0);
-            self.to_process_heap.delete_key(next_id);
-        }
-
-        // Then we check whether the predicate was not already present in the heap, if
-        // this is not the case then we insert it
-        if !self.to_process_heap.is_key_present(predicate_id)
-            && *self.to_process_heap.get_value(predicate_id) == 0
-        {
-            let trail_position = self.state.trail_position(predicate).unwrap();
-
-            // The goal is to traverse predicate in reverse order of the trail.
-            //
-            // However some predicates may share the trail position. For example, if a
-            // predicate that was posted to trail resulted in
-            // some other predicates being true, then all
-            // these predicates would have the same trail position.
-            //
-            // When considering the predicates in reverse order of the trail, the
-            // implicitly set predicates are posted after the
-            // explicitly set one, but they all have the same
-            // trail position.
-            //
-            // To remedy this, we make a tie-breaking scheme to prioritise implied
-            // predicates over explicit predicates. This is done
-            // by assigning explicitly set predicates the
-            // value `2 * trail_position`, whereas implied predicates get `2 *
-            // trail_position + 1`.
-            let heap_value = if self.state.is_on_trail(predicate) {
-                trail_position * 2
-            } else {
-                trail_position * 2 + 1
-            };
-
-            // We restore the key and since we know that the value is 0, we can safely
-            // increment with `heap_value`
-            self.to_process_heap.restore_key(predicate_id);
-            self.to_process_heap
-                .increment(predicate_id, heap_value as u32);
-
-            pumpkin_assert_moderate!(
-                *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
-                "The value in the heap should be the same as was added"
-            )
-        }
     }
 
     fn post_assumptions(&mut self, predicates: &[Predicate]) -> Result<(), Conflict> {

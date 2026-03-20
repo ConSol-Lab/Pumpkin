@@ -9,6 +9,7 @@ authors.workspace = true
 [dependencies]
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
+clap-verbosity-flag = "3.0.4"
 drcp-format = { version = "0.3.1", path = "../drcp-format" }
 fzn-rs = { version = "0.1.0", path = "../fzn-rs" }
 flate2 = { version = "1.1.2" }
@@ -22,6 +23,7 @@ thiserror = "2.0.18"
 assert_cmd = "2.1.2"
 escargot = "0.5.15"
 pumpkin-checker = { path = "../pumpkin-checker" }
+regex = "1.12.3"
 
 [lints]
 workspace = true
