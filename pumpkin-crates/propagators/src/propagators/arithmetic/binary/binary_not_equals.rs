@@ -85,17 +85,14 @@ where
         // We first check whether they are both fixed
         if let Some(fixed_a) = domains.fixed_value(&self.a)
             && let Some(fixed_b) = domains.fixed_value(&self.b)
+            && fixed_a == fixed_b
         {
-            // If they are, then we check whether they are assigned to the same value
-            if fixed_a == fixed_b {
-                // If this is the case then we have detected a conflict
-                Some(PropagatorConflict {
-                    conjunction: conjunction!([self.a == fixed_a] & [self.b == fixed_a]),
-                    inference_code: self.inference_code.clone(),
-                })
-            } else {
-                None
-            }
+            // If they are, and they are assigned to the same value, then we have detected a
+            // conflict
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.a == fixed_a] & [self.b == fixed_a]),
+                inference_code: self.inference_code.clone(),
+            })
         } else {
             None
         }
