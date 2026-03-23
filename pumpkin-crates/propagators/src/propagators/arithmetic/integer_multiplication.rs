@@ -186,10 +186,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         )?;
     }
 
-    if context.is_fixed(a)
-        && context.is_fixed(b)
-        && context.is_fixed(c)
-        && (context.lower_bound(a) * context.lower_bound(b)) != context.lower_bound(c)
+    if let Some(fixed_a) = context.fixed_value(a)
+        && let Some(fixed_b) = context.fixed_value(b)
+        && let Some(fixed_c) = context.fixed_value(c)
+        && (fixed_a * fixed_b) != fixed_c
     {
         // All variables are assigned but the resulting value is not correct, so we report a
         // conflict

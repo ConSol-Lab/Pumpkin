@@ -131,8 +131,7 @@ where
 
         self.propagate_index_based_on_domain_intersection_with_rhs(&mut context)?;
 
-        if context.is_fixed(&self.index) {
-            let idx = context.lower_bound(&self.index);
+        if let Some(idx) = context.fixed_value(&self.index) {
             self.propagate_equality(&mut context, idx)?;
         }
 

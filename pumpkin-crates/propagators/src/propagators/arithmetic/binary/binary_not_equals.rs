@@ -83,15 +83,14 @@ where
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         // We first check whether they are both fixed
-        if domains.is_fixed(&self.a) && domains.is_fixed(&self.b) {
-            let lb_a = domains.lower_bound(&self.a);
-            let lb_b = domains.lower_bound(&self.b);
-
+        if let Some(fixed_a) = domains.fixed_value(&self.a)
+            && let Some(fixed_b) = domains.fixed_value(&self.b)
+        {
             // If they are, then we check whether they are assigned to the same value
-            if lb_a == lb_b {
+            if fixed_a == fixed_b {
                 // If this is the case then we have detected a conflict
                 Some(PropagatorConflict {
-                    conjunction: conjunction!([self.a == lb_a] & [self.b == lb_a]),
+                    conjunction: conjunction!([self.a == fixed_a] & [self.b == fixed_a]),
                     inference_code: self.inference_code.clone(),
                 })
             } else {

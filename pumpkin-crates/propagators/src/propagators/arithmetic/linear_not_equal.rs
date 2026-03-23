@@ -250,8 +250,8 @@ where
             .terms
             .iter()
             .map(|var| {
-                if context.is_fixed(var) {
-                    context.lower_bound(var) as i64
+                if let Some(fixed_value) = context.fixed_value(var) {
+                    fixed_value as i64
                 } else {
                     0
                 }
@@ -315,11 +315,8 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
             self.terms
                 .iter()
                 .fold((0, 0), |(fixed_lhs, number_of_fixed_terms), term| {
-                    if context.is_fixed(term) {
-                        (
-                            fixed_lhs + context.lower_bound(term),
-                            number_of_fixed_terms + 1,
-                        )
+                    if let Some(fixed_term) = context.fixed_value(term) {
+                        (fixed_lhs + fixed_term, number_of_fixed_terms + 1)
                     } else {
                         (fixed_lhs, number_of_fixed_terms)
                     }
@@ -359,13 +356,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
         let expected_fixed_lhs: i32 = self
             .terms
             .iter()
-            .filter_map(|x_i| {
-                if context.is_fixed(x_i) {
-                    Some(context.lower_bound(x_i))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|x_i| context.fixed_value(x_i))
             .sum();
         let lhs_is_outdated_or_correct =
             self.should_recalculate_lhs || self.fixed_lhs == expected_fixed_lhs;

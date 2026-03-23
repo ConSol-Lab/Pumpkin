@@ -76,6 +76,10 @@ pub trait ReadDomains {
     /// fixed).
     fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool;
 
+    /// Returns the fixed value if the domain of the given variable is singleton (i.e., the
+    /// variable is fixed).
+    fn fixed_value<Var: IntegerVariable>(&self, var: &Var) -> Option<i32>;
+
     /// Returns the lowest value in the domain of `var`.
     fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32;
 
@@ -179,6 +183,11 @@ impl<T: HasAssignments> ReadDomains for T {
 
     fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool {
         self.lower_bound(var) == self.upper_bound(var)
+    }
+
+    fn fixed_value<Var: IntegerVariable>(&self, var: &Var) -> Option<i32> {
+        let lower_bound = self.lower_bound(var);
+        (lower_bound == self.upper_bound(var)).then_some(lower_bound)
     }
 
     fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
