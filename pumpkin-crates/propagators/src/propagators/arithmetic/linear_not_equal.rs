@@ -249,13 +249,7 @@ where
         let lhs = self
             .terms
             .iter()
-            .map(|var| {
-                if let Some(fixed_value) = context.fixed_value(var) {
-                    fixed_value as i64
-                } else {
-                    0
-                }
-            })
+            .map(|var| context.fixed_value(var).unwrap_or_default() as i64)
             .sum::<i64>();
 
         if num_fixed == self.terms.len() - 1 {
