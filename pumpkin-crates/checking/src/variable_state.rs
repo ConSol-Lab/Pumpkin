@@ -460,4 +460,42 @@ mod tests {
 
         assert_eq!(values, vec![5, 6, 8, 9, 10]);
     }
+
+    #[test]
+    fn not_equals_is_correct() {
+        let mut state = VariableState::default();
+
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::GreaterEqual,
+            value: 5,
+        });
+        let _ = state.apply(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::LessEqual,
+            value: 10,
+        });
+
+        assert!(!state.is_true(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::NotEqual,
+            value: 10
+        }));
+        assert!(!state.is_true(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::NotEqual,
+            value: 5
+        }));
+
+        assert!(state.is_true(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::NotEqual,
+            value: 4
+        }));
+        assert!(state.is_true(&TestAtomic {
+            name: "x1",
+            comparison: Comparison::NotEqual,
+            value: 11
+        }));
+    }
 }
