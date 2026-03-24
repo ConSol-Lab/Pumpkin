@@ -164,7 +164,12 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            &mut self.state.notification_engine,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        );
         var.watch_all(&mut watchers, domain_events.events());
     }
 
@@ -207,7 +212,12 @@ impl PropagatorConstructorContext<'_> {
 
         self.update_next_local_id(local_id);
 
-        let mut watchers = Watchers::new(propagator_var, &mut self.state.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            &mut self.state.notification_engine,
+            &mut self.state.trailed_values,
+            &self.state.assignments,
+        );
         var.watch_all_backtrack(&mut watchers, domain_events.events());
     }
 

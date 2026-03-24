@@ -11,6 +11,7 @@ use flatzinc::Expr;
 use flatzinc::IntExpr;
 use flatzinc::SetExpr;
 use flatzinc::SetLiteralExpr;
+use pumpkin_core::predicate;
 use pumpkin_core::variables::Literal;
 
 use super::context::CompilationContext;
@@ -49,7 +50,7 @@ pub(crate) fn run(
                                         .copied()
                                         .expect("referencing undefined boolean variable");
 
-                                    Literal::new(domain_id)
+                                    Literal::new(predicate!(domain_id >= 1))
                                 }
                             })
                             .collect(),

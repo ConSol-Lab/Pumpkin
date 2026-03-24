@@ -156,15 +156,6 @@ impl Model {
         self.solver.is_inconsistent()
     }
 
-    /// Get an integer variable for the given boolean.
-    ///
-    /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
-    ///
-    /// This is deprecated as of 0.3.0. Prefer to use `BoolExpression.as_integer`.
-    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        boolean.as_integer()
-    }
-
     /// Reify a predicate as an explicit boolean expression.
     ///
     /// A tag should be provided for this link to be identifiable in the proof.
@@ -190,9 +181,6 @@ impl Model {
         } else {
             self.solver.new_literal_for_predicate(solver_predicate, tag)
         };
-
-        self.brancher
-            .add_domain(*literal.get_integer_variable().inner());
 
         Ok(literal.into())
     }

@@ -144,10 +144,9 @@ where
         let old_bound = context.read_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
-        pumpkin_assert_simple!(
-            old_bound < new_bound,
-            "propagator should only be triggered when lower bounds are tightened, old_bound={old_bound}, new_bound={new_bound}"
-        );
+        if old_bound == new_bound {
+            return EnqueueDecision::Skip;
+        }
 
         context.write_trailed_integer(
             self.lower_bound_left_hand_side,
@@ -220,7 +219,6 @@ where
 
         for (i, x_i) in self.x.iter().enumerate() {
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
-
             if context.upper_bound(x_i) > bound {
                 context.post(predicate![x_i <= bound], i, &self.inference_code)?;
             }

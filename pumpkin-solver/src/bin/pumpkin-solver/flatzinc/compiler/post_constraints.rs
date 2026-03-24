@@ -648,11 +648,12 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(
-        pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
-            .post(context.solver)
-            .is_ok(),
-    )
+    todo!()
+    // Ok(
+    //     pumpkin_constraints::binary_equals(a, b.scaled(1), constraint_tag)
+    //         .post(context.solver)
+    //         .is_ok(),
+    // )
 }
 
 fn compile_bool_or(

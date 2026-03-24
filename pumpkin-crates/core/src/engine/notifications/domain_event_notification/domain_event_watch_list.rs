@@ -3,10 +3,15 @@ use std::fmt::Display;
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
+use crate::basic_types::PredicateId;
 use crate::containers::KeyedVec;
+use crate::engine::Assignments;
+use crate::engine::TrailedValues;
 use crate::engine::notifications::NotificationEngine;
 use crate::engine::variables::DomainId;
+use crate::predicates::Predicate;
 use crate::propagation::PropagatorVarId;
+use crate::variables::Literal;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct WatchListDomainEvents {
@@ -22,6 +27,26 @@ pub(crate) struct WatchListDomainEvents {
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
     notification_engine: &'a mut NotificationEngine,
+    trailed_values: &'a mut TrailedValues,
+    assignments: &'a Assignments,
+}
+
+impl<'a> Watchers<'a> {
+    pub(crate) fn watch_literal(&mut self, literal: Literal, events: EnumSet<DomainEvent>) {
+        self.notification_engine.watch_literal(
+            literal,
+            events,
+            self.propagator_var,
+            self.trailed_values,
+            self.assignments,
+        )
+    }
+
+    pub(crate) fn unwatch_predicate(&mut self, predicate: Predicate) {
+        let predicate_id = self.notification_engine.get_id(predicate);
+        self.notification_engine
+            .unwatch_predicate(predicate_id, self.propagator_var.propagator);
+    }
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
@@ -95,10 +120,14 @@ impl<'a> Watchers<'a> {
     pub(crate) fn new(
         propagator_var: PropagatorVarId,
         notification_engine: &'a mut NotificationEngine,
+        trailed_values: &'a mut TrailedValues,
+        assignments: &'a Assignments,
     ) -> Self {
         Watchers {
             propagator_var,
             notification_engine,
+            trailed_values,
+            assignments,
         }
     }
 

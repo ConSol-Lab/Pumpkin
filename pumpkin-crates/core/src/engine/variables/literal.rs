@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::ops::Not;
 
 use enumset::EnumSet;
@@ -16,31 +17,31 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::AffineView;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Literal {
-    integer_variable: AffineView<DomainId>,
+    pub(crate) inner: Predicate,
+}
+
+impl Debug for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
 }
 
 impl Literal {
     /// Creates a new literal wrapping the provided [`DomainId`].
     ///
     /// Note: the provided `domain_id` should have a domain between 0 and 1.
-    pub fn new(domain_id: DomainId) -> Literal {
-        Literal {
-            integer_variable: domain_id.scaled(1),
-        }
-    }
-
-    pub fn get_integer_variable(&self) -> AffineView<DomainId> {
-        self.integer_variable
+    pub fn new(predicate: Predicate) -> Literal {
+        Literal { inner: predicate }
     }
 
     pub fn get_true_predicate(&self) -> Predicate {
-        self.lower_bound_predicate(1)
+        self.inner
     }
 
     pub fn get_false_predicate(&self) -> Predicate {
-        self.upper_bound_predicate(0)
+        !self.inner
     }
 }
 
@@ -48,60 +49,119 @@ impl Not for Literal {
     type Output = Literal;
 
     fn not(self) -> Self::Output {
-        Literal {
-            integer_variable: self.integer_variable.scaled(-1).offset(1),
-        }
-    }
-}
-
-/// Forwards a function implementation to the field on self.
-macro_rules! forward {
-    (
-        $field:ident,
-        fn $(<$($lt:lifetime),+>)? $name:ident(
-            & $($lt_self:lifetime)? self,
-            $($param_name:ident : $param_type:ty),*
-        ) -> $return_type:ty
-        $(where $($where_clause:tt)*)?
-    ) => {
-        fn $name$(<$($lt),+>)?(
-            & $($lt_self)? self,
-            $($param_name: $param_type),*
-        ) -> $return_type $(where $($where_clause)*)? {
-            self.$field.$name($($param_name),*)
-        }
+        Literal { inner: !self.inner }
     }
 }
 
 impl CheckerVariable<Predicate> for Literal {
-    forward!(integer_variable, fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool);
-    forward!(integer_variable, fn atomic_less_than(&self, value: i32) -> Predicate);
-    forward!(integer_variable, fn atomic_greater_than(&self, value: i32) -> Predicate);
-    forward!(integer_variable, fn atomic_not_equal(&self, value: i32) -> Predicate);
-    forward!(integer_variable, fn atomic_equal(&self, value: i32) -> Predicate);
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
+        atomic.get_domain() == self.inner.get_domain()
+    }
 
-    forward!(integer_variable, fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
-    forward!(integer_variable, fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt);
-    forward!(integer_variable, fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32>);
-    forward!(integer_variable, fn induced_domain_contains(&self, variable_state: &VariableState<Predicate>, value: i32) -> bool);
-    forward!(
-        integer_variable,
-        fn <'this, 'state> induced_holes(
-            &'this self,
-            variable_state: &'state VariableState<Predicate>
-        ) -> impl Iterator<Item = i32> + 'state
-        where
-            'this: 'state,
-    );
-    forward!(
-        integer_variable,
-        fn <'this, 'state> iter_induced_domain(
-            &'this self,
-            variable_state: &'state VariableState<Predicate>
-        ) -> Option<impl Iterator<Item = i32> + 'state>
-        where
-            'this: 'state,
-    );
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        if value == 0 {
+            !self.inner
+        } else if value >= 1 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        if value == 1 {
+            !self.inner
+        } else if value <= 0 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        if value == 1 {
+            self.inner
+        } else if value == 0 {
+            !self.inner
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        if value == 1 {
+            !self.inner
+        } else if value == 0 {
+            self.inner
+        } else {
+            Predicate::trivially_true()
+        }
+    }
+
+    fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
+        IntExt::Int(
+            variable_state
+                .is_true(&self.inner)
+                .then(|| 1)
+                .unwrap_or_default(),
+        )
+    }
+
+    fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
+        IntExt::Int(variable_state.is_true(&!self.inner).then(|| 0).unwrap_or(1))
+    }
+
+    fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32> {
+        if variable_state.is_true(&self.inner) {
+            Some(1)
+        } else if variable_state.is_true(&!self.inner) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        if value == 1 && !variable_state.is_true(&!self.inner) {
+            true
+        } else if value == 0 && !variable_state.is_true(&self.inner) {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        _variable_state: &'state VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        std::iter::empty()
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        Some((0..=1).filter(|&value| {
+            if value == 0 {
+                !variable_state.is_true(&self.inner)
+            } else if value == 1 {
+                !variable_state.is_true(&!self.inner)
+            } else {
+                unreachable!()
+            }
+        }))
+    }
 }
 
 impl IntegerVariable for Literal {
@@ -112,7 +172,11 @@ impl IntegerVariable for Literal {
     /// Literal that evaluate to false have a lower bound of 0.
     /// Unassigned literals have a lower bound of 0.
     fn lower_bound(&self, assignment: &Assignments) -> i32 {
-        self.integer_variable.lower_bound(assignment)
+        if assignment.is_predicate_satisfied(self.inner) {
+            1
+        } else {
+            0
+        }
     }
 
     fn lower_bound_at_trail_position(
@@ -120,8 +184,11 @@ impl IntegerVariable for Literal {
         assignment: &Assignments,
         trail_position: usize,
     ) -> i32 {
-        self.integer_variable
-            .lower_bound_at_trail_position(assignment, trail_position)
+        if assignment.is_predicate_satisfied_at_trail_position(self.inner, trail_position) {
+            1
+        } else {
+            0
+        }
     }
 
     /// Returns the upper bound represented as a 0-1 value.
@@ -129,7 +196,11 @@ impl IntegerVariable for Literal {
     /// Literal that evaluate to false have a upper bound of 0.
     /// Unassigned literals have a upper bound of 1.
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
-        self.integer_variable.upper_bound(assignment)
+        if assignment.is_predicate_satisfied(!self.inner) {
+            0
+        } else {
+            1
+        }
     }
 
     fn upper_bound_at_trail_position(
@@ -137,8 +208,11 @@ impl IntegerVariable for Literal {
         assignment: &Assignments,
         trail_position: usize,
     ) -> i32 {
-        self.integer_variable
-            .upper_bound_at_trail_position(assignment, trail_position)
+        if assignment.is_predicate_satisfied_at_trail_position(!self.inner, trail_position) {
+            0
+        } else {
+            1
+        }
     }
 
     /// Returns whether the input value, when interpreted as a bool,
@@ -147,7 +221,13 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to false only contain value 0.
     /// Unassigned literals contain both values 0 and 1.
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
-        self.integer_variable.contains(assignment, value)
+        if value == 0 {
+            !assignment.is_predicate_satisfied(self.inner)
+        } else if value == 1 {
+            !assignment.is_predicate_satisfied(!self.inner)
+        } else {
+            false
+        }
     }
 
     fn contains_at_trail_position(
@@ -156,40 +236,52 @@ impl IntegerVariable for Literal {
         value: i32,
         trail_position: usize,
     ) -> bool {
-        self.integer_variable
-            .contains_at_trail_position(assignment, value, trail_position)
+        if value == 0 {
+            !assignment.is_predicate_satisfied_at_trail_position(self.inner, trail_position)
+        } else if value == 1 {
+            !assignment.is_predicate_satisfied_at_trail_position(!self.inner, trail_position)
+        } else {
+            false
+        }
     }
 
     fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
-        self.integer_variable.iterate_domain(assignment)
+        (0..=1).filter(|&value| {
+            if value == 0 {
+                !assignment.is_predicate_satisfied(self.inner)
+            } else if value == 1 {
+                !assignment.is_predicate_satisfied(!self.inner)
+            } else {
+                unreachable!()
+            }
+        })
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        self.integer_variable.watch_all(watchers, events)
+        watchers.watch_literal(*self, events)
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
-        self.integer_variable.unwatch_all(watchers)
+        watchers.unwatch_predicate(self.inner);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
-        self.integer_variable.unpack_event(event)
+        event.unwrap()
     }
 
-    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
-        self.integer_variable.watch_all_backtrack(watchers, events)
+    fn watch_all_backtrack(&self, _watchers: &mut Watchers<'_>, _events: EnumSet<DomainEvent>) {
+        todo!()
     }
 
     fn get_holes_at_current_checkpoint(
         &self,
-        assignments: &Assignments,
+        _assignments: &Assignments,
     ) -> impl Iterator<Item = i32> {
-        self.integer_variable
-            .get_holes_at_current_checkpoint(assignments)
+        std::iter::empty()
     }
 
-    fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32> {
-        self.integer_variable.get_holes(assignments)
+    fn get_holes(&self, _assignments: &Assignments) -> impl Iterator<Item = i32> {
+        std::iter::empty()
     }
 }
 
@@ -197,19 +289,43 @@ impl PredicateConstructor for Literal {
     type Value = i32;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.lower_bound_predicate(bound)
+        if bound == 1 {
+            self.inner
+        } else if bound < 1 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.upper_bound_predicate(bound)
+        if bound == 0 {
+            !self.inner
+        } else if bound > 0 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.equality_predicate(bound)
+        if bound == 0 {
+            !self.inner
+        } else if bound == 1 {
+            self.inner
+        } else {
+            Predicate::trivially_true()
+        }
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        self.integer_variable.disequality_predicate(bound)
+        if bound == 0 {
+            self.inner
+        } else if bound == 1 {
+            !self.inner
+        } else {
+            Predicate::trivially_true()
+        }
     }
 }
 
