@@ -57,6 +57,12 @@ Please cite Pumpkin using the following citation:
 }
 ```
 
+# Publications Using Pumpkin
+- M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, [‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11), in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
+- R. Baauw, M. Flippo, and E. Demirović, [‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2025.4), in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
+- K. Sidorov, I. Marijnissen, and E. Demirović, [‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2025.35), in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
+- I. Bleukx, M. Flippo, B. Bogaerts, E. Demirović, and T. Guns, [‘Using Certifying Constraint Solvers for Generating Step-wise Explanations’](https://ojs.aaai.org/index.php/AAAI/article/view/38432), Proceedings of the AAAI Conference on Artificial Intelligence, vol. 40, no. 17, pp. 14192–14200, Mar. 2026.
+
 # Usage
 
 To use Pumpkin as a library, use cargo to install it with:
@@ -107,11 +113,6 @@ cargo doc --no-deps
 
 ## Examples
 There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples) which contains examples such as bibd, nqueens, and disjunctive scheduling.
-
-# Publications Using Pumpkin
-- M. Flippo, K. Sidorov, I. Marijnissen, J. Smits, and E. Demirović, ‘A Multi-Stage Proof Logging Framework to Certify the Correctness of CP Solvers’, in 30th International Conference on Principles and Practice of Constraint Programming (CP 2024), 2024, vol. 307, p. 11:1-11:20.
-- R. Baauw, M. Flippo, and E. Demirović, ‘Conflict Analysis Based on Cutting-Planes for Constraint Programming’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 4:1-4:19.
-- K. Sidorov, I. Marijnissen, and E. Demirović, ‘Unite and Lead: Finding Disjunctive Cliques for Scheduling Problems’, in 31st International Conference on Principles and Practice of Constraint Programming (CP 2025), 2025, vol. 340, p. 35:1-35:24.
 
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
