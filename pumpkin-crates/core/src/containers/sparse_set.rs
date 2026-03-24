@@ -255,4 +255,15 @@ mod tests {
         assert!(v.contains(&100));
         assert!(v.contains(&20));
     }
+
+    #[test]
+    fn remove_temporarily() {
+        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        sparse_set.remove_temporarily(&10);
+        assert!(!sparse_set.contains(&10));
+
+        sparse_set.remove_temporarily(&5);
+        sparse_set.remove_temporarily(&2);
+        assert!(sparse_set.is_empty());
+    }
 }
