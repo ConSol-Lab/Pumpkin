@@ -60,11 +60,11 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let proof_processor = parse_model(&cli.model_path)
-        .with_context(|| "Error while creating proof processor with model")?;
+        .with_context(|| "Failed to parse model")?;
     let proof_reader = create_proof_reader(&cli.scaffold_path)
-        .with_context(|| "Error while creating proof reader for scaffold")?;
+        .with_context(|| "Failed to read proof")?;
     let proof_writer = create_proof_writer(&cli.full_proof_path)
-        .with_context(|| "Error while creating proof writer for writing the full proof")?;
+        .with_context(|| "Failed to create proof writer")?;
 
     proof_processor.process(proof_reader, proof_writer)?;
 
