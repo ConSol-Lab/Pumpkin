@@ -15,20 +15,3 @@ predicate array_float_minimum(var float: m, array [int] of var float: x) =
   array_float_minimum_I(m, [x[i] | i in index_set(x)]);
 predicate array_float_maximum(var float: m, array [int] of var float: x) =
   array_float_minimum_I(-m, [-x[i] | i in index_set(x)]);
-
-predicate int_lin_eq_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r) =
-    int_lin_le_imp(as, bs, c, r) /\ int_lin_le_imp([-a | a in as], bs, -c, r);
-
-predicate int_lin_ge_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
-predicate int_lin_gt_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
-predicate int_lin_le_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
-predicate int_lin_lt_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
-
-predicate int_lin_ne_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r) =
-    r -> (int_lin_le(as, bs, c - 1) \/ int_lin_le([-a | a in as], bs, -c - 1));

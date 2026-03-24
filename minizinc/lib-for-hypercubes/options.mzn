@@ -124,7 +124,10 @@ opt bool: fMIPdomains; %% Can be defined from cmdline: -D "fMIPdomains=false"
 %   else
 %     deopt(fMIPDomains)
 %   endif;
+
+% EDIT: We do not want to post-process domains when solving HL constraints.
 bool: fPostprocessDomains = false;
+
 opt bool: fMIPdomAux;
 bool: fPostproDom_AUX = if absent(fMIPdomAux) then false else deopt(fMIPdomAux) endif; %% Specialized for aux_ constr
 opt bool: fMIPdomDiff;
