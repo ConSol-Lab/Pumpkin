@@ -29,30 +29,35 @@ impl RandomSelector {
 
 impl VariableSelector<DomainId> for RandomSelector {
     fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
-        if self.variables.is_empty() {
-            return None;
-        }
+        self.variables
+            .iter()
+            .copied()
+            .find(|&domain| !context.is_integer_fixed(domain))
 
-        let mut variable = *self.variables.get(
-            context
-                .random()
-                .generate_usize_in_range(0..self.variables.len()),
-        );
+        // if self.variables.is_empty() {
+        //     return None;
+        // }
 
-        while context.is_integer_fixed(variable) {
-            self.variables.remove_temporarily(&variable);
-            if self.variables.is_empty() {
-                return None;
-            }
+        // let mut variable = *self.variables.get(
+        //     context
+        //         .random()
+        //         .generate_usize_in_range(0..self.variables.len()),
+        // );
 
-            variable = *self.variables.get(
-                context
-                    .random()
-                    .generate_usize_in_range(0..self.variables.len()),
-            );
-        }
+        // while context.is_integer_fixed(variable) {
+        //     self.variables.remove_temporarily(&variable);
+        //     if self.variables.is_empty() {
+        //         return None;
+        //     }
 
-        Some(variable)
+        //     variable = *self.variables.get(
+        //         context
+        //             .random()
+        //             .generate_usize_in_range(0..self.variables.len()),
+        //     );
+        // }
+
+        // Some(variable)
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, _value: i32) {
