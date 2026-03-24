@@ -161,9 +161,20 @@ impl<T> SparseSet<T> {
         if !self.contains(&element) {
             self.accommodate(&element);
 
-            self.indices[(self.mapping)(&element)] = self.domain.len();
-            self.domain.push(element);
-            self.swap(self.size, self.domain.len() - 1);
+            let mut index = self.indices[(self.mapping)(&element)];
+
+            // The index is outside of the domain, we need to readjust it
+            //
+            // If the index is `<= self.domain.len()`, then it could be that it is a temporarily
+            // removed variable; in this case, we do not want to add a new element, but we just want
+            // to place it inside of the domain again
+            if index >= self.domain.len() {
+                index = self.domain.len();
+                self.indices[(self.mapping)(&element)] = index;
+                self.domain.push(element);
+            }
+
+            self.swap(self.size, index);
             self.size += 1;
         }
     }
@@ -257,13 +268,49 @@ mod tests {
     }
 
     #[test]
-    fn remove_temporarily() {
-        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
-        sparse_set.remove_temporarily(&10);
-        assert!(!sparse_set.contains(&10));
+    fn remove_temporarily_simple() {
+        let mut sparse_set = SparseSet::new(vec![0], mapping_function);
 
-        sparse_set.remove_temporarily(&5);
+        sparse_set.remove_temporarily(&0);
+        sparse_set.insert(0);
+        sparse_set.remove_temporarily(&0);
+
+        assert!(sparse_set.is_empty())
+    }
+
+    #[test]
+    fn remove_temporarily() {
+        let mut sparse_set = SparseSet::new(vec![2, 0, 1], mapping_function);
+
+        assert!(!sparse_set.is_empty());
+
+        sparse_set.remove_temporarily(&0);
+        sparse_set.insert(0);
+        sparse_set.remove_temporarily(&0);
+
+        assert!(!sparse_set.is_empty());
+
+        sparse_set.remove_temporarily(&0);
+        assert!(!sparse_set.contains(&0));
+
+        sparse_set.remove_temporarily(&0);
         sparse_set.remove_temporarily(&2);
+        sparse_set.remove_temporarily(&1);
+
         assert!(sparse_set.is_empty());
+
+        sparse_set.insert(1);
+
+        assert!(sparse_set.contains(&1));
+
+        assert!(!sparse_set.contains(&0));
+        assert!(sparse_set.contains(&1));
+        assert!(!sparse_set.contains(&2));
+
+        sparse_set.restore_temporarily_removed();
+
+        assert!(sparse_set.contains(&0));
+        assert!(sparse_set.contains(&1));
+        assert!(sparse_set.contains(&2));
     }
 }
