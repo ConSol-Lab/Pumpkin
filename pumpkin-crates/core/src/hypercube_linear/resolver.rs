@@ -360,7 +360,6 @@ impl HypercubeLinearResolver {
             //     );
             // }
 
-            dbg!(trail_index);
             let unsatisfied_reason_set_predicates = conflicting_reason_set
                 .hypercube
                 .iter_predicates()
@@ -369,14 +368,14 @@ impl HypercubeLinearResolver {
                         .assignments
                         .evaluate_predicate_at_trail_position(predicate, trail_index);
 
-                    let domain = predicate.get_domain();
-                    println!(
-                        "{} -> {} in [{}, {}]",
-                        predicate.display(&state.variable_names),
-                        domain.display(&state.variable_names),
-                        domain.lower_bound_at_trail_position(&state.assignments, trail_index),
-                        domain.upper_bound_at_trail_position(&state.assignments, trail_index)
-                    );
+                    // let domain = predicate.get_domain();
+                    // println!(
+                    //     "{} -> {} in [{}, {}]",
+                    //     predicate.display(&state.variable_names),
+                    //     domain.display(&state.variable_names),
+                    //     domain.lower_bound_at_trail_position(&state.assignments, trail_index),
+                    //     domain.upper_bound_at_trail_position(&state.assignments, trail_index)
+                    // );
 
                     truth_value != Some(true)
                 })
@@ -410,13 +409,6 @@ impl HypercubeLinearResolver {
                     .display(&state.variable_names),
                 conflicting_reason_set.hypercube.iter_predicates().count()
             );
-
-            // if reasons_on_current_dl.len() <= 1 {
-            //     return (
-            //         conflicting_hypercube_linear,
-            //         conflicting_reason_set.hypercube.iter_predicates().collect(),
-            //     );
-            // }
 
             assert_eq!(
                 is_conflicting(
