@@ -13,6 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use anyhow::Context;
 use clap::Parser;
 use clap_verbosity_flag::InfoLevel;
 use clap_verbosity_flag::Verbosity;
@@ -58,9 +59,11 @@ fn main() -> anyhow::Result<()> {
         .target(env_logger::Target::Stdout)
         .init();
 
-    let proof_processor = parse_model(&cli.model_path)?;
-    let proof_reader = create_proof_reader(&cli.scaffold_path)?;
-    let proof_writer = create_proof_writer(&cli.full_proof_path)?;
+    let proof_processor = parse_model(&cli.model_path).with_context(|| "Failed to parse model")?;
+    let proof_reader =
+        create_proof_reader(&cli.scaffold_path).with_context(|| "Failed to read proof")?;
+    let proof_writer = create_proof_writer(&cli.full_proof_path)
+        .with_context(|| "Failed to create proof writer")?;
 
     proof_processor.process(proof_reader, proof_writer)?;
 
