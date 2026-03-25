@@ -6,7 +6,7 @@ use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
 
 /// The linear inequality part of a hypercube linear constraint.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LinearInequality {
     terms: Box<[AffineView<DomainId>]>,
     bound: i32,

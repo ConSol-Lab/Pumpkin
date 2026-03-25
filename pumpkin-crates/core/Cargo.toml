@@ -41,4 +41,5 @@ wasm-bindgen-test = "0.3"
 [features]
 check-propagations = []
 debug-checks = []
+hl-checks = []
 clap = ["dep:clap"]

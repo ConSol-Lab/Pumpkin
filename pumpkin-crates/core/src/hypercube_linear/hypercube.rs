@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
@@ -16,9 +18,17 @@ pub struct InconsistentHypercube(DomainId);
 /// A region in the solution space.
 ///
 /// The hypercube will always be consistent.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hypercube {
     state: VariableState<Predicate>,
+}
+
+impl Hash for Hypercube {
+    fn hash<H: std::hash::Hasher>(&self, hash_state: &mut H) {
+        for predicate in self.iter_predicates() {
+            predicate.hash(hash_state);
+        }
+    }
 }
 
 impl Hypercube {
