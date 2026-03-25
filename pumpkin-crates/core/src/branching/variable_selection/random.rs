@@ -16,7 +16,7 @@ impl RandomSelector {
         // Note the -1 due to the fact that the indices of the domain ids start at 1
         Self {
             variables: SparseSet::new(variables.into_iter().collect(), |element| {
-                element.index() - 1
+                element.index() as i32 - 1
             }),
         }
     }

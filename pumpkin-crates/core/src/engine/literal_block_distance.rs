@@ -11,8 +11,8 @@ pub struct Lbd {
 
 impl Default for Lbd {
     fn default() -> Self {
-        fn sparse_set_mapping(elem: &u32) -> usize {
-            *elem as usize
+        fn sparse_set_mapping(elem: &u32) -> i32 {
+            *elem as i32
         }
 
         Lbd {
