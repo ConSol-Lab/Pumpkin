@@ -648,7 +648,8 @@ fn compile_bool2int(
     let _a = context.resolve_bool_variable(&exprs[0])?;
     let _b = context.resolve_integer_variable(&exprs[1])?;
 
-    todo!()
+    todo!();
+
     // Ok(
     //     pumpkin_constraints::binary_equals(a, b.scaled(1), constraint_tag)
     //         .post(context.solver)
