@@ -41,8 +41,10 @@ pub(crate) struct NotificationEngine {
     /// The watch list from predicates to propagators.
     pub(crate) watch_list_predicate_id: KeyedVec<PredicateId, Vec<PropagatorId>>,
     // TODO: Should use direct hashing
-    pub(crate) literal_watch_list: HashMap<Literal, (LocalId, EnumSet<DomainEvent>)>,
-    pub(crate) literal_watch_list_backtrack: HashMap<Literal, (LocalId, EnumSet<DomainEvent>)>,
+    pub(crate) literal_watch_list:
+        HashMap<Literal, HashMap<PropagatorId, (LocalId, EnumSet<DomainEvent>)>>,
+    pub(crate) literal_watch_list_backtrack:
+        HashMap<Literal, HashMap<PropagatorId, (LocalId, EnumSet<DomainEvent>)>>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
@@ -217,6 +219,8 @@ impl NotificationEngine {
         let entry = self
             .literal_watch_list
             .entry(literal)
+            .or_default()
+            .entry(propagator_var.propagator)
             .or_insert((propagator_var.variable, events));
         entry.1 |= events;
 
@@ -281,6 +285,8 @@ impl NotificationEngine {
         let entry = self
             .literal_watch_list_backtrack
             .entry(literal)
+            .or_default()
+            .entry(propagator_var.propagator)
             .or_insert((propagator_var.variable, events));
         entry.1 |= events;
 
@@ -520,7 +526,11 @@ impl NotificationEngine {
 
         for (literal, propagator_id) in self.backtrack_events_literals.drain(..).collect::<Vec<_>>()
         {
-            if let Some((var_id, events)) = self.literal_watch_list_backtrack.get(&literal) {
+            if let Some(Some((var_id, events))) = self
+                .literal_watch_list_backtrack
+                .get(&literal)
+                .map(|inner| inner.get(&propagator_id))
+            {
                 let propagator = &mut propagators[propagator_id];
                 for event in events.iter() {
                     let mut context = NotificationContext::new(trailed_values, assignments);
@@ -551,12 +561,18 @@ impl NotificationEngine {
                 for propagator_id in propagators_to_notify {
                     let predicate = self.predicate_notifier.get_predicate(predicate_id);
                     let literal = Literal::new(predicate);
-                    if let Some((var_id, events)) = self.literal_watch_list.get(&literal)
-                        && !events.is_empty()
-                        && !self
-                            .backtrack_events_literals
-                            .contains(&(literal, propagator_id))
+                    if let Some(Some((var_id, events))) = self
+                        .literal_watch_list
+                        .get(&literal)
+                        .map(|inner| inner.get(&propagator_id))
                     {
+                        if events.is_empty()
+                            || self
+                                .backtrack_events_literals
+                                .contains(&(literal, propagator_id))
+                        {
+                            continue;
+                        }
                         self.backtrack_events_literals
                             .push((literal, propagator_id));
                         let propagator = &mut propagators[propagator_id];
