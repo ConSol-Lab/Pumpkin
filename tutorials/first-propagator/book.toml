@@ -5,3 +5,4 @@ language = 'en'
 
 [output.html]
 mathjax-support = true
+additional-css = ["theme/css/custom.css"]

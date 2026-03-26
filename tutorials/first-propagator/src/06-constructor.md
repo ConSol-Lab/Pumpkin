@@ -17,10 +17,13 @@ pub struct BinaryEqualsPropagatorConstructor<AVar, BVar> {
 }
 ```
 
-> **Notes**
-> - The type parameters `AVar` and `BVar` are [generic](https://doc.rust-lang.org/book/ch10-01-syntax.html), meaning the propagator can work with any integer variable type Pumpkin supports. Rust generics play a role similar to Java generics and C++ templates, although they behave differently in important ways.
-> - The fields are declared as [`pub`](https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#exposing-paths-with-the-pub-keyword), allowing other [crates](https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html) to construct this propagator.
-> - The [derived traits](https://doc.rust-lang.org/book/appendix-03-derivable-traits.html#appendix-c-derivable-traits) `Clone` and `Debug` are added for convenience. Traits are conceptually similar to Java interfaces or C++ abstract base classes, but not identical.
+<details>
+    <summary>Explanation of Rust language features</summary>
+
+- The type parameters `AVar` and `BVar` are [generic](https://doc.rust-lang.org/book/ch10-01-syntax.html), meaning the propagator can work with any integer variable type Pumpkin supports. Rust generics play a role similar to Java generics and C++ templates, although they behave differently in important ways.
+- The fields are declared as [`pub`](https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#exposing-paths-with-the-pub-keyword), allowing other [crates](https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html) to construct this propagator.
+- The [derived traits](https://doc.rust-lang.org/book/appendix-03-derivable-traits.html#appendix-c-derivable-traits) `Clone` and `Debug` are added for convenience. Traits are conceptually similar to Java interfaces or C++ abstract base classes, but not identical.
+</details>
 
 Before implementing the constructor, we first define the *propagator struct* so the constructor has a concrete type to reference:
 
