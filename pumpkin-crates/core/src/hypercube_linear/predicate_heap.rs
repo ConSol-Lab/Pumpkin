@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::collections::binary_heap::Drain;
 
 use crate::predicates::Predicate;
 use crate::state::State;
@@ -18,9 +19,19 @@ impl PredicateHeap {
         self.heap.is_empty()
     }
 
+    /// See [`BinaryHeap::len`].
+    pub(crate) fn len(&self) -> usize {
+        self.heap.len()
+    }
+
     /// See [`BinaryHeap::pop`].
     pub(crate) fn pop(&mut self) -> Option<Predicate> {
         self.heap.pop().map(|to_explain| to_explain.predicate)
+    }
+
+    /// See [`BinaryHeap::drain`].
+    pub(crate) fn drain(&mut self) -> impl ExactSizeIterator<Item = Predicate> + '_ {
+        self.heap.drain().map(|to_explain| to_explain.predicate)
     }
 
     /// Push a new predicate onto the heap.

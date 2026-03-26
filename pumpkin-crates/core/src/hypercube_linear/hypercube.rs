@@ -18,7 +18,7 @@ pub struct InconsistentHypercube(DomainId);
 /// A region in the solution space.
 ///
 /// The hypercube will always be consistent.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hypercube {
     state: VariableState<Predicate>,
 }
@@ -45,6 +45,32 @@ impl Hypercube {
             .map_err(InconsistentHypercube)?;
 
         Ok(Hypercube { state })
+    }
+
+    /// Add a predicate to the hypercube.
+    ///
+    /// If the new predicate causes the hypercube to be inconsistent, an error is returned.
+    pub fn with_predicate(
+        mut self,
+        predicate: Predicate,
+    ) -> Result<Hypercube, InconsistentHypercube> {
+        if self.state.apply(&predicate) {
+            Ok(self)
+        } else {
+            Err(InconsistentHypercube(predicate.get_domain()))
+        }
+    }
+
+    /// Add all predicates from the iterator to self.
+    pub fn with_predicates(
+        mut self,
+        predicates: impl ExactSizeIterator<Item = Predicate>,
+    ) -> Result<Hypercube, InconsistentHypercube> {
+        for predicate in predicates {
+            self = self.with_predicate(predicate)?;
+        }
+
+        Ok(self)
     }
 
     /// Get all predicates that define the hypercube.
