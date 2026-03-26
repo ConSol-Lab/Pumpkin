@@ -3,6 +3,7 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
+use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::declare_inference_label;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
@@ -143,9 +144,7 @@ where
         let old_bound = context.read_trailed_integer(self.current_bounds[index]);
         let new_bound = context.lower_bound(x_i) as i64;
 
-        if old_bound == new_bound {
-            return EnqueueDecision::Skip;
-        }
+        pumpkin_assert_simple!(new_bound > old_bound);
 
         context.write_trailed_integer(
             self.lower_bound_left_hand_side,
