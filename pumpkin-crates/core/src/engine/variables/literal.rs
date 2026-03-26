@@ -6,7 +6,6 @@ use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
-use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
 use crate::engine::Assignments;
@@ -29,7 +28,7 @@ impl Debug for Literal {
 }
 
 impl Literal {
-    /// Creates a new literal wrapping the provided [`DomainId`].
+    /// Creates a new literal wrapping the provided [`Predicate`].
     ///
     /// Note: the provided `domain_id` should have a domain between 0 and 1.
     pub fn new(predicate: Predicate) -> Literal {
@@ -99,16 +98,19 @@ impl CheckerVariable<Predicate> for Literal {
     }
 
     fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
-        IntExt::Int(
-            variable_state
-                .is_true(&self.inner)
-                .then(|| 1)
-                .unwrap_or_default(),
-        )
+        IntExt::Int(if variable_state.is_true(&self.inner) {
+            1
+        } else {
+            Default::default()
+        })
     }
 
     fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
-        IntExt::Int(variable_state.is_true(&!self.inner).then(|| 0).unwrap_or(1))
+        IntExt::Int(if variable_state.is_true(&!self.inner) {
+            0
+        } else {
+            1
+        })
     }
 
     fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32> {
@@ -128,10 +130,8 @@ impl CheckerVariable<Predicate> for Literal {
     ) -> bool {
         if value == 1 && !variable_state.is_true(&!self.inner) {
             true
-        } else if value == 0 && !variable_state.is_true(&self.inner) {
-            true
         } else {
-            false
+            value == 0 && !variable_state.is_true(&self.inner)
         }
     }
 
@@ -269,8 +269,8 @@ impl IntegerVariable for Literal {
         event.unwrap()
     }
 
-    fn watch_all_backtrack(&self, _watchers: &mut Watchers<'_>, _events: EnumSet<DomainEvent>) {
-        todo!()
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        watchers.watch_literal_backtrack(*self, events)
     }
 
     fn get_holes_at_current_checkpoint(

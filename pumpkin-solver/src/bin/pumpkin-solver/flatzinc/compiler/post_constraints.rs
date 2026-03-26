@@ -637,7 +637,7 @@ fn compile_bool_and(
 fn compile_bool2int(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
-    constraint_tag: ConstraintTag,
+    _constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     // TODO: Perhaps we want to add a phase in the compiler that directly uses the literal
     // corresponding to the predicate [b = 1] for the boolean parameter in this constraint.
@@ -645,8 +645,8 @@ fn compile_bool2int(
 
     check_parameters!(exprs, 2, "bool2int");
 
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
+    let _a = context.resolve_bool_variable(&exprs[0])?;
+    let _b = context.resolve_integer_variable(&exprs[1])?;
 
     todo!()
     // Ok(

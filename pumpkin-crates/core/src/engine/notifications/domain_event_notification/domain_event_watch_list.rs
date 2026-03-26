@@ -3,7 +3,6 @@ use std::fmt::Display;
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
-use crate::basic_types::PredicateId;
 use crate::containers::KeyedVec;
 use crate::engine::Assignments;
 use crate::engine::TrailedValues;
@@ -34,6 +33,20 @@ pub struct Watchers<'a> {
 impl<'a> Watchers<'a> {
     pub(crate) fn watch_literal(&mut self, literal: Literal, events: EnumSet<DomainEvent>) {
         self.notification_engine.watch_literal(
+            literal,
+            events,
+            self.propagator_var,
+            self.trailed_values,
+            self.assignments,
+        )
+    }
+
+    pub(crate) fn watch_literal_backtrack(
+        &mut self,
+        literal: Literal,
+        events: EnumSet<DomainEvent>,
+    ) {
+        self.notification_engine.watch_literal_backtrack(
             literal,
             events,
             self.propagator_var,

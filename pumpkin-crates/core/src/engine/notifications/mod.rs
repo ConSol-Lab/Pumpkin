@@ -13,7 +13,6 @@ pub(crate) use predicate_notification::PredicateNotifier;
 use crate::basic_types::PredicateId;
 use crate::containers::HashMap;
 use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
@@ -43,11 +42,13 @@ pub(crate) struct NotificationEngine {
     pub(crate) watch_list_predicate_id: KeyedVec<PredicateId, Vec<PropagatorId>>,
     // TODO: Should use direct hashing
     pub(crate) literal_watch_list: HashMap<Literal, (LocalId, EnumSet<DomainEvent>)>,
+    pub(crate) literal_watch_list_backtrack: HashMap<Literal, (LocalId, EnumSet<DomainEvent>)>,
     /// Events which have occurred since the last round of notifications have taken place
     events: EventSink,
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
     /// place
     backtrack_events: EventSink,
+    backtrack_events_literals: Vec<(Literal, PropagatorId)>,
 }
 
 impl Default for NotificationEngine {
@@ -56,10 +57,12 @@ impl Default for NotificationEngine {
             watch_list_domain_events: Default::default(),
             watch_list_predicate_id: Default::default(),
             literal_watch_list: Default::default(),
+            literal_watch_list_backtrack: Default::default(),
             predicate_notifier: Default::default(),
             last_notified_trail_index: 0,
             events: Default::default(),
             backtrack_events: Default::default(),
+            backtrack_events_literals: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -83,6 +86,9 @@ impl NotificationEngine {
             last_notified_trail_index: usize::MAX,
             events: Default::default(),
             backtrack_events: Default::default(),
+            literal_watch_list: Default::default(),
+            literal_watch_list_backtrack: Default::default(),
+            backtrack_events_literals: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -210,6 +216,57 @@ impl NotificationEngine {
     ) {
         let entry = self
             .literal_watch_list
+            .entry(literal)
+            .or_insert((propagator_var.variable, events));
+        entry.1 |= events;
+
+        for event in events {
+            match event {
+                DomainEvent::Assign => {
+                    let _ = self.watch_predicate(
+                        literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                    let _ = self.watch_predicate(
+                        !literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                }
+                DomainEvent::LowerBound => {
+                    let _ = self.watch_predicate(
+                        literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                }
+                DomainEvent::UpperBound => {
+                    let _ = self.watch_predicate(
+                        !literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                }
+                DomainEvent::Removal => {}
+            };
+        }
+    }
+
+    pub(crate) fn watch_literal_backtrack(
+        &mut self,
+        literal: Literal,
+        events: EnumSet<DomainEvent>,
+        propagator_var: PropagatorVarId,
+        trailed_values: &mut TrailedValues,
+        assignments: &Assignments,
+    ) {
+        let entry = self
+            .literal_watch_list_backtrack
             .entry(literal)
             .or_insert((propagator_var.variable, events));
         entry.1 |= events;
@@ -434,6 +491,18 @@ impl NotificationEngine {
                 }
             }
         }
+
+        for (literal, propagator_id) in self.backtrack_events_literals.drain(..).collect::<Vec<_>>()
+        {
+            if let Some((var_id, events)) = self.literal_watch_list_backtrack.get(&literal) {
+                let propagator = &mut propagators[propagator_id];
+                for event in events.iter() {
+                    let mut context = NotificationContext::new(trailed_values, assignments);
+
+                    propagator.notify_backtrack(context.domains(), *var_id, event.into())
+                }
+            }
+        }
         true
     }
 
@@ -459,6 +528,8 @@ impl NotificationEngine {
                     if let Some((var_id, events)) = self.literal_watch_list.get(&literal)
                         && !events.is_empty()
                     {
+                        self.backtrack_events_literals
+                            .push((literal, propagator_id));
                         let propagator = &mut propagators[propagator_id];
                         for event in events.iter() {
                             let mut context = NotificationContext::new(trailed_values, assignments);
