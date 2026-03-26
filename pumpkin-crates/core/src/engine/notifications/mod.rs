@@ -252,7 +252,20 @@ impl NotificationEngine {
                         assignments,
                     );
                 }
-                DomainEvent::Removal => {}
+                DomainEvent::Removal => {
+                    let _ = self.watch_predicate(
+                        literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                    let _ = self.watch_predicate(
+                        !literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                }
             };
         }
     }
@@ -303,7 +316,20 @@ impl NotificationEngine {
                         assignments,
                     );
                 }
-                DomainEvent::Removal => {}
+                DomainEvent::Removal => {
+                    let _ = self.watch_predicate(
+                        literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                    let _ = self.watch_predicate(
+                        !literal.inner,
+                        propagator_var.propagator,
+                        trailed_values,
+                        assignments,
+                    );
+                }
             };
         }
     }
@@ -527,6 +553,9 @@ impl NotificationEngine {
                     let literal = Literal::new(predicate);
                     if let Some((var_id, events)) = self.literal_watch_list.get(&literal)
                         && !events.is_empty()
+                        && !self
+                            .backtrack_events_literals
+                            .contains(&(literal, propagator_id))
                     {
                         self.backtrack_events_literals
                             .push((literal, propagator_id));
