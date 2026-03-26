@@ -9,6 +9,8 @@ We now focus on **consistency checkers**, which certify that a propagator is con
 
 Both rely on certificates: small objects that can be checked independently to ensure that the required properties are satisfied. Because certificate checking is simple and reliable, it gives us strong assurance that the propagator behaves correctly.
 
+These certificates are checked at runtime while solving. Because this incurs overhead, checkers are typically enabled only during testing.
+
 In the remainder of this section, we implement checkers for our `a = b` propagator.
 
 > **Note:**

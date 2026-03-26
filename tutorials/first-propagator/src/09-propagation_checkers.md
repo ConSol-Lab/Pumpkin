@@ -1,24 +1,20 @@
 # Propagation Checkers
 
 ## TODO
-- I did not make a detailed pass through this section.
+- I am still processing this section.
 
-## Checker Struct
+Propagation checkers are independent procedures that verify whether a given explanation is correct. Because Pumpkin requires every propagator to provide explanations for all propagations and conflicts, checkers allow us to validate that these explanations are justified.
 
-We define a `struct` that identifies which variables are involved in the inference.
+Since checkers are implemented separately from the propagator with much simpler correctness‑focused logic rather than performance‑optimised code, they serve as a reliable reference implementation. This separation increases our confidence that the behavaiour of the propagator is correct.
 
-```rust
-#[derive(Clone, Debug)]
-pub struct BinaryEqualsChecker<AVar, BVar> {
-    pub a: AVar,
-    pub b: BVar,
-}
-```
+There are two parts when checking explanation.
+- Applicability: asssert that the explanation is relevant given the trail, that is, that the premise of the explanation is satisfied, and that this is what triggered the propagation. For example, if the propagator claims it removed the value 5 from the domain of variable `b` because the variable `a` does not have 5 in its domain ((\\[a != 5] -> [b != 5]\\)), we need to check that indeed $a != 5$ holds. Since this is generic over all propagators, Pumpkin does this behind the scenes and we do not need to worry about this.
+1. **Applicability**: assert that the explanation is relevant given the trail. In other words, the premises of the explanation are satisfied and that the consequent was not set before the premise. For example, if the propagator claims it removed the value 5 from the domain of variable `b` because variable `a` does not contain 5 (i.e., `[a != 5] -> [b != 5]`), we must check that indeed `a != 5` holds and that `b != 5` has not been set before. Since this check is generic across propagators, Pumpkin performs this behind the scenes and we do not need to explicitly consider it.
+2. **Validity**: assert that the explanation is logically entailed by the constraint. This is what each propagator must verify, and what we focus on below.
 
----
+## Inference Checker Trait
 
-## Checker Trait
-As with other structs, the checker has its own trait, the `InferenceChecker` trait, which defines a single method `check`:
+Inference checkers verify the validity of an explanation. These checkers have their own trait, the `InferenceChecker` trait, which defines a single method `check`:
 
 ```rust
 pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
@@ -31,20 +27,32 @@ pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
 }
 ```
 
-Given an explanation for a propagation or conflict (\\(\bigwedge_{p \in \mathtt{premises}} p \rightarrow \mathtt{consequent}\\)), the `VariableState` represents variable domains such that all premises hold and (if present) the **negation** of the consequent holds. It serves a role similar to the `PropagationContext` used during propagation, acting as the main object that provides information about the variables. Note that the consequent can be `None` if the explanation was for a conflict rather than a propagation.
+Given an explanation of the form `∧ premises → consequent`, the `VariableState` contains domains such that all premises hold and (if present) the **negation** of the consequent holds. It serves a similar role to the `PropagationContext` used during propagation, acting as the object that provides information about current variable domains. Note that the consequent is `None` when checking explanations for conflicts.
 
-The checker returns `true` if the `state` leads to a conflict, indicating that the checker successfully verified the correctness of the explanation. Since verifying the explanation corresponds to detecting a conflict, our checker logic can be much simpler than the propagator.
-
-We know that for a conflict to exist, the intersection of the domains must be empty, since otherwise the variables could be assigned to the same value. We implement this by applying the domain of `b` to the domain of `a` and checking whether the result is an empty domain.
+The checker is expected to return `true` if the `state` leads to a conflict, indicating that the checker successfully verified the correctness of the explanation. Conceptually, verifying an explanation reduces to only checking for conflicts, since propagation explanations are converted into conflict explanations. As we only use checkers during testing, our checker logic can be much simpler than the propagator. 
 
 ## Checker Implementation
 
-The following implementation of the checker for our `a = b` propagator follows the above idea:
+For the `a = b` constraint, we know that a conflict exists when the domains of `a` and `b` have an empty intersection. In other words, if there is no value that both variables can take, the constraint is violated.
 
-1. Enforce \(a \leq \mathrm{UB}(b)\) and \(a \geq \mathrm{LB}(b)\).
-2. Remove from `a` all values not present in `b`.
+The checker implements this idea as follows:
 
-If these steps lead to inconsistency under the premises and the negated consequent, the inference is correct.
+1. Enforce `a <= UB(b)` and `a >= LB(b)`.
+2. Remove from `a` all values that are not present in `b`.
+
+If applying these restrictions results in an empty domain under the domain encoded in `state`, then the explanation is valid.
+
+We begin by defining a `struct` that identifies the variables involved in the explanation:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct BinaryEqualsChecker<AVar, BVar> {
+    pub a: AVar,
+    pub b: BVar,
+}
+```
+
+STOPPED HERE. Need to explain IntExt
 
 ```rust
 impl<AVar, BVar, Atomic> InferenceChecker<Atomic> for BinaryEqualsChecker<Lhs, Rhs>
