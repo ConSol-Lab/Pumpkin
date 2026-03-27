@@ -1,3 +1,4 @@
+mod conflict;
 pub(crate) mod constraint_satisfaction_solver;
 mod constraint_tag;
 pub(crate) mod cp;
@@ -12,6 +13,7 @@ pub(crate) mod termination;
 pub(crate) mod variable_names;
 pub(crate) mod variables;
 
+pub use conflict::*;
 pub use constraint_satisfaction_solver::ConflictResolverType;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;

@@ -15,9 +15,8 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
-use pumpkin_core::state::Conflict;
-use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::state::PropagationStatusCP;
+use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::disjunctive_task::ArgDisjunctiveTask;
@@ -184,10 +183,10 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
         // (which takes into account `j`) is larger than the LCT of `j` then we can report an
         // overflow
         if theta_lambda_tree.ect() > lct_j {
-            return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction: create_conflict_explanation(theta_lambda_tree, context, lct_j),
-                inference_code: inference_code.clone(),
-            }));
+            return propagator_conflict(
+                create_conflict_explanation(theta_lambda_tree, context, lct_j),
+                inference_code,
+            );
         }
 
         // If there was no overflow then we continue by checking whether we can find a propagation

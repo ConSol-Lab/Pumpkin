@@ -1,12 +1,12 @@
-use super::propagation_status_cp::PropagatorConflict;
 use crate::ConstraintOperationError;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
-use crate::engine::state::Conflict;
 use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::propagation::Propagator;
+use crate::state::Conflict;
+use crate::state::PropagatorConflict;
 
 /// a conflict info which can be stored in the solver.
 /// two (related) conflicts can happen:

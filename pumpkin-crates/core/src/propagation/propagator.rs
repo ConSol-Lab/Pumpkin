@@ -8,12 +8,12 @@ use super::ExplanationContext;
 use super::PropagationContext;
 use super::contexts::NotificationContext;
 use crate::basic_types::PredicateId;
-use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropagatorConflict;
 #[cfg(doc)]
 use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::PropagationStatusCP;
+use crate::engine::PropagatorConflict;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 #[cfg(doc)]
