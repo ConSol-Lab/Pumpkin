@@ -30,12 +30,12 @@ pub(crate) struct UpdatableStructures<Var> {
 
 impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     pub(crate) fn new(parameters: &CumulativeParameters<Var>) -> Self {
-        let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), |element| {
+        let mut updated_tasks = SparseSet::new_with_mapping(parameters.tasks.to_vec(), |element| {
             Task::get_id(element) as i32
         });
         updated_tasks.set_to_empty();
 
-        let unfixed_tasks = SparseSet::new(parameters.tasks.to_vec(), |element| {
+        let unfixed_tasks = SparseSet::new_with_mapping(parameters.tasks.to_vec(), |element| {
             Task::get_id(element) as i32
         });
         Self {

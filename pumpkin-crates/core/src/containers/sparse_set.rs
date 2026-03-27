@@ -29,6 +29,7 @@
 //! (TRICS), 2013, pp. 1–10.
 
 use crate::containers::HashSet;
+use crate::containers::StorageKey;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -62,15 +63,25 @@ pub struct SparseSet<T> {
     index_offset: i32,
 }
 
+impl<T: StorageKey> SparseSet<T> {
+    /// Creates a new [`SparseSet`], using [`StorageKey::index`] as the index for the elements.
+    ///
+    /// If [`StorageKey::index`] returns the same index for two elements, then this method will
+    /// panic.
+    pub fn new(input: Vec<T>) -> Self {
+        Self::new_with_mapping(input, |element: &T| element.index() as i32)
+    }
+}
+
 impl<T> SparseSet<T> {
-    /// Creates a new [`SparseSet`].
+    /// Creates a new [`SparseSet`], using the provided `mapping` to map the elements to indices.
     ///
     /// If the provided `mapping` maps two elements in `input` to the same element then this method
     /// will panic.
     ///
     /// For performance, it is recommended to provide a mapping which maps all elements to the
     /// range `[0, |domain|]`.
-    pub fn new(input: Vec<T>, mapping: fn(&T) -> i32) -> Self {
+    pub fn new_with_mapping(input: Vec<T>, mapping: fn(&T) -> i32) -> Self {
         let input_len = input.len();
 
         let mut min_index = 0;
@@ -270,13 +281,13 @@ mod tests {
 
     #[test]
     fn test_len() {
-        let sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
+        let sparse_set = SparseSet::new_with_mapping(vec![0, 1, 2], mapping_function);
         assert_eq!(sparse_set.len(), 3);
     }
 
     #[test]
     fn removal() {
-        let mut sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![0, 1, 2], mapping_function);
         sparse_set.remove(&1);
         assert_eq!(sparse_set.domain, vec![0, 2]);
         assert_eq!(sparse_set.size, 2);
@@ -285,7 +296,7 @@ mod tests {
 
     #[test]
     fn removal_adjusts_size() {
-        let mut sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![0, 1, 2], mapping_function);
         assert_eq!(sparse_set.size, 3);
         sparse_set.remove(&0);
         assert_eq!(sparse_set.size, 2);
@@ -293,7 +304,7 @@ mod tests {
 
     #[test]
     fn remove_all_elements_leads_to_empty_set() {
-        let mut sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![0, 1, 2], mapping_function);
         sparse_set.remove(&0);
         sparse_set.remove(&1);
         sparse_set.remove(&2);
@@ -302,7 +313,7 @@ mod tests {
 
     #[test]
     fn iter1() {
-        let sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        let sparse_set = SparseSet::new_with_mapping(vec![5, 10, 2], mapping_function);
         let v: Vec<i32> = sparse_set.iter().copied().collect();
         assert_eq!(v.len(), 3);
         assert!(v.contains(&10));
@@ -312,7 +323,7 @@ mod tests {
 
     #[test]
     fn iter2() {
-        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function); // 5, 10, 2
+        let mut sparse_set = SparseSet::new_with_mapping(vec![5, 10, 2], mapping_function); // 5, 10, 2
         sparse_set.insert(100); // 5, 10, 2, 100
         sparse_set.insert(2); // 5, 10, 2, 100
         sparse_set.insert(20); // 5, 10, 2, 100, 20
@@ -331,7 +342,7 @@ mod tests {
 
     #[test]
     fn remove_temporarily_simple() {
-        let mut sparse_set = SparseSet::new(vec![0], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![0], mapping_function);
 
         sparse_set.remove_temporarily(&0);
         sparse_set.insert(0);
@@ -342,7 +353,7 @@ mod tests {
 
     #[test]
     fn remove_temporarily() {
-        let mut sparse_set = SparseSet::new(vec![2, 0, 1], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![2, 0, 1], mapping_function);
 
         assert!(!sparse_set.is_empty());
 
@@ -381,7 +392,7 @@ mod tests {
 
     #[test]
     fn remove_temporarily_non_continuous() {
-        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![5, 10, 2], mapping_function);
         sparse_set.remove_temporarily(&10);
         assert!(!sparse_set.contains(&10));
 
@@ -392,7 +403,7 @@ mod tests {
 
     #[test]
     fn remove_temporarily_non_continuous_spanning() {
-        let mut sparse_set = SparseSet::new(vec![5, 10, -2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![5, 10, -2], mapping_function);
         sparse_set.remove_temporarily(&10);
         assert!(!sparse_set.contains(&10));
 
@@ -406,7 +417,7 @@ mod tests {
 
     #[test]
     fn remove_temporarily_non_continuous_negative() {
-        let mut sparse_set = SparseSet::new(vec![-5, -10, -2], mapping_function);
+        let mut sparse_set = SparseSet::new_with_mapping(vec![-5, -10, -2], mapping_function);
         sparse_set.remove_temporarily(&-10);
         assert!(!sparse_set.contains(&-10));
 

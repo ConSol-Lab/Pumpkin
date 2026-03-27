@@ -11,12 +11,8 @@ pub struct Lbd {
 
 impl Default for Lbd {
     fn default() -> Self {
-        fn sparse_set_mapping(elem: &u32) -> i32 {
-            *elem as i32
-        }
-
         Lbd {
-            lbd_helper: SparseSet::new(vec![], sparse_set_mapping),
+            lbd_helper: SparseSet::new(vec![]),
         }
     }
 }
