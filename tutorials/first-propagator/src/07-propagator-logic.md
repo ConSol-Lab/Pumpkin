@@ -73,17 +73,22 @@ We are now ready to proceed to the propagation algorithm.
 If both variables are already assigned to different values, the constraint `a = b` is violated. In general, it is common to check for conflicts before performing propagation, because an early check can often simplify the propagation algorithm that follows.
 
 ```rust,no_run,noplayground
-if a_lb == a_ub && b_lb == b_ub && a_lb != b_lb {
-    return Err(Conflict::Propagator(PropagatorConflict {
-        conjunction: conjunction!([self.a == a_lb] & [self.b == b_lb]),
-        inference_code: self.inference_code.clone(),
-    }));
+if a_ub < b_lb {
+    return propagator_conflict(
+        conjunction!([self.a <= a_ub] & [self.b >= b_lb]),
+        &self.inference_code,
+    );
+}
+
+if a_lb > b_ub {
+    return propagator_conflict(
+        conjunction!([self.a >= a_lb] & [self.b <= b_ub]),
+        &self.inference_code,
+    );
 }
 ```
 
-Let us unpack the snippet above:
-- When a conflict is detected, the propagator signals it by returning an error value:  `Err(Conflict::Propagator(PropagatorConflict { ... }))`.
-- `conjunction: conjunction!([self.a == a_lb] & [self.b == b_lb])` specifies the _reason_ for the conflict: both variables were fixed to different values. In the macro, predicates are joined using the `&` operator to represent `logical and`.
+Let us unpack the snippet above: When a conflict is detected, the propagator signals it by returning an error. The error consists of the conjunction of predicates that cause the conflict, as well as the inference code that identified the conflict. In the `conjunction!` macro, predicates are joined using the `&` operator to represent `logical and`.
 
 ## Bounds Filtering
 
