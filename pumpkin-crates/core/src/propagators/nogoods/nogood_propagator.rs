@@ -317,6 +317,7 @@ impl Propagator for NogoodPropagator {
                 let reason = Reason::DynamicLazy(watcher.nogood_id.id as u64);
 
                 let predicate = !context.get_predicate(nogood_predicates[0]);
+
                 let result = context.post(
                     predicate,
                     reason,

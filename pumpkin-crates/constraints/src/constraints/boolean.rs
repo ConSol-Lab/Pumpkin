@@ -7,7 +7,6 @@ use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
-use super::equals;
 use super::less_than_or_equals;
 
 /// Creates the [`Constraint`] `∑ weights_i * bools_i <= rhs`.
@@ -36,7 +35,7 @@ pub fn boolean_equals(
         weights: weights.into(),
         bools: bools.into(),
         rhs,
-        constraint_tag,
+        _constraint_tag: constraint_tag,
     }
 }
 
@@ -67,11 +66,11 @@ impl Constraint for BooleanLessThanOrEqual {
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<AffineView<Literal>> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
+            .map(|(index, bool)| bool.scaled(self.weights[index]))
             .collect()
     }
 }
@@ -80,34 +79,40 @@ struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
     rhs: DomainId,
-    constraint_tag: ConstraintTag,
+    _constraint_tag: ConstraintTag,
 }
 
 impl Constraint for BooleanEqual {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains();
+    fn post(self, _solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        let (_domains, _rhs_domain) = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).post(solver)
+        todo!();
+
+        // equals(domains, 0, self.constraint_tag).post(solver)
     }
 
     fn implied_by(
         self,
-        solver: &mut Solver,
-        reification_literal: Literal,
+        _solver: &mut Solver,
+        _reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains();
+        let (_domains, _rhs_domain) = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
+        todo!();
+
+        // equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
     }
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
-        self.bools
-            .iter()
-            .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
-            .chain(std::iter::once(self.rhs.scaled(-1)))
-            .collect()
+    fn create_domains(&self) -> (Vec<AffineView<Literal>>, AffineView<DomainId>) {
+        (
+            self.bools
+                .iter()
+                .enumerate()
+                .map(|(index, bool)| bool.scaled(self.weights[index]))
+                .collect(),
+            self.rhs.scaled(-1),
+        )
     }
 }

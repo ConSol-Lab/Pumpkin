@@ -152,7 +152,12 @@ impl<'a> PropagationContext<'a> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            self.notification_engine,
+            self.trailed_values,
+            self.assignments,
+        );
         var.watch_all(&mut watchers, domain_events.events());
     }
 
@@ -163,7 +168,12 @@ impl<'a> PropagationContext<'a> {
             variable: local_id,
         };
 
-        let mut watchers = Watchers::new(propagator_var, self.notification_engine);
+        let mut watchers = Watchers::new(
+            propagator_var,
+            self.notification_engine,
+            self.trailed_values,
+            self.assignments,
+        );
         var.unwatch_all(&mut watchers);
     }
 
