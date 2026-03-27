@@ -3,7 +3,7 @@ use pumpkin_checking::BoxedChecker;
 use pumpkin_checking::CheckerVariable;
 use pumpkin_checking::InferenceChecker;
 
-use crate::basic_types::PropagationStatusCP;
+use crate::engine::PropagationStatusCP;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
 use crate::propagation::DomainEvents;
@@ -260,9 +260,9 @@ impl<Atomic: AtomicConstraint + Clone, Var: CheckerVariable<Atomic>> InferenceCh
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::PropagatorConflict;
     use crate::conjunction;
     use crate::containers::StorageKey;
+    use crate::engine::PropagatorConflict;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;

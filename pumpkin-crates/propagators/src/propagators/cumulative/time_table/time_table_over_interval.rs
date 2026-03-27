@@ -19,9 +19,9 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
-use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
 use super::TimeTable;
@@ -143,10 +143,7 @@ impl<Var: IntegerVariable + 'static> PropagatorConstructor
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         if self.parameters.is_infeasible {
-            return Err(Conflict::Propagator(PropagatorConflict {
-                conjunction: conjunction!(),
-                inference_code: self.inference_code.clone().unwrap(),
-            }));
+            return propagator_conflict(conjunction!(), self.inference_code.as_ref().unwrap());
         }
 
         let time_table = create_time_table_over_interval_from_scratch(

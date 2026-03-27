@@ -16,8 +16,8 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
-use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::state::PropagationStatusCP;
+use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
 declare_inference_label!(IntegerMultiplication);
@@ -193,15 +193,14 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     {
         // All variables are assigned but the resulting value is not correct, so we report a
         // conflict
-        return Err(PropagatorConflict {
-            conjunction: conjunction!(
+        return propagator_conflict(
+            conjunction!(
                 [a == context.lower_bound(a)]
                     & [b == context.lower_bound(b)]
                     & [c == context.lower_bound(c)]
             ),
-            inference_code: inference_code.clone(),
-        }
-        .into());
+            inference_code,
+        );
     }
 
     Ok(())

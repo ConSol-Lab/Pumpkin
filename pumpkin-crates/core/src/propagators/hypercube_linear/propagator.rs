@@ -1,5 +1,6 @@
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
+use crate::engine::PropagationStatusCP;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
@@ -17,7 +18,6 @@ use crate::propagators::hypercube_linear::Hypercube;
 use crate::propagators::hypercube_linear::HypercubeLinearChecker;
 use crate::propagators::hypercube_linear::LinearInequality;
 use crate::pumpkin_assert_simple;
-use crate::results::PropagationStatusCP;
 use crate::state::PropagatorConflict;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
