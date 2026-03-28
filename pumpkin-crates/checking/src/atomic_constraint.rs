@@ -88,7 +88,7 @@ impl AtomicConstraint for TestAtomic {
     }
 }
 
-/// Create a [`TestAtomic`] using a DSL.
+/// A convenient way to construct a [`TestAtomic`].
 ///
 /// # Example
 /// ```
