@@ -333,7 +333,6 @@ impl ResolutionResolver {
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
-        //
 
         // First we obtain a semantically minimised nogood.
         //

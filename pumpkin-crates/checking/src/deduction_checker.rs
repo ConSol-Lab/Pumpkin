@@ -2,6 +2,9 @@ use crate::AtomicConstraint;
 use crate::VariableState;
 
 /// An inference that was ignored when checking a deduction.
+///
+/// Returned as an error when checking a deduction. These inferences were added to the proof stage,
+/// but never used. Hence, they likely point to why the proof stage is rejected.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IgnoredInference<Atomic> {
     /// The inference that was ignored.

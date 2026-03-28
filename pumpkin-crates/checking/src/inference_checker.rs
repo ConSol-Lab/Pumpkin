@@ -11,7 +11,7 @@ pub trait InferenceChecker<Atomic: AtomicConstraint>: Debug + DynClone {
     /// Returns `true` if `state` is a conflict, and `false` if not.
     ///
     /// For the conflict check, all the premises are true in the state and the consequent, if
-    /// present, if false.
+    /// present, is false.
     fn check(
         &self,
         state: VariableState<Atomic>,

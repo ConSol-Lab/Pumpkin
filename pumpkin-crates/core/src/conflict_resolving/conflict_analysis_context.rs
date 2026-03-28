@@ -100,7 +100,7 @@ impl ConflictAnalysisContext<'_> {
                     &self.state.assignments,
                 );
 
-                conflict.conjunction.clone()
+                conflict.conjunction
             }
             StoredConflictInfo::EmptyDomain(conflict) => self.compute_conflict_nogood(conflict),
             StoredConflictInfo::RootLevelConflict(_) => {

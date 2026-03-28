@@ -211,7 +211,9 @@ impl ProofLog {
     ) -> std::io::Result<ConstraintTag> {
         let constraint_tag = constraint_tags.next_key();
 
-        self.verify_deduction_at_runtime(premises.clone());
+        if cfg!(feature = "check-deductions") {
+            self.verify_deduction_at_runtime(premises.clone());
+        }
 
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
@@ -331,10 +333,6 @@ impl ProofLog {
         &mut self,
         premises: impl IntoIterator<Item = Predicate> + Clone,
     ) {
-        if cfg!(not(feature = "check-deductions")) {
-            return;
-        }
-
         match verify_deduction(
             premises.clone(),
             self.supporting_inferences.iter().cloned().rev(),
