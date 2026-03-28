@@ -177,6 +177,20 @@ impl ConflictAnalysisContext<'_> {
         );
     }
 
+    /// Indicate to the proof that the initial domain `predicate` is used in the next
+    /// deduction.
+    pub fn log_domain_inference(&mut self, predicate: Predicate) {
+        let _ = self
+            .proof_log
+            .log_domain_inference(
+                predicate,
+                &self.state.variable_names,
+                &mut self.state.constraint_tags,
+                &self.state.assignments,
+            )
+            .expect("Failed to write proof log");
+    }
+
     /// Log a deduction (learned nogood) to the proof.
     ///
     /// The inferences and marked propagations are assumed to be recorded in reverse-application

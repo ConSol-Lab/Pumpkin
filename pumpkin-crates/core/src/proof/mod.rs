@@ -141,6 +141,13 @@ impl ProofLog {
     ) -> std::io::Result<Option<ConstraintTag>> {
         assert!(assignments.is_initial_bound(predicate));
 
+        if cfg!(feature = "check-deductions") {
+            self.supporting_inferences.push(SupportingInference {
+                premises: vec![],
+                consequent: Some(predicate),
+            });
+        }
+
         if is_likely_a_constant(predicate, variable_names, assignments) {
             // The predicate is over a constant variable. We assume we do not want to
             // log these if they have no name.
@@ -328,8 +335,13 @@ impl ProofLog {
             return;
         }
 
-        match verify_deduction(premises.clone(), self.supporting_inferences.drain(..).rev()) {
-            Ok(_) => {}
+        match verify_deduction(
+            premises.clone(),
+            self.supporting_inferences.iter().cloned().rev(),
+        ) {
+            Ok(_) => {
+                self.supporting_inferences.clear();
+            }
             Err(error) => {
                 match error {
                     InvalidDeduction::NoConflict(ignored_inferences) => {
@@ -342,6 +354,11 @@ impl ProofLog {
                                     ignored_inference.inference.consequent
                                 );
                             }
+
+                            eprintln!("All inferences:");
+                            for inference in self.supporting_inferences.iter() {
+                                eprintln!("{:?} -> {:?}", inference.premises, inference.consequent);
+                            }
                         }
                     }
                     InvalidDeduction::InconsistentPremises => {
@@ -350,7 +367,7 @@ impl ProofLog {
                 }
 
                 panic!(
-                    "Failed to verify deduction: {:?}",
+                    "Failed to verify deduction: {:?} -> false",
                     itertools::join(premises, " & ")
                 );
             }
