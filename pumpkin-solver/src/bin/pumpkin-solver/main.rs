@@ -630,7 +630,10 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
+                ResolutionResolver::new(
+                    AnalysisMode::OneUIP,
+                    !args.no_learning_clause_minimisation,
+                ),
             )?,
         },
     }
