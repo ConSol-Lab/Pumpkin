@@ -379,28 +379,22 @@ mod tests {
             },
             constraint_tag,
         ));
-        let result = state.propagate_to_fixed_point();
-        assert!(match result {
-            Err(e) => match e {
-                Conflict::EmptyDomain(_) => false,
-                Conflict::Propagator(x) => {
-                    let expected = [
-                        predicate!(s1 <= 1),
-                        predicate!(s1 >= 1),
-                        predicate!(s2 <= 1),
-                        predicate!(s2 >= 1),
-                    ];
-                    expected.iter().all(|y| {
-                        x.conjunction
-                            .iter()
-                            .collect::<Vec<&Predicate>>()
-                            .contains(&y)
-                    }) && x.conjunction.iter().all(|y| expected.contains(y))
-                }
-            },
-
-            Ok(_) => false,
-        });
+        let Conflict::Propagator(x) = state.propagate_to_fixed_point().unwrap_err() else {
+            panic!("an explicit conflict should have been detected");
+        };
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 <= 1),
+            predicate!(s2 >= 1),
+        ];
+        assert!(expected.iter().all(|y| {
+            x.conjunction
+                .iter()
+                .collect::<Vec<&Predicate>>()
+                .contains(&y)
+        }));
+        assert!(x.conjunction.iter().all(|y| expected.contains(y)));
     }
 
     #[test]

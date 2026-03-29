@@ -666,6 +666,7 @@ mod tests {
     use pumpkin_core::state::State;
     use pumpkin_core::variables::DomainId;
 
+    use crate::StateExt;
     use crate::cumulative::ArgTask;
     use crate::cumulative::options::CumulativePropagatorOptions;
     use crate::cumulative::time_table::CumulativeExplanationType;
@@ -699,11 +700,11 @@ mod tests {
                 constraint_tag,
             ),
         );
+
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 1);
-        assert_eq!(state.upper_bound(s1), 1);
+
+        state.assert_bounds(s1, 1, 1);
+        state.assert_bounds(s2, 5, 8);
     }
 
     #[test]
@@ -737,27 +738,27 @@ mod tests {
                 constraint_tag,
             ),
         );
-        let result = state.propagate_to_fixed_point();
 
-        assert!(matches!(result, Err(Conflict::Propagator(_))));
-        assert!(match result {
-            Err(Conflict::Propagator(conflict)) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 >= 1),
-                    predicate!(s2 <= 1),
-                ];
-                expected.iter().all(|y| {
-                    conflict
-                        .conjunction
-                        .iter()
-                        .collect::<Vec<&Predicate>>()
-                        .contains(&y)
-                }) && conflict.conjunction.iter().all(|y| expected.contains(y))
-            }
-            _ => false,
-        });
+        let Conflict::Propagator(conflict) = state.propagate_to_fixed_point().unwrap_err() else {
+            panic!("an explicit conflict should be detected");
+        };
+
+        let expected = [
+            predicate!(s1 <= 1),
+            predicate!(s1 >= 1),
+            predicate!(s2 >= 1),
+            predicate!(s2 <= 1),
+        ];
+
+        assert!(expected.iter().all(|y| {
+            conflict
+                .conjunction
+                .iter()
+                .collect::<Vec<&Predicate>>()
+                .contains(&y)
+        }));
+
+        assert!(conflict.conjunction.iter().all(|y| expected.contains(y)));
     }
 
     #[test]
@@ -789,10 +790,8 @@ mod tests {
             ),
         );
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 0);
-        assert_eq!(state.upper_bound(s2), 6);
-        assert_eq!(state.lower_bound(s1), 0);
-        assert_eq!(state.upper_bound(s1), 6);
+        state.assert_bounds(s1, 0, 6);
+        state.assert_bounds(s2, 0, 6);
     }
 
     #[test]
@@ -935,10 +934,8 @@ mod tests {
             ),
         );
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 1);
-        assert_eq!(state.upper_bound(s2), 3);
-        assert_eq!(state.lower_bound(s1), 6);
-        assert_eq!(state.upper_bound(s1), 6);
+        state.assert_bounds(s1, 6, 6);
+        state.assert_bounds(s2, 1, 3);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -1148,10 +1145,8 @@ mod tests {
             ),
         );
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 1);
-        assert_eq!(state.upper_bound(s1), 1);
+        state.assert_bounds(s1, 1, 1);
+        state.assert_bounds(s2, 5, 8);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -1201,12 +1196,9 @@ mod tests {
             ),
         );
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s3), 7);
-        assert_eq!(state.upper_bound(s3), 15);
-        assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 5);
-        assert_eq!(state.lower_bound(s1), 3);
-        assert_eq!(state.upper_bound(s1), 3);
+        state.assert_bounds(s1, 3, 3);
+        state.assert_bounds(s2, 5, 5);
+        state.assert_bounds(s2, 7, 15);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -1251,10 +1243,9 @@ mod tests {
             ),
         );
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 0);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 4);
-        assert_eq!(state.upper_bound(s1), 4);
+
+        state.assert_bounds(s1, 4, 4);
+        state.assert_bounds(s2, 0, 8);
 
         for removed in 2..8 {
             assert!(!state.contains(s2, removed));
