@@ -209,6 +209,8 @@ where
 mod tests {
     use pumpkin_core::state::State;
 
+    use crate::StateExt;
+
     use super::*;
 
     #[test]
@@ -226,8 +228,7 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(absolute), 0);
-        assert_eq!(state.upper_bound(absolute), 4);
+        state.assert_bounds(absolute, 0, 4);
     }
 
     #[test]
@@ -245,8 +246,7 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(signed), -3);
-        assert_eq!(state.upper_bound(signed), 3);
+        state.assert_bounds(signed, -3, 3);
     }
 
     #[test]
@@ -264,8 +264,7 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(absolute), 3);
-        assert_eq!(state.upper_bound(absolute), 6);
+        state.assert_bounds(absolute, 3, 6);
     }
 
     #[test]
@@ -283,8 +282,7 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(absolute), 3);
-        assert_eq!(state.upper_bound(absolute), 5);
+        state.assert_bounds(absolute, 3, 5);
     }
 
     #[test]
@@ -302,8 +300,7 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(signed), -5);
-        assert_eq!(state.upper_bound(signed), -1);
+        state.assert_bounds(signed, -5, -1);
     }
 
     #[test]
@@ -321,7 +318,6 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(signed), 3);
-        assert_eq!(state.upper_bound(signed), 5);
+        state.assert_bounds(signed, 3, 5);
     }
 }

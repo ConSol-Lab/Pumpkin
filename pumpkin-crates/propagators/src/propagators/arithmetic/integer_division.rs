@@ -477,8 +477,7 @@ mod tests {
             rhs,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
 
-        assert!(result.is_err());
+        let _ = state.propagate_to_fixed_point().unwrap_err();
     }
 }

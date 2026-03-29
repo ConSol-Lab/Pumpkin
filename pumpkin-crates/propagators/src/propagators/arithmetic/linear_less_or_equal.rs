@@ -333,6 +333,8 @@ mod tests {
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
 
+    use crate::StateExt;
+
     use super::*;
 
     #[test]
@@ -350,10 +352,8 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(state.lower_bound(x), 1);
-        assert_eq!(state.upper_bound(x), 5);
-        assert_eq!(state.lower_bound(y), 0);
-        assert_eq!(state.upper_bound(y), 6);
+        state.assert_bounds(x, 1, 5);
+        state.assert_bounds(y, 0, 6);
     }
 
     #[test]
@@ -394,7 +394,9 @@ mod tests {
             c: i32::MAX,
             constraint_tag,
         });
-        let _ = state.propagate_to_fixed_point().expect_err("Expected overflow to be detected");
+        let _ = state
+            .propagate_to_fixed_point()
+            .expect_err("Expected overflow to be detected");
     }
 
     #[test]

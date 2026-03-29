@@ -425,6 +425,8 @@ mod tests {
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
 
+    use crate::StateExt;
+
     use super::*;
 
     #[test]
@@ -444,12 +446,9 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(1, state.lower_bound(a));
-        assert_eq!(3, state.upper_bound(a));
-        assert_eq!(0, state.lower_bound(b));
-        assert_eq!(4, state.upper_bound(b));
-        assert_eq!(0, state.lower_bound(c));
-        assert_eq!(12, state.upper_bound(c));
+        state.assert_bounds(a, 1, 3);
+        state.assert_bounds(b, 0, 4);
+        state.assert_bounds(c, 0, 12);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -490,12 +489,9 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(2, state.lower_bound(a));
-        assert_eq!(3, state.upper_bound(a));
-        assert_eq!(1, state.lower_bound(b));
-        assert_eq!(6, state.upper_bound(b));
-        assert_eq!(2, state.lower_bound(c));
-        assert_eq!(12, state.upper_bound(c));
+        state.assert_bounds(a, 2, 3);
+        state.assert_bounds(b, 1, 6);
+        state.assert_bounds(c, 2, 12);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -533,12 +529,9 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no empty domains");
 
-        assert_eq!(1, state.lower_bound(a));
-        assert_eq!(4, state.upper_bound(a));
-        assert_eq!(3, state.lower_bound(b));
-        assert_eq!(6, state.upper_bound(b));
-        assert_eq!(3, state.lower_bound(c));
-        assert_eq!(12, state.upper_bound(c));
+        state.assert_bounds(a, 1, 4);
+        state.assert_bounds(b, 3, 6);
+        state.assert_bounds(c, 3, 12);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(

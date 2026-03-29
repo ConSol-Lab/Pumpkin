@@ -210,7 +210,7 @@ where
 mod tests {
     use pumpkin_core::state::State;
 
-    use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
+    use crate::{StateExt, propagators::arithmetic::BinaryNotEqualsPropagatorArgs};
 
     #[test]
     fn detects_conflict() {
@@ -224,7 +224,9 @@ mod tests {
             b,
             constraint_tag,
         });
-        let _ = state.propagate_to_fixed_point().expect_err("Expected conflict to be detected");
+        let _ = state
+            .propagate_to_fixed_point()
+            .expect_err("Expected conflict to be detected");
     }
 
     #[test]
@@ -243,8 +245,7 @@ mod tests {
             .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        assert_eq!(state.lower_bound(b), 1);
-        assert_eq!(state.upper_bound(b), 1);
+        state.assert_bounds(b, 1, 1);
     }
 
     #[allow(deprecated, reason = "Uses TestSolver for EnqueueDecision assertions")]
@@ -294,9 +295,7 @@ mod tests {
             .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        assert_eq!(state.lower_bound(a), 0);
-        assert_eq!(state.upper_bound(a), 5);
-        assert_eq!(state.lower_bound(b), 6);
-        assert_eq!(state.upper_bound(b), 10);
+        state.assert_bounds(a, 0, 5);
+        state.assert_bounds(b, 6, 10);
     }
 }

@@ -443,7 +443,7 @@ where
 mod tests {
     use pumpkin_core::state::State;
 
-    use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
+    use crate::{StateExt, propagators::arithmetic::BinaryEqualsPropagatorArgs};
 
     #[test]
     fn test_propagation_of_bounds() {
@@ -459,10 +459,8 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
-        assert_eq!(state.lower_bound(a), 3);
-        assert_eq!(state.upper_bound(a), 5);
-        assert_eq!(state.lower_bound(b), 3);
-        assert_eq!(state.upper_bound(b), 5);
+        state.assert_bounds(a, 3, 5);
+        state.assert_bounds(b, 3, 5);
     }
 
     #[test]
@@ -479,10 +477,8 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("no conflict");
 
-        assert_eq!(state.lower_bound(a), 4);
-        assert_eq!(state.upper_bound(a), 9);
-        assert_eq!(state.lower_bound(b), 4);
-        assert_eq!(state.upper_bound(b), 9);
+        state.assert_bounds(a, 4, 9);
+        state.assert_bounds(b, 4, 9);
 
         for i in 5..=8 {
             assert!(!state.contains(a, i));
@@ -541,6 +537,8 @@ mod tests {
             b,
             constraint_tag,
         });
-        let _ = state.propagate_to_fixed_point().expect_err("expected conflict");
+        let _ = state
+            .propagate_to_fixed_point()
+            .expect_err("expected conflict");
     }
 }

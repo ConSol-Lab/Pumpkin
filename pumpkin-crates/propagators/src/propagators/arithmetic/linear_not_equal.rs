@@ -413,6 +413,8 @@ mod tests {
     use pumpkin_core::state::State;
     use pumpkin_core::variables::TransformableVariable;
 
+    use crate::StateExt;
+
     use super::*;
 
     #[test]
@@ -430,10 +432,8 @@ mod tests {
         });
         state.propagate_to_fixed_point().expect("non-empty domain");
 
-        assert_eq!(state.lower_bound(x), 2);
-        assert_eq!(state.upper_bound(x), 2);
-        assert_eq!(state.lower_bound(y), 1);
-        assert_eq!(state.upper_bound(y), 5);
+        state.assert_bounds(x, 2, 2);
+        state.assert_bounds(y, 1, 5);
         assert!(!state.contains(y, 2));
     }
 
