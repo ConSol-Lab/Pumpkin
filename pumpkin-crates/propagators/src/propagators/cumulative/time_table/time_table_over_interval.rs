@@ -507,6 +507,7 @@ mod tests {
     use pumpkin_core::state::State;
     use pumpkin_core::variables::DomainId;
 
+    use crate::StateExt;
     use crate::cumulative::ArgTask;
     use crate::cumulative::options::CumulativePropagatorOptions;
     use crate::cumulative::time_table::CumulativeExplanationType;
@@ -539,10 +540,8 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 1);
-        assert_eq!(state.upper_bound(s1), 1);
+        state.assert_bounds(s1, 1, 1);
+        state.assert_bounds(s2, 5, 8);
     }
 
     #[test]
@@ -627,10 +626,8 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 0);
-        assert_eq!(state.upper_bound(s2), 6);
-        assert_eq!(state.lower_bound(s1), 0);
-        assert_eq!(state.upper_bound(s1), 6);
+        state.assert_bounds(s1, 0, 6);
+        state.assert_bounds(s2, 0, 6);
     }
 
     #[test]
@@ -767,10 +764,214 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 1);
-        assert_eq!(state.upper_bound(s2), 3);
-        assert_eq!(state.lower_bound(s1), 6);
-        assert_eq!(state.upper_bound(s1), 6);
+        state.assert_bounds(s1, 6, 6);
+        state.assert_bounds(s2, 1, 3);
+
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate!(s2 <= 3),
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into_iter().collect();
+        assert_eq!(conjunction!([s2 <= 8] & [s1 >= 6] & [s1 <= 6]), reason);
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "Uses TestSolver for incremental notification assertions"
+    )]
+    fn propagator_propagates_example_4_3_schutt_after_update() {
+        let mut solver = TestSolver::default();
+        let f = solver.new_variable(0, 14);
+        let e = solver.new_variable(0, 4);
+        let d = solver.new_variable(0, 2);
+        let c = solver.new_variable(8, 9);
+        let b = solver.new_variable(2, 3);
+        let a = solver.new_variable(0, 1);
+        let constraint_tag = solver.new_constraint_tag();
+
+        let propagator = solver
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                5,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(a), 0);
+        assert_eq!(solver.upper_bound(a), 1);
+        assert_eq!(solver.lower_bound(b), 2);
+        assert_eq!(solver.upper_bound(b), 3);
+        assert_eq!(solver.lower_bound(c), 8);
+        assert_eq!(solver.upper_bound(c), 9);
+        assert_eq!(solver.lower_bound(d), 0);
+        assert_eq!(solver.upper_bound(d), 2);
+        assert_eq!(solver.lower_bound(e), 0);
+        assert_eq!(solver.upper_bound(e), 4);
+        assert_eq!(solver.lower_bound(f), 0);
+        assert_eq!(solver.upper_bound(f), 14);
+
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 3, e, 3);
+        assert!(match notification_status {
+            EnqueueDecision::Enqueue => true,
+            EnqueueDecision::Skip => false,
+        });
+        let result = solver.propagate(propagator);
+        assert!(result.is_ok());
+        assert_eq!(solver.lower_bound(f), 10);
+    }
+
+    #[test]
+    #[allow(
+        deprecated,
+        reason = "Uses TestSolver for incremental notification assertions"
+    )]
+    fn propagator_propagates_example_4_3_schutt_multiple_profiles() {
+        let mut solver = TestSolver::default();
+        let f = solver.new_variable(0, 14);
+        let e = solver.new_variable(0, 4);
+        let d = solver.new_variable(0, 2);
+        let c = solver.new_variable(8, 9);
+        let b2 = solver.new_variable(5, 5);
+        let b1 = solver.new_variable(3, 3);
+        let a = solver.new_variable(0, 1);
+
+        let constraint_tag = solver.new_constraint_tag();
+
+        let propagator = solver
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b1,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: b2,
+                        processing_time: 3,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                5,
+                CumulativePropagatorOptions::default(),
+                constraint_tag,
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(a), 0);
+        assert_eq!(solver.upper_bound(a), 1);
+        assert_eq!(solver.lower_bound(c), 8);
+        assert_eq!(solver.upper_bound(c), 9);
+        assert_eq!(solver.lower_bound(d), 0);
+        assert_eq!(solver.upper_bound(d), 2);
+        assert_eq!(solver.lower_bound(e), 0);
+        assert_eq!(solver.upper_bound(e), 4);
+        assert_eq!(solver.lower_bound(f), 0);
+        assert_eq!(solver.upper_bound(f), 14);
+
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 4, e, 3);
+        assert!(match notification_status {
+            EnqueueDecision::Enqueue => true,
+            EnqueueDecision::Skip => false,
+        });
+        let result = solver.propagate(propagator);
+        assert!(result.is_ok());
+        assert_eq!(solver.lower_bound(f), 10);
+    }
+
+    #[test]
+    fn propagator_propagates_from_profile_reason() {
+        let mut state = State::default();
+        let s1 = state.new_interval_variable(1, 1, None);
+        let s2 = state.new_interval_variable(1, 8, None);
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(TimeTableOverIntervalPropagator::<DomainId>::new(
+            &[
+                ArgTask {
+                    start_time: s1,
+                    processing_time: 4,
+                    resource_usage: 1,
+                },
+                ArgTask {
+                    start_time: s2,
+                    processing_time: 3,
+                    resource_usage: 1,
+                },
+            ]
+            .into_iter()
+            .collect::<Vec<_>>(),
+            1,
+            CumulativePropagatorOptions {
+                explanation_type: CumulativeExplanationType::Naive,
+                ..Default::default()
+            },
+            constraint_tag,
+        ));
+        state.propagate_to_fixed_point().expect("No conflict");
+        state.assert_bounds(s1, 1, 1);
+        state.assert_bounds(s2, 5, 8);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -976,9 +1177,6 @@ mod tests {
         ));
         state.propagate_to_fixed_point().expect("No conflict");
         assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 1);
-        assert_eq!(state.upper_bound(s1), 1);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -1026,12 +1224,9 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s3), 7);
-        assert_eq!(state.upper_bound(s3), 15);
-        assert_eq!(state.lower_bound(s2), 5);
-        assert_eq!(state.upper_bound(s2), 5);
-        assert_eq!(state.lower_bound(s1), 3);
-        assert_eq!(state.upper_bound(s1), 3);
+        state.assert_bounds(s1, 3, 3);
+        state.assert_bounds(s2, 5, 5);
+        state.assert_bounds(s2, 7, 15);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
@@ -1074,10 +1269,8 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        assert_eq!(state.lower_bound(s2), 0);
-        assert_eq!(state.upper_bound(s2), 8);
-        assert_eq!(state.lower_bound(s1), 4);
-        assert_eq!(state.upper_bound(s1), 4);
+        state.assert_bounds(s1, 4, 4);
+        state.assert_bounds(s2, 0, 8);
 
         for removed in 2..8 {
             assert!(!state.contains(s2, removed));
