@@ -394,8 +394,7 @@ mod tests {
             c: i32::MAX,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
-        assert!(result.is_err(), "Expected overflow to be detected");
+        let _ = state.propagate_to_fixed_point().expect_err("Expected overflow to be detected");
     }
 
     #[test]

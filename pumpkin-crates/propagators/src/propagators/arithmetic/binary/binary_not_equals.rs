@@ -224,9 +224,7 @@ mod tests {
             b,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
-
-        assert!(result.is_err(), "Expected conflict to be detected");
+        let _ = state.propagate_to_fixed_point().expect_err("Expected conflict to be detected");
     }
 
     #[test]

@@ -457,9 +457,7 @@ mod tests {
             b,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
-
-        assert!(result.is_ok());
+        state.propagate_to_fixed_point().expect("no conflict");
 
         assert_eq!(state.lower_bound(a), 3);
         assert_eq!(state.upper_bound(a), 5);
@@ -479,9 +477,7 @@ mod tests {
             b,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
-
-        assert!(result.is_ok());
+        state.propagate_to_fixed_point().expect("no conflict");
 
         assert_eq!(state.lower_bound(a), 4);
         assert_eq!(state.upper_bound(a), 9);
@@ -545,8 +541,6 @@ mod tests {
             b,
             constraint_tag,
         });
-        let result = state.propagate_to_fixed_point();
-
-        assert!(result.is_err());
+        let _ = state.propagate_to_fixed_point().expect_err("expected conflict");
     }
 }
