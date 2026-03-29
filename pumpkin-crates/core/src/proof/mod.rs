@@ -338,27 +338,20 @@ impl ProofLog {
             Ok(_) => {
                 self.supporting_inferences.clear();
             }
-            Err(error) => {
-                match error {
-                    InvalidDeduction::NoConflict(ignored_inferences) => {
-                        eprintln!("Supporting inferences:");
-                        for inference in self.supporting_inferences.iter() {
-                            eprintln!("{:?} -> {:?}", inference.premises, inference.consequent);
-                        }
+            Err(InvalidDeduction(ignored_inferences)) => {
+                eprintln!("Supporting inferences:");
+                for inference in self.supporting_inferences.iter() {
+                    eprintln!("{:?} -> {:?}", inference.premises, inference.consequent);
+                }
 
-                        if !ignored_inferences.is_empty() {
-                            eprintln!("Ignored inferences:");
-                            for ignored_inference in ignored_inferences {
-                                eprintln!(
-                                    "{:?} -> {:?}",
-                                    ignored_inference.inference.premises,
-                                    ignored_inference.inference.consequent
-                                );
-                            }
-                        }
-                    }
-                    InvalidDeduction::InconsistentPremises => {
-                        eprintln!("Inconsistent predicates in learned nogood")
+                if !ignored_inferences.is_empty() {
+                    eprintln!("Ignored inferences:");
+                    for ignored_inference in ignored_inferences {
+                        eprintln!(
+                            "{:?} -> {:?}",
+                            ignored_inference.inference.premises,
+                            ignored_inference.inference.consequent
+                        );
                     }
                 }
 

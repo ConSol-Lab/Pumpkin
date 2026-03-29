@@ -15,18 +15,12 @@ pub struct IgnoredInference<Atomic> {
 }
 
 /// A deduction is rejected by the checker.
+///
+/// The inferences in the proof stage do not derive an empty domain or an explicit
+/// conflict.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
-#[error("invalid deduction")]
-pub enum InvalidDeduction<Atomic> {
-    /// The inferences in the proof stage do not derive an empty domain or an explicit
-    /// conflict.
-    #[error("no conflict was derived after applying all inferences")]
-    NoConflict(Vec<IgnoredInference<Atomic>>),
-
-    /// The premise contains mutually exclusive atomic constraints.
-    #[error("the deduction contains inconsistent premises")]
-    InconsistentPremises,
-}
+#[error("no conflict was derived after applying all inferences")]
+pub struct InvalidDeduction<Atomic>(pub Vec<IgnoredInference<Atomic>>);
 
 /// An inference used to support a deduction.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,8 +49,10 @@ where
     // At some point, this should either reach a fact without a consequent or derive an
     // inconsistent domain.
 
-    let mut variable_state = VariableState::prepare_for_conflict_check(premises, None)
-        .map_err(|_| InvalidDeduction::InconsistentPremises)?;
+    let Ok(mut variable_state) = VariableState::prepare_for_conflict_check(premises, None) else {
+        // If the deduction contains inconsistent premises, its trivially valid.
+        return Ok(());
+    };
 
     let mut unused_inferences = Vec::new();
 
@@ -98,7 +94,7 @@ where
 
     // Reaching this point means that the conjunction of inferences did not yield to a
     // conflict. Therefore the deduction is invalid.
-    Err(InvalidDeduction::NoConflict(unused_inferences))
+    Err(InvalidDeduction(unused_inferences))
 }
 
 #[cfg(test)]
@@ -163,13 +159,12 @@ mod tests {
     }
 
     #[test]
-    fn inconsistent_premises_are_identified() {
+    fn inconsistent_premises_are_no_problem() {
         let premises = vec![test_atomic!([x >= 5]), test_atomic!([x <= 4])];
 
         let inferences = vec![inference!([x == 5] -> false)];
 
-        let error = verify_deduction(premises, inferences).expect_err("inconsistent premises");
-        assert_eq!(InvalidDeduction::InconsistentPremises, error);
+        verify_deduction(premises, inferences).expect("no inconsistency");
     }
 
     #[test]
@@ -182,7 +177,7 @@ mod tests {
         ];
 
         let error = verify_deduction(premises, inferences).expect_err("conflict is not reached");
-        assert_eq!(InvalidDeduction::NoConflict(vec![]), error);
+        assert_eq!(InvalidDeduction(vec![]), error);
     }
 
     #[test]
@@ -197,7 +192,7 @@ mod tests {
 
         let error = verify_deduction(premises, inferences).expect_err("premises are not satisfied");
         assert_eq!(
-            InvalidDeduction::NoConflict(vec![
+            InvalidDeduction(vec![
                 IgnoredInference {
                     inference: inference!([y <= 7] & [x >= 6] -> [z != 10]),
                     unsatisfied_premises: vec![test_atomic!([x >= 6])],

@@ -35,10 +35,6 @@ pub enum InvalidDeduction {
     /// conflict.
     #[error("no conflict was derived after applying all inferences")]
     NoConflict(Vec<IgnoredInference>),
-
-    /// The premise contains mutually exclusive atomic constraints.
-    #[error("the deduction contains inconsistent premises")]
-    InconsistentPremises,
 }
 
 /// Verify that a deduction is valid given the inferences in the proof stage.
@@ -74,21 +70,16 @@ fn convert_error(
     error: pumpkin_checking::InvalidDeduction<Atomic>,
     facts_in_proof_stage: &BTreeMap<ConstraintId, Fact>,
 ) -> InvalidDeduction {
-    match error {
-        pumpkin_checking::InvalidDeduction::NoConflict(ignored_inferences) => {
-            let mapped_ignored_inferences = ignored_inferences
-                .into_iter()
-                .map(|ignored_inference| {
-                    convert_ignored_inferences(ignored_inference, facts_in_proof_stage)
-                })
-                .collect();
+    let pumpkin_checking::InvalidDeduction(ignored_inferences) = error;
 
-            InvalidDeduction::NoConflict(mapped_ignored_inferences)
-        }
-        pumpkin_checking::InvalidDeduction::InconsistentPremises => {
-            InvalidDeduction::InconsistentPremises
-        }
-    }
+    let mapped_ignored_inferences = ignored_inferences
+        .into_iter()
+        .map(|ignored_inference| {
+            convert_ignored_inferences(ignored_inference, facts_in_proof_stage)
+        })
+        .collect();
+
+    InvalidDeduction::NoConflict(mapped_ignored_inferences)
 }
 
 fn convert_ignored_inferences(
