@@ -425,9 +425,8 @@ mod tests {
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
 
-    use crate::StateExt;
-
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn bounds_of_a_and_b_propagate_bounds_c() {

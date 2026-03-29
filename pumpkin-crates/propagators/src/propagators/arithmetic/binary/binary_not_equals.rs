@@ -210,7 +210,8 @@ where
 mod tests {
     use pumpkin_core::state::State;
 
-    use crate::{StateExt, propagators::arithmetic::BinaryNotEqualsPropagatorArgs};
+    use crate::StateExt;
+    use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
     #[test]
     fn detects_conflict() {

@@ -5,7 +5,9 @@
 mod propagators;
 pub use propagators::*;
 #[cfg(test)]
-use pumpkin_core::{state::State, variables::DomainId};
+use pumpkin_core::state::State;
+#[cfg(test)]
+use pumpkin_core::variables::DomainId;
 
 #[cfg(test)]
 pub(crate) trait StateExt {

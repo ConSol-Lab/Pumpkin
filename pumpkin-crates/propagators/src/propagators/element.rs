@@ -409,9 +409,8 @@ mod tests {
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
 
-    use crate::StateExt;
-
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {

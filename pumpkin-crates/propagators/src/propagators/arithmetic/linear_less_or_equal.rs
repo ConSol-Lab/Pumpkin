@@ -333,9 +333,8 @@ mod tests {
     use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::State;
 
-    use crate::StateExt;
-
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn test_bounds_are_propagated() {

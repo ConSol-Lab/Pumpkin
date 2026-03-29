@@ -443,7 +443,8 @@ where
 mod tests {
     use pumpkin_core::state::State;
 
-    use crate::{StateExt, propagators::arithmetic::BinaryEqualsPropagatorArgs};
+    use crate::StateExt;
+    use crate::propagators::arithmetic::BinaryEqualsPropagatorArgs;
 
     #[test]
     fn test_propagation_of_bounds() {

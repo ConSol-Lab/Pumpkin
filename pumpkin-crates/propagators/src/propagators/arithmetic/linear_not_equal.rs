@@ -413,9 +413,8 @@ mod tests {
     use pumpkin_core::state::State;
     use pumpkin_core::variables::TransformableVariable;
 
-    use crate::StateExt;
-
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn test_value_is_removed() {
