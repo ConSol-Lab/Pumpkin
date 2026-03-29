@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 dyn-clone = "1.0.20"
 fnv = "1.0.7"
+thiserror = "2.0.18"
 
 [lints]
 workspace = true
