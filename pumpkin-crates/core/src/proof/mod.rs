@@ -139,8 +139,6 @@ impl ProofLog {
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         assignments: &Assignments,
     ) -> std::io::Result<Option<ConstraintTag>> {
-        assert!(assignments.is_initial_bound(predicate));
-
         if cfg!(feature = "check-deductions") {
             self.supporting_inferences.push(SupportingInference {
                 premises: vec![],
