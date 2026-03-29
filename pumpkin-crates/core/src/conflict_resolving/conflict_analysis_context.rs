@@ -135,6 +135,23 @@ impl ConflictAnalysisContext<'_> {
             .collect()
     }
 
+    /// Get the reason for `predicate` being true, without logging that reason to the proof.
+    pub fn get_propagation_reason_without_proof_log(
+        &mut self,
+        predicate: Predicate,
+        current_nogood: CurrentNogood<'_>,
+        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+    ) -> Option<InferenceCode> {
+        Self::get_propagation_reason_inner(
+            predicate,
+            current_nogood,
+            &mut ProofLog::default(),
+            self.unit_nogood_inference_codes,
+            reason_buffer,
+            self.state,
+        )
+    }
+
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///
@@ -161,6 +178,10 @@ impl ConflictAnalysisContext<'_> {
     pub fn find_last_decision(&mut self) -> Option<Predicate> {
         self.state.assignments.find_last_decision()
     }
+
+    pub fn is_proof_logging_inferences(&self) -> bool {
+        self.proof_log.is_logging_inferences()
+    }
 }
 
 /// Methods used for proof logging
@@ -175,6 +196,26 @@ impl ConflictAnalysisContext<'_> {
             },
             predicate,
         );
+    }
+
+    /// Log an inference to the proof.
+    pub fn log_inference(
+        &mut self,
+        inference_code: InferenceCode,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
+        consequent: Option<Predicate>,
+    ) {
+        let _ = self
+            .proof_log
+            .log_inference(
+                &mut self.state.constraint_tags,
+                inference_code,
+                premises,
+                consequent,
+                &self.state.variable_names,
+                &self.state.assignments,
+            )
+            .expect("Failed to write proof log");
     }
 
     /// Indicate to the proof that the initial domain `predicate` is used in the next

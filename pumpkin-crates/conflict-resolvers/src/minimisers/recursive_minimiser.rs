@@ -31,6 +31,9 @@ pub struct RecursiveMinimiser {
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
 
+    /// Marks the predicates which had their reason logged to the proof.
+    logged_predicates: HashSet<Predicate>,
+
     statistics: RecursiveMinimiserStatistics,
 }
 
@@ -60,6 +63,8 @@ impl NogoodMinimiser for RecursiveMinimiser {
             if label == Label::Poison || label == Label::Keep {
                 nogood[end_position] = learned_predicate;
                 end_position += 1;
+            } else if context.is_proof_logging_inferences() {
+                self.add_inferences_for(context, learned_predicate);
             }
         }
 
@@ -123,7 +128,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we have to take ownership of the reason.
         // TODO: Reuse the allocation if it becomes a bottleneck.
         let mut reason = vec![];
-        let _ = context.get_propagation_reason(
+        let _ = context.get_propagation_reason_without_proof_log(
             input_predicate,
             CurrentNogood::from(current_nogood),
             &mut reason,
@@ -136,10 +141,6 @@ impl RecursiveMinimiser {
                 .unwrap()
                 == 0
             {
-                // The minimisation can introduce new inferences in the proof. If those inferences
-                // contain root-level antecedents, which we identified here, we need to make sure
-                // the proof is aware that that root-level assignment is used.
-                context.explain_root_assignment(antecedent_predicate);
                 continue;
             }
 
@@ -167,6 +168,7 @@ impl RecursiveMinimiser {
                 }
             }
         }
+
         // If the code reaches this part (it did not get into one of the previous 'return'
         // statements, so all antecedents of the literal are either KEEP or REMOVABLE),
         // meaning this literal is REMOVABLE.
@@ -223,6 +225,8 @@ impl RecursiveMinimiser {
     ) {
         pumpkin_assert_simple!(self.current_depth == 0);
 
+        self.logged_predicates.clear();
+
         // Mark literals from the initial learned nogood.
         for &predicate in nogood {
             // Predicates from the current decision level are always kept.
@@ -256,6 +260,25 @@ impl RecursiveMinimiser {
     fn is_at_max_allowed_depth(&self) -> bool {
         pumpkin_assert_moderate!(self.current_depth <= 500);
         self.current_depth == 500
+    }
+
+    fn add_inferences_for(&mut self, context: &mut ConflictAnalysisContext, predicate: Predicate) {
+        if context.get_checkpoint_for_predicate(predicate).unwrap() == 0 {
+            context.explain_root_assignment(predicate);
+            return;
+        }
+
+        if [Label::Keep, Label::Poison].contains(&self.get_predicate_label(predicate)) {
+            return;
+        }
+
+        let mut reason_buffer = vec![];
+        let _ =
+            context.get_propagation_reason(predicate, CurrentNogood::empty(), &mut reason_buffer);
+
+        for antecedent in reason_buffer {
+            self.add_inferences_for(context, antecedent);
+        }
     }
 }
 

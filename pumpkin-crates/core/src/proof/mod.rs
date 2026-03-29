@@ -310,7 +310,7 @@ impl ProofLog {
                 propagation_order_hint: Some(_),
                 ..
             })
-        )
+        ) || cfg!(feature = "check-deductions")
     }
 
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
