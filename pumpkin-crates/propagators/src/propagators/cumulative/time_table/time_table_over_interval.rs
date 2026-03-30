@@ -883,12 +883,12 @@ mod tests {
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
-            predicate!(s2 <= 3),
+            predicate!(s2 >= 5),
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
         let reason: PropositionalConjunction = reason_buffer.into_iter().collect();
-        assert_eq!(conjunction!([s2 <= 8] & [s1 >= 6] & [s1 <= 6]), reason);
+        assert_eq!(conjunction!([s2 >= 1] & [s1 >= 1] & [s1 <= 1]), reason);
     }
 
     #[test]
@@ -1002,7 +1002,7 @@ mod tests {
         state.propagate_to_fixed_point().expect("No conflict");
         state.assert_bounds(s1, 3, 3);
         state.assert_bounds(s2, 5, 5);
-        state.assert_bounds(s2, 7, 15);
+        state.assert_bounds(s3, 7, 15);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(

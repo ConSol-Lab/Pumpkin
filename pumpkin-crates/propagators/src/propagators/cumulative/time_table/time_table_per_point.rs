@@ -562,8 +562,8 @@ mod tests {
             constraint_tag,
         ));
         state.propagate_to_fixed_point().expect("No conflict");
-        state.assert_bounds(s1, 1, 3);
-        state.assert_bounds(s2, 6, 6);
+        state.assert_bounds(s1, 6, 6);
+        state.assert_bounds(s2, 1, 3);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
         let _ = state.get_propagation_reason(
