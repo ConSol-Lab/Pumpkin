@@ -10,6 +10,11 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    let gitcl = vergen_gix::GixBuilder::all_git()?;
+    vergen_gix::Emitter::default()
+        .add_instructions(&gitcl)?
+        .emit()?;
+
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-env-changed=NO_CHECKERS");
 
