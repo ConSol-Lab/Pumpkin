@@ -846,7 +846,8 @@ impl State {
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.
     ///
-    /// All the predicates in the returned slice will evaluate to `true`.
+    /// All the predicates appended to the `reason_buffer` will evaluate to `true`. The buffer
+    /// is _not_ cleared before predicates are appended.
     ///
     /// If the provided predicate is not true, then this method will panic.
     pub fn get_propagation_reason(
