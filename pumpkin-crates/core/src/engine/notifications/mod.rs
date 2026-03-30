@@ -8,6 +8,7 @@ pub(crate) use domain_event_notification::Watchers;
 pub use domain_event_notification::domain_events::DomainEvents;
 pub use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
+use log::trace;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use crate::basic_types::PredicateId;
@@ -169,6 +170,12 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
+        // If the predicate is trivially true, then the propagator will never be notified.
+        // Therefore, it makes no sense to track it.
+        if assignments.is_initial_bound(self.get_predicate(predicate_id)) {
+            return;
+        }
+
         self.watch_list_predicate_id
             .accomodate(predicate_id, vec![]);
         self.watch_list_predicate_id[predicate_id].push(propagator_id);
@@ -181,7 +188,13 @@ impl NotificationEngine {
         &mut self,
         predicate_id: PredicateId,
         propagator_to_unwatch: PropagatorId,
+        assignments: &Assignments,
     ) {
+        // If the predicate is an initial bound, then it was never watched to begin with.
+        if assignments.is_initial_bound(self.get_predicate(predicate_id)) {
+            return;
+        }
+
         let watch_list = &mut self.watch_list_predicate_id[predicate_id];
 
         let index = watch_list
@@ -399,6 +412,8 @@ impl NotificationEngine {
                     let enqueue_decision =
                         propagator.notify_predicate_id_satisfied(context.reborrow(), predicate_id);
 
+                    trace!("notifying {propagator_id:?}");
+
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
                     }
@@ -418,6 +433,8 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
     ) {
         let context = NotificationContext::new(trailed_values, assignments);
+
+        trace!("notifying {propagator_id:?}");
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 

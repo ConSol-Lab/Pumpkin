@@ -53,6 +53,7 @@ impl DebugHelper {
         propagators: &PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
+        println!("===== start debug fixed point propagation");
         let mut assignments_clone = assignments.clone();
         let mut trailed_values_clone = trailed_values.clone();
         let mut notification_engine_clone =
@@ -114,6 +115,7 @@ impl DebugHelper {
                 panic!("missed propagations");
             }
         }
+        println!("===== end debug fixed point propagation");
         true
     }
 

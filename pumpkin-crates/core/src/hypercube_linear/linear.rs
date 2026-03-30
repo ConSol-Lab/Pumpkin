@@ -1,6 +1,7 @@
 use std::num::NonZero;
 
 use crate::containers::HashMap;
+use crate::hypercube_linear::BoundPredicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
@@ -10,6 +11,12 @@ use crate::variables::TransformableVariable;
 pub struct LinearInequality {
     terms: Box<[AffineView<DomainId>]>,
     bound: i32,
+}
+
+impl Default for LinearInequality {
+    fn default() -> Self {
+        LinearInequality::trivially_false()
+    }
 }
 
 impl LinearInequality {
@@ -68,6 +75,25 @@ impl LinearInequality {
     /// Get the term for the given domain.
     pub fn term_for_domain(&self, domain: DomainId) -> Option<AffineView<DomainId>> {
         self.terms().find(|view| view.inner == domain)
+    }
+
+    /// Weakens the linear inequality on the given bound.
+    ///
+    /// Does nothing if the bound does not contribute to the slack of the linear.
+    pub fn weaken(&mut self, bound: BoundPredicate, count: u32) {
+        todo!()
+    }
+
+    /// Weakens the linear inequality on the given bound and ensures the weight of the domain
+    /// of the bound is 0.
+    ///
+    /// Does nothing if the bound does not contribute to the slack of the linear.
+    pub fn weaken_to_zero(&mut self, bound: BoundPredicate) {
+        let Some(term) = self.term_for_domain(bound.domain) else {
+            return;
+        };
+
+        self.weaken(bound, term.scale.unsigned_abs());
     }
 }
 

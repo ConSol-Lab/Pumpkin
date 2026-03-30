@@ -10,6 +10,7 @@ repository.workspace = true
 
 [dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
+clap-verbosity-flag = "3.0.4"
 env_logger = "0.10.0"
 flatzinc = "0.3.21"
 log = "0.4.27"

@@ -44,6 +44,47 @@ impl Predicate {
     pub fn get_predicate_type(&self) -> PredicateType {
         (*self).into()
     }
+
+    /// Returns `self` if this implies `other`.
+    pub fn implies(&self, other: Predicate) -> bool {
+        if self.get_domain() != other.get_domain() {
+            // Predicates only imply other predicates on the same domain.
+            return false;
+        }
+
+        match self.get_predicate_type() {
+            PredicateType::LowerBound => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() > other.get_right_hand_side(),
+                PredicateType::UpperBound | PredicateType::Equal => false,
+            },
+            PredicateType::UpperBound => match other.get_predicate_type() {
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() < other.get_right_hand_side(),
+                PredicateType::LowerBound | PredicateType::Equal => false,
+            },
+            PredicateType::NotEqual => {
+                other.get_predicate_type() == PredicateType::NotEqual
+                    && self.get_right_hand_side() == other.get_right_hand_side()
+            }
+            PredicateType::Equal => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => {
+                    self.get_right_hand_side() != other.get_right_hand_side()
+                }
+                PredicateType::Equal => self.get_right_hand_side() == other.get_right_hand_side(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Hash, EnumSetType)]

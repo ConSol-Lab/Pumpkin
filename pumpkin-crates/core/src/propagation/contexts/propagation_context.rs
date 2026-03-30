@@ -1,4 +1,5 @@
 use crate::basic_types::PredicateId;
+use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;
@@ -134,8 +135,11 @@ impl<'a> PropagationContext<'a> {
 
     /// Stop being enqueued for the given predicate.
     pub fn unregister_predicate(&mut self, predicate_id: PredicateId) {
-        self.notification_engine
-            .unwatch_predicate(predicate_id, self.propagator_id);
+        self.notification_engine.unwatch_predicate(
+            predicate_id,
+            self.propagator_id,
+            self.assignments,
+        );
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -249,6 +253,10 @@ impl PropagationContext<'_> {
             Some((slot.reason_ref(), inference_code.clone())),
             self.notification_engine,
         );
+
+        if predicate.get_domain().index() == 18 {
+            println!("propagated {predicate:?} with result {modification_result:?}");
+        }
 
         match modification_result {
             Ok(false) => Ok(()),
