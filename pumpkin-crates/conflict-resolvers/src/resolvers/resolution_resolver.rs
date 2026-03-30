@@ -6,9 +6,11 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
+use pumpkin_core::predicate;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
+use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
@@ -268,56 +270,95 @@ impl ResolutionResolver {
                 self.to_process_heap.delete_key(next_id);
             }
 
-            // Then we check whether the predicate was not already present in the heap, if
-            // this is not the case then we insert it
-            if !self.to_process_heap.is_key_present(predicate_id)
-                && *self.to_process_heap.get_value(predicate_id) == 0
+            context.predicate_appeared_in_conflict(predicate);
+
+            self.to_process_heap.set_value(predicate_id, 0);
+            self.to_process_heap.delete_key(predicate_id);
+
+            for element in self
+                .to_process_heap
+                .keys()
+                .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
+                .filter(|element| {
+                    element.get_domain() == predicate.get_domain()
+                        && context.get_state().trail_position(*element)
+                            != context.get_state().trail_position(predicate)
+                })
+                .collect::<Vec<_>>()
             {
-                context.predicate_appeared_in_conflict(predicate);
+                match (element.get_predicate_type(), predicate.get_predicate_type()) {
+                    (PredicateType::Equal, PredicateType::NotEqual) => return,
+                    (PredicateType::Equal, PredicateType::UpperBound) => return,
+                    (PredicateType::Equal, PredicateType::LowerBound) => return,
+                    (PredicateType::UpperBound, PredicateType::UpperBound) => {
+                        if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+                            return;
+                        } else {
+                            let element_id = self.predicate_id_generator.get_id(element);
+                            self.to_process_heap.delete_key(element_id);
+                        }
+                    }
+                    (PredicateType::UpperBound, PredicateType::NotEqual) => {
+                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                            // todo!()
+                        } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
+                            return;
+                        }
+                    }
+                    (PredicateType::LowerBound, PredicateType::LowerBound) => {
+                        if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+                            return;
+                        } else {
+                            let element_id = self.predicate_id_generator.get_id(element);
+                            self.to_process_heap.delete_key(element_id);
+                        }
+                    }
+                    (PredicateType::LowerBound, PredicateType::NotEqual) => {
+                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                            // todo!()
+                        } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
+                            return;
+                        }
+                    }
+                    (PredicateType::UpperBound, PredicateType::LowerBound) => {
+                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                            // todo!()
+                        }
+                    }
 
-                // The goal is to traverse predicate in reverse order of the trail.
-                //
-                // However some predicates may share the trail position. For example, if a
-                // predicate that was posted to trail resulted in
-                // some other predicates being true, then all
-                // these predicates would have the same trail position.
-                //
-                // When considering the predicates in reverse order of the trail, the
-                // implicitly set predicates are posted after the
-                // explicitly set one, but they all have the same
-                // trail position.
-                //
-                // To remedy this, we make a tie-breaking scheme to prioritise implied
-                // predicates over explicit predicates. This is done
-                // by assigning explicitly set predicates the
-                // value `2 * trail_position`, whereas implied predicates get `2 *
-                // trail_position + 1`.
-                let heap_value = if context.get_state().is_on_trail(predicate) {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                } else {
-                    context
-                        .get_state()
-                        .trail_position(predicate)
-                        .expect("Predicate should be true during conflict analysis")
-                        * 2
-                        + 1
-                };
-
-                // We restore the key and since we know that the value is 0, we can safely
-                // increment with `heap_value`
-                self.to_process_heap.restore_key(predicate_id);
-                self.to_process_heap
-                    .increment(predicate_id, heap_value as u32);
-
-                pumpkin_assert_moderate!(
-                    *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
-                    "The value in the heap should be the same as was added"
-                )
+                    _ => {}
+                }
             }
+
+            // The goal is to traverse predicate in reverse order of the trail.
+            //
+            // However some predicates may share the trail position. For example, if a
+            // predicate that was posted to trail resulted in
+            // some other predicates being true, then all
+            // these predicates would have the same trail position.
+            //
+            // When considering the predicates in reverse order of the trail, the
+            // implicitly set predicates are posted after the
+            // explicitly set one, but they all have the same
+            // trail position.
+            //
+            // To remedy this, we make a tie-breaking scheme to prioritise implied
+            // predicates over explicit predicates. This is done
+            // by assigning explicitly set predicates the
+            // value `2 * trail_position`, whereas implied predicates get `2 *
+            // trail_position + 1`.
+            let heap_value = get_heap_value(predicate, context);
+
+            // We restore the key and since we know that the value is 0, we can safely
+            // increment with `heap_value`
+            self.to_process_heap.restore_key(predicate_id);
+            self.to_process_heap
+                .set_value(predicate_id, heap_value as u32);
+
+            pumpkin_assert_simple!(
+                *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
+                "The value in the heap should be the same as was added"
+            )
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
@@ -391,5 +432,22 @@ impl ResolutionResolver {
         for predicate in self.processed_nogood_predicates.iter() {
             context.predicate_appeared_in_conflict(*predicate);
         }
+    }
+}
+
+fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> usize {
+    if context.get_state().is_on_trail(predicate) {
+        context
+            .get_state()
+            .trail_position(predicate)
+            .expect("Predicate should be true during conflict analysis")
+            * 2
+    } else {
+        context
+            .get_state()
+            .trail_position(predicate)
+            .expect("Predicate should be true during conflict analysis")
+            * 2
+            + 1
     }
 }

@@ -62,7 +62,7 @@ where
     /// Get the keys in the heap.
     ///
     /// The order in which the keys are yielded is unspecified.
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Key> + '_ {
+    pub fn keys(&self) -> impl Iterator<Item = Key> + '_ {
         self.map_position_to_key[..self.end_position]
             .iter()
             .copied()
@@ -116,6 +116,16 @@ where
     pub fn increment(&mut self, key: Key, increment: Value) {
         let position = self.map_key_to_position[key];
         self.values[position] += increment;
+        // Recall that increment may be applied to keys not present
+        // So we only apply sift up in case the key is present
+        if self.is_key_present(key) {
+            self.sift_up(position);
+        }
+    }
+
+    pub fn set_value(&mut self, key: Key, value: Value) {
+        let position = self.map_key_to_position[key];
+        self.values[position] = value;
         // Recall that increment may be applied to keys not present
         // So we only apply sift up in case the key is present
         if self.is_key_present(key) {
