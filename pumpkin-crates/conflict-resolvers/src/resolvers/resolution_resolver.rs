@@ -1,5 +1,4 @@
 use pumpkin_core::asserts::pumpkin_assert_advanced;
-use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::conflict_resolving::ConflictResolver;
@@ -88,6 +87,7 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
+        num_removed_during_analysis: usize,
 });
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -292,8 +292,10 @@ impl ResolutionResolver {
                     (PredicateType::Equal, PredicateType::LowerBound) => return,
                     (PredicateType::UpperBound, PredicateType::UpperBound) => {
                         if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+                            self.statistics.num_removed_during_analysis += 1;
                             return;
                         } else {
+                            self.statistics.num_removed_during_analysis += 1;
                             let element_id = self.predicate_id_generator.get_id(element);
                             self.to_process_heap.delete_key(element_id);
                         }
@@ -302,13 +304,16 @@ impl ResolutionResolver {
                         if element.get_right_hand_side() == predicate.get_right_hand_side() {
                             // todo!()
                         } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
+                            self.statistics.num_removed_during_analysis += 1;
                             return;
                         }
                     }
                     (PredicateType::LowerBound, PredicateType::LowerBound) => {
                         if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+                            self.statistics.num_removed_during_analysis += 1;
                             return;
                         } else {
+                            self.statistics.num_removed_during_analysis += 1;
                             let element_id = self.predicate_id_generator.get_id(element);
                             self.to_process_heap.delete_key(element_id);
                         }
@@ -317,6 +322,7 @@ impl ResolutionResolver {
                         if element.get_right_hand_side() == predicate.get_right_hand_side() {
                             // todo!()
                         } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
+                            self.statistics.num_removed_during_analysis += 1;
                             return;
                         }
                     }
