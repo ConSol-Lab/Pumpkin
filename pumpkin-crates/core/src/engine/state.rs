@@ -175,6 +175,10 @@ impl State {
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
     ///
+    /// Variables can be unnamed. In that case, `None` can be provided as the name. However,
+    /// when the solver queries the name (e.g. when logging a proof), and no name exists for a
+    /// domain, the solver will crash.
+    ///
     /// Creation of new domains is not influenced by the current checkpoint of the state. If
     /// a domain is created at a non-zero checkpoint, then it will _not_ 'disappear' when
     /// backtracking past the checkpoint where the domain was created.)
