@@ -175,6 +175,10 @@ impl State {
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
     ///
+    /// Variables can be unnamed. In that case, `None` can be provided as the name. However,
+    /// when the solver queries the name (e.g. when logging a proof), and no name exists for a
+    /// domain, the solver will crash.
+    ///
     /// Creation of new domains is not influenced by the current checkpoint of the state. If
     /// a domain is created at a non-zero checkpoint, then it will _not_ 'disappear' when
     /// backtracking past the checkpoint where the domain was created.)
@@ -846,7 +850,8 @@ impl State {
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.
     ///
-    /// All the predicates in the returned slice will evaluate to `true`.
+    /// All the predicates appended to the `reason_buffer` will evaluate to `true`. The buffer
+    /// is _not_ cleared before predicates are appended.
     ///
     /// If the provided predicate is not true, then this method will panic.
     pub fn get_propagation_reason(
