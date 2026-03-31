@@ -87,7 +87,7 @@ where
                 .unwrap();
 
             for t in lst..est + propagating_task.processing_time {
-                *profile.entry(t).or_insert(0) += propagating_task.resource_usage;
+                *profile.entry(t).or_insert(0) -= propagating_task.resource_usage;
                 if *profile.get(&t).unwrap() > self.capacity {
                     return true;
                 }
