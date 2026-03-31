@@ -67,7 +67,7 @@ impl ConflictResolver for HypercubeLinearResolver {
             _ => unreachable!("can only resolve empty domain or propagator conflicts"),
         };
 
-        self.resolve_conflict_impl(context.state, conflict);
+        self.resolve_conflict_impl(context, conflict);
     }
 
     fn log_statistics(&self, logger: StatisticLogger) {
@@ -83,18 +83,18 @@ struct LearnedHypercubeLinear {
 }
 
 impl HypercubeLinearResolver {
-    fn resolve_conflict_impl(&mut self, state: &mut State, conflict: Conflict) {
-        let learned_constraint = self.learn_hypercube_linear(state, conflict);
+    fn resolve_conflict_impl(&mut self, context: &mut ConflictAnalysisContext, conflict: Conflict) {
+        let learned_constraint = self.learn_hypercube_linear(context.state, conflict);
 
         #[cfg(feature = "hl-checks")]
         self.assert_new_constraint(learned_constraint.clone());
 
         let predicates_str = learned_constraint.hypercube.iter_predicates().join("& ");
 
-        let _ = state.restore_to(learned_constraint.propagates_at);
+        context.restore_to(learned_constraint.propagates_at);
 
-        let constraint_tag = state.new_constraint_tag();
-        let handle = state.add_propagator(HypercubeLinearConstructor {
+        let constraint_tag = context.state.new_constraint_tag();
+        let handle = context.state.add_propagator(HypercubeLinearConstructor {
             hypercube: learned_constraint.hypercube,
             linear: learned_constraint.linear,
             constraint_tag,
