@@ -15,16 +15,52 @@ macro_rules! mzn_test {
     ($name:ident, $file:expr, $options:expr) => {
         #[test]
         fn $name() {
+            let mut actual_options = vec![];
+            actual_options.extend($options);
+
             let output = run_mzn_test_with_options::<false>(
                 $file,
                 "mzn_constraints",
                 false,
                 TestType::SolutionEnumeration,
-                $options,
+                actual_options.clone(),
+                stringify!($name),
+            );
+            assert!(output.ends_with("==========\n"));
+
+            actual_options.extend([
+                "--conflict-resolver".to_owned(),
+                "hypercube-linear".to_owned(),
+            ]);
+
+            let output = run_mzn_test_with_options::<false>(
+                $file,
+                "mzn_constraints",
+                false,
+                TestType::SolutionEnumeration,
+                actual_options,
                 stringify!($name),
             );
             assert!(output.ends_with("==========\n"));
         }
+
+        // paste::paste! {
+        //     #[test]
+        //     fn [<$name _with_hl_resolution>]() {
+        //         let mut actual_options = vec![];
+        //         actual_options.extend($options);
+
+        //         let output = run_mzn_test_with_options::<false>(
+        //             $file,
+        //             "mzn_constraints",
+        //             false,
+        //             TestType::SolutionEnumeration,
+        //             actual_options.clone(),
+        //             stringify!($name),
+        //         );
+        //         assert!(output.ends_with("==========\n"));
+        //     }
+        // }
     };
 }
 
