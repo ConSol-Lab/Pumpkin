@@ -162,6 +162,8 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    /// Whether semantic minimisation is applied during conflict analysis.
+    pub iterative_minimisation: bool,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -173,6 +175,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
+            iterative_minimisation: false,
         }
     }
 }

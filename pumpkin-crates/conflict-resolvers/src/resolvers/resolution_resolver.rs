@@ -68,11 +68,12 @@ pub struct ResolutionResolver {
     statistics: LearnedNogoodStatistics,
 
     should_minimise: bool,
+    iterative_minimisation: bool,
 }
 
 impl Default for ResolutionResolver {
     fn default() -> Self {
-        ResolutionResolver::new(AnalysisMode::OneUIP, true)
+        ResolutionResolver::new(AnalysisMode::OneUIP, true, false)
     }
 }
 
@@ -89,7 +90,7 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
-        iterative_minimisation: IterativeMinimisationStatistics
+        iterative_minimisation_statistics: IterativeMinimisationStatistics
 });
 
 create_statistics_struct!(IterativeMinimisationStatistics {
@@ -147,7 +148,7 @@ impl ConflictResolver for ResolutionResolver {
 }
 
 impl ResolutionResolver {
-    pub fn new(mode: AnalysisMode, should_minimise: bool) -> Self {
+    pub fn new(mode: AnalysisMode, should_minimise: bool, iterative_minimisation: bool) -> Self {
         Self {
             mode,
             to_process_heap: Default::default(),
@@ -159,6 +160,7 @@ impl ResolutionResolver {
             semantic_minimiser: Default::default(),
             statistics: Default::default(),
             should_minimise,
+            iterative_minimisation,
         }
     }
 
@@ -281,47 +283,57 @@ impl ResolutionResolver {
                 self.to_process_heap.delete_key(next_id);
             }
 
-            context.predicate_appeared_in_conflict(predicate);
-
-            self.to_process_heap.set_value(predicate_id, 0);
-            self.to_process_heap.delete_key(predicate_id);
-
-            if let ControlFlow::Break(_) = self.check_redundancy_previous_level(predicate, context)
+            if self.iterative_minimisation
+                || (!self.to_process_heap.is_key_present(predicate_id)
+                    && *self.to_process_heap.get_value(predicate_id) == 0)
             {
-                return;
+                context.predicate_appeared_in_conflict(predicate);
+
+                self.to_process_heap.set_value(predicate_id, 0);
+                self.to_process_heap.delete_key(predicate_id);
+
+                if self.iterative_minimisation {
+                    if let ControlFlow::Break(_) =
+                        self.check_redundancy_previous_level(predicate, context)
+                    {
+                        return;
+                    }
+                    if let ControlFlow::Break(_) =
+                        self.check_redundancy_current_level(predicate, context)
+                    {
+                        return;
+                    }
+                }
+
+                // The goal is to traverse predicate in reverse order of the trail.
+                //
+                // However some predicates may share the trail position. For example, if a
+                // predicate that was posted to trail resulted in
+                // some other predicates being true, then all
+                // these predicates would have the same trail position.
+                //
+                // When considering the predicates in reverse order of the trail, the
+                // implicitly set predicates are posted after the
+                // explicitly set one, but they all have the same
+                // trail position.
+                //
+                // To remedy this, we make a tie-breaking scheme to prioritise implied
+                // predicates over explicit predicates. This is done
+                // by assigning explicitly set predicates the
+                // value `2 * trail_position`, whereas implied predicates get `2 *
+                // trail_position + 1`.
+                let heap_value = get_heap_value(predicate, context);
+
+                // We restore the key and since we know that the value is 0, we can safely
+                // increment with `heap_value`
+                self.to_process_heap.restore_key(predicate_id);
+                self.to_process_heap.set_value(predicate_id, heap_value);
+
+                pumpkin_assert_simple!(
+                    *self.to_process_heap.get_value(predicate_id) == heap_value,
+                    "The value in the heap should be the same as was added"
+                );
             }
-            if let ControlFlow::Break(_) = self.check_redundancy_current_level(predicate, context) {
-                return;
-            }
-
-            // The goal is to traverse predicate in reverse order of the trail.
-            //
-            // However some predicates may share the trail position. For example, if a
-            // predicate that was posted to trail resulted in
-            // some other predicates being true, then all
-            // these predicates would have the same trail position.
-            //
-            // When considering the predicates in reverse order of the trail, the
-            // implicitly set predicates are posted after the
-            // explicitly set one, but they all have the same
-            // trail position.
-            //
-            // To remedy this, we make a tie-breaking scheme to prioritise implied
-            // predicates over explicit predicates. This is done
-            // by assigning explicitly set predicates the
-            // value `2 * trail_position`, whereas implied predicates get `2 *
-            // trail_position + 1`.
-            let heap_value = get_heap_value(predicate, context);
-
-            // We restore the key and since we know that the value is 0, we can safely
-            // increment with `heap_value`
-            self.to_process_heap.restore_key(predicate_id);
-            self.to_process_heap.set_value(predicate_id, heap_value);
-
-            pumpkin_assert_simple!(
-                *self.to_process_heap.get_value(predicate_id) == heap_value,
-                "The value in the heap should be the same as was added"
-            )
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
@@ -349,16 +361,20 @@ impl ResolutionResolver {
                 (PredicateType::Equal, PredicateType::NotEqual)
                 | (PredicateType::Equal, PredicateType::UpperBound)
                 | (PredicateType::Equal, PredicateType::LowerBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_current_dl += 1;
                     return ControlFlow::Break(());
                 }
                 (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_current_dl += 1;
                     if element.get_right_hand_side() <= predicate.get_right_hand_side() {
                         return ControlFlow::Break(());
@@ -369,30 +385,38 @@ impl ResolutionResolver {
                 }
                 (PredicateType::UpperBound, PredicateType::NotEqual) => {
                     if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_current_dl += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
                             .num_replaced_with_new_current_dl += 1;
                         let domain = element.get_domain();
 
                         let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
                         self.replace_if_possible_current_level(context, element, new_predicate)?;
                     } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_current_dl += 1;
-                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
                         return ControlFlow::Break(());
                     }
                 }
                 (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_current_dl += 1;
                     if element.get_right_hand_side() >= predicate.get_right_hand_side() {
                         return ControlFlow::Break(());
@@ -403,21 +427,25 @@ impl ResolutionResolver {
                 }
                 (PredicateType::LowerBound, PredicateType::NotEqual) => {
                     if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_current_dl += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
                             .num_replaced_with_new_current_dl += 1;
                         let domain = element.get_domain();
 
                         let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
                         self.replace_if_possible_current_level(context, element, new_predicate)?;
                     } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_current_dl += 1;
                         return ControlFlow::Break(());
                     }
@@ -425,12 +453,14 @@ impl ResolutionResolver {
                 (PredicateType::UpperBound, PredicateType::LowerBound)
                     if element.get_right_hand_side() == predicate.get_right_hand_side() =>
                 {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_current_dl += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
                         .num_replaced_with_new_current_dl += 1;
                     let domain = element.get_domain();
 
@@ -489,16 +519,20 @@ impl ResolutionResolver {
                 (PredicateType::Equal, PredicateType::NotEqual)
                 | (PredicateType::Equal, PredicateType::UpperBound)
                 | (PredicateType::Equal, PredicateType::LowerBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_previous_dl += 1;
                     return ControlFlow::Break(());
                 }
                 (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_previous_dl += 1;
                     if element.get_right_hand_side() <= predicate.get_right_hand_side() {
                         return ControlFlow::Break(());
@@ -514,29 +548,35 @@ impl ResolutionResolver {
                 }
                 (PredicateType::UpperBound, PredicateType::NotEqual) => {
                     if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_previous_dl += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
                             .num_replaced_with_new_previous_dl += 1;
 
                         let domain = element.get_domain();
                         let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
                         self.replace_if_possible_previous_level(context, element, new_predicate)?;
                     } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_previous_dl += 1;
                         return ControlFlow::Break(());
                     }
                 }
                 (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_previous_dl += 1;
                     if element.get_right_hand_side() >= predicate.get_right_hand_side() {
                         return ControlFlow::Break(());
@@ -552,21 +592,25 @@ impl ResolutionResolver {
                 }
                 (PredicateType::LowerBound, PredicateType::NotEqual) => {
                     if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_previous_dl += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
                             .num_replaced_with_new_previous_dl += 1;
 
                         let domain = element.get_domain();
                         let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
                         self.replace_if_possible_previous_level(context, element, new_predicate)?;
                     } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
-                        self.statistics.iterative_minimisation.num_removed += 1;
                         self.statistics
-                            .iterative_minimisation
+                            .iterative_minimisation_statistics
+                            .num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation_statistics
                             .num_removed_previous_dl += 1;
                         return ControlFlow::Break(());
                     }
@@ -574,12 +618,14 @@ impl ResolutionResolver {
                 (PredicateType::UpperBound, PredicateType::LowerBound)
                     if element.get_right_hand_side() == predicate.get_right_hand_side() =>
                 {
-                    self.statistics.iterative_minimisation.num_removed += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation_statistics
                         .num_removed_previous_dl += 1;
                     self.statistics
-                        .iterative_minimisation
+                        .iterative_minimisation_statistics
                         .num_replaced_with_new_previous_dl += 1;
 
                     let domain = element.get_domain();
