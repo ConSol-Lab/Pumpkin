@@ -19,6 +19,7 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;
+use crate::state::PropagatorId;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 
@@ -359,6 +360,15 @@ impl Propagator for HypercubeLinearPropagator {
             // If the hypercube contains at least one false predicate, the propagator will not do
             // anything.
             return Ok(());
+        }
+
+        use crate::containers::StorageKey;
+        if context.propagator_id == PropagatorId::create_from_index(100) {
+            println!("================ state of {}", context.propagator_id);
+            for p in self.hypercube_predicates.iter().copied() {
+                let v = context.evaluate_predicate(p);
+                println!(" - {p:?} = {v:?}");
+            }
         }
 
         // Get the predicates that are not assigned to true.

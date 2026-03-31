@@ -28,6 +28,11 @@ impl PredicateHeap {
         self.heap.drain().map(|to_explain| to_explain.predicate)
     }
 
+    /// See [`BinaryHeap::iter`].
+    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = Predicate> + '_ {
+        self.heap.iter().map(|to_explain| to_explain.predicate)
+    }
+
     /// Push a new predicate onto the heap.
     ///
     /// Its priority will be based on its trail position in the given `state`. This heap will

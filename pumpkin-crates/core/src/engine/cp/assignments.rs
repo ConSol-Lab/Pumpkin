@@ -788,6 +788,67 @@ impl Assignments {
             })
             .unwrap_or_else(|| panic!("could not find a reason for predicate {predicate}"))
     }
+
+    /// Get the last trail position that is on the given checkpoint.
+    pub(crate) fn get_trail_position_at_checkpoint(&self, checkpoint: usize) -> usize {
+        self.trail.get_trail_position_at_decision_level(checkpoint)
+    }
+
+    /// Same as [ Self::evaluate_predicate`] but at a given trail position.
+    pub(crate) fn evaluate_predicate_at_trail_position(
+        &self,
+        predicate: Predicate,
+        trail_position: usize,
+    ) -> Option<bool> {
+        let domain_id = predicate.get_domain();
+        let value = predicate.get_right_hand_side();
+
+        let lb = self.get_lower_bound_at_trail_position(domain_id, trail_position);
+        let ub = self.get_upper_bound_at_trail_position(domain_id, trail_position);
+
+        match predicate.get_predicate_type() {
+            PredicateType::LowerBound => {
+                if lb >= value {
+                    Some(true)
+                } else if ub < value {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::UpperBound => {
+                if ub <= value {
+                    Some(true)
+                } else if lb > value {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::NotEqual => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(true)
+                } else if lb == ub {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(lb == value);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            PredicateType::Equal => {
+                if !self.is_value_in_domain_at_trail_position(domain_id, value, trail_position) {
+                    Some(false)
+                } else if lb == ub {
+                    pumpkin_assert_moderate!(lb == value);
+                    Some(true)
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

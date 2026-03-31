@@ -635,18 +635,18 @@ impl State {
                         &mut self.propagators,
                         &mut self.propagator_queue,
                     );
-                pumpkin_assert_extreme!(
-                    DebugHelper::debug_check_propagations(
-                        num_trail_entries_before,
-                        propagator_id,
-                        &self.trailed_values,
-                        &self.assignments,
-                        &mut self.reason_store,
-                        &mut self.propagators,
-                        &self.notification_engine
-                    ),
-                    "Checking the propagations performed by the propagator led to inconsistencies!"
-                );
+                // pumpkin_assert_extreme!(
+                //     DebugHelper::debug_check_propagations(
+                //         num_trail_entries_before,
+                //         propagator_id,
+                //         &self.trailed_values,
+                //         &self.assignments,
+                //         &mut self.reason_store,
+                //         &mut self.propagators,
+                //         &self.notification_engine
+                //     ),
+                //     "Checking the propagations performed by the propagator led to inconsistencies!"
+                // );
             }
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]

@@ -25,6 +25,7 @@ use crate::state::State;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::DomainId;
+use crate::variables::IntegerVariable;
 
 create_statistics_struct!(ResolverStatistics {
     num_propositional_resolutions: usize,
@@ -117,7 +118,12 @@ impl HypercubeLinearResolver {
         self.compute_conflicting_hypercube_linear(state, conflict);
 
         let mut last_tp = usize::MAX;
-        while self.predicates_to_explain.len() > 1 {
+
+        loop {
+            if let Some(dl) = self.will_propagate_on_previous_dl(state) {
+                return self.extract_learned_hypercube_linear(dl);
+            }
+
             let pivot = self
                 .predicates_to_explain
                 .pop()
@@ -140,10 +146,9 @@ impl HypercubeLinearResolver {
                 "explanation = {} -> false",
                 explanation.hypercube.iter_predicates().join(" & ")
             );
+
             self.resolve(state, pivot, explanation);
         }
-
-        self.extract_learned_hypercube_linear(state.get_checkpoint() - 1)
     }
 
     fn resolve(&mut self, state: &mut State, pivot: Predicate, explanation: HypercubeLinear) {
@@ -365,6 +370,131 @@ impl HypercubeLinearResolver {
                 self.predicates_to_explain.push(predicate, state);
             }
         }
+    }
+
+    fn will_propagate_on_previous_dl(&self, state: &State) -> Option<usize> {
+        trace!("Testing propagation at previous dl");
+        let current_dl = state.get_checkpoint();
+        let decision_levels = (0..current_dl).rev();
+
+        for decision_level in decision_levels {
+            trace!("  => testing dl = {decision_level}");
+            let trail_position = state
+                .assignments
+                .get_trail_position_at_checkpoint(decision_level);
+
+            if !self.propagates_at(state, trail_position) {
+                trace!("    => does not propagate");
+                // The initial assumption is that the hypercube linear is conflicting, so it will be
+                // propagating at the current decision level. That means the first time it does not
+                // propagate is one decision level too far back.
+
+                let backjump_dl = decision_level + 1;
+
+                if backjump_dl < current_dl {
+                    return Some(decision_level + 1);
+                } else {
+                    return None;
+                }
+            }
+        }
+
+        // At this point the constraint is propagating at decision level 0, since that is the last
+        // decision level tested in the loop.
+        Some(0)
+    }
+
+    /// Returns true if the given hypercube linear propagates at the given trail position.
+    fn propagates_at(&self, state: &State, trail_position: usize) -> bool {
+        // Get the predicates that are not assigned to true.
+        let unsatisfied_predicates_in_hypercubes = self
+            .working_hypercube
+            .iter_predicates()
+            .chain(self.predicates_to_explain.iter())
+            .filter(|&predicate| {
+                state
+                    .assignments
+                    .evaluate_predicate_at_trail_position(predicate, trail_position)
+                    != Some(true)
+            })
+            .collect::<Vec<_>>();
+
+        if unsatisfied_predicates_in_hypercubes.len() > 1 {
+            // If more than one predicate remains unassigned, we cannot do anything.
+            return false;
+        }
+
+        let slack = self.compute_linear_slack_at_trail_position(state, trail_position);
+
+        if unsatisfied_predicates_in_hypercubes.len() == 1 {
+            let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
+
+            if slack < 0 {
+                return true;
+            } else if let Some(term) = self
+                .conflicting_linear
+                .term_for_domain(unassigned_predicate.get_domain())
+            {
+                let term_lower_bound =
+                    term.lower_bound_at_trail_position(&state.assignments, trail_position);
+                let new_upper_bound = match i32::try_from(slack + i64::from(term_lower_bound)) {
+                    Ok(bound) => bound,
+                    Err(_) => return false,
+                };
+
+                return new_upper_bound
+                    < term.upper_bound_at_trail_position(&state.assignments, trail_position);
+            }
+        } else {
+            assert!(unsatisfied_predicates_in_hypercubes.is_empty());
+            return self.linear_propagates_at(state, trail_position);
+        }
+
+        false
+    }
+
+    /// Returns true if the given linear propagates at the given trail position.
+    fn linear_propagates_at(&self, state: &State, trail_position: usize) -> bool {
+        if self.conflicting_linear.is_trivially_false() {
+            return true;
+        }
+
+        let slack = self.compute_linear_slack_at_trail_position(state, trail_position);
+
+        for term in self.conflicting_linear.terms() {
+            let term_lower_bound =
+                i64::from(term.lower_bound_at_trail_position(&state.assignments, trail_position));
+            let new_term_upper_bound_i64 = slack + term_lower_bound;
+            let new_term_upper_bound = match i32::try_from(new_term_upper_bound_i64) {
+                Ok(bound) => bound,
+                // The upper bound is smaller than i32::MIN, which means this would propagate (even if
+                // wee cannot perform the propagation due to our domains being 32-bit).
+                Err(_) if new_term_upper_bound_i64.is_negative() => return true,
+                // If we want to set the upper bound to a value larger than i32::MAX,
+                // it can never tighten the existing bound of `term_to_propagate`.
+                Err(_) => continue,
+            };
+
+            if new_term_upper_bound
+                < term.upper_bound_at_trail_position(&state.assignments, trail_position)
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn compute_linear_slack_at_trail_position(&self, state: &State, trail_position: usize) -> i64 {
+        let lower_bound_terms = self
+            .conflicting_linear
+            .terms()
+            .map(|term| {
+                i64::from(term.lower_bound_at_trail_position(&state.assignments, trail_position))
+            })
+            .sum::<i64>();
+
+        i64::from(self.conflicting_linear.bound()) - lower_bound_terms
     }
 }
 

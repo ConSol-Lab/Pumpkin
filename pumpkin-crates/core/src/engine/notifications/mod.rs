@@ -412,7 +412,7 @@ impl NotificationEngine {
                     let enqueue_decision =
                         propagator.notify_predicate_id_satisfied(context.reborrow(), predicate_id);
 
-                    trace!("notifying {propagator_id:?}");
+                    // trace!("notifying {propagator_id:?}");
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
@@ -434,7 +434,7 @@ impl NotificationEngine {
     ) {
         let context = NotificationContext::new(trailed_values, assignments);
 
-        trace!("notifying {propagator_id:?}");
+        // trace!("notifying {propagator_id:?}");
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 

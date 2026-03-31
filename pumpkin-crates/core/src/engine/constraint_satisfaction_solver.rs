@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use log::trace;
 #[allow(
     clippy::disallowed_types,
     reason = "any rand generator is a valid implementation of Random"
@@ -515,6 +516,10 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
+            trace!(
+                "Propagation to fixedpoint @ {}",
+                self.state.get_checkpoint()
+            );
             self.propagate();
 
             if self.solver_state.no_conflict() {
@@ -530,6 +535,8 @@ impl ConstraintSatisfactionSolver {
                 }
 
                 let branching_result = self.make_next_decision(brancher);
+
+                trace!("Branching @ {}", self.state.get_checkpoint());
 
                 self.solver_statistics.engine_statistics.peak_depth = max(
                     self.solver_statistics.engine_statistics.peak_depth,
@@ -552,6 +559,7 @@ impl ConstraintSatisfactionSolver {
                     Ok(()) => {}
                 }
             } else {
+                trace!("Conflict detected @ {}", self.state.get_checkpoint());
                 if self.get_checkpoint() == 0 {
                     self.complete_proof();
                     self.solver_state.declare_infeasible();

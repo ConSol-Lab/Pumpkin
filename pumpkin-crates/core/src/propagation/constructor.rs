@@ -171,6 +171,8 @@ impl PropagatorConstructorContext<'_> {
     /// Register the propagator to be enqueued when the given [`Predicate`] becomes true.
     /// Returns the [`PredicateId`] used by the solver to track the predicate.
     pub fn register_predicate(&mut self, predicate: Predicate) -> PredicateId {
+        println!("registering {predicate:?} for {:?}", self.propagator_id);
+
         self.will_not_register_any_events();
 
         self.state.notification_engine.watch_predicate(

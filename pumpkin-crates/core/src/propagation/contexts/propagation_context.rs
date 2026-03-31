@@ -255,7 +255,10 @@ impl PropagationContext<'_> {
         );
 
         if predicate.get_domain().index() == 18 {
-            println!("propagated {predicate:?} with result {modification_result:?}");
+            println!(
+                "propagated {predicate:?} with result {modification_result:?} @ {}",
+                self.assignments.get_checkpoint()
+            );
         }
 
         match modification_result {
