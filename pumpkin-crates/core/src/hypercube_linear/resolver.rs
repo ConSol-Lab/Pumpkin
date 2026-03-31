@@ -120,6 +120,15 @@ impl HypercubeLinearResolver {
         let mut last_tp = usize::MAX;
 
         loop {
+            trace!(
+                "conflict constraint: {} -> {}",
+                self.working_hypercube
+                    .iter_predicates()
+                    .chain(self.predicates_to_explain.iter())
+                    .join(" & "),
+                "false"
+            );
+
             if let Some(dl) = self.will_propagate_on_previous_dl(state) {
                 return self.extract_learned_hypercube_linear(dl);
             }
@@ -148,6 +157,15 @@ impl HypercubeLinearResolver {
             );
 
             self.resolve(state, pivot, explanation);
+
+            trace!(
+                "resolvent: {} -> {}",
+                self.working_hypercube
+                    .iter_predicates()
+                    .chain(self.predicates_to_explain.iter())
+                    .join(" & "),
+                "false"
+            );
         }
     }
 
@@ -255,11 +273,11 @@ impl HypercubeLinearResolver {
             &mut clausal_conflict,
         );
 
-        let pid = state.reason_store.get_propagator(trigger_reason);
-        dbg!(state.propagators[pid].name());
+        // let pid = state.reason_store.get_propagator(trigger_reason);
+        // dbg!(state.propagators[pid].name());
 
         trace!("conflicting predicate = {trigger_predicate:?}");
-        dbg!(&clausal_conflict);
+        // dbg!(&clausal_conflict);
 
         assert!(
             clausal_conflict
@@ -406,11 +424,16 @@ impl HypercubeLinearResolver {
 
     /// Returns true if the given hypercube linear propagates at the given trail position.
     fn propagates_at(&self, state: &State, trail_position: usize) -> bool {
-        // Get the predicates that are not assigned to true.
-        let unsatisfied_predicates_in_hypercubes = self
+        // TODO: Optimize this
+        let final_hypercube = self
             .working_hypercube
+            .clone()
+            .with_predicates(self.predicates_to_explain.iter())
+            .expect("no inconsistent hypercube");
+
+        // Get the predicates that are not assigned to true.
+        let unsatisfied_predicates_in_hypercubes = final_hypercube
             .iter_predicates()
-            .chain(self.predicates_to_explain.iter())
             .filter(|&predicate| {
                 state
                     .assignments
