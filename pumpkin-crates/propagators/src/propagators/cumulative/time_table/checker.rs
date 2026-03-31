@@ -61,7 +61,7 @@ where
                 .try_into()
                 .unwrap();
 
-            for t in est + task.processing_time..lst {
+            for t in lst..est + task.processing_time {
                 *profile.entry(t).or_insert(0) += task.resource_usage;
                 if *profile.get(&t).unwrap() > self.capacity {
                     return true;
@@ -86,8 +86,8 @@ where
                 .try_into()
                 .unwrap();
 
-            for t in est + propagating_task.processing_time..lst {
-                *profile.entry(t).or_insert(0) += propagating_task.resource_usage;
+            for t in lst..est + propagating_task.processing_time {
+                *profile.entry(t).or_insert(0) -= propagating_task.resource_usage;
                 if *profile.get(&t).unwrap() > self.capacity {
                     return true;
                 }
