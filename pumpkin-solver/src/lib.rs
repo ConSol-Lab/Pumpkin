@@ -356,3 +356,9 @@ pub use pumpkin_constraints::*;
 pub use pumpkin_core::Solver;
 #[cfg(doc)]
 use pumpkin_core::conflict_resolving::ConflictResolver;
+
+/// The version of Pumpkin that is being executed.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The latest commit hash.
+pub const LATEST_COMMIT: &str = env!("VERGEN_GIT_SHA");
