@@ -516,10 +516,6 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
-            trace!(
-                "Propagation to fixedpoint @ {}",
-                self.state.get_checkpoint()
-            );
             self.propagate();
 
             if self.solver_state.no_conflict() {
@@ -535,8 +531,6 @@ impl ConstraintSatisfactionSolver {
                 }
 
                 let branching_result = self.make_next_decision(brancher);
-
-                trace!("Branching @ {}", self.state.get_checkpoint());
 
                 self.solver_statistics.engine_statistics.peak_depth = max(
                     self.solver_statistics.engine_statistics.peak_depth,
@@ -619,6 +613,12 @@ impl ConstraintSatisfactionSolver {
         };
 
         self.new_checkpoint();
+
+        trace!(
+            "Branching {} @ {}",
+            decision_predicate,
+            self.state.get_checkpoint()
+        );
 
         // Note: This also checks that the decision predicate is not already true. That is a
         // stronger check than the `.expect(...)` used later on when handling the result of

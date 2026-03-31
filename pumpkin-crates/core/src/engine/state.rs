@@ -740,6 +740,8 @@ impl State {
     /// Once the [`State`] is conflicting, then the only operation that is defined is
     /// [`State::restore_to`]. All other operations and queries on the state are unspecified.
     pub fn propagate_to_fixed_point(&mut self) -> Result<(), Conflict> {
+        trace!("Propagation to fixedpoint @ {}", self.get_checkpoint());
+
         // The initial domain events are due to the decision predicate.
         self.notification_engine
             .notify_propagators_about_domain_events(

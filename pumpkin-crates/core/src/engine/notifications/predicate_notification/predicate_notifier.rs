@@ -49,12 +49,7 @@ impl PredicateNotifier {
     /// Returns the satisfied predicates; note that this structure will be cleared once it is
     /// dropped.
     pub(crate) fn drain_satisfied_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
-        self.predicate_id_assignments
-            .drain_satisfied_predicates()
-            .inspect(|pid| {
-                let p = self.predicate_to_id.get_predicate(*pid);
-                println!("{p:?} became true");
-            })
+        self.predicate_id_assignments.drain_satisfied_predicates()
     }
 
     /// Returns the [`Predicate`] corresponding to a [`PredicateId`].
