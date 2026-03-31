@@ -645,8 +645,8 @@ impl State {
                 //         &mut self.propagators,
                 //         &self.notification_engine
                 //     ),
-                //     "Checking the propagations performed by the propagator led to inconsistencies!"
-                // );
+                //     "Checking the propagations performed by the propagator led to
+                // inconsistencies!" );
             }
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]

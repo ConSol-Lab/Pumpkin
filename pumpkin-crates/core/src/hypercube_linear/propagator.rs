@@ -260,8 +260,8 @@ impl Propagator for HypercubeLinearPropagator {
     //         // More than one watcher is unassigned, so we do not need to propagate anything.
     //         return Ok(());
     //     } else if satisfied_watchers == NUM_WATCHED_PREDICATES {
-    //         // The hypercube is satisfied, so we should be registered to bound events on the terms
-    //         // of the linear inequality.
+    //         // The hypercube is satisfied, so we should be registered to bound events on the
+    // terms         // of the linear inequality.
     //         self.register_bound_events_on_linear(context.reborrow());
     //     }
 
@@ -305,8 +305,8 @@ impl Propagator for HypercubeLinearPropagator {
     //                 // The slack is at least 0, but it may be that the linear could propagate
     //                 // something weaker than `!predicate_in_hypercube`.
 
-    //                 if !could_propagate_weaker_predicate(predicate_in_hypercube, term_to_propagate)
-    //                 {
+    //                 if !could_propagate_weaker_predicate(predicate_in_hypercube,
+    // term_to_propagate)                 {
     //                     return Ok(());
     //                 }
 

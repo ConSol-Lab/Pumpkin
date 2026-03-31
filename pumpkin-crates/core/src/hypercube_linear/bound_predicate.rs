@@ -1,4 +1,5 @@
-use crate::{predicates::Predicate, variables::DomainId};
+use crate::predicates::Predicate;
+use crate::variables::DomainId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoundPredicate {

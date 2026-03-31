@@ -490,8 +490,9 @@ impl HypercubeLinearResolver {
             let new_term_upper_bound_i64 = slack + term_lower_bound;
             let new_term_upper_bound = match i32::try_from(new_term_upper_bound_i64) {
                 Ok(bound) => bound,
-                // The upper bound is smaller than i32::MIN, which means this would propagate (even if
-                // wee cannot perform the propagation due to our domains being 32-bit).
+                // The upper bound is smaller than i32::MIN, which means this would propagate (even
+                // if wee cannot perform the propagation due to our domains being
+                // 32-bit).
                 Err(_) if new_term_upper_bound_i64.is_negative() => return true,
                 // If we want to set the upper bound to a value larger than i32::MAX,
                 // it can never tighten the existing bound of `term_to_propagate`.
