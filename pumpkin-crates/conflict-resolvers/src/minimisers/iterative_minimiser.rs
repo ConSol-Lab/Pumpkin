@@ -1,13 +1,14 @@
 use pumpkin_core::containers::HashMap;
-use pumpkin_core::containers::HashSet;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::variables::DomainId;
 
+#[derive(Debug, Clone, Default)]
 pub(crate) struct IterativeMinimiser {
     domains: KeyedVec<DomainId, IterativeDomain>,
+    replacement_with_equals: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +47,7 @@ impl Default for IterativeDomain {
 }
 
 impl IterativeDomain {
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate, replacement: bool) {
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() > self.lower_bound {
@@ -84,13 +85,21 @@ impl IterativeDomain {
                 );
             }
             PredicateType::Equal => {
-                self.upper_bound = predicate.get_right_hand_side();
+                if replacement {
+                    if self.lower_bound == predicate.get_right_hand_side() {
+                        let _ = self.lower_bound_updates.pop();
+                    } else if self.upper_bound == predicate.get_right_hand_side() {
+                        let _ = self.upper_bound_updates.pop();
+                    }
+                }
+
+                self.lower_bound_updates
+                    .push(predicate.get_right_hand_side());
                 self.upper_bound_updates
                     .push(predicate.get_right_hand_side());
 
+                self.upper_bound = predicate.get_right_hand_side();
                 self.lower_bound = predicate.get_right_hand_side();
-                self.lower_bound_updates
-                    .push(predicate.get_right_hand_side());
             }
         }
     }
@@ -101,23 +110,61 @@ impl IterativeDomain {
                 let position = self
                     .lower_bound_updates
                     .iter()
-                    .rev()
                     .position(|value| *value == predicate.get_right_hand_side())
                     .expect("Expected removed lower-bound to be present");
 
                 let _ = self.lower_bound_updates.remove(position);
                 self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
+
+                if self
+                    .holes
+                    .get(&predicate.get_right_hand_side())
+                    .map(|(lb_updated, _)| *lb_updated)
+                    .unwrap_or_default()
+                {
+                    if let Some(position) = self
+                        .lower_bound_updates
+                        .iter()
+                        .position(|value| *value == predicate.get_right_hand_side() + 1)
+                    {
+                        let _ = self.lower_bound_updates.remove(position);
+                        self.lower_bound =
+                            self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
+                    }
+                }
             }
             PredicateType::UpperBound => {
                 let position = self
                     .upper_bound_updates
                     .iter()
-                    .rev()
                     .position(|value| *value == predicate.get_right_hand_side())
-                    .expect("Expected removed lower-bound to be present");
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Expected removed upper-bound {} to be present\n{:?}",
+                            predicate.get_right_hand_side(),
+                            self.upper_bound_updates
+                        )
+                    });
 
                 let _ = self.upper_bound_updates.remove(position);
-                self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MIN);
+                self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
+
+                if self
+                    .holes
+                    .get(&predicate.get_right_hand_side())
+                    .map(|(_, ub_updated)| *ub_updated)
+                    .unwrap_or_default()
+                {
+                    if let Some(position) = self
+                        .upper_bound_updates
+                        .iter()
+                        .position(|value| *value == predicate.get_right_hand_side() - 1)
+                    {
+                        let _ = self.upper_bound_updates.remove(position);
+                        self.upper_bound =
+                            self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
+                    }
+                }
             }
             PredicateType::NotEqual => {
                 let (lb_caused_update, ub_caused_update) = self
@@ -126,51 +173,61 @@ impl IterativeDomain {
                     .expect("Expected removed not equals to be present");
 
                 if *lb_caused_update {
-                    let position = self
+                    if let Some(position) = self
                         .lower_bound_updates
                         .iter()
-                        .rev()
                         .position(|value| *value == predicate.get_right_hand_side() + 1)
-                        .expect("Expected removed lower-bound to be present");
-
-                    let _ = self.lower_bound_updates.remove(position);
-                    self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
+                    {
+                        let _ = self.lower_bound_updates.remove(position);
+                        self.lower_bound =
+                            self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
+                    }
                 }
 
                 if *ub_caused_update {
-                    let position = self
+                    if let Some(position) = self
                         .upper_bound_updates
                         .iter()
-                        .rev()
                         .position(|value| *value == predicate.get_right_hand_side() - 1)
-                        .expect("Expected removed lower-bound to be present");
-
-                    let _ = self.upper_bound_updates.remove(position);
-                    self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MIN);
+                    {
+                        let _ = self.upper_bound_updates.remove(position);
+                        self.upper_bound =
+                            self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
+                    }
                 }
             }
             PredicateType::Equal => {
                 assert_eq!(self.lower_bound, self.upper_bound);
                 assert_eq!(self.lower_bound, predicate.get_right_hand_side());
 
-                let _ = self.lower_bound_updates.pop();
-                let _ = self.upper_bound_updates.pop();
+                self.lower_bound_updates.pop();
+                self.upper_bound_updates.pop();
+
                 self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
-                self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MIN);
+                self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
             }
         }
     }
 }
 
 impl IterativeMinimiser {
+    pub(crate) fn did_not_replace(&mut self) {
+        self.replacement_with_equals = false;
+    }
+
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
         self.domains[domain].remove_predicate(predicate);
     }
 
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) -> bool {
+        println!(
+            "\t\tApplying ({}) {predicate:?}",
+            self.replacement_with_equals
+        );
         let domain = predicate.get_domain();
-        self.domains[domain].apply_predicate(predicate);
+        self.domains.accomodate(domain, IterativeDomain::default());
+        self.domains[domain].apply_predicate(predicate, self.replacement_with_equals);
     }
 
     pub(crate) fn process_predicate(&mut self, predicate: Predicate) -> ProcessingResult {
@@ -180,6 +237,8 @@ impl IterativeMinimiser {
         let lower_bound = self.domains[domain].lower_bound;
         let upper_bound = self.domains[domain].upper_bound;
 
+        // println!("TEST: {predicate:?} - {:?}", self.domains[domain]);
+
         if lower_bound == upper_bound {
             return ProcessingResult::Redundant;
         }
@@ -187,49 +246,60 @@ impl IterativeMinimiser {
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() == upper_bound {
-                    return ProcessingResult::ReplacedWithNew {
+                    self.replacement_with_equals = true;
+                    ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain == upper_bound),
-                    };
+                    }
                 } else if predicate.get_right_hand_side() > lower_bound {
-                    return ProcessingResult::ReplacedPresent {
-                        removed: predicate!(domain >= lower_bound),
-                    };
+                    if lower_bound != i32::MIN {
+                        ProcessingResult::ReplacedPresent {
+                            removed: predicate!(domain >= lower_bound),
+                        }
+                    } else {
+                        ProcessingResult::NotRedundant
+                    }
                 } else {
-                    return ProcessingResult::Redundant;
+                    ProcessingResult::Redundant
                 }
             }
             PredicateType::UpperBound => {
                 if predicate.get_right_hand_side() == lower_bound {
-                    return ProcessingResult::ReplacedWithNew {
+                    self.replacement_with_equals = true;
+                    ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain == lower_bound),
-                    };
+                    }
                 } else if predicate.get_right_hand_side() < upper_bound {
-                    return ProcessingResult::ReplacedPresent {
-                        removed: predicate!(domain <= upper_bound),
-                    };
+                    if upper_bound != i32::MAX {
+                        ProcessingResult::ReplacedPresent {
+                            removed: predicate!(domain <= upper_bound),
+                        }
+                    } else {
+                        ProcessingResult::NotRedundant
+                    }
                 } else {
-                    return ProcessingResult::Redundant;
+                    ProcessingResult::Redundant
                 }
             }
             PredicateType::NotEqual => {
                 if predicate.get_right_hand_side() == upper_bound {
-                    return ProcessingResult::ReplacedWithNew {
+                    ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain <= upper_bound - 1),
-                    };
+                    }
                 } else if predicate.get_right_hand_side() > upper_bound {
-                    return ProcessingResult::Redundant;
+                    // println!("REACHED: {predicate:?} - {upper_bound}");
+                    ProcessingResult::Redundant
                 } else if predicate.get_right_hand_side() == lower_bound {
-                    return ProcessingResult::ReplacedWithNew {
+                    ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain >= lower_bound + 1),
-                    };
+                    }
                 } else if predicate.get_right_hand_side() < lower_bound {
-                    return ProcessingResult::Redundant;
+                    ProcessingResult::Redundant
                 } else {
-                    return ProcessingResult::NotRedundant;
+                    ProcessingResult::NotRedundant
                 }
             }
             PredicateType::Equal => ProcessingResult::NotRedundant,

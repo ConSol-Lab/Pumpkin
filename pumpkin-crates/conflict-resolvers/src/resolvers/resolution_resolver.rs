@@ -7,11 +7,9 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::containers::KeyValueHeap;
 use pumpkin_core::containers::StorageKey;
 use pumpkin_core::create_statistics_struct;
-use pumpkin_core::predicate;
 use pumpkin_core::predicates::Lbd;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateIdGenerator;
-use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::PredicateId;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::state::CurrentNogood;
@@ -20,7 +18,9 @@ use pumpkin_core::statistics::StatisticLogger;
 use pumpkin_core::statistics::moving_averages::CumulativeMovingAverage;
 use pumpkin_core::statistics::moving_averages::MovingAverage;
 
+use crate::minimisers::IterativeMinimiser;
 use crate::minimisers::NogoodMinimiser;
+use crate::minimisers::ProcessingResult;
 use crate::minimisers::RecursiveMinimiser;
 use crate::minimisers::SemanticMinimisationMode;
 use crate::minimisers::SemanticMinimiser;
@@ -69,6 +69,8 @@ pub struct ResolutionResolver {
 
     should_minimise: bool,
     iterative_minimisation: bool,
+
+    iterative_minimiser: IterativeMinimiser,
 }
 
 impl Default for ResolutionResolver {
@@ -93,14 +95,7 @@ create_statistics_struct!(
         iterative_minimisation_statistics: IterativeMinimisationStatistics
 });
 
-create_statistics_struct!(IterativeMinimisationStatistics {
-    num_removed: usize,
-    num_replaced_with_new_current_dl: usize,
-    num_replaced_with_new_previous_dl: usize,
-
-    num_removed_previous_dl: usize,
-    num_removed_current_dl: usize,
-});
+create_statistics_struct!(IterativeMinimisationStatistics { num_removed: usize });
 
 #[derive(Debug, Clone, Copy, Default)]
 /// Determines which type of learning is performed by the [`ResolutionResolver`].
@@ -161,6 +156,7 @@ impl ResolutionResolver {
             statistics: Default::default(),
             should_minimise,
             iterative_minimisation,
+            iterative_minimiser: Default::default(),
         }
     }
 
@@ -168,6 +164,8 @@ impl ResolutionResolver {
         self.clean_up();
 
         let conflict_nogood = context.get_conflict_nogood();
+
+        println!("C: {conflict_nogood:?}");
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -198,11 +196,27 @@ impl ResolutionResolver {
                 AnalysisMode::AllDecision => self.to_process_heap.num_nonremoved_elements() > 0,
             }
         } {
+            println!(
+                "WORKING NOGOOD: {:?}",
+                self.processed_nogood_predicates
+                    .iter()
+                    .copied()
+                    .chain(
+                        self.to_process_heap
+                            .keys()
+                            .map(|id| self.predicate_id_generator.get_predicate(id))
+                    )
+                    .collect::<Vec<_>>()
+            );
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = self.pop_predicate_from_conflict_nogood();
+            if self.iterative_minimisation {
+                println!("Removing {next_predicate:?}");
+                self.iterative_minimiser.remove_predicate(next_predicate);
+            }
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
@@ -217,6 +231,8 @@ impl ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
+            println!("R: {:?} -> {next_predicate}", self.reason_buffer);
+
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
             }
@@ -230,6 +246,11 @@ impl ResolutionResolver {
         self.processed_nogood_predicates.clear();
         self.predicate_id_generator.clear();
         self.to_process_heap.clear();
+
+        // TODO: make more efficient
+        if self.iterative_minimisation {
+            self.iterative_minimiser = IterativeMinimiser::default()
+        }
     }
 
     /// Add the predicate to the current conflict nogood if we know it needs to be added.
@@ -253,6 +274,8 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
+            println!("{predicate:?} ROOT LEVEL");
+            self.iterative_minimiser.apply_predicate(predicate);
             context.explain_root_assignment(predicate);
         }
         // 1UIP
@@ -262,219 +285,294 @@ impl ResolutionResolver {
         // All-decision Learning
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
-        else if match mode {
-            AnalysisMode::OneUIP => dec_level == context.get_checkpoint(),
-            AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
-        } {
+        else {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
-            // The first time we encounter the predicate, we initialise its value in the
-            // heap.
-            //
-            // Note that if the predicate is already in the heap, no action needs to be
-            // taken. It can happen that a predicate is returned
-            // multiple times as a reason for other predicates.
-
-            // TODO: could improve the heap structure to be more user-friendly.
-
-            // Here we manually adjust the size of the heap to accommodate new elements.
-            while self.to_process_heap.len() <= predicate_id.index() {
-                let next_id = PredicateId::create_from_index(self.to_process_heap.len());
-                self.to_process_heap.grow(next_id, 0);
-                self.to_process_heap.delete_key(next_id);
+            if self.iterative_minimisation {
+                if let ControlFlow::Break(_) =
+                    self.check_for_iterative_redundancy(predicate, context, predicate_id)
+                {
+                    return;
+                }
             }
+            if match mode {
+                AnalysisMode::OneUIP => dec_level == context.get_checkpoint(),
+                AnalysisMode::AllDecision => !context.is_decision_predicate(predicate),
+            } {
+                // The first time we encounter the predicate, we initialise its value in the
+                // heap.
+                //
+                // Note that if the predicate is already in the heap, no action needs to be
+                // taken. It can happen that a predicate is returned
+                // multiple times as a reason for other predicates.
 
-            if self.iterative_minimisation
-                || (!self.to_process_heap.is_key_present(predicate_id)
-                    && *self.to_process_heap.get_value(predicate_id) == 0)
-            {
-                context.predicate_appeared_in_conflict(predicate);
+                // TODO: could improve the heap structure to be more user-friendly.
 
-                if self.iterative_minimisation {
-                    self.to_process_heap.set_value(predicate_id, 0);
-                    self.to_process_heap.delete_key(predicate_id);
+                // Here we manually adjust the size of the heap to accommodate new elements.
+                while self.to_process_heap.len() <= predicate_id.index() {
+                    let next_id = PredicateId::create_from_index(self.to_process_heap.len());
+                    self.to_process_heap.grow(next_id, 0);
+                    self.to_process_heap.delete_key(next_id);
                 }
 
-                if self.iterative_minimisation {
-                    if let ControlFlow::Break(_) =
-                        self.check_redundancy_previous_level(predicate, context)
-                    {
-                        return;
-                    }
-                    if let ControlFlow::Break(_) =
-                        self.check_redundancy_current_level(predicate, context)
-                    {
-                        return;
-                    }
+                if self.iterative_minimisation
+                    || (!self.to_process_heap.is_key_present(predicate_id)
+                        && *self.to_process_heap.get_value(predicate_id) == 0)
+                {
+                    context.predicate_appeared_in_conflict(predicate);
+
+                    // The goal is to traverse predicate in reverse order of the trail.
+                    //
+                    // However some predicates may share the trail position. For example, if a
+                    // predicate that was posted to trail resulted in
+                    // some other predicates being true, then all
+                    // these predicates would have the same trail position.
+                    //
+                    // When considering the predicates in reverse order of the trail, the
+                    // implicitly set predicates are posted after the
+                    // explicitly set one, but they all have the same
+                    // trail position.
+                    //
+                    // To remedy this, we make a tie-breaking scheme to prioritise implied
+                    // predicates over explicit predicates. This is done
+                    // by assigning explicitly set predicates the
+                    // value `2 * trail_position`, whereas implied predicates get `2 *
+                    // trail_position + 1`.
+                    let heap_value = get_heap_value(predicate, context);
+
+                    // We restore the key and since we know that the value is 0, we can safely
+                    // increment with `heap_value`
+                    self.to_process_heap.restore_key(predicate_id);
+                    self.to_process_heap.set_value(predicate_id, heap_value);
+
+                    pumpkin_assert_simple!(
+                        *self.to_process_heap.get_value(predicate_id) == heap_value,
+                        "The value in the heap should be the same as was added"
+                    );
                 }
-
-                // The goal is to traverse predicate in reverse order of the trail.
-                //
-                // However some predicates may share the trail position. For example, if a
-                // predicate that was posted to trail resulted in
-                // some other predicates being true, then all
-                // these predicates would have the same trail position.
-                //
-                // When considering the predicates in reverse order of the trail, the
-                // implicitly set predicates are posted after the
-                // explicitly set one, but they all have the same
-                // trail position.
-                //
-                // To remedy this, we make a tie-breaking scheme to prioritise implied
-                // predicates over explicit predicates. This is done
-                // by assigning explicitly set predicates the
-                // value `2 * trail_position`, whereas implied predicates get `2 *
-                // trail_position + 1`.
-                let heap_value = get_heap_value(predicate, context);
-
-                // We restore the key and since we know that the value is 0, we can safely
-                // increment with `heap_value`
-                self.to_process_heap.restore_key(predicate_id);
-                self.to_process_heap.set_value(predicate_id, heap_value);
-
-                pumpkin_assert_simple!(
-                    *self.to_process_heap.get_value(predicate_id) == heap_value,
-                    "The value in the heap should be the same as was added"
-                );
+            } else {
+                // We do not check for duplicate, we simply add the predicate.
+                // Semantic minimisation will later remove duplicates and do other processing.
+                self.processed_nogood_predicates.push(predicate);
             }
-        } else {
-            // We do not check for duplicate, we simply add the predicate.
-            // Semantic minimisation will later remove duplicates and do other processing.
-            self.processed_nogood_predicates.push(predicate);
         }
     }
 
-    fn check_redundancy_current_level(
+    fn check_for_iterative_redundancy(
         &mut self,
         predicate: Predicate,
         context: &mut ConflictAnalysisContext<'_>,
+        predicate_id: PredicateId,
     ) -> ControlFlow<()> {
-        for element in self
-            .to_process_heap
-            .keys()
-            .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
-            .filter(|element| {
-                element.get_domain() == predicate.get_domain()
-                    && context.get_state().trail_position(*element)
-                        != context.get_state().trail_position(predicate)
-            })
-            .collect::<Vec<_>>()
-        {
-            match (element.get_predicate_type(), predicate.get_predicate_type()) {
-                (PredicateType::Equal, PredicateType::NotEqual)
-                | (PredicateType::Equal, PredicateType::UpperBound)
-                | (PredicateType::Equal, PredicateType::LowerBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_current_dl += 1;
-                    return ControlFlow::Break(());
-                }
-                (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_current_dl += 1;
-                    if element.get_right_hand_side() <= predicate.get_right_hand_side() {
-                        return ControlFlow::Break(());
-                    } else {
-                        let element_id = self.predicate_id_generator.get_id(element);
-                        self.to_process_heap.delete_key(element_id);
+        let process_predicate = self.iterative_minimiser.process_predicate(predicate);
+        println!("\tRESULT ({predicate:?}): {process_predicate:?}");
+        match process_predicate {
+            ProcessingResult::Redundant => {
+                if !self.to_process_heap.is_key_present(predicate_id) {
+                    println!("\t\tNot present - {predicate:?}");
+                    if predicate_id.index() < self.to_process_heap.len() {
+                        self.to_process_heap.set_value(predicate_id, 0);
                     }
+                    self.to_process_heap.delete_key(predicate_id);
                 }
-                (PredicateType::UpperBound, PredicateType::NotEqual) => {
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_current_dl += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_replaced_with_new_current_dl += 1;
-                        let domain = element.get_domain();
 
-                        let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
-                        self.replace_if_possible_current_level(context, element, new_predicate)?;
-                    } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_current_dl += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        return ControlFlow::Break(());
-                    }
-                }
-                (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_current_dl += 1;
-                    if element.get_right_hand_side() >= predicate.get_right_hand_side() {
-                        return ControlFlow::Break(());
-                    } else {
-                        let element_id = self.predicate_id_generator.get_id(element);
-                        self.to_process_heap.delete_key(element_id);
-                    }
-                }
-                (PredicateType::LowerBound, PredicateType::NotEqual) => {
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_current_dl += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_replaced_with_new_current_dl += 1;
-                        let domain = element.get_domain();
+                self.statistics
+                    .iterative_minimisation_statistics
+                    .num_removed += 1;
+                return ControlFlow::Break(());
+            }
+            ProcessingResult::ReplacedPresent { removed } => {
+                self.iterative_minimiser.remove_predicate(removed);
+                self.statistics
+                    .iterative_minimisation_statistics
+                    .num_removed += 1;
 
-                        let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
-                        self.replace_if_possible_current_level(context, element, new_predicate)?;
-                    } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_current_dl += 1;
-                        return ControlFlow::Break(());
+                let removed_id = self.predicate_id_generator.get_id(removed);
+                if self.to_process_heap.is_key_present(removed_id) {
+                    self.to_process_heap.delete_key(removed_id);
+                } else {
+                    if let Some(position) = self
+                        .processed_nogood_predicates
+                        .iter()
+                        .position(|predicate| *predicate == removed)
+                    {
+                        let _ = self.processed_nogood_predicates.remove(position);
                     }
                 }
-                (PredicateType::UpperBound, PredicateType::LowerBound)
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+                self.iterative_minimiser.apply_predicate(predicate);
+            }
+            ProcessingResult::ReplacedWithNew {
+                previous,
+                new_predicate,
+            } => {
+                self.statistics
+                    .iterative_minimisation_statistics
+                    .num_removed += 1;
+
+                if context.get_checkpoint_for_predicate(new_predicate).unwrap()
+                    == context.get_checkpoint()
                 {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_current_dl += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_replaced_with_new_current_dl += 1;
-                    let domain = element.get_domain();
-
-                    let new_predicate = predicate!(domain == element.get_right_hand_side());
-                    self.replace_if_possible_current_level(context, element, new_predicate)?;
+                    if let ControlFlow::Break(_) =
+                        self.replace_if_possible_current_level(context, previous, new_predicate)
+                    {
+                        self.to_process_heap.set_value(predicate_id, 0);
+                        self.to_process_heap.delete_key(predicate_id);
+                        return ControlFlow::Break(());
+                    } else {
+                        self.iterative_minimiser.did_not_replace();
+                        self.iterative_minimiser.apply_predicate(predicate);
+                    }
+                } else {
+                    if let ControlFlow::Break(_) =
+                        self.replace_if_possible_previous_level(context, previous, new_predicate)
+                    {
+                        self.to_process_heap.set_value(predicate_id, 0);
+                        self.to_process_heap.delete_key(predicate_id);
+                        return ControlFlow::Break(());
+                    } else {
+                        self.iterative_minimiser.did_not_replace();
+                        self.iterative_minimiser.apply_predicate(predicate);
+                    }
                 }
-
-                _ => {}
+            }
+            ProcessingResult::NotRedundant => {
+                self.iterative_minimiser.apply_predicate(predicate);
             }
         }
         ControlFlow::Continue(())
     }
+
+    // fn check_redundancy_current_level(
+    //     &mut self,
+    //     predicate: Predicate,
+    //     context: &mut ConflictAnalysisContext<'_>,
+    // ) -> ControlFlow<()> {
+    //     for element in self
+    //         .to_process_heap
+    //         .keys()
+    //         .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
+    //         .filter(|element| {
+    //             element.get_domain() == predicate.get_domain()
+    //                 && context.get_state().trail_position(*element)
+    //                     != context.get_state().trail_position(predicate)
+    //         })
+    //         .collect::<Vec<_>>()
+    //     {
+    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
+    //             (PredicateType::Equal, PredicateType::NotEqual)
+    //             | (PredicateType::Equal, PredicateType::UpperBound)
+    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 return ControlFlow::Break(());
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     let element_id = self.predicate_id_generator.get_id(element);
+    //                     self.to_process_heap.delete_key(element_id);
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_current_dl += 1;
+    //                     let domain = element.get_domain();
+    //
+    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
+    // 1);                     self.replace_if_possible_current_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() <
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     let element_id = self.predicate_id_generator.get_id(element);
+    //                     self.to_process_heap.delete_key(element_id);
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_current_dl += 1;
+    //                     let domain = element.get_domain();
+    //
+    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
+    // 1);                     self.replace_if_possible_current_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() >
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_current_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::LowerBound)
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+    //             {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_current_dl += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_replaced_with_new_current_dl += 1;
+    //                 let domain = element.get_domain();
+    //
+    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
+    //                 self.replace_if_possible_current_level(context, element, new_predicate)?;
+    //             }
+    //
+    //             _ => {}
+    //         }
+    //     }
+    //     ControlFlow::Continue(())
+    // }
 
     fn replace_if_possible_current_level(
         &mut self,
@@ -501,145 +599,145 @@ impl ResolutionResolver {
         ControlFlow::Continue(())
     }
 
-    fn check_redundancy_previous_level(
-        &mut self,
-        predicate: Predicate,
-        context: &mut ConflictAnalysisContext<'_>,
-    ) -> ControlFlow<()> {
-        for element in self
-            .processed_nogood_predicates
-            .iter()
-            .filter(|element| {
-                element.get_domain() == predicate.get_domain()
-                    && context.get_state().trail_position(**element)
-                        != context.get_state().trail_position(predicate)
-            })
-            .copied()
-            .collect::<Vec<_>>()
-        {
-            match (element.get_predicate_type(), predicate.get_predicate_type()) {
-                (PredicateType::Equal, PredicateType::NotEqual)
-                | (PredicateType::Equal, PredicateType::UpperBound)
-                | (PredicateType::Equal, PredicateType::LowerBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_previous_dl += 1;
-                    return ControlFlow::Break(());
-                }
-                (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_previous_dl += 1;
-                    if element.get_right_hand_side() <= predicate.get_right_hand_side() {
-                        return ControlFlow::Break(());
-                    } else {
-                        if let Some(index) = self
-                            .processed_nogood_predicates
-                            .iter()
-                            .position(|predicate| *predicate == element)
-                        {
-                            let _ = self.processed_nogood_predicates.remove(index);
-                        }
-                    }
-                }
-                (PredicateType::UpperBound, PredicateType::NotEqual) => {
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_previous_dl += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_replaced_with_new_previous_dl += 1;
-
-                        let domain = element.get_domain();
-                        let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
-                        self.replace_if_possible_previous_level(context, element, new_predicate)?;
-                    } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_previous_dl += 1;
-                        return ControlFlow::Break(());
-                    }
-                }
-                (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_previous_dl += 1;
-                    if element.get_right_hand_side() >= predicate.get_right_hand_side() {
-                        return ControlFlow::Break(());
-                    } else {
-                        if let Some(index) = self
-                            .processed_nogood_predicates
-                            .iter()
-                            .position(|predicate| *predicate == element)
-                        {
-                            let _ = self.processed_nogood_predicates.remove(index);
-                        }
-                    }
-                }
-                (PredicateType::LowerBound, PredicateType::NotEqual) => {
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_previous_dl += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_replaced_with_new_previous_dl += 1;
-
-                        let domain = element.get_domain();
-                        let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
-                        self.replace_if_possible_previous_level(context, element, new_predicate)?;
-                    } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed += 1;
-                        self.statistics
-                            .iterative_minimisation_statistics
-                            .num_removed_previous_dl += 1;
-                        return ControlFlow::Break(());
-                    }
-                }
-                (PredicateType::UpperBound, PredicateType::LowerBound)
-                    if element.get_right_hand_side() == predicate.get_right_hand_side() =>
-                {
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_removed_previous_dl += 1;
-                    self.statistics
-                        .iterative_minimisation_statistics
-                        .num_replaced_with_new_previous_dl += 1;
-
-                    let domain = element.get_domain();
-                    let new_predicate = predicate!(domain == element.get_right_hand_side());
-                    self.replace_if_possible_previous_level(context, element, new_predicate)?;
-                }
-
-                _ => {}
-            }
-        }
-        ControlFlow::Continue(())
-    }
+    // fn check_redundancy_previous_level(
+    //     &mut self,
+    //     predicate: Predicate,
+    //     context: &mut ConflictAnalysisContext<'_>,
+    // ) -> ControlFlow<()> {
+    //     for element in self
+    //         .processed_nogood_predicates
+    //         .iter()
+    //         .filter(|element| {
+    //             element.get_domain() == predicate.get_domain()
+    //                 && context.get_state().trail_position(**element)
+    //                     != context.get_state().trail_position(predicate)
+    //         })
+    //         .copied()
+    //         .collect::<Vec<_>>()
+    //     {
+    //         match (element.get_predicate_type(), predicate.get_predicate_type()) {
+    //             (PredicateType::Equal, PredicateType::NotEqual)
+    //             | (PredicateType::Equal, PredicateType::UpperBound)
+    //             | (PredicateType::Equal, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 return ControlFlow::Break(());
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::UpperBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     if let Some(index) = self
+    //                         .processed_nogood_predicates
+    //                         .iter()
+    //                         .position(|predicate| *predicate == element)
+    //                     {
+    //                         let _ = self.processed_nogood_predicates.remove(index);
+    //                     }
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_previous_dl += 1;
+    //
+    //                     let domain = element.get_domain();
+    //                     let new_predicate = predicate!(domain <= element.get_right_hand_side() -
+    // 1);                     self.replace_if_possible_previous_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() <
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::LowerBound) => {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+    //                     return ControlFlow::Break(());
+    //                 } else {
+    //                     if let Some(index) = self
+    //                         .processed_nogood_predicates
+    //                         .iter()
+    //                         .position(|predicate| *predicate == element)
+    //                     {
+    //                         let _ = self.processed_nogood_predicates.remove(index);
+    //                     }
+    //                 }
+    //             }
+    //             (PredicateType::LowerBound, PredicateType::NotEqual) => {
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() {
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_replaced_with_new_previous_dl += 1;
+    //
+    //                     let domain = element.get_domain();
+    //                     let new_predicate = predicate!(domain >= element.get_right_hand_side() +
+    // 1);                     self.replace_if_possible_previous_level(context, element,
+    // new_predicate)?;                 } else if element.get_right_hand_side() >
+    // predicate.get_right_hand_side() {                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed += 1;
+    //                     self.statistics
+    //                         .iterative_minimisation_statistics
+    //                         .num_removed_previous_dl += 1;
+    //                     return ControlFlow::Break(());
+    //                 }
+    //             }
+    //             (PredicateType::UpperBound, PredicateType::LowerBound)
+    //                 if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+    //             {
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_removed_previous_dl += 1;
+    //                 self.statistics
+    //                     .iterative_minimisation_statistics
+    //                     .num_replaced_with_new_previous_dl += 1;
+    //
+    //                 let domain = element.get_domain();
+    //                 let new_predicate = predicate!(domain == element.get_right_hand_side());
+    //                 self.replace_if_possible_previous_level(context, element, new_predicate)?;
+    //             }
+    //
+    //             _ => {}
+    //         }
+    //     }
+    //     ControlFlow::Continue(())
+    // }
 
     fn replace_if_possible_previous_level(
         &mut self,
@@ -683,6 +781,18 @@ impl ResolutionResolver {
         // First we obtain a semantically minimised nogood.
         //
         // We reuse the vector with lower decision levels for simplicity.
+        println!(
+            "FINAL NOGOOD: {:?}",
+            self.processed_nogood_predicates
+                .iter()
+                .copied()
+                .chain(
+                    self.to_process_heap
+                        .keys()
+                        .map(|id| self.predicate_id_generator.get_predicate(id))
+                )
+                .collect::<Vec<_>>()
+        );
         if self.to_process_heap.num_nonremoved_elements() > 0 {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
             self.processed_nogood_predicates.push(last_predicate);

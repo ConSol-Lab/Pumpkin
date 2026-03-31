@@ -584,7 +584,6 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
-        iterative_minimisation: args.iterative_minimisation,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
@@ -643,7 +642,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
-                    args.iterative_minimisation,
+                    !args.iterative_minimisation,
                 ),
             )?,
         },
