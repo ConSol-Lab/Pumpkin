@@ -289,8 +289,10 @@ impl ResolutionResolver {
             {
                 context.predicate_appeared_in_conflict(predicate);
 
-                self.to_process_heap.set_value(predicate_id, 0);
-                self.to_process_heap.delete_key(predicate_id);
+                if self.iterative_minimisation {
+                    self.to_process_heap.set_value(predicate_id, 0);
+                    self.to_process_heap.delete_key(predicate_id);
+                }
 
                 if self.iterative_minimisation {
                     if let ControlFlow::Break(_) =

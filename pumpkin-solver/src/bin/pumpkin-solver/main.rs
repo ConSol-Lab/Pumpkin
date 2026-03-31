@@ -171,6 +171,15 @@ struct Args {
     #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
     no_learning_clause_minimisation: bool,
 
+    /// Decides whether to apply semantic minimisation during conflict analysis; according to the
+    /// idea proposed in "Semantic Learning for Lazy Clause Generation - Feydy et al. (2013)".
+    ///
+    /// If this flag is present then the minimisation is turned on.
+    ///
+    /// Possible values: bool
+    #[arg(long = "iterative-minimisation", verbatim_doc_comment)]
+    iterative_minimisation: bool,
+
     /// Decides the sequence based on which the restarts are performed.
     ///
     /// - The "constant" approach uses a constant number of conflicts before another restart is
@@ -575,6 +584,7 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
+        iterative_minimisation: args.iterative_minimisation,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
@@ -633,6 +643,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
+                    args.iterative_minimisation,
                 ),
             )?,
         },
