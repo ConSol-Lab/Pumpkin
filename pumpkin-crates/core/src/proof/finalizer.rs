@@ -102,7 +102,7 @@ fn finalize_proof_impl(
 
             // There must be some combination of other factors.
             let mut reason = vec![];
-            ConflictAnalysisContext::get_propagation_reason_inner(
+            let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                 predicate,
                 CurrentNogood::empty(),
                 context.proof_log,
@@ -157,5 +157,21 @@ pub(crate) fn explain_root_assignment(
         [predicate].into_iter().collect(),
     )]);
 
-    let _ = finalize_proof_impl(context, to_explain);
+    let required_assumptions = finalize_proof_impl(context, to_explain);
+
+    // This can happen when solving under assumptions. However, we do not have a good way to
+    // handle assumptions in the proof format yet. So, we introduce them as initial domains.
+    // This would never pass an external checker, but will satisfy the runtime deduction
+    // verification.
+    for assumption in required_assumptions {
+        let _ = context
+            .proof_log
+            .log_domain_inference(
+                assumption,
+                &context.state.variable_names,
+                &mut context.state.constraint_tags,
+                &context.state.assignments,
+            )
+            .expect("failed to write to proof");
+    }
 }

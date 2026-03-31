@@ -191,7 +191,8 @@ impl ResolutionResolver {
 
             // 2) Get the reason for the predicate and add it to the nogood.
             self.reason_buffer.clear();
-            context.get_propagation_reason(
+
+            let _ = context.get_propagation_reason(
                 next_predicate,
                 CurrentNogood::new(
                     &self.to_process_heap,
@@ -206,7 +207,7 @@ impl ResolutionResolver {
             }
         }
 
-        self.extract_final_nogood(context)
+        self.extract_final_nogood(context);
     }
 
     /// Clears all data structures to prepare for the new conflict analysis.
