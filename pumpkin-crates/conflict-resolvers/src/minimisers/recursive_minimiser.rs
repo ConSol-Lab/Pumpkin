@@ -56,12 +56,16 @@ impl NogoodMinimiser for RecursiveMinimiser {
             self.compute_label(predicate, context, nogood);
 
             // If the predicate is removable, mark it to be explained.
-            if self.get_predicate_label(predicate) == Label::Removable {
+            if context.is_proof_logging_inferences()
+                && self.get_predicate_label(predicate) == Label::Removable
+            {
                 self.predicates_to_log.push(predicate, context.get_state());
             }
         }
 
-        self.add_inferences_for_removed_predicates(context);
+        if context.is_proof_logging_inferences() {
+            self.add_inferences_for_removed_predicates(context);
+        }
 
         // Iterate over each predicate and check whether it is a dominated predicate.
         let mut end_position: usize = 0;
