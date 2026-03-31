@@ -72,7 +72,7 @@ where
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///
     /// The time-complexity of this operation is O(1)
-    pub(crate) fn peek_max(&self) -> Option<(&Key, &Value)> {
+    pub fn peek_max(&self) -> Option<(&Key, &Value)> {
         if self.has_no_nonremoved_elements() {
             None
         } else {

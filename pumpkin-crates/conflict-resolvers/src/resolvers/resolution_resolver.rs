@@ -1,3 +1,5 @@
+use std::ops::ControlFlow;
+
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
@@ -87,7 +89,16 @@ create_statistics_struct!(
         average_backtrack_amount: CumulativeMovingAverage<u64>,
         /// The average literal-block distance (LBD) metric for newly added learned nogoods
         average_lbd: CumulativeMovingAverage<u64>,
-        num_removed_during_analysis: usize,
+        iterative_minimisation: IterativeMinimisationStatistics
+});
+
+create_statistics_struct!(IterativeMinimisationStatistics {
+    num_removed: usize,
+    num_replaced_with_new_current_dl: usize,
+    num_replaced_with_new_previous_dl: usize,
+
+    num_removed_previous_dl: usize,
+    num_removed_current_dl: usize,
 });
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -275,65 +286,12 @@ impl ResolutionResolver {
             self.to_process_heap.set_value(predicate_id, 0);
             self.to_process_heap.delete_key(predicate_id);
 
-            for element in self
-                .to_process_heap
-                .keys()
-                .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
-                .filter(|element| {
-                    element.get_domain() == predicate.get_domain()
-                        && context.get_state().trail_position(*element)
-                            != context.get_state().trail_position(predicate)
-                })
-                .collect::<Vec<_>>()
+            if let ControlFlow::Break(_) = self.check_redundancy_previous_level(predicate, context)
             {
-                match (element.get_predicate_type(), predicate.get_predicate_type()) {
-                    (PredicateType::Equal, PredicateType::NotEqual) => return,
-                    (PredicateType::Equal, PredicateType::UpperBound) => return,
-                    (PredicateType::Equal, PredicateType::LowerBound) => return,
-                    (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                        if element.get_right_hand_side() <= predicate.get_right_hand_side() {
-                            self.statistics.num_removed_during_analysis += 1;
-                            return;
-                        } else {
-                            self.statistics.num_removed_during_analysis += 1;
-                            let element_id = self.predicate_id_generator.get_id(element);
-                            self.to_process_heap.delete_key(element_id);
-                        }
-                    }
-                    (PredicateType::UpperBound, PredicateType::NotEqual) => {
-                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                            // todo!()
-                        } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
-                            self.statistics.num_removed_during_analysis += 1;
-                            return;
-                        }
-                    }
-                    (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                        if element.get_right_hand_side() >= predicate.get_right_hand_side() {
-                            self.statistics.num_removed_during_analysis += 1;
-                            return;
-                        } else {
-                            self.statistics.num_removed_during_analysis += 1;
-                            let element_id = self.predicate_id_generator.get_id(element);
-                            self.to_process_heap.delete_key(element_id);
-                        }
-                    }
-                    (PredicateType::LowerBound, PredicateType::NotEqual) => {
-                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                            // todo!()
-                        } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
-                            self.statistics.num_removed_during_analysis += 1;
-                            return;
-                        }
-                    }
-                    (PredicateType::UpperBound, PredicateType::LowerBound) => {
-                        if element.get_right_hand_side() == predicate.get_right_hand_side() {
-                            // todo!()
-                        }
-                    }
-
-                    _ => {}
-                }
+                return;
+            }
+            if let ControlFlow::Break(_) = self.check_redundancy_current_level(predicate, context) {
+                return;
             }
 
             // The goal is to traverse predicate in reverse order of the trail.
@@ -358,11 +316,10 @@ impl ResolutionResolver {
             // We restore the key and since we know that the value is 0, we can safely
             // increment with `heap_value`
             self.to_process_heap.restore_key(predicate_id);
-            self.to_process_heap
-                .set_value(predicate_id, heap_value as u32);
+            self.to_process_heap.set_value(predicate_id, heap_value);
 
             pumpkin_assert_simple!(
-                *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
+                *self.to_process_heap.get_value(predicate_id) == heap_value,
                 "The value in the heap should be the same as was added"
             )
         } else {
@@ -370,6 +327,300 @@ impl ResolutionResolver {
             // Semantic minimisation will later remove duplicates and do other processing.
             self.processed_nogood_predicates.push(predicate);
         }
+    }
+
+    fn check_redundancy_current_level(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+    ) -> ControlFlow<()> {
+        for element in self
+            .to_process_heap
+            .keys()
+            .map(|predicate_id| self.predicate_id_generator.get_predicate(predicate_id))
+            .filter(|element| {
+                element.get_domain() == predicate.get_domain()
+                    && context.get_state().trail_position(*element)
+                        != context.get_state().trail_position(predicate)
+            })
+            .collect::<Vec<_>>()
+        {
+            match (element.get_predicate_type(), predicate.get_predicate_type()) {
+                (PredicateType::Equal, PredicateType::NotEqual)
+                | (PredicateType::Equal, PredicateType::UpperBound)
+                | (PredicateType::Equal, PredicateType::LowerBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_current_dl += 1;
+                    return ControlFlow::Break(());
+                }
+                (PredicateType::UpperBound, PredicateType::UpperBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_current_dl += 1;
+                    if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+                        return ControlFlow::Break(());
+                    } else {
+                        let element_id = self.predicate_id_generator.get_id(element);
+                        self.to_process_heap.delete_key(element_id);
+                    }
+                }
+                (PredicateType::UpperBound, PredicateType::NotEqual) => {
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_current_dl += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_replaced_with_new_current_dl += 1;
+                        let domain = element.get_domain();
+
+                        let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
+                        self.replace_if_possible_current_level(context, element, new_predicate)?;
+                    } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_current_dl += 1;
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        return ControlFlow::Break(());
+                    }
+                }
+                (PredicateType::LowerBound, PredicateType::LowerBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_current_dl += 1;
+                    if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+                        return ControlFlow::Break(());
+                    } else {
+                        let element_id = self.predicate_id_generator.get_id(element);
+                        self.to_process_heap.delete_key(element_id);
+                    }
+                }
+                (PredicateType::LowerBound, PredicateType::NotEqual) => {
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_current_dl += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_replaced_with_new_current_dl += 1;
+                        let domain = element.get_domain();
+
+                        let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
+                        self.replace_if_possible_current_level(context, element, new_predicate)?;
+                    } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_current_dl += 1;
+                        return ControlFlow::Break(());
+                    }
+                }
+                (PredicateType::UpperBound, PredicateType::LowerBound)
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+                {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_current_dl += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_replaced_with_new_current_dl += 1;
+                    let domain = element.get_domain();
+
+                    let new_predicate = predicate!(domain == element.get_right_hand_side());
+                    self.replace_if_possible_current_level(context, element, new_predicate)?;
+                }
+
+                _ => {}
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn replace_if_possible_current_level(
+        &mut self,
+        context: &mut ConflictAnalysisContext<'_>,
+        element: Predicate,
+        new_predicate: Predicate,
+    ) -> ControlFlow<()> {
+        let heap_value = get_heap_value(new_predicate, context);
+
+        if heap_value
+            < self
+                .to_process_heap
+                .peek_max()
+                .map(|(_, value)| *value)
+                .unwrap_or_default()
+        {
+            let element_id = self.predicate_id_generator.get_id(element);
+            self.to_process_heap.delete_key(element_id);
+
+            self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
+
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn check_redundancy_previous_level(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext<'_>,
+    ) -> ControlFlow<()> {
+        for element in self
+            .processed_nogood_predicates
+            .iter()
+            .filter(|element| {
+                element.get_domain() == predicate.get_domain()
+                    && context.get_state().trail_position(**element)
+                        != context.get_state().trail_position(predicate)
+            })
+            .copied()
+            .collect::<Vec<_>>()
+        {
+            match (element.get_predicate_type(), predicate.get_predicate_type()) {
+                (PredicateType::Equal, PredicateType::NotEqual)
+                | (PredicateType::Equal, PredicateType::UpperBound)
+                | (PredicateType::Equal, PredicateType::LowerBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_previous_dl += 1;
+                    return ControlFlow::Break(());
+                }
+                (PredicateType::UpperBound, PredicateType::UpperBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_previous_dl += 1;
+                    if element.get_right_hand_side() <= predicate.get_right_hand_side() {
+                        return ControlFlow::Break(());
+                    } else {
+                        if let Some(index) = self
+                            .processed_nogood_predicates
+                            .iter()
+                            .position(|predicate| *predicate == element)
+                        {
+                            let _ = self.processed_nogood_predicates.remove(index);
+                        }
+                    }
+                }
+                (PredicateType::UpperBound, PredicateType::NotEqual) => {
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_previous_dl += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_replaced_with_new_previous_dl += 1;
+
+                        let domain = element.get_domain();
+                        let new_predicate = predicate!(domain <= element.get_right_hand_side() - 1);
+                        self.replace_if_possible_previous_level(context, element, new_predicate)?;
+                    } else if element.get_right_hand_side() < predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_previous_dl += 1;
+                        return ControlFlow::Break(());
+                    }
+                }
+                (PredicateType::LowerBound, PredicateType::LowerBound) => {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_previous_dl += 1;
+                    if element.get_right_hand_side() >= predicate.get_right_hand_side() {
+                        return ControlFlow::Break(());
+                    } else {
+                        if let Some(index) = self
+                            .processed_nogood_predicates
+                            .iter()
+                            .position(|predicate| *predicate == element)
+                        {
+                            let _ = self.processed_nogood_predicates.remove(index);
+                        }
+                    }
+                }
+                (PredicateType::LowerBound, PredicateType::NotEqual) => {
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_previous_dl += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_replaced_with_new_previous_dl += 1;
+
+                        let domain = element.get_domain();
+                        let new_predicate = predicate!(domain >= element.get_right_hand_side() + 1);
+                        self.replace_if_possible_previous_level(context, element, new_predicate)?;
+                    } else if element.get_right_hand_side() > predicate.get_right_hand_side() {
+                        self.statistics.iterative_minimisation.num_removed += 1;
+                        self.statistics
+                            .iterative_minimisation
+                            .num_removed_previous_dl += 1;
+                        return ControlFlow::Break(());
+                    }
+                }
+                (PredicateType::UpperBound, PredicateType::LowerBound)
+                    if element.get_right_hand_side() == predicate.get_right_hand_side() =>
+                {
+                    self.statistics.iterative_minimisation.num_removed += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_removed_previous_dl += 1;
+                    self.statistics
+                        .iterative_minimisation
+                        .num_replaced_with_new_previous_dl += 1;
+
+                    let domain = element.get_domain();
+                    let new_predicate = predicate!(domain == element.get_right_hand_side());
+                    self.replace_if_possible_previous_level(context, element, new_predicate)?;
+                }
+
+                _ => {}
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn replace_if_possible_previous_level(
+        &mut self,
+        context: &mut ConflictAnalysisContext<'_>,
+        element: Predicate,
+        new_predicate: Predicate,
+    ) -> ControlFlow<()> {
+        let heap_value = get_heap_value(new_predicate, context);
+
+        if heap_value
+            < self
+                .to_process_heap
+                .peek_max()
+                .map(|(_, value)| *value)
+                .unwrap_or_default()
+        {
+            if let Some(index) = self
+                .processed_nogood_predicates
+                .iter()
+                .position(|predicate| *predicate == element)
+            {
+                let _ = self.processed_nogood_predicates.remove(index);
+            }
+
+            self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
+
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
     }
 
     fn pop_predicate_from_conflict_nogood(&mut self) -> Predicate {
@@ -441,18 +692,18 @@ impl ResolutionResolver {
     }
 }
 
-fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> usize {
+fn get_heap_value(predicate: Predicate, context: &mut ConflictAnalysisContext<'_>) -> u32 {
     if context.get_state().is_on_trail(predicate) {
         context
             .get_state()
             .trail_position(predicate)
-            .expect("Predicate should be true during conflict analysis")
+            .expect("Predicate should be true during conflict analysis") as u32
             * 2
     } else {
         context
             .get_state()
             .trail_position(predicate)
-            .expect("Predicate should be true during conflict analysis")
+            .expect("Predicate should be true during conflict analysis") as u32
             * 2
             + 1
     }
