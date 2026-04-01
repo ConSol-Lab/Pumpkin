@@ -314,6 +314,9 @@ impl IterativeMinimiser {
         if context.is_proof_logging_inferences() {
             let domain = predicate.get_domain();
             let mut lower_bound = self.domains[domain].lower_bound;
+            if lower_bound == i32::MIN {
+                return;
+            }
 
             if context.get_checkpoint_for_predicate(predicate!(domain >= lower_bound)) == Some(0) {
                 context.explain_root_assignment(predicate!(domain >= lower_bound));
@@ -339,6 +342,9 @@ impl IterativeMinimiser {
         if context.is_proof_logging_inferences() {
             let domain = predicate.get_domain();
             let mut upper_bound = self.domains[domain].upper_bound;
+            if upper_bound == i32::MAX {
+                return;
+            }
 
             if context.get_checkpoint_for_predicate(predicate!(domain <= upper_bound)) == Some(0) {
                 context.explain_root_assignment(predicate!(domain <= upper_bound));
