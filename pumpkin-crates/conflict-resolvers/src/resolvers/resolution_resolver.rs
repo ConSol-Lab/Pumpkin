@@ -276,7 +276,7 @@ impl ResolutionResolver {
         // Ignore root level predicates.
         if dec_level == 0 {
             // println!("{predicate:?} ROOT LEVEL");
-            let _ = self.iterative_minimiser.apply_predicate(predicate);
+            self.iterative_minimiser.apply_predicate(predicate);
 
             context.explain_root_assignment(predicate);
         }
@@ -289,12 +289,11 @@ impl ResolutionResolver {
         // otherwise we add it to the decision predicates which have been discovered previously
         else {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
-            if self.iterative_minimisation {
-                if let ControlFlow::Break(_) =
+            if self.iterative_minimisation
+                && let ControlFlow::Break(_) =
                     self.check_for_iterative_redundancy(predicate, context, predicate_id)
-                {
-                    return;
-                }
+            {
+                return;
             }
             if match mode {
                 AnalysisMode::OneUIP => dec_level == context.get_checkpoint(),

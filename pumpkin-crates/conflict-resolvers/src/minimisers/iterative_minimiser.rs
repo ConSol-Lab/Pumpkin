@@ -49,10 +49,7 @@ impl Default for IterativeDomain {
 }
 
 impl IterativeDomain {
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate, replacement: bool) -> bool {
-        let prev_lb = self.lower_bound;
-        let prev_ub = self.upper_bound;
-
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate, replacement: bool) {
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() > self.lower_bound {
@@ -107,8 +104,6 @@ impl IterativeDomain {
                 self.lower_bound = predicate.get_right_hand_side();
             }
         }
-
-        prev_lb != prev_ub && self.lower_bound == self.upper_bound
     }
 
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
@@ -128,16 +123,13 @@ impl IterativeDomain {
                     .get(&predicate.get_right_hand_side())
                     .map(|(lb_updated, _)| *lb_updated)
                     .unwrap_or_default()
-                {
-                    if let Some(position) = self
+                    && let Some(position) = self
                         .lower_bound_updates
                         .iter()
                         .position(|value| *value == predicate.get_right_hand_side() + 1)
-                    {
-                        let _ = self.lower_bound_updates.remove(position);
-                        self.lower_bound =
-                            self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
-                    }
+                {
+                    let _ = self.lower_bound_updates.remove(position);
+                    self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
                 }
             }
             PredicateType::UpperBound => {
@@ -161,16 +153,13 @@ impl IterativeDomain {
                     .get(&predicate.get_right_hand_side())
                     .map(|(_, ub_updated)| *ub_updated)
                     .unwrap_or_default()
-                {
-                    if let Some(position) = self
+                    && let Some(position) = self
                         .upper_bound_updates
                         .iter()
                         .position(|value| *value == predicate.get_right_hand_side() - 1)
-                    {
-                        let _ = self.upper_bound_updates.remove(position);
-                        self.upper_bound =
-                            self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
-                    }
+                {
+                    let _ = self.upper_bound_updates.remove(position);
+                    self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
                 }
             }
             PredicateType::NotEqual => {
@@ -179,36 +168,35 @@ impl IterativeDomain {
                     .get(&predicate.get_right_hand_side())
                     .expect("Expected removed not equals to be present");
 
-                if *lb_caused_update {
-                    if let Some(position) = self
+                if *lb_caused_update
+                    && let Some(position) = self
                         .lower_bound_updates
                         .iter()
                         .position(|value| *value == predicate.get_right_hand_side() + 1)
-                    {
-                        let _ = self.lower_bound_updates.remove(position);
-                        self.lower_bound =
-                            self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
-                    }
+                {
+                    let _ = self.lower_bound_updates.remove(position);
+                    self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
                 }
 
-                if *ub_caused_update {
-                    if let Some(position) = self
+                if *ub_caused_update
+                    && let Some(position) = self
                         .upper_bound_updates
                         .iter()
                         .position(|value| *value == predicate.get_right_hand_side() - 1)
-                    {
-                        let _ = self.upper_bound_updates.remove(position);
-                        self.upper_bound =
-                            self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
-                    }
+                {
+                    let _ = self.upper_bound_updates.remove(position);
+                    self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
                 }
             }
             PredicateType::Equal => {
                 assert_eq!(self.lower_bound, self.upper_bound);
                 assert_eq!(self.lower_bound, predicate.get_right_hand_side());
 
-                self.lower_bound_updates.pop();
-                self.upper_bound_updates.pop();
+                let popped_lb = self.lower_bound_updates.pop();
+                assert_eq!(popped_lb, Some(predicate.get_right_hand_side()));
+
+                let popped_ub = self.upper_bound_updates.pop();
+                assert_eq!(popped_ub, Some(predicate.get_right_hand_side()));
 
                 self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
                 self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
@@ -227,14 +215,14 @@ impl IterativeMinimiser {
         self.domains[domain].remove_predicate(predicate);
     }
 
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) -> bool {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
         // println!(
         //     "\t\tApplying ({}) {predicate:?}",
         //     self.replacement_with_equals
         // );
         let domain = predicate.get_domain();
         self.domains.accomodate(domain, IterativeDomain::default());
-        self.domains[domain].apply_predicate(predicate, self.replacement_with_equals)
+        self.domains[domain].apply_predicate(predicate, self.replacement_with_equals);
     }
 
     pub(crate) fn process_predicate(
