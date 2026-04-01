@@ -13,14 +13,14 @@ pub(crate) struct PredicateHeap {
 }
 
 impl PredicateHeap {
-    /// See [`BinaryHeap::len`].
-    pub(crate) fn len(&self) -> usize {
-        self.heap.len()
-    }
-
     /// See [`BinaryHeap::pop`].
     pub(crate) fn pop(&mut self) -> Option<Predicate> {
         self.heap.pop().map(|to_explain| to_explain.predicate)
+    }
+
+    /// See [`BinaryHeap::peek`].
+    pub(crate) fn peek(&mut self) -> Option<Predicate> {
+        self.heap.peek().map(|to_explain| to_explain.predicate)
     }
 
     /// See [`BinaryHeap::drain`].
@@ -53,15 +53,18 @@ impl PredicateHeap {
         self.heap.push(PredicateToExplain {
             predicate,
             trail_position,
+            is_implied: state.trail_entry(trail_position).predicate == predicate,
         });
 
-        assert_eq!(
-            self.heap
-                .iter()
-                .filter(|pte| pte.predicate == predicate)
-                .count(),
-            1
-        );
+        if cfg!(feature = "hl-checks") {
+            assert_eq!(
+                self.heap
+                    .iter()
+                    .filter(|pte| pte.predicate == predicate)
+                    .count(),
+                1
+            );
+        }
     }
 }
 
@@ -73,6 +76,7 @@ impl PredicateHeap {
 struct PredicateToExplain {
     predicate: Predicate,
     trail_position: usize,
+    is_implied: bool,
 }
 
 impl PartialOrd for PredicateToExplain {
@@ -89,18 +93,16 @@ impl Ord for PredicateToExplain {
             Ordering::Equal => {
                 assert_eq!(self.predicate.get_domain(), other.predicate.get_domain());
 
-                let self_implies_other = self.predicate.implies(other.predicate);
-                let other_implies_self = other.predicate.implies(self.predicate);
-
-                if (self_implies_other && other_implies_self) {
+                if self.is_implied && other.is_implied {
                     Ordering::Equal
-                } else if self_implies_other {
+                } else if self.is_implied {
                     Ordering::Less
-                } else if other_implies_self {
+                } else if other.is_implied {
                     Ordering::Greater
                 } else {
-                    // The predicates are incomparable, so their order is irrelevant.
-                    Ordering::Equal
+                    unreachable!(
+                        "cannot have multiple predicates on the trail at the same position"
+                    )
                 }
             }
         }

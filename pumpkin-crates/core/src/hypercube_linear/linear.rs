@@ -2,6 +2,7 @@ use std::num::NonZero;
 
 use crate::containers::HashMap;
 use crate::hypercube_linear::BoundPredicate;
+use crate::math::num_ext::NumExt;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
@@ -77,10 +78,22 @@ impl LinearInequality {
         self.terms().find(|view| view.inner == domain)
     }
 
+    /// Divide the linear inequality and round the bound down.
+    ///
+    /// The divisor _must_ divide all term weights, otherwise this function panics.
+    pub fn divide(&mut self, divisor: i32) {
+        for term in self.terms.iter_mut() {
+            assert_eq!(term.scale % divisor, 0);
+            term.scale = term.scale / divisor;
+        }
+
+        self.bound = <i32 as NumExt>::div_floor(self.bound, divisor);
+    }
+
     /// Weakens the linear inequality on the given bound.
     ///
     /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken(&mut self, bound: BoundPredicate, count: u32) {
+    pub fn weaken(mut self, bound: BoundPredicate, count: u32) -> Option<Self> {
         todo!()
     }
 
@@ -88,12 +101,12 @@ impl LinearInequality {
     /// of the bound is 0.
     ///
     /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken_to_zero(&mut self, bound: BoundPredicate) {
+    pub fn weaken_to_zero(mut self, bound: BoundPredicate) -> Option<Self> {
         let Some(term) = self.term_for_domain(bound.domain) else {
-            return;
+            return Some(self);
         };
 
-        self.weaken(bound, term.scale.unsigned_abs());
+        self.weaken(bound, term.scale.unsigned_abs())
     }
 }
 

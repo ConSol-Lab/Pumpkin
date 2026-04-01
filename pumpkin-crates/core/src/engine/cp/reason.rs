@@ -53,11 +53,11 @@ impl ReasonStore {
         true
     }
 
-    pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
+    pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<u64> {
         match self.trail.get(reference.0 as usize) {
             Some(reason) => match &reason.1 {
                 StoredReason::Eager(_) => None,
-                StoredReason::DynamicLazy(code) => Some(code),
+                StoredReason::DynamicLazy(code) => Some(*code),
             },
             None => None,
         }

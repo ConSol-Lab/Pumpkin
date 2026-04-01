@@ -1,7 +1,11 @@
 //! Compile constraints into CP propagators
 
+use std::num::NonZero;
 use std::rc::Rc;
 
+use pumpkin_core::hypercube_linear::Hypercube;
+use pumpkin_core::hypercube_linear::HypercubeLinearConstructor;
+use pumpkin_core::hypercube_linear::LinearInequality;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -17,6 +21,18 @@ use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
+
+macro_rules! check_parameters {
+    ($exprs:ident, $num_parameters:expr, $name:expr) => {
+        if $exprs.len() != $num_parameters {
+            return Err(FlatZincError::IncorrectNumberOfArguments {
+                constraint_id: $name.into(),
+                expected: $num_parameters,
+                actual: $exprs.len(),
+            });
+        }
+    };
+}
 
 pub(crate) fn run(
     _: &FlatZincAst,
@@ -169,14 +185,41 @@ pub(crate) fn run(
                 constraint_tag,
                 pumpkin_constraints::not_equals,
             )?,
-            "int_lin_le" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
+            // "int_lin_le" => compile_int_lin_predicate(
+            //     context,
+            //     exprs,
+            //     annos,
+            //     "int_lin_le",
+            //     constraint_tag,
+            //     pumpkin_constraints::less_than_or_equals,
+            // )?,
+            "int_lin_le" => {
+                check_parameters!(exprs, 3, "int_lin_le");
+
+                let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+
+                let terms = weights
+                    .iter()
+                    .copied()
+                    .zip(vars.iter().copied())
+                    .filter_map(|(weight, domain)| {
+                        NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
+                    });
+
+                match LinearInequality::new(terms, rhs) {
+                    Some(linear) => context
+                        .solver
+                        .add_propagator(HypercubeLinearConstructor {
+                            hypercube: Hypercube::default(),
+                            linear,
+                            constraint_tag,
+                        })
+                        .is_ok(),
+                    None => todo!(),
+                }
+            }
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
@@ -354,18 +397,6 @@ pub(crate) fn run(
     }
 
     Ok(())
-}
-
-macro_rules! check_parameters {
-    ($exprs:ident, $num_parameters:expr, $name:expr) => {
-        if $exprs.len() != $num_parameters {
-            return Err(FlatZincError::IncorrectNumberOfArguments {
-                constraint_id: $name.into(),
-                expected: $num_parameters,
-                actual: $exprs.len(),
-            });
-        }
-    };
 }
 
 fn compile_disjunctive_strict(

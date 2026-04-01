@@ -1,3 +1,4 @@
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
@@ -28,5 +29,14 @@ impl BoundPredicate {
             comparator,
             value: predicate.get_right_hand_side(),
         })
+    }
+}
+
+impl Into<Predicate> for BoundPredicate {
+    fn into(self) -> Predicate {
+        match self.comparator {
+            BoundComparator::LowerBound => predicate![self.domain >= self.value],
+            BoundComparator::UpperBound => predicate![self.domain <= self.value],
+        }
     }
 }

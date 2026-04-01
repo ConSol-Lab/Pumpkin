@@ -19,7 +19,6 @@ use crate::propagation::PropagatorConstructorContext;
 use crate::propagation::ReadDomains;
 use crate::pumpkin_assert_simple;
 use crate::state::PropagatorConflict;
-use crate::state::PropagatorId;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 
@@ -67,6 +66,7 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
         };
 
         HypercubeLinearPropagator {
+            hypercube,
             linear,
 
             hypercube_predicates,
@@ -83,6 +83,7 @@ const NUM_WATCHED_PREDICATES: usize = 2;
 /// A [`Propagator`] for the hypercube linear constraint.
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearPropagator {
+    hypercube: Hypercube,
     linear: LinearInequality,
 
     hypercube_predicates: Box<[Predicate]>,
@@ -143,17 +144,9 @@ impl HypercubeLinearPropagator {
                 Err(_) => return Ok(()),
             };
 
-            let reason = self
-                .linear
-                .terms()
-                .filter(|&t| t != term)
-                .map(|term| predicate![term >= context.lower_bound(&term)])
-                .chain(self.hypercube_predicates.iter().copied())
-                .collect::<PropositionalConjunction>();
-
             context.post(
                 predicate![term <= term_upper_bound],
-                reason,
+                0_u64,
                 &self.inference_code,
             )?;
         }
@@ -245,6 +238,14 @@ impl Propagator for HypercubeLinearPropagator {
         "HypercubeLinear"
     }
 
+    fn explain_as_hypercube_linear(
+        &mut self,
+        _code: u64,
+        _context: crate::propagation::ExplanationContext,
+    ) -> Option<(Hypercube, LinearInequality)> {
+        Some((self.hypercube.clone(), self.linear.clone()))
+    }
+
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
         let satisfied_watchers = self.update_watched_predicates(context.reborrow());
 
@@ -280,19 +281,7 @@ impl Propagator for HypercubeLinearPropagator {
                     // does not appear in the linear inequality. Since the slack is negative, we
                     // can propagate that predicate to false.
 
-                    let conjunction: PropositionalConjunction = self
-                        .linear
-                        .terms()
-                        .map(|term| predicate![term >= context.lower_bound(&term)])
-                        .chain(
-                            self.hypercube_predicates
-                                .iter()
-                                .copied()
-                                .filter(|&predicate| predicate != predicate_in_hypercube),
-                        )
-                        .collect();
-
-                    context.post(!predicate_in_hypercube, conjunction, &self.inference_code)?;
+                    context.post(!predicate_in_hypercube, 0_u64, &self.inference_code)?;
                 } else if let Some(term_to_propagate) = maybe_term {
                     // The slack is at least 0, but it may be that the linear could propagate
                     // something weaker than `!predicate_in_hypercube`.
@@ -313,21 +302,9 @@ impl Propagator for HypercubeLinearPropagator {
                         Err(_) => return Ok(()),
                     };
 
-                    let conjunction: PropositionalConjunction = self
-                        .linear
-                        .terms()
-                        .map(|term| predicate![term >= context.lower_bound(&term)])
-                        .chain(
-                            self.hypercube_predicates
-                                .iter()
-                                .copied()
-                                .filter(|&predicate| predicate != predicate_in_hypercube),
-                        )
-                        .collect();
-
                     context.post(
                         predicate![term_to_propagate <= bound],
-                        conjunction,
+                        0_u64,
                         &self.inference_code,
                     )?;
                 }

@@ -184,7 +184,7 @@ impl NogoodPropagator {
                 let propagated_by_nogood_propagator = propagator_id == handle.propagator_id();
                 // Then we check whether the lazy reason for the propagation was this particular
                 // nogood
-                let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
+                let code_matches_id = code.is_none() || code.unwrap() == id.id as u64;
                 return propagated_by_nogood_propagator && code_matches_id;
             }
         }
