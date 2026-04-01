@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_core::variables::IntegerVariableEnum;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -637,7 +638,7 @@ fn compile_bool_and(
 fn compile_bool2int(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
-    _constraint_tag: ConstraintTag,
+    constraint_tag: ConstraintTag,
 ) -> Result<bool, FlatZincError> {
     // TODO: Perhaps we want to add a phase in the compiler that directly uses the literal
     // corresponding to the predicate [b = 1] for the boolean parameter in this constraint.
@@ -645,16 +646,16 @@ fn compile_bool2int(
 
     check_parameters!(exprs, 2, "bool2int");
 
-    let _a = context.resolve_bool_variable(&exprs[0])?;
-    let _b = context.resolve_integer_variable(&exprs[1])?;
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_integer_variable(&exprs[1])?;
 
-    todo!();
-
-    // Ok(
-    //     pumpkin_constraints::binary_equals(a, b.scaled(1), constraint_tag)
-    //         .post(context.solver)
-    //         .is_ok(),
-    // )
+    Ok(pumpkin_constraints::binary_equals(
+        IntegerVariableEnum::Literal(a.scaled(1)),
+        IntegerVariableEnum::DomainId(b.scaled(1)),
+        constraint_tag,
+    )
+    .post(context.solver)
+    .is_ok())
 }
 
 fn compile_bool_or(

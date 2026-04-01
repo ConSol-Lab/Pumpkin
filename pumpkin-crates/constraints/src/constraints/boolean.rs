@@ -4,10 +4,12 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::AffineView;
 use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariableEnum;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::less_than_or_equals;
+use crate::equals;
 
 /// Creates the [`Constraint`] `∑ weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(
@@ -35,7 +37,7 @@ pub fn boolean_equals(
         weights: weights.into(),
         bools: bools.into(),
         rhs,
-        _constraint_tag: constraint_tag,
+        constraint_tag,
     }
 }
 
@@ -79,40 +81,34 @@ struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
     rhs: DomainId,
-    _constraint_tag: ConstraintTag,
+    constraint_tag: ConstraintTag,
 }
 
 impl Constraint for BooleanEqual {
-    fn post(self, _solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        let (_domains, _rhs_domain) = self.create_domains();
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        let domains = self.create_domains();
 
-        todo!();
-
-        // equals(domains, 0, self.constraint_tag).post(solver)
+        equals(domains, 0, self.constraint_tag).post(solver)
     }
 
     fn implied_by(
         self,
-        _solver: &mut Solver,
-        _reification_literal: Literal,
+        solver: &mut Solver,
+        reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        let (_domains, _rhs_domain) = self.create_domains();
+        let domains = self.create_domains();
 
-        todo!();
-
-        // equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
+        equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)
     }
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> (Vec<AffineView<Literal>>, AffineView<DomainId>) {
-        (
-            self.bools
-                .iter()
-                .enumerate()
-                .map(|(index, bool)| bool.scaled(self.weights[index]))
-                .collect(),
-            self.rhs.scaled(-1),
-        )
+    fn create_domains(&self) -> Vec<IntegerVariableEnum> {
+        self.bools
+            .iter()
+            .enumerate()
+            .map(|(index, bool)| bool.scaled(self.weights[index]).into())
+            .chain(std::iter::once(self.rhs.scaled(-1).into()))
+            .collect()
     }
 }
