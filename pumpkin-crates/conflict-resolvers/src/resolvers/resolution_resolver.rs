@@ -403,8 +403,8 @@ impl ResolutionResolver {
                 }
                 self.iterative_minimiser.apply_predicate(predicate);
             }
-            ProcessingResult::ReplacedWithNew {
-                previous,
+            ProcessingResult::PossiblyReplacedWithNew {
+                removed: previous,
                 new_predicate,
             } => {
                 self.statistics
