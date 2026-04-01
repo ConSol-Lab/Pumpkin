@@ -480,7 +480,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
 
         assert_eq!(conjunction!([x == 2]), reason);
     }

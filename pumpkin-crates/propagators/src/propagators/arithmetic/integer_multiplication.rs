@@ -455,7 +455,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 0] & [b >= 0]), reason_lb);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
@@ -464,7 +464,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_ub: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
             conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
             reason_ub
@@ -498,7 +498,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), reason_lb);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
@@ -507,7 +507,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_ub: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), reason_ub);
     }
 
@@ -538,7 +538,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([b >= 1] & [c >= 1]), reason_lb);
 
         let mut reason_buffer: Vec<Predicate> = vec![];
@@ -547,7 +547,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_ub: PropositionalConjunction = reason_buffer.into_iter().collect();
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), reason_ub);
     }
 
