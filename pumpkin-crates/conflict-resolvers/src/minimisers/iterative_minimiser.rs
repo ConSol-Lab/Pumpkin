@@ -252,16 +252,21 @@ impl IterativeMinimiser {
             context.is_initial_bound(predicate!(domain >= lower_bound));
         let upper_bound_is_initial_bound =
             context.is_initial_bound(predicate!(domain <= upper_bound));
+        if lower_bound_is_initial_bound {
+            context.explain_root_assignment(predicate!(domain >= lower_bound));
+        }
+        if upper_bound_is_initial_bound {
+            context.explain_root_assignment(predicate!(domain <= upper_bound));
+        }
+        for hole in self.domains[domain].holes.keys() {
+            if context.get_checkpoint_for_predicate(predicate!(domain != *hole)) == Some(0) {
+                context.explain_root_assignment(predicate!(domain != *hole));
+            }
+        }
 
         // println!("TEST: {predicate:?} - {:?}", self.domains[domain]);
 
         if lower_bound == upper_bound {
-            if lower_bound_is_initial_bound {
-                context.explain_root_assignment(predicate!(domain >= lower_bound));
-            }
-            if upper_bound_is_initial_bound {
-                context.explain_root_assignment(predicate!(domain <= upper_bound));
-            }
             return ProcessingResult::Redundant;
         }
 

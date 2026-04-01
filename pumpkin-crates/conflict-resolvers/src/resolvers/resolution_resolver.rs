@@ -165,6 +165,7 @@ impl ResolutionResolver {
 
         let conflict_nogood = context.get_conflict_nogood();
 
+        // println!("======================================================================");
         // println!("C: {conflict_nogood:?}");
 
         // Initialise the data structures with the conflict nogood.
@@ -595,6 +596,8 @@ impl ResolutionResolver {
             let element_id = self.predicate_id_generator.get_id(element);
             self.to_process_heap.delete_key(element_id);
 
+            // println!("Removing previous: {element:?}");
+            self.iterative_minimiser.remove_predicate(element);
             self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
 
             return ControlFlow::Break(());
@@ -764,6 +767,9 @@ impl ResolutionResolver {
             {
                 let _ = self.processed_nogood_predicates.remove(index);
             }
+
+            // println!("Removing previous: {element:?}");
+            self.iterative_minimiser.remove_predicate(element);
 
             self.add_predicate_to_conflict_nogood(new_predicate, self.mode, context);
 
