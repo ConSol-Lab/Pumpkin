@@ -191,6 +191,12 @@ impl IterativeDomain {
                     let _ = self.lower_bound_updates.remove(position);
                     // And update the lower-bound.
                     self.lower_bound = self.lower_bound_updates.last().copied().unwrap_or(i32::MIN);
+                    // Then we also set the update of the lb to be false again.
+                    self.holes
+                        .get_mut(&predicate.get_right_hand_side())
+                        .as_mut()
+                        .unwrap()
+                        .0 = false;
                 }
             }
             PredicateType::UpperBound => {
@@ -232,16 +238,22 @@ impl IterativeDomain {
                     let _ = self.upper_bound_updates.remove(position);
                     // And update the upper-bound
                     self.upper_bound = self.upper_bound_updates.last().copied().unwrap_or(i32::MAX);
+                    // Then we also set the update of the ub to be false again.
+                    self.holes
+                        .get_mut(&predicate.get_right_hand_side())
+                        .as_mut()
+                        .unwrap()
+                        .1 = false;
                 }
             }
             PredicateType::NotEqual => {
                 let (lb_caused_update, ub_caused_update) = self
                     .holes
-                    .get(&predicate.get_right_hand_side())
+                    .remove(&predicate.get_right_hand_side())
                     .expect("Expected removed not equals to be present");
 
                 // We remove the updated lower-bound if it is present
-                if *lb_caused_update
+                if lb_caused_update
                     && let Some(position) = self
                         .lower_bound_updates
                         .iter()
@@ -252,7 +264,7 @@ impl IterativeDomain {
                 }
 
                 // We remove the updated upper-bound if it is present
-                if *ub_caused_update
+                if ub_caused_update
                     && let Some(position) = self
                         .upper_bound_updates
                         .iter()
