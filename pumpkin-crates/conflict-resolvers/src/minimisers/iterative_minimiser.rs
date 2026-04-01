@@ -305,6 +305,57 @@ impl IterativeMinimiser {
         self.domains[domain].apply_predicate(predicate, self.replacement_with_equals);
     }
 
+    /// Explains the lower-bound in the proof log.
+    fn explain_lower_bound_in_proof(
+        &self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext,
+    ) {
+        if context.is_proof_logging_inferences() {
+            let domain = predicate.get_domain();
+            let mut lower_bound = self.domains[domain].lower_bound;
+
+            if context.get_checkpoint_for_predicate(predicate!(domain >= lower_bound)) == Some(0) {
+                context.explain_root_assignment(predicate!(domain >= lower_bound));
+            }
+
+            while lower_bound != i32::MIN
+                && let Some((lb_updated, _)) = self.domains[domain].holes.get(&(lower_bound - 1))
+                && *lb_updated
+                && context.get_checkpoint_for_predicate(predicate!(domain != lower_bound - 1))
+                    == Some(0)
+            {
+                lower_bound -= 1;
+                context.explain_root_assignment(predicate!(domain != lower_bound));
+            }
+        }
+    }
+
+    fn explain_upper_bound_in_proof(
+        &self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext,
+    ) {
+        if context.is_proof_logging_inferences() {
+            let domain = predicate.get_domain();
+            let mut upper_bound = self.domains[domain].upper_bound;
+
+            if context.get_checkpoint_for_predicate(predicate!(domain <= upper_bound)) == Some(0) {
+                context.explain_root_assignment(predicate!(domain <= upper_bound));
+            }
+
+            while upper_bound != i32::MAX
+                && let Some((_, ub_updated)) = self.domains[domain].holes.get(&(upper_bound + 1))
+                && *ub_updated
+                && context.get_checkpoint_for_predicate(predicate!(domain != upper_bound + 1))
+                    == Some(0)
+            {
+                upper_bound += 1;
+                context.explain_root_assignment(predicate!(domain != upper_bound));
+            }
+        }
+    }
+
     /// Processes the predicate, indicating via [`ProcessingResult`] what can happen to it.
     pub(crate) fn process_predicate(
         &mut self,
@@ -317,26 +368,6 @@ impl IterativeMinimiser {
         let lower_bound = self.domains[domain].lower_bound;
         let upper_bound = self.domains[domain].upper_bound;
 
-        // First, we log initial bounds which could be responsible for removing a predicate from
-        // the nogood.
-        //
-        // TODO: Should only log when relevant.
-        let lower_bound_is_initial_bound =
-            context.is_initial_bound(predicate!(domain >= lower_bound));
-        let upper_bound_is_initial_bound =
-            context.is_initial_bound(predicate!(domain <= upper_bound));
-        if lower_bound_is_initial_bound {
-            context.explain_root_assignment(predicate!(domain >= lower_bound));
-        }
-        if upper_bound_is_initial_bound {
-            context.explain_root_assignment(predicate!(domain <= upper_bound));
-        }
-        for hole in self.domains[domain].holes.keys() {
-            if context.get_checkpoint_for_predicate(predicate!(domain != *hole)) == Some(0) {
-                context.explain_root_assignment(predicate!(domain != *hole));
-            }
-        }
-
         // If the domain is assigned, then the added predicate is redundant.
         //
         // Encompasses the rules:
@@ -344,16 +375,16 @@ impl IterativeMinimiser {
         // - [x = v], [x <= v'] => [x = v]
         // - [x = v], [x >= v'] => [x = v]
         if lower_bound == upper_bound {
+            self.explain_lower_bound_in_proof(predicate, context);
+            self.explain_upper_bound_in_proof(predicate, context);
             return ProcessingResult::Redundant;
         }
 
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() == upper_bound {
+                    self.explain_upper_bound_in_proof(predicate, context);
                     // [x <= v], [x >= v] => [x = v]
-                    if upper_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain <= upper_bound));
-                    }
                     self.replacement_with_equals = true;
                     ProcessingResult::PossiblyReplacedWithNew {
                         removed: predicate!(domain <= upper_bound),
@@ -370,18 +401,14 @@ impl IterativeMinimiser {
                     }
                 } else {
                     // [x >= v], [x >= v'] => [x >= v] if v > v'
-                    if lower_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain >= lower_bound));
-                    }
+                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 }
             }
             PredicateType::UpperBound => {
                 // [x >= v], [x <= v] => [x = v]
                 if predicate.get_right_hand_side() == lower_bound {
-                    if lower_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain >= lower_bound));
-                    }
+                    self.explain_lower_bound_in_proof(predicate, context);
                     self.replacement_with_equals = true;
                     ProcessingResult::PossiblyReplacedWithNew {
                         removed: predicate!(domain >= lower_bound),
@@ -398,42 +425,32 @@ impl IterativeMinimiser {
                     }
                 } else {
                     // [x <= v], [x <= v'] => [x <= v] if v < v'
-                    if upper_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain <= upper_bound));
-                    }
+                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 }
             }
             PredicateType::NotEqual => {
                 if predicate.get_right_hand_side() == upper_bound {
                     // [x <= v], [x != v] => [x <= v - 1]
-                    if upper_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain <= upper_bound));
-                    }
+                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
                         removed: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain <= upper_bound - 1),
                     }
                 } else if predicate.get_right_hand_side() > upper_bound {
                     // [x <= v], [x != v'] => [x <= v] where v' > v
-                    if upper_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain <= upper_bound));
-                    }
+                    self.explain_upper_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else if predicate.get_right_hand_side() == lower_bound {
                     // [x >= v], [x != v] => [x <= v + 1]
-                    if lower_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain >= lower_bound));
-                    }
+                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::PossiblyReplacedWithNew {
                         removed: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain >= lower_bound + 1),
                     }
                 } else if predicate.get_right_hand_side() < lower_bound {
                     // [x >= v], [x != v'] => [x >= v] where v' < v
-                    if lower_bound_is_initial_bound {
-                        context.explain_root_assignment(predicate!(domain >= lower_bound));
-                    }
+                    self.explain_lower_bound_in_proof(predicate, context);
                     ProcessingResult::Redundant
                 } else {
                     ProcessingResult::NotRedundant
