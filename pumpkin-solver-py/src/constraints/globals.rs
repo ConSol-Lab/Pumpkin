@@ -52,48 +52,48 @@ macro_rules! python_constraint {
 
 python_constraint! {
     Absolute: absolute {
-        signed: IntExpression,
-        absolute: IntExpression,
+        signed: IntegerVariableWrapper,
+        absolute: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     AllDifferent: all_different {
-        variables: Vec<IntExpression>,
+        variables: Vec<IntegerVariableWrapper>,
     }
 }
 
 python_constraint! {
     BinaryEquals: binary_equals {
-        lhs: IntExpression,
-        rhs: IntExpression,
+        lhs: IntegerVariableWrapper,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     BinaryLessThan: binary_less_than {
-        lhs: IntExpression,
-        rhs: IntExpression,
+        lhs: IntegerVariableWrapper,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     BinaryLessThanEqual: binary_less_than_or_equals {
-        lhs: IntExpression,
-        rhs: IntExpression,
+        lhs: IntegerVariableWrapper,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     BinaryNotEquals: binary_not_equals {
-        lhs: IntExpression,
-        rhs: IntExpression,
+        lhs: IntegerVariableWrapper,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     Cumulative: cumulative {
-        start_times: Vec<IntExpression>,
+        start_times: Vec<IntegerVariableWrapper>,
         durations: Vec<i32>,
         resource_requirements: Vec<i32>,
         resource_capacity: i32,
@@ -102,68 +102,68 @@ python_constraint! {
 
 python_constraint! {
     Division: division {
-        numerator: IntExpression,
-        denominator: IntExpression,
-        rhs: IntExpression,
+        numerator: IntegerVariableWrapper,
+        denominator: IntegerVariableWrapper,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     Element: element {
-        index: IntExpression,
-        array: Vec<IntExpression>,
-        rhs: IntExpression,
+        index: IntegerVariableWrapper,
+        array: Vec<IntegerVariableWrapper>,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     Equals: equals {
-        terms: Vec<IntExpression>,
+        terms: Vec<IntegerVariableWrapper>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     LessThanOrEquals: less_than_or_equals {
-        terms: Vec<IntExpression>,
+        terms: Vec<IntegerVariableWrapper>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     Maximum: maximum {
-        choices: Vec<IntExpression>,
-        rhs: IntExpression,
+        choices: Vec<IntegerVariableWrapper>,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     Minimum: minimum {
-        choices: Vec<IntExpression>,
-        rhs: IntExpression,
+        choices: Vec<IntegerVariableWrapper>,
+        rhs: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     NotEquals: not_equals {
-        terms: Vec<IntExpression>,
+        terms: Vec<IntegerVariableWrapper>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     Plus: plus {
-        a: IntExpression,
-        b: IntExpression,
-        c: IntExpression,
+        a: IntegerVariableWrapper,
+        b: IntegerVariableWrapper,
+        c: IntegerVariableWrapper,
     }
 }
 
 python_constraint! {
     Times: times {
-        a: IntExpression,
-        b: IntExpression,
-        c: IntExpression,
+        a: IntegerVariableWrapper,
+        b: IntegerVariableWrapper,
+        c: IntegerVariableWrapper,
     }
 }
 
@@ -181,14 +181,14 @@ python_constraint! {
 
 python_constraint! {
     Table: table {
-        variables: Vec<IntExpression>,
+        variables: Vec<IntegerVariableWrapper>,
         table: Vec<Vec<i32>>,
     }
 }
 
 python_constraint! {
     NegativeTable: negative_table {
-        variables: Vec<IntExpression>,
+        variables: Vec<IntegerVariableWrapper>,
         table: Vec<Vec<i32>>,
     }
 }

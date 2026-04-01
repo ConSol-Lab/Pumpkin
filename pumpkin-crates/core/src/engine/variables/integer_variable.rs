@@ -74,7 +74,7 @@ pub trait IntegerVariable:
     fn get_holes(&self, assignments: &Assignments) -> impl Iterator<Item = i32>;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IntegerVariableEnum {
     DomainId(AffineView<DomainId>),
     Literal(AffineView<Literal>),
