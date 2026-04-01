@@ -165,7 +165,7 @@ impl ResolutionResolver {
 
         let conflict_nogood = context.get_conflict_nogood();
 
-        println!("C: {conflict_nogood:?}");
+        // println!("C: {conflict_nogood:?}");
 
         // Initialise the data structures with the conflict nogood.
         for predicate in conflict_nogood.iter() {
@@ -196,25 +196,25 @@ impl ResolutionResolver {
                 AnalysisMode::AllDecision => self.to_process_heap.num_nonremoved_elements() > 0,
             }
         } {
-            println!(
-                "WORKING NOGOOD: {:?}",
-                self.processed_nogood_predicates
-                    .iter()
-                    .copied()
-                    .chain(
-                        self.to_process_heap
-                            .keys()
-                            .map(|id| self.predicate_id_generator.get_predicate(id))
-                    )
-                    .collect::<Vec<_>>()
-            );
+            // println!(
+            //     "WORKING NOGOOD: {:?}",
+            //     self.processed_nogood_predicates
+            //         .iter()
+            //         .copied()
+            //         .chain(
+            //             self.to_process_heap
+            //                 .keys()
+            //                 .map(|id| self.predicate_id_generator.get_predicate(id))
+            //         )
+            //         .collect::<Vec<_>>()
+            // );
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = self.pop_predicate_from_conflict_nogood();
             if self.iterative_minimisation {
-                println!("Removing {next_predicate:?}");
+                // println!("Removing {next_predicate:?}");
                 self.iterative_minimiser.remove_predicate(next_predicate);
             }
 
@@ -231,7 +231,7 @@ impl ResolutionResolver {
                 &mut self.reason_buffer,
             );
 
-            println!("R: {:?} -> {next_predicate}", self.reason_buffer);
+            // println!("R: {:?} -> {next_predicate}", self.reason_buffer);
 
             for i in 0..self.reason_buffer.len() {
                 self.add_predicate_to_conflict_nogood(self.reason_buffer[i], self.mode, context);
@@ -274,8 +274,9 @@ impl ResolutionResolver {
             });
         // Ignore root level predicates.
         if dec_level == 0 {
-            println!("{predicate:?} ROOT LEVEL");
-            self.iterative_minimiser.apply_predicate(predicate);
+            // println!("{predicate:?} ROOT LEVEL");
+            let _ = self.iterative_minimiser.apply_predicate(predicate);
+
             context.explain_root_assignment(predicate);
         }
         // 1UIP
@@ -363,12 +364,14 @@ impl ResolutionResolver {
         context: &mut ConflictAnalysisContext<'_>,
         predicate_id: PredicateId,
     ) -> ControlFlow<()> {
-        let process_predicate = self.iterative_minimiser.process_predicate(predicate);
-        println!("\tRESULT ({predicate:?}): {process_predicate:?}");
+        let process_predicate = self
+            .iterative_minimiser
+            .process_predicate(predicate, context);
+        // println!("\tRESULT ({predicate:?}): {process_predicate:?}");
         match process_predicate {
             ProcessingResult::Redundant => {
                 if !self.to_process_heap.is_key_present(predicate_id) {
-                    println!("\t\tNot present - {predicate:?}");
+                    // println!("\t\tNot present - {predicate:?}");
                     if predicate_id.index() < self.to_process_heap.len() {
                         self.to_process_heap.set_value(predicate_id, 0);
                     }
@@ -781,18 +784,18 @@ impl ResolutionResolver {
         // First we obtain a semantically minimised nogood.
         //
         // We reuse the vector with lower decision levels for simplicity.
-        println!(
-            "FINAL NOGOOD: {:?}",
-            self.processed_nogood_predicates
-                .iter()
-                .copied()
-                .chain(
-                    self.to_process_heap
-                        .keys()
-                        .map(|id| self.predicate_id_generator.get_predicate(id))
-                )
-                .collect::<Vec<_>>()
-        );
+        // println!(
+        //     "FINAL NOGOOD: {:?}",
+        //     self.processed_nogood_predicates
+        //         .iter()
+        //         .copied()
+        //         .chain(
+        //             self.to_process_heap
+        //                 .keys()
+        //                 .map(|id| self.predicate_id_generator.get_predicate(id))
+        //         )
+        //         .collect::<Vec<_>>()
+        // );
         if self.to_process_heap.num_nonremoved_elements() > 0 {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
             self.processed_nogood_predicates.push(last_predicate);

@@ -1,8 +1,10 @@
+use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::containers::KeyedVec;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
+use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::DomainId;
 
 #[derive(Debug, Clone, Default)]
@@ -47,7 +49,10 @@ impl Default for IterativeDomain {
 }
 
 impl IterativeDomain {
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate, replacement: bool) {
+    pub(crate) fn apply_predicate(&mut self, predicate: Predicate, replacement: bool) -> bool {
+        let prev_lb = self.lower_bound;
+        let prev_ub = self.upper_bound;
+
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() > self.lower_bound {
@@ -102,6 +107,8 @@ impl IterativeDomain {
                 self.lower_bound = predicate.get_right_hand_side();
             }
         }
+
+        prev_lb != prev_ub && self.lower_bound == self.upper_bound
     }
 
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
@@ -221,31 +228,49 @@ impl IterativeMinimiser {
     }
 
     pub(crate) fn apply_predicate(&mut self, predicate: Predicate) -> bool {
-        println!(
-            "\t\tApplying ({}) {predicate:?}",
-            self.replacement_with_equals
-        );
+        // println!(
+        //     "\t\tApplying ({}) {predicate:?}",
+        //     self.replacement_with_equals
+        // );
         let domain = predicate.get_domain();
         self.domains.accomodate(domain, IterativeDomain::default());
-        self.domains[domain].apply_predicate(predicate, self.replacement_with_equals);
+        self.domains[domain].apply_predicate(predicate, self.replacement_with_equals)
     }
 
-    pub(crate) fn process_predicate(&mut self, predicate: Predicate) -> ProcessingResult {
+    pub(crate) fn process_predicate(
+        &mut self,
+        predicate: Predicate,
+        context: &mut ConflictAnalysisContext,
+    ) -> ProcessingResult {
         let domain = predicate.get_domain();
         self.domains.accomodate(domain, IterativeDomain::default());
 
         let lower_bound = self.domains[domain].lower_bound;
         let upper_bound = self.domains[domain].upper_bound;
 
+        let lower_bound_is_initial_bound =
+            context.is_initial_bound(predicate!(domain >= lower_bound));
+        let upper_bound_is_initial_bound =
+            context.is_initial_bound(predicate!(domain <= upper_bound));
+
         // println!("TEST: {predicate:?} - {:?}", self.domains[domain]);
 
         if lower_bound == upper_bound {
+            if lower_bound_is_initial_bound {
+                context.explain_root_assignment(predicate!(domain >= lower_bound));
+            }
+            if upper_bound_is_initial_bound {
+                context.explain_root_assignment(predicate!(domain <= upper_bound));
+            }
             return ProcessingResult::Redundant;
         }
 
         match predicate.get_predicate_type() {
             PredicateType::LowerBound => {
                 if predicate.get_right_hand_side() == upper_bound {
+                    if upper_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain <= upper_bound));
+                    }
                     self.replacement_with_equals = true;
                     ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain <= upper_bound),
@@ -260,11 +285,17 @@ impl IterativeMinimiser {
                         ProcessingResult::NotRedundant
                     }
                 } else {
+                    if lower_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain >= lower_bound));
+                    }
                     ProcessingResult::Redundant
                 }
             }
             PredicateType::UpperBound => {
                 if predicate.get_right_hand_side() == lower_bound {
+                    if lower_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain >= lower_bound));
+                    }
                     self.replacement_with_equals = true;
                     ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain >= lower_bound),
@@ -279,24 +310,39 @@ impl IterativeMinimiser {
                         ProcessingResult::NotRedundant
                     }
                 } else {
+                    if upper_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain <= upper_bound));
+                    }
                     ProcessingResult::Redundant
                 }
             }
             PredicateType::NotEqual => {
                 if predicate.get_right_hand_side() == upper_bound {
+                    if upper_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain <= upper_bound));
+                    }
                     ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain <= upper_bound),
                         new_predicate: predicate!(domain <= upper_bound - 1),
                     }
                 } else if predicate.get_right_hand_side() > upper_bound {
                     // println!("REACHED: {predicate:?} - {upper_bound}");
+                    if upper_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain <= upper_bound));
+                    }
                     ProcessingResult::Redundant
                 } else if predicate.get_right_hand_side() == lower_bound {
+                    if lower_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain >= lower_bound));
+                    }
                     ProcessingResult::ReplacedWithNew {
                         previous: predicate!(domain >= lower_bound),
                         new_predicate: predicate!(domain >= lower_bound + 1),
                     }
                 } else if predicate.get_right_hand_side() < lower_bound {
+                    if lower_bound_is_initial_bound {
+                        context.explain_root_assignment(predicate!(domain >= lower_bound));
+                    }
                     ProcessingResult::Redundant
                 } else {
                     ProcessingResult::NotRedundant
