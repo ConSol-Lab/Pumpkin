@@ -943,7 +943,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into();
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([s2 <= 8] & [s1 >= 6] & [s1 <= 6]), reason);
     }
 
@@ -1154,7 +1154,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into();
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([s2 >= 1] & [s1 >= 1] & [s1 <= 1]), reason);
     }
 
@@ -1206,7 +1206,7 @@ mod tests {
             &mut reason_buffer,
             CurrentNogood::empty(),
         );
-        let reason_lb: PropositionalConjunction = reason_buffer.into();
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([s2 <= 5] & [s2 >= 5] & [s3 >= 5]), reason);
     }
 
@@ -1255,7 +1255,7 @@ mod tests {
                 &mut reason_buffer,
                 CurrentNogood::empty(),
             );
-            let reason_lb: PropositionalConjunction = reason_buffer.into();
+            let reason: PropositionalConjunction = reason_buffer.into();
             assert_eq!(conjunction!([s1 <= 4] & [s1 >= 4]), reason);
         }
     }
