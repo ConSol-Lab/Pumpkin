@@ -9,8 +9,11 @@ use pumpkin_core::state::State;
 #[cfg(test)]
 use pumpkin_core::variables::DomainId;
 
+/// Utilities that simplify test code using the [`State`].
 #[cfg(test)]
 pub(crate) trait StateExt {
+    /// Assert that the bounds of the given `domain_id` match the provided `lower_bound` and
+    /// `upper_bound`.
     fn assert_bounds(&self, domain_id: DomainId, lower_bound: i32, upper_bound: i32);
 }
 
