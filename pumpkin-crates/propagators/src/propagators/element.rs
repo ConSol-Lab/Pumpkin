@@ -26,7 +26,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Reason;
 
@@ -398,154 +398,200 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use pumpkin_checking::TestAtomic;
     use pumpkin_checking::VariableState;
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::state::State;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x_0 = solver.new_variable(4, 6);
-        let x_1 = solver.new_variable(2, 3);
-        let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(14, 15);
+        let x_0 = state.new_interval_variable(4, 6, None);
+        let x_1 = state.new_interval_variable(2, 3, None);
+        let x_2 = state.new_interval_variable(7, 9, None);
+        let x_3 = state.new_interval_variable(14, 15, None);
 
-        let index = solver.new_variable(0, 3);
-        let rhs = solver.new_variable(6, 9);
-        let constraint_tag = solver.new_constraint_tag();
+        let index = state.new_interval_variable(0, 3, None);
+        let rhs = state.new_interval_variable(6, 9, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(ElementArgs {
-                array: vec![x_0, x_1, x_2, x_3].into(),
-                index,
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(ElementArgs {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(index, 0, 2);
+        state.assert_bounds(index, 0, 2);
 
-        assert_eq!(
-            solver.get_reason_int(predicate![index != 3]),
-            conjunction!([x_3 >= 10] & [rhs <= 9])
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![index != 3],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
         );
+        let reason: PropositionalConjunction = reason_buffer.into();
+        assert_eq!(conjunction!([x_3 >= 10] & [rhs <= 9]), reason);
 
-        assert_eq!(
-            solver.get_reason_int(predicate![index != 1]),
-            conjunction!([x_1 <= 5] & [rhs >= 6])
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![index != 1],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
         );
+        let reason: PropositionalConjunction = reason_buffer.into();
+        assert_eq!(conjunction!([x_1 <= 5] & [rhs >= 6]), reason);
     }
 
     #[test]
     fn bounds_of_rhs_are_min_and_max_of_lower_and_upper_in_array() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x_0 = solver.new_variable(3, 10);
-        let x_1 = solver.new_variable(2, 3);
-        let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(14, 15);
+        let x_0 = state.new_interval_variable(3, 10, None);
+        let x_1 = state.new_interval_variable(2, 3, None);
+        let x_2 = state.new_interval_variable(7, 9, None);
+        let x_3 = state.new_interval_variable(14, 15, None);
 
-        let index = solver.new_variable(0, 3);
-        let rhs = solver.new_variable(0, 20);
-        let constraint_tag = solver.new_constraint_tag();
+        let index = state.new_interval_variable(0, 3, None);
+        let rhs = state.new_interval_variable(0, 20, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(ElementArgs {
-                array: vec![x_0, x_1, x_2, x_3].into(),
-                index,
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(ElementArgs {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(rhs, 2, 15);
+        state.assert_bounds(rhs, 2, 15);
 
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs >= 2],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
-            solver.get_reason_int(predicate![rhs >= 2]),
-            conjunction!([x_0 >= 2] & [x_1 >= 2] & [x_2 >= 2] & [x_3 >= 2])
+            conjunction!([x_0 >= 2] & [x_1 >= 2] & [x_2 >= 2] & [x_3 >= 2]),
+            reason
         );
 
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs <= 15],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
-            solver.get_reason_int(predicate![rhs <= 15]),
-            conjunction!([x_0 <= 15] & [x_1 <= 15] & [x_2 <= 15] & [x_3 <= 15])
+            conjunction!([x_0 <= 15] & [x_1 <= 15] & [x_2 <= 15] & [x_3 <= 15]),
+            reason
         );
     }
 
     #[test]
     fn fixed_index_propagates_bounds_on_element() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x_0 = solver.new_variable(3, 10);
-        let x_1 = solver.new_variable(0, 15);
-        let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(14, 15);
-        let constraint_tag = solver.new_constraint_tag();
+        let x_0 = state.new_interval_variable(3, 10, None);
+        let x_1 = state.new_interval_variable(0, 15, None);
+        let x_2 = state.new_interval_variable(7, 9, None);
+        let x_3 = state.new_interval_variable(14, 15, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let index = solver.new_variable(1, 1);
-        let rhs = solver.new_variable(6, 9);
+        let index = state.new_interval_variable(1, 1, None);
+        let rhs = state.new_interval_variable(6, 9, None);
 
-        let _ = solver
-            .new_propagator(ElementArgs {
-                array: vec![x_0, x_1, x_2, x_3].into(),
-                index,
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(ElementArgs {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(x_1, 6, 9);
+        state.assert_bounds(x_1, 6, 9);
 
-        assert_eq!(
-            solver.get_reason_int(predicate![x_1 >= 6]),
-            conjunction!([index == 1] & [rhs >= 6])
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![x_1 >= 6],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
         );
+        let reason: PropositionalConjunction = reason_buffer.into();
+        assert_eq!(conjunction!([index == 1] & [rhs >= 6]), reason);
 
-        assert_eq!(
-            solver.get_reason_int(predicate![x_1 <= 9]),
-            conjunction!([index == 1] & [rhs <= 9])
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![x_1 <= 9],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
         );
+        let reason: PropositionalConjunction = reason_buffer.into();
+        assert_eq!(conjunction!([index == 1] & [rhs <= 9]), reason);
     }
 
     #[test]
     fn index_hole_propagates_bounds_on_rhs() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x_0 = solver.new_variable(3, 10);
-        let x_1 = solver.new_variable(0, 15);
-        let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(14, 15);
-        let constraint_tag = solver.new_constraint_tag();
+        let x_0 = state.new_interval_variable(3, 10, None);
+        let x_1 = state.new_interval_variable(0, 15, None);
+        let x_2 = state.new_interval_variable(7, 9, None);
+        let x_3 = state.new_interval_variable(14, 15, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let index = solver.new_variable(0, 3);
-        solver.remove(index, 1).expect("Value can be removed");
+        let index = state.new_interval_variable(0, 3, None);
+        let _ = state
+            .post(predicate![index != 1])
+            .expect("Value can be removed");
 
-        let rhs = solver.new_variable(-10, 30);
+        let rhs = state.new_interval_variable(-10, 30, None);
 
-        let _ = solver
-            .new_propagator(ElementArgs {
-                array: vec![x_0, x_1, x_2, x_3].into(),
-                index,
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(ElementArgs {
+            array: vec![x_0, x_1, x_2, x_3].into(),
+            index,
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(rhs, 3, 15);
+        state.assert_bounds(rhs, 3, 15);
 
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs >= 3],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
-            solver.get_reason_int(predicate![rhs >= 3]),
-            conjunction!([x_0 >= 3] & [x_2 >= 3] & [x_3 >= 3] & [index != 1])
+            conjunction!([x_0 >= 3] & [x_2 >= 3] & [x_3 >= 3] & [index != 1]),
+            reason
         );
 
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs <= 15],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
-            solver.get_reason_int(predicate![rhs <= 15]),
-            conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1])
+            conjunction!([x_0 <= 15] & [x_2 <= 15] & [x_3 <= 15] & [index != 1]),
+            reason
         );
     }
 

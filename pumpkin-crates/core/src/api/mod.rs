@@ -25,7 +25,6 @@ pub mod results {
     pub use crate::api::outputs::SolutionReference;
     pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
-    pub use crate::basic_types::PropagationStatusCP;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
@@ -119,11 +118,14 @@ pub mod state {
     //!
     //! See [`State`] for more information.
     pub use crate::api::solver::PropagatorHandle;
-    pub use crate::basic_types::PropagatorConflict;
     pub use crate::engine::Conflict;
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::EmptyDomainConflict;
+    pub use crate::engine::PredicateHeap;
+    pub use crate::engine::PropagationStatusCP;
+    pub use crate::engine::PropagatorConflict;
     pub use crate::engine::State;
+    pub use crate::engine::propagator_conflict;
     pub use crate::propagation::CurrentNogood;
     pub use crate::propagation::PropagatorId;
 }

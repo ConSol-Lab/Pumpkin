@@ -5,7 +5,6 @@ use pumpkin_checking::InferenceChecker;
 #[cfg(feature = "check-propagations")]
 use pumpkin_checking::VariableState;
 
-use crate::basic_types::PropagatorConflict;
 use crate::containers::HashMap;
 use crate::containers::KeyGenerator;
 use crate::create_statistics_struct;
@@ -18,7 +17,6 @@ use crate::engine::Reason;
 use crate::engine::TrailedValues;
 use crate::engine::VariableNames;
 use crate::engine::notifications::NotificationEngine;
-use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -42,6 +40,8 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::results::SolutionReference;
+use crate::state::Conflict;
+use crate::state::EmptyDomainConflict;
 use crate::state::PropagatorHandle;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
@@ -96,77 +96,6 @@ create_statistics_struct!(StateStatistics {
     /// a learned nogood) occurs.
     num_backjumps: u64,
 });
-
-/// Information concerning the conflict returned by [`State::propagate_to_fixed_point`].
-///
-/// Two (related) conflicts can happen:
-/// 1) a propagator explicitly detects a conflict.
-/// 2) a propagator post a domain change that results in a variable having an empty domain.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Conflict {
-    /// A conflict raised explicitly by a propagator.
-    Propagator(PropagatorConflict),
-    /// A conflict caused by an empty domain for a variable occurring.
-    EmptyDomain(EmptyDomainConflict),
-}
-
-impl From<EmptyDomainConflict> for Conflict {
-    fn from(value: EmptyDomainConflict) -> Self {
-        Conflict::EmptyDomain(value)
-    }
-}
-
-impl From<PropagatorConflict> for Conflict {
-    fn from(value: PropagatorConflict) -> Self {
-        Conflict::Propagator(value)
-    }
-}
-
-/// A conflict because a domain became empty.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EmptyDomainConflict {
-    /// The predicate that caused a domain to become empty.
-    pub trigger_predicate: Predicate,
-    /// The [`InferenceCode`] that accompanies triggered the conflict.
-    ///
-    /// If the empty domain is not triggered by a propagation, this is [`None`].
-    pub trigger_inference_code: Option<InferenceCode>,
-
-    /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
-    ///
-    /// If the empty domain is not triggered by a propagation, this is [`None`].
-    pub(crate) trigger_reason: Option<ReasonRef>,
-}
-
-impl EmptyDomainConflict {
-    /// The domain that became empty.
-    pub fn domain(&self) -> DomainId {
-        self.trigger_predicate.get_domain()
-    }
-
-    /// Returns the reason for the [`EmptyDomainConflict::trigger_predicate`] being propagated to
-    /// true while it is already false in the [`State`].
-    pub fn get_reason(
-        &self,
-        state: &mut State,
-        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-        current_nogood: CurrentNogood,
-    ) {
-        if let Some(reason_ref) = self.trigger_reason {
-            let _ = state.reason_store.get_or_compute(
-                reason_ref,
-                ExplanationContext::new(
-                    &state.assignments,
-                    current_nogood,
-                    state.trail_len(),
-                    &mut state.notification_engine,
-                ),
-                &mut state.propagators,
-                reason_buffer,
-            );
-        }
-    }
-}
 
 impl Default for State {
     fn default() -> Self {
@@ -245,6 +174,10 @@ impl State {
     /// The name is used in solver traces to identify individual domains. They are required to be
     /// unique. If the state already contains a domain with the given name, then this function
     /// will panic.
+    ///
+    /// Variables can be unnamed. In that case, `None` can be provided as the name. However,
+    /// when the solver queries the name (e.g. when logging a proof), and no name exists for a
+    /// domain, the solver will crash.
     ///
     /// Creation of new domains is not influenced by the current checkpoint of the state. If
     /// a domain is created at a non-zero checkpoint, then it will _not_ 'disappear' when
@@ -917,7 +850,8 @@ impl State {
     /// The provided `current_nogood` can be used by the propagator to provide a different reason;
     /// use [`CurrentNogood::empty`] otherwise.
     ///
-    /// All the predicates in the returned slice will evaluate to `true`.
+    /// All the predicates appended to the `reason_buffer` will evaluate to `true`. The buffer
+    /// is _not_ cleared before predicates are appended.
     ///
     /// If the provided predicate is not true, then this method will panic.
     pub fn get_propagation_reason(

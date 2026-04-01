@@ -17,7 +17,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 #[derive(Clone, Debug)]
@@ -224,109 +224,128 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::state::State;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let a = solver.new_variable(1, 3);
-        let b = solver.new_variable(1, 4);
-        let c = solver.new_variable(1, 5);
+        let a = state.new_interval_variable(1, 3, None);
+        let b = state.new_interval_variable(1, 4, None);
+        let c = state.new_interval_variable(1, 5, None);
 
-        let rhs = solver.new_variable(1, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let rhs = state.new_interval_variable(1, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(MaximumArgs {
-                array: [a, b, c].into(),
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domain");
+        let _ = state.add_propagator(MaximumArgs {
+            array: [a, b, c].into(),
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domain");
 
-        solver.assert_bounds(rhs, 1, 5);
+        state.assert_bounds(rhs, 1, 5);
 
-        let reason = solver.get_reason_int(predicate![rhs <= 5]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs <= 5],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a <= 5] & [b <= 5] & [c <= 5]), reason);
     }
 
     #[test]
     fn lower_bound_of_rhs_is_maximum_of_lower_bounds_in_array() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let a = solver.new_variable(3, 10);
-        let b = solver.new_variable(4, 10);
-        let c = solver.new_variable(5, 10);
+        let a = state.new_interval_variable(3, 10, None);
+        let b = state.new_interval_variable(4, 10, None);
+        let c = state.new_interval_variable(5, 10, None);
 
-        let rhs = solver.new_variable(1, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let rhs = state.new_interval_variable(1, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(MaximumArgs {
-                array: [a, b, c].into(),
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domain");
+        let _ = state.add_propagator(MaximumArgs {
+            array: [a, b, c].into(),
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domain");
 
-        solver.assert_bounds(rhs, 5, 10);
+        state.assert_bounds(rhs, 5, 10);
 
-        let reason = solver.get_reason_int(predicate![rhs >= 5]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![rhs >= 5],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([c >= 5]), reason);
     }
 
     #[test]
     fn upper_bound_of_all_array_elements_at_most_rhs_max_at_initialise() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
         let array = (1..=5)
-            .map(|idx| solver.new_variable(1, 4 + idx))
+            .map(|idx| state.new_interval_variable(1, 4 + idx, None))
             .collect::<Box<_>>();
 
-        let rhs = solver.new_variable(1, 3);
-        let constraint_tag = solver.new_constraint_tag();
+        let rhs = state.new_interval_variable(1, 3, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(MaximumArgs {
-                array: array.clone(),
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domain");
+        let _ = state.add_propagator(MaximumArgs {
+            array: array.clone(),
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domain");
 
         for var in array.iter() {
-            solver.assert_bounds(*var, 1, 3);
-            let reason = solver.get_reason_int(predicate![var <= 3]);
+            state.assert_bounds(*var, 1, 3);
+
+            let mut reason_buffer: Vec<Predicate> = vec![];
+            let _ = state.get_propagation_reason(
+                predicate![var <= 3],
+                &mut reason_buffer,
+                CurrentNogood::empty(),
+            );
+            let reason: PropositionalConjunction = reason_buffer.into();
             assert_eq!(conjunction!([rhs <= 3]), reason);
         }
     }
 
     #[test]
     fn single_variable_propagate() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
         let array = (1..=5)
-            .map(|idx| solver.new_variable(1, 1 + 10 * idx))
+            .map(|idx| state.new_interval_variable(1, 1 + 10 * idx, None))
             .collect::<Box<_>>();
 
-        let rhs = solver.new_variable(45, 60);
-        let constraint_tag = solver.new_constraint_tag();
+        let rhs = state.new_interval_variable(45, 60, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(MaximumArgs {
-                array: array.clone(),
-                rhs,
-                constraint_tag,
-            })
-            .expect("no empty domain");
+        let _ = state.add_propagator(MaximumArgs {
+            array: array.clone(),
+            rhs,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domain");
 
-        solver.assert_bounds(*array.last().unwrap(), 45, 51);
-        solver.assert_bounds(rhs, 45, 51);
+        state.assert_bounds(*array.last().unwrap(), 45, 51);
+        state.assert_bounds(rhs, 45, 51);
     }
 }

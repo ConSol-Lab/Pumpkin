@@ -28,7 +28,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 declare_inference_label!(LinearNotEquals);
@@ -387,54 +387,54 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
     use pumpkin_core::conjunction;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
     use pumpkin_core::state::Conflict;
+    use pumpkin_core::state::State;
     use pumpkin_core::variables::TransformableVariable;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn test_value_is_removed() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(2, 2);
-        let y = solver.new_variable(1, 5);
+        let mut state = State::default();
+        let x = state.new_interval_variable(2, 2, None);
+        let y = state.new_interval_variable(1, 5, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearNotEqualPropagatorArgs {
-                terms: [x.scaled(1), y.scaled(-1)].into(),
-                rhs: 0,
-                constraint_tag,
-            })
-            .expect("non-empty domain");
+        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("non-empty domain");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        solver.assert_bounds(x, 2, 2);
-        solver.assert_bounds(y, 1, 5);
-        assert!(!solver.contains(y, 2));
+        state.assert_bounds(x, 2, 2);
+        state.assert_bounds(y, 1, 5);
+        assert!(!state.contains(y, 2));
     }
 
     #[test]
     fn test_empty_domain_is_detected() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(2, 2);
-        let y = solver.new_variable(2, 2);
+        let mut state = State::default();
+        let x = state.new_interval_variable(2, 2, None);
+        let y = state.new_interval_variable(2, 2, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let err = solver
-            .new_propagator(LinearNotEqualPropagatorArgs {
-                terms: [x.scaled(1), y.scaled(-1)].into(),
-                rhs: 0,
-                constraint_tag,
-            })
-            .expect_err("empty domain");
+        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+            constraint_tag,
+        });
+        let err = state.propagate_to_fixed_point().expect_err("empty domain");
 
         let expected = conjunction!([x == 2] & [y == 2]);
 
@@ -446,53 +446,52 @@ mod tests {
 
     #[test]
     fn explanation_for_propagation() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(2, 2).scaled(1);
-        let y = solver.new_variable(1, 5).scaled(-1);
+        let mut state = State::default();
+        let x = state.new_interval_variable(2, 2, None).scaled(1);
+        let y = state.new_interval_variable(1, 5, None).scaled(-1);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearNotEqualPropagatorArgs {
-                terms: [x, y].into(),
-                rhs: 0,
-                constraint_tag,
-            })
-            .expect("non-empty domain");
+        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
+            terms: [x, y].into(),
+            rhs: 0,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("non-empty domain");
 
-        solver.propagate(propagator).expect("non-empty domain");
-
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![y != -2],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason: PropositionalConjunction = reason_buffer.into();
 
         assert_eq!(conjunction!([x == 2]), reason);
     }
 
     #[test]
     fn satisfied_constraint_does_not_trigger_conflict() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(0, 3);
-        let y = solver.new_variable(0, 3);
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 3, None);
+        let y = state.new_interval_variable(0, 3, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(LinearNotEqualPropagatorArgs {
-                terms: [x.scaled(1), y.scaled(-1)].into(),
-                rhs: 0,
-                constraint_tag,
-            })
-            .expect("non-empty domain");
+        let _ = state.add_propagator(LinearNotEqualPropagatorArgs {
+            terms: [x.scaled(1), y.scaled(-1)].into(),
+            rhs: 0,
+            constraint_tag,
+        });
 
-        solver.remove(x, 0).expect("non-empty domain");
-        solver.remove(x, 2).expect("non-empty domain");
-        solver.remove(x, 3).expect("non-empty domain");
+        let _ = state.post(predicate![x != 0]).unwrap();
+        let _ = state.post(predicate![x != 2]).unwrap();
+        let _ = state.post(predicate![x != 3]).unwrap();
 
-        solver.remove(y, 0).expect("non-empty domain");
-        solver.remove(y, 1).expect("non-empty domain");
-        solver.remove(y, 2).expect("non-empty domain");
+        let _ = state.post(predicate![y != 0]).unwrap();
+        let _ = state.post(predicate![y != 1]).unwrap();
+        let _ = state.post(predicate![y != 2]).unwrap();
 
-        solver.notify_propagator(propagator);
-
-        solver.propagate(propagator).expect("non-empty domain");
+        state.propagate_to_fixed_point().expect("non-empty domain");
     }
 }

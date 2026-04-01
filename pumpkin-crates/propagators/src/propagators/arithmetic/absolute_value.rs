@@ -16,7 +16,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 declare_inference_label!(AbsoluteValue);
@@ -205,124 +205,118 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::state::State;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn absolute_bounds_are_propagated_at_initialise() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(-3, 4);
-        let absolute = solver.new_variable(-2, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(-3, 4, None);
+        let absolute = state.new_interval_variable(-2, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(absolute, 0, 4);
+        state.assert_bounds(absolute, 0, 4);
     }
 
     #[test]
     fn signed_bounds_are_propagated_at_initialise() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(-5, 5);
-        let absolute = solver.new_variable(0, 3);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(-5, 5, None);
+        let absolute = state.new_interval_variable(0, 3, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(signed, -3, 3);
+        state.assert_bounds(signed, -3, 3);
     }
 
     #[test]
     fn absolute_lower_bound_can_be_strictly_positive() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(3, 6);
-        let absolute = solver.new_variable(0, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(3, 6, None);
+        let absolute = state.new_interval_variable(0, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(absolute, 3, 6);
+        state.assert_bounds(absolute, 3, 6);
     }
 
     #[test]
     fn strictly_negative_signed_value_can_propagate_lower_bound_on_absolute() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(-5, -3);
-        let absolute = solver.new_variable(1, 5);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(-5, -3, None);
+        let absolute = state.new_interval_variable(1, 5, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(absolute, 3, 5);
+        state.assert_bounds(absolute, 3, 5);
     }
 
     #[test]
     fn lower_bound_on_absolute_can_propagate_negative_upper_bound_on_signed() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(-5, 0);
-        let absolute = solver.new_variable(1, 5);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(-5, 0, None);
+        let absolute = state.new_interval_variable(1, 5, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(signed, -5, -1);
+        state.assert_bounds(signed, -5, -1);
     }
 
     #[test]
     fn lower_bound_on_absolute_can_propagate_positive_lower_bound_on_signed() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let signed = solver.new_variable(1, 5);
-        let absolute = solver.new_variable(3, 5);
-        let constraint_tag = solver.new_constraint_tag();
+        let signed = state.new_interval_variable(1, 5, None);
+        let absolute = state.new_interval_variable(3, 5, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(AbsoluteValueArgs {
-                signed,
-                absolute,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(AbsoluteValueArgs {
+            signed,
+            absolute,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.assert_bounds(signed, 3, 5);
+        state.assert_bounds(signed, 3, 5);
     }
 }

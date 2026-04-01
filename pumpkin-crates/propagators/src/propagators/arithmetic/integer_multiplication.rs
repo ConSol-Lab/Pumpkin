@@ -16,8 +16,8 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
-use pumpkin_core::state::PropagatorConflict;
+use pumpkin_core::state::PropagationStatusCP;
+use pumpkin_core::state::propagator_conflict;
 use pumpkin_core::variables::IntegerVariable;
 
 declare_inference_label!(IntegerMultiplication);
@@ -193,15 +193,14 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     {
         // All variables are assigned but the resulting value is not correct, so we report a
         // conflict
-        return Err(PropagatorConflict {
-            conjunction: conjunction!(
+        return propagator_conflict(
+            conjunction!(
                 [a == context.lower_bound(a)]
                     & [b == context.lower_bound(b)]
                     & [c == context.lower_bound(c)]
             ),
-            inference_code: inference_code.clone(),
-        }
-        .into());
+            inference_code,
+        );
     }
 
     Ok(())
@@ -417,44 +416,54 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::predicate;
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PropositionalConjunction;
+    use pumpkin_core::propagation::CurrentNogood;
+    use pumpkin_core::state::State;
 
     use super::*;
+    use crate::StateExt;
 
     #[test]
     fn bounds_of_a_and_b_propagate_bounds_c() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(1, 3);
-        let b = solver.new_variable(0, 4);
-        let c = solver.new_variable(-10, 20);
+        let mut state = State::default();
+        let a = state.new_interval_variable(1, 3, None);
+        let b = state.new_interval_variable(0, 4, None);
+        let c = state.new_interval_variable(-10, 20, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("no empty domains");
+        state.assert_bounds(a, 1, 3);
+        state.assert_bounds(b, 0, 4);
+        state.assert_bounds(c, 0, 12);
 
-        assert_eq!(1, solver.lower_bound(a));
-        assert_eq!(3, solver.upper_bound(a));
-        assert_eq!(0, solver.lower_bound(b));
-        assert_eq!(4, solver.upper_bound(b));
-        assert_eq!(0, solver.lower_bound(c));
-        assert_eq!(12, solver.upper_bound(c));
-
-        let reason_lb = solver.get_reason_int(predicate![c >= 0]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![c >= 0],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 0] & [b >= 0]), reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![c <= 12]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![c <= 12],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_ub: PropositionalConjunction = reason_buffer.into();
         assert_eq!(
             conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
             reason_ub
@@ -463,141 +472,149 @@ mod tests {
 
     #[test]
     fn bounds_of_a_and_c_propagate_bounds_b() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(2, 3);
-        let b = solver.new_variable(0, 12);
-        let c = solver.new_variable(2, 12);
+        let mut state = State::default();
+        let a = state.new_interval_variable(2, 3, None);
+        let b = state.new_interval_variable(0, 12, None);
+        let c = state.new_interval_variable(2, 12, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("no empty domains");
+        state.assert_bounds(a, 2, 3);
+        state.assert_bounds(b, 1, 6);
+        state.assert_bounds(c, 2, 12);
 
-        assert_eq!(2, solver.lower_bound(a));
-        assert_eq!(3, solver.upper_bound(a));
-        assert_eq!(1, solver.lower_bound(b));
-        assert_eq!(6, solver.upper_bound(b));
-        assert_eq!(2, solver.lower_bound(c));
-        assert_eq!(12, solver.upper_bound(c));
-
-        let reason_lb = solver.get_reason_int(predicate![b >= 1]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![b >= 1],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![b <= 6]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![b <= 6],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_ub: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), reason_ub);
     }
 
     #[test]
     fn bounds_of_b_and_c_propagate_bounds_a() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 10);
-        let b = solver.new_variable(3, 6);
-        let c = solver.new_variable(2, 12);
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 10, None);
+        let b = state.new_interval_variable(3, 6, None);
+        let c = state.new_interval_variable(2, 12, None);
 
-        let constraint_tag = solver.new_constraint_tag();
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("no empty domains");
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("no empty domains");
 
-        solver.propagate(propagator).expect("no empty domains");
+        state.assert_bounds(a, 1, 4);
+        state.assert_bounds(b, 3, 6);
+        state.assert_bounds(c, 3, 12);
 
-        assert_eq!(1, solver.lower_bound(a));
-        assert_eq!(4, solver.upper_bound(a));
-        assert_eq!(3, solver.lower_bound(b));
-        assert_eq!(6, solver.upper_bound(b));
-        assert_eq!(3, solver.lower_bound(c));
-        assert_eq!(12, solver.upper_bound(c));
-
-        let reason_lb = solver.get_reason_int(predicate![a >= 1]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![a >= 1],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_lb: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([b >= 1] & [c >= 1]), reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![a <= 4]);
+        let mut reason_buffer: Vec<Predicate> = vec![];
+        let _ = state.get_propagation_reason(
+            predicate![a <= 4],
+            &mut reason_buffer,
+            CurrentNogood::empty(),
+        );
+        let reason_ub: PropositionalConjunction = reason_buffer.into();
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), reason_ub);
     }
 
     #[test]
     fn b_unbounded_does_not_panic() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(12, 12);
-        let b = solver.new_variable(i32::MIN, i32::MAX);
-        let c = solver.new_variable(144, 144);
+        let mut state = State::default();
+        let a = state.new_interval_variable(12, 12, None);
+        let b = state.new_interval_variable(i32::MIN, i32::MAX, None);
+        let c = state.new_interval_variable(144, 144, None);
 
-        let constraint_tag = solver.new_constraint_tag();
-        let _ = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("No empty domains");
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("No empty domains");
     }
 
     #[test]
     fn a_unbounded_does_not_panic() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(i32::MIN, i32::MAX);
-        let b = solver.new_variable(12, 12);
-        let c = solver.new_variable(144, 144);
+        let mut state = State::default();
+        let a = state.new_interval_variable(i32::MIN, i32::MAX, None);
+        let b = state.new_interval_variable(12, 12, None);
+        let c = state.new_interval_variable(144, 144, None);
 
-        let constraint_tag = solver.new_constraint_tag();
-        let _ = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("No empty domains");
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("No empty domains");
     }
 
     #[test]
     fn c_unbounded_does_not_panic() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(12, 12);
-        let b = solver.new_variable(12, 12);
-        let c = solver.new_variable(i32::MIN, i32::MAX);
+        let mut state = State::default();
+        let a = state.new_interval_variable(12, 12, None);
+        let b = state.new_interval_variable(12, 12, None);
+        let c = state.new_interval_variable(i32::MIN, i32::MAX, None);
 
-        let constraint_tag = solver.new_constraint_tag();
-        let _ = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("No empty domains");
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("No empty domains");
     }
 
     #[test]
     fn all_unbounded_does_not_panic() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(i32::MIN, i32::MAX);
-        let b = solver.new_variable(i32::MIN, i32::MAX);
-        let c = solver.new_variable(i32::MIN, i32::MAX);
+        let mut state = State::default();
+        let a = state.new_interval_variable(i32::MIN, i32::MAX, None);
+        let b = state.new_interval_variable(i32::MIN, i32::MAX, None);
+        let c = state.new_interval_variable(i32::MIN, i32::MAX, None);
 
-        let constraint_tag = solver.new_constraint_tag();
-        let _ = solver
-            .new_propagator(IntegerMultiplicationArgs {
-                a,
-                b,
-                c,
-                constraint_tag,
-            })
-            .expect("No empty domains");
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(IntegerMultiplicationArgs {
+            a,
+            b,
+            c,
+            constraint_tag,
+        });
+        state.propagate_to_fixed_point().expect("No empty domains");
     }
 }

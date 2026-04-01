@@ -17,7 +17,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 /// The [`PropagatorConstructor`] for the [`DivisionPropagator`].
@@ -457,28 +457,27 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::state::State;
 
     use super::*;
 
     #[test]
     fn detects_conflicts() {
-        let mut solver = TestSolver::default();
-        let numerator = solver.new_variable(1, 1);
-        let denominator = solver.new_variable(2, 2);
-        let rhs = solver.new_variable(2, 2);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let numerator = state.new_interval_variable(1, 1, None);
+        let denominator = state.new_interval_variable(2, 2, None);
+        let rhs = state.new_interval_variable(2, 2, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver.new_propagator(DivisionArgs {
+        let _ = state.add_propagator(DivisionArgs {
             numerator,
             denominator,
             rhs,
             constraint_tag,
         });
 
-        assert!(propagator.is_err());
+        let _ = state.propagate_to_fixed_point().unwrap_err();
     }
 }

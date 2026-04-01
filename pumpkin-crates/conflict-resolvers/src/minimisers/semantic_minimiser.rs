@@ -81,6 +81,7 @@ impl NogoodMinimiser for SemanticMinimiser {
                 return;
             }
             self.domains[domain_id].add_domain_description_to_vector(
+                context,
                 *domain_id,
                 &self.original_domains[domain_id],
                 &mut self.helper,
@@ -149,6 +150,7 @@ impl SemanticMinimiser {
 
     fn grow(&mut self, lower_bound: i32, upper_bound: i32, holes: Vec<i32>) {
         let mut initial_domain = SimpleIntegerDomain {
+            assigned_to: None,
             lower_bound,
             upper_bound,
             holes: HashSet::from_iter(holes.iter().cloned()),
@@ -177,6 +179,14 @@ impl SemanticMinimiser {
 
 #[derive(Clone, Default, Debug)]
 struct SimpleIntegerDomain {
+    /// The value this domain was assigned to with an equality predicate.
+    ///
+    /// An input nogood `[x == 3] -> false` can be minimized to `[x >= 3] -> false`
+    /// if `[x <= 3]` is an initial domain bound. However, that initial domain bound
+    /// should be logged to the proof. This is only necessary in this situation, since if the
+    /// domain is assigned by a conjunction of multiple predicates, those will all have been
+    /// justified to the proof before reaching minimization.
+    assigned_to: Option<i32>,
     lower_bound: i32,
     upper_bound: i32,
     holes: HashSet<i32>,
@@ -202,6 +212,8 @@ impl SimpleIntegerDomain {
     }
 
     fn assign(&mut self, value: i32) {
+        self.assigned_to = Some(value);
+
         // If the domains are inconsistent, or if the assigned value would make the domain
         // inconsistent, declare inconsistency and stop.
         if self.lower_bound > self.upper_bound
@@ -250,6 +262,7 @@ impl SimpleIntegerDomain {
 
     fn add_domain_description_to_vector(
         &self,
+        context: &mut ConflictAnalysisContext<'_>,
         domain_id: DomainId,
         original_domain: &SimpleIntegerDomain,
         description: &mut Vec<Predicate>,
@@ -269,10 +282,20 @@ impl SimpleIntegerDomain {
         // Add bounds but avoid root assignments.
         if self.lower_bound != original_domain.lower_bound {
             description.push(predicate![domain_id >= self.lower_bound]);
+        } else if self
+            .assigned_to
+            .is_some_and(|value| value == original_domain.lower_bound)
+        {
+            context.log_domain_inference(predicate![domain_id >= original_domain.lower_bound]);
         }
 
         if self.upper_bound != original_domain.upper_bound {
             description.push(predicate![domain_id <= self.upper_bound]);
+        } else if self
+            .assigned_to
+            .is_some_and(|value| value == original_domain.upper_bound)
+        {
+            context.log_domain_inference(predicate![domain_id <= original_domain.upper_bound]);
         }
 
         // Add nonroot holes.

@@ -20,6 +20,9 @@ use drcp_format::writer::ProofWriter;
 pub(crate) use finalizer::*;
 pub use inference_code::*;
 use proof_atomics::ProofAtomics;
+use pumpkin_checking::InvalidDeduction;
+use pumpkin_checking::SupportingInference;
+use pumpkin_checking::verify_deduction;
 
 #[cfg(doc)]
 use crate::Solver;
@@ -39,6 +42,7 @@ use crate::variables::Literal;
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
+    supporting_inferences: Vec<SupportingInference<Predicate>>,
 }
 
 impl ProofLog {
@@ -64,6 +68,7 @@ impl ProofLog {
                 logged_domain_inferences: HashMap::default(),
                 proof_atomics: ProofAtomics::default(),
             }),
+            supporting_inferences: vec![],
         })
     }
 
@@ -72,6 +77,7 @@ impl ProofLog {
         let file = File::create(file_path)?;
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::DimacsProof(DimacsProof::new(file))),
+            supporting_inferences: vec![],
         })
     }
 
@@ -80,12 +86,19 @@ impl ProofLog {
         &mut self,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         inference_code: InferenceCode,
-        premises: impl IntoIterator<Item = Predicate>,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
         propagated: Option<Predicate>,
         variable_names: &VariableNames,
         assignments: &Assignments,
     ) -> std::io::Result<ConstraintTag> {
         let inference_tag = constraint_tags.next_key();
+
+        if cfg!(feature = "check-deductions") {
+            self.supporting_inferences.push(SupportingInference {
+                premises: premises.clone().into_iter().collect(),
+                consequent: propagated,
+            });
+        }
 
         let Some(ProofImpl::CpProof {
             writer,
@@ -126,7 +139,12 @@ impl ProofLog {
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         assignments: &Assignments,
     ) -> std::io::Result<Option<ConstraintTag>> {
-        assert!(assignments.is_initial_bound(predicate));
+        if cfg!(feature = "check-deductions") {
+            self.supporting_inferences.push(SupportingInference {
+                premises: vec![],
+                consequent: Some(predicate),
+            });
+        }
 
         if is_likely_a_constant(predicate, variable_names, assignments) {
             // The predicate is over a constant variable. We assume we do not want to
@@ -184,12 +202,16 @@ impl ProofLog {
     /// order.
     pub(crate) fn log_deduction(
         &mut self,
-        premises: impl IntoIterator<Item = Predicate>,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
         variable_names: &VariableNames,
         constraint_tags: &mut KeyGenerator<ConstraintTag>,
         assignments: &Assignments,
     ) -> std::io::Result<ConstraintTag> {
         let constraint_tag = constraint_tags.next_key();
+
+        if cfg!(feature = "check-deductions") {
+            self.verify_deduction_at_runtime(premises.clone());
+        }
 
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
@@ -286,7 +308,7 @@ impl ProofLog {
                 propagation_order_hint: Some(_),
                 ..
             })
-        )
+        ) || cfg!(feature = "check-deductions")
     }
 
     pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
@@ -303,6 +325,42 @@ impl ProofLog {
 
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_proof.is_some()
+    }
+
+    fn verify_deduction_at_runtime(
+        &mut self,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
+    ) {
+        match verify_deduction(
+            premises.clone(),
+            self.supporting_inferences.iter().cloned().rev(),
+        ) {
+            Ok(_) => {
+                self.supporting_inferences.clear();
+            }
+            Err(InvalidDeduction(ignored_inferences)) => {
+                eprintln!("Supporting inferences:");
+                for inference in self.supporting_inferences.iter() {
+                    eprintln!("{:?} -> {:?}", inference.premises, inference.consequent);
+                }
+
+                if !ignored_inferences.is_empty() {
+                    eprintln!("Ignored inferences:");
+                    for ignored_inference in ignored_inferences {
+                        eprintln!(
+                            "{:?} -> {:?}",
+                            ignored_inference.inference.premises,
+                            ignored_inference.inference.consequent
+                        );
+                    }
+                }
+
+                panic!(
+                    "Failed to verify deduction: {:?} -> false",
+                    itertools::join(premises, " & ")
+                );
+            }
+        }
     }
 }
 

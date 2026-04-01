@@ -567,17 +567,11 @@ fn run() -> PumpkinResult<()> {
         activity_bump_increment: 1.0,
     };
 
-    let should_minimise_nogoods = if args.proof_type == ProofType::Full {
-        warn!("Recursive minimisation is disabled when logging the full proof.");
-        false
-    } else {
-        !args.no_learning_clause_minimisation
-    };
     let solver_options = SolverOptions {
         // 1 MB is 1_000_000 bytes
         memory_preallocated: args.memory_preallocated,
         restart_options,
-        should_minimise_nogoods,
+        should_minimise_nogoods: !args.no_learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
@@ -636,7 +630,10 @@ fn run() -> PumpkinResult<()> {
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose,
                 },
-                ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
+                ResolutionResolver::new(
+                    AnalysisMode::OneUIP,
+                    !args.no_learning_clause_minimisation,
+                ),
             )?,
         },
     }

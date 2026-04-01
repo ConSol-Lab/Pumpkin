@@ -1,9 +1,11 @@
+mod conflict;
 pub(crate) mod constraint_satisfaction_solver;
 mod constraint_tag;
 pub(crate) mod cp;
 mod debug_helper;
 mod literal_block_distance;
 pub(crate) mod notifications;
+mod predicate_heap;
 pub(crate) mod predicates;
 mod restart_strategy;
 mod solver_statistics;
@@ -12,6 +14,7 @@ pub(crate) mod termination;
 pub(crate) mod variable_names;
 pub(crate) mod variables;
 
+pub use conflict::*;
 pub use constraint_satisfaction_solver::ConflictResolverType;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
@@ -20,6 +23,7 @@ pub(crate) use cp::*;
 pub(crate) use debug_helper::DebugDyn;
 pub(crate) use debug_helper::DebugHelper;
 pub use literal_block_distance::Lbd;
+pub use predicate_heap::*;
 pub use reason::Reason;
 pub use restart_strategy::RestartOptions;
 pub(crate) use restart_strategy::RestartStrategy;

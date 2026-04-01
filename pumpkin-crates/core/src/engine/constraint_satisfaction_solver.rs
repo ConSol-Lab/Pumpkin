@@ -437,7 +437,7 @@ impl ConstraintSatisfactionSolver {
                         continue;
                     }
 
-                    ConflictAnalysisContext::get_propagation_reason_inner(
+                    let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                         predicate,
                         CurrentNogood::empty(),
                         context.proof_log,
@@ -983,7 +983,23 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if are_all_falsified_at_root {
+            // Since the propagation is not actually performed, we log the inference
+            // explicitly here for the proof.
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(
+                    &mut self.state.constraint_tags,
+                    inference_code,
+                    predicates.iter().copied(),
+                    None,
+                    &self.state.variable_names,
+                    &self.state.assignments,
+                )
+                .expect("failed to write to proof");
+
             finalize_proof(FinalizingContext {
                 conflict: predicates.into(),
                 proof_log: &mut self.internal_parameters.proof_log,
@@ -997,7 +1013,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 
