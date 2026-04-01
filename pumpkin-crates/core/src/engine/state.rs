@@ -572,6 +572,7 @@ impl State {
         }
 
         let _ = self.notification_engine.process_backtrack_events(
+            checkpoint,
             &mut self.assignments,
             &mut self.trailed_values,
             &mut self.propagators,

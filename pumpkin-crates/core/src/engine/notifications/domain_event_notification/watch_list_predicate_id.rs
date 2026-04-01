@@ -83,5 +83,10 @@ impl PredicateWatchList {
         self.literal_watch_list
             .get(&literal)
             .and_then(|inner| inner.get(&propagator_id))
+            .or_else(|| {
+                self.literal_watch_list
+                    .get(&(!literal))
+                    .and_then(|inner| inner.get(&propagator_id))
+            })
     }
 }

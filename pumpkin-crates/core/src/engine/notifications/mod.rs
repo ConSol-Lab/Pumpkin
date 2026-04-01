@@ -11,6 +11,7 @@ use enumset::EnumSet;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use crate::basic_types::PredicateId;
+use crate::basic_types::Trail;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
@@ -43,7 +44,7 @@ pub(crate) struct NotificationEngine {
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
     /// place
     backtrack_events: EventSink,
-    backtrack_events_literals: Vec<(Literal, PropagatorId)>,
+    backtrack_events_literals: Trail<(Literal, PropagatorId)>,
 }
 
 impl Default for NotificationEngine {
@@ -478,6 +479,7 @@ impl NotificationEngine {
 
     pub(crate) fn process_backtrack_events(
         &mut self,
+        new_checkpoint: usize,
         assignments: &mut Assignments,
         trailed_values: &mut TrailedValues,
         propagators: &mut PropagatorStore,
@@ -505,7 +507,10 @@ impl NotificationEngine {
             }
         }
 
-        for (literal, propagator_id) in self.backtrack_events_literals.drain(..).collect::<Vec<_>>()
+        for (literal, propagator_id) in self
+            .backtrack_events_literals
+            .synchronise(new_checkpoint)
+            .collect::<Vec<_>>()
         {
             if let Some((var_id, events)) = self
                 .watch_list_predicate_ids
@@ -682,6 +687,7 @@ impl NotificationEngine {
         self.predicate_notifier
             .predicate_id_assignments
             .new_checkpoint();
+        self.backtrack_events_literals.new_checkpoint();
     }
 
     pub(crate) fn debug_create_from_assignments(&mut self, assignments: &Assignments) {
