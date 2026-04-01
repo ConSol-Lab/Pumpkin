@@ -311,7 +311,6 @@ mod tests {
     use pumpkin_core::propagation::EnqueueDecision;
     use pumpkin_core::state::Conflict;
     use pumpkin_core::state::State;
-    use pumpkin_core::variables::DomainId;
 
     use crate::StateExt;
     use crate::cumulative::ArgTask;
@@ -326,7 +325,7 @@ mod tests {
         let s2 = state.new_interval_variable(1, 8, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -357,7 +356,7 @@ mod tests {
         let s2 = state.new_interval_variable(1, 1, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -404,7 +403,7 @@ mod tests {
         let s2 = state.new_interval_variable(0, 6, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -439,7 +438,7 @@ mod tests {
         let a = state.new_interval_variable(0, 1, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: a,
@@ -539,7 +538,7 @@ mod tests {
         let s2 = state.new_interval_variable(1, 8, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -744,7 +743,7 @@ mod tests {
         let s2 = state.new_interval_variable(1, 8, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -798,7 +797,7 @@ mod tests {
         let s3 = state.new_interval_variable(1, 15, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -854,7 +853,7 @@ mod tests {
         let s2 = state.new_interval_variable(0, 8, None);
         let constraint_tag = state.new_constraint_tag();
 
-        let _ = state.add_propagator(TimeTablePerPointPropagator::<DomainId>::new(
+        let _ = state.add_propagator(TimeTablePerPointPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
