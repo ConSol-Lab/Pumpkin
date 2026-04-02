@@ -1,5 +1,4 @@
 use pumpkin_solver::core::predicate;
-use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::IntegerVariableEnum;
 use pumpkin_solver::core::variables::Literal;
@@ -8,30 +7,23 @@ use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntegerVariableWrapper {
-    pub(crate) inner: IntegerVariableEnum,
-}
-
-impl From<IntegerVariableEnum> for IntegerVariableWrapper {
-    fn from(value: IntegerVariableEnum) -> Self {
-        Self { inner: value }
-    }
-}
-
-impl From<IntExpression> for IntegerVariableWrapper {
-    fn from(value: IntExpression) -> Self {
-        let value: IntegerVariableEnum = value.0.into();
-        value.into()
-    }
-}
-
-#[pyclass(eq, hash, frozen)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntExpression(pub AffineView<DomainId>);
+pub struct IntExpression(pub IntegerVariableEnum);
 
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {
         IntExpression(domain_id.into())
+    }
+}
+
+impl From<Literal> for IntExpression {
+    fn from(value: Literal) -> Self {
+        IntExpression(value.into())
+    }
+}
+
+impl From<BoolExpression> for IntExpression {
+    fn from(value: BoolExpression) -> Self {
+        IntExpression(value.0.into())
     }
 }
 
@@ -49,13 +41,6 @@ impl IntExpression {
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BoolExpression(pub Literal);
-
-impl From<BoolExpression> for IntegerVariableWrapper {
-    fn from(value: BoolExpression) -> Self {
-        let value: IntegerVariableEnum = value.0.into();
-        value.into()
-    }
-}
 
 #[pymethods]
 impl BoolExpression {

@@ -1,11 +1,8 @@
-use pumpkin_solver::core::variables::AffineView;
-use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::IntegerVariableEnum;
 use pumpkin_solver::core::variables::Literal;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
-use crate::variables::IntegerVariableWrapper;
 
 /// Trait which helps to convert Python API types to the solver types when creating constraints.
 pub trait PythonConstraintArg {
@@ -14,16 +11,8 @@ pub trait PythonConstraintArg {
     fn to_solver_constraint_argument(self) -> Self::Output;
 }
 
-impl PythonConstraintArg for IntegerVariableWrapper {
-    type Output = IntegerVariableEnum;
-
-    fn to_solver_constraint_argument(self) -> Self::Output {
-        self.inner
-    }
-}
-
 impl PythonConstraintArg for IntExpression {
-    type Output = AffineView<DomainId>;
+    type Output = IntegerVariableEnum;
 
     fn to_solver_constraint_argument(self) -> Self::Output {
         self.0
