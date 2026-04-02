@@ -76,6 +76,9 @@ pub(crate) struct FlatZincOptions {
 
     /// Indicates that the solver should perform verbose logging
     pub(crate) verbose: bool,
+
+    /// Whether to use hypercube linear propagator when possible.
+    pub(crate) use_hypercube_linear: bool,
 }
 
 fn log_statistics(

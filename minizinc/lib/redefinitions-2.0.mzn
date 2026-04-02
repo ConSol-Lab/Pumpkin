@@ -29,14 +29,24 @@ predicate int_ge_imp(var int: a, var int: b, var bool: r);
 predicate int_gt_imp(var int: a, var int: b, var bool: r);
 
 predicate int_lin_eq_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
+                         int: c, var bool: r) = 
+    int_lin_le_imp(as, bs, c, r) /\ 
+    int_lin_ge_imp(as, bs, c, r);
+
 predicate int_lin_ge_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
+                         int: c, var bool: r) =
+    int_lin_le_imp([-a | a in as], bs, -c, r);
+
 predicate int_lin_gt_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
+                         int: c, var bool: r) =
+    int_lin_ge_imp(as, bs, c + 1, r);
+
 predicate int_lin_le_imp(array [int] of int: as, array [int] of var int: bs,
                          int: c, var bool: r);
+
 predicate int_lin_lt_imp(array [int] of int: as, array [int] of var int: bs,
-                         int: c, var bool: r);
+                         int: c, var bool: r) = 
+    int_lin_le_imp(as, bs, c - 1, r);
+
 predicate int_lin_ne_imp(array [int] of int: as, array [int] of var int: bs,
                          int: c, var bool: r);

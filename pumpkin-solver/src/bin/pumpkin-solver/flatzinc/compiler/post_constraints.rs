@@ -120,46 +120,6 @@ pub(crate) fn run(
                 pumpkin_constraints::binary_not_equals,
             )?,
 
-            "int_lin_eq_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_imp",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
-            "int_lin_ge_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_ge_imp",
-                constraint_tag,
-                pumpkin_constraints::greater_than_or_equals,
-            )?,
-            "int_lin_gt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_gt_imp",
-                constraint_tag,
-                pumpkin_constraints::greater_than,
-            )?,
-            "int_lin_le_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_imp",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
-            "int_lin_lt_imp" => compile_int_lin_imp_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_lt_imp",
-                constraint_tag,
-                pumpkin_constraints::less_than,
-            )?,
             "int_lin_ne_imp" => compile_int_lin_imp_predicate(
                 context,
                 exprs,
@@ -185,65 +145,86 @@ pub(crate) fn run(
                 constraint_tag,
                 pumpkin_constraints::not_equals,
             )?,
-            // "int_lin_le" => compile_int_lin_predicate(
-            //     context,
-            //     exprs,
-            //     annos,
-            //     "int_lin_le",
-            //     constraint_tag,
-            //     pumpkin_constraints::less_than_or_equals,
-            // )?,
             "int_lin_le" => {
-                check_parameters!(exprs, 3, "int_lin_le");
+                if !options.use_hypercube_linear {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    check_parameters!(exprs, 3, "int_lin_le");
 
-                let weights = context.resolve_array_integer_constants(&exprs[0])?;
-                let vars = context.resolve_integer_variable_array(&exprs[1])?;
-                let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+                    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                    let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-                let terms = weights
-                    .iter()
-                    .copied()
-                    .zip(vars.iter().copied())
-                    .filter_map(|(weight, domain)| {
-                        NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
-                    });
+                    let terms = weights
+                        .iter()
+                        .copied()
+                        .zip(vars.iter().copied())
+                        .filter_map(|(weight, domain)| {
+                            NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
+                        });
 
-                match LinearInequality::new(terms, rhs) {
-                    Some(linear) => context
-                        .solver
-                        .add_propagator(HypercubeLinearConstructor {
-                            hypercube: Hypercube::default(),
-                            linear,
-                            constraint_tag,
-                        })
-                        .is_ok(),
-                    None => todo!(),
+                    match LinearInequality::new(terms, rhs) {
+                        Some(linear) => context
+                            .solver
+                            .add_propagator(HypercubeLinearConstructor {
+                                hypercube: Hypercube::default(),
+                                linear,
+                                constraint_tag,
+                            })
+                            .is_ok(),
+                        None => continue,
+                    }
                 }
             }
-            "int_lin_le_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_le_reif",
-                constraint_tag,
-                pumpkin_constraints::less_than_or_equals,
-            )?,
-            "int_lin_eq" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
-            "int_lin_eq_reif" => compile_reified_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq_reif",
-                constraint_tag,
-                pumpkin_constraints::equals,
-            )?,
+            "int_lin_le_imp" => {
+                if !options.use_hypercube_linear {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_imp",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    check_parameters!(exprs, 4, "int_lin_le_imp");
+
+                    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+                    let vars = context.resolve_integer_variable_array(&exprs[1])?;
+                    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+                    let reif = context.resolve_bool_variable(&exprs[3])?;
+
+                    let terms = weights
+                        .iter()
+                        .copied()
+                        .zip(vars.iter().copied())
+                        .filter_map(|(weight, domain)| {
+                            NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
+                        });
+
+                    let hypercube = Hypercube::new([reif.get_true_predicate()])
+                        .expect("cannot be inconsistent with one predicate");
+
+                    match LinearInequality::new(terms, rhs) {
+                        Some(linear) => context
+                            .solver
+                            .add_propagator(HypercubeLinearConstructor {
+                                hypercube,
+                                linear,
+                                constraint_tag,
+                            })
+                            .is_ok(),
+                        None => continue,
+                    }
+                }
+            }
             "int_ne" => compile_binary_int_predicate(
                 context,
                 exprs,
