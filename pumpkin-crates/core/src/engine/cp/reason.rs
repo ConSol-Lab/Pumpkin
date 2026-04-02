@@ -241,6 +241,7 @@ mod tests {
             PropagatorId(0),
             &mut PropagatorStore::default(),
             &mut out_reason,
+            predicate![x == 5],
         );
 
         assert_eq!(conjunction.as_slice(), &out_reason);
@@ -267,6 +268,7 @@ mod tests {
             ExplanationContext::test_new(&integers, &mut notification_engine),
             &mut PropagatorStore::default(),
             &mut out_reason,
+            predicate![x == 5],
         );
 
         assert_eq!(conjunction.as_slice(), &out_reason);

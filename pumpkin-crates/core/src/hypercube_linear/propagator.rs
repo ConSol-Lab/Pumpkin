@@ -66,17 +66,21 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             )
         });
 
-        let watched_predicates = if hypercube_predicates.is_empty() {
-            let true_predicate = Predicate::trivially_true();
-            let true_predicate_id = context.register_predicate(true_predicate);
-            [true_predicate_id; NUM_WATCHED_PREDICATES]
-        } else {
-            let last_idx = hypercube_predicates.len() - 1;
-            [
-                context.register_predicate(hypercube_predicates[0]),
-                context.register_predicate(hypercube_predicates[1.min(last_idx)]),
-            ]
-        };
+        #[allow(clippy::get_first, reason = "is more consistent")]
+        let watched_predicates = [
+            context.register_predicate(
+                hypercube_predicates
+                    .get(0)
+                    .copied()
+                    .unwrap_or_else(Predicate::trivially_true),
+            ),
+            context.register_predicate(
+                hypercube_predicates
+                    .get(1)
+                    .copied()
+                    .unwrap_or_else(Predicate::trivially_true),
+            ),
+        ];
 
         HypercubeLinearPropagator {
             hypercube,
@@ -681,5 +685,26 @@ mod tests {
 
         assert_eq!(state.upper_bound(z2), 6);
         assert_eq!(state.upper_bound(z3), 6);
+    }
+
+    #[test]
+    fn single_predicate_in_hypercube_with_trivially_false_linear_triggers() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new([predicate![x >= 2]]).expect("not inconsistent");
+
+        let linear = LinearInequality::trivially_false();
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(x), 1);
     }
 }
