@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
@@ -32,11 +34,29 @@ impl BoundPredicate {
     }
 }
 
-impl Into<Predicate> for BoundPredicate {
-    fn into(self) -> Predicate {
-        match self.comparator {
-            BoundComparator::LowerBound => predicate![self.domain >= self.value],
-            BoundComparator::UpperBound => predicate![self.domain <= self.value],
+impl From<BoundPredicate> for Predicate {
+    fn from(value: BoundPredicate) -> Self {
+        match value.comparator {
+            BoundComparator::LowerBound => predicate![value.domain >= value.value],
+            BoundComparator::UpperBound => predicate![value.domain <= value.value],
+        }
+    }
+}
+
+impl Not for BoundPredicate {
+    type Output = BoundPredicate;
+
+    fn not(self) -> Self::Output {
+        BoundPredicate {
+            domain: self.domain,
+            comparator: match self.comparator {
+                BoundComparator::LowerBound => BoundComparator::UpperBound,
+                BoundComparator::UpperBound => BoundComparator::LowerBound,
+            },
+            value: match self.comparator {
+                BoundComparator::LowerBound => self.value - 1,
+                BoundComparator::UpperBound => self.value + 1,
+            },
         }
     }
 }

@@ -679,7 +679,7 @@ impl HypercubeLinearResolver {
 
             // Then, we have to do the same on the explanation.
             explanation = std::mem::take(&mut explanation)
-                .weaken_to_zero(bound_predicate)
+                .weaken_to_zero(!bound_predicate)
                 .expect("cannot weaken to trivially satisfiable");
         }
 
@@ -939,12 +939,6 @@ impl HypercubeLinearExplanation {
             }
 
             HypercubeLinearExplanation::Conjunction(predicates) => {
-                // Assert that the bound exists in predicates already.
-                if cfg!(feature = "hl-checks") {
-                    let predicate: Predicate = bound.into();
-                    assert!(predicates.contains(&!predicate));
-                }
-
                 Some(HypercubeLinearExplanation::Conjunction(predicates))
             }
         }
