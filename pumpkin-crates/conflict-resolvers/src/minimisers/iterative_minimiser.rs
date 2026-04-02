@@ -2,6 +2,7 @@ use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::KeyedVec;
+use pumpkin_core::containers::StorageKey;
 use pumpkin_core::predicate;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::predicates::PredicateType;
@@ -149,6 +150,9 @@ impl IterativeMinimiser {
         context: &mut ConflictAnalysisContext,
     ) -> ProcessingResult {
         let domain = predicate.get_domain();
+        if domain.index() >= self.domains.len() || self.domains[domain].is_empty() {
+            return ProcessingResult::NotRedundant;
+        }
         self.domains.accomodate(domain, Default::default());
 
         self.state.reset_domain(domain);
