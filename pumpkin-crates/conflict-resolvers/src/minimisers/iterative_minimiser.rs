@@ -50,7 +50,7 @@ pub(crate) struct IterativeMinimiser {
 }
 
 /// The result of processing a predicate, indicating its redundancy.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum ProcessingResult {
     /// The predicate to process was redundant.
     Redundant,
@@ -58,7 +58,7 @@ pub(crate) enum ProcessingResult {
     /// [`ProcessingResult::ReplacedPresent::removed`].
     ///
     /// e.g., [x >= 5] can replace [x >= 2].
-    ReplacedPresent { removed: Predicate },
+    ReplacedPresent { removed: Vec<Predicate> },
     /// The predicate to process was replaced with
     /// [`ProcessingResult::PossiblyReplacedWithNew::new_predicate`] and it also removed
     /// [`ProcessingResult::PossiblyReplacedWithNew::removed`].
@@ -191,14 +191,14 @@ impl IterativeMinimiser {
                     }
                 } else if predicate.get_right_hand_side() > lower_bound {
                     // [x >= v], [x >= v'] => [x >= v'] if v' > v
-                    if let Some(to_remove) = self.domains[predicate.get_domain()]
+                    let to_remove = self.domains[predicate.get_domain()]
                         .iter()
                         .filter(|element| element.is_lower_bound_predicate())
-                        .max_by_key(|element| element.get_right_hand_side())
-                    {
-                        ProcessingResult::ReplacedPresent {
-                            removed: *to_remove,
-                        }
+                        .copied()
+                        .collect::<Vec<_>>();
+
+                    if !to_remove.is_empty() {
+                        ProcessingResult::ReplacedPresent { removed: to_remove }
                     } else {
                         ProcessingResult::NotRedundant
                     }
@@ -218,14 +218,13 @@ impl IterativeMinimiser {
                     }
                 } else if predicate.get_right_hand_side() < upper_bound {
                     // [x <= v], [x <= v'] => [x <= v'] if v' < v
-                    if let Some(to_remove) = self.domains[predicate.get_domain()]
+                    let to_remove = self.domains[predicate.get_domain()]
                         .iter()
                         .filter(|element| element.is_upper_bound_predicate())
-                        .min_by_key(|element| element.get_right_hand_side())
-                    {
-                        ProcessingResult::ReplacedPresent {
-                            removed: *to_remove,
-                        }
+                        .copied()
+                        .collect::<Vec<_>>();
+                    if !to_remove.is_empty() {
+                        ProcessingResult::ReplacedPresent { removed: to_remove }
                     } else {
                         ProcessingResult::NotRedundant
                     }

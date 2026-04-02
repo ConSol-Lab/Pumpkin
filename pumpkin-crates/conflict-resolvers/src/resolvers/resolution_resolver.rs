@@ -384,23 +384,25 @@ impl ResolutionResolver {
                 return ControlFlow::Break(());
             }
             ProcessingResult::ReplacedPresent { removed } => {
-                self.iterative_minimiser.remove_predicate(removed);
-                self.statistics
-                    .iterative_minimisation_statistics
-                    .num_removed += 1;
-
-                let removed_id = self.predicate_id_generator.get_id(removed);
-                if self.to_process_heap.is_key_present(removed_id) {
-                    self.to_process_heap.delete_key(removed_id);
-                } else {
-                    if let Some(position) = self
-                        .processed_nogood_predicates
-                        .iter()
-                        .position(|predicate| *predicate == removed)
-                    {
-                        let _ = self.processed_nogood_predicates.remove(position);
+                for removed_predicate in removed {
+                    self.statistics
+                        .iterative_minimisation_statistics
+                        .num_removed += 1;
+                    self.iterative_minimiser.remove_predicate(removed_predicate);
+                    let removed_id = self.predicate_id_generator.get_id(removed_predicate);
+                    if self.to_process_heap.is_key_present(removed_id) {
+                        self.to_process_heap.delete_key(removed_id);
+                    } else {
+                        if let Some(position) = self
+                            .processed_nogood_predicates
+                            .iter()
+                            .position(|predicate| *predicate == removed_predicate)
+                        {
+                            let _ = self.processed_nogood_predicates.remove(position);
+                        }
                     }
                 }
+
                 self.iterative_minimiser.apply_predicate(predicate);
             }
             ProcessingResult::PossiblyReplacedWithNew {
