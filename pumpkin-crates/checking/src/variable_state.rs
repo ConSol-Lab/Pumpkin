@@ -31,6 +31,10 @@ impl<Atomic> VariableState<Atomic>
 where
     Atomic: AtomicConstraint,
 {
+    pub fn reset_domain(&mut self, identified: Atomic::Identifier) {
+        let _ = self.domains.insert(identified, Domain::all_integers());
+    }
+
     /// Create a variable state that applies all the premises and, if present, the negation of the
     /// consequent.
     ///

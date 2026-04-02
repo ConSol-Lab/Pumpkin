@@ -421,7 +421,6 @@ impl ResolutionResolver {
                         self.to_process_heap.delete_key(predicate_id);
                         return ControlFlow::Break(());
                     } else {
-                        self.iterative_minimiser.did_not_replace();
                         self.iterative_minimiser.apply_predicate(predicate);
                     }
                 } else {
@@ -432,7 +431,6 @@ impl ResolutionResolver {
                         self.to_process_heap.delete_key(predicate_id);
                         return ControlFlow::Break(());
                     } else {
-                        self.iterative_minimiser.did_not_replace();
                         self.iterative_minimiser.apply_predicate(predicate);
                     }
                 }
