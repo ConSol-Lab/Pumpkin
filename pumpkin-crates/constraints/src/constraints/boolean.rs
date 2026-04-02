@@ -4,11 +4,12 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::AffineView;
 use pumpkin_core::variables::DomainId;
+use pumpkin_core::variables::IntegerVariableEnum;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
-use super::equals;
 use super::less_than_or_equals;
+use crate::equals;
 
 /// Creates the [`Constraint`] `∑ weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(
@@ -67,11 +68,11 @@ impl Constraint for BooleanLessThanOrEqual {
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<AffineView<Literal>> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
+            .map(|(index, bool)| bool.scaled(self.weights[index]))
             .collect()
     }
 }
@@ -102,12 +103,12 @@ impl Constraint for BooleanEqual {
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<IntegerVariableEnum> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
-            .chain(std::iter::once(self.rhs.scaled(-1)))
+            .map(|(index, bool)| bool.scaled(self.weights[index]).into())
+            .chain(std::iter::once(self.rhs.scaled(-1).into()))
             .collect()
     }
 }

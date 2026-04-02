@@ -86,7 +86,7 @@ impl TestSolver {
 
     pub fn new_literal(&mut self) -> Literal {
         let domain_id = self.new_variable(0, 1);
-        Literal::new(domain_id)
+        Literal::new(predicate!(domain_id >= 1))
     }
 
     pub fn new_propagator<Constructor>(

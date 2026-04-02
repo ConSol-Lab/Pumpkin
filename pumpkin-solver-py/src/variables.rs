@@ -1,17 +1,29 @@
 use pumpkin_solver::core::predicate;
-use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::DomainId;
+use pumpkin_solver::core::variables::IntegerVariableEnum;
 use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntExpression(pub AffineView<DomainId>);
+pub struct IntExpression(pub IntegerVariableEnum);
 
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {
         IntExpression(domain_id.into())
+    }
+}
+
+impl From<Literal> for IntExpression {
+    fn from(value: Literal) -> Self {
+        IntExpression(value.into())
+    }
+}
+
+impl From<BoolExpression> for IntExpression {
+    fn from(value: BoolExpression) -> Self {
+        IntExpression(value.0.into())
     }
 }
 
@@ -32,12 +44,22 @@ pub struct BoolExpression(pub Literal);
 
 #[pymethods]
 impl BoolExpression {
-    pub fn as_integer(&self) -> IntExpression {
-        IntExpression(self.0.get_integer_variable())
+    pub fn scaled(&self, scale: i32) -> IntExpression {
+        let int_expr: IntExpression = (*self).into();
+        int_expr.scaled(scale)
+    }
+
+    pub fn offset(&self, offset: i32) -> IntExpression {
+        let int_expr: IntExpression = (*self).into();
+        int_expr.offset(offset)
     }
 
     pub fn negate(&self) -> BoolExpression {
         BoolExpression(!self.0)
+    }
+
+    pub fn as_expression(&self) -> IntExpression {
+        (*self).into()
     }
 }
 

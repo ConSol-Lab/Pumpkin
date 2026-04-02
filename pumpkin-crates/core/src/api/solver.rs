@@ -102,7 +102,7 @@ pub struct Solver {
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,
@@ -114,7 +114,7 @@ impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
+        let true_literal = Literal::new(Predicate::trivially_true());
         Self {
             satisfaction_solver,
             true_literal,

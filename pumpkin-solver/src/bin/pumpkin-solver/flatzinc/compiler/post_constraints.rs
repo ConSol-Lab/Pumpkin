@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use pumpkin_core::variables::IntegerVariableEnum;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -648,11 +649,13 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(
-        pumpkin_constraints::binary_equals(a.get_integer_variable(), b.scaled(1), constraint_tag)
-            .post(context.solver)
-            .is_ok(),
+    Ok(pumpkin_constraints::binary_equals(
+        IntegerVariableEnum::Literal(a.scaled(1)),
+        IntegerVariableEnum::DomainId(b.scaled(1)),
+        constraint_tag,
     )
+    .post(context.solver)
+    .is_ok())
 }
 
 fn compile_bool_or(
