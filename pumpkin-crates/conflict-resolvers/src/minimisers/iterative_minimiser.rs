@@ -7,9 +7,49 @@ use pumpkin_core::predicates::PredicateType;
 use pumpkin_core::propagation::ReadDomains;
 use pumpkin_core::variables::DomainId;
 
+/// A minimiser which iteratively applies rewrite rules based on the semantic meaning of predicates
+/// *during* conflict analysis.
+///
+/// The implementation is heavily inspired by \[1\].
+///
+/// There are a couple of limitations to note:
+/// - Currently, whenever a hole is created at a lower- or upper-bound, the bound is only moved by 1
+///   (even if there are multiple holes which could cause a higher lower-bound). This simplifies a
+///   lot of the logic.
+/// - Currently, it is unclear how the rules are applied in \[1\]. This means that certain rules are
+///   invalid (for, as of yet, unknown reasons), for example, removing all other elements concerning
+///   `x` when `[x = v]` is added leads to wrong solutions.
+///   - This leads to another slightly nuanced point; which is that when an element is removed from
+///     the nogood, it could be that there are other bounds which should be restored.
+///
+///     For example, it could be that the nogood contains (among others) the predicates `[x >= v]`
+///     and `[x = v + 1]`. In this case, once `[x = v + 1]` gets removed, the lower-bound should be
+///     moved back to `v`.
+///
+/// ## Developer Notes
+/// - The predicates from the previous decision level should also be added to the
+///   [`IterativeMinimiser`]; this is due to the fact that they are not guaranteed to be
+///   semantically minimised away.
+///
+///   Imagine the situation where we have `[x >= v]` from a previous
+///   decision level and `[x >= v']` from the current decision level (where `v' > v`). If we then
+///   do not process `[x >= v]`, then it would get added to the nogood directly rather than removed
+///   due to redundancy. If we now resolve on [`x >= v'`] and the nogood becomes asserting, then
+///   there are no other elements over `x` and the predicate from the previous decision level does
+///   not get removed.
+///
+/// # Bibliography
+/// \[1\] T. Feydy, A. Schutt, and P. Stuckey, ‘Semantic learning for lazy clause generation’, in
+/// TRICS workshop, held alongside CP, 2013.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct IterativeMinimiser {
+    /// Keeps track of the domains induced by the current working nogood.
     domains: KeyedVec<DomainId, IterativeDomain>,
+    /// Used to keep track of situations where `[x <= v]` or `[x >= v]` gets replaced with `[x =
+    /// v]` due to the addition of `[x >= v]` or `[x <= v]`, respectively.
+    ///
+    /// This is used to make sure that the bounds stored in the [`IterativeDomain`] remain
+    /// consistent.
     replacement_with_equals: bool,
 }
 
