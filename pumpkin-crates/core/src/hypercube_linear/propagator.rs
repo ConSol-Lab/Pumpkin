@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use crate::basic_types::PredicateId;
 use crate::declare_inference_label;
 use crate::engine::PropagationStatusCP;
@@ -51,7 +53,18 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
             constraint_tag,
         } = self;
 
-        let hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
+        let mut hypercube_predicates = hypercube.iter_predicates().collect::<Box<[_]>>();
+
+        // Make sure the predicates with highest decision level are at the start. If
+        // predicates are not assigned, we consider them at the highest decision level.
+        hypercube_predicates.sort_unstable_by_key(|&p| {
+            Reverse(
+                context
+                    .domains()
+                    .get_checkpoint_for_predicate(p)
+                    .unwrap_or(usize::MAX),
+            )
+        });
 
         let watched_predicates = if hypercube_predicates.is_empty() {
             let true_predicate = Predicate::trivially_true();
