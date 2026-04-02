@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::basic_types::PredicateId;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
@@ -251,6 +253,11 @@ impl PropagationContext<'_> {
             predicate,
             Some((slot.reason_ref(), inference_code.clone())),
             self.notification_engine,
+        );
+
+        trace!(
+            "propagated {predicate} @ {dl} with result {modification_result:?}",
+            dl = self.assignments.get_checkpoint(),
         );
 
         match modification_result {
