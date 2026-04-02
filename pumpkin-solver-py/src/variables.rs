@@ -44,8 +44,22 @@ pub struct BoolExpression(pub Literal);
 
 #[pymethods]
 impl BoolExpression {
+    pub fn scaled(&self, scale: i32) -> IntExpression {
+        let int_expr: IntExpression = (*self).into();
+        int_expr.scaled(scale)
+    }
+
+    pub fn offset(&self, offset: i32) -> IntExpression {
+        let int_expr: IntExpression = (*self).into();
+        int_expr.offset(offset)
+    }
+
     pub fn negate(&self) -> BoolExpression {
         BoolExpression(!self.0)
+    }
+
+    pub fn as_expression(&self) -> IntExpression {
+        (*self).into()
     }
 }
 

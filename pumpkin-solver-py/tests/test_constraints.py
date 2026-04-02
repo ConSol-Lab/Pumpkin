@@ -67,7 +67,7 @@ def create_linear_model(request):
     model = pumpkin_solver.Model()
 
     if bool:
-        args = [model.new_boolean_variable(name=f"x[{i}]") for i in range(3)]
+        args = [model.new_boolean_variable(name=f"x[{i}]").as_expression() for i in range(3)]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
     if scaled:  # do scaling (0, -2, 4,...)
@@ -99,7 +99,7 @@ def create_operator_model(request):
     model = pumpkin_solver.Model()
 
     if bool:
-        args = [model.new_boolean_variable(name=f"x[{i}]") for i in range(3)]
+        args = [model.new_boolean_variable(name=f"x[{i}]").as_expression() for i in range(3)]
     else:
         args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
     if scaled:  # do scaling (0, -2, 4,...)
@@ -140,7 +140,7 @@ def create_global_model(request):
 
     if name == "alldiff":
         if bool:
-            args = [model.new_boolean_variable(name=f"x[{i}]") for i in range(3)]
+            args = [model.new_boolean_variable(name=f"x[{i}]").as_expression() for i in range(3)]
         else:
             args = [model.new_integer_variable(-3, 5, name=f"x[{i}]") for i in range(3)]
         if scaled or bool:  # do scaling (0, -2, 4,...)
