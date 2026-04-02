@@ -55,10 +55,12 @@ impl PredicateHeap {
             .trail_position(predicate)
             .expect("predicate must be true in given state");
 
+        let is_implied = state.trail_entry(trail_position).predicate != predicate;
+
         self.heap.push(PredicateToExplain {
             predicate,
             trail_position,
-            is_implied: state.trail_entry(trail_position).predicate == predicate,
+            is_implied,
         });
 
         if cfg!(feature = "hl-checks") {
