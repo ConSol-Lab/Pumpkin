@@ -160,24 +160,13 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) -> PredicateId {
-        let predicate_id = self.get_id(predicate);
-        self.watch_predicate_id(predicate_id, propagator_id, trailed_values, assignments);
-
-        predicate_id
-    }
-
-    pub(crate) fn watch_predicate_id(
-        &mut self,
-        predicate_id: PredicateId,
-        propagator_id: PropagatorId,
-        trailed_values: &mut TrailedValues,
-        assignments: &Assignments,
-    ) {
-        self.watch_list_predicate_ids
-            .watch_predicate_id(predicate_id, propagator_id);
-
-        self.predicate_notifier
-            .track_predicate(predicate_id, trailed_values, assignments);
+        self.watch_list_predicate_ids.watch_predicate(
+            predicate,
+            propagator_id,
+            &mut self.predicate_notifier,
+            assignments,
+            trailed_values,
+        )
     }
 
     pub(crate) fn unwatch_predicate(
@@ -185,19 +174,8 @@ impl NotificationEngine {
         predicate_id: PredicateId,
         propagator_to_unwatch: PropagatorId,
     ) {
-        if let Some(watch_list) = self
-            .watch_list_predicate_ids
-            .watchers_predicate_id_mut(predicate_id)
-        {
-            let index = watch_list
-                .iter()
-                .position(|&watched_propagator| watched_propagator == propagator_to_unwatch)
-                .expect("cannot unwatch a (predicate, propagator) pair if it was not watched");
-
-            let _ = watch_list.swap_remove(index);
-        }
-
-        // TODO: Can we remove the predicate from being tracked if it does not have watchers?
+        self.watch_list_predicate_ids
+            .unwatch_predicate(predicate_id, propagator_to_unwatch)
     }
 
     pub(crate) fn watch_literal(
@@ -208,57 +186,14 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        self.watch_list_predicate_ids
-            .insert_literal_watcher(literal, propagator_var, events);
-
-        for event in events {
-            match event {
-                DomainEvent::Assign => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::LowerBound => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::UpperBound => {
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::Removal => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-            };
-        }
+        self.watch_list_predicate_ids.watch_literal(
+            literal,
+            propagator_var,
+            events,
+            &mut self.predicate_notifier,
+            assignments,
+            trailed_values,
+        );
     }
 
     pub(crate) fn watch_literal_backtrack(
@@ -269,57 +204,14 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        self.watch_list_predicate_ids
-            .insert_literal_watcher_backtrack(literal, propagator_var, events);
-
-        for event in events {
-            match event {
-                DomainEvent::Assign => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::LowerBound => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::UpperBound => {
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-                DomainEvent::Removal => {
-                    let _ = self.watch_predicate(
-                        literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                    let _ = self.watch_predicate(
-                        !literal.inner,
-                        propagator_var.propagator,
-                        trailed_values,
-                        assignments,
-                    );
-                }
-            };
-        }
+        self.watch_list_predicate_ids.watch_literal_backtrack(
+            literal,
+            propagator_var,
+            events,
+            &mut self.predicate_notifier,
+            assignments,
+            trailed_values,
+        );
     }
 
     pub(crate) fn watch_all_backtrack(
@@ -512,15 +404,17 @@ impl NotificationEngine {
             .synchronise(new_checkpoint)
             .collect::<Vec<_>>()
         {
-            if let Some((var_id, events)) = self
+            if let Some(watcher) = self
                 .watch_list_predicate_ids
-                .watchers_literal_propagator(literal, propagator_id)
+                .backtrack_watcher_for_literal_and_propagator(literal, propagator_id)
+                && let Some(events) = watcher.events
+                && let Some(local_id) = watcher.local_id
             {
                 let propagator = &mut propagators[propagator_id];
                 for event in events.iter() {
                     let mut context = NotificationContext::new(trailed_values, assignments);
 
-                    propagator.notify_backtrack(context.domains(), *var_id, event.into())
+                    propagator.notify_backtrack(context.domains(), local_id, event.into())
                 }
             }
         }
@@ -544,45 +438,48 @@ impl NotificationEngine {
                 .watch_list_predicate_ids
                 .watchers_predicate_id(predicate_id)
             {
-                for propagator_id in watchers {
+                for predicate_watcher in watchers {
                     let predicate = self.predicate_notifier.get_predicate(predicate_id);
                     let literal = Literal::new(predicate);
-                    if let Some((var_id, events)) = self
-                        .watch_list_predicate_ids
-                        .watchers_literal_propagator(literal, *propagator_id)
+                    if let Some(events) = predicate_watcher.events
+                        && let Some(local_id) = predicate_watcher.local_id
                     {
                         if events.is_empty()
                             || self
                                 .backtrack_events_literals
-                                .contains(&(literal, *propagator_id))
+                                .contains(&(literal, predicate_watcher.propagator_id))
                         {
                             continue;
                         }
                         self.backtrack_events_literals
-                            .push((literal, *propagator_id));
+                            .push((literal, predicate_watcher.propagator_id));
 
-                        let propagator = &mut propagators[*propagator_id];
+                        let propagator = &mut propagators[predicate_watcher.propagator_id];
                         for event in events.iter() {
                             let mut context = NotificationContext::new(trailed_values, assignments);
 
                             let enqueue_decision =
-                                propagator.notify(context.reborrow(), *var_id, event.into());
+                                propagator.notify(context.reborrow(), local_id, event.into());
 
                             if enqueue_decision == EnqueueDecision::Enqueue {
-                                propagator_queue
-                                    .enqueue_propagator(*propagator_id, propagator.priority());
+                                propagator_queue.enqueue_propagator(
+                                    predicate_watcher.propagator_id,
+                                    propagator.priority(),
+                                );
                             }
                         }
                     } else {
                         let mut context = NotificationContext::new(trailed_values, assignments);
 
-                        let propagator = &mut propagators[*propagator_id];
+                        let propagator = &mut propagators[predicate_watcher.propagator_id];
                         let enqueue_decision = propagator
                             .notify_predicate_id_satisfied(context.reborrow(), predicate_id);
 
                         if enqueue_decision == EnqueueDecision::Enqueue {
-                            propagator_queue
-                                .enqueue_propagator(*propagator_id, propagator.priority());
+                            propagator_queue.enqueue_propagator(
+                                predicate_watcher.propagator_id,
+                                propagator.priority(),
+                            );
                         }
                     }
                 }
