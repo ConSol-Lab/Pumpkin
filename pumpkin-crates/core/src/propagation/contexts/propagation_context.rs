@@ -1,5 +1,4 @@
 use crate::basic_types::PredicateId;
-use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::EmptyDomainConflict;

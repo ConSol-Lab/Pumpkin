@@ -3,7 +3,6 @@ use std::num::NonZero;
 use itertools::Itertools;
 use log::debug;
 use log::trace;
-use log::warn;
 
 use crate::basic_types::StoredConflictInfo;
 use crate::conflict_resolving::ConflictAnalysisContext;
@@ -11,7 +10,7 @@ use crate::conflict_resolving::ConflictResolver;
 #[cfg(feature = "hl-checks")]
 use crate::containers::HashSet;
 use crate::create_statistics_struct;
-use crate::engine::reason::ReasonRef;
+use crate::hypercube_linear::BoundComparator;
 use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
@@ -99,7 +98,7 @@ impl HypercubeLinearResolver {
 
         debug!(
             "Learned {} -> {} <= {}",
-            learned_constraint.hypercube.iter_predicates().format("& "),
+            learned_constraint.hypercube.iter_predicates().format(" & "),
             learned_constraint
                 .linear
                 .terms()
@@ -126,6 +125,9 @@ impl HypercubeLinearResolver {
         state: &mut State,
         conflict: Conflict,
     ) -> LearnedHypercubeLinear {
+        assert!(self.hypercube_predicates_on_conflict_dl.is_empty());
+        assert!(self.predicates_to_explain.is_empty());
+
         self.compute_conflicting_hypercube_linear(state, conflict);
 
         let mut last_tp = usize::MAX;
@@ -178,55 +180,86 @@ impl HypercubeLinearResolver {
                 last_tp = tp;
             }
 
-            let Some(explanation) = self.explain(state, pivot) else {
-                trace!("  implied predicate, skipping");
-                continue;
-            };
+            let explanation = self.explain(state, pivot);
 
-            trace!(
-                "explanation = {} -> {} <= {}",
-                explanation.hypercube.iter_predicates().format(" & "),
-                explanation
-                    .linear
-                    .terms()
-                    .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-                explanation.linear.bound(),
-            );
+            match &explanation {
+                HypercubeLinearExplanation::Proper(hypercube_linear) => trace!(
+                    "explanation = {} -> {} <= {}",
+                    hypercube_linear.hypercube.iter_predicates().format(" & "),
+                    hypercube_linear
+                        .linear
+                        .terms()
+                        .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
+                    hypercube_linear.linear.bound(),
+                ),
+                HypercubeLinearExplanation::Conjunction(predicates) => {
+                    trace!("explanation = {} -> false", predicates.iter().format(" & "))
+                }
+            }
 
             self.resolve(state, pivot, explanation);
-
-            trace!(
-                "resolvent: {} -> {} <= {}",
-                self.working_hypercube
-                    .iter_predicates()
-                    .chain(self.predicates_to_explain.iter())
-                    .format(" & "),
-                self.conflicting_linear
-                    .terms()
-                    .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-                self.conflicting_linear.bound(),
-            );
+            self.simplify_conflict();
         }
     }
 
-    fn resolve(&mut self, state: &mut State, pivot: Predicate, explanation: HypercubeLinear) {
-        match self.fourier_resolve(state, pivot, &explanation) {
-            Ok(()) => {
-                self.statistics.num_successful_fourier_resolutions += 1;
-            }
-            Err(FourierError::NoVariableElimination) => {}
-            Err(FourierError::ResultOfEliminationTriviallySatisfiable) => {
-                panic!("should this happen?")
-            }
-            Err(FourierError::IntegerOverflow) => {
-                self.statistics.num_integer_overflow_errors += 1;
+    /// Simplify the conflicting hypercube linear given any equalities in the conflicting hypercube.
+    fn simplify_conflict(&mut self) {
+        let equality_predicates = self
+            .working_hypercube
+            .iter_predicates()
+            .chain(self.hypercube_predicates_on_conflict_dl.iter())
+            .filter_map(|predicate| {
+                if predicate.is_equality_predicate() {
+                    Some((predicate.get_domain(), predicate.get_right_hand_side()))
+                } else {
+                    None
+                }
+            });
+        for (domain, value) in equality_predicates {
+            let Some(term) = self.conflicting_linear.term_for_domain(domain) else {
+                continue;
+            };
+
+            let comparator = match term.scale.is_positive() {
+                true => BoundComparator::LowerBound,
+                false => BoundComparator::UpperBound,
+            };
+
+            self.conflicting_linear = std::mem::take(&mut self.conflicting_linear)
+                .weaken_to_zero(BoundPredicate {
+                    domain,
+                    comparator,
+                    value,
+                })
+                .expect("does not weaken to trivially satisfiable");
+        }
+    }
+
+    fn resolve(
+        &mut self,
+        state: &mut State,
+        pivot: Predicate,
+        explanation: HypercubeLinearExplanation,
+    ) {
+        if let HypercubeLinearExplanation::Proper(hl) = &explanation {
+            match self.fourier_resolve(state, pivot, hl) {
+                Ok(()) => {
+                    self.statistics.num_successful_fourier_resolutions += 1;
+                }
+                Err(FourierError::NoVariableElimination) => {}
+                Err(FourierError::ResultOfEliminationTriviallySatisfiable) => {
+                    panic!("should this happen?")
+                }
+                Err(FourierError::IntegerOverflow) => {
+                    self.statistics.num_integer_overflow_errors += 1;
+                }
             }
         }
 
         self.propositional_resolve(state, pivot, explanation);
     }
 
-    fn explain(&mut self, state: &mut State, pivot: Predicate) -> Option<HypercubeLinear> {
+    fn explain(&mut self, state: &mut State, pivot: Predicate) -> HypercubeLinearExplanation {
         assert!(self.reason_buffer.is_empty());
 
         // If possible, explain using hypercube linear.
@@ -252,7 +285,12 @@ impl HypercubeLinearResolver {
                     )
                 {
                     for predicate in hypercube.iter_predicates() {
-                        self.add_hypercube_predicate(state, predicate);
+                        // The predicate may be false if it was propagated by the
+                        // linear being a conflict. In that case, we do not need to
+                        // explain the predicate.
+                        if !predicate != pivot {
+                            self.add_hypercube_predicate(state, predicate);
+                        }
                     }
 
                     for term in linear.terms() {
@@ -261,7 +299,10 @@ impl HypercubeLinearResolver {
                             .push(predicate![term >= term_bound], state);
                     }
 
-                    return Some(HypercubeLinear { hypercube, linear });
+                    return HypercubeLinearExplanation::Proper(HypercubeLinear {
+                        hypercube,
+                        linear,
+                    });
                 }
             }
         }
@@ -289,22 +330,19 @@ impl HypercubeLinearResolver {
             }
         }
         self.reason_buffer = reason_buffer;
+        self.reason_buffer.push(!pivot);
 
         if maybe_inference_code.is_some() {
-            Some(HypercubeLinear {
-                hypercube: Hypercube::new(self.reason_buffer.drain(..).chain([!pivot]))
+            HypercubeLinearExplanation::Proper(HypercubeLinear {
+                hypercube: Hypercube::new(self.reason_buffer.drain(..))
                     .expect("reason contains inconsistent predicates"),
                 linear: LinearInequality::trivially_false(),
             })
         } else {
             // In this case the explanation explains the semantics of the atomic
-            // constraint. That results in an inconsistent hypercube, and we can just
-            // skip any resolution.
-            //
-            // We do need to clear the reason buffer for later use though.
-            self.reason_buffer.clear();
-
-            None
+            // constraint. That results in an inconsistent hypercube, but we need to
+            // perform the resolution anyways.
+            HypercubeLinearExplanation::Conjunction(self.reason_buffer.drain(..).collect())
         }
     }
 
@@ -391,6 +429,7 @@ impl HypercubeLinearResolver {
             ),
             &mut state.propagators,
             &mut clausal_conflict,
+            trigger_predicate,
         );
 
         trace!("conflicting predicate = {trigger_predicate:?}");
@@ -437,6 +476,8 @@ impl HypercubeLinearResolver {
         let hypercube = std::mem::take(&mut self.working_hypercube)
             .with_predicates(self.predicates_to_explain.drain())
             .expect("can never encounter inconsistent hypercube");
+
+        let _ = self.hypercube_predicates_on_conflict_dl.drain();
 
         LearnedHypercubeLinear {
             hypercube,
@@ -591,8 +632,8 @@ impl HypercubeLinearResolver {
             )
             .ok_or(FourierError::IntegerOverflow)?;
 
-        // Normalize the linear component of the hypercube linear to hopefully avoid overflows in the
-        // future.
+        // Normalize the linear component of the hypercube linear to hopefully avoid overflows in
+        // the future.
         let normalize_by = linear_terms
             .iter()
             .map(|(weight, _)| *weight)
@@ -620,7 +661,7 @@ impl HypercubeLinearResolver {
         &mut self,
         state: &State,
         pivot: Predicate,
-        explanation: HypercubeLinear,
+        mut explanation: HypercubeLinearExplanation,
     ) {
         trace!("applying propositional resolution on {pivot}");
 
@@ -637,10 +678,12 @@ impl HypercubeLinearResolver {
                 );
 
             // Then, we have to do the same on the explanation.
-            explanation.linear.weaken_to_zero(bound_predicate);
+            explanation = std::mem::take(&mut explanation)
+                .weaken_to_zero(bound_predicate)
+                .expect("cannot weaken to trivially satisfiable");
         }
 
-        for predicate in explanation.hypercube.iter_predicates() {
+        for predicate in explanation.iter_hypercube() {
             let truth_value = state
                 .truth_value(predicate)
                 .expect("all predicates in explanation hypercube are assigned");
@@ -712,7 +755,7 @@ impl HypercubeLinearResolver {
             .expect("no inconsistent hypercube");
 
         // Get the predicates that are not assigned to true.
-        let unsatisfied_predicates_in_hypercubes = final_hypercube
+        let unsatisfied_predicates_in_hypercube = final_hypercube
             .iter_predicates()
             .filter(|&predicate| {
                 state
@@ -722,7 +765,7 @@ impl HypercubeLinearResolver {
             })
             .collect::<Vec<_>>();
 
-        if unsatisfied_predicates_in_hypercubes.len() > 1 {
+        if unsatisfied_predicates_in_hypercube.len() > 1 {
             // If more than one predicate remains unassigned, we cannot do anything.
             return false;
         }
@@ -730,8 +773,8 @@ impl HypercubeLinearResolver {
         let slack =
             compute_linear_slack_at_trail_position(state, &self.conflicting_linear, trail_position);
 
-        if unsatisfied_predicates_in_hypercubes.len() == 1 {
-            let unassigned_predicate = unsatisfied_predicates_in_hypercubes[0];
+        if unsatisfied_predicates_in_hypercube.len() == 1 {
+            let unassigned_predicate = unsatisfied_predicates_in_hypercube[0];
 
             if slack < 0 {
                 return true;
@@ -750,7 +793,7 @@ impl HypercubeLinearResolver {
                     < term.upper_bound_at_trail_position(&state.assignments, trail_position);
             }
         } else {
-            assert!(unsatisfied_predicates_in_hypercubes.is_empty());
+            assert!(unsatisfied_predicates_in_hypercube.is_empty());
             return self.linear_propagates_at(state, trail_position);
         }
 
@@ -845,15 +888,7 @@ fn compute_linear_slack_at_trail_position(
     let lower_bound_terms = linear
         .terms()
         .map(|term| {
-            let bound =
-                i64::from(term.lower_bound_at_trail_position(&state.assignments, trail_position));
-            println!(
-                "{}",
-                predicate![
-                    term >= term.lower_bound_at_trail_position(&state.assignments, trail_position)
-                ]
-            );
-            bound
+            i64::from(term.lower_bound_at_trail_position(&state.assignments, trail_position))
         })
         .sum::<i64>();
 
@@ -864,6 +899,56 @@ fn compute_linear_slack_at_trail_position(
 struct HypercubeLinear {
     hypercube: Hypercube,
     linear: LinearInequality,
+}
+
+#[derive(Clone)]
+enum HypercubeLinearExplanation {
+    Proper(HypercubeLinear),
+    Conjunction(Vec<Predicate>),
+}
+
+impl Default for HypercubeLinearExplanation {
+    fn default() -> Self {
+        HypercubeLinearExplanation::Conjunction(vec![])
+    }
+}
+
+impl HypercubeLinearExplanation {
+    fn iter_hypercube(&self) -> impl Iterator<Item = Predicate> {
+        match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => {
+                itertools::Either::Left(hypercube_linear.hypercube.iter_predicates())
+            }
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                itertools::Either::Right(predicates.iter().copied())
+            }
+        }
+    }
+
+    fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
+        match self {
+            HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
+                hypercube_linear.linear =
+                    std::mem::take(&mut hypercube_linear.linear).weaken_to_zero(bound)?;
+
+                hypercube_linear.hypercube = std::mem::take(&mut hypercube_linear.hypercube)
+                    .with_predicate(bound.into())
+                    .expect("should never construct inconsistent hypercube");
+
+                Some(HypercubeLinearExplanation::Proper(hypercube_linear))
+            }
+
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                // Assert that the bound exists in predicates already.
+                if cfg!(feature = "hl-checks") {
+                    let predicate: Predicate = bound.into();
+                    assert!(predicates.contains(&!predicate));
+                }
+
+                Some(HypercubeLinearExplanation::Conjunction(predicates))
+            }
+        }
+    }
 }
 
 enum FourierError {

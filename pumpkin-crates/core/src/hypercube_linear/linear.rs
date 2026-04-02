@@ -1,6 +1,7 @@
 use std::num::NonZero;
 
 use crate::containers::HashMap;
+use crate::hypercube_linear::BoundComparator;
 use crate::hypercube_linear::BoundPredicate;
 use crate::math::num_ext::NumExt;
 use crate::variables::AffineView;
@@ -10,7 +11,7 @@ use crate::variables::TransformableVariable;
 /// The linear inequality part of a hypercube linear constraint.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LinearInequality {
-    terms: Box<[AffineView<DomainId>]>,
+    terms: Vec<AffineView<DomainId>>,
     bound: i32,
 }
 
@@ -49,7 +50,7 @@ impl LinearInequality {
             .into_iter()
             .filter(|&(_, weight)| weight != 0)
             .map(|(domain, weight)| domain.scaled(weight))
-            .collect::<Box<[_]>>();
+            .collect::<Vec<_>>();
 
         if terms.is_empty() && bound >= 0 {
             return None;
@@ -84,7 +85,7 @@ impl LinearInequality {
     pub fn divide(&mut self, divisor: i32) {
         for term in self.terms.iter_mut() {
             assert_eq!(term.scale % divisor, 0);
-            term.scale = term.scale / divisor;
+            term.scale /= term.scale;
         }
 
         self.bound = <i32 as NumExt>::div_floor(self.bound, divisor);
@@ -93,20 +94,53 @@ impl LinearInequality {
     /// Weakens the linear inequality on the given bound.
     ///
     /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken(mut self, bound: BoundPredicate, count: u32) -> Option<Self> {
-        todo!()
+    pub fn weaken(mut self, bound: BoundPredicate, count: i32) -> Option<Self> {
+        let Some(term_idx) = self
+            .terms
+            .iter()
+            .position(|term| term.inner == bound.domain)
+        else {
+            return Some(self);
+        };
+
+        let term = &mut self.terms[term_idx];
+        let contributes_to_slack = (term.scale.is_positive()
+            && bound.comparator == BoundComparator::LowerBound)
+            || (term.scale.is_negative() && bound.comparator == BoundComparator::UpperBound);
+
+        if !contributes_to_slack {
+            return Some(self);
+        }
+
+        let signed_diff = match bound.comparator {
+            BoundComparator::LowerBound => -count,
+            BoundComparator::UpperBound => count,
+        };
+
+        term.scale += signed_diff;
+        self.bound += signed_diff * bound.value;
+
+        if term.scale == 0 {
+            let _ = self.terms.remove(term_idx);
+        }
+
+        if self.terms.is_empty() && self.bound >= 0 {
+            None
+        } else {
+            Some(self)
+        }
     }
 
     /// Weakens the linear inequality on the given bound and ensures the weight of the domain
     /// of the bound is 0.
     ///
     /// Does nothing if the bound does not contribute to the slack of the linear.
-    pub fn weaken_to_zero(mut self, bound: BoundPredicate) -> Option<Self> {
+    pub fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
         let Some(term) = self.term_for_domain(bound.domain) else {
             return Some(self);
         };
 
-        self.weaken(bound, term.scale.unsigned_abs())
+        self.weaken(bound, term.scale.abs())
     }
 }
 

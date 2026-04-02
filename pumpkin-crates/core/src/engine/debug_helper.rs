@@ -178,6 +178,7 @@ impl DebugHelper {
                 ),
                 propagators,
                 &mut reason,
+                trail_entry.predicate,
             );
 
             result &= Self::debug_propagator_reason(

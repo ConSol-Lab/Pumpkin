@@ -63,6 +63,19 @@ impl<'a> ExplanationContext<'a> {
         }
     }
 
+    pub fn reborrow(&mut self) -> ExplanationContext<'_> {
+        ExplanationContext {
+            assignments: self.assignments,
+            notification_engine: self.notification_engine,
+            current_nogood: CurrentNogood {
+                heap: &self.current_nogood.heap,
+                visited: &self.current_nogood.visited,
+                ids: &self.current_nogood.ids,
+            },
+            trail_position: self.trail_position,
+        }
+    }
+
     pub fn get_predicate(&mut self, predicate_id: PredicateId) -> Predicate {
         self.notification_engine.get_predicate(predicate_id)
     }

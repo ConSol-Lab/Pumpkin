@@ -164,6 +164,8 @@ pub struct SatisfactionSolverOptions {
     pub learning_options: LearningOptions,
     /// The number of MBs which are preallocated by the nogood propagator.
     pub memory_preallocated: usize,
+    /// The type of conflict resolver being used.
+    pub resolver_type: ConflictResolverType,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -175,6 +177,7 @@ impl Default for SatisfactionSolverOptions {
             proof_log: ProofLog::default(),
             learning_options: LearningOptions::default(),
             memory_preallocated: 50,
+            resolver_type: Default::default(),
         }
     }
 }
@@ -206,6 +209,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        if self.internal_parameters.resolver_type != ConflictResolverType::UIP {
+            return;
+        }
+
         struct DummyBrancher;
 
         impl Brancher for DummyBrancher {

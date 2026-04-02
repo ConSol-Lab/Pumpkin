@@ -569,6 +569,7 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
         proof_log,
         learning_options,
+        resolver_type: args.conflict_resolver,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

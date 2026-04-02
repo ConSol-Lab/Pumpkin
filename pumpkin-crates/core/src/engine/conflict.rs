@@ -89,6 +89,7 @@ impl EmptyDomainConflict {
                 ),
                 &mut state.propagators,
                 reason_buffer,
+                self.trigger_predicate,
             );
         }
     }

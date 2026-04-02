@@ -351,6 +351,7 @@ impl ConflictAnalysisContext<'_> {
             ),
             &mut self.state.propagators,
             &mut empty_domain_reason,
+            conflict.trigger_predicate,
         );
 
         // We also need to log this last propagation to the proof log as an inference.

@@ -635,18 +635,19 @@ impl State {
                         &mut self.propagators,
                         &mut self.propagator_queue,
                     );
-                // pumpkin_assert_extreme!(
-                //     DebugHelper::debug_check_propagations(
-                //         num_trail_entries_before,
-                //         propagator_id,
-                //         &self.trailed_values,
-                //         &self.assignments,
-                //         &mut self.reason_store,
-                //         &mut self.propagators,
-                //         &self.notification_engine
-                //     ),
-                //     "Checking the propagations performed by the propagator led to
-                // inconsistencies!" );
+                pumpkin_assert_extreme!(
+                    DebugHelper::debug_check_propagations(
+                        num_trail_entries_before,
+                        propagator_id,
+                        &self.trailed_values,
+                        &self.assignments,
+                        &mut self.reason_store,
+                        &mut self.propagators,
+                        &self.notification_engine
+                    ),
+                    "Checking the propagations performed by the propagator led to
+                inconsistencies!"
+                );
             }
             Err(conflict) => {
                 #[cfg(feature = "check-propagations")]
@@ -715,6 +716,7 @@ impl State {
                 ),
                 &mut self.propagators,
                 &mut reason_buffer,
+                entry.predicate,
             );
             assert!(reason_exists, "all propagations have reasons");
 
@@ -845,6 +847,7 @@ impl State {
             ),
             &mut self.propagators,
             reason_buffer,
+            entry.predicate,
         );
     }
     /// Get the reason for a predicate being true and store it in `reason_buffer`.
@@ -908,6 +911,7 @@ impl State {
                 explanation_context,
                 &mut self.propagators,
                 reason_buffer,
+                trail_entry.predicate,
             );
 
             assert!(reason_exists, "reason reference should not be stale");

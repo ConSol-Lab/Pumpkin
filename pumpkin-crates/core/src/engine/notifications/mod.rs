@@ -8,7 +8,6 @@ pub(crate) use domain_event_notification::Watchers;
 pub use domain_event_notification::domain_events::DomainEvents;
 pub use domain_event_notification::opaque_domain_event::OpaqueDomainEvent;
 use enumset::EnumSet;
-use log::trace;
 pub(crate) use predicate_notification::PredicateNotifier;
 
 use crate::basic_types::PredicateId;

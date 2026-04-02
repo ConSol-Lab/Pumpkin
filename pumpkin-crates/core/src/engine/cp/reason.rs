@@ -4,9 +4,12 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 #[cfg(doc)]
 use crate::containers::KeyedVec;
+use crate::predicate;
 use crate::predicates::Predicate;
 use crate::propagation::ExplanationContext;
+use crate::propagation::Propagator;
 use crate::propagation::PropagatorId;
+use crate::propagation::ReadDomains;
 use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_simple;
 
@@ -41,14 +44,19 @@ impl ReasonStore {
         context: ExplanationContext<'_>,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
     ) -> bool {
         let Some(reason) = self.trail.get(reference.0 as usize) else {
             return false;
         };
 
-        reason
-            .1
-            .compute(context, reason.0, propagators, destination_buffer);
+        reason.1.compute(
+            context,
+            reason.0,
+            propagators,
+            destination_buffer,
+            predicate_to_explain,
+        );
 
         true
     }
@@ -124,18 +132,50 @@ impl StoredReason {
         propagator_id: PropagatorId,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
     ) {
         match self {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            StoredReason::DynamicLazy(code) => destination_buffer.extend(
-                propagators[propagator_id]
-                    .lazy_explanation(*code, context)
-                    .iter()
-                    .copied(),
+            StoredReason::DynamicLazy(code) => self.compute_lazy_explanation(
+                context,
+                *code,
+                &mut propagators[propagator_id],
+                destination_buffer,
+                predicate_to_explain,
             ),
             StoredReason::Eager(result) => destination_buffer.extend(result.iter().copied()),
+        }
+    }
+
+    fn compute_lazy_explanation(
+        &self,
+        mut context: ExplanationContext<'_>,
+        code: u64,
+        propagator: &mut dyn Propagator,
+        destination_buffer: &mut impl Extend<Predicate>,
+        predicate_to_explain: Predicate,
+    ) {
+        if let Some((hypercube, linear)) =
+            propagator.explain_as_hypercube_linear(code, context.reborrow())
+        {
+            let clausal_explanation = hypercube
+                .iter_predicates()
+                .filter(|&p| p != !predicate_to_explain)
+                .chain(linear.terms().filter_map(|term| {
+                    if term.inner == predicate_to_explain.get_domain() {
+                        None
+                    } else {
+                        let lb = context
+                            .lower_bound_at_trail_position(&term, context.get_trail_position());
+                        Some(predicate![term >= lb])
+                    }
+                }));
+
+            destination_buffer.extend(clausal_explanation);
+        } else {
+            destination_buffer.extend(propagator.lazy_explanation(code, context).iter().copied());
         }
     }
 }

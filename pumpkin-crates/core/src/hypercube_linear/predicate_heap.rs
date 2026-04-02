@@ -13,6 +13,11 @@ pub(crate) struct PredicateHeap {
 }
 
 impl PredicateHeap {
+    /// See [`BinaryHeap::is_empty`].
+    pub(crate) fn is_empty(&mut self) -> bool {
+        self.heap.is_empty()
+    }
+
     /// See [`BinaryHeap::pop`].
     pub(crate) fn pop(&mut self) -> Option<Predicate> {
         self.heap.pop().map(|to_explain| to_explain.predicate)

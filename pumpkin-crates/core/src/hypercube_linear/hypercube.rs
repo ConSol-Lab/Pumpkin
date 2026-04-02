@@ -93,14 +93,14 @@ impl Hypercube {
                     };
 
                 itertools::Either::Right(
-                    [lower_bound_predicate, upper_bound_predicate]
+                    lower_bound_predicate
                         .into_iter()
-                        .flatten()
                         .chain(
                             self.state
                                 .holes(domain_id)
                                 .map(|value| predicate![domain_id != value]),
-                        ),
+                        )
+                        .chain(upper_bound_predicate),
                 )
             }
         })
