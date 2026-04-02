@@ -71,7 +71,7 @@ predicate int_lin_eq_reif(array [int] of int: as,
 predicate int_lin_eq(array [int] of int: as,
                           array [int] of var int: bs,
                           int: c) =
-    int_lin_le(as, bs, c, r) /\ int_lin_le([-a | a in as], bs, -c);
+    int_lin_le(as, bs, c) /\ int_lin_le([-a | a in as], bs, -c);
 
 
 % Redefinition taken from chuffed:
