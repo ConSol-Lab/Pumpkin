@@ -197,7 +197,12 @@ impl IterativeMinimiser {
                     // [x >= v], [x >= v'] => [x >= v'] if v' > v
                     let to_remove = self.domains[predicate.get_domain()]
                         .iter()
-                        .filter(|element| element.is_lower_bound_predicate())
+                        .filter(|element| {
+                            element.is_lower_bound_predicate()
+                                || (element.is_not_equal_predicate()
+                                    && element.get_right_hand_side()
+                                        < predicate.get_right_hand_side())
+                        })
                         .copied()
                         .collect::<Vec<_>>();
 
@@ -224,7 +229,12 @@ impl IterativeMinimiser {
                     // [x <= v], [x <= v'] => [x <= v'] if v' < v
                     let to_remove = self.domains[predicate.get_domain()]
                         .iter()
-                        .filter(|element| element.is_upper_bound_predicate())
+                        .filter(|element| {
+                            element.is_upper_bound_predicate()
+                                || (element.is_not_equal_predicate()
+                                    && element.get_right_hand_side()
+                                        > predicate.get_right_hand_side())
+                        })
                         .copied()
                         .collect::<Vec<_>>();
                     if !to_remove.is_empty() {
