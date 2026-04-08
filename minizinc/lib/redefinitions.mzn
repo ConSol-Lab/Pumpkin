@@ -62,6 +62,12 @@ predicate int_lin_ne_reif(array [int] of int: as,
                           int: c,
                           var bool: r) = int_lin_eq_reif(as, bs, c, not r);
 
+predicate int_lin_le_reif(array [int] of int: as,
+                          array [int] of var int: bs,
+                          int: c,
+                          var bool: r) =
+    int_lin_le_imp(as, bs, c, r) /\ int_lin_gt_imp(as, bs, c, not r);
+
 predicate int_lin_eq_reif(array [int] of int: as,
                           array [int] of var int: bs,
                           int: c,
