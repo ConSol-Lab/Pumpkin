@@ -112,7 +112,10 @@ pub struct ConstraintSatisfactionSolver {
 
 impl Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
-        ConstraintSatisfactionSolver::new(SatisfactionSolverOptions::default())
+        ConstraintSatisfactionSolver::from_state(
+            SatisfactionSolverOptions::default(),
+            State::default(),
+        )
     }
 }
 
@@ -248,8 +251,8 @@ impl ConstraintSatisfactionSolver {
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
-        let mut state = State::default();
+    /// Create a new satisfaction solver based on the given state.
+    pub fn from_state(solver_options: SatisfactionSolverOptions, mut state: State) -> Self {
         let handle = state.add_propagator(NogoodPropagatorConstructor::new(
             (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
             solver_options.learning_options,

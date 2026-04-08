@@ -39,6 +39,7 @@ use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+use crate::state::State;
 use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
@@ -113,7 +114,12 @@ impl Default for Solver {
 impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
-        let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
+        Solver::from_state(solver_options, State::default())
+    }
+
+    /// Create a new solver based on a given state.
+    pub fn from_state(solver_options: SolverOptions, state: State) -> Self {
+        let satisfaction_solver = ConstraintSatisfactionSolver::from_state(solver_options, state);
         let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
