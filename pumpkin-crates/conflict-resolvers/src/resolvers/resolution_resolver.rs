@@ -276,7 +276,7 @@ impl ResolutionResolver {
         // Ignore root level predicates.
         if dec_level == 0 {
             // println!("{predicate:?} ROOT LEVEL");
-            self.iterative_minimiser.apply_predicate(predicate);
+            self.iterative_minimiser.apply_predicate(predicate, context);
 
             context.explain_root_assignment(predicate);
         }
@@ -403,7 +403,7 @@ impl ResolutionResolver {
                     }
                 }
 
-                self.iterative_minimiser.apply_predicate(predicate);
+                self.iterative_minimiser.apply_predicate(predicate, context);
             }
             ProcessingResult::PossiblyReplacedWithNew {
                 removed: previous,
@@ -423,7 +423,7 @@ impl ResolutionResolver {
                         self.to_process_heap.delete_key(predicate_id);
                         return ControlFlow::Break(());
                     } else {
-                        self.iterative_minimiser.apply_predicate(predicate);
+                        self.iterative_minimiser.apply_predicate(predicate, context);
                     }
                 } else {
                     if let ControlFlow::Break(_) =
@@ -433,12 +433,12 @@ impl ResolutionResolver {
                         self.to_process_heap.delete_key(predicate_id);
                         return ControlFlow::Break(());
                     } else {
-                        self.iterative_minimiser.apply_predicate(predicate);
+                        self.iterative_minimiser.apply_predicate(predicate, context);
                     }
                 }
             }
             ProcessingResult::NotRedundant => {
-                self.iterative_minimiser.apply_predicate(predicate);
+                self.iterative_minimiser.apply_predicate(predicate, context);
             }
         }
         ControlFlow::Continue(())

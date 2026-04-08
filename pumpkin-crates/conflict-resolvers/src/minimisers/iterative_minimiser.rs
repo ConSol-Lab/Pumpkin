@@ -1,4 +1,3 @@
-use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 use pumpkin_core::conflict_resolving::ConflictAnalysisContext;
 use pumpkin_core::containers::KeyedVec;
@@ -48,6 +47,7 @@ pub(crate) struct IterativeMinimiser {
     /// Keeps track of the domains induced by the current working nogood.
     state: VariableState<Predicate>,
     domains: KeyedVec<DomainId, Vec<Predicate>>,
+    root_predicates: KeyedVec<DomainId, Vec<Predicate>>,
 }
 
 /// The result of processing a predicate, indicating its redundancy.
@@ -81,7 +81,7 @@ impl IterativeMinimiser {
     /// Removes the given predicate from the nogood.
     pub(crate) fn remove_predicate(&mut self, predicate: Predicate) {
         let domain = predicate.get_domain();
-        if let Some(to_remove_position) = self.domains[domain]
+        while let Some(to_remove_position) = self.domains[domain]
             .iter()
             .position(|element| *element == predicate)
         {
@@ -90,10 +90,22 @@ impl IterativeMinimiser {
     }
 
     /// Applies the given predicate from the nogood.
-    pub(crate) fn apply_predicate(&mut self, predicate: Predicate) {
+    pub(crate) fn apply_predicate(
+        &mut self,
+        predicate: Predicate,
+        context: &ConflictAnalysisContext,
+    ) {
+        // println!("APPLYING {predicate:?}");
         let domain = predicate.get_domain();
         self.domains.accomodate(domain, Default::default());
-        self.domains[domain].push(predicate)
+        self.domains[domain].push(predicate);
+
+        if context.is_proof_logging_inferences()
+            && context.get_checkpoint_for_predicate(predicate) == Some(0)
+        {
+            self.root_predicates.accomodate(domain, Default::default());
+            self.root_predicates[domain].push(predicate)
+        }
     }
 
     /// Explains the lower-bound in the proof log.
@@ -105,17 +117,18 @@ impl IterativeMinimiser {
         if context.is_proof_logging_inferences() {
             let domain = predicate.get_domain();
 
-            if let IntExt::Int(lower_bound) = self.state.lower_bound(&domain)
-                && context.get_checkpoint_for_predicate(predicate!(domain >= lower_bound))
-                    == Some(0)
-            {
-                context.explain_root_assignment(predicate!(domain >= lower_bound));
+            if domain.index() >= self.root_predicates.len() {
+                return;
             }
 
-            for hole in self.state.holes(&domain) {
-                if context.get_checkpoint_for_predicate(predicate!(domain != hole)) == Some(0) {
-                    context.explain_root_assignment(predicate!(domain != hole));
-                }
+            for root_predicate in self.root_predicates[domain]
+                .iter()
+                .filter(|root_predicate| {
+                    root_predicate.is_lower_bound_predicate()
+                        || root_predicate.is_not_equal_predicate()
+                })
+            {
+                context.explain_root_assignment(*root_predicate);
             }
         }
     }
@@ -128,17 +141,18 @@ impl IterativeMinimiser {
         if context.is_proof_logging_inferences() {
             let domain = predicate.get_domain();
 
-            if let IntExt::Int(upper_bound) = self.state.upper_bound(&domain)
-                && context.get_checkpoint_for_predicate(predicate!(domain <= upper_bound))
-                    == Some(0)
-            {
-                context.explain_root_assignment(predicate!(domain <= upper_bound));
+            if domain.index() >= self.root_predicates.len() {
+                return;
             }
 
-            for hole in self.state.holes(&domain) {
-                if context.get_checkpoint_for_predicate(predicate!(domain != hole)) == Some(0) {
-                    context.explain_root_assignment(predicate!(domain != hole));
-                }
+            for root_predicate in self.root_predicates[domain]
+                .iter()
+                .filter(|root_predicate| {
+                    root_predicate.is_upper_bound_predicate()
+                        || root_predicate.is_not_equal_predicate()
+                })
+            {
+                context.explain_root_assignment(*root_predicate);
             }
         }
     }
