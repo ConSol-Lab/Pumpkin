@@ -4,4 +4,6 @@ allowed-duplicate-crates = [
     "windows-sys",
     "regex-syntax",
     "regex-automata",
+    "anstream",
+    "anstyle-parse"
 ]

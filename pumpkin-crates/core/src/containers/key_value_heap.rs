@@ -62,7 +62,7 @@ where
     /// Get the keys in the heap.
     ///
     /// The order in which the keys are yielded is unspecified.
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Key> + '_ {
+    pub fn keys(&self) -> impl Iterator<Item = Key> + '_ {
         self.map_position_to_key[..self.end_position]
             .iter()
             .copied()
@@ -72,7 +72,7 @@ where
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///
     /// The time-complexity of this operation is O(1)
-    pub(crate) fn peek_max(&self) -> Option<(&Key, &Value)> {
+    pub fn peek_max(&self) -> Option<(&Key, &Value)> {
         if self.has_no_nonremoved_elements() {
             None
         } else {
@@ -120,6 +120,18 @@ where
         // So we only apply sift up in case the key is present
         if self.is_key_present(key) {
             self.sift_up(position);
+        }
+    }
+
+    pub fn set_value(&mut self, key: Key, value: Value) {
+        if key.index() < self.len() {
+            let position = self.map_key_to_position[key];
+            self.values[position] = value;
+            // Recall that increment may be applied to keys not present
+            // So we only apply sift up in case the key is present
+            if self.is_key_present(key) {
+                self.sift_up(position);
+            }
         }
     }
 
