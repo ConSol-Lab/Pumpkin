@@ -642,7 +642,7 @@ fn run() -> PumpkinResult<()> {
                 ResolutionResolver::new(
                     AnalysisMode::OneUIP,
                     !args.no_learning_clause_minimisation,
-                    !args.iterative_minimisation,
+                    args.iterative_minimisation,
                 ),
             )?,
         },
