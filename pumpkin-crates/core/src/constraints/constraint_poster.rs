@@ -29,7 +29,16 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
     pub fn post(mut self) -> Result<(), ConstraintOperationError> {
-        self.constraint.take().unwrap().post(self.solver)
+        self.constraint
+            .take()
+            .unwrap()
+            .post(&mut self.solver.satisfaction_solver.state);
+
+        self.solver
+            .satisfaction_solver
+            .state
+            .propagate_to_fixed_point()
+            .map_err(|_| ConstraintOperationError::InfeasiblePropagator)
     }
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
@@ -41,10 +50,16 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
         mut self,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.constraint
-            .take()
-            .unwrap()
-            .implied_by(self.solver, reification_literal)
+        self.constraint.take().unwrap().implied_by(
+            &mut self.solver.satisfaction_solver.state,
+            reification_literal,
+        );
+
+        self.solver
+            .satisfaction_solver
+            .state
+            .propagate_to_fixed_point()
+            .map_err(|_| ConstraintOperationError::InfeasiblePropagator)
     }
 }
 
@@ -55,10 +70,16 @@ impl<ConstraintImpl: NegatableConstraint> ConstraintPoster<'_, ConstraintImpl> {
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
     pub fn reify(mut self, reification_literal: Literal) -> Result<(), ConstraintOperationError> {
-        self.constraint
-            .take()
-            .unwrap()
-            .reify(self.solver, reification_literal)
+        self.constraint.take().unwrap().reify(
+            &mut self.solver.satisfaction_solver.state,
+            reification_literal,
+        );
+
+        self.solver
+            .satisfaction_solver
+            .state
+            .propagate_to_fixed_point()
+            .map_err(|_| ConstraintOperationError::InfeasiblePropagator)
     }
 }
 

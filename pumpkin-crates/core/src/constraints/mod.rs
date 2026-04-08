@@ -1,8 +1,7 @@
 //! Defines the main building blocks of constraints.
-use crate::ConstraintOperationError;
-use crate::Solver;
 use crate::propagation::PropagatorConstructor;
 use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
+use crate::state::State;
 use crate::variables::Literal;
 
 mod constraint_poster;
@@ -14,64 +13,38 @@ pub use constraint_poster::ConstraintPoster;
 /// For example, the constraint `a = b` over two variables `a` and `b` only allows assignments to
 /// `a` and `b` of the same value, and rejects any assignment where `a` and `b` differ.
 pub trait Constraint {
-    /// Add the [`Constraint`] to the [`Solver`].
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    ///
-    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
-    /// show up in the proof log.
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
+    /// Add the [`Constraint`] to the [`State`] by posting appropriate propagators.
+    fn post(self, state: &mut State);
 
-    /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
+    /// Add the half-reified version of the [`Constraint`] to the [`State`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    ///
-    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
-    /// show up in the proof log.
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError>;
+    fn implied_by(self, state: &mut State, reification_literal: Literal);
 }
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
     ConcretePropagator: PropagatorConstructor + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        let _ = solver.add_propagator(self)?;
-        Ok(())
+    fn post(self, state: &mut State) {
+        let _ = state.add_propagator(self);
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let _ = solver.add_propagator(ReifiedPropagatorArgs {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
+        let _ = state.add_propagator(ReifiedPropagatorArgs {
             propagator: self,
             reification_literal,
-        })?;
-        Ok(())
+        });
     }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.into_iter().try_for_each(|c| c.post(solver))
+    fn post(self, state: &mut State) {
+        self.into_iter().for_each(|c| c.post(state));
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         self.into_iter()
-            .try_for_each(|c| c.implied_by(solver, reification_literal))
+            .for_each(|c| c.implied_by(state, reification_literal));
     }
 }
 
@@ -88,23 +61,13 @@ pub trait NegatableConstraint: Constraint {
 
     /// Add the reified version of the [`Constraint`] to the [`Solver`]; i.e. post the constraint
     /// `r <-> constraint` where `r` is a reification literal.
-    ///
-    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
-    /// to a root-level conflict.
-    ///
-    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
-    /// show up in the proof log.
-    fn reify(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError>
+    fn reify(self, state: &mut State, reification_literal: Literal)
     where
         Self: Sized,
     {
         let negation = self.negation();
 
-        self.implied_by(solver, reification_literal)?;
-        negation.implied_by(solver, !reification_literal)
+        self.implied_by(state, reification_literal);
+        negation.implied_by(state, !reification_literal);
     }
 }
