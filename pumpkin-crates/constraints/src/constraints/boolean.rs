@@ -6,10 +6,9 @@ use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
-use crate::EqualityConsistency;
-
 use super::equals;
 use super::less_than_or_equals;
+use crate::EqualityConsistency;
 
 /// Creates the [`Constraint`] `∑ weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(

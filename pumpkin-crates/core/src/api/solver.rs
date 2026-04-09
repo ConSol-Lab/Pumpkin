@@ -43,9 +43,6 @@ use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::state::State;
-use crate::statistics::StatisticLogger;
-use crate::statistics::log_statistic;
-use crate::statistics::log_statistic_postfix;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.

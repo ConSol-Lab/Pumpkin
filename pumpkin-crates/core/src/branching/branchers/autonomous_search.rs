@@ -11,7 +11,6 @@ use crate::branching::variable_selection::RandomSelector;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::create_statistics_struct;
-use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
 use crate::propagation::ReadDomains;
 use crate::results::Solution;
@@ -359,18 +358,17 @@ mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
-    use crate::engine::Assignments;
-    use crate::engine::notifications::NotificationEngine;
     use crate::predicate;
     use crate::results::SolutionReference;
+    use crate::state::State;
 
     #[test]
     fn brancher_picks_bumped_values() {
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        let y = assignments.grow(-10, 0);
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(-10, 0, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        let mut brancher = AutonomousSearch::default_over_all_variables(&state);
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
@@ -380,60 +378,59 @@ mod tests {
 
     #[test]
     fn dormant_values() {
-        let mut notification_engine = NotificationEngine::default();
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        notification_engine.grow();
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        let mut brancher = AutonomousSearch::default_over_all_variables(&state);
 
         let predicate = predicate!(x >= 5);
         brancher.on_appearance_in_conflict_predicate(predicate);
         let decision = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert_eq!(decision, Some(predicate));
 
-        assignments.new_checkpoint();
+        state.new_checkpoint();
+
         // Decision Level 1
-        let _ = assignments.post_predicate(predicate!(x >= 5), None, &mut notification_engine);
+        let _ = state.post(predicate!(x >= 5)).expect("no conflict");
 
-        assignments.new_checkpoint();
+        state.new_checkpoint();
         // Decision Level 2
-        let _ = assignments.post_predicate(predicate!(x >= 7), None, &mut notification_engine);
+        let _ = state.post(predicate!(x >= 7)).expect("no conflict");
 
-        assignments.new_checkpoint();
+        state.new_checkpoint();
         // Decision Level 3
-        let _ = assignments.post_predicate(predicate!(x >= 10), None, &mut notification_engine);
+        let _ = state.post(predicate!(x >= 10)).expect("no conflict");
 
-        assignments.new_checkpoint();
+        state.new_checkpoint();
         // We end at decision level 4
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(3, &mut notification_engine);
+        let _ = state.restore_to(3);
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(0, &mut notification_engine);
+        let _ = state.restore_to(0);
         brancher.synchronise(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert_eq!(decision, Some(predicate));
@@ -442,13 +439,13 @@ mod tests {
 
     #[test]
     fn uses_fallback() {
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        let mut brancher = AutonomousSearch::default_over_all_variables(&state);
 
         let result = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom {
                 integers: vec![2],
                 usizes: vec![0],
@@ -462,19 +459,17 @@ mod tests {
 
     #[test]
     fn uses_stored_solution() {
-        let mut notification_engine = NotificationEngine::default();
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        notification_engine.grow();
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, None);
 
-        assignments.new_checkpoint();
-        let _ = assignments.post_predicate(predicate!(x == 7), None, &mut notification_engine);
+        state.new_checkpoint();
+        let _ = state.post(predicate!(x == 7));
 
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        let mut brancher = AutonomousSearch::default_over_all_variables(&state);
 
-        brancher.on_solution(SolutionReference::new(&assignments));
+        brancher.on_solution(SolutionReference::new(&state.assignments));
 
-        let _ = assignments.synchronise(0, &mut notification_engine);
+        let _ = state.restore_to(0);
 
         assert_eq!(
             predicate!(x >= 5),
@@ -496,7 +491,7 @@ mod tests {
         brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
 
         let result = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert_eq!(result, Some(predicate!(x >= 5)));

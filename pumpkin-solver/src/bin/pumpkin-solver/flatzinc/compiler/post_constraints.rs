@@ -452,7 +452,7 @@ fn compile_disjunctive_strict(
 
     assert_eq!(start_times.len(), durations.len());
 
-    let post_result = pumpkin_constraints::disjunctive_strict(
+    pumpkin_constraints::disjunctive_strict(
         start_times
             .iter()
             .zip(durations.iter())
@@ -463,7 +463,7 @@ fn compile_disjunctive_strict(
         constraint_tag,
     )
     .post(context.state);
-    Ok(post_result)
+    Ok(())
 }
 
 fn compile_cumulative(
@@ -479,7 +479,7 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    let post_result = pumpkin_constraints::cumulative_with_options(
+    pumpkin_constraints::cumulative_with_options(
         start_times.iter().copied(),
         durations.iter().copied(),
         resource_requirements.iter().copied(),
@@ -488,7 +488,7 @@ fn compile_cumulative(
         constraint_tag,
     )
     .post(context.state);
-    Ok(post_result)
+    Ok(())
 }
 
 fn compile_array_int_maximum(
@@ -501,9 +501,10 @@ fn compile_array_int_maximum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
+    let _: () = pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
+    .post(context.state);
     Ok(
-        pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
-            .post(context.state),
+        (),
     )
 }
 
@@ -517,9 +518,10 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
+    let _: () = pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
+    .post(context.state);
     Ok(
-        pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
-            .post(context.state),
+        (),
     )
 }
 
@@ -534,7 +536,7 @@ fn compile_set_in_reif(
     let set = context.resolve_set_constant(&exprs[1])?;
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
-    let success = match set {
+    match set {
         Set::Interval {
             lower_bound,
             upper_bound,
@@ -586,7 +588,7 @@ fn compile_set_in_reif(
         }
     };
 
-    Ok(success)
+    Ok(())
 }
 
 fn compile_array_var_int_element(
@@ -600,9 +602,10 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
+    let _: () = pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
+    .post(context.state);
     Ok(
-        pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
-            .post(context.state),
+        (),
     )
 }
 
@@ -873,7 +876,8 @@ fn compile_ternary_int_predicate<C: Constraint>(
     let c = context.resolve_integer_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, c, constraint_tag);
-    Ok(constraint.post(context.state))
+    constraint.post(context.state);
+    Ok(())
 }
 
 fn compile_binary_int_predicate<C: Constraint>(
@@ -890,7 +894,8 @@ fn compile_binary_int_predicate<C: Constraint>(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     let constraint = create_constraint(a, b, constraint_tag);
-    Ok(constraint.post(context.state))
+    constraint.post(context.state);
+    Ok(())
 }
 
 fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
@@ -908,7 +913,8 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, constraint_tag);
-    Ok(constraint.reify(context.state, reif))
+    let _: () = constraint.reify(context.state, reif);
+    Ok(())
 }
 
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
@@ -936,7 +942,8 @@ fn compile_int_lin_predicate<C: Constraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
-    Ok(constraint.post(context.state))
+    constraint.post(context.state);
+    Ok(())
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
@@ -957,7 +964,8 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
-    Ok(constraint.reify(context.state, reif))
+    let _: () = constraint.reify(context.state, reif);
+    Ok(())
 }
 
 fn compile_int_lin_imp_predicate<C: Constraint>(
@@ -978,7 +986,8 @@ fn compile_int_lin_imp_predicate<C: Constraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs, constraint_tag);
-    Ok(constraint.implied_by(context.state, reif))
+    let _: () = constraint.implied_by(context.state, reif);
+    Ok(())
 }
 
 fn compile_binary_int_imp<C: Constraint>(
@@ -996,7 +1005,8 @@ fn compile_binary_int_imp<C: Constraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, constraint_tag);
-    Ok(constraint.implied_by(context.state, reif))
+    let _: () = constraint.implied_by(context.state, reif);
+    Ok(())
 }
 
 fn compile_bool_lin_eq_predicate(
@@ -1010,13 +1020,14 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(pumpkin_constraints::boolean_equals(
+    let _: () = pumpkin_constraints::boolean_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
         constraint_tag,
     )
-    .post(context.state))
+    .post(context.state);
+    Ok(())
 }
 
 fn compile_bool_lin_le_predicate(
@@ -1030,13 +1041,14 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(pumpkin_constraints::boolean_less_than_or_equals(
+    let _: () = pumpkin_constraints::boolean_less_than_or_equals(
         weights.as_ref().to_owned(),
         bools.as_ref().to_owned(),
         rhs,
         constraint_tag,
     )
-    .post(context.state))
+    .post(context.state);
+    Ok(())
 }
 
 fn compile_all_different(
@@ -1048,7 +1060,8 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    Ok(pumpkin_constraints::all_different(variables, constraint_tag).post(context.state))
+    let _: () = pumpkin_constraints::all_different(variables, constraint_tag).post(context.state);
+    Ok(())
 }
 
 fn compile_table(
@@ -1064,13 +1077,14 @@ fn compile_table(
     let flat_table = context.resolve_array_integer_constants(&exprs[1])?;
     let table = create_table(flat_table, variables.len());
 
-    Ok(pumpkin_constraints::table(
+    let _: () = pumpkin_constraints::table(
         variables,
         table,
         constraint_tag,
         context.nogood_propagator_handle,
     )
-    .post(context.state))
+    .post(context.state);
+    Ok(())
 }
 
 fn compile_table_reif(
@@ -1088,13 +1102,14 @@ fn compile_table_reif(
 
     let reified = context.resolve_bool_variable(&exprs[2])?;
 
-    Ok(pumpkin_constraints::table(
+    let _: () = pumpkin_constraints::table(
         variables,
         table,
         constraint_tag,
         context.nogood_propagator_handle,
     )
-    .reify(context.state, reified))
+    .reify(context.state, reified);
+    Ok(())
 }
 
 fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {

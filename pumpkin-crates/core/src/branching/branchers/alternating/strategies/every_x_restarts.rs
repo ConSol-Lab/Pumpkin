@@ -82,40 +82,42 @@ impl AlternatingStrategy for EveryXRestarts {
 
 #[cfg(test)]
 mod tests {
-    use crate::Solver;
+    use crate::DefaultBrancher;
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
     use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
     use crate::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
-    use crate::engine::Assignments;
+    use crate::state::State;
 
     #[test]
     fn test_every_restart() {
-        let assignments = Assignments::default();
-        let solver = Solver::default();
-        let mut brancher =
-            AlternatingBrancher::new(&solver, solver.default_brancher(), EveryXRestarts::new(1));
+        let state = State::default();
+        let mut brancher = AlternatingBrancher::new(
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
+            EveryXRestarts::new(1),
+        );
 
         assert!(!brancher.is_using_default_brancher());
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
 
@@ -124,31 +126,33 @@ mod tests {
 
     #[test]
     fn test_every_other_restart() {
-        let assignments = Assignments::default();
-        let solver = Solver::default();
-        let mut brancher =
-            AlternatingBrancher::new(&solver, solver.default_brancher(), EveryXRestarts::new(2));
+        let state = State::default();
+        let mut brancher = AlternatingBrancher::new(
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
+            EveryXRestarts::new(2),
+        );
 
         assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
 
@@ -156,7 +160,7 @@ mod tests {
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
 
@@ -164,7 +168,7 @@ mod tests {
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
 

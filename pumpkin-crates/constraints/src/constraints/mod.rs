@@ -7,7 +7,7 @@
 //! # Example
 //! ```
 //! # use pumpkin_core::constraints;
-//! # use pumpkin_core::state::State;
+//! # use pumpkin_core::Solver;
 //! let mut solver = Solver::default();
 //!
 //! let a = solver.new_bounded_integer(0, 3);
@@ -17,7 +17,12 @@
 //! let constraint_tag = solver.new_constraint_tag();
 //!
 //! solver
-//!     .add_constraint(pumpkin_constraints::equals([a, b], 0, constraint_tag))
+//!     .add_constraint(pumpkin_constraints::equals(
+//!         [a, b],
+//!         0,
+//!         constraint_tag,
+//!         pumpkin_constraints::EqualityConsistency::Bound,
+//!     ))
 //!     .post();
 //! ```
 //!

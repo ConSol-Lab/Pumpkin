@@ -32,7 +32,6 @@ use crate::conflict_resolving::ConflictResolver;
 use crate::containers::HashMap;
 use crate::containers::HashSet;
 use crate::declare_inference_label;
-use crate::engine::Assignments;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::State;
@@ -187,10 +186,6 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    pub(crate) fn assignments(&self) -> &Assignments {
-        &self.state.assignments
-    }
-
     /// This is a temporary accessor to help refactoring.
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         self.state.get_solution_reference()
@@ -1233,7 +1228,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: CoreExtractionResult,
     ) {
-        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state.assignments);
+        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.state);
         let mut resolver = NoLearningResolver;
 
         let flag = solver.solve_under_assumptions(

@@ -38,7 +38,7 @@ use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 /// // We can infer that Task 0 and Task 1 execute at the same time
 /// // while Task 2 will start after them
 /// # use pumpkin_core::termination::Indefinite;
-/// # use pumpkin_core::state::State;
+/// # use pumpkin_core::Solver;
 /// # use pumpkin_core::results::SatisfactionResult;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;

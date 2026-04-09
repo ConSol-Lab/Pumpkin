@@ -52,21 +52,23 @@ impl AlternatingStrategy for EveryXSolutions {
 
 #[cfg(test)]
 mod tests {
-    use crate::Solver;
+    use crate::DefaultBrancher;
     use crate::branching::Brancher;
     use crate::branching::branchers::alternating::alternating_brancher::AlternatingBrancher;
     use crate::branching::branchers::alternating::strategies::every_x_solutions::EveryXSolutions;
-    use crate::engine::Assignments;
     use crate::results::SolutionReference;
+    use crate::state::State;
 
     #[test]
     fn test_every_other_solution() {
-        let solver = Solver::default();
-        let mut brancher =
-            AlternatingBrancher::new(&solver, solver.default_brancher(), EveryXSolutions::new(2));
+        let state = State::default();
+        let mut brancher = AlternatingBrancher::new(
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
+            EveryXSolutions::new(2),
+        );
 
-        let assignments = Assignments::default();
-        let empty_solution_reference = SolutionReference::new(&assignments);
+        let empty_solution_reference = SolutionReference::new(&state.assignments);
 
         assert!(!brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);

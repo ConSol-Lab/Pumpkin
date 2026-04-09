@@ -3,7 +3,6 @@
 
 use super::BrancherToUse;
 use crate::DefaultBrancher;
-use crate::Solver;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;

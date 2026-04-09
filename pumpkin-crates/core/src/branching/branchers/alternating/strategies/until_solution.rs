@@ -84,7 +84,7 @@ impl<Strategy: AlternatingStrategy> AlternatingStrategy for UntilSolution<Strate
 
 #[cfg(test)]
 mod tests {
-    use crate::Solver;
+    use crate::DefaultBrancher;
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
@@ -92,21 +92,19 @@ mod tests {
     use crate::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
     use crate::branching::branchers::alternating::other_only::OtherOnly;
     use crate::branching::branchers::alternating::until_solution::UntilSolution;
-    use crate::engine::Assignments;
-    use crate::results::Solution;
     use crate::results::SolutionReference;
+    use crate::state::State;
 
     #[test]
     fn test_switch_to_default_after_first_solution() {
-        let solver = Solver::default();
+        let state = State::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
-            solver.default_brancher(),
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
             UntilSolution::new(OtherOnly),
         );
 
-        let assignments = Assignments::default();
-        let empty_solution_reference = SolutionReference::new(&assignments);
+        let empty_solution_reference = SolutionReference::new(&state.assignments);
 
         assert!(!brancher.is_using_default_brancher());
         brancher.on_solution(empty_solution_reference);
@@ -119,11 +117,10 @@ mod tests {
 
     #[test]
     fn test_switch_after_first_solution() {
-        let assignments = Assignments::default();
-        let solver = Solver::default();
+        let state = State::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
-            solver.default_brancher(),
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
             UntilSolution::new(OtherOnly),
         );
 
@@ -131,42 +128,42 @@ mod tests {
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
+        brancher.on_solution(SolutionReference::new(&state.assignments));
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
+        brancher.on_solution(SolutionReference::new(&state.assignments));
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
@@ -174,11 +171,10 @@ mod tests {
 
     #[test]
     fn test_every_restart_until_first_solution() {
-        let assignments = Assignments::default();
-        let solver = Solver::default();
+        let state = State::default();
         let mut brancher = AlternatingBrancher::new(
-            &solver,
-            solver.default_brancher(),
+            &state,
+            DefaultBrancher::default_over_all_variables(&state),
             UntilSolution::new(EveryXRestarts::new(1)),
         );
 
@@ -186,42 +182,42 @@ mod tests {
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
+        brancher.on_solution(SolutionReference::new(&state.assignments));
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());
 
-        brancher.on_solution(Solution::from(assignments.clone()).as_reference());
+        brancher.on_solution(SolutionReference::new(&state.assignments));
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments,
+            &state.assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher());

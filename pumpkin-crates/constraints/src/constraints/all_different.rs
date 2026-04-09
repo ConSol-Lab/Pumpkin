@@ -2,9 +2,8 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
 
-use crate::EqualityConsistency;
-
 use super::binary_not_equals;
+use crate::EqualityConsistency;
 
 /// Creates the [`Constraint`] that enforces that all the given `variables` are distinct.
 pub fn all_different<Var: IntegerVariable + 'static>(

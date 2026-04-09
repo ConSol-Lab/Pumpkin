@@ -689,7 +689,7 @@ impl Domain {
             Domain::IntervalDomain { lb, ub } => {
                 state.new_interval_variable(lb, ub, Some(name.into()))
             }
-            Domain::SparseDomain { values } => state.new_sparse_variable(values, Some(name.into())),
+            Domain::SparseDomain { values } => state.new_sparse_variable(values, Some(name)),
         }
     }
 }
