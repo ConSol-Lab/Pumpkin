@@ -94,7 +94,7 @@ impl<Var: IntegerVariable> Table<Var> {
                     // l -> clause
                     clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                    solver.add_clause(clause, self.constraint_tag)?;
+                    solver.add_clause(clause, self.constraint_tag);
                 }
 
                 // `condition -> (\/ supports)`
@@ -108,9 +108,9 @@ impl<Var: IntegerVariable> Table<Var> {
         // 4. Enforce at least one `y` to be true.
         let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
         if let Some(literal) = reification_literal {
-            poster.implied_by(literal)?;
+            poster.implied_by(literal);
         } else {
-            poster.post()?;
+            poster.post();
         }
     }
 }
@@ -157,7 +157,7 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .map(|(x, value)| predicate![x != value])
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag)?;
+            solver.add_clause(clause, self.constraint_tag);
         }
     }
 
@@ -171,7 +171,7 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .chain(std::iter::once(reification_literal.get_false_predicate()))
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag)?;
+            solver.add_clause(clause, self.constraint_tag);
         }
     }
 }

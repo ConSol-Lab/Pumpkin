@@ -182,7 +182,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 self.options.propagator_options,
                 self.constraint_tag,
             )
-            .post(solver),
+            .post(state),
 
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
@@ -191,7 +191,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .post(solver)
+                .post(state)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
                 TimeTablePerPointIncrementalPropagator::<Var, true>::new(
@@ -200,7 +200,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .post(solver)
+                .post(state)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 TimeTableOverIntervalPropagator::new(
@@ -209,7 +209,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .post(solver)
+                .post(state)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
@@ -218,7 +218,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .post(solver)
+                .post(state)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
@@ -227,7 +227,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .post(solver)
+                .post(state)
             }
         }
     }
@@ -240,7 +240,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                 self.options.propagator_options,
                 self.constraint_tag,
             )
-            .implied_by(solver, reification_literal),
+            .implied_by(state, reification_literal),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::<Var, false>::new(
                     &self.tasks,
@@ -248,7 +248,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(state, reification_literal)
             }
             CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
                 TimeTablePerPointIncrementalPropagator::<Var, true>::new(
@@ -257,7 +257,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(state, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 TimeTableOverIntervalPropagator::new(
@@ -266,7 +266,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(state, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, false>::new(
@@ -275,7 +275,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(state, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
                 TimeTableOverIntervalIncrementalPropagator::<Var, true>::new(
@@ -284,7 +284,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     self.options.propagator_options,
                     self.constraint_tag,
                 )
-                .implied_by(solver, reification_literal)
+                .implied_by(state, reification_literal)
             }
         }
     }

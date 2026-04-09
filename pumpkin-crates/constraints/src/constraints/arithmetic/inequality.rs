@@ -113,7 +113,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             c: self.rhs,
             constraint_tag: self.constraint_tag,
         }
-        .post(solver)
+        .post(state)
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
@@ -122,7 +122,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             c: self.rhs,
             constraint_tag: self.constraint_tag,
         }
-        .implied_by(solver, reification_literal)
+        .implied_by(state, reification_literal)
     }
 }
 

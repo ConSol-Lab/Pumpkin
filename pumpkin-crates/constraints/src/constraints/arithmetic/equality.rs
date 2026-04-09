@@ -91,16 +91,16 @@ where
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
-            })?;
+            });
         } else {
-            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag).post(state);
 
             let negated = self
                 .terms
                 .iter()
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
-            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
+            less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(state);
         }
     }
 
@@ -113,10 +113,10 @@ where
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
-            })?;
+            });
         } else {
             less_than_or_equals(self.terms.clone(), self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+                .implied_by(state, reification_literal);
 
             let negated = self
                 .terms
@@ -124,7 +124,7 @@ where
                 .map(|var| var.scaled(-1))
                 .collect::<Box<[_]>>();
             less_than_or_equals(negated, -self.rhs, self.constraint_tag)
-                .implied_by(solver, reification_literal)?;
+                .implied_by(state, reification_literal);
         }
     }
 }
@@ -160,14 +160,14 @@ where
                 a: terms[0].clone(),
                 b: terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
-            })?;
+            });
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
                 rhs,
                 constraint_tag,
             }
-            .post(solver)
+            .post(state)
         }
     }
 
@@ -186,14 +186,14 @@ where
                     constraint_tag: self.constraint_tag,
                 },
                 reification_literal,
-            })?;
+            });
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
                 rhs,
                 constraint_tag,
             }
-            .implied_by(solver, reification_literal)
+            .implied_by(state, reification_literal)
         }
     }
 }
