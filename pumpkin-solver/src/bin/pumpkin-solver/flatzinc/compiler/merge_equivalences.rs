@@ -236,6 +236,8 @@ mod tests {
     use flatzinc::ConstraintItem;
     use flatzinc::Expr;
     use flatzinc::SolveItem;
+    use pumpkin_core::propagators::nogoods::NogoodPropagatorConstructor;
+    use pumpkin_core::state::State;
     use pumpkin_solver::Solver;
 
     use super::*;
@@ -272,8 +274,9 @@ mod tests {
         });
 
         let mut ast = ast_builder.build().expect("valid ast");
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
         let options = FlatZincOptions::default();
 
         super::super::reserve_constraint_tags::run(&ast, &mut context)
@@ -321,8 +324,9 @@ mod tests {
         });
 
         let mut ast = ast_builder.build().expect("valid ast");
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
         let options = FlatZincOptions {
             proof_type: Some(ProofType::Full),
             ..Default::default()

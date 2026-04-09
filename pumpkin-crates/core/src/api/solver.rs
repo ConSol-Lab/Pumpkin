@@ -161,6 +161,11 @@ impl Solver {
     pub fn state(&self) -> &State {
         &self.satisfaction_solver.state
     }
+
+    /// The nogood propagator used to propagate learned nogoods.
+    pub fn nogood_propagator_handle(&self) -> PropagatorHandle<NogoodPropagator> {
+        self.satisfaction_solver.nogood_propagator_handle
+    }
 }
 
 /// Methods to retrieve information about variables

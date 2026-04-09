@@ -10,6 +10,7 @@
 //! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
@@ -69,12 +70,14 @@ fn main() {
             // equivelent to literal <=> (s_x - s_y <= -p_x)
             // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = pumpkin_constraints::less_than_or_equals(
-                variables,
-                -(processing_times[x] as i32),
-                constraint_tag,
-            )
-            .reify(&mut solver, literal);
+            solver
+                .add_constraint(pumpkin_constraints::less_than_or_equals(
+                    variables,
+                    -(processing_times[x] as i32),
+                    constraint_tag,
+                ))
+                .reify(literal)
+                .expect("not inconsistent");
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause(
@@ -87,7 +90,7 @@ fn main() {
         }
     }
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut resolver = ResolutionResolver::default();
     if matches!(
         solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver),

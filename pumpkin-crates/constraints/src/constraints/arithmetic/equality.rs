@@ -12,9 +12,15 @@ use pumpkin_propagators::arithmetic::LinearNotEqualPropagatorArgs;
 
 use super::less_than_or_equals;
 
+/// The requested consistency level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EqualityConsistency {
+    /// Use bound consistent propagation.
     Bound,
+    /// If the constraint is over two variables, use domain consistent propagation.
+    ///
+    /// This is only useful when variables are actually equal. In the future this will likely
+    /// become a preprocessing step to unify the variables.
     Domain,
 }
 

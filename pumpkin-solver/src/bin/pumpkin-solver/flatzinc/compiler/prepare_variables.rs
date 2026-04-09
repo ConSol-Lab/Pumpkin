@@ -89,6 +89,8 @@ pub(crate) fn run(
 #[cfg(test)]
 mod tests {
 
+    use pumpkin_core::propagators::nogoods::NogoodPropagatorConstructor;
+    use pumpkin_core::state::State;
     use pumpkin_solver::Solver;
 
     use super::*;
@@ -104,8 +106,9 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
 
         run(&ast, &mut context).expect("no errors");
 
@@ -128,8 +131,9 @@ mod tests {
             },
         ]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
 
         run(&ast, &mut context).expect("no errors");
 
@@ -151,8 +155,9 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
         let _ = context.boolean_parameters.insert("FalsePar".into(), false);
 
         run(&ast, &mut context).expect("no errors");
@@ -171,8 +176,9 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
 
         run(&ast, &mut context).expect("no errors");
 
@@ -192,8 +198,9 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
 
         run(&ast, &mut context).expect("no errors");
 
@@ -213,8 +220,9 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = Solver::default();
-        let mut context = CompilationContext::new(&mut solver);
+        let mut state = State::default();
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::default());
+        let mut context = CompilationContext::new(&mut state, nogood_propagator_handle);
         let _ = context.integer_parameters.insert("IntPar".into(), 3);
 
         run(&ast, &mut context).expect("no errors");

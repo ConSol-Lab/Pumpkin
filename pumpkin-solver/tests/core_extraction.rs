@@ -1,6 +1,7 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
 use pumpkin_core::Solver;
 use pumpkin_core::predicate;
 use pumpkin_core::results::SatisfactionResultUnderAssumptions;
@@ -30,7 +31,7 @@ fn basic_core_extraction() {
     // We create a termination condition which allows the solver to run indefinitely
     let mut termination = Indefinite;
     // And we create a search strategy (in this case, simply the default)
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
 
     let mut resolver = ResolutionResolver::default();
 

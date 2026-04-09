@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::predicate;
@@ -23,7 +24,11 @@ fn proof_with_reified_literals() {
     let literal = solver.new_literal_for_predicate(predicate![variable == 5], constraint_tag);
 
     solver
-        .add_constraint(pumpkin_constraints::clause(vec![literal], constraint_tag))
+        .add_constraint(pumpkin_constraints::clause(
+            vec![literal.get_true_predicate()],
+            constraint_tag,
+            solver.nogood_propagator_handle(),
+        ))
         .post()
         .expect("no error");
 
@@ -32,11 +37,12 @@ fn proof_with_reified_literals() {
             [variable],
             5,
             constraint_tag,
+            pumpkin_solver::EqualityConsistency::Bound,
         ))
         .post()
         .expect_err("unsat");
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);
@@ -60,6 +66,7 @@ fn proof_with_equality_unit_nogood_step() {
             x1,
             x2,
             constraint_tag,
+            pumpkin_solver::EqualityConsistency::Bound,
         ))
         .post()
         .expect("no conflict");
@@ -73,7 +80,7 @@ fn proof_with_equality_unit_nogood_step() {
         .post()
         .expect_err("conflict");
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut resolver = ResolutionResolver::default();
 
     let result = solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver);

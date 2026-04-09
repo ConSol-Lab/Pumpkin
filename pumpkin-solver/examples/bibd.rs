@@ -14,6 +14,8 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
+use pumpkin_solver::EqualityConsistency;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;
@@ -101,6 +103,7 @@ fn main() {
                 row.clone(),
                 bibd.row_sum as i32,
                 constraint_tag,
+                EqualityConsistency::Bound,
             ))
             .post();
     }
@@ -112,6 +115,7 @@ fn main() {
                 row,
                 bibd.column_sum as i32,
                 constraint_tag,
+                EqualityConsistency::Bound,
             ))
             .post();
     }
@@ -145,7 +149,7 @@ fn main() {
         }
     }
 
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut Indefinite, &mut resolver) {
