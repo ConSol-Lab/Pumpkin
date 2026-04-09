@@ -7,6 +7,8 @@ use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 
+use crate::EqualityConsistency;
+
 use super::equals;
 use super::less_than_or_equals;
 
@@ -83,13 +85,14 @@ impl Constraint for BooleanEqual {
     fn post(self, state: &mut State) {
         let domains = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).post(state)
+        equals(domains, 0, self.constraint_tag, EqualityConsistency::Bound).post(state)
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let domains = self.create_domains();
 
-        equals(domains, 0, self.constraint_tag).implied_by(state, reification_literal)
+        equals(domains, 0, self.constraint_tag, EqualityConsistency::Bound)
+            .implied_by(state, reification_literal)
     }
 }
 

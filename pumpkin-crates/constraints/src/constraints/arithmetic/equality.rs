@@ -13,10 +13,17 @@ use pumpkin_propagators::arithmetic::LinearNotEqualPropagatorArgs;
 
 use super::less_than_or_equals;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EqualityConsistency {
+    Bound,
+    Domain,
+}
+
 struct EqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 }
 
 /// Creates the [`NegatableConstraint`] `∑ terms_i = rhs`.
@@ -26,11 +33,13 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 ) -> impl NegatableConstraint {
     EqualConstraint {
         terms: terms.into(),
         rhs,
         constraint_tag,
+        consistency,
     }
 }
 
@@ -41,11 +50,13 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 ) -> impl NegatableConstraint {
     EqualConstraint {
         terms: [lhs.scaled(1), rhs.scaled(-1)].into(),
         rhs: 0,
         constraint_tag,
+        consistency,
     }
 }
 
@@ -53,6 +64,7 @@ struct NotEqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 }
 
 /// Create the [`NegatableConstraint`] `∑ terms_i != rhs`.
@@ -62,8 +74,9 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 ) -> impl NegatableConstraint {
-    equals(terms, rhs, constraint_tag).negation()
+    equals(terms, rhs, constraint_tag, consistency).negation()
 }
 
 /// Creates the [`NegatableConstraint`] `lhs != rhs`.
@@ -73,11 +86,13 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
     constraint_tag: ConstraintTag,
+    consistency: EqualityConsistency,
 ) -> impl NegatableConstraint {
     NotEqualConstraint {
         terms: [lhs.scaled(1), rhs.scaled(-1)].into(),
         rhs: 0,
         constraint_tag,
+        consistency,
     }
 }
 
@@ -86,7 +101,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, state: &mut State) {
-        if self.terms.len() == 2 && !solver.is_logging_proof() {
+        if self.terms.len() == 2 && self.consistency == EqualityConsistency::Domain {
             let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
@@ -105,7 +120,7 @@ where
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
-        if self.terms.len() == 2 && !solver.is_logging_proof() {
+        if self.terms.len() == 2 && self.consistency == EqualityConsistency::Domain {
             let _ = state.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
                     a: self.terms[0].clone(),
@@ -140,6 +155,7 @@ where
             terms: self.terms.clone(),
             rhs: self.rhs,
             constraint_tag: self.constraint_tag,
+            consistency: self.consistency,
         }
     }
 }
@@ -153,6 +169,7 @@ where
             terms,
             rhs,
             constraint_tag,
+            consistency: _,
         } = self;
 
         if terms.len() == 2 {
@@ -176,6 +193,7 @@ where
             terms,
             rhs,
             constraint_tag,
+            consistency: _,
         } = self;
 
         if terms.len() == 2 {
@@ -209,6 +227,7 @@ where
             terms: self.terms.clone(),
             rhs: self.rhs,
             constraint_tag: self.constraint_tag,
+            consistency: self.consistency,
         }
     }
 }
