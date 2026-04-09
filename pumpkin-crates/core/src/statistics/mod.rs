@@ -6,11 +6,7 @@ pub(crate) mod statistic_logging;
 use std::fmt::Display;
 
 pub use statistic_logger::StatisticLogger;
-pub use statistic_logging::StatisticOptions;
-pub use statistic_logging::configure_statistic_logging;
-pub use statistic_logging::log_statistic;
-pub use statistic_logging::log_statistic_postfix;
-pub use statistic_logging::should_log_statistics;
+pub use statistic_logging::*;
 
 #[cfg(doc)]
 use crate::Solver;

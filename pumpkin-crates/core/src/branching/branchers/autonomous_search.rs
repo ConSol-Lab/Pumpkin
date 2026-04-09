@@ -15,6 +15,7 @@ use crate::engine::Assignments;
 use crate::engine::predicates::predicate::Predicate;
 use crate::propagation::ReadDomains;
 use crate::results::Solution;
+use crate::state::State;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::statistics::moving_averages::CumulativeMovingAverage;
@@ -119,7 +120,7 @@ impl DefaultBrancher {
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
     /// [`RandomSelector`] with [`RandomSplitter`].
-    pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
+    pub fn default_over_all_variables(state: &State) -> DefaultBrancher {
         AutonomousSearch {
             predicate_id_info: DeletablePredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -130,7 +131,7 @@ impl DefaultBrancher {
             best_known_solution: None,
             should_synchronise: false,
             backup_brancher: IndependentVariableValueBrancher::new(
-                RandomSelector::new(assignments.get_domains()),
+                RandomSelector::new(state.assignments.get_domains()),
                 RandomSplitter,
             ),
             statistics: Default::default(),

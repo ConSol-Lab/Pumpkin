@@ -12,6 +12,9 @@ mod remove_unused_variables;
 mod reserve_constraint_tags;
 
 use context::CompilationContext;
+use pumpkin_core::propagators::nogoods::NogoodPropagator;
+use pumpkin_core::state::PropagatorHandle;
+use pumpkin_core::state::State;
 use pumpkin_solver::Solver;
 
 use super::FlatZincError;
@@ -21,10 +24,11 @@ use super::instance::FlatZincInstance;
 
 pub(crate) fn compile(
     mut ast: FlatZincAst,
-    solver: &mut Solver,
+    state: &mut State,
+    nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
-    let mut context = CompilationContext::new(solver);
+    let mut context = CompilationContext::new(state, nogood_propagator_handle);
 
     define_constants::run(&ast, &mut context)?;
     reserve_constraint_tags::run(&ast, &mut context)?;

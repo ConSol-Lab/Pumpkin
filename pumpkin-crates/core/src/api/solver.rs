@@ -5,6 +5,7 @@ use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::PredicateId;
 use crate::basic_types::Solution;
 use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
@@ -37,6 +38,8 @@ use crate::predicates;
 use crate::proof::ConstraintTag;
 use crate::propagation::PropagatorConstructor;
 pub use crate::propagation::store::PropagatorHandle;
+use crate::propagators::nogoods::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagatorConstructor;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::state::State;
@@ -97,16 +100,13 @@ use crate::statistics::log_statistic_postfix;
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     pub(crate) satisfaction_solver: ConstraintSatisfactionSolver,
-    true_literal: Literal,
 }
 
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            true_literal,
         }
     }
 }
@@ -114,44 +114,40 @@ impl Default for Solver {
 impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
-        Solver::from_state(solver_options, State::default())
+        let mut state = State::default();
+
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
+            solver_options.learning_options,
+        ));
+
+        Solver::from_state(solver_options, state, nogood_propagator_handle)
+            .expect("no propagation happens")
     }
 
     /// Create a new solver based on a given state.
-    pub fn from_state(solver_options: SolverOptions, state: State) -> Self {
-        let satisfaction_solver = ConstraintSatisfactionSolver::from_state(solver_options, state);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
-        Self {
-            satisfaction_solver,
-            true_literal,
-        }
-    }
+    ///
+    /// If the state is inconsistent after calling propagate, then it is returned as the error
+    /// variant.
+    pub fn from_state(
+        solver_options: SolverOptions,
+        state: State,
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    ) -> Result<Self, State> {
+        let satisfaction_solver = ConstraintSatisfactionSolver::from_state(
+            solver_options,
+            state,
+            nogood_propagator_handle,
+        )?;
 
-    /// Logs the statistics currently present in the solver with the provided objective value.
-    pub fn log_statistics_with_objective(
-        &self,
-        brancher: &impl Brancher,
-        resolver: &impl ConflictResolver,
-        objective_value: i64,
-        verbose: bool,
-    ) {
-        log_statistic("objective", objective_value);
-        self.log_statistics(brancher, resolver, verbose);
+        Ok(Self {
+            satisfaction_solver,
+        })
     }
 
     /// Logs the statistics currently present in the solver.
-    pub fn log_statistics(
-        &self,
-        brancher: &impl Brancher,
-        resolver: &impl ConflictResolver,
-        verbose: bool,
-    ) {
+    pub fn log_statistics(&self, verbose: bool) {
         self.satisfaction_solver.log_statistics(verbose);
-        resolver.log_statistics(StatisticLogger::default());
-        if verbose {
-            brancher.log_statistics(StatisticLogger::default());
-        }
-        log_statistic_postfix();
     }
 
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
@@ -160,6 +156,10 @@ impl Solver {
 
     pub fn is_logging_proof(&self) -> bool {
         self.satisfaction_solver.is_logging_proof()
+    }
+
+    pub fn state(&self) -> &State {
+        &self.satisfaction_solver.state
     }
 }
 
@@ -263,12 +263,12 @@ impl Solver {
 
     /// Get a literal which is always true.
     pub fn get_true_literal(&self) -> Literal {
-        self.true_literal
+        Literal::trivially_true()
     }
 
     /// Get a literal which is always false.
     pub fn get_false_literal(&self) -> Literal {
-        !self.true_literal
+        Literal::trivially_false()
     }
 
     /// Create a new integer variable with the given bounds.
@@ -565,14 +565,6 @@ impl Solver {
         Constructor::PropagatorImpl: 'static,
     {
         self.satisfaction_solver.add_propagator(constructor)
-    }
-}
-
-/// Default brancher implementation
-impl Solver {
-    /// Creates an instance of the [`DefaultBrancher`].
-    pub fn default_brancher(&self) -> DefaultBrancher {
-        DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
     }
 }
 

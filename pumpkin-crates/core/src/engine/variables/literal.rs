@@ -31,6 +31,18 @@ impl Literal {
         }
     }
 
+    /// A literal that is assigned to true.
+    pub fn trivially_true() -> Literal {
+        Literal {
+            integer_variable: DomainId::new(0).scaled(1),
+        }
+    }
+
+    /// A literal that is assigned to false.
+    pub fn trivially_false() -> Literal {
+        !Literal::trivially_true()
+    }
+
     pub fn get_integer_variable(&self) -> AffineView<DomainId> {
         self.integer_variable
     }

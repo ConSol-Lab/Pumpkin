@@ -12,7 +12,7 @@ pub(crate) fn run(
     context: &mut CompilationContext,
 ) -> Result<(), FlatZincError> {
     for decl in &ast.constraint_decls {
-        let tag = context.solver.new_constraint_tag();
+        let tag = context.state.new_constraint_tag();
         context.constraints.push((tag, decl.clone()));
     }
 

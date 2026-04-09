@@ -12,6 +12,11 @@ use std::sync::RwLock;
 use convert_case::Case;
 use convert_case::Casing;
 
+use crate::Solver;
+use crate::branching::Brancher;
+use crate::conflict_resolving::ConflictResolver;
+use crate::statistics::StatisticLogger;
+
 /// The options for statistic logging containing the statistic prefix, the (optional) line which is
 /// printed after the statistics, and the (optional) casing of the statistics.
 pub struct StatisticOptions<'a> {
@@ -82,6 +87,25 @@ pub fn log_statistic(name: impl Display, value: impl Display) {
         statistic_options.statistics_writer,
         "{prefix} {name}={value}"
     );
+}
+
+pub fn log_solver_statistics(
+    solver: &Solver,
+    resolver: &impl ConflictResolver,
+    brancher: &impl Brancher,
+    objective: Option<i64>,
+    verbose: bool,
+) {
+    solver.log_statistics(verbose);
+    if let Some(objective_value) = objective {
+        log_statistic("objective", objective_value);
+    }
+
+    resolver.log_statistics(StatisticLogger::default());
+    if verbose {
+        brancher.log_statistics(StatisticLogger::default());
+    }
+    log_statistic_postfix();
 }
 
 /// Logs the postfix of the statistics (if it has been set).

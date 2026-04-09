@@ -9,6 +9,7 @@ use optimisation::linear_search::LinearSearch;
 use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::termination::TimeBudget;
 
@@ -32,7 +33,7 @@ pub(crate) fn wcnf_problem(
         ..
     } = parse_wcnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
 
-    let brancher = solver.default_brancher();
+    let brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut termination = time_limit.map(TimeBudget::starting_now);
     let resolver = ResolutionResolver::default();
 

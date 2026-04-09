@@ -5,6 +5,7 @@ use std::rc::Rc;
 use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;
 use pumpkin_solver::core::variables::Literal;
 
@@ -32,7 +33,7 @@ pub(crate) fn run(
                     .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
                         create_integer_domain(
-                            context.solver,
+                            context.state,
                             &mut context.constant_domain_ids,
                             representative,
                             domain,
@@ -60,7 +61,7 @@ pub(crate) fn run(
                     .entry(Rc::clone(&representative))
                     .or_insert_with(|| {
                         create_integer_domain(
-                            context.solver,
+                            context.state,
                             &mut context.constant_domain_ids,
                             representative,
                             domain,
@@ -78,7 +79,7 @@ pub(crate) fn run(
 }
 
 fn create_integer_domain(
-    solver: &mut Solver,
+    state: &mut State,
     constant_domains: &mut HashMap<i32, DomainId>,
     identifier: Rc<str>,
     domain: Domain,
@@ -91,9 +92,9 @@ fn create_integer_domain(
 
         *constant_domains
             .entry(value)
-            .or_insert_with(|| domain.into_variable(solver, value.to_string()))
+            .or_insert_with(|| domain.into_variable(state, value.to_string()))
     } else {
-        domain.into_variable(solver, identifier.to_string())
+        domain.into_variable(state, identifier.to_string())
     }
 }
 

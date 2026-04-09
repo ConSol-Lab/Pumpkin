@@ -126,7 +126,7 @@ impl Default for State {
 }
 
 impl State {
-    pub(crate) fn log_statistics(&self, verbose: bool) {
+    pub fn log_statistics(&self, verbose: bool) {
         log_statistic("variables", self.assignments.num_domains());
         log_statistic("propagators", self.propagators.num_propagators());
         log_statistic("failures", self.statistics.num_conflicts);

@@ -11,6 +11,7 @@ use crate::branching::brancher::BrancherEvent;
 use crate::branching::branchers::alternating::strategies::AlternatingStrategy;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
+use crate::state::State;
 use crate::statistics::StatisticLogger;
 
 /// A [`Brancher`] which switches between its provided brancher and [`DefaultBrancher`] based on the
@@ -34,10 +35,10 @@ pub struct AlternatingBrancher<OtherBrancher, Strategy> {
 impl<Strategy: AlternatingStrategy, OtherBrancher: Brancher>
     AlternatingBrancher<OtherBrancher, Strategy>
 {
-    pub fn new(solver: &Solver, other_brancher: OtherBrancher, strategy: Strategy) -> Self {
+    pub fn new(state: &State, other_brancher: OtherBrancher, strategy: Strategy) -> Self {
         Self {
             other_brancher,
-            default_brancher: solver.default_brancher(),
+            default_brancher: DefaultBrancher::default_over_all_variables(state),
             strategy,
         }
     }

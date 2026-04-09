@@ -112,10 +112,16 @@ pub struct ConstraintSatisfactionSolver {
 
 impl Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
-        ConstraintSatisfactionSolver::from_state(
-            SatisfactionSolverOptions::default(),
-            State::default(),
-        )
+        let mut state = State::default();
+        let solver_options = SatisfactionSolverOptions::default();
+
+        let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+            (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
+            solver_options.learning_options,
+        ));
+
+        ConstraintSatisfactionSolver::from_state(solver_options, state, nogood_propagator_handle)
+            .expect("no propagation happens")
     }
 }
 
@@ -252,22 +258,25 @@ impl ConstraintSatisfactionSolver {
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
     /// Create a new satisfaction solver based on the given state.
-    pub fn from_state(solver_options: SatisfactionSolverOptions, mut state: State) -> Self {
-        let handle = state.add_propagator(NogoodPropagatorConstructor::new(
-            (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
-            solver_options.learning_options,
-        ));
+    pub fn from_state(
+        solver_options: SatisfactionSolverOptions,
+        mut state: State,
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    ) -> Result<Self, State> {
+        if state.propagate_to_fixed_point().is_err() {
+            return Err(state);
+        }
 
-        ConstraintSatisfactionSolver {
+        Ok(ConstraintSatisfactionSolver {
             solver_state: CSPSolverState::default(),
             assumptions: Vec::default(),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
-            nogood_propagator_handle: handle,
+            nogood_propagator_handle,
             solver_statistics: SolverStatistics::default(),
             unit_nogood_inference_codes: Default::default(),
             internal_parameters: solver_options,
             state,
-        }
+        })
     }
 
     pub fn solve(

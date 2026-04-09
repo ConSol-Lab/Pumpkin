@@ -4,6 +4,10 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::propagators::nogoods::NogoodPropagator;
+use pumpkin_core::state::PropagatorHandle;
+use pumpkin_core::state::State;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
@@ -15,8 +19,10 @@ use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
 
 pub(crate) struct CompilationContext<'a> {
-    /// The solver to compile the FlatZinc into.
-    pub(crate) solver: &'a mut Solver,
+    /// The state to compile the FlatZinc into.
+    pub(crate) state: &'a mut State,
+    /// The nogood propagator to use for nogoods/clauses.
+    pub(crate) nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
 
     /// All identifiers occuring in the model. The identifiers are interned, to support cheap
     /// cloning.
@@ -37,10 +43,6 @@ pub(crate) struct CompilationContext<'a> {
     /// is posted or an array is created).
     pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
 
-    /// Literal which is always true
-    pub(crate) true_literal: Literal,
-    /// Literal which is always false
-    pub(crate) false_literal: Literal,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
@@ -74,19 +76,18 @@ pub(crate) enum Set {
 }
 
 impl CompilationContext<'_> {
-    pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
-        let true_literal = solver.get_true_literal();
-        let false_literal = solver.get_false_literal();
-
+    pub(crate) fn new(
+        state: &mut State,
+        nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
+    ) -> CompilationContext<'_> {
         CompilationContext {
-            solver,
+            state,
+            nogood_propagator_handle,
             identifiers: Default::default(),
 
             outputs: Default::default(),
             equivalences: Default::default(),
 
-            true_literal,
-            false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_arrays: Default::default(),
@@ -106,14 +107,6 @@ impl CompilationContext<'_> {
         self.integer_parameters.contains_key(identifier)
     }
 
-    // pub fn resolve_bool_constant(&self, identifier: &str) -> Option<bool> {
-    //     self.boolean_parameters.get(identifier).copied()
-    // }
-
-    // pub fn resolve_int_constant(&self, identifier: &str) -> Option<i32> {
-    //     self.integer_parameters.get(identifier).copied()
-    // }
-
     pub(crate) fn resolve_bool_variable(
         &mut self,
         expr: &flatzinc::Expr,
@@ -122,9 +115,9 @@ impl CompilationContext<'_> {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
             flatzinc::Expr::Bool(value) => {
                 if *value {
-                    Ok(self.solver.get_true_literal())
+                    Ok(Literal::trivially_true())
                 } else {
-                    Ok(self.solver.get_false_literal())
+                    Ok(Literal::trivially_false())
                 }
             }
             _ => Err(FlatZincError::UnexpectedExpr),
@@ -145,9 +138,9 @@ impl CompilationContext<'_> {
                 .get(&self.equivalences.representative(identifier))
                 .map(|value| {
                     if *value {
-                        self.solver.get_true_literal()
+                        Literal::trivially_true()
                     } else {
-                        self.solver.get_false_literal()
+                        Literal::trivially_false()
                     }
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
@@ -173,9 +166,9 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     if *value {
-                                        self.solver.get_true_literal()
+                                        Literal::trivially_true()
                                     } else {
-                                        self.solver.get_false_literal()
+                                        Literal::trivially_false()
                                     }
                                 })
                                 .collect()
@@ -192,8 +185,8 @@ impl CompilationContext<'_> {
                     flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
                     }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
+                    flatzinc::BoolExpr::Bool(true) => Ok(Literal::trivially_true()),
+                    flatzinc::BoolExpr::Bool(false) => Ok(Literal::trivially_false()),
                 })
                 .collect(),
             flatzinc::Expr::ArrayOfInt(array) => array
@@ -259,8 +252,8 @@ impl CompilationContext<'_> {
             identifier.to_owned(),
         ))?;
         Ok(*self.constant_domain_ids.entry(value).or_insert_with(|| {
-            self.solver
-                .new_named_bounded_integer(value, value, identifier.to_owned())
+            self.state
+                .new_interval_variable(value, value, Some(identifier.into()))
         }))
     }
 
@@ -325,10 +318,10 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*value as i32)
                 .or_insert_with(|| {
-                    self.solver.new_named_bounded_integer(
+                    self.state.new_interval_variable(
                         *value as i32,
                         *value as i32,
-                        value.to_string(),
+                        Some(value.to_string().into()),
                     )
                 })),
             flatzinc::IntExpr::VarParIdentifier(id) => {
@@ -349,8 +342,11 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*val as i32)
                 .or_insert_with(|| {
-                    self.solver
-                        .new_named_bounded_integer(*val as i32, *val as i32, val.to_string())
+                    self.state.new_interval_variable(
+                        *val as i32,
+                        *val as i32,
+                        Some(val.to_string().into()),
+                    )
                 })),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
@@ -376,8 +372,11 @@ impl CompilationContext<'_> {
                 .get(&self.equivalences.representative(identifier))
                 .map(|value| {
                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                        self.solver
-                            .new_named_bounded_integer(*value, *value, value.to_string())
+                        self.state.new_interval_variable(
+                            *value,
+                            *value,
+                            Some(value.to_string().into()),
+                        )
                     })
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
@@ -403,10 +402,10 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                                        self.solver.new_named_bounded_integer(
+                                        self.state.new_interval_variable(
                                             *value,
                                             *value,
-                                            value.to_string(),
+                                            Some(value.to_string().into()),
                                         )
                                     })
                                 })
@@ -687,10 +686,12 @@ impl Domain {
         Domain::IntervalDomain { lb, ub }
     }
 
-    pub(crate) fn into_variable(self, solver: &mut Solver, name: String) -> DomainId {
+    pub(crate) fn into_variable(self, state: &mut State, name: String) -> DomainId {
         match self {
-            Domain::IntervalDomain { lb, ub } => solver.new_named_bounded_integer(lb, ub, name),
-            Domain::SparseDomain { values } => solver.new_named_sparse_integer(values, name),
+            Domain::IntervalDomain { lb, ub } => {
+                state.new_interval_variable(lb, ub, Some(name.into()))
+            }
+            Domain::SparseDomain { values } => state.new_sparse_variable(values, Some(name.into())),
         }
     }
 }

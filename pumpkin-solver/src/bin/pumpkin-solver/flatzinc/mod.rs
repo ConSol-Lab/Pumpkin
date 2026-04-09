@@ -15,7 +15,16 @@ use pumpkin_core::branching::branchers::alternating::AlternatingBrancher;
 use pumpkin_core::branching::branchers::alternating::every_x_restarts::EveryXRestarts;
 use pumpkin_core::branching::branchers::alternating::until_solution::UntilSolution;
 use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::options::SolverOptions;
+use pumpkin_core::propagation::PredicateId;
+use pumpkin_core::propagators::nogoods::NogoodPropagator;
+use pumpkin_core::propagators::nogoods::NogoodPropagatorConstructor;
+use pumpkin_core::state::PropagatorHandle;
+use pumpkin_core::state::State;
+use pumpkin_core::statistics::StatisticLogger;
+use pumpkin_core::statistics::log_solver_statistics;
 use pumpkin_core::statistics::log_statistic;
+use pumpkin_core::statistics::log_statistic_postfix;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::branching::Brancher;
@@ -84,14 +93,16 @@ fn log_statistics(
     resolver: &impl ConflictResolver,
     verbose: bool,
     init_time: Duration,
-    objective_value: Option<i64>,
+    objective_value: Option<i32>,
 ) {
     log_statistic("initTime", init_time.as_secs_f64());
-    if let Some(objective) = objective_value {
-        solver.log_statistics_with_objective(brancher, resolver, objective, verbose);
-    } else {
-        solver.log_statistics(brancher, resolver, verbose);
-    }
+    log_solver_statistics(
+        solver,
+        resolver,
+        brancher,
+        objective_value.map(i64::from),
+        verbose,
+    );
 }
 
 #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
@@ -104,26 +115,19 @@ fn solution_callback(
     solver: &Solver,
     solution: SolutionReference,
     verbose: bool,
-    init_time: Duration,
 ) {
     if options_all_solutions || instance_objective_function.is_none() {
-        if let Some(objective) = instance_objective_function {
-            log_statistic("initTime", init_time.as_secs_f64());
-            solver.log_statistics_with_objective(
-                brancher,
-                resolver,
-                solution.get_integer_value(objective) as i64,
-                verbose,
-            );
-        } else {
-            solver.log_statistics(brancher, resolver, verbose)
-        }
+        let objective =
+            instance_objective_function.map(|var| solution.get_integer_value(var).into());
+
+        log_solver_statistics(solver, resolver, brancher, objective, verbose);
+
         print_solution_from_solver(solution, outputs);
     }
 }
 
 pub(crate) fn solve<R: ConflictResolver>(
-    mut solver: Solver,
+    solver_options: SolverOptions,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
     options: FlatZincOptions,
@@ -138,7 +142,34 @@ pub(crate) fn solve<R: ConflictResolver>(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let mut state = State::default();
+    let nogood_propagator_handle = state.add_propagator(NogoodPropagatorConstructor::new(
+        (solver_options.memory_preallocated * 1_000_000) / size_of::<PredicateId>(),
+        solver_options.learning_options,
+    ));
+
+    let instance = parse_and_compile(&mut state, nogood_propagator_handle, instance, options)?;
+
+    let mut solver = match Solver::from_state(solver_options, state, nogood_propagator_handle) {
+        Ok(solver) => solver,
+        Err(state) => {
+            let init_time = init_start_time.elapsed();
+
+            println!("{MSG_UNSATISFIABLE}");
+
+            log_statistic("nodes", 0);
+            log_statistic("restarts", 0);
+            log_statistic("peakDepth", 0);
+            log_statistic("solveTime", init_time.as_secs_f64());
+            state.log_statistics(true);
+
+            resolver.log_statistics(StatisticLogger::default());
+            log_statistic_postfix();
+
+            return Ok(());
+        }
+    };
+
     let outputs = instance.outputs.clone();
 
     let init_time = init_start_time.elapsed();
@@ -149,7 +180,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             // If there is an objective, then we use the provided search until the first solution,
             // and then we switch to default search
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                &solver,
+                solver.state(),
                 instance.search.expect("Expected a search to be defined"),
                 UntilSolution::new(EveryXRestarts::new(1)),
             ))])
@@ -157,7 +188,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             // If there is no objective, then we alternate between the provided strategy and the
             // default search every restart
             DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
-                &solver,
+                solver.state(),
                 instance.search.expect("Expected a search to be defined"),
                 EveryXRestarts::new(1),
             ))])
@@ -197,7 +228,6 @@ pub(crate) fn solve<R: ConflictResolver>(
             solver,
             solution,
             options.verbose,
-            init_time,
         );
 
         ControlFlow::Continue(())
@@ -223,7 +253,7 @@ pub(crate) fn solve<R: ConflictResolver>(
             unreachable!("the callback will never return ControlFlow::Break")
         }
         OptimisationResult::Optimal(optimal_solution) => {
-            let objective_value = optimal_solution.get_integer_value(objective) as i64;
+            let objective_value = optimal_solution.get_integer_value(objective);
             if !options.all_solutions {
                 log_statistics(
                     &solver,
@@ -247,7 +277,7 @@ pub(crate) fn solve<R: ConflictResolver>(
         }
         OptimisationResult::Satisfiable(solution) => {
             // Solutions are printed in the callback.
-            let objective_value = solution.get_integer_value(objective) as i64;
+            let objective_value = solution.get_integer_value(objective);
             log_statistics(
                 &solver,
                 &brancher,
@@ -310,7 +340,6 @@ fn satisfy(
                         solver,
                         solution.as_reference(),
                         options.verbose,
-                        init_time,
                     );
                 }
                 IteratedSolution::Finished => {
@@ -366,7 +395,6 @@ fn satisfy(
                 satisfiable.solver(),
                 satisfiable.solution(),
                 options.verbose,
-                init_time,
             ),
             SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
                 println!("{MSG_UNSATISFIABLE}");
@@ -381,12 +409,13 @@ fn satisfy(
 }
 
 fn parse_and_compile(
-    solver: &mut Solver,
+    state: &mut State,
+    nogood_propagator_handle: PropagatorHandle<NogoodPropagator>,
     instance: impl Read,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver, options)
+    compiler::compile(ast, state, nogood_propagator_handle, options)
 }
 
 /// Prints the current solution.

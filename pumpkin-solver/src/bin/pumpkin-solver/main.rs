@@ -27,6 +27,8 @@ use parsers::dimacs::parse_cnf;
 use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
+use pumpkin_core::DefaultBrancher;
+use pumpkin_core::statistics::log_solver_statistics;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -593,7 +595,7 @@ fn run() -> PumpkinResult<()> {
         )?,
         FileFormat::FlatZinc => match args.conflict_resolver {
             ConflictResolverType::NoLearning => flatzinc::solve(
-                Solver::with_options(solver_options),
+                solver_options,
                 instance_path,
                 time_limit,
                 FlatZincOptions {
@@ -613,7 +615,7 @@ fn run() -> PumpkinResult<()> {
                 NoLearningResolver,
             )?,
             ConflictResolverType::UIP => flatzinc::solve(
-                Solver::with_options(solver_options),
+                solver_options,
                 instance_path,
                 time_limit,
                 FlatZincOptions {
@@ -652,16 +654,19 @@ fn cnf_problem(
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = solver.default_brancher();
+    let mut brancher = DefaultBrancher::default_over_all_variables(solver.state());
     let mut resolver = ResolutionResolver::default();
 
     match solver.satisfy(&mut brancher, &mut termination, &mut resolver) {
         SatisfactionResult::Satisfiable(satisfiable) => {
-            satisfiable.solver().log_statistics(
-                satisfiable.brancher(),
+            log_solver_statistics(
+                satisfiable.solver(),
                 satisfiable.conflict_resolver(),
+                satisfiable.brancher(),
+                None,
                 true,
             );
+
             println!("s SATISFIABLE");
             println!(
                 "v {}",
@@ -673,12 +678,12 @@ fn cnf_problem(
             );
         }
         SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
-            solver.log_statistics(brancher, resolver, true);
+            log_solver_statistics(solver, resolver, brancher, None, true);
 
             println!("s UNSATISFIABLE");
         }
         SatisfactionResult::Unknown(solver, brancher, resolver) => {
-            solver.log_statistics(brancher, resolver, true);
+            log_solver_statistics(solver, resolver, brancher, None, true);
             println!("s UNKNOWN");
         }
     }

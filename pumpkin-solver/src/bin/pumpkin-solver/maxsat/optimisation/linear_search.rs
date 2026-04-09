@@ -1,5 +1,6 @@
 use log::info;
 use pumpkin_core::conflict_resolving::ConflictResolver;
+use pumpkin_core::statistics::log_solver_statistics;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::Function;
 use pumpkin_solver::core::asserts::pumpkin_assert_moderate;
@@ -40,10 +41,11 @@ impl LinearSearch {
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
 
-        solver.log_statistics_with_objective(
-            &brancher,
+        log_solver_statistics(
+            solver,
             resolver,
-            best_objective_value as i64,
+            &brancher,
+            Some(best_objective_value as i64),
             true,
         );
         println!("o {best_objective_value}");
@@ -61,10 +63,11 @@ impl LinearSearch {
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
-                solver.log_statistics_with_objective(
-                    &brancher,
+                log_solver_statistics(
+                    solver,
                     resolver,
-                    best_objective_value as i64,
+                    &brancher,
+                    Some(best_objective_value as i64),
                     true,
                 );
                 return MaxSatOptimisationResult::Optimal {
@@ -78,10 +81,11 @@ impl LinearSearch {
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
-                solver.log_statistics_with_objective(
-                    &brancher,
+                log_solver_statistics(
+                    solver,
                     resolver,
-                    best_objective_value as i64,
+                    &brancher,
+                    Some(best_objective_value as i64),
                     true,
                 );
                 return MaxSatOptimisationResult::Optimal {
@@ -107,10 +111,11 @@ impl LinearSearch {
                     best_objective_value = new_objective_value;
                     best_solution = satisfiable.solution().into();
 
-                    satisfiable.solver().log_statistics_with_objective(
-                        satisfiable.brancher(),
+                    log_solver_statistics(
+                        satisfiable.solver(),
                         satisfiable.conflict_resolver(),
-                        best_objective_value as i64,
+                        satisfiable.brancher(),
+                        Some(best_objective_value as i64),
                         true,
                     );
 
@@ -123,10 +128,11 @@ impl LinearSearch {
                     );
                 }
                 SatisfactionResult::Unsatisfiable(solver, brancher, resolver) => {
-                    solver.log_statistics_with_objective(
-                        brancher,
+                    log_solver_statistics(
+                        solver,
                         resolver,
-                        best_objective_value as i64,
+                        brancher,
+                        Some(best_objective_value as i64),
                         true,
                     );
 
@@ -135,10 +141,11 @@ impl LinearSearch {
                     };
                 }
                 SatisfactionResult::Unknown(solver, brancher, resolver) => {
-                    solver.log_statistics_with_objective(
-                        brancher,
+                    log_solver_statistics(
+                        solver,
                         resolver,
-                        best_objective_value as i64,
+                        brancher,
+                        Some(best_objective_value as i64),
                         true,
                     );
                     return MaxSatOptimisationResult::Satisfiable { best_solution };

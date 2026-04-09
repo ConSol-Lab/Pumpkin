@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use flatzinc::AnnExpr;
+use pumpkin_core::DefaultBrancher;
 use pumpkin_solver::core::branching::Brancher;
 use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::core::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
@@ -210,7 +211,10 @@ fn create_from_search_strategy(
             )),
             None => {}
         }
-        brancher.add_brancher(Box::new(context.solver.default_brancher()));
+
+        brancher.add_brancher(Box::new(DefaultBrancher::default_over_all_variables(
+            context.state,
+        )));
     }
 
     Ok(brancher)

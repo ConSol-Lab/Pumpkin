@@ -36,8 +36,9 @@ pub(crate) fn run(
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.true_literal,
-                                BoolExpr::Bool(false) => context.false_literal,
+                                BoolExpr::Bool(true) => Literal::trivially_true(),
+                                BoolExpr::Bool(false) => Literal::trivially_false(),
+
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
                                     let representative =
@@ -85,7 +86,7 @@ pub(crate) fn run(
 
                                 Ok(
                                     *context.constant_domain_ids.entry(value).or_insert_with(
-                                        || context.solver.new_bounded_integer(value, value),
+                                        || context.state.new_interval_variable(value, value, None),
                                     ),
                                 )
                             }

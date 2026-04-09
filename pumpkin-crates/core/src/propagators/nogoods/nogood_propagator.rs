@@ -97,7 +97,7 @@ pub struct NogoodPropagatorConstructor {
 }
 
 impl NogoodPropagatorConstructor {
-    pub(crate) fn new(capacity: usize, parameters: LearningOptions) -> Self {
+    pub fn new(capacity: usize, parameters: LearningOptions) -> Self {
         Self {
             capacity,
             parameters,
