@@ -1,17 +1,18 @@
 use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::propagators::nogoods::NogoodPropagator;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::Literal;
 
-/// Creates the [`NegatableConstraint`] `\/ literal`
+/// Creates the [`NegatableConstraint`] `\/ predicate`
 ///
-/// Its negation is `/\ !literal`
+/// Its negation is `/\ !predicate`
 pub fn clause(
-    literals: impl IntoIterator<Item = Literal>,
+    literals: impl IntoIterator<Item = Predicate>,
     constraint_tag: ConstraintTag,
     propagator_handle: PropagatorHandle<NogoodPropagator>,
 ) -> impl NegatableConstraint {
@@ -22,11 +23,11 @@ pub fn clause(
     }
 }
 
-/// Creates the [`NegatableConstraint`] `/\ literal`
+/// Creates the [`NegatableConstraint`] `/\ predicate`
 ///
-/// Its negation is `\/ !literal`
+/// Its negation is `\/ !predicate`
 pub fn conjunction(
-    literals: impl IntoIterator<Item = Literal>,
+    literals: impl IntoIterator<Item = Predicate>,
     constraint_tag: ConstraintTag,
     propagator_handle: PropagatorHandle<NogoodPropagator>,
 ) -> impl NegatableConstraint {
@@ -38,7 +39,7 @@ pub fn conjunction(
 }
 
 struct Clause {
-    literals: Vec<Literal>,
+    literals: Vec<Predicate>,
     constraint_tag: ConstraintTag,
     propagator_handle: PropagatorHandle<NogoodPropagator>,
 }
@@ -57,7 +58,7 @@ impl Constraint for Clause {
 
         // Since we are adding this constraint as a nogood, every literal is negated.
         propagator.add_nogood(
-            literals.into_iter().map(|lit| lit.get_false_predicate()),
+            literals.into_iter().map(|predicate| !predicate),
             constraint_tag,
         );
     }
@@ -72,7 +73,7 @@ impl Constraint for Clause {
         clause(
             literals
                 .into_iter()
-                .chain(std::iter::once(reification_literal)),
+                .chain(std::iter::once(reification_literal.get_false_predicate())),
             constraint_tag,
             propagator_handle,
         )
@@ -99,7 +100,7 @@ impl NegatableConstraint for Clause {
 }
 
 struct Conjunction {
-    literals: Vec<Literal>,
+    literals: Vec<Predicate>,
     constraint_tag: ConstraintTag,
     propagator_handle: PropagatorHandle<NogoodPropagator>,
 }
@@ -126,7 +127,7 @@ impl Constraint for Conjunction {
 
         for literal in literals {
             clause(
-                [!reification_literal, literal],
+                [reification_literal.get_false_predicate(), literal],
                 constraint_tag,
                 propagator_handle,
             )

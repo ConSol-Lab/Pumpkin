@@ -5,9 +5,13 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::propagators::nogoods::NogoodPropagator;
+use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
+
+use crate::clause;
 
 /// Create the [table](https://sofdem.github.io/gccat/gccat/Cin_relation.html#uid22830) [`NegatableConstraint`].
 ///
@@ -24,11 +28,13 @@ pub fn table<Var: IntegerVariable + 'static>(
     xs: impl IntoIterator<Item = Var>,
     table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
+    propagator_handle: PropagatorHandle<NogoodPropagator>,
 ) -> impl NegatableConstraint {
     Table {
         xs: xs.into_iter().collect(),
         table,
         constraint_tag,
+        propagator_handle,
     }
 }
 
@@ -47,11 +53,13 @@ pub fn negative_table<Var: IntegerVariable + 'static>(
     xs: impl IntoIterator<Item = Var>,
     table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
+    propagator_handle: PropagatorHandle<NogoodPropagator>,
 ) -> impl NegatableConstraint {
     NegativeTable {
         xs: xs.into_iter().collect(),
         table,
         constraint_tag,
+        propagator_handle,
     }
 }
 
@@ -59,13 +67,14 @@ struct Table<Var> {
     xs: Vec<Var>,
     table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
+    propagator_handle: PropagatorHandle<NogoodPropagator>,
 }
 
 impl<Var: IntegerVariable> Table<Var> {
     fn encode(self, state: &mut State, reification_literal: Option<Literal>) {
         // 1. Create a variable `y_i` that selects the row from the table which is chosen.
         let ys: Vec<_> = (0..self.table.len())
-            .map(|_| solver.new_literal())
+            .map(|_| state.new_literal(None))
             .collect();
 
         // 2. Setup the implications between values and `ys`.
@@ -88,13 +97,13 @@ impl<Var: IntegerVariable> Table<Var> {
 
                 // For every `support in supports`: `support -> condition`
                 for support in supports.iter() {
-                    let mut clause = vec![support.get_false_predicate(), condition];
+                    let mut predicates = vec![support.get_false_predicate(), condition];
 
                     // Account for possible reification.
                     // l -> clause
-                    clause.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
+                    predicates.extend(reification_literal.iter().map(|l| l.get_false_predicate()));
 
-                    solver.add_clause(clause, self.constraint_tag);
+                    clause(predicates, self.constraint_tag, self.propagator_handle).post(state);
                 }
 
                 // `condition -> (\/ supports)`
@@ -106,22 +115,27 @@ impl<Var: IntegerVariable> Table<Var> {
         }
 
         // 4. Enforce at least one `y` to be true.
-        let poster = solver.add_constraint(crate::constraints::clause(ys, self.constraint_tag));
+        let constraint = clause(
+            ys.into_iter().map(|y| y.get_true_predicate()),
+            self.constraint_tag,
+            self.propagator_handle,
+        );
+
         if let Some(literal) = reification_literal {
-            poster.implied_by(literal);
+            constraint.implied_by(state, literal);
         } else {
-            poster.post();
+            constraint.post(state);
         }
     }
 }
 
 impl<Var: IntegerVariable> Constraint for Table<Var> {
     fn post(self, state: &mut State) {
-        self.encode(solver, None)
+        self.encode(state, None)
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
-        self.encode(solver, Some(reification_literal))
+        self.encode(state, Some(reification_literal))
     }
 }
 
@@ -132,11 +146,13 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for Table<Var> {
         let xs = self.xs.clone();
         let table = self.table.clone();
         let constraint_tag = self.constraint_tag;
+        let propagator_handle = self.propagator_handle;
 
         NegativeTable {
             xs,
             table,
             constraint_tag,
+            propagator_handle,
         }
     }
 }
@@ -145,25 +161,26 @@ struct NegativeTable<Var> {
     xs: Vec<Var>,
     table: Vec<Vec<i32>>,
     constraint_tag: ConstraintTag,
+    propagator_handle: PropagatorHandle<NogoodPropagator>,
 }
 
 impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
     fn post(self, state: &mut State) {
         for row in self.table {
-            let clause: Vec<_> = self
+            let literals: Vec<_> = self
                 .xs
                 .iter()
                 .zip(row)
                 .map(|(x, value)| predicate![x != value])
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag);
+            clause(literals, self.constraint_tag, self.propagator_handle).post(state);
         }
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
         for row in self.table {
-            let clause: Vec<_> = self
+            let literals: Vec<_> = self
                 .xs
                 .iter()
                 .zip(row)
@@ -171,7 +188,7 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
                 .chain(std::iter::once(reification_literal.get_false_predicate()))
                 .collect();
 
-            solver.add_clause(clause, self.constraint_tag);
+            clause(literals, self.constraint_tag, self.propagator_handle).post(state);
         }
     }
 }
@@ -183,11 +200,13 @@ impl<Var: IntegerVariable + 'static> NegatableConstraint for NegativeTable<Var> 
         let xs = self.xs.clone();
         let table = self.table.clone();
         let constraint_tag = self.constraint_tag;
+        let propagator_handle = self.propagator_handle;
 
         Table {
             xs,
             table,
             constraint_tag,
+            propagator_handle,
         }
     }
 }
