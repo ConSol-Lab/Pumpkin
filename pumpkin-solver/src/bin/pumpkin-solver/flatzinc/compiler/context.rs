@@ -4,11 +4,9 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_core::predicates::Predicate;
 use pumpkin_core::propagators::nogoods::NogoodPropagator;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
-use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
 use pumpkin_solver::core::proof::ConstraintTag;

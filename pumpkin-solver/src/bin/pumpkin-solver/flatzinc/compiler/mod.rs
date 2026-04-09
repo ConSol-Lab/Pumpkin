@@ -15,7 +15,6 @@ use context::CompilationContext;
 use pumpkin_core::propagators::nogoods::NogoodPropagator;
 use pumpkin_core::state::PropagatorHandle;
 use pumpkin_core::state::State;
-use pumpkin_solver::Solver;
 
 use super::FlatZincError;
 use super::FlatZincOptions;

@@ -3,7 +3,6 @@
 use std::rc::Rc;
 
 use flatzinc::Annotation;
-use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
 use pumpkin_core::state::State;
 use pumpkin_core::variables::DomainId;

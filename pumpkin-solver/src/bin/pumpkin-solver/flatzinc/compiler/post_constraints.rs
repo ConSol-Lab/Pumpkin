@@ -758,8 +758,10 @@ fn compile_bool_xor(
         .resolve_bool_variable(&exprs[1])?
         .get_true_predicate();
 
-    pumpkin_constraints::clause([!a, !b], constraint_tag, context.nogood_propagator_handle);
-    pumpkin_constraints::clause([b, a], constraint_tag, context.nogood_propagator_handle);
+    pumpkin_constraints::clause([!a, !b], constraint_tag, context.nogood_propagator_handle)
+        .post(context.state);
+    pumpkin_constraints::clause([b, a], constraint_tag, context.nogood_propagator_handle)
+        .post(context.state);
 
     Ok(())
 }
