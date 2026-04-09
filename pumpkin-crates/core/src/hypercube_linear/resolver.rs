@@ -153,6 +153,10 @@ impl HypercubeLinearResolver {
                     .format(", "),
             );
 
+            if cfg!(feature = "hl-checks") {
+                self.assert_invariants(state, last_tp);
+            }
+
             if let Some(dl) = self.will_propagate_on_previous_dl(state) {
                 return self.extract_learned_hypercube_linear(dl);
             }
@@ -170,15 +174,13 @@ impl HypercubeLinearResolver {
                 let _ = self.hypercube_predicates_on_conflict_dl.pop();
             }
 
-            if cfg!(feature = "hl-checks") {
-                let tp = state
-                    .trail_position(pivot)
-                    .expect("all predicates are true");
+            let tp = state
+                .trail_position(pivot)
+                .expect("all predicates are true");
 
-                trace!("applying HL resolution on {pivot} @ {tp}");
-                assert!(last_tp >= tp, "last_tp = {last_tp}, tp = {tp}");
-                last_tp = tp;
-            }
+            trace!("applying HL resolution on {pivot} @ {tp}");
+            assert!(last_tp >= tp, "last_tp = {last_tp}, tp = {tp}");
+            last_tp = tp;
 
             let explanation = self.explain(state, pivot);
 
@@ -284,6 +286,8 @@ impl HypercubeLinearResolver {
                         ),
                     )
                 {
+                    trace!("explaining with HL");
+
                     for predicate in hypercube.iter_predicates() {
                         // The predicate may be false if it was propagated by the
                         // linear being a conflict. In that case, we do not need to
@@ -295,8 +299,17 @@ impl HypercubeLinearResolver {
 
                     for term in linear.terms() {
                         let term_bound = state.lower_bound(term);
-                        self.predicates_to_explain
-                            .push(predicate![term >= term_bound], state);
+                        let predicate = predicate![term >= term_bound];
+
+                        let checkpoint = state
+                            .get_checkpoint_for_predicate(predicate)
+                            .expect("the predicate is true");
+
+                        // Only explain the predicate if it is at the conflict
+                        // checkpoint.
+                        if checkpoint == state.get_checkpoint() {
+                            self.predicates_to_explain.push(predicate, state);
+                        }
                     }
 
                     return HypercubeLinearExplanation::Proper(HypercubeLinear {
@@ -306,6 +319,8 @@ impl HypercubeLinearResolver {
                 }
             }
         }
+
+        trace!("explaining with clause");
 
         let maybe_inference_code =
             state.get_propagation_reason(pivot, &mut self.reason_buffer, CurrentNogood::empty());
@@ -456,7 +471,15 @@ impl HypercubeLinearResolver {
     fn add_hypercube_predicate(&mut self, state: &State, predicate: Predicate) {
         let checkpoint = state
             .get_checkpoint_for_predicate(predicate)
-            .unwrap_or_else(|| panic!("adding untrue predicate {predicate} to hypercube"));
+            .unwrap_or_else(|| panic!("adding unassigned predicate {predicate} to hypercube"));
+
+        if cfg!(feature = "hl-checks") {
+            assert_eq!(
+                state.truth_value(predicate),
+                Some(true),
+                "adding untrue predicate {predicate} to hypercube"
+            );
+        }
 
         if checkpoint == 0 {
             // Ignore it. We don't need to process it further.
@@ -832,6 +855,33 @@ impl HypercubeLinearResolver {
         }
 
         false
+    }
+
+    /// Assert the invariants of the resolver are kept.
+    fn assert_invariants(&self, state: &State, trail_position: usize) {
+        let linear_slack =
+            compute_linear_slack_at_trail_position(state, &self.conflicting_linear, trail_position);
+        assert!(
+            linear_slack.is_negative(),
+            "conflicting constraint linear is not conflicting at trail position {trail_position}"
+        );
+
+        let unsatisfied_hypercube_predicates = self
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .chain(self.working_hypercube.iter_predicates())
+            .filter(|&p| {
+                state
+                    .assignments
+                    .evaluate_predicate_at_trail_position(p, trail_position)
+                    == Some(true)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            unsatisfied_hypercube_predicates,
+            vec![],
+            "hypercube of conflicting constraint contains unsatisfied predicates at trail position {trail_position}"
+        );
     }
 }
 
