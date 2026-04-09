@@ -91,7 +91,6 @@ mod tests {
 
     use pumpkin_core::propagators::nogoods::NogoodPropagatorConstructor;
     use pumpkin_core::state::State;
-    use pumpkin_solver::Solver;
 
     use super::*;
     use crate::flatzinc::ast::SearchStrategy;

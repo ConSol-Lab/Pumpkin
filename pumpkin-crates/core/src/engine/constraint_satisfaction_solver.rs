@@ -253,6 +253,7 @@ impl ConstraintSatisfactionSolver {
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
     /// Create a new satisfaction solver based on the given state.
+    #[allow(clippy::result_large_err, reason = "we want the original state back")]
     pub fn from_state(
         solver_options: SatisfactionSolverOptions,
         mut state: State,

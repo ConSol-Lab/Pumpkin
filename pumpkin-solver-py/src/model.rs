@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_solver::Solver;
+use pumpkin_solver::core::DefaultBrancher;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::StorageKey;
 use pumpkin_solver::core::optimisation::OptimisationDirection;
@@ -86,7 +87,8 @@ impl Model {
         };
 
         let solver = Solver::with_options(options);
-        let brancher = PythonBrancher::new(solver.default_brancher());
+        let brancher =
+            PythonBrancher::new(DefaultBrancher::default_over_all_variables(solver.state()));
 
         Ok(Model { solver, brancher })
     }

@@ -126,6 +126,7 @@ impl Solver {
     ///
     /// If the state is inconsistent after calling propagate, then it is returned as the error
     /// variant.
+    #[allow(clippy::result_large_err, reason = "we want the original state back")]
     pub fn from_state(
         solver_options: SolverOptions,
         state: State,

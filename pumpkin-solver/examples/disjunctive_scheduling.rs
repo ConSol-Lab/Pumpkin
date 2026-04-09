@@ -11,7 +11,6 @@
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::DefaultBrancher;
-use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;

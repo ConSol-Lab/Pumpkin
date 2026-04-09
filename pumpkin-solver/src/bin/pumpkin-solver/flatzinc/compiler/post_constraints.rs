@@ -502,10 +502,8 @@ fn compile_array_int_maximum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     let _: () = pumpkin_constraints::maximum(array.as_ref().to_owned(), rhs, constraint_tag)
-    .post(context.state);
-    Ok(
-        (),
-    )
+        .post(context.state);
+    Ok(())
 }
 
 fn compile_array_int_minimum(
@@ -519,10 +517,8 @@ fn compile_array_int_minimum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     let _: () = pumpkin_constraints::minimum(array.as_ref().to_owned(), rhs, constraint_tag)
-    .post(context.state);
-    Ok(
-        (),
-    )
+        .post(context.state);
+    Ok(())
 }
 
 fn compile_set_in_reif(
@@ -603,10 +599,8 @@ fn compile_array_var_int_element(
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
     let _: () = pumpkin_constraints::element(index, array.as_ref().to_owned(), rhs, constraint_tag)
-    .post(context.state);
-    Ok(
-        (),
-    )
+        .post(context.state);
+    Ok(())
 }
 
 fn compile_bool_not(
