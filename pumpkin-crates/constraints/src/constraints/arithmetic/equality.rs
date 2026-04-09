@@ -85,7 +85,7 @@ impl<Var> Constraint for EqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
@@ -106,11 +106,7 @@ where
         Ok(())
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
@@ -156,7 +152,7 @@ impl<Var> Constraint for NotEqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State) {
         let NotEqualConstraint {
             terms,
             rhs,
@@ -181,11 +177,7 @@ where
         }
     }
 
-    fn implied_by(
-        self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let NotEqualConstraint {
             terms,
             rhs,

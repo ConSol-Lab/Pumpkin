@@ -28,7 +28,7 @@ pub fn conjunction(
 struct Clause(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Clause {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -39,9 +39,9 @@ impl Constraint for Clause {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -67,7 +67,7 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Conjunction {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         let Conjunction(conjunction, constraint_tag) = self;
 
         conjunction
@@ -77,9 +77,9 @@ impl Constraint for Conjunction {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         let Conjunction(conjunction, constraint_tag) = self;
 
         conjunction.into_iter().try_for_each(|lit| {

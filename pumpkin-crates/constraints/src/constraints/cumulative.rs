@@ -174,7 +174,7 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,
@@ -234,9 +234,9 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,

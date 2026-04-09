@@ -107,7 +107,7 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -118,9 +118,9 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,

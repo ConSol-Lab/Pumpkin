@@ -64,9 +64,9 @@ struct Table<Var> {
 impl<Var: IntegerVariable> Table<Var> {
     fn encode(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Option<Literal>,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         // 1. Create a variable `y_i` that selects the row from the table which is chosen.
         let ys: Vec<_> = (0..self.table.len())
             .map(|_| solver.new_literal())
@@ -122,15 +122,15 @@ impl<Var: IntegerVariable> Table<Var> {
 }
 
 impl<Var: IntegerVariable> Constraint for Table<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         self.encode(solver, None)
     }
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         self.encode(solver, Some(reification_literal))
     }
 }
@@ -158,7 +158,7 @@ struct NegativeTable<Var> {
 }
 
 impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
@@ -175,9 +175,9 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs

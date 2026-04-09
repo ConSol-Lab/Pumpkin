@@ -40,7 +40,7 @@ struct DisjunctiveConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(self, state: &mut State)  {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)?;
         DisjunctiveConstructor::new(
@@ -57,9 +57,9 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
 
     fn implied_by(
         self,
-        solver: &mut Solver,
+        state: &mut State,
         reification_literal: Literal,
-    ) -> Result<(), ConstraintOperationError> {
+    )  {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag)
             .implied_by(solver, reification_literal)?;
