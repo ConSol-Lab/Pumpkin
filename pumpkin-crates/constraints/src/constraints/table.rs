@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::predicate;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 
@@ -62,11 +62,7 @@ struct Table<Var> {
 }
 
 impl<Var: IntegerVariable> Table<Var> {
-    fn encode(
-        self,
-        state: &mut State,
-        reification_literal: Option<Literal>,
-    )  {
+    fn encode(self, state: &mut State, reification_literal: Option<Literal>) {
         // 1. Create a variable `y_i` that selects the row from the table which is chosen.
         let ys: Vec<_> = (0..self.table.len())
             .map(|_| solver.new_literal())
@@ -116,21 +112,15 @@ impl<Var: IntegerVariable> Table<Var> {
         } else {
             poster.post()?;
         }
-
-        Ok(())
     }
 }
 
 impl<Var: IntegerVariable> Constraint for Table<Var> {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         self.encode(solver, None)
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         self.encode(solver, Some(reification_literal))
     }
 }
@@ -158,7 +148,7 @@ struct NegativeTable<Var> {
 }
 
 impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
@@ -169,15 +159,9 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
 
             solver.add_clause(clause, self.constraint_tag)?;
         }
-
-        Ok(())
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         for row in self.table {
             let clause: Vec<_> = self
                 .xs
@@ -189,8 +173,6 @@ impl<Var: IntegerVariable> Constraint for NegativeTable<Var> {
 
             solver.add_clause(clause, self.constraint_tag)?;
         }
-
-        Ok(())
     }
 }
 

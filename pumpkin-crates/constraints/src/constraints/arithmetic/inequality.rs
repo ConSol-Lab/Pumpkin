@@ -1,8 +1,8 @@
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_propagators::arithmetic::LinearLessOrEqualPropagatorArgs;
@@ -107,7 +107,7 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,
@@ -116,11 +116,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         .post(solver)
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         LinearLessOrEqualPropagatorArgs {
             x: self.terms,
             c: self.rhs,

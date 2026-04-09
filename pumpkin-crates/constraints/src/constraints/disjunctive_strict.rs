@@ -1,7 +1,7 @@
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
@@ -40,7 +40,7 @@ struct DisjunctiveConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag).post(solver)?;
         DisjunctiveConstructor::new(
@@ -55,11 +55,7 @@ impl<Var: IntegerVariable + 'static> Constraint for DisjunctiveConstraint<Var> {
         .post(solver)
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         // We post both the propagator on the lower-bound and the propagator on the upper-bound.
         DisjunctiveConstructor::new(self.tasks.clone(), self.constraint_tag)
             .implied_by(solver, reification_literal)?;

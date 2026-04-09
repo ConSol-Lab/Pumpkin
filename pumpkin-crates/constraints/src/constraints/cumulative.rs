@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::asserts::pumpkin_assert_simple;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_propagators::cumulative::ArgTask;
@@ -39,7 +39,7 @@ use pumpkin_propagators::cumulative::time_table::TimeTablePerPointPropagator;
 /// // We can infer that Task 0 and Task 1 execute at the same time
 /// // while Task 2 will start after them
 /// # use pumpkin_core::termination::Indefinite;
-/// # use pumpkin_core::Solver;
+/// # use pumpkin_core::state::State;
 /// # use pumpkin_core::results::SatisfactionResult;
 /// # use pumpkin_core::constraints;
 /// # use pumpkin_core::constraints::Constraint;
@@ -174,7 +174,7 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
 }
 
 impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,
@@ -232,11 +232,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
         }
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
                 &self.tasks,

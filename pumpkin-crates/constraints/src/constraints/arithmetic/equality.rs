@@ -1,9 +1,9 @@
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::options::ReifiedPropagatorArgs;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::IntegerVariable;
 use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
@@ -87,7 +87,7 @@ where
 {
     fn post(self, state: &mut State) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
-            let _ = solver.add_propagator(BinaryEqualsPropagatorArgs {
+            let _ = state.add_propagator(BinaryEqualsPropagatorArgs {
                 a: self.terms[0].clone(),
                 b: self.terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
@@ -102,13 +102,11 @@ where
                 .collect::<Box<[_]>>();
             less_than_or_equals(negated, -self.rhs, self.constraint_tag).post(solver)?;
         }
-
-        Ok(())
     }
 
     fn implied_by(self, state: &mut State, reification_literal: Literal) {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
-            let _ = solver.add_propagator(ReifiedPropagatorArgs {
+            let _ = state.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryEqualsPropagatorArgs {
                     a: self.terms[0].clone(),
                     b: self.terms[1].scaled(-1).offset(self.rhs),
@@ -128,8 +126,6 @@ where
             less_than_or_equals(negated, -self.rhs, self.constraint_tag)
                 .implied_by(solver, reification_literal)?;
         }
-
-        Ok(())
     }
 }
 
@@ -160,13 +156,11 @@ where
         } = self;
 
         if terms.len() == 2 {
-            let _ = solver.add_propagator(BinaryNotEqualsPropagatorArgs {
+            let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
                 a: terms[0].clone(),
                 b: terms[1].scaled(-1).offset(self.rhs),
                 constraint_tag: self.constraint_tag,
             })?;
-
-            Ok(())
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),
@@ -185,7 +179,7 @@ where
         } = self;
 
         if terms.len() == 2 {
-            let _ = solver.add_propagator(ReifiedPropagatorArgs {
+            let _ = state.add_propagator(ReifiedPropagatorArgs {
                 propagator: BinaryNotEqualsPropagatorArgs {
                     a: terms[0].clone(),
                     b: terms[1].scaled(-1).offset(self.rhs),
@@ -193,7 +187,6 @@ where
                 },
                 reification_literal,
             })?;
-            Ok(())
         } else {
             LinearNotEqualPropagatorArgs {
                 terms: terms.into(),

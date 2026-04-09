@@ -1,7 +1,7 @@
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::AffineView;
 use pumpkin_core::variables::DomainId;
 use pumpkin_core::variables::Literal;
@@ -48,17 +48,13 @@ struct BooleanLessThanOrEqual {
 }
 
 impl Constraint for BooleanLessThanOrEqual {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         let domains = self.create_domains();
 
         less_than_or_equals(domains, self.rhs, self.constraint_tag).post(solver)
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let domains = self.create_domains();
 
         less_than_or_equals(domains, self.rhs, self.constraint_tag)
@@ -84,17 +80,13 @@ struct BooleanEqual {
 }
 
 impl Constraint for BooleanEqual {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         let domains = self.create_domains();
 
         equals(domains, 0, self.constraint_tag).post(solver)
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let domains = self.create_domains();
 
         equals(domains, 0, self.constraint_tag).implied_by(solver, reification_literal)

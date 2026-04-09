@@ -1,8 +1,8 @@
 use pumpkin_core::ConstraintOperationError;
-use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::proof::ConstraintTag;
+use pumpkin_core::state::State;
 use pumpkin_core::variables::Literal;
 
 /// Creates the [`NegatableConstraint`] `\/ literal`
@@ -28,7 +28,7 @@ pub fn conjunction(
 struct Clause(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Clause {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -37,11 +37,7 @@ impl Constraint for Clause {
         )
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let Clause(clause, constraint_tag) = self;
 
         solver.add_clause(
@@ -67,7 +63,7 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>, ConstraintTag);
 
 impl Constraint for Conjunction {
-    fn post(self, state: &mut State)  {
+    fn post(self, state: &mut State) {
         let Conjunction(conjunction, constraint_tag) = self;
 
         conjunction
@@ -75,11 +71,7 @@ impl Constraint for Conjunction {
             .try_for_each(|lit| solver.add_clause([lit.get_true_predicate()], constraint_tag))
     }
 
-    fn implied_by(
-        self,
-        state: &mut State,
-        reification_literal: Literal,
-    )  {
+    fn implied_by(self, state: &mut State, reification_literal: Literal) {
         let Conjunction(conjunction, constraint_tag) = self;
 
         conjunction.into_iter().try_for_each(|lit| {
