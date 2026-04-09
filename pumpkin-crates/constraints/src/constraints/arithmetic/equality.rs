@@ -1,4 +1,3 @@
-use pumpkin_core::ConstraintOperationError;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::options::ReifiedPropagatorArgs;
