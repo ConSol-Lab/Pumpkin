@@ -913,7 +913,8 @@ impl ConstraintSatisfactionSolver {
         let nogood_propagator =
             nogood_propagator.expect("Nogood propagator handle should refer to nogood propagator");
 
-        let addition_status = nogood_propagator.add_nogood(nogood, inference_code, &mut context);
+        let addition_status =
+            nogood_propagator.add_permanent_nogood(nogood, inference_code, &mut context);
 
         if addition_status.is_err() || self.solver_state.is_conflicting() {
             if let Err(conflict) = addition_status {

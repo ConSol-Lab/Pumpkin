@@ -10,6 +10,7 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
+use crate::declare_inference_label;
 use crate::engine::Assignments;
 use crate::engine::Lbd;
 use crate::engine::PropagationStatusCP;
@@ -19,6 +20,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::predicate;
+use crate::proof::ConstraintTag;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
@@ -38,6 +40,8 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::state::Conflict;
 use crate::state::PropagatorHandle;
+
+declare_inference_label!(pub Nogood);
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -78,11 +82,15 @@ pub struct NogoodPropagator {
     /// current subtree. To test for that, we compare this handle with the propagator ID of a
     /// proapgated literal to see if this propagator propagated a predicate.
     handle: PropagatorHandle<NogoodPropagator>,
+
+    /// These are nogoods that have to be considered the next time propagation is executed.
+    newly_added_nogoods: Vec<(ConstraintTag, Vec<Predicate>)>,
 }
 
 /// [`PropagatorConstructor`] for constructing a new instance of the [`NogoodPropagator`] with the
 /// provided [`LearningOptions`] and `capacity`.
-pub(crate) struct NogoodPropagatorConstructor {
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NogoodPropagatorConstructor {
     /// How many [`PredicateId`]s to preallocate to the [`ArenaAllocator`].
     capacity: usize,
     parameters: LearningOptions,
@@ -116,6 +124,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
             lbd_helper: Default::default(),
             bumped_nogoods: Default::default(),
             temp_nogood_reason: Default::default(),
+            newly_added_nogoods: Default::default(),
         }
     }
 }
@@ -222,6 +231,11 @@ impl Propagator for NogoodPropagator {
             context.reason_store,
             context.notification_engine,
         );
+
+        // Add new nogoods to the propagator.
+        for (tag, nogood) in std::mem::take(&mut self.newly_added_nogoods) {
+            self.add_permanent_nogood(nogood, InferenceCode::new(tag, Nogood), &mut context)?;
+        }
 
         if self.watch_lists.len() <= context.num_predicate_ids() {
             self.watch_lists
@@ -506,19 +520,29 @@ impl NogoodPropagator {
         }
     }
 
-    /// Adds a nogood to the propagator as a permanent nogood and sets the internal state to be
-    /// infeasible if the nogood led to a conflict.
-    pub(crate) fn add_nogood(
+    /// Adds a nogood to the propagator as a permanent nogood.
+    ///
+    /// This nogood will automatically be enqueued for propagation.
+    ///
+    /// No preprocessing is done on the provided nogood. Therefore, the caller is responsible
+    /// for removing redundant literals.
+    ///
+    /// Panics if the nogood is empty.
+    pub fn add_nogood(
         &mut self,
-        nogood: Vec<Predicate>,
-        inference_code: InferenceCode,
-        context: &mut PropagationContext,
-    ) -> PropagationStatusCP {
-        self.add_permanent_nogood(nogood, inference_code, context)
+        nogood: impl IntoIterator<Item = Predicate>,
+        constraint_tag: ConstraintTag,
+    ) {
+        let nogood = nogood.into_iter().collect::<Vec<_>>();
+
+        assert!(!nogood.is_empty(), "cannot add empty nogoods");
+
+        self.newly_added_nogoods.push((constraint_tag, nogood));
     }
 
-    /// Adds a nogood which cannot be deleted by clause management.
-    fn add_permanent_nogood(
+    /// Adds a nogood to the propagator as a permanent nogood and sets the internal state to be
+    /// infeasible if the nogood led to a conflict.
+    pub(crate) fn add_permanent_nogood(
         &mut self,
         mut nogood: Vec<Predicate>,
         inference_code: InferenceCode,
@@ -1316,7 +1340,7 @@ mod tests {
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
-                .add_nogood(nogood.into(), inference_code, &mut context)
+                .add_permanent_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }
 
@@ -1353,7 +1377,7 @@ mod tests {
             let nogood_propagator: &mut NogoodPropagator = nogood_propagator.unwrap();
 
             nogood_propagator
-                .add_nogood(nogood.into(), inference_code, &mut context)
+                .add_permanent_nogood(nogood.into(), inference_code, &mut context)
                 .unwrap();
         }
 

@@ -9,4 +9,4 @@ pub use checker::*;
 pub use learning_options::*;
 pub(crate) use nogood_id::*;
 pub(crate) use nogood_info::*;
-pub(crate) use nogood_propagator::*;
+pub use nogood_propagator::*;
