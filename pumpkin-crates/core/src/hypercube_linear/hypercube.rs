@@ -21,6 +21,7 @@ pub struct InconsistentHypercube(DomainId);
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hypercube {
     state: VariableState<Predicate>,
+    predicates: Vec<Predicate>,
 }
 
 impl Hash for Hypercube {
@@ -44,7 +45,43 @@ impl Hypercube {
         let state = VariableState::prepare_for_conflict_check(predicates, None)
             .map_err(InconsistentHypercube)?;
 
-        Ok(Hypercube { state })
+        // Get the description of the state in terms of predicates.
+        let mut predicates = state
+            .domains()
+            .flat_map(|domain_id| {
+                if let Some(value) = state.fixed_value(domain_id) {
+                    itertools::Either::Left(std::iter::once(predicate![domain_id == value]))
+                } else {
+                    let lower_bound_predicate =
+                        if let IntExt::Int(lower_bound) = state.lower_bound(domain_id) {
+                            Some(predicate![domain_id >= lower_bound])
+                        } else {
+                            None
+                        };
+                    let upper_bound_predicate =
+                        if let IntExt::Int(upper_bound) = state.upper_bound(domain_id) {
+                            Some(predicate![domain_id <= upper_bound])
+                        } else {
+                            None
+                        };
+
+                    itertools::Either::Right(
+                        lower_bound_predicate
+                            .into_iter()
+                            .chain(
+                                state
+                                    .holes(domain_id)
+                                    .map(|value| predicate![domain_id != value]),
+                            )
+                            .chain(upper_bound_predicate),
+                    )
+                }
+            })
+            .collect::<Vec<_>>();
+
+        predicates.sort();
+
+        Ok(Hypercube { state, predicates })
     }
 
     /// Add a predicate to the hypercube.
@@ -54,7 +91,16 @@ impl Hypercube {
         mut self,
         predicate: Predicate,
     ) -> Result<Hypercube, InconsistentHypercube> {
-        if self.state.apply(&predicate) {
+        if self.state.is_true(&predicate) {
+            // The predicate is subsumed by the existing predicates in the hypercube.
+            Ok(self)
+        } else if self.state.apply(&predicate) {
+            let insertion_index = self.predicates.binary_search(&predicate).expect_err(
+                "since the predicate is not true in the state, it does not exist in predicates",
+            );
+
+            self.predicates.insert(insertion_index, predicate);
+
             Ok(self)
         } else {
             Err(InconsistentHypercube(predicate.get_domain()))
@@ -74,36 +120,10 @@ impl Hypercube {
     }
 
     /// Get all predicates that define the hypercube.
+    ///
+    /// Predicates are yielded in sorted order.
     pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
-        self.state.domains().flat_map(|domain_id| {
-            if let Some(value) = self.state.fixed_value(domain_id) {
-                itertools::Either::Left(std::iter::once(predicate![domain_id == value]))
-            } else {
-                let lower_bound_predicate =
-                    if let IntExt::Int(lower_bound) = self.state.lower_bound(domain_id) {
-                        Some(predicate![domain_id >= lower_bound])
-                    } else {
-                        None
-                    };
-                let upper_bound_predicate =
-                    if let IntExt::Int(upper_bound) = self.state.upper_bound(domain_id) {
-                        Some(predicate![domain_id <= upper_bound])
-                    } else {
-                        None
-                    };
-
-                itertools::Either::Right(
-                    lower_bound_predicate
-                        .into_iter()
-                        .chain(
-                            self.state
-                                .holes(domain_id)
-                                .map(|value| predicate![domain_id != value]),
-                        )
-                        .chain(upper_bound_predicate),
-                )
-            }
-        })
+        self.predicates.iter().copied()
     }
 }
 
@@ -169,6 +189,23 @@ mod tests {
         assert_eq!(
             [predicate![x >= 4]].into_iter().collect::<HashSet<_>>(),
             hypercube.iter_predicates().collect::<HashSet<_>>(),
+        );
+    }
+
+    #[test]
+    fn iterated_predicates_are_returned_in_sorted_order() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+        let y = state.new_interval_variable(1, 10, Some("y".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![y >= 2], predicate![x <= 6], predicate![x >= 4]])
+                .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x >= 4], predicate![x <= 6], predicate![y >= 2]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
         );
     }
 }
