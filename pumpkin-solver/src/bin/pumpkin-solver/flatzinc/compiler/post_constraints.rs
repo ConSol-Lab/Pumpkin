@@ -184,6 +184,69 @@ pub(crate) fn run(
                     )?
                 }
             }
+            "int_lin_eq" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
+            "int_lin_eq_imp" => {
+                if !options.use_hypercube_linear {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_imp",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_int_lin_imp_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_imp",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
+            "int_lin_eq_reif" => {
+                if !options.use_hypercube_linear {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_reif",
+                        constraint_tag,
+                        pumpkin_constraints::equals,
+                    )?
+                } else {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_eq_reif",
+                        constraint_tag,
+                        hl_for_lin_eq,
+                    )?
+                }
+            }
             "int_ne" => compile_binary_int_predicate(
                 context,
                 exprs,
@@ -991,7 +1054,26 @@ fn hl_for_lin_le(
     rhs: i32,
     constraint_tag: ConstraintTag,
 ) -> impl NegatableConstraint {
-    pumpkin_core::hypercube_linear::hypercube_linear(
+    pumpkin_core::hypercube_linear::hypercube_linear_le(
+        std::iter::empty(),
+        terms.into_iter().map(|view| {
+            assert_eq!(view.offset, 0);
+
+            let weight = NonZero::new(view.scale).expect("zero weight in int_lin_le_imp");
+
+            (weight, view.inner)
+        }),
+        rhs,
+        constraint_tag,
+    )
+}
+
+fn hl_for_lin_eq(
+    terms: Box<[AffineView<DomainId>]>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    pumpkin_core::hypercube_linear::hypercube_linear_eq(
         std::iter::empty(),
         terms.into_iter().map(|view| {
             assert_eq!(view.offset, 0);
