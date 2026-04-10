@@ -495,10 +495,10 @@ impl HypercubeLinearResolver {
     /// Build the learned hypercube linear from the current state of the resolver.
     fn extract_learned_hypercube_linear(&mut self, propagates_at: usize) -> LearnedHypercubeLinear {
         let hypercube = std::mem::take(&mut self.working_hypercube)
-            .with_predicates(self.predicates_to_explain.drain())
+            .with_predicates(self.hypercube_predicates_on_conflict_dl.drain())
             .expect("can never encounter inconsistent hypercube");
 
-        let _ = self.hypercube_predicates_on_conflict_dl.drain();
+        let _ = self.predicates_to_explain.drain();
 
         LearnedHypercubeLinear {
             hypercube,
@@ -588,14 +588,7 @@ impl HypercubeLinearResolver {
             pivot.get_domain().scaled(weight_in_reason),
         );
 
-        trace!(
-            "  - tightly propagating: {} -> {}",
-            self.working_hypercube
-                .iter_predicates()
-                .chain(self.predicates_to_explain.iter())
-                .format(" & "),
-            self.conflicting_linear,
-        );
+        trace!("  - tightly propagating: {tightly_propagating_reason}");
 
         let tp_slack = compute_linear_slack_at_trail_position(
             state,
@@ -967,6 +960,17 @@ struct HypercubeLinear {
     linear: LinearInequality,
 }
 
+impl Display for HypercubeLinear {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -> {}",
+            self.hypercube.iter_predicates().format(" & "),
+            self.linear,
+        )
+    }
+}
+
 #[derive(Clone)]
 enum HypercubeLinearExplanation {
     Proper(HypercubeLinear),
@@ -1011,6 +1015,9 @@ impl HypercubeLinearExplanation {
             clause.push(predicate_to_weaken_on.into());
         }
 
+        clause
+    }
+
     fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
         match self {
             HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
@@ -1034,12 +1041,9 @@ impl HypercubeLinearExplanation {
 impl Display for HypercubeLinearExplanation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HypercubeLinearExplanation::Proper(hypercube_linear) => write!(
-                f,
-                "{} -> {}",
-                hypercube_linear.hypercube.iter_predicates().format(" & "),
-                hypercube_linear.linear
-            ),
+            HypercubeLinearExplanation::Proper(hypercube_linear) => {
+                write!(f, "{hypercube_linear}")
+            }
             HypercubeLinearExplanation::Conjunction(predicates) => {
                 write!(f, "{} -> false", predicates.iter().format(" & "))
             }
