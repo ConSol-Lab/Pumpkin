@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use std::fmt::Display;
+use std::io::Write;
 use std::num::NonZero;
+use std::rc::Rc;
 
 use itertools::Itertools;
 use log::debug;
@@ -16,6 +19,7 @@ use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::Trace;
 use crate::hypercube_linear::predicate_heap::PredicateHeap;
 use crate::math::num_ext::NumExt;
 use crate::predicate;
@@ -39,7 +43,7 @@ create_statistics_struct!(ResolverStatistics {
     num_conflicts: usize,
 });
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct HypercubeLinearResolver {
     /// The hypercube that is being discovered during conflict resolution.
     working_hypercube: Hypercube,
@@ -56,11 +60,30 @@ pub struct HypercubeLinearResolver {
     /// A temporary buffer for storing reasons.
     reason_buffer: Vec<Predicate>,
 
+    /// The proof file of the analysis.
+    proof_file: Rc<RefCell<Trace>>,
+
     /// Set of all learned constraints.
     ///
     /// Used to detect when re-learning the same constraint again.
     #[cfg(feature = "hl-checks")]
     learned_constraints: HashSet<(Hypercube, LinearInequality)>,
+}
+
+impl HypercubeLinearResolver {
+    pub fn new(trace: Trace) -> Self {
+        Self {
+            working_hypercube: Default::default(),
+            hypercube_predicates_on_conflict_dl: Default::default(),
+            predicates_to_explain: Default::default(),
+            conflicting_linear: Default::default(),
+            statistics: Default::default(),
+            reason_buffer: Default::default(),
+            proof_file: Rc::new(RefCell::new(trace)),
+            #[cfg(feature = "hl-checks")]
+            learned_constraints: Default::default(),
+        }
+    }
 }
 
 impl ConflictResolver for HypercubeLinearResolver {
@@ -106,13 +129,26 @@ impl HypercubeLinearResolver {
         context.restore_to(learned_constraint.propagates_at);
 
         let constraint_tag = context.state.new_constraint_tag();
+
+        writeln!(
+            self.proof_file.borrow_mut(),
+            "d {id} {h} -> {r}",
+            id = NonZero::from(constraint_tag),
+            h = learned_constraint.hypercube.iter_predicates().format(" & "),
+            r = learned_constraint.linear,
+        )
+        .expect("failed to write proof");
+
         let handle = context.state.add_propagator(HypercubeLinearConstructor {
             hypercube: learned_constraint.hypercube,
             linear: learned_constraint.linear,
             constraint_tag,
         });
 
-        debug!("  with ID = {:?}", handle.propagator_id());
+        debug!(
+            "  with ID = {:?} and tag = {constraint_tag:?}",
+            handle.propagator_id(),
+        );
     }
 
     /// Learns a conflicting hypercube linear that would have propagated at an earlier
@@ -179,6 +215,17 @@ impl HypercubeLinearResolver {
                 trace!("  => no longer contributes, skipping");
                 continue;
             }
+
+            writeln!(
+                self.proof_file.borrow_mut(),
+                "di {} -> {}",
+                self.working_hypercube
+                    .iter_predicates()
+                    .chain(self.hypercube_predicates_on_conflict_dl.iter())
+                    .format(" & "),
+                self.conflicting_linear,
+            )
+            .expect("failed to write proof");
 
             if self
                 .hypercube_predicates_on_conflict_dl
@@ -284,6 +331,14 @@ impl HypercubeLinearResolver {
                 {
                     trace!("explaining with HL");
 
+                    writeln!(
+                        self.proof_file.borrow_mut(),
+                        "i {h} -> {r}",
+                        h = hypercube.iter_predicates().format(" & "),
+                        r = linear,
+                    )
+                    .expect("failed to write proof");
+
                     for predicate in hypercube.iter_predicates() {
                         // The predicate may be false if it was propagated by the
                         // linear being a conflict. In that case, we do not need to
@@ -345,12 +400,29 @@ impl HypercubeLinearResolver {
         self.reason_buffer.push(!pivot);
 
         if maybe_inference_code.is_some() {
-            HypercubeLinearExplanation::Proper(HypercubeLinear {
+            let hypercube_linear = HypercubeLinear {
                 hypercube: Hypercube::new(self.reason_buffer.drain(..))
                     .expect("reason contains inconsistent predicates"),
                 linear: LinearInequality::trivially_false(),
-            })
+            };
+
+            writeln!(
+                self.proof_file.borrow_mut(),
+                "i {h} -> {r}",
+                h = hypercube_linear.hypercube.iter_predicates().format(" & "),
+                r = hypercube_linear.linear,
+            )
+            .expect("failed to write proof");
+
+            HypercubeLinearExplanation::Proper(hypercube_linear)
         } else {
+            writeln!(
+                self.proof_file.borrow_mut(),
+                "i {} ->  <= -1",
+                self.reason_buffer.iter().format(" & "),
+            )
+            .expect("failed to write proof");
+
             // In this case the explanation explains the semantics of the atomic
             // constraint. That results in an inconsistent hypercube, but we need to
             // perform the resolution anyways.
@@ -366,6 +438,13 @@ impl HypercubeLinearResolver {
         match conflict {
             Conflict::Propagator(propagator_conflict) => {
                 trace!("Converting propagator conflict to hypercube");
+
+                writeln!(
+                    self.proof_file.borrow_mut(),
+                    "i {} ->  <= -1",
+                    propagator_conflict.conjunction.iter().format(" & "),
+                )
+                .expect("failed to write proof");
 
                 for predicate in propagator_conflict.conjunction {
                     self.add_hypercube_predicate(state, predicate);
@@ -416,6 +495,14 @@ impl HypercubeLinearResolver {
                     ),
                 )
             {
+                writeln!(
+                    self.proof_file.borrow_mut(),
+                    "i {h} -> {r}",
+                    h = hypercube.iter_predicates().format(" & "),
+                    r = linear,
+                )
+                .expect("failed to write proof");
+
                 for predicate in hypercube.iter_predicates() {
                     self.add_hypercube_predicate(state, predicate);
                 }
@@ -441,7 +528,7 @@ impl HypercubeLinearResolver {
             }
         }
 
-        let mut clausal_conflict = vec![!trigger_predicate];
+        let mut clausal_conflict = vec![];
         let _ = state.reason_store.get_or_compute(
             trigger_reason,
             ExplanationContext::without_working_nogood(
@@ -453,6 +540,14 @@ impl HypercubeLinearResolver {
             &mut clausal_conflict,
             trigger_predicate,
         );
+        clausal_conflict.push(!trigger_predicate);
+
+        writeln!(
+            self.proof_file.borrow_mut(),
+            "i {} ->  <= -1",
+            clausal_conflict.iter().format(" & "),
+        )
+        .expect("failed to write proof");
 
         trace!("conflicting predicate = {trigger_predicate:?}");
 
@@ -490,6 +585,8 @@ impl HypercubeLinearResolver {
 
         if checkpoint == 0 {
             // Ignore it. We don't need to process it further.
+            writeln!(self.proof_file.borrow_mut(), "i {} ->  <= -1", !predicate)
+                .expect("failed to write proof");
         } else if checkpoint == state.get_checkpoint() {
             self.predicates_to_explain.push(predicate, state);
             self.hypercube_predicates_on_conflict_dl
@@ -693,6 +790,15 @@ impl HypercubeLinearResolver {
                     "weakening the conflict will never result in a trivially satisfiable linear",
                 );
 
+            trace!(
+                "weakened conflict constraint: {pivot} & {} -> {}",
+                self.working_hypercube
+                    .iter_predicates()
+                    .chain(self.hypercube_predicates_on_conflict_dl.iter())
+                    .format(" & "),
+                self.conflicting_linear,
+            );
+
             // Then, we have to do the same on the explanation.
             //
             // This is unnecessary if we end up converting the explanation to a clause.
@@ -706,7 +812,12 @@ impl HypercubeLinearResolver {
             trace!("weakened explanation: {explanation}");
         }
 
-        for predicate in explanation.into_clause(state, trail_position) {
+        let clausal_explanation = explanation.into_clause(state, trail_position);
+        trace!(
+            "clausal explanation: {}",
+            clausal_explanation.iter().format(" & ")
+        );
+        for predicate in clausal_explanation {
             let truth_value = state
                 .truth_value(predicate)
                 .expect("all predicates in explanation hypercube are assigned");
@@ -717,24 +828,7 @@ impl HypercubeLinearResolver {
                 continue;
             }
 
-            let checkpoint = state
-                .get_checkpoint_for_predicate(predicate)
-                .expect("everything is assigned in the hypercube");
-
-            if checkpoint == 0 {
-                // Ignore the predicate.
-            } else if checkpoint < state.get_checkpoint() {
-                // If the predicate is assigned at a previous decision level, it will
-                // be part of the hypercube of the final learned constraint.
-                self.working_hypercube = std::mem::take(&mut self.working_hypercube)
-                    .with_predicate(predicate)
-                    .expect("predicate is true so is not inconsistent with working hypercube");
-            } else {
-                // If the predicate is assiged at the current decision level, it may
-                // need to be explained in the future.
-                assert_eq!(checkpoint, state.get_checkpoint());
-                self.predicates_to_explain.push(predicate, state);
-            }
+            self.add_hypercube_predicate(state, predicate);
         }
     }
 
@@ -1054,7 +1148,7 @@ impl Display for HypercubeLinearExplanation {
                 write!(f, "{hypercube_linear}")
             }
             HypercubeLinearExplanation::Conjunction(predicates) => {
-                write!(f, "{} -> false", predicates.iter().format(" & "))
+                write!(f, "{} ->  <= -1", predicates.iter().format(" & "))
             }
         }
     }

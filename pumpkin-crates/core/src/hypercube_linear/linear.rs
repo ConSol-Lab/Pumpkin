@@ -152,8 +152,10 @@ impl Display for LinearInequality {
         write!(
             f,
             "{} <= {}",
-            self.terms()
-                .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
+            self.terms().format_with(" ", |elt, f| f(&format_args!(
+                "{} {}",
+                elt.scale, elt.inner
+            ))),
             self.bound(),
         )
     }

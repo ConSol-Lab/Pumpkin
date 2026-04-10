@@ -29,6 +29,7 @@ use pumpkin_conflict_resolvers::resolvers::AnalysisMode;
 use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::hypercube_linear::HypercubeLinearResolver;
+use pumpkin_core::hypercube_linear::Trace;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -646,12 +647,19 @@ fn run() -> PumpkinResult<()> {
                         args.cumulative_incremental_backtracking,
                     ),
                     optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.map(|_| args.proof_type),
+                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
                     use_hypercube_linear: args.conflict_resolver
                         == ConflictResolverType::HypercubeLinear,
                 },
-                HypercubeLinearResolver::default(),
+                HypercubeLinearResolver::new(
+                    args.proof_path
+                        .as_ref()
+                        .map(File::create)
+                        .transpose()?
+                        .map(Trace::to_file)
+                        .unwrap_or(Trace::discard()),
+                ),
             )?,
         },
     }
