@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 use std::iter::once;
 
 use log::debug;
+use log::trace;
 
 use super::TrailedValues;
 use super::notifications::NotificationEngine;
@@ -53,6 +54,7 @@ impl DebugHelper {
         propagators: &PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
+        trace!("---------- starting fixed point check");
         let mut assignments_clone = assignments.clone();
         let mut trailed_values_clone = trailed_values.clone();
         let mut notification_engine_clone =
@@ -114,6 +116,9 @@ impl DebugHelper {
                 panic!("missed propagations");
             }
         }
+
+        trace!("---------- end fixed point check");
+
         true
     }
 
@@ -151,6 +156,7 @@ impl DebugHelper {
         propagators: &mut PropagatorStore,
         notification_engine: &NotificationEngine,
     ) -> bool {
+        trace!("---------- start propagation check");
         if propagators
             .as_propagator_handle::<NogoodPropagator>(propagator_id)
             .is_some()
@@ -191,6 +197,7 @@ impl DebugHelper {
                 notification_engine,
             );
         }
+        trace!("---------- end propagation check");
         result
     }
 
