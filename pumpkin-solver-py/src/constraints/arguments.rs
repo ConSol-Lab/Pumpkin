@@ -1,5 +1,5 @@
+use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::variables::IntegerVariableEnum;
-use pumpkin_solver::core::variables::Literal;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
@@ -20,7 +20,7 @@ impl PythonConstraintArg for IntExpression {
 }
 
 impl PythonConstraintArg for BoolExpression {
-    type Output = Literal;
+    type Output = Predicate;
 
     fn to_solver_constraint_argument(self) -> Self::Output {
         self.0

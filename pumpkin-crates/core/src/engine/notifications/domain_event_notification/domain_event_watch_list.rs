@@ -10,7 +10,6 @@ use crate::engine::notifications::NotificationEngine;
 use crate::engine::variables::DomainId;
 use crate::predicates::Predicate;
 use crate::propagation::PropagatorVarId;
-use crate::variables::Literal;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct WatchListDomainEvents {
@@ -31,9 +30,9 @@ pub struct Watchers<'a> {
 }
 
 impl<'a> Watchers<'a> {
-    pub(crate) fn watch_literal(&mut self, literal: Literal, events: EnumSet<DomainEvent>) {
+    pub(crate) fn watch_predicate(&mut self, predicate: Predicate, events: EnumSet<DomainEvent>) {
         self.notification_engine.watch_literal(
-            literal,
+            predicate,
             events,
             self.propagator_var,
             self.trailed_values,
@@ -41,13 +40,13 @@ impl<'a> Watchers<'a> {
         )
     }
 
-    pub(crate) fn watch_literal_backtrack(
+    pub(crate) fn watch_predicate_backtrack(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         events: EnumSet<DomainEvent>,
     ) {
         self.notification_engine.watch_literal_backtrack(
-            literal,
+            predicate,
             events,
             self.propagator_var,
             self.trailed_values,

@@ -11,13 +11,12 @@ use crate::propagation::DomainEvent;
 use crate::propagation::LocalId;
 use crate::propagation::PropagatorVarId;
 use crate::state::PropagatorId;
-use crate::variables::Literal;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct PredicateWatchList {
     /// The watch list from predicates to propagators.
     pub(crate) watch_list_predicate_id: KeyedVec<PredicateId, Vec<PredicateWatcher>>,
-    pub(crate) watch_list_predicate_id_backtrack: HashMap<Literal, Vec<PredicateWatcher>>,
+    pub(crate) watch_list_predicate_id_backtrack: HashMap<PredicateId, Vec<PredicateWatcher>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,7 +127,7 @@ impl PredicateWatchList {
 
     pub(crate) fn watch_literal(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         propagator_var: PropagatorVarId,
         events: EnumSet<DomainEvent>,
         predicate_notifier: &mut PredicateNotifier,
@@ -139,7 +138,7 @@ impl PredicateWatchList {
             match event {
                 DomainEvent::Assign => {
                     self.add_literal_watcher(
-                        literal.inner,
+                        predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -147,7 +146,7 @@ impl PredicateWatchList {
                         events,
                     );
                     self.add_literal_watcher(
-                        !literal.inner,
+                        !predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -157,7 +156,7 @@ impl PredicateWatchList {
                 }
                 DomainEvent::LowerBound => {
                     self.add_literal_watcher(
-                        literal.inner,
+                        predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -167,7 +166,7 @@ impl PredicateWatchList {
                 }
                 DomainEvent::UpperBound => {
                     self.add_literal_watcher(
-                        !literal.inner,
+                        !predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -177,7 +176,7 @@ impl PredicateWatchList {
                 }
                 DomainEvent::Removal => {
                     self.add_literal_watcher(
-                        literal.inner,
+                        predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -185,7 +184,7 @@ impl PredicateWatchList {
                         events,
                     );
                     self.add_literal_watcher(
-                        !literal.inner,
+                        !predicate,
                         propagator_var,
                         predicate_notifier,
                         trailed_values,
@@ -213,15 +212,16 @@ impl PredicateWatchList {
 
     pub(crate) fn watch_literal_backtrack(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         propagator_var: PropagatorVarId,
         events: EnumSet<DomainEvent>,
         predicate_notifier: &mut PredicateNotifier,
         assignments: &Assignments,
         trailed_values: &mut TrailedValues,
     ) {
+        let predicate_id = predicate_notifier.get_id(predicate);
         self.watch_list_predicate_id_backtrack
-            .entry(literal)
+            .entry(predicate_id)
             .or_default()
             .push(PredicateWatcher::new_literal_watcher(
                 propagator_var.propagator,
@@ -232,13 +232,13 @@ impl PredicateWatchList {
             match event {
                 DomainEvent::Assign => {
                     self.add_literal_watcher_backtrack(
-                        literal.inner,
+                        predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
                     );
                     self.add_literal_watcher_backtrack(
-                        !literal.inner,
+                        !predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
@@ -246,7 +246,7 @@ impl PredicateWatchList {
                 }
                 DomainEvent::LowerBound => {
                     self.add_literal_watcher_backtrack(
-                        literal.inner,
+                        predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
@@ -254,7 +254,7 @@ impl PredicateWatchList {
                 }
                 DomainEvent::UpperBound => {
                     self.add_literal_watcher_backtrack(
-                        !literal.inner,
+                        !predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
@@ -262,13 +262,13 @@ impl PredicateWatchList {
                 }
                 DomainEvent::Removal => {
                     self.add_literal_watcher_backtrack(
-                        literal.inner,
+                        predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
                     );
                     self.add_literal_watcher_backtrack(
-                        !literal.inner,
+                        !predicate,
                         predicate_notifier,
                         trailed_values,
                         assignments,
@@ -292,11 +292,11 @@ impl PredicateWatchList {
 
     pub(crate) fn backtrack_watcher_for_literal_and_propagator(
         &self,
-        literal: Literal,
+        predicate_id: PredicateId,
         propagator_id: PropagatorId,
     ) -> Option<PredicateWatcher> {
         self.watch_list_predicate_id_backtrack
-            .get(&literal)
+            .get(&predicate_id)
             .and_then(|watch_list| {
                 watch_list
                     .iter()

@@ -4,7 +4,7 @@ use crate::branching::SelectionContext;
 use crate::branching::brancher::BrancherEvent;
 use crate::branching::variable_selection::VariableSelector;
 use crate::engine::variables::DomainId;
-use crate::variables::Literal;
+use crate::predicates::Predicate;
 
 /// A [`VariableSelector`] which selects the first variable which is not fixed given the order in
 /// the provided list.
@@ -37,11 +37,11 @@ impl VariableSelector<DomainId> for InputOrder<DomainId> {
     }
 }
 
-impl VariableSelector<Literal> for InputOrder<Literal> {
-    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+impl VariableSelector<Predicate> for InputOrder<Predicate> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         self.variables
             .iter()
-            .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
+            .find(|&variable| !context.is_predicate_assigned(*variable))
             .copied()
     }
 

@@ -7,7 +7,6 @@ mod constant;
 mod domain_generator_iterator;
 mod domain_id;
 mod integer_variable;
-mod literal;
 mod transformable_variable;
 
 pub use affine_view::AffineView;
@@ -15,5 +14,4 @@ pub(crate) use domain_generator_iterator::DomainGeneratorIterator;
 pub use domain_id::DomainId;
 pub use integer_variable::IntegerVariable;
 pub use integer_variable::IntegerVariableEnum;
-pub use literal::Literal;
 pub use transformable_variable::TransformableVariable;

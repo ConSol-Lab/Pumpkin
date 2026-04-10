@@ -31,7 +31,6 @@ use crate::containers::KeyGenerator;
 use crate::engine::Assignments;
 use crate::engine::variable_names::VariableNames;
 use crate::predicates::Predicate;
-use crate::variables::Literal;
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
 /// allow the following types of proofs:
@@ -311,7 +310,7 @@ impl ProofLog {
         ) || cfg!(feature = "check-deductions")
     }
 
-    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
+    pub(crate) fn reify_predicate(&mut self, predicate: Predicate) {
         let Some(ProofImpl::CpProof {
             ref mut proof_atomics,
             ..
@@ -320,7 +319,7 @@ impl ProofLog {
             return;
         };
 
-        proof_atomics.reify_predicate(literal, predicate);
+        proof_atomics.reify_predicate(predicate);
     }
 
     pub(crate) fn is_logging_proof(&self) -> bool {

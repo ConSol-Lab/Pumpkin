@@ -12,6 +12,7 @@ use pumpkin_solver::core::optimisation::OptimisationDirection;
 use pumpkin_solver::core::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_solver::core::optimisation::linear_unsat_sat::LinearUnsatSat;
 use pumpkin_solver::core::options::SolverOptions;
+use pumpkin_solver::core::predicates::PredicateConstructor;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::proof::ProofLog;
 use pumpkin_solver::core::rand::SeedableRng;
@@ -127,13 +128,16 @@ impl Model {
         }
 
         let literal = if let Some(name) = name {
-            self.solver.new_named_literal(name)
+            self.solver
+                .new_named_bounded_integer(0, 1, name)
+                .lower_bound_predicate(1)
         } else {
-            self.solver.new_literal()
+            self.solver
+                .new_bounded_integer(0, 1)
+                .lower_bound_predicate(1)
         };
 
-        self.brancher
-            .add_domain(literal.get_true_predicate().get_domain());
+        self.brancher.add_domain(literal.get_domain());
 
         Ok(literal.into())
     }
@@ -175,14 +179,7 @@ impl Model {
         let solver_predicate = predicate.into_solver_predicate();
         let Tag(tag) = tag;
 
-        let literal = if let Some(name) = name {
-            self.solver
-                .new_named_literal_for_predicate(solver_predicate, tag, name)
-        } else {
-            self.solver.new_literal_for_predicate(solver_predicate, tag)
-        };
-
-        Ok(literal.into())
+        Ok(solver_predicate.into())
     }
 
     /// Add the given constraint to the model.

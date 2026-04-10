@@ -12,7 +12,6 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::predicates::Predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
-use crate::variables::Literal;
 
 /// A trait specifying the required behaviour of an integer variable such as retrieving a
 /// lower-bound ([`IntegerVariable::lower_bound`]).
@@ -77,7 +76,7 @@ pub trait IntegerVariable:
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IntegerVariableEnum {
     DomainId(AffineView<DomainId>),
-    Literal(AffineView<Literal>),
+    Predicate(AffineView<Predicate>),
 }
 
 impl From<AffineView<DomainId>> for IntegerVariableEnum {
@@ -92,15 +91,15 @@ impl From<DomainId> for IntegerVariableEnum {
     }
 }
 
-impl From<AffineView<Literal>> for IntegerVariableEnum {
-    fn from(value: AffineView<Literal>) -> Self {
-        IntegerVariableEnum::Literal(value)
+impl From<AffineView<Predicate>> for IntegerVariableEnum {
+    fn from(value: AffineView<Predicate>) -> Self {
+        IntegerVariableEnum::Predicate(value)
     }
 }
 
-impl From<Literal> for IntegerVariableEnum {
-    fn from(value: Literal) -> Self {
-        IntegerVariableEnum::Literal(value.scaled(1))
+impl From<Predicate> for IntegerVariableEnum {
+    fn from(value: Predicate) -> Self {
+        IntegerVariableEnum::Predicate(value.scaled(1))
     }
 }
 
@@ -110,28 +109,28 @@ impl PredicateConstructor for IntegerVariableEnum {
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.lower_bound_predicate(bound),
-            IntegerVariableEnum::Literal(literal) => literal.lower_bound_predicate(bound),
+            IntegerVariableEnum::Predicate(literal) => literal.lower_bound_predicate(bound),
         }
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.upper_bound_predicate(bound),
-            IntegerVariableEnum::Literal(literal) => literal.upper_bound_predicate(bound),
+            IntegerVariableEnum::Predicate(literal) => literal.upper_bound_predicate(bound),
         }
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.equality_predicate(bound),
-            IntegerVariableEnum::Literal(literal) => literal.equality_predicate(bound),
+            IntegerVariableEnum::Predicate(literal) => literal.equality_predicate(bound),
         }
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.disequality_predicate(bound),
-            IntegerVariableEnum::Literal(literal) => literal.disequality_predicate(bound),
+            IntegerVariableEnum::Predicate(literal) => literal.disequality_predicate(bound),
         }
     }
 }
@@ -140,14 +139,14 @@ impl TransformableVariable<IntegerVariableEnum> for IntegerVariableEnum {
     fn scaled(&self, scale: i32) -> IntegerVariableEnum {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.scaled(scale).into(),
-            IntegerVariableEnum::Literal(literal) => literal.scaled(scale).into(),
+            IntegerVariableEnum::Predicate(literal) => literal.scaled(scale).into(),
         }
     }
 
     fn offset(&self, offset: i32) -> IntegerVariableEnum {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.offset(offset).into(),
-            IntegerVariableEnum::Literal(literal) => literal.offset(offset).into(),
+            IntegerVariableEnum::Predicate(literal) => literal.offset(offset).into(),
         }
     }
 }
@@ -158,7 +157,7 @@ impl IntegerVariable for IntegerVariableEnum {
     fn lower_bound(&self, assignment: &Assignments) -> i32 {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.lower_bound(assignment),
-            IntegerVariableEnum::Literal(literal) => literal.lower_bound(assignment),
+            IntegerVariableEnum::Predicate(literal) => literal.lower_bound(assignment),
         }
     }
 
@@ -171,7 +170,7 @@ impl IntegerVariable for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.lower_bound_at_trail_position(assignment, trail_position)
             }
-            IntegerVariableEnum::Literal(literal) => {
+            IntegerVariableEnum::Predicate(literal) => {
                 literal.lower_bound_at_trail_position(assignment, trail_position)
             }
         }
@@ -180,7 +179,7 @@ impl IntegerVariable for IntegerVariableEnum {
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.upper_bound(assignment),
-            IntegerVariableEnum::Literal(literal) => literal.upper_bound(assignment),
+            IntegerVariableEnum::Predicate(literal) => literal.upper_bound(assignment),
         }
     }
 
@@ -193,7 +192,7 @@ impl IntegerVariable for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.upper_bound_at_trail_position(assignment, trail_position)
             }
-            IntegerVariableEnum::Literal(literal) => {
+            IntegerVariableEnum::Predicate(literal) => {
                 literal.upper_bound_at_trail_position(assignment, trail_position)
             }
         }
@@ -202,7 +201,7 @@ impl IntegerVariable for IntegerVariableEnum {
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.contains(assignment, value),
-            IntegerVariableEnum::Literal(literal) => literal.contains(assignment, value),
+            IntegerVariableEnum::Predicate(literal) => literal.contains(assignment, value),
         }
     }
 
@@ -216,7 +215,7 @@ impl IntegerVariable for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.contains_at_trail_position(assignment, value, trail_position)
             }
-            IntegerVariableEnum::Literal(literal) => {
+            IntegerVariableEnum::Predicate(literal) => {
                 literal.contains_at_trail_position(assignment, value, trail_position)
             }
         }
@@ -228,7 +227,7 @@ impl IntegerVariable for IntegerVariableEnum {
                 .iterate_domain(assignment)
                 .collect::<Vec<_>>()
                 .into_iter(),
-            IntegerVariableEnum::Literal(literal) => literal
+            IntegerVariableEnum::Predicate(literal) => literal
                 .iterate_domain(assignment)
                 .collect::<Vec<_>>()
                 .into_iter(),
@@ -238,14 +237,14 @@ impl IntegerVariable for IntegerVariableEnum {
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.watch_all(watchers, events),
-            IntegerVariableEnum::Literal(literal) => literal.watch_all(watchers, events),
+            IntegerVariableEnum::Predicate(literal) => literal.watch_all(watchers, events),
         }
     }
 
     fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.unwatch_all(watchers),
-            IntegerVariableEnum::Literal(literal) => literal.unwatch_all(watchers),
+            IntegerVariableEnum::Predicate(literal) => literal.unwatch_all(watchers),
         }
     }
 
@@ -254,14 +253,16 @@ impl IntegerVariable for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.watch_all_backtrack(watchers, events)
             }
-            IntegerVariableEnum::Literal(literal) => literal.watch_all_backtrack(watchers, events),
+            IntegerVariableEnum::Predicate(literal) => {
+                literal.watch_all_backtrack(watchers, events)
+            }
         }
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.unpack_event(event),
-            IntegerVariableEnum::Literal(literal) => literal.unpack_event(event),
+            IntegerVariableEnum::Predicate(literal) => literal.unpack_event(event),
         }
     }
 
@@ -274,7 +275,7 @@ impl IntegerVariable for IntegerVariableEnum {
                 .get_holes_at_current_checkpoint(assignments)
                 .collect::<Vec<_>>()
                 .into_iter(),
-            IntegerVariableEnum::Literal(literal) => literal
+            IntegerVariableEnum::Predicate(literal) => literal
                 .get_holes_at_current_checkpoint(assignments)
                 .collect::<Vec<_>>()
                 .into_iter(),
@@ -287,7 +288,7 @@ impl IntegerVariable for IntegerVariableEnum {
                 .get_holes(assignments)
                 .collect::<Vec<_>>()
                 .into_iter(),
-            IntegerVariableEnum::Literal(literal) => literal
+            IntegerVariableEnum::Predicate(literal) => literal
                 .get_holes(assignments)
                 .collect::<Vec<_>>()
                 .into_iter(),
@@ -301,35 +302,35 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.does_atomic_constrain_self(atomic)
             }
-            IntegerVariableEnum::Literal(literal) => literal.does_atomic_constrain_self(atomic),
+            IntegerVariableEnum::Predicate(literal) => literal.does_atomic_constrain_self(atomic),
         }
     }
 
     fn atomic_less_than(&self, value: i32) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.atomic_less_than(value),
-            IntegerVariableEnum::Literal(literal) => literal.atomic_less_than(value),
+            IntegerVariableEnum::Predicate(literal) => literal.atomic_less_than(value),
         }
     }
 
     fn atomic_greater_than(&self, value: i32) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.atomic_greater_than(value),
-            IntegerVariableEnum::Literal(literal) => literal.atomic_greater_than(value),
+            IntegerVariableEnum::Predicate(literal) => literal.atomic_greater_than(value),
         }
     }
 
     fn atomic_equal(&self, value: i32) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.atomic_equal(value),
-            IntegerVariableEnum::Literal(literal) => literal.atomic_equal(value),
+            IntegerVariableEnum::Predicate(literal) => literal.atomic_equal(value),
         }
     }
 
     fn atomic_not_equal(&self, value: i32) -> Predicate {
         match self {
             IntegerVariableEnum::DomainId(domain_id) => domain_id.atomic_not_equal(value),
-            IntegerVariableEnum::Literal(literal) => literal.atomic_not_equal(value),
+            IntegerVariableEnum::Predicate(literal) => literal.atomic_not_equal(value),
         }
     }
 
@@ -341,7 +342,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.induced_lower_bound(variable_state)
             }
-            IntegerVariableEnum::Literal(literal) => literal.induced_lower_bound(variable_state),
+            IntegerVariableEnum::Predicate(literal) => literal.induced_lower_bound(variable_state),
         }
     }
 
@@ -353,7 +354,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.induced_upper_bound(variable_state)
             }
-            IntegerVariableEnum::Literal(literal) => literal.induced_upper_bound(variable_state),
+            IntegerVariableEnum::Predicate(literal) => literal.induced_upper_bound(variable_state),
         }
     }
 
@@ -365,7 +366,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.induced_fixed_value(variable_state)
             }
-            IntegerVariableEnum::Literal(literal) => literal.induced_fixed_value(variable_state),
+            IntegerVariableEnum::Predicate(literal) => literal.induced_fixed_value(variable_state),
         }
     }
 
@@ -378,7 +379,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => {
                 domain_id.induced_domain_contains(variable_state, value)
             }
-            IntegerVariableEnum::Literal(literal) => {
+            IntegerVariableEnum::Predicate(literal) => {
                 literal.induced_domain_contains(variable_state, value)
             }
         }
@@ -396,7 +397,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
                 .induced_holes(variable_state)
                 .collect::<Vec<_>>()
                 .into_iter(),
-            IntegerVariableEnum::Literal(literal) => literal
+            IntegerVariableEnum::Predicate(literal) => literal
                 .induced_holes(variable_state)
                 .collect::<Vec<_>>()
                 .into_iter(),
@@ -414,7 +415,7 @@ impl CheckerVariable<Predicate> for IntegerVariableEnum {
             IntegerVariableEnum::DomainId(domain_id) => domain_id
                 .iter_induced_domain(variable_state)
                 .map(|iter| iter.collect::<Vec<_>>().into_iter()),
-            IntegerVariableEnum::Literal(literal) => literal
+            IntegerVariableEnum::Predicate(literal) => literal
                 .iter_induced_domain(variable_state)
                 .map(|iter| iter.collect::<Vec<_>>().into_iter()),
         }

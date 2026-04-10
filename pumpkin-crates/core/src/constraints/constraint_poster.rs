@@ -4,7 +4,7 @@ use super::Constraint;
 use super::NegatableConstraint;
 use crate::ConstraintOperationError;
 use crate::Solver;
-use crate::variables::Literal;
+use crate::predicates::Predicate;
 
 /// A structure which is responsible for adding the created [`Constraint`]s to the
 /// [`Solver`]. For an example on how to use this, see [`crate::constraints`].
@@ -39,7 +39,7 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     /// to a root-level conflict.
     pub fn implied_by(
         mut self,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         self.constraint
             .take()
@@ -54,7 +54,7 @@ impl<ConstraintImpl: NegatableConstraint> ConstraintPoster<'_, ConstraintImpl> {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
-    pub fn reify(mut self, reification_literal: Literal) -> Result<(), ConstraintOperationError> {
+    pub fn reify(mut self, reification_literal: Predicate) -> Result<(), ConstraintOperationError> {
         self.constraint
             .take()
             .unwrap()

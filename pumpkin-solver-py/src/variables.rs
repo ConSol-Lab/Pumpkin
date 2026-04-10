@@ -1,7 +1,6 @@
 use pumpkin_solver::core::predicate;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::IntegerVariableEnum;
-use pumpkin_solver::core::variables::Literal;
 use pumpkin_solver::core::variables::TransformableVariable;
 use pyo3::prelude::*;
 
@@ -15,8 +14,8 @@ impl From<DomainId> for IntExpression {
     }
 }
 
-impl From<Literal> for IntExpression {
-    fn from(value: Literal) -> Self {
+impl From<pumpkin_solver::core::predicates::Predicate> for IntExpression {
+    fn from(value: pumpkin_solver::core::predicates::Predicate) -> Self {
         IntExpression(value.into())
     }
 }
@@ -40,7 +39,7 @@ impl IntExpression {
 
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct BoolExpression(pub Literal);
+pub struct BoolExpression(pub pumpkin_solver::core::predicates::Predicate);
 
 #[pymethods]
 impl BoolExpression {
@@ -63,8 +62,8 @@ impl BoolExpression {
     }
 }
 
-impl From<Literal> for BoolExpression {
-    fn from(literal: Literal) -> BoolExpression {
+impl From<pumpkin_solver::core::predicates::Predicate> for BoolExpression {
+    fn from(literal: pumpkin_solver::core::predicates::Predicate) -> BoolExpression {
         BoolExpression(literal)
     }
 }

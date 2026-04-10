@@ -45,6 +45,6 @@ impl Solution {
     }
 
     fn bool_value(&self, variable: BoolExpression) -> bool {
-        self.0.get_literal_value(variable.0)
+        self.0.get_predicate_value(variable.0)
     }
 }

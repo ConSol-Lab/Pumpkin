@@ -1,10 +1,20 @@
+use enumset::EnumSet;
 use enumset::EnumSetType;
 use pumpkin_checking::AtomicConstraint;
+use pumpkin_checking::CheckerVariable;
+use pumpkin_checking::IntExt;
+use pumpkin_checking::VariableState;
 
 use crate::engine::Assignments;
+use crate::engine::notifications::Watchers;
 use crate::engine::variables::DomainId;
 use crate::predicate;
+use crate::predicates::PredicateConstructor;
 use crate::propagation::DomainEvent;
+use crate::propagation::OpaqueDomainEvent;
+use crate::variables::AffineView;
+use crate::variables::IntegerVariable;
+use crate::variables::TransformableVariable;
 
 /// Representation of a domain operation, also known as an atomic constraint. It is a triple
 /// ([`DomainId`], [`PredicateType`], value).
@@ -272,6 +282,293 @@ impl AtomicConstraint for Predicate {
 
     fn negate(&self) -> Self {
         !*self
+    }
+}
+
+impl CheckerVariable<Predicate> for Predicate {
+    fn does_atomic_constrain_self(&self, atomic: &Predicate) -> bool {
+        atomic.get_domain() == self.get_domain()
+    }
+
+    fn atomic_less_than(&self, value: i32) -> Predicate {
+        if value == 0 {
+            self.negate()
+        } else if value >= 1 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_greater_than(&self, value: i32) -> Predicate {
+        if value == 1 {
+            self.negate()
+        } else if value <= 0 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_equal(&self, value: i32) -> Predicate {
+        if value == 1 {
+            *self
+        } else if value == 0 {
+            self.negate()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn atomic_not_equal(&self, value: i32) -> Predicate {
+        if value == 1 {
+            self.negate()
+        } else if value == 0 {
+            *self
+        } else {
+            Predicate::trivially_true()
+        }
+    }
+
+    fn induced_lower_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
+        IntExt::Int(if variable_state.is_true(self) {
+            1
+        } else {
+            Default::default()
+        })
+    }
+
+    fn induced_upper_bound(&self, variable_state: &VariableState<Predicate>) -> IntExt {
+        IntExt::Int(if variable_state.is_true(&self.negate()) {
+            0
+        } else {
+            1
+        })
+    }
+
+    fn induced_fixed_value(&self, variable_state: &VariableState<Predicate>) -> Option<i32> {
+        if variable_state.is_true(self) {
+            Some(1)
+        } else if variable_state.is_true(&self.negate()) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    fn induced_domain_contains(
+        &self,
+        variable_state: &VariableState<Predicate>,
+        value: i32,
+    ) -> bool {
+        if value == 1 && !variable_state.is_true(&self.negate()) {
+            true
+        } else {
+            value == 0 && !variable_state.is_true(self)
+        }
+    }
+
+    fn induced_holes<'this, 'state>(
+        &'this self,
+        _variable_state: &'state VariableState<Predicate>,
+    ) -> impl Iterator<Item = i32> + 'state
+    where
+        'this: 'state,
+    {
+        std::iter::empty()
+    }
+
+    fn iter_induced_domain<'this, 'state>(
+        &'this self,
+        variable_state: &'state VariableState<Predicate>,
+    ) -> Option<impl Iterator<Item = i32> + 'state>
+    where
+        'this: 'state,
+    {
+        Some((0..=1).filter(|&value| {
+            if value == 0 {
+                !variable_state.is_true(self)
+            } else if value == 1 {
+                !variable_state.is_true(&!*self)
+            } else {
+                unreachable!()
+            }
+        }))
+    }
+}
+
+impl IntegerVariable for Predicate {
+    type AffineView = AffineView<Self>;
+
+    /// Returns the lower bound represented as a 0-1 value.
+    /// Literals that evaluate to true have a lower bound of 1.
+    /// Literal that evaluate to false have a lower bound of 0.
+    /// Unassigned literals have a lower bound of 0.
+    fn lower_bound(&self, assignment: &Assignments) -> i32 {
+        if assignment.is_predicate_satisfied(*self) {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if assignment.is_predicate_satisfied_at_trail_position(*self, trail_position) {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Returns the upper bound represented as a 0-1 value.
+    /// Literals that evaluate to true have an upper bound of 1.
+    /// Literal that evaluate to false have a upper bound of 0.
+    /// Unassigned literals have a upper bound of 1.
+    fn upper_bound(&self, assignment: &Assignments) -> i32 {
+        if assignment.is_predicate_satisfied(self.negate()) {
+            0
+        } else {
+            1
+        }
+    }
+
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if assignment.is_predicate_satisfied_at_trail_position(self.negate(), trail_position) {
+            0
+        } else {
+            1
+        }
+    }
+
+    /// Returns whether the input value, when interpreted as a bool,
+    /// can be considered for the literal.
+    /// Literals that evaluate to true only contain value 1.
+    /// Literals that evaluate to false only contain value 0.
+    /// Unassigned literals contain both values 0 and 1.
+    fn contains(&self, assignment: &Assignments, value: i32) -> bool {
+        if value == 0 {
+            !assignment.is_predicate_satisfied(*self)
+        } else if value == 1 {
+            !assignment.is_predicate_satisfied(self.negate())
+        } else {
+            false
+        }
+    }
+
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        if value == 0 {
+            !assignment.is_predicate_satisfied_at_trail_position(*self, trail_position)
+        } else if value == 1 {
+            !assignment.is_predicate_satisfied_at_trail_position(self.negate(), trail_position)
+        } else {
+            false
+        }
+    }
+
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+        (0..=1).filter(|&value| {
+            if value == 0 {
+                !assignment.is_predicate_satisfied(*self)
+            } else if value == 1 {
+                !assignment.is_predicate_satisfied(!*self)
+            } else {
+                unreachable!()
+            }
+        })
+    }
+
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        watchers.watch_predicate(*self, events)
+    }
+
+    fn unwatch_all(&self, watchers: &mut Watchers<'_>) {
+        watchers.unwatch_predicate(*self);
+    }
+
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
+        event.unwrap()
+    }
+
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        watchers.watch_predicate_backtrack(*self, events)
+    }
+
+    fn get_holes_at_current_checkpoint(
+        &self,
+        _assignments: &Assignments,
+    ) -> impl Iterator<Item = i32> {
+        std::iter::empty()
+    }
+
+    fn get_holes(&self, _assignments: &Assignments) -> impl Iterator<Item = i32> {
+        std::iter::empty()
+    }
+}
+
+impl PredicateConstructor for Predicate {
+    type Value = i32;
+
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        if bound == 1 {
+            *self
+        } else if bound < 1 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        if bound == 0 {
+            self.negate()
+        } else if bound > 0 {
+            Predicate::trivially_true()
+        } else {
+            Predicate::trivially_false()
+        }
+    }
+
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        if bound == 0 {
+            self.negate()
+        } else if bound == 1 {
+            *self
+        } else {
+            Predicate::trivially_true()
+        }
+    }
+
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        if bound == 0 {
+            *self
+        } else if bound == 1 {
+            self.negate()
+        } else {
+            Predicate::trivially_true()
+        }
+    }
+}
+
+impl TransformableVariable<AffineView<Predicate>> for Predicate {
+    fn scaled(&self, scale: i32) -> AffineView<Predicate> {
+        AffineView::new(*self, scale, 0)
+    }
+
+    fn offset(&self, offset: i32) -> AffineView<Predicate> {
+        AffineView::new(*self, 1, offset)
     }
 }
 

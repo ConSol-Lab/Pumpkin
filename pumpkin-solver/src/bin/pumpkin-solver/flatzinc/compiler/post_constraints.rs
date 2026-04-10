@@ -474,21 +474,12 @@ fn compile_set_in_reif(
             // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
             let forward = context
                 .solver
-                .add_clause(
-                    [
-                        !reif.get_true_predicate(),
-                        predicate![variable >= lower_bound],
-                    ],
-                    constraint_tag,
-                )
+                .add_clause([!reif, predicate![variable >= lower_bound]], constraint_tag)
                 .is_ok()
                 && context
                     .solver
                     .add_clause(
-                        [
-                            !reif.get_true_predicate(),
-                            !predicate![variable >= upper_bound + 1],
-                        ],
+                        [!reif, !predicate![variable >= upper_bound + 1]],
                         constraint_tag,
                     )
                     .is_ok();
@@ -499,7 +490,7 @@ fn compile_set_in_reif(
                 .solver
                 .add_clause(
                     [
-                        reif.get_true_predicate(),
+                        reif,
                         !predicate![variable >= lower_bound],
                         predicate![variable >= upper_bound + 1],
                     ],
@@ -513,11 +504,7 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| {
-                    context
-                        .solver
-                        .new_literal_for_predicate(predicate![variable == value], constraint_tag)
-                })
+                .map(|&value| predicate!(variable == value))
                 .collect::<Vec<_>>();
 
             pumpkin_constraints::clause(clause, constraint_tag)
@@ -613,7 +600,6 @@ fn compile_bool_clause(
         .iter()
         .cloned()
         .chain(clause_2.iter().map(|literal| !*literal))
-        .map(|literal| literal.get_true_predicate())
         .collect();
 
     Ok(context.solver.add_clause(clause, constraint_tag).is_ok())
@@ -650,7 +636,7 @@ fn compile_bool2int(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     Ok(pumpkin_constraints::binary_equals(
-        IntegerVariableEnum::Literal(a.scaled(1)),
+        IntegerVariableEnum::Predicate(a.scaled(1)),
         IntegerVariableEnum::DomainId(b.scaled(1)),
         constraint_tag,
     )
@@ -680,12 +666,8 @@ fn compile_bool_xor(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a = context
-        .resolve_bool_variable(&exprs[0])?
-        .get_true_predicate();
-    let b = context
-        .resolve_bool_variable(&exprs[1])?
-        .get_true_predicate();
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_bool_variable(&exprs[1])?;
 
     let c1 = context.solver.add_clause([!a, !b], constraint_tag).is_ok();
     let c2 = context.solver.add_clause([b, a], constraint_tag).is_ok();

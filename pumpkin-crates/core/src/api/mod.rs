@@ -53,7 +53,6 @@ pub mod variables {
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::IntegerVariableEnum;
-    pub use crate::engine::variables::Literal;
     pub use crate::engine::variables::TransformableVariable;
 }
 

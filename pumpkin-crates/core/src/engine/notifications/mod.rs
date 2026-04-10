@@ -27,7 +27,6 @@ use crate::propagation::store::PropagatorStore;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
-use crate::variables::Literal;
 
 #[derive(Debug, Clone)]
 pub(crate) struct NotificationEngine {
@@ -44,7 +43,7 @@ pub(crate) struct NotificationEngine {
     /// Backtrack events which have occurred since the last of backtrack notifications have taken
     /// place
     backtrack_events: EventSink,
-    backtrack_events_literals: Trail<(Literal, PropagatorId)>,
+    backtrack_events_literals: Trail<(PredicateId, PropagatorId)>,
 }
 
 impl Default for NotificationEngine {
@@ -180,14 +179,14 @@ impl NotificationEngine {
 
     pub(crate) fn watch_literal(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         events: EnumSet<DomainEvent>,
         propagator_var: PropagatorVarId,
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
         self.watch_list_predicate_ids.watch_literal(
-            literal,
+            predicate,
             propagator_var,
             events,
             &mut self.predicate_notifier,
@@ -198,14 +197,14 @@ impl NotificationEngine {
 
     pub(crate) fn watch_literal_backtrack(
         &mut self,
-        literal: Literal,
+        predicate: Predicate,
         events: EnumSet<DomainEvent>,
         propagator_var: PropagatorVarId,
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
         self.watch_list_predicate_ids.watch_literal_backtrack(
-            literal,
+            predicate,
             propagator_var,
             events,
             &mut self.predicate_notifier,
@@ -439,20 +438,18 @@ impl NotificationEngine {
                 .watchers_predicate_id(predicate_id)
             {
                 for predicate_watcher in watchers {
-                    let predicate = self.predicate_notifier.get_predicate(predicate_id);
-                    let literal = Literal::new(predicate);
                     if let Some(events) = predicate_watcher.events
                         && let Some(local_id) = predicate_watcher.local_id
                     {
                         if events.is_empty()
                             || self
                                 .backtrack_events_literals
-                                .contains(&(literal, predicate_watcher.propagator_id))
+                                .contains(&(predicate_id, predicate_watcher.propagator_id))
                         {
                             continue;
                         }
                         self.backtrack_events_literals
-                            .push((literal, predicate_watcher.propagator_id));
+                            .push((predicate_id, predicate_watcher.propagator_id));
 
                         let propagator = &mut propagators[predicate_watcher.propagator_id];
                         for event in events.iter() {
