@@ -325,8 +325,6 @@ impl HypercubeLinearResolver {
                     .trail_position(predicate)
                     .expect("all predicates are true");
 
-                println!("tp {predicate} = {tp}");
-
                 let pivot_tp = state
                     .trail_position(pivot)
                     .expect("all predicates are true");
@@ -415,8 +413,17 @@ impl HypercubeLinearResolver {
 
                 for term in linear.terms() {
                     let term_bound = state.lower_bound(term);
-                    self.predicates_to_explain
-                        .push(predicate![term >= term_bound], state);
+                    let predicate = predicate![term >= term_bound];
+
+                    let checkpoint = state
+                        .get_checkpoint_for_predicate(predicate)
+                        .expect("the predicate is true");
+
+                    // Only explain the predicate if it is at the conflict
+                    // checkpoint.
+                    if checkpoint == state.get_checkpoint() {
+                        self.predicates_to_explain.push(predicate, state);
+                    }
                 }
 
                 self.conflicting_linear = linear;
