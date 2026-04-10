@@ -131,7 +131,7 @@ impl HypercubeLinearResolver {
 
         self.compute_conflicting_hypercube_linear(state, conflict);
 
-        let mut last_tp = usize::MAX;
+        let mut trail_position = usize::MAX;
 
         loop {
             trace!(
@@ -155,7 +155,7 @@ impl HypercubeLinearResolver {
             );
 
             if cfg!(feature = "hl-checks") {
-                self.assert_invariants(state, last_tp);
+                self.assert_invariants(state, trail_position);
             }
 
             if let Some(dl) = self.will_propagate_on_previous_dl(state) {
@@ -167,6 +167,22 @@ impl HypercubeLinearResolver {
                 .pop()
                 .expect("there are at least two predicates to explain");
 
+            let tp = state
+                .trail_position(pivot)
+                .expect("all predicates are true");
+
+            trace!("applying HL resolution on {pivot} @ {tp}");
+            assert!(
+                trail_position >= tp,
+                "last_tp = {trail_position}, tp = {tp}"
+            );
+            trail_position = tp;
+
+            if !self.contributes_to_conflict(pivot) {
+                trace!("  => no longer contributes, skipping");
+                continue;
+            }
+
             if self
                 .hypercube_predicates_on_conflict_dl
                 .peek()
@@ -174,14 +190,6 @@ impl HypercubeLinearResolver {
             {
                 let _ = self.hypercube_predicates_on_conflict_dl.pop();
             }
-
-            let tp = state
-                .trail_position(pivot)
-                .expect("all predicates are true");
-
-            trace!("applying HL resolution on {pivot} @ {tp}");
-            assert!(last_tp >= tp, "last_tp = {last_tp}, tp = {tp}");
-            last_tp = tp;
 
             let explanation = self.explain(state, pivot);
             trace!("explanation = {explanation}");
@@ -889,6 +897,22 @@ impl HypercubeLinearResolver {
             vec![],
             "hypercube of conflicting constraint contains unsatisfied predicates at trail position {trail_position}"
         );
+    }
+
+    fn contributes_to_conflict(&self, pivot: Predicate) -> bool {
+        let is_in_hypercube = self.hypercube_predicates_on_conflict_dl.contains(pivot);
+        let contributes_to_linear_conflict = self
+            .conflicting_linear
+            .term_for_domain(pivot.get_domain())
+            .is_some_and(|term| {
+                if term.scale.is_positive() {
+                    pivot.is_lower_bound_predicate()
+                } else {
+                    pivot.is_upper_bound_predicate()
+                }
+            });
+
+        is_in_hypercube || contributes_to_linear_conflict
     }
 }
 
