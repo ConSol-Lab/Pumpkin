@@ -270,7 +270,7 @@ impl Propagator for HypercubeLinearPropagator {
             self.unregister_bound_events_on_linear(context.reborrow());
             // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());
-        } else if satisfied_watchers == NUM_WATCHED_PREDICATES {
+        } else {
             // The hypercube is satisfied, so we should be registered to bound events on the terms
             // of the linear inequality.
             self.register_bound_events_on_linear(context.reborrow());
