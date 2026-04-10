@@ -176,7 +176,7 @@ where
 
         if let Some(not_linear) = LinearInequality::new(not_linear_terms, not_linear_rhs) {
             let _ = solver.add_propagator(HypercubeLinearConstructor {
-                hypercube: Hypercube::new([reification_literal.get_false_predicate()])
+                hypercube: Hypercube::new([reification_literal.get_true_predicate()])
                     .expect("single predicate hypercube cannot be inconsistent"),
                 linear: not_linear,
                 constraint_tag: self.constraint_tag,

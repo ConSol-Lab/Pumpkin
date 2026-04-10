@@ -165,7 +165,7 @@ pub(crate) fn run(
             }
             "int_lin_le_imp" => {
                 if !options.use_hypercube_linear {
-                    compile_reified_int_lin_predicate(
+                    compile_int_lin_imp_predicate(
                         context,
                         exprs,
                         annos,
@@ -174,11 +174,32 @@ pub(crate) fn run(
                         pumpkin_constraints::less_than_or_equals,
                     )?
                 } else {
-                    compile_reified_int_lin_predicate(
+                    compile_int_lin_imp_predicate(
                         context,
                         exprs,
                         annos,
                         "int_lin_le_imp",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
+                }
+            }
+            "int_lin_le_reif" => {
+                if !options.use_hypercube_linear {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_reif",
+                        constraint_tag,
+                        pumpkin_constraints::less_than_or_equals,
+                    )?
+                } else {
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_reif",
                         constraint_tag,
                         hl_for_lin_le,
                     )?
