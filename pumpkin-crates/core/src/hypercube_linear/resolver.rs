@@ -160,16 +160,20 @@ impl HypercubeLinearResolver {
                 .pop()
                 .expect("there are at least two predicates to explain");
 
-            let tp = state
-                .trail_position(pivot)
-                .expect("all predicates are true");
+            trail_position = {
+                let tp = state
+                    .trail_position(pivot)
+                    .expect("all predicates are true");
 
-            trace!("applying HL resolution on {pivot} @ {tp}");
-            assert!(
-                trail_position >= tp,
-                "last_tp = {trail_position}, tp = {tp}"
-            );
-            trail_position = tp;
+                assert!(
+                    trail_position >= tp,
+                    "last_tp = {trail_position}, tp = {tp}"
+                );
+
+                tp
+            };
+
+            trace!("applying HL resolution on {pivot} @ {trail_position}");
 
             if !self.contributes_to_conflict(pivot) {
                 trace!("  => no longer contributes, skipping");
@@ -184,10 +188,10 @@ impl HypercubeLinearResolver {
                 let _ = self.hypercube_predicates_on_conflict_dl.pop();
             }
 
-            let explanation = self.explain(state, pivot);
+            let explanation = self.explain(state, pivot, trail_position);
             trace!("explanation = {explanation}");
 
-            self.resolve(state, tp, pivot, explanation);
+            self.resolve(state, trail_position, pivot, explanation);
             self.simplify_conflict();
         }
     }
@@ -250,20 +254,23 @@ impl HypercubeLinearResolver {
         self.propositional_resolve(state, trail_position, pivot, explanation);
     }
 
-    fn explain(&mut self, state: &mut State, pivot: Predicate) -> HypercubeLinearExplanation {
+    fn explain(
+        &mut self,
+        state: &mut State,
+        pivot: Predicate,
+        trail_position: usize,
+    ) -> HypercubeLinearExplanation {
         assert!(self.reason_buffer.is_empty());
 
         // If possible, explain using hypercube linear.
         if state.is_on_trail(pivot) {
-            let position = state.trail_position(pivot).expect("pivot is on the trail");
             let (reason_ref, _) = state
-                .trail_entry(position)
+                .trail_entry(trail_position)
                 .reason
                 .expect("pivot is propagated");
 
             if let Some(code) = state.reason_store.get_lazy_code(reason_ref) {
                 let propagator_id = state.reason_store.get_propagator(reason_ref);
-                let trail_position = state.trail_len() - 1;
 
                 if let Some((hypercube, linear)) = state.propagators[propagator_id]
                     .explain_as_hypercube_linear(
@@ -287,7 +294,8 @@ impl HypercubeLinearResolver {
                     }
 
                     for term in linear.terms() {
-                        let term_bound = state.lower_bound(term);
+                        let term_bound =
+                            term.lower_bound_at_trail_position(&state.assignments, trail_position);
                         let predicate = predicate![term >= term_bound];
 
                         let checkpoint = state
@@ -413,7 +421,8 @@ impl HypercubeLinearResolver {
                 }
 
                 for term in linear.terms() {
-                    let term_bound = state.lower_bound(term);
+                    let term_bound =
+                        term.lower_bound_at_trail_position(&state.assignments, trail_position);
                     let predicate = predicate![term >= term_bound];
 
                     let checkpoint = state
