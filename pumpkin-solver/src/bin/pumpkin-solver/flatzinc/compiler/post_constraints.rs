@@ -156,31 +156,14 @@ pub(crate) fn run(
                         pumpkin_constraints::less_than_or_equals,
                     )?
                 } else {
-                    check_parameters!(exprs, 3, "int_lin_le");
-
-                    let weights = context.resolve_array_integer_constants(&exprs[0])?;
-                    let vars = context.resolve_integer_variable_array(&exprs[1])?;
-                    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
-
-                    let terms = weights
-                        .iter()
-                        .copied()
-                        .zip(vars.iter().copied())
-                        .filter_map(|(weight, domain)| {
-                            NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
-                        });
-
-                    match LinearInequality::new(terms, rhs) {
-                        Some(linear) => context
-                            .solver
-                            .add_propagator(HypercubeLinearConstructor {
-                                hypercube: Hypercube::default(),
-                                linear,
-                                constraint_tag,
-                            })
-                            .is_ok(),
-                        None => continue,
-                    }
+                    compile_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
                 }
             }
             "int_lin_le_imp" => {
@@ -194,35 +177,14 @@ pub(crate) fn run(
                         pumpkin_constraints::less_than_or_equals,
                     )?
                 } else {
-                    check_parameters!(exprs, 4, "int_lin_le_imp");
-
-                    let weights = context.resolve_array_integer_constants(&exprs[0])?;
-                    let vars = context.resolve_integer_variable_array(&exprs[1])?;
-                    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
-                    let reif = context.resolve_bool_variable(&exprs[3])?;
-
-                    let terms = weights
-                        .iter()
-                        .copied()
-                        .zip(vars.iter().copied())
-                        .filter_map(|(weight, domain)| {
-                            NonZero::new(weight).map(|non_zero_weight| (non_zero_weight, domain))
-                        });
-
-                    let hypercube = Hypercube::new([reif.get_true_predicate()])
-                        .expect("cannot be inconsistent with one predicate");
-
-                    match LinearInequality::new(terms, rhs) {
-                        Some(linear) => context
-                            .solver
-                            .add_propagator(HypercubeLinearConstructor {
-                                hypercube,
-                                linear,
-                                constraint_tag,
-                            })
-                            .is_ok(),
-                        None => continue,
-                    }
+                    compile_reified_int_lin_predicate(
+                        context,
+                        exprs,
+                        annos,
+                        "int_lin_le_imp",
+                        constraint_tag,
+                        hl_for_lin_le,
+                    )?
                 }
             }
             "int_ne" => compile_binary_int_predicate(
@@ -1025,4 +987,23 @@ fn create_table(flat_table: Rc<[i32]>, num_variables: usize) -> Vec<Vec<i32>> {
     }
 
     table
+}
+
+fn hl_for_lin_le(
+    terms: Box<[AffineView<DomainId>]>,
+    rhs: i32,
+    constraint_tag: ConstraintTag,
+) -> impl NegatableConstraint {
+    pumpkin_core::hypercube_linear::hypercube_linear(
+        std::iter::empty(),
+        terms.into_iter().map(|view| {
+            assert_eq!(view.offset, 0);
+
+            let weight = NonZero::new(view.scale).expect("zero weight in int_lin_le_imp");
+
+            (weight, view.inner)
+        }),
+        rhs,
+        constraint_tag,
+    )
 }

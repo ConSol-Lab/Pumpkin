@@ -255,10 +255,12 @@ impl PropagationContext<'_> {
             self.notification_engine,
         );
 
-        trace!(
-            "propagated {predicate} @ {dl} with result {modification_result:?}",
-            dl = self.assignments.get_checkpoint(),
-        );
+        if !matches!(modification_result, Ok(false)) {
+            trace!(
+                "propagated {predicate} @ {dl} with result {modification_result:?}",
+                dl = self.assignments.get_checkpoint(),
+            );
+        }
 
         match modification_result {
             Ok(false) => Ok(()),
