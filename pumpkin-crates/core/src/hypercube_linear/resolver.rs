@@ -227,14 +227,6 @@ impl HypercubeLinearResolver {
             )
             .expect("failed to write proof");
 
-            if self
-                .hypercube_predicates_on_conflict_dl
-                .peek()
-                .is_some_and(|p| p == pivot)
-            {
-                let _ = self.hypercube_predicates_on_conflict_dl.pop();
-            }
-
             let explanation = self.explain(state, pivot, trail_position);
             trace!("explanation = {explanation}");
 
@@ -343,7 +335,7 @@ impl HypercubeLinearResolver {
                         // The predicate may be false if it was propagated by the
                         // linear being a conflict. In that case, we do not need to
                         // explain the predicate.
-                        if !predicate != pivot {
+                        if !predicate.implies(!pivot) {
                             self.add_hypercube_predicate(state, predicate);
                         }
                     }
@@ -811,6 +803,10 @@ impl HypercubeLinearResolver {
 
             trace!("weakened explanation: {explanation}");
         }
+
+        // Remove the predicates from the hypercube that are resolved on.
+        self.hypercube_predicates_on_conflict_dl
+            .retain(|p| !pivot.implies(p));
 
         let clausal_explanation = explanation.into_clause(state, trail_position);
         trace!(

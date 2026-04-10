@@ -33,6 +33,11 @@ impl PredicateHeap {
         self.heap.drain().map(|to_explain| to_explain.predicate)
     }
 
+    /// See [`BinaryHeap::retain`].
+    pub(crate) fn retain(&mut self, mut f: impl FnMut(Predicate) -> bool) {
+        self.heap.retain(move |pte| f(pte.predicate));
+    }
+
     /// See [`BinaryHeap::iter`].
     pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = Predicate> + '_ {
         self.heap.iter().map(|to_explain| to_explain.predicate)
