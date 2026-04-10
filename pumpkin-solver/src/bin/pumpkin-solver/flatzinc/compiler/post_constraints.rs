@@ -3,9 +3,6 @@
 use std::num::NonZero;
 use std::rc::Rc;
 
-use pumpkin_core::hypercube_linear::Hypercube;
-use pumpkin_core::hypercube_linear::HypercubeLinearConstructor;
-use pumpkin_core::hypercube_linear::LinearInequality;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
