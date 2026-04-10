@@ -98,13 +98,9 @@ impl HypercubeLinearResolver {
         self.assert_new_constraint(learned_constraint.clone());
 
         debug!(
-            "Learned {} -> {} <= {}",
+            "Learned {} -> {}",
             learned_constraint.hypercube.iter_predicates().format(" & "),
-            learned_constraint
-                .linear
-                .terms()
-                .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-            learned_constraint.linear.bound(),
+            learned_constraint.linear,
         );
 
         context.restore_to(learned_constraint.propagates_at);
@@ -135,15 +131,12 @@ impl HypercubeLinearResolver {
 
         loop {
             trace!(
-                "conflict constraint: {} -> {} <= {}",
+                "conflict constraint: {} -> {}",
                 self.working_hypercube
                     .iter_predicates()
                     .chain(self.hypercube_predicates_on_conflict_dl.iter())
                     .format(" & "),
-                self.conflicting_linear
-                    .terms()
-                    .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-                self.conflicting_linear.bound(),
+                self.conflicting_linear,
             );
 
             trace!(
@@ -588,11 +581,6 @@ impl HypercubeLinearResolver {
         );
         trace!("  - slack b: {reason_slack}");
 
-        // if reason_slack < 0 {
-        //     trace!("  => no fourier possible as reason propagated through hypercube");
-        //     return Err(FourierError::ResultOfEliminationTriviallySatisfiable);
-        // }
-
         let tightly_propagating_reason = compute_tightly_propagating_reason(
             state,
             trail_position,
@@ -601,15 +589,12 @@ impl HypercubeLinearResolver {
         );
 
         trace!(
-            "  - tightly propagating: {} -> {} <= {}",
+            "  - tightly propagating: {} -> {}",
             self.working_hypercube
                 .iter_predicates()
                 .chain(self.predicates_to_explain.iter())
                 .format(" & "),
-            self.conflicting_linear
-                .terms()
-                .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-            self.conflicting_linear.bound(),
+            self.conflicting_linear,
         );
 
         let tp_slack = compute_linear_slack_at_trail_position(
@@ -1026,9 +1011,6 @@ impl HypercubeLinearExplanation {
             clause.push(predicate_to_weaken_on.into());
         }
 
-        clause
-    }
-
     fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
         match self {
             HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
@@ -1054,13 +1036,9 @@ impl Display for HypercubeLinearExplanation {
         match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => write!(
                 f,
-                "{} -> {} <= {}",
+                "{} -> {}",
                 hypercube_linear.hypercube.iter_predicates().format(" & "),
-                hypercube_linear
-                    .linear
-                    .terms()
-                    .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-                hypercube_linear.linear.bound(),
+                hypercube_linear.linear
             ),
             HypercubeLinearExplanation::Conjunction(predicates) => {
                 write!(f, "{} -> false", predicates.iter().format(" & "))

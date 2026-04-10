@@ -1,4 +1,7 @@
+use std::fmt::Display;
 use std::num::NonZero;
+
+use itertools::Itertools;
 
 use crate::containers::HashMap;
 use crate::hypercube_linear::BoundComparator;
@@ -141,6 +144,18 @@ impl LinearInequality {
         };
 
         self.weaken(bound, term.scale.abs())
+    }
+}
+
+impl Display for LinearInequality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} <= {}",
+            self.terms()
+                .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
+            self.bound(),
+        )
     }
 }
 
