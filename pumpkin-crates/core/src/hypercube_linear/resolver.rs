@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::num::NonZero;
 
 use itertools::Itertools;
@@ -183,23 +184,9 @@ impl HypercubeLinearResolver {
             last_tp = tp;
 
             let explanation = self.explain(state, pivot);
+            trace!("explanation = {explanation}");
 
-            match &explanation {
-                HypercubeLinearExplanation::Proper(hypercube_linear) => trace!(
-                    "explanation = {} -> {} <= {}",
-                    hypercube_linear.hypercube.iter_predicates().format(" & "),
-                    hypercube_linear
-                        .linear
-                        .terms()
-                        .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
-                    hypercube_linear.linear.bound(),
-                ),
-                HypercubeLinearExplanation::Conjunction(predicates) => {
-                    trace!("explanation = {} -> false", predicates.iter().format(" & "))
-                }
-            }
-
-            self.resolve(state, pivot, explanation);
+            self.resolve(state, tp, pivot, explanation);
             self.simplify_conflict();
         }
     }
@@ -240,6 +227,7 @@ impl HypercubeLinearResolver {
     fn resolve(
         &mut self,
         state: &mut State,
+        trail_position: usize,
         pivot: Predicate,
         explanation: HypercubeLinearExplanation,
     ) {
@@ -258,7 +246,7 @@ impl HypercubeLinearResolver {
             }
         }
 
-        self.propositional_resolve(state, pivot, explanation);
+        self.propositional_resolve(state, trail_position, pivot, explanation);
     }
 
     fn explain(&mut self, state: &mut State, pivot: Predicate) -> HypercubeLinearExplanation {
@@ -336,6 +324,8 @@ impl HypercubeLinearResolver {
                 let tp = state
                     .trail_position(predicate)
                     .expect("all predicates are true");
+
+                println!("tp {predicate} = {tp}");
 
                 let pivot_tp = state
                     .trail_position(pivot)
@@ -683,6 +673,7 @@ impl HypercubeLinearResolver {
     fn propositional_resolve(
         &mut self,
         state: &State,
+        trail_position: usize,
         pivot: Predicate,
         mut explanation: HypercubeLinearExplanation,
     ) {
@@ -701,12 +692,19 @@ impl HypercubeLinearResolver {
                 );
 
             // Then, we have to do the same on the explanation.
+            //
+            // This is unnecessary if we end up converting the explanation to a clause.
+            // However, for alternative resolution implementations it may be useful to
+            // have the explanation without any of the integer contribution in the
+            // linear.
             explanation = std::mem::take(&mut explanation)
                 .weaken_to_zero(!bound_predicate)
                 .expect("cannot weaken to trivially satisfiable");
+
+            trace!("weakened explanation: {explanation}");
         }
 
-        for predicate in explanation.iter_hypercube() {
+        for predicate in explanation.into_clause(state, trail_position) {
             let truth_value = state
                 .truth_value(predicate)
                 .expect("all predicates in explanation hypercube are assigned");
@@ -721,7 +719,9 @@ impl HypercubeLinearResolver {
                 .get_checkpoint_for_predicate(predicate)
                 .expect("everything is assigned in the hypercube");
 
-            if checkpoint < state.get_checkpoint() {
+            if checkpoint == 0 {
+                // Ignore the predicate.
+            } else if checkpoint < state.get_checkpoint() {
                 // If the predicate is assigned at a previous decision level, it will
                 // be part of the hypercube of the final learned constraint.
                 self.working_hypercube = std::mem::take(&mut self.working_hypercube)
@@ -874,7 +874,7 @@ impl HypercubeLinearResolver {
                 state
                     .assignments
                     .evaluate_predicate_at_trail_position(p, trail_position)
-                    == Some(true)
+                    != Some(true)
             })
             .collect::<Vec<_>>();
         assert_eq!(
@@ -964,15 +964,38 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    fn iter_hypercube(&self) -> impl Iterator<Item = Predicate> {
-        match self {
-            HypercubeLinearExplanation::Proper(hypercube_linear) => {
-                itertools::Either::Left(hypercube_linear.hypercube.iter_predicates())
-            }
-            HypercubeLinearExplanation::Conjunction(predicates) => {
-                itertools::Either::Right(predicates.iter().copied())
-            }
+    fn into_clause(self, state: &State, trail_position: usize) -> Vec<Predicate> {
+        let mut hypercube_linear = match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => hypercube_linear,
+            HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
+        };
+
+        let mut clause = hypercube_linear
+            .hypercube
+            .iter_predicates()
+            .collect::<Vec<_>>();
+
+        while !hypercube_linear.linear.is_trivially_false() {
+            let next_term = hypercube_linear
+                .linear
+                .terms()
+                .next()
+                .expect("conversion to clause only possible when linear is conflicting");
+
+            let term_bound =
+                next_term.lower_bound_at_trail_position(&state.assignments, trail_position);
+
+            let predicate_to_weaken_on = BoundPredicate::new(predicate![next_term >= term_bound])
+                .expect("the predicate is a bound predicate");
+
+            hypercube_linear.linear = std::mem::take(&mut hypercube_linear.linear)
+                .weaken_to_zero(predicate_to_weaken_on)
+                .expect("conversion to clause only possible when linear is conflicting");
+
+            clause.push(predicate_to_weaken_on.into());
         }
+
+        clause
     }
 
     fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
@@ -990,6 +1013,26 @@ impl HypercubeLinearExplanation {
 
             HypercubeLinearExplanation::Conjunction(predicates) => {
                 Some(HypercubeLinearExplanation::Conjunction(predicates))
+            }
+        }
+    }
+}
+
+impl Display for HypercubeLinearExplanation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => write!(
+                f,
+                "{} -> {} <= {}",
+                hypercube_linear.hypercube.iter_predicates().format(" & "),
+                hypercube_linear
+                    .linear
+                    .terms()
+                    .format_with(" + ", |elt, f| f(&format_args!("{:?}", elt))),
+                hypercube_linear.linear.bound(),
+            ),
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                write!(f, "{} -> false", predicates.iter().format(" & "))
             }
         }
     }
