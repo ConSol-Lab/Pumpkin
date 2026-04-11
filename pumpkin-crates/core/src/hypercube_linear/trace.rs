@@ -1,6 +1,15 @@
 use std::{
     fs::File,
     io::{BufWriter, Write},
+    num::NonZero,
+};
+
+use itertools::Itertools;
+
+use crate::{
+    predicates::Predicate,
+    proof::ConstraintTag,
+    variables::{AffineView, DomainId},
 };
 
 /// A wrapper around a proof file
@@ -22,21 +31,81 @@ impl Trace {
     pub fn discard() -> Trace {
         Trace { proof_file: None }
     }
-}
 
-impl Write for Trace {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if let Some(file) = self.proof_file.as_mut() {
-            file.write(buf)
-        } else {
-            Ok(buf.len())
-        }
+    /// Log an axiom.
+    pub fn axiom(
+        &mut self,
+        hypercube: impl IntoIterator<Item = Predicate>,
+        linear_terms: impl IntoIterator<Item = AffineView<DomainId>>,
+        linear_rhs: i32,
+    ) {
+        let Some(writer) = self.proof_file.as_mut() else {
+            return;
+        };
+
+        writeln!(
+            writer,
+            "i {h} -> {r} <= {linear_rhs}",
+            h = hypercube.into_iter().format(" & "),
+            r = linear_terms
+                .into_iter()
+                .format_with(" ", |elt, f| f(&format_args!(
+                    "{} {}",
+                    elt.scale, elt.inner
+                )))
+        )
+        .expect("failed to write proof");
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        if let Some(file) = self.proof_file.as_mut() {
-            file.flush()?;
-        }
-        Ok(())
+    /// Log an intermediate deduction.
+    pub fn intermediate_deduction(
+        &mut self,
+        hypercube: impl IntoIterator<Item = Predicate>,
+        linear_terms: impl IntoIterator<Item = AffineView<DomainId>>,
+        linear_rhs: i32,
+    ) {
+        let Some(writer) = self.proof_file.as_mut() else {
+            return;
+        };
+
+        writeln!(
+            writer,
+            "di {h} -> {r} <= {linear_rhs}",
+            h = hypercube.into_iter().format(" & "),
+            r = linear_terms
+                .into_iter()
+                .format_with(" ", |elt, f| f(&format_args!(
+                    "{} {}",
+                    elt.scale, elt.inner
+                )))
+        )
+        .expect("failed to write proof");
+    }
+
+    /// Log a deduction.
+    pub fn deduction(
+        &mut self,
+        constraint_tag: ConstraintTag,
+        hypercube: impl IntoIterator<Item = Predicate>,
+        linear_terms: impl IntoIterator<Item = AffineView<DomainId>>,
+        linear_rhs: i32,
+    ) {
+        let Some(writer) = self.proof_file.as_mut() else {
+            return;
+        };
+
+        writeln!(
+            writer,
+            "d {id} {h} -> {r} <= {linear_rhs}",
+            id = NonZero::from(constraint_tag),
+            h = hypercube.into_iter().format(" & "),
+            r = linear_terms
+                .into_iter()
+                .format_with(" ", |elt, f| f(&format_args!(
+                    "{} {}",
+                    elt.scale, elt.inner
+                )))
+        )
+        .expect("failed to write proof");
     }
 }
