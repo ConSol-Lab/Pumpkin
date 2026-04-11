@@ -1,5 +1,7 @@
+use std::fmt::Display;
 use std::hash::Hash;
 
+use itertools::Itertools;
 use pumpkin_checking::IntExt;
 use pumpkin_checking::VariableState;
 
@@ -124,6 +126,12 @@ impl Hypercube {
     /// Predicates are yielded in sorted order.
     pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.predicates.iter().copied()
+    }
+}
+
+impl Display for Hypercube {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.iter_predicates().format(" & "))
     }
 }
 
