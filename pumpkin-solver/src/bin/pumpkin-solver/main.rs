@@ -523,7 +523,9 @@ fn run() -> PumpkinResult<()> {
         );
     };
 
-    let proof_log = if let Some(path_buf) = args.proof_path.as_ref() {
+    let proof_log = if args.conflict_resolver == ConflictResolverType::UIP
+        && let Some(path_buf) = args.proof_path.as_ref()
+    {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(path_buf)?,
             FileFormat::WcnfDimacsPLine => {

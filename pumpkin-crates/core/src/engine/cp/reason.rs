@@ -162,7 +162,7 @@ impl StoredReason {
         {
             let clausal_explanation = hypercube
                 .iter_predicates()
-                .filter(|&p| p != !predicate_to_explain)
+                .filter(|&p| !(!p).implies(predicate_to_explain))
                 .chain(linear.terms().filter_map(|term| {
                     if term.inner == predicate_to_explain.get_domain() {
                         None
