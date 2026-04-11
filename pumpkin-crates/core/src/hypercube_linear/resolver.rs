@@ -953,10 +953,19 @@ impl HypercubeLinearResolver {
     fn assert_invariants(&self, state: &State, trail_position: usize) {
         let linear_slack =
             compute_linear_slack_at_trail_position(state, &self.conflicting_linear, trail_position);
-        assert!(
-            linear_slack.is_negative(),
-            "conflicting constraint linear is not conflicting at trail position {trail_position}"
-        );
+
+        if !linear_slack.is_negative() {
+            eprintln!("Bounds:");
+
+            for term in self.conflicting_linear.terms() {
+                let lb = term.lower_bound_at_trail_position(&state.assignments, trail_position);
+                eprintln!("  - {} {} >= {}", term.scale, term.inner, lb);
+            }
+
+            panic!(
+                "conflicting constraint linear is not conflicting at trail position {trail_position}"
+            );
+        }
 
         let unsatisfied_hypercube_predicates = self
             .hypercube_predicates_on_conflict_dl
