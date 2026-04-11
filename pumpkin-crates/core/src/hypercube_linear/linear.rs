@@ -90,7 +90,7 @@ impl LinearInequality {
     pub fn divide(&mut self, divisor: i32) {
         for term in self.terms.iter_mut() {
             assert_eq!(term.scale % divisor, 0);
-            term.scale /= term.scale;
+            term.scale /= divisor;
         }
 
         self.bound = <i32 as NumExt>::div_floor(self.bound, divisor);
