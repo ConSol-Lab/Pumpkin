@@ -385,30 +385,17 @@ impl HypercubeLinearResolver {
         self.reason_buffer = reason_buffer;
         self.reason_buffer.push(!pivot);
 
-        if maybe_inference_code.is_some() {
-            let hypercube_linear = HypercubeLinear {
-                hypercube: Hypercube::new(self.reason_buffer.drain(..))
-                    .expect("reason contains inconsistent predicates"),
-                linear: LinearInequality::trivially_false(),
-            };
+        writeln!(
+            self.proof_file.borrow_mut(),
+            "i {} ->  <= -1",
+            self.reason_buffer.iter().format(" & "),
+        )
+        .expect("failed to write proof");
 
-            writeln!(self.proof_file.borrow_mut(), "i {hypercube_linear}",)
-                .expect("failed to write proof");
-
-            HypercubeLinearExplanation::Proper(hypercube_linear)
-        } else {
-            writeln!(
-                self.proof_file.borrow_mut(),
-                "i {} ->  <= -1",
-                self.reason_buffer.iter().format(" & "),
-            )
-            .expect("failed to write proof");
-
-            // In this case the explanation explains the semantics of the atomic
-            // constraint. That results in an inconsistent hypercube, but we need to
-            // perform the resolution anyways.
-            HypercubeLinearExplanation::Conjunction(self.reason_buffer.drain(..).collect())
-        }
+        // In this case the explanation explains the semantics of the atomic
+        // constraint. That results in an inconsistent hypercube, but we need to
+        // perform the resolution anyways.
+        HypercubeLinearExplanation::Conjunction(self.reason_buffer.drain(..).collect())
     }
 
     /// Computes the conflicting hypercube linear constraint.
@@ -853,10 +840,10 @@ impl HypercubeLinearResolver {
             .with_predicates(self.hypercube_predicates_on_conflict_dl.iter())
             .expect("no inconsistent hypercube");
 
-        println!(
-            "testing propagation of {final_hypercube} -> {}",
-            self.conflicting_linear
-        );
+        // println!(
+        //     "testing propagation of {final_hypercube} -> {}",
+        //     self.conflicting_linear
+        // );
 
         // Get the predicates that are not assigned to true.
         let unsatisfied_predicates_in_hypercube = final_hypercube
@@ -870,7 +857,7 @@ impl HypercubeLinearResolver {
             .collect::<Vec<_>>();
 
         if unsatisfied_predicates_in_hypercube.len() > 1 {
-            dbg!(unsatisfied_predicates_in_hypercube);
+            // dbg!(unsatisfied_predicates_in_hypercube);
             // If more than one predicate remains unassigned, we cannot do anything.
             return false;
         }
