@@ -122,8 +122,7 @@ impl HypercubeLinearResolver {
 
         debug!(
             "Learned {} -> {}",
-            learned_constraint.hypercube.iter_predicates().format(" & "),
-            learned_constraint.linear,
+            learned_constraint.hypercube, learned_constraint.linear,
         );
 
         context.restore_to(learned_constraint.propagates_at);
@@ -134,7 +133,7 @@ impl HypercubeLinearResolver {
             self.proof_file.borrow_mut(),
             "d {id} {h} -> {r}",
             id = NonZero::from(constraint_tag),
-            h = learned_constraint.hypercube.iter_predicates().format(" & "),
+            h = learned_constraint.hypercube,
             r = learned_constraint.linear,
         )
         .expect("failed to write proof");
@@ -323,13 +322,8 @@ impl HypercubeLinearResolver {
                 {
                     trace!("explaining with HL");
 
-                    writeln!(
-                        self.proof_file.borrow_mut(),
-                        "i {h} -> {r}",
-                        h = hypercube.iter_predicates().format(" & "),
-                        r = linear,
-                    )
-                    .expect("failed to write proof");
+                    writeln!(self.proof_file.borrow_mut(), "i {hypercube} -> {linear}",)
+                        .expect("failed to write proof");
 
                     for predicate in hypercube.iter_predicates() {
                         // The predicate may be false if it was propagated by the
@@ -398,13 +392,8 @@ impl HypercubeLinearResolver {
                 linear: LinearInequality::trivially_false(),
             };
 
-            writeln!(
-                self.proof_file.borrow_mut(),
-                "i {h} -> {r}",
-                h = hypercube_linear.hypercube.iter_predicates().format(" & "),
-                r = hypercube_linear.linear,
-            )
-            .expect("failed to write proof");
+            writeln!(self.proof_file.borrow_mut(), "i {hypercube_linear}",)
+                .expect("failed to write proof");
 
             HypercubeLinearExplanation::Proper(hypercube_linear)
         } else {
@@ -487,13 +476,8 @@ impl HypercubeLinearResolver {
                     ),
                 )
             {
-                writeln!(
-                    self.proof_file.borrow_mut(),
-                    "i {h} -> {r}",
-                    h = hypercube.iter_predicates().format(" & "),
-                    r = linear,
-                )
-                .expect("failed to write proof");
+                writeln!(self.proof_file.borrow_mut(), "i {hypercube} -> {linear}",)
+                    .expect("failed to write proof");
 
                 for predicate in hypercube.iter_predicates() {
                     self.add_hypercube_predicate(state, predicate);
@@ -869,6 +853,11 @@ impl HypercubeLinearResolver {
             .with_predicates(self.hypercube_predicates_on_conflict_dl.iter())
             .expect("no inconsistent hypercube");
 
+        println!(
+            "testing propagation of {final_hypercube} -> {}",
+            self.conflicting_linear
+        );
+
         // Get the predicates that are not assigned to true.
         let unsatisfied_predicates_in_hypercube = final_hypercube
             .iter_predicates()
@@ -881,6 +870,7 @@ impl HypercubeLinearResolver {
             .collect::<Vec<_>>();
 
         if unsatisfied_predicates_in_hypercube.len() > 1 {
+            dbg!(unsatisfied_predicates_in_hypercube);
             // If more than one predicate remains unassigned, we cannot do anything.
             return false;
         }
@@ -1070,12 +1060,7 @@ struct HypercubeLinear {
 
 impl Display for HypercubeLinear {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} -> {}",
-            self.hypercube.iter_predicates().format(" & "),
-            self.linear,
-        )
+        write!(f, "{} -> {}", self.hypercube, self.linear,)
     }
 }
 
