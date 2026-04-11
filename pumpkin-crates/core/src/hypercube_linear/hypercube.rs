@@ -47,41 +47,7 @@ impl Hypercube {
         let state = VariableState::prepare_for_conflict_check(predicates, None)
             .map_err(InconsistentHypercube)?;
 
-        // Get the description of the state in terms of predicates.
-        let mut predicates = state
-            .domains()
-            .flat_map(|domain_id| {
-                if let Some(value) = state.fixed_value(domain_id) {
-                    itertools::Either::Left(std::iter::once(predicate![domain_id == value]))
-                } else {
-                    let lower_bound_predicate =
-                        if let IntExt::Int(lower_bound) = state.lower_bound(domain_id) {
-                            Some(predicate![domain_id >= lower_bound])
-                        } else {
-                            None
-                        };
-                    let upper_bound_predicate =
-                        if let IntExt::Int(upper_bound) = state.upper_bound(domain_id) {
-                            Some(predicate![domain_id <= upper_bound])
-                        } else {
-                            None
-                        };
-
-                    itertools::Either::Right(
-                        lower_bound_predicate
-                            .into_iter()
-                            .chain(
-                                state
-                                    .holes(domain_id)
-                                    .map(|value| predicate![domain_id != value]),
-                            )
-                            .chain(upper_bound_predicate),
-                    )
-                }
-            })
-            .collect::<Vec<_>>();
-
-        predicates.sort();
+        let predicates = describe_state_with_predicates(&state);
 
         Ok(Hypercube { state, predicates })
     }
@@ -97,11 +63,8 @@ impl Hypercube {
             // The predicate is subsumed by the existing predicates in the hypercube.
             Ok(self)
         } else if self.state.apply(&predicate) {
-            let insertion_index = self.predicates.binary_search(&predicate).expect_err(
-                "since the predicate is not true in the state, it does not exist in predicates",
-            );
-
-            self.predicates.insert(insertion_index, predicate);
+            // TODO: Do this incrementally.
+            self.predicates = describe_state_with_predicates(&self.state);
 
             Ok(self)
         } else {
@@ -133,6 +96,46 @@ impl Display for Hypercube {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.iter_predicates().format(" & "))
     }
+}
+
+/// Get a vector of predicates that describe the given state.
+fn describe_state_with_predicates(state: &VariableState<Predicate>) -> Vec<Predicate> {
+    let mut predicates = state
+        .domains()
+        .flat_map(|domain_id| {
+            if let Some(value) = state.fixed_value(domain_id) {
+                itertools::Either::Left(std::iter::once(predicate![domain_id == value]))
+            } else {
+                let lower_bound_predicate =
+                    if let IntExt::Int(lower_bound) = state.lower_bound(domain_id) {
+                        Some(predicate![domain_id >= lower_bound])
+                    } else {
+                        None
+                    };
+                let upper_bound_predicate =
+                    if let IntExt::Int(upper_bound) = state.upper_bound(domain_id) {
+                        Some(predicate![domain_id <= upper_bound])
+                    } else {
+                        None
+                    };
+
+                itertools::Either::Right(
+                    lower_bound_predicate
+                        .into_iter()
+                        .chain(
+                            state
+                                .holes(domain_id)
+                                .map(|value| predicate![domain_id != value]),
+                        )
+                        .chain(upper_bound_predicate),
+                )
+            }
+        })
+        .collect::<Vec<_>>();
+
+    predicates.sort();
+
+    predicates
 }
 
 #[cfg(test)]
@@ -213,6 +216,23 @@ mod tests {
 
         assert_eq!(
             vec![predicate![x >= 4], predicate![x <= 6], predicate![y >= 2]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn strengthening_the_hypercube_does_not_introduce_duplicate_predicates() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new([predicate![x >= 4]])
+            .expect("not inconsistent")
+            .with_predicate(predicate![x >= 6])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x >= 6]],
             hypercube.iter_predicates().collect::<Vec<_>>(),
         );
     }
