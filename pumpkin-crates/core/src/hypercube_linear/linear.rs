@@ -49,7 +49,7 @@ impl LinearInequality {
             *existing_weight += weight.get();
         }
 
-        let terms = domain_to_weight
+        let mut terms = domain_to_weight
             .into_iter()
             .filter(|&(_, weight)| weight != 0)
             .map(|(domain, weight)| domain.scaled(weight))
@@ -58,6 +58,8 @@ impl LinearInequality {
         if terms.is_empty() && bound >= 0 {
             return None;
         }
+
+        terms.sort_by_key(|t| t.inner);
 
         Some(LinearInequality { terms, bound })
     }
