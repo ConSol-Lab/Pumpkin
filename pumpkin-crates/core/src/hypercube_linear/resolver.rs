@@ -763,6 +763,8 @@ impl HypercubeLinearResolver {
             trace!("weakened explanation: {explanation}");
         }
 
+        self.statistics.num_propositional_resolutions += 1;
+
         // Remove the predicates from the hypercube that are resolved on.
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
