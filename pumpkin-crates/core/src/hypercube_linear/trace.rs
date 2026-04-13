@@ -9,6 +9,7 @@ use itertools::Itertools;
 use crate::{
     predicates::Predicate,
     proof::ConstraintTag,
+    state::State,
     variables::{AffineView, DomainId},
 };
 
@@ -41,6 +42,20 @@ impl Trace {
         Trace {
             proof_file: None,
             options: TraceOptions::default(),
+        }
+    }
+
+    pub fn write_variables(&mut self, state: &State) {
+        let Some(writer) = self.proof_file.as_mut() else {
+            return;
+        };
+
+        for (domain_id, name) in state.variable_names.named_domains() {
+            if is_likely_a_constant(domain_id, state) {
+                continue;
+            }
+
+            writeln!(writer, "v {domain_id} {name}").expect("failed to write to trace");
         }
     }
 
@@ -123,5 +138,21 @@ impl Trace {
                 )))
         )
         .expect("failed to write proof");
+    }
+}
+
+fn is_likely_a_constant(domain_id: DomainId, state: &State) -> bool {
+    let is_fixed = state.assignments.get_initial_lower_bound(domain_id)
+        == state.assignments.get_initial_upper_bound(domain_id);
+
+    if !is_fixed {
+        return false;
+    }
+
+    let value = state.assignments.get_initial_upper_bound(domain_id);
+
+    match state.variable_names.get_int_name(domain_id) {
+        Some(name) => name.parse::<i32>().is_ok_and(|v| v == value),
+        None => true,
     }
 }

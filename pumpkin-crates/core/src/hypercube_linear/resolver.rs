@@ -60,6 +60,8 @@ pub struct HypercubeLinearResolver {
 
     /// The proof file of the analysis.
     proof_file: Rc<RefCell<Trace>>,
+    /// True if the names are written to the trace, false if not.
+    logged_variable_names: bool,
 
     /// Set of all learned constraints.
     ///
@@ -78,6 +80,7 @@ impl HypercubeLinearResolver {
             statistics: Default::default(),
             reason_buffer: Default::default(),
             proof_file: Rc::new(RefCell::new(trace)),
+            logged_variable_names: false,
             #[cfg(feature = "hl-checks")]
             learned_constraints: Default::default(),
         }
@@ -86,6 +89,11 @@ impl HypercubeLinearResolver {
 
 impl ConflictResolver for HypercubeLinearResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
+        if !self.logged_variable_names {
+            self.proof_file.borrow_mut().write_variables(context.state);
+            self.logged_variable_names = true;
+        }
+
         debug!("Resolving conflict with hypercube linear resolution");
 
         self.statistics.num_conflicts += 1;
