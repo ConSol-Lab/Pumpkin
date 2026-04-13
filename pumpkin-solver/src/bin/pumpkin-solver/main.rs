@@ -30,6 +30,7 @@ use pumpkin_conflict_resolvers::resolvers::NoLearningResolver;
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::hypercube_linear::HypercubeLinearResolver;
 use pumpkin_core::hypercube_linear::Trace;
+use pumpkin_core::hypercube_linear::TraceOptions;
 use pumpkin_propagators::cumulative::options::CumulativeOptions;
 use pumpkin_propagators::cumulative::options::CumulativePropagationMethod;
 use pumpkin_propagators::cumulative::time_table::CumulativeExplanationType;
@@ -398,6 +399,12 @@ struct Args {
     /// The amount of memory (in MB) that is preallocated for storing nogoods.
     #[arg(long = "memory-preallocated", default_value_t = 50)]
     memory_preallocated: usize,
+
+    /// Include intermediate steps in the hypercube linear proof.
+    ///
+    /// Ignored if not using hypercube linear resolver or not logging a proof.
+    #[arg(long = "hl-proof-with-intermediates", default_value_t)]
+    hl_proof_with_intermediates: bool,
 }
 
 fn configure_logging(
@@ -659,7 +666,14 @@ fn run() -> PumpkinResult<()> {
                         .as_ref()
                         .map(File::create)
                         .transpose()?
-                        .map(Trace::to_file)
+                        .map(|file| {
+                            Trace::to_file(
+                                file,
+                                TraceOptions {
+                                    include_intermediate_steps: args.hl_proof_with_intermediates,
+                                },
+                            )
+                        })
                         .unwrap_or(Trace::discard()),
                 ),
             )?,

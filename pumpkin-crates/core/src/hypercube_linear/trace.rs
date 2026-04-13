@@ -17,19 +17,31 @@ use crate::{
 pub struct Trace {
     /// The proof file.
     proof_file: Option<BufWriter<File>>,
+
+    options: TraceOptions,
+}
+
+/// How to trace the hypercube linear resolver.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TraceOptions {
+    pub include_intermediate_steps: bool,
 }
 
 impl Trace {
     /// Trace to the given file.
-    pub fn to_file(file: File) -> Trace {
+    pub fn to_file(file: File, options: TraceOptions) -> Trace {
         Trace {
             proof_file: Some(BufWriter::new(file)),
+            options,
         }
     }
 
     /// Discard what is written to the trace.
     pub fn discard() -> Trace {
-        Trace { proof_file: None }
+        Trace {
+            proof_file: None,
+            options: TraceOptions::default(),
+        }
     }
 
     /// Log an axiom.
@@ -64,6 +76,10 @@ impl Trace {
         linear_terms: impl IntoIterator<Item = AffineView<DomainId>>,
         linear_rhs: i32,
     ) {
+        if !self.options.include_intermediate_steps {
+            return;
+        }
+
         let Some(writer) = self.proof_file.as_mut() else {
             return;
         };
