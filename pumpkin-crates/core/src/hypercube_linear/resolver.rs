@@ -782,8 +782,15 @@ impl HypercubeLinearResolver {
         self.statistics.num_propositional_resolutions += 1;
 
         // Remove the predicates from the hypercube that are resolved on.
+        let num_predicates_before_removal = self.hypercube_predicates_on_conflict_dl.len();
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
+
+        if self.hypercube_predicates_on_conflict_dl.len() == num_predicates_before_removal {
+            // No propositional resolution happens if the pivot is not responsible for
+            // true predicates in the hypercube of the conflict.
+            return;
+        }
 
         let clausal_explanation = explanation.into_clause(state, trail_position);
         trace!(
