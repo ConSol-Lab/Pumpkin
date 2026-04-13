@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::fmt::Display;
 use std::num::NonZero;
 use std::rc::Rc;
 
@@ -19,6 +18,8 @@ use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::Trace;
+use crate::hypercube_linear::explanation::HypercubeLinear;
+use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
 use crate::hypercube_linear::predicate_heap::PredicateHeap;
 use crate::math::num_ext::NumExt;
 use crate::predicate;
@@ -1050,98 +1051,6 @@ fn compute_linear_slack_at_trail_position(
     i64::from(linear.bound()) - lower_bound_terms
 }
 
-#[derive(Clone)]
-struct HypercubeLinear {
-    hypercube: Hypercube,
-    linear: LinearInequality,
-}
-
-impl Display for HypercubeLinear {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.hypercube, self.linear,)
-    }
-}
-
-#[derive(Clone)]
-enum HypercubeLinearExplanation {
-    Proper(HypercubeLinear),
-    Conjunction(Vec<Predicate>),
-}
-
-impl Default for HypercubeLinearExplanation {
-    fn default() -> Self {
-        HypercubeLinearExplanation::Conjunction(vec![])
-    }
-}
-
-impl HypercubeLinearExplanation {
-    fn into_clause(self, state: &State, trail_position: usize) -> Vec<Predicate> {
-        let mut hypercube_linear = match self {
-            HypercubeLinearExplanation::Proper(hypercube_linear) => hypercube_linear,
-            HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
-        };
-
-        let mut clause = hypercube_linear
-            .hypercube
-            .iter_predicates()
-            .collect::<Vec<_>>();
-
-        while !hypercube_linear.linear.is_trivially_false() {
-            let next_term = hypercube_linear
-                .linear
-                .terms()
-                .next()
-                .expect("conversion to clause only possible when linear is conflicting");
-
-            let term_bound =
-                next_term.lower_bound_at_trail_position(&state.assignments, trail_position);
-
-            let predicate_to_weaken_on = BoundPredicate::new(predicate![next_term >= term_bound])
-                .expect("the predicate is a bound predicate");
-
-            hypercube_linear.linear = std::mem::take(&mut hypercube_linear.linear)
-                .weaken_to_zero(predicate_to_weaken_on)
-                .expect("conversion to clause only possible when linear is conflicting");
-
-            clause.push(predicate_to_weaken_on.into());
-        }
-
-        clause
-    }
-
-    fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
-        match self {
-            HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
-                hypercube_linear.linear =
-                    std::mem::take(&mut hypercube_linear.linear).weaken_to_zero(bound)?;
-
-                hypercube_linear.hypercube = std::mem::take(&mut hypercube_linear.hypercube)
-                    .with_predicate(bound.into())
-                    .expect("should never construct inconsistent hypercube");
-
-                Some(HypercubeLinearExplanation::Proper(hypercube_linear))
-            }
-
-            HypercubeLinearExplanation::Conjunction(predicates) => {
-                Some(HypercubeLinearExplanation::Conjunction(predicates))
-            }
-        }
-    }
-}
-
-impl Display for HypercubeLinearExplanation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HypercubeLinearExplanation::Proper(hypercube_linear) => {
-                write!(f, "{hypercube_linear}")
-            }
-            HypercubeLinearExplanation::Conjunction(predicates) => {
-                write!(f, "{} ->  <= -1", predicates.iter().format(" & "))
-            }
-        }
-    }
-}
-
 enum FourierError {
     NoVariableElimination,
     ResultOfEliminationTriviallySatisfiable,
@@ -1191,4 +1100,218 @@ fn gcd(a: i32, b: i32) -> i32 {
         }
     }
     m << shift
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZero;
+
+    use super::*;
+    use crate::hypercube_linear::Trace;
+    use crate::predicate;
+    use crate::state::State;
+
+    // === HypercubeLinearResolver::resolve ===
+
+    #[test]
+    fn resolve_propositional_with_conjunction_adds_reason_to_hypercube() {
+        // Tests that propositional resolution with a clausal (Conjunction) explanation removes the
+        // pivot from the conflict hypercube and adds the reason predicates to the working hypercube.
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+
+        // DL 1: post y >= 3 (reason predicate, at a previous checkpoint)
+        state.new_checkpoint();
+        let _ = state.post(predicate![y >= 3]).expect("domain not empty");
+
+        // DL 2 (conflict DL): post x >= 5 (the pivot)
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 5]).expect("domain not empty");
+        let pivot = predicate![x >= 5];
+        let trail_position = state.trail_position(pivot).expect("pivot is on trail");
+
+        let mut resolver = HypercubeLinearResolver::new(Trace::discard());
+        resolver.conflicting_linear = LinearInequality::trivially_false();
+        resolver
+            .hypercube_predicates_on_conflict_dl
+            .push(pivot, &state);
+
+        // Explanation: why x >= 5 became true (Conjunction includes !pivot = x <= 4)
+        let explanation =
+            HypercubeLinearExplanation::Conjunction(vec![predicate![y >= 3], predicate![x <= 4]]);
+
+        resolver.resolve(&mut state, trail_position, pivot, explanation);
+
+        // The pivot should be removed from the conflict DL heap.
+        assert!(!resolver.hypercube_predicates_on_conflict_dl.contains(pivot));
+
+        // y >= 3 was posted at checkpoint 1 (< current 2), so it should be in working_hypercube.
+        assert!(
+            resolver
+                .working_hypercube
+                .iter_predicates()
+                .any(|p| p == predicate![y >= 3])
+        );
+    }
+
+    #[test]
+    fn resolve_fourier_eliminates_pivot_variable_from_conflict_linear() {
+        // Tests that Fourier resolution eliminates the pivot variable from the conflict linear.
+        //
+        // Conflict:  {} -> x + y <= 5  (violated: x=5, y=1, slack=-1)
+        // Reason:    {} -> -x + z <= -2  (propagated x >= 5 given z >= 3:
+        //                                 slack = -2 - (-10 + 3) = 5,
+        //                                 -x <= -5, i.e. x >= 5)
+        // Fourier combination: x eliminated, result is y + z <= 3.
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(0, 10, Some("y".into()));
+        let z = state.new_interval_variable(0, 10, Some("z".into()));
+
+        // DL 1: post z >= 3
+        state.new_checkpoint();
+        let _ = state.post(predicate![z >= 3]).expect("domain not empty");
+
+        // DL 2 (conflict DL): post x >= 5, y >= 1
+        state.new_checkpoint();
+        let _ = state.post(predicate![x >= 5]).expect("domain not empty");
+        let _ = state.post(predicate![y >= 1]).expect("domain not empty");
+        let pivot = predicate![x >= 5];
+        let trail_position = state.trail_position(pivot).expect("pivot is on trail");
+
+        // conflicting_linear: x + y <= 5, slack = 5 - 5 - 1 = -1 at conflict
+        let conflicting_linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            5,
+        )
+        .expect("not trivially satisfiable");
+
+        // Explanation: {} -> -x + z <= -2
+        // (reason hypercube is empty, so it is always satisfied — Fourier can apply)
+        let explanation_linear = LinearInequality::new(
+            [
+                (NonZero::new(-1).unwrap(), x),
+                (NonZero::new(1).unwrap(), z),
+            ],
+            -2,
+        )
+        .expect("not trivially satisfiable");
+
+        let explanation = HypercubeLinearExplanation::Proper(HypercubeLinear {
+            hypercube: Hypercube::new([]).expect("not inconsistent"),
+            linear: explanation_linear,
+        });
+
+        let mut resolver = HypercubeLinearResolver::new(Trace::discard());
+        resolver.conflicting_linear = conflicting_linear;
+        resolver
+            .hypercube_predicates_on_conflict_dl
+            .push(pivot, &state);
+
+        resolver.resolve(&mut state, trail_position, pivot, explanation);
+
+        // After Fourier elimination of x: conflict becomes y + z <= 3.
+        let expected_linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), y), (NonZero::new(1).unwrap(), z)],
+            3,
+        )
+        .expect("not trivially satisfiable");
+        assert_eq!(resolver.conflicting_linear, expected_linear);
+
+        // z >= 3 (at checkpoint 1 < conflict DL 2) should be added to the working hypercube.
+        assert!(
+            resolver
+                .working_hypercube
+                .iter_predicates()
+                .any(|p| p == predicate![z >= 3])
+        );
+
+        // x >= 5 should be removed from the conflict DL heap.
+        assert!(!resolver.hypercube_predicates_on_conflict_dl.contains(pivot));
+    }
+
+    #[test]
+    fn resolve_propositional_with_hl_propagation_case() {
+        // Tests propositional resolution where the explanation comes from a HL constraint
+        // in the "weaker propagation" case: H /\ l -> R propagated k (weaker than !l).
+        //
+        // Constraint: [a >= 1, x >= 2] -> x + y <= 5
+        //   With a=1 satisfied and x >= 2 unassigned (lb(x)=0), y=2:
+        //   slack = 5 - 0 - 2 = 3, propagates x <= 3 (weaker than !(x>=2) = x <= 1).
+        //
+        // The pivot is x <= 3 (the propagated upper bound). Because x >= 2 is NOT satisfied
+        // at the pivot's trail position (lb(x) = 0), Fourier resolution fails and propositional
+        // resolution handles it instead.
+        //
+        // Conflict linear: -x + w <= -4 (violated because ub(x)=3, so lb(-x)=-3, lb(w)=0,
+        //   slack = -4 - (-3 + 0) = -1).
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 10, Some("a".into()));
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        let y = state.new_interval_variable(2, 10, Some("y".into())); // initial lb = 2
+        let w = state.new_interval_variable(0, 10, Some("w".into()));
+
+        // DL 1: post a >= 1
+        state.new_checkpoint();
+        let _ = state.post(predicate![a >= 1]).expect("domain not empty");
+
+        // DL 2 (conflict DL): post x <= 3 (the propagated upper bound / pivot)
+        state.new_checkpoint();
+        let _ = state.post(predicate![x <= 3]).expect("domain not empty");
+        let pivot = predicate![x <= 3];
+        let trail_position = state.trail_position(pivot).expect("pivot is on trail");
+
+        // conflicting_linear: -x + w <= -4 (violated with ub(x)=3)
+        let conflicting_linear = LinearInequality::new(
+            [
+                (NonZero::new(-1).unwrap(), x),
+                (NonZero::new(1).unwrap(), w),
+            ],
+            -4,
+        )
+        .expect("not trivially satisfiable");
+
+        // Explanation: [a >= 1, x >= 2] -> x + y <= 5
+        // Note: x >= 2 is in the hypercube but is NOT satisfied at the pivot's trail position
+        // (lb(x) = 0 at that point), so Fourier resolution cannot apply.
+        let explanation_hypercube =
+            Hypercube::new([predicate![a >= 1], predicate![x >= 2]]).expect("not inconsistent");
+        let explanation_linear = LinearInequality::new(
+            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
+            5,
+        )
+        .expect("not trivially satisfiable");
+
+        let explanation = HypercubeLinearExplanation::Proper(HypercubeLinear {
+            hypercube: explanation_hypercube,
+            linear: explanation_linear,
+        });
+
+        let mut resolver = HypercubeLinearResolver::new(Trace::discard());
+        resolver.conflicting_linear = conflicting_linear;
+        resolver
+            .hypercube_predicates_on_conflict_dl
+            .push(pivot, &state);
+
+        resolver.resolve(&mut state, trail_position, pivot, explanation);
+
+        // The conflict linear should be weakened on x <= 3 (UpperBound):
+        // -x term (scale=-1) is removed; bound = -4 + 1*3 = -1. Result: w <= -1.
+        let expected_linear =
+            LinearInequality::new([(NonZero::new(1).unwrap(), w)], -1).expect("not trivially sat");
+        assert_eq!(resolver.conflicting_linear, expected_linear);
+
+        // x <= 3 should be removed from the conflict DL heap.
+        assert!(!resolver.hypercube_predicates_on_conflict_dl.contains(pivot));
+
+        // a >= 1 (at checkpoint 1 < conflict DL 2) should be added to working_hypercube.
+        // (x >= 4 from the clause is false in state, y >= 2 is at checkpoint 0 and is ignored.)
+        assert!(
+            resolver
+                .working_hypercube
+                .iter_predicates()
+                .any(|p| p == predicate![a >= 1])
+        );
+    }
 }

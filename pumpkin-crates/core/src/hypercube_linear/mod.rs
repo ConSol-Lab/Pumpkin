@@ -1,6 +1,7 @@
 mod bound_predicate;
 mod checker;
 mod constraint;
+mod explanation;
 mod hypercube;
 mod linear;
 mod predicate_heap;
