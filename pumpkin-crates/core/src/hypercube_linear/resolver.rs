@@ -25,6 +25,7 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::propagation::ExplanationContext;
 use crate::state::Conflict;
+use crate::state::CurrentNogood;
 use crate::state::EmptyDomainConflict;
 use crate::state::State;
 use crate::statistics::Statistic;
@@ -363,6 +364,8 @@ impl HypercubeLinearResolver {
         }
 
         trace!("explaining with clause");
+        let _ =
+            state.get_propagation_reason(pivot, &mut self.reason_buffer, CurrentNogood::empty());
 
         // Enqueue predicates to be explained.
         //
