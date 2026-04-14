@@ -750,6 +750,23 @@ impl HypercubeLinearResolver {
     ) {
         trace!("applying propositional resolution on {pivot}");
 
+        // No propositional resolution happens when the following are both true:
+        // - The pivot does not imply a predicate in the current hypercube,
+        // - and its negation is not implied by a predicate in the explanation.
+        let pivot_implies_predicate_in_conflict = self
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .any(|p| pivot.implies(p));
+
+        let not_pivot_is_implied_by_hypercube_of_explanation =
+            explanation.iter_predicates().any(|p| p.implies(!pivot));
+
+        if !pivot_implies_predicate_in_conflict && !not_pivot_is_implied_by_hypercube_of_explanation
+        {
+            trace!("  => skipping propositional resolution");
+            return;
+        }
+
         let pivot_as_bound = BoundPredicate::new(pivot);
 
         // Both the conflict and the explanation are weakened on the pivot. This ensures
@@ -782,16 +799,8 @@ impl HypercubeLinearResolver {
         self.statistics.num_propositional_resolutions += 1;
 
         // Remove the predicates from the hypercube that are resolved on.
-        let num_predicates_before_removal = self.hypercube_predicates_on_conflict_dl.len();
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
-
-        if self.hypercube_predicates_on_conflict_dl.len() == num_predicates_before_removal {
-            trace!("  => no propositional resolution necessary");
-            // No propositional resolution happens if the pivot is not responsible for
-            // true predicates in the hypercube of the conflict.
-            return;
-        }
 
         let clausal_explanation = explanation.into_clause(state, trail_position);
         trace!(

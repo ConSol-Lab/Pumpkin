@@ -79,11 +79,6 @@ impl PredicateHeap {
     pub(crate) fn contains(&self, predicate: Predicate) -> bool {
         self.heap.iter().any(|pte| pte.predicate == predicate)
     }
-
-    /// See [`BinaryHeap::len`].
-    pub(crate) fn len(&self) -> usize {
-        self.heap.len()
-    }
 }
 
 /// Used to order the predicates in the [`PredicateHeap`].

@@ -87,6 +87,17 @@ impl HypercubeLinearExplanation {
             }
         }
     }
+
+    pub(super) fn iter_predicates(&self) -> impl Iterator<Item = Predicate> {
+        match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => {
+                itertools::Either::Left(hypercube_linear.hypercube.iter_predicates())
+            }
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                itertools::Either::Right(predicates.iter().copied())
+            }
+        }
+    }
 }
 
 impl Display for HypercubeLinearExplanation {
