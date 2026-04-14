@@ -8,6 +8,7 @@ use pumpkin_checking::VariableState;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::variables::DomainId;
+use crate::variables::IntegerVariable;
 
 /// Error that occurs when constructing a [`Hypercube`].
 ///
@@ -35,6 +36,13 @@ impl Hash for Hypercube {
 }
 
 impl Hypercube {
+    /// Creates a new [`Hypercube`] from a single predicate.
+    ///
+    /// Since a single predicate cannot be inconsistent, a hypercube can always be constructed.
+    pub fn from_single_predicate(predicate: Predicate) -> Hypercube {
+        Hypercube::new([predicate]).expect("single predicate cannot be inconsistent")
+    }
+
     /// Create a new hypercube from a sequence of predicates.
     ///
     /// If the predicates are inconsistent, the [`Err`] variant is returned.
@@ -89,6 +97,14 @@ impl Hypercube {
     /// Predicates are yielded in sorted order.
     pub fn iter_predicates(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.predicates.iter().copied()
+    }
+
+    pub fn lower_bound(&self, term: &impl IntegerVariable) -> i32 {
+        match term.induced_lower_bound(&self.state) {
+            IntExt::Int(bound) => bound,
+            IntExt::NegativeInf => i32::MIN,
+            IntExt::PositiveInf => i32::MAX,
+        }
     }
 }
 

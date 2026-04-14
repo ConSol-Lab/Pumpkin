@@ -281,7 +281,12 @@ impl Propagator for HypercubeLinearPropagator {
         let lower_bound_terms = self
             .linear
             .terms()
-            .map(|term| i64::from(context.lower_bound(&term)))
+            .map(|term| {
+                let bound_in_state = context.lower_bound(&term);
+                let bound_in_hypercube = self.hypercube.lower_bound(&term);
+
+                i64::from(i32::max(bound_in_state, bound_in_hypercube))
+            })
             .sum::<i64>();
 
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
@@ -309,7 +314,10 @@ impl Propagator for HypercubeLinearPropagator {
                         return Ok(());
                     }
 
-                    let bound_i64 = slack + i64::from(context.lower_bound(&term_to_propagate));
+                    let bound_in_state = context.lower_bound(&term_to_propagate);
+                    let bound_in_hypercube = self.hypercube.lower_bound(&term_to_propagate);
+                    let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
+
                     let bound = match i32::try_from(bound_i64) {
                         Ok(bound) => bound,
                         Err(_) if bound_i64.is_negative() => todo!(
@@ -365,7 +373,12 @@ impl Propagator for HypercubeLinearPropagator {
         let lower_bound_terms = self
             .linear
             .terms()
-            .map(|term| i64::from(context.lower_bound(&term)))
+            .map(|term| {
+                let bound_in_state = context.lower_bound(&term);
+                let bound_in_hypercube = self.hypercube.lower_bound(&term);
+
+                i64::from(i32::max(bound_in_state, bound_in_hypercube))
+            })
             .sum::<i64>();
 
         let slack = i64::from(self.linear.bound()) - lower_bound_terms;
@@ -391,8 +404,10 @@ impl Propagator for HypercubeLinearPropagator {
                 .linear
                 .term_for_domain(unassigned_predicate.get_domain())
             {
-                let term_lower_bound = context.lower_bound(&term);
-                let new_upper_bound = match i32::try_from(slack + i64::from(term_lower_bound)) {
+                let bound_in_state = context.lower_bound(&term);
+                let bound_in_hypercube = self.hypercube.lower_bound(&term);
+                let bound_i64 = slack + i64::from(i32::max(bound_in_state, bound_in_hypercube));
+                let new_upper_bound = match i32::try_from(slack + bound_i64) {
                     Ok(bound) => bound,
                     Err(_) => return Ok(()),
                 };
@@ -706,5 +721,57 @@ mod tests {
 
         assert!(state.propagate_to_fixed_point().is_ok());
         assert_eq!(state.upper_bound(x), 1);
+    }
+
+    #[test]
+    fn slack_should_be_hypercube_linear_slack() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(2, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new([predicate![x >= 4]]).expect("not inconsistent");
+
+        let linear =
+            LinearInequality::new([(NonZero::new(1).unwrap(), x)], 3).expect("not trivially false");
+
+        let constraint_tag = state.new_constraint_tag();
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.upper_bound(x), 3);
+    }
+
+    #[test]
+    fn hypercube_is_taken_into_slack_calculation() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(0, 10, None);
+        let z = state.new_interval_variable(-6, 6, None);
+
+        let hypercube = Hypercube::from_single_predicate(predicate![z <= -2]);
+        let linear = LinearInequality::new(
+            [
+                (NonZero::new(1).unwrap(), x),
+                (NonZero::new(1).unwrap(), y),
+                (NonZero::new(-1).unwrap(), z),
+            ],
+            0,
+        )
+        .expect("not trivially satisfiable");
+        let constraint_tag = state.new_constraint_tag();
+
+        let _ = state.add_propagator(HypercubeLinearConstructor {
+            hypercube,
+            linear,
+            constraint_tag,
+        });
+
+        assert!(state.propagate_to_fixed_point().is_ok());
+        assert_eq!(state.lower_bound(z), -1);
     }
 }

@@ -160,10 +160,70 @@ impl StoredReason {
         if let Some((hypercube, linear)) =
             propagator.explain_as_hypercube_linear(code, context.reborrow())
         {
-            let clausal_explanation = hypercube
+            convert_hl_to_clause(
+                context,
+                hypercube,
+                linear,
+                destination_buffer,
+                predicate_to_explain,
+            );
+        } else {
+            destination_buffer.extend(propagator.lazy_explanation(code, context).iter().copied());
+        }
+    }
+}
+
+fn convert_hl_to_clause(
+    context: ExplanationContext<'_>,
+    hypercube: crate::hypercube_linear::Hypercube,
+    linear: crate::hypercube_linear::LinearInequality,
+    destination_buffer: &mut impl Extend<Predicate>,
+    predicate_to_explain: Predicate,
+) {
+    let unsatisfied_hypercube_predicates = hypercube
+        .iter_predicates()
+        .filter(|&p| {
+            context.evaluate_predicate_at_trail_position(p, context.get_trail_position())
+                != Some(true)
+        })
+        .collect::<Vec<_>>();
+
+    if unsatisfied_hypercube_predicates.is_empty() {
+        // The propagation is part of the linear. The hypercube is entirely part of the
+        // reason.
+        destination_buffer.extend(hypercube.iter_predicates());
+
+        // Add all lower bounds, except for the domain that was propagated. The iterator is
+        // guaranteed to yield every domain at most once.
+        destination_buffer.extend(linear.terms().filter_map(|term| {
+            if term.inner == predicate_to_explain.get_domain() {
+                None
+            } else {
+                let lb = context.lower_bound_at_trail_position(&term, context.get_trail_position());
+                Some(predicate![term >= lb])
+            }
+        }));
+    } else {
+        assert_eq!(
+            unsatisfied_hypercube_predicates.len(),
+            1,
+            "cannot have more than one unassigned predicate when a hypercube linear propagates"
+        );
+
+        let unsatisfied_predicate = unsatisfied_hypercube_predicates[0];
+
+        // Add all true predicates in the hypercube.
+        destination_buffer.extend(
+            hypercube
                 .iter_predicates()
-                .filter(|&p| !(!p).implies(predicate_to_explain))
-                .chain(linear.terms().filter_map(|term| {
+                .filter(|&p| p != unsatisfied_predicate),
+        );
+
+        // Add all lower bounds that are true.
+        destination_buffer.extend(
+            linear
+                .terms()
+                .filter_map(|term| {
                     if term.inner == predicate_to_explain.get_domain() {
                         None
                     } else {
@@ -171,12 +231,12 @@ impl StoredReason {
                             .lower_bound_at_trail_position(&term, context.get_trail_position());
                         Some(predicate![term >= lb])
                     }
-                }));
-
-            destination_buffer.extend(clausal_explanation);
-        } else {
-            destination_buffer.extend(propagator.lazy_explanation(code, context).iter().copied());
-        }
+                })
+                .filter(|&p| {
+                    context.evaluate_predicate_at_trail_position(p, context.get_trail_position())
+                        == Some(true)
+                }),
+        );
     }
 }
 
