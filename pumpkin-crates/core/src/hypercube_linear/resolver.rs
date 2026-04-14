@@ -978,7 +978,12 @@ fn propagates_at(
 
             let predicate_to_propagate = predicate![term <= new_upper_bound];
 
-            return (!unassigned_predicate).implies(predicate_to_propagate);
+            let predicate_truth_value = state
+                .assignments
+                .evaluate_predicate_at_trail_position(predicate_to_propagate, trail_position);
+
+            return (!unassigned_predicate).implies(predicate_to_propagate)
+                && predicate_truth_value != Some(true);
         }
     } else {
         assert!(unsatisfied_predicates_in_hypercube.is_empty());
