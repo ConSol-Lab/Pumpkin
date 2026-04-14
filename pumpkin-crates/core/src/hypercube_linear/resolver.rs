@@ -804,7 +804,7 @@ impl HypercubeLinearResolver {
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
 
-        let clausal_explanation = explanation.into_clause(state, trail_position);
+        let clausal_explanation = explanation.into_clause(state, pivot, trail_position);
         trace!(
             "clausal explanation: {}",
             clausal_explanation.iter().format(" & ")

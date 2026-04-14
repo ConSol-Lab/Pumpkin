@@ -35,36 +35,34 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    pub(super) fn into_clause(self, state: &State, trail_position: usize) -> Vec<Predicate> {
-        let mut hypercube_linear = match self {
+    pub(super) fn into_clause(
+        self,
+        state: &State,
+        pivot: Predicate,
+        trail_position: usize,
+    ) -> Vec<Predicate> {
+        let hypercube_linear = match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => hypercube_linear,
             HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
         };
 
-        let mut clause = hypercube_linear
-            .hypercube
-            .iter_predicates()
-            .collect::<Vec<_>>();
+        let mut clause = vec![!pivot];
 
-        while !hypercube_linear.linear.is_trivially_false() {
-            let next_term = hypercube_linear
-                .linear
-                .terms()
-                .next()
-                .expect("conversion to clause only possible when linear is conflicting");
+        clause.extend(
+            hypercube_linear
+                .hypercube
+                .iter_predicates()
+                // Any predicate in the hypercube that is implied by !pivot should be
+                // excluded. This is due to the propagation rule that allows a weaker
+                // hypercube predicate to be propagated by the linear.
+                .filter(|&p| !(!pivot).implies(p)),
+        );
 
-            let term_bound =
-                next_term.lower_bound_at_trail_position(&state.assignments, trail_position);
+        clause.extend(hypercube_linear.linear.terms().map(|term| {
+            let term_bound = term.lower_bound_at_trail_position(&state.assignments, trail_position);
 
-            let predicate_to_weaken_on = BoundPredicate::new(predicate![next_term >= term_bound])
-                .expect("the predicate is a bound predicate");
-
-            hypercube_linear.linear = std::mem::take(&mut hypercube_linear.linear)
-                .weaken_to_zero(predicate_to_weaken_on)
-                .expect("conversion to clause only possible when linear is conflicting");
-
-            clause.push(predicate_to_weaken_on.into());
-        }
+            predicate![term >= term_bound]
+        }));
 
         clause
     }
