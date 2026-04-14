@@ -1187,7 +1187,8 @@ mod tests {
     #[test]
     fn resolve_propositional_with_conjunction_adds_reason_to_hypercube() {
         // Tests that propositional resolution with a clausal (Conjunction) explanation removes the
-        // pivot from the conflict hypercube and adds the reason predicates to the working hypercube.
+        // pivot from the conflict hypercube and adds the reason predicates to the working
+        // hypercube.
         let mut state = State::default();
         let x = state.new_interval_variable(0, 10, Some("x".into()));
         let y = state.new_interval_variable(0, 10, Some("y".into()));

@@ -2,13 +2,13 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 
-use crate::{
-    hypercube_linear::{BoundPredicate, Hypercube, LinearInequality},
-    predicate,
-    predicates::Predicate,
-    state::State,
-    variables::IntegerVariable,
-};
+use crate::hypercube_linear::BoundPredicate;
+use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::LinearInequality;
+use crate::predicate;
+use crate::predicates::Predicate;
+use crate::state::State;
+use crate::variables::IntegerVariable;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HypercubeLinear {

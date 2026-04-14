@@ -1,17 +1,15 @@
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    num::NonZero,
-};
+use std::fs::File;
+use std::io::BufWriter;
+use std::io::Write;
+use std::num::NonZero;
 
 use itertools::Itertools;
 
-use crate::{
-    predicates::Predicate,
-    proof::ConstraintTag,
-    state::State,
-    variables::{AffineView, DomainId},
-};
+use crate::predicates::Predicate;
+use crate::proof::ConstraintTag;
+use crate::state::State;
+use crate::variables::AffineView;
+use crate::variables::DomainId;
 
 /// A wrapper around a proof file
 #[derive(Debug)]

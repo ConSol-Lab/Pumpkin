@@ -107,10 +107,10 @@ impl PredicateToExplain {
     ///
     /// - **Rank 4** – `NotEqual` implied by the trail entry (a propagated consequence of an
     ///   equality or a bound that excluded the value): these are the "furthest derived" facts.
-    /// - **Rank 3** – `Equal` implied by a combination of bounds: the equality was established
-    ///   only once both bounds met, making it more derived than either individual bound.
-    /// - **Rank 2** – The direct trail entry itself (`Equal`, `LowerBound`, or `UpperBound`):
-    ///   the actual CP fact that was recorded.
+    /// - **Rank 3** – `Equal` implied by a combination of bounds: the equality was established only
+    ///   once both bounds met, making it more derived than either individual bound.
+    /// - **Rank 2** – The direct trail entry itself (`Equal`, `LowerBound`, or `UpperBound`): the
+    ///   actual CP fact that was recorded.
     /// - **Rank 1** – Implied `LowerBound`/`UpperBound`: weaker bounds that became true as a
     ///   side-effect of the direct entry but carry strictly less information.
     /// - **Rank 0** – Direct `NotEqual` trail entry: these are typically narrow, single-value
@@ -177,7 +177,6 @@ impl Ord for PredicateToExplain {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::predicate;
     use crate::state::State;
 
