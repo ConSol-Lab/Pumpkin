@@ -442,6 +442,7 @@ impl HypercubeLinearResolver {
                     ),
                 )
             {
+                trace!("constructing conflict from HL");
                 self.proof_file.borrow_mut().axiom(
                     hypercube.iter_predicates(),
                     linear.terms(),
@@ -473,19 +474,20 @@ impl HypercubeLinearResolver {
             }
         }
 
+        trace!("constructing conflict from clause");
         let mut clausal_conflict = vec![];
         let _ = state.reason_store.get_or_compute(
             trigger_reason,
             ExplanationContext::without_working_nogood(
                 &state.assignments,
-                state.trail_len() - 1,
+                // -1 is not necessary, conflicting trail entry is undone
+                state.trail_len(),
                 &mut state.notification_engine,
             ),
             &mut state.propagators,
             &mut clausal_conflict,
             trigger_predicate,
         );
-        // dbg!(&clausal_conflict);
         clausal_conflict.push(!trigger_predicate);
 
         self.proof_file
@@ -634,7 +636,7 @@ impl HypercubeLinearResolver {
         let reason_slack =
             compute_linear_slack_at_trail_position(state, &explanation.linear, trail_position);
 
-        trace!("applying fourier elimination on {pivot}",);
+        trace!("applying fourier elimination on {pivot}");
         trace!(
             "  - slack conflict: {}",
             compute_linear_slack_at_trail_position(state, &self.conflicting_linear, trail_position),
@@ -877,11 +879,19 @@ impl HypercubeLinearResolver {
             compute_linear_slack_at_trail_position(state, &self.conflicting_linear, trail_position);
 
         if !linear_slack.is_negative() {
-            eprintln!("Bounds:");
+            eprintln!("Bounds in conflicting linear:");
 
             for term in self.conflicting_linear.terms() {
                 let lb = term.lower_bound_at_trail_position(&state.assignments, trail_position);
-                eprintln!("  - {} {} >= {}", term.scale, term.inner, lb);
+                eprintln!(
+                    "  - {} {} >= {} @ {}",
+                    term.scale,
+                    term.inner,
+                    lb,
+                    state
+                        .trail_position(predicate![term >= lb])
+                        .expect("predicate is true")
+                );
             }
 
             panic!(
@@ -1066,11 +1076,14 @@ fn compute_hl_slack_at_trail_position(
     linear: &LinearInequality,
     trail_position: usize,
 ) -> i64 {
+    // trace!("Computing HL slack:");
     let lower_bound_terms = linear
         .terms()
         .map(|term| {
             let state_lb = term.lower_bound_at_trail_position(&state.assignments, trail_position);
             let hypercube_lb = hypercube.lower_bound(&term);
+
+            // trace!("  - {term:?} >= state {state_lb}, hl {hypercube_lb}");
 
             i64::from(i32::max(state_lb, hypercube_lb))
         })
