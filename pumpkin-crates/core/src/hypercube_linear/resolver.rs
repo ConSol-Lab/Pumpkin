@@ -1058,15 +1058,23 @@ fn compute_tightly_propagating_reason(
         .collect();
 
     let mut tightly_propagating_reason = original_reason.clone();
+
     for bound in bounds_to_weaken {
         tightly_propagating_reason.hypercube =
             std::mem::take(&mut tightly_propagating_reason.hypercube)
                 .with_predicate(bound.into())
                 .expect("bound is true and original is true so hypercube is not inconsistent");
 
+        let term = tightly_propagating_reason
+            .linear
+            .term_for_domain(bound.domain)
+            .expect("the bound is computed based on terms");
+
+        let num_weakenings = term.scale % divisor;
+
         tightly_propagating_reason.linear = tightly_propagating_reason
             .linear
-            .weaken_to_zero(bound)
+            .weaken(bound, num_weakenings)
             .expect("never becomes trivially satisfiable");
     }
 
@@ -1403,5 +1411,40 @@ mod tests {
             &hypercube,
             &linear,
         ));
+    }
+
+    #[test]
+    fn tightly_propagating_reason_weakens_appropriately() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(1, 10, None);
+
+        let original_reason = HypercubeLinear {
+            hypercube: Hypercube::default(),
+            linear: LinearInequality::new(
+                [(NonZero::new(2).unwrap(), x), (NonZero::new(5).unwrap(), y)],
+                10,
+            )
+            .expect("not trivially satisfiable"),
+        };
+
+        let expected = HypercubeLinear {
+            hypercube: Hypercube::from_single_predicate(predicate![y >= 1]),
+            linear: LinearInequality::new(
+                [(NonZero::new(1).unwrap(), x), (NonZero::new(2).unwrap(), y)],
+                4,
+            )
+            .expect("not trivially satisfiable"),
+        };
+
+        let actual = compute_tightly_propagating_reason(
+            &state,
+            state.trail_len(),
+            &original_reason,
+            x.scaled(2),
+        );
+
+        assert_eq!(actual, expected);
     }
 }

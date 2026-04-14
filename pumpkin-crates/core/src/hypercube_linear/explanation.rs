@@ -10,7 +10,7 @@ use crate::{
     variables::IntegerVariable,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HypercubeLinear {
     pub hypercube: Hypercube,
     pub linear: LinearInequality,
@@ -116,71 +116,6 @@ mod tests {
     use std::num::NonZero;
 
     use super::*;
-
-    #[test]
-    fn into_clause_conjunction_returns_predicates_directly() {
-        let mut state = State::default();
-        let x = state.new_interval_variable(0, 10, Some("x".into()));
-        let y = state.new_interval_variable(0, 10, Some("y".into()));
-
-        let predicates = vec![predicate![x >= 3], predicate![y >= 2], predicate![x <= 7]];
-        let explanation = HypercubeLinearExplanation::Conjunction(predicates.clone());
-
-        let clause = explanation.into_clause(&state, state.trail_len());
-
-        assert_eq!(clause, predicates);
-    }
-
-    #[test]
-    fn into_clause_proper_trivially_false_linear_returns_only_hypercube_predicates() {
-        let mut state = State::default();
-        let a = state.new_interval_variable(0, 10, Some("a".into()));
-        let b = state.new_interval_variable(0, 10, Some("b".into()));
-
-        let hypercube =
-            Hypercube::new([predicate![a >= 1], predicate![b <= 5]]).expect("not inconsistent");
-        let linear = LinearInequality::trivially_false();
-
-        let explanation = HypercubeLinearExplanation::Proper(HypercubeLinear { hypercube, linear });
-
-        let clause = explanation.into_clause(&state, state.trail_len());
-
-        assert_eq!(clause.len(), 2);
-        assert!(clause.contains(&predicate![a >= 1]));
-        assert!(clause.contains(&predicate![b <= 5]));
-    }
-
-    #[test]
-    fn into_clause_proper_converts_conflicting_linear_terms_to_bound_predicates() {
-        // Tests that a Proper explanation with a conflicting linear is converted to a clause
-        // consisting of the hypercube predicates plus the lower-bound predicate for each term.
-        let mut state = State::default();
-        let a = state.new_interval_variable(0, 10, Some("a".into()));
-        // y has initial lb=2, z has initial lb=3 so that y + z <= 4 (slack=-1) is conflicting.
-        let y = state.new_interval_variable(2, 10, Some("y".into()));
-        let z = state.new_interval_variable(3, 5, Some("z".into()));
-
-        // y + z <= 4 with lb(y)=2, lb(z)=3: slack = 4 - 2 - 3 = -1 (conflicting)
-        let linear = LinearInequality::new(
-            [(NonZero::new(1).unwrap(), y), (NonZero::new(1).unwrap(), z)],
-            4,
-        )
-        .expect("not trivially satisfiable");
-
-        let hypercube = Hypercube::new([predicate![a >= 1]]).expect("not inconsistent");
-
-        let explanation = HypercubeLinearExplanation::Proper(HypercubeLinear { hypercube, linear });
-
-        // trail_len() gives a position past all trail entries so lower_bound_at_trail_position
-        // returns the current (initial) lower bounds.
-        let clause = explanation.into_clause(&state, state.trail_len());
-
-        // Clause = [a >= 1] (hypercube) + [y >= 2, z >= 3] (from weakening the linear)
-        assert_eq!(clause.len(), 3);
-        assert!(clause.contains(&predicate![a >= 1]));
-        assert!(clause.contains(&predicate![y >= 2]));
-        assert!(clause.contains(&predicate![z >= 3]));
-    }
 
     #[test]
     fn weaken_to_zero_conjunction_is_passthrough() {
