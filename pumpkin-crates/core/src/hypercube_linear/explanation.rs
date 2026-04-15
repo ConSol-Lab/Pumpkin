@@ -40,10 +40,12 @@ impl HypercubeLinearExplanation {
         state: &State,
         pivot: Predicate,
         trail_position: usize,
-    ) -> Vec<Predicate> {
+    ) -> (Vec<Predicate>, LinearInequality) {
         let hypercube_linear = match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => hypercube_linear,
-            HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
+            HypercubeLinearExplanation::Conjunction(predicates) => {
+                return (predicates, LinearInequality::trivially_false());
+            }
         };
 
         let mut clause = vec![!pivot];
@@ -65,7 +67,7 @@ impl HypercubeLinearExplanation {
             predicate![term >= term_bound]
         }));
 
-        clause
+        (clause, hypercube_linear.linear)
     }
 
     pub(super) fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {

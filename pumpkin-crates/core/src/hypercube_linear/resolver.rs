@@ -41,6 +41,7 @@ use crate::variables::TransformableVariable;
 
 create_statistics_struct!(ResolverStatistics {
     num_propositional_resolutions: usize,
+    num_propositional_resolutions_use_explanation_linear: usize,
     num_successful_fourier_resolutions: usize,
     num_integer_overflow_errors: usize,
     num_conflicts: usize,
@@ -254,6 +255,7 @@ impl HypercubeLinearResolver {
                     None
                 }
             });
+
         for (domain, value) in equality_predicates {
             let Some(term) = self.conflicting_linear.term_for_domain(domain) else {
                 continue;
@@ -800,7 +802,9 @@ impl HypercubeLinearResolver {
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
 
-        let clausal_explanation = explanation.into_clause(state, pivot, trail_position);
+        let (clausal_explanation, explanation_linear) =
+            explanation.into_clause(state, pivot, trail_position);
+
         trace!(
             "clausal explanation: {}",
             clausal_explanation.iter().format(" & ")
@@ -817,6 +821,16 @@ impl HypercubeLinearResolver {
             }
 
             self.add_hypercube_predicate(state, predicate);
+        }
+
+        if self.conflicting_linear.is_trivially_false() {
+            trace!(
+                "since the linear in the conflict is trivially false, use linear from explanation"
+            );
+
+            self.conflicting_linear = explanation_linear;
+            self.statistics
+                .num_propositional_resolutions_use_explanation_linear += 1;
         }
     }
 
