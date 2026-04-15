@@ -45,6 +45,8 @@ create_statistics_struct!(ResolverStatistics {
     num_successful_fourier_resolutions: usize,
     num_integer_overflow_errors: usize,
     num_conflicts: usize,
+    num_learned_clauses: usize,
+    num_learned_hls: usize,
 });
 
 #[derive(Clone, Debug)]
@@ -198,7 +200,7 @@ impl HypercubeLinearResolver {
             }
 
             if let Some(dl) = self.will_propagate_on_previous_dl(state) {
-                return self.extract_learned_hypercube_linear(dl);
+                return self.extract_learned_hypercube_linear(state, dl);
             }
 
             let pivot = self
@@ -553,16 +555,39 @@ impl HypercubeLinearResolver {
     }
 
     /// Build the learned hypercube linear from the current state of the resolver.
-    fn extract_learned_hypercube_linear(&mut self, propagates_at: usize) -> LearnedHypercubeLinear {
+    fn extract_learned_hypercube_linear(
+        &mut self,
+        state: &State,
+        propagates_at: usize,
+    ) -> LearnedHypercubeLinear {
         let hypercube = std::mem::take(&mut self.working_hypercube)
             .with_predicates(self.hypercube_predicates_on_conflict_dl.drain())
             .expect("can never encounter inconsistent hypercube");
 
         let _ = self.predicates_to_explain.drain();
 
+        // Determine whether the linear can propagate something at some point.
+        // If not, replace it with a trivially false linear to save memory and
+        // registrations for bound events.
+        let root_trail_position = state.assignments.get_trail_position_at_checkpoint(0);
+        let hl_slack_at_root = compute_hl_slack_at_trail_position(
+            state,
+            &hypercube,
+            &self.conflicting_linear,
+            root_trail_position,
+        );
+
+        let linear = if hl_slack_at_root < 0 {
+            self.statistics.num_learned_clauses += 1;
+            LinearInequality::trivially_false()
+        } else {
+            self.statistics.num_learned_hls += 1;
+            std::mem::take(&mut self.conflicting_linear)
+        };
+
         LearnedHypercubeLinear {
             hypercube,
-            linear: std::mem::take(&mut self.conflicting_linear),
+            linear,
             propagates_at,
         }
     }
