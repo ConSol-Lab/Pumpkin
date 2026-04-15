@@ -92,8 +92,31 @@ impl Hypercube {
         mut self,
         predicates: impl IntoIterator<Item = Predicate>,
     ) -> Result<Hypercube, InconsistentHypercube> {
-        for predicate in predicates {
-            self = self.with_predicate(predicate)?;
+        let applied_predicates = predicates.into_iter().filter_map(|p| {
+            if self.state.is_true(&p) {
+                None
+            } else if self.state.apply(&p) {
+                Some(Ok(p))
+            } else {
+                Some(Err(InconsistentHypercube(p.get_domain())))
+            }
+        });
+
+        for maybe_predicate in applied_predicates {
+            let predicate = maybe_predicate?;
+
+            let index_to_insert = self
+                .predicates
+                .binary_search(&predicate)
+                .expect_err("the predicate does not exist in the hypercube");
+
+            self.predicates.insert(index_to_insert, predicate);
+        }
+
+        minimize(&mut self.predicates);
+
+        if cfg!(feature = "hl-checks") {
+            assert_eq!(self.predicates, describe_state_with_predicates(&self.state));
         }
 
         Ok(self)
