@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZero;
 use std::rc::Rc;
@@ -647,6 +648,7 @@ impl HypercubeLinearResolver {
             state,
             trail_position,
             explanation,
+            reason_slack,
             pivot.get_domain().scaled(weight_in_reason),
         );
 
@@ -680,12 +682,6 @@ impl HypercubeLinearResolver {
                 self.predicates_to_explain.push(predicate, state);
             }
         }
-
-        let term_in_reformulated_reason = tightly_propagating_reason
-            .linear
-            .term_for_domain(pivot.get_domain())
-            .unwrap();
-        assert_eq!(term_in_reformulated_reason.scale.abs(), 1);
 
         let scale_reason = weight_in_conflicting.abs();
         let mut linear_terms = self
@@ -1030,14 +1026,21 @@ fn linear_propagates_at(
     false
 }
 
-/// Use weakening to obtain a hypercube linear that has the term for `pivot_domain` be unit in the
-/// linear part.
-fn compute_tightly_propagating_reason(
+/// Use weakening to obtain a hypercube linear that propagates the given term without any rounding.
+fn compute_tightly_propagating_reason<'expl>(
     state: &State,
     trail_position: usize,
-    original_reason: &HypercubeLinear,
+    original_reason: &'expl HypercubeLinear,
+    reason_slack: i64,
     pivot_term: AffineView<DomainId>,
-) -> HypercubeLinear {
+) -> Cow<'expl, HypercubeLinear> {
+    let pivot_term_upper_bound = reason_slack
+        + i64::from(pivot_term.lower_bound_at_trail_position(&state.assignments, trail_position));
+
+    if pivot_term_upper_bound % i64::from(pivot_term.scale) == 0 {
+        return Cow::Borrowed(original_reason);
+    }
+
     let divisor = pivot_term.scale.abs();
 
     let bounds_to_weaken: Vec<_> = original_reason
@@ -1080,7 +1083,7 @@ fn compute_tightly_propagating_reason(
 
     tightly_propagating_reason.linear.divide(divisor);
 
-    tightly_propagating_reason
+    Cow::Owned(tightly_propagating_reason)
 }
 
 fn compute_hl_slack_at_trail_position(
@@ -1430,6 +1433,12 @@ mod tests {
             .expect("not trivially satisfiable"),
         };
 
+        let slack = compute_linear_slack_at_trail_position(
+            &state,
+            &original_reason.linear,
+            state.trail_len(),
+        );
+
         let expected = HypercubeLinear {
             hypercube: Hypercube::from_single_predicate(predicate![y >= 1]),
             linear: LinearInequality::new(
@@ -1443,10 +1452,11 @@ mod tests {
             &state,
             state.trail_len(),
             &original_reason,
+            slack,
             x.scaled(2),
         );
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.into_owned(), expected);
     }
 
     #[test]
@@ -1463,10 +1473,16 @@ mod tests {
                     (NonZero::new(2).unwrap(), x),
                     (NonZero::new(-5).unwrap(), y),
                 ],
-                10,
+                9,
             )
             .expect("not trivially satisfiable"),
         };
+
+        let slack = compute_linear_slack_at_trail_position(
+            &state,
+            &original_reason.linear,
+            state.trail_len(),
+        );
 
         let expected = HypercubeLinear {
             hypercube: Hypercube::from_single_predicate(predicate![y <= 10]),
@@ -1475,7 +1491,7 @@ mod tests {
                     (NonZero::new(1).unwrap(), x),
                     (NonZero::new(-2).unwrap(), y),
                 ],
-                10,
+                9,
             )
             .expect("not trivially satisfiable"),
         };
@@ -1484,9 +1500,10 @@ mod tests {
             &state,
             state.trail_len(),
             &original_reason,
+            slack,
             x.scaled(2),
         );
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.into_owned(), expected);
     }
 }
