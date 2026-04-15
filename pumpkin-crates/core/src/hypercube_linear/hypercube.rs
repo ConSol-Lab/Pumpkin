@@ -7,6 +7,7 @@ use pumpkin_checking::VariableState;
 
 use crate::predicate;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateType;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 
@@ -52,12 +53,7 @@ impl Hypercube {
         // Note: Ideally this would be an implementation of [`TryFrom`], however, that cannot be
         // done in the same way due to a 'conflicting implementations' error.
 
-        let state = VariableState::prepare_for_conflict_check(predicates, None)
-            .map_err(InconsistentHypercube)?;
-
-        let predicates = describe_state_with_predicates(&state);
-
-        Ok(Hypercube { state, predicates })
+        Hypercube::default().with_predicates(predicates)
     }
 
     /// Add a predicate to the hypercube.
@@ -71,8 +67,19 @@ impl Hypercube {
             // The predicate is subsumed by the existing predicates in the hypercube.
             Ok(self)
         } else if self.state.apply(&predicate) {
-            // TODO: Do this incrementally.
-            self.predicates = describe_state_with_predicates(&self.state);
+            // We know that the new predicate is not implied by the hypercube, so it
+            // must be inserted.
+            let index_to_insert = self
+                .predicates
+                .binary_search(&predicate)
+                .expect_err("the predicate does not exist in the hypercube");
+
+            self.predicates.insert(index_to_insert, predicate);
+            minimize(&mut self.predicates);
+
+            if cfg!(feature = "hl-checks") {
+                assert_eq!(self.predicates, describe_state_with_predicates(&self.state));
+            }
 
             Ok(self)
         } else {
@@ -106,6 +113,186 @@ impl Hypercube {
             IntExt::PositiveInf => i32::MAX,
         }
     }
+}
+
+/// Semantically minimize the given vector of predicates.
+///
+/// If the conjunction of predicates is inconsistent, the behavior is unspecified.
+///
+/// Panics if the vector is not sorted.
+fn minimize(predicates: &mut Vec<Predicate>) {
+    assert!(predicates.is_sorted());
+
+    if predicates.len() < 2 {
+        // At least two elements are needed to require minimization.
+        return;
+    }
+
+    // In the first pass, we tighten the lower bounds as much as possible.
+    let mut read_idx = 1;
+    let mut write_idx = 0;
+
+    while read_idx < predicates.len() {
+        let p1 = predicates[write_idx];
+        let p2 = predicates[read_idx];
+
+        match tighten_lower_bound(p1, p2) {
+            Some(p) => {
+                predicates[write_idx] = p;
+                read_idx += 1;
+            }
+            None => {
+                write_idx += 1;
+                predicates[write_idx] = predicates[read_idx];
+                read_idx += 1;
+            }
+        }
+    }
+
+    predicates.truncate(write_idx + 1);
+
+    if predicates.len() < 2 {
+        // The truncate call may have reduced the length to 1.
+        return;
+    }
+
+    // In a second pass, we tighten the upper bounds and identify equality.
+    let mut read_idx = 1;
+    let mut write_idx = 0;
+
+    let num_predicates = predicates.len();
+    let reverse_idx = |idx: usize| num_predicates - idx - 1;
+
+    while read_idx < predicates.len() {
+        let p1 = predicates[reverse_idx(read_idx)];
+        let p2 = predicates[reverse_idx(write_idx)];
+
+        match tighten_upper_bound_and_merge_equalities(p1, p2) {
+            Some(p) => {
+                predicates[reverse_idx(write_idx)] = p;
+                read_idx += 1;
+            }
+            None => {
+                write_idx += 1;
+                predicates[reverse_idx(write_idx)] = predicates[reverse_idx(read_idx)];
+                read_idx += 1;
+            }
+        }
+    }
+
+    let end_of_range_to_drain = predicates.len() - write_idx - 1;
+
+    // Shift everything to the right.
+    let _ = predicates.drain(..end_of_range_to_drain);
+}
+
+fn tighten_upper_bound_and_merge_equalities(p1: Predicate, p2: Predicate) -> Option<Predicate> {
+    use PredicateType::*;
+    assert!(p1 <= p2);
+
+    if p1.get_domain() != p2.get_domain() {
+        return None;
+    }
+
+    let domain = p1.get_domain();
+    let p1_rhs = p1.get_right_hand_side();
+    let p2_rhs = p2.get_right_hand_side();
+
+    match (p1.get_predicate_type(), p2.get_predicate_type()) {
+        (NotEqual, UpperBound) => {
+            if p1_rhs == p2_rhs {
+                return Some(predicate![domain <= p1_rhs - 1]);
+            }
+            if p1_rhs > p2_rhs {
+                return Some(p2);
+            }
+        }
+        (UpperBound, UpperBound) => return Some(p1),
+
+        (Equal, UpperBound) => return Some(p1),
+
+        (LowerBound, Equal) => return Some(p2),
+
+        (LowerBound, UpperBound) => {
+            if p1_rhs == p2_rhs {
+                return Some(predicate![domain == p1_rhs]);
+            }
+        }
+
+        // Handled in forward pass.
+        (LowerBound, LowerBound)
+        | (LowerBound, NotEqual)
+        | (Equal, NotEqual)
+        | (NotEqual, NotEqual)
+        | (NotEqual, Equal) => {}
+
+        (UpperBound, LowerBound)
+        | (UpperBound, NotEqual)
+        | (UpperBound, Equal)
+        | (NotEqual, LowerBound)
+        | (Equal, LowerBound)
+        | (Equal, Equal) => unreachable!("predicate order: p1 = {p1}, p2 = {p2}"),
+    }
+
+    None
+}
+
+fn tighten_lower_bound(p1: Predicate, p2: Predicate) -> Option<Predicate> {
+    use PredicateType::*;
+
+    assert!(p1 <= p2);
+
+    if p1.get_domain() != p2.get_domain() {
+        return None;
+    }
+
+    let domain = p1.get_domain();
+    let p1_rhs = p1.get_right_hand_side();
+    let p2_rhs = p2.get_right_hand_side();
+
+    match (p1.get_predicate_type(), p2.get_predicate_type()) {
+        (LowerBound, LowerBound) => {
+            return Some(p2);
+        }
+        (LowerBound, NotEqual) => {
+            if p1_rhs > p2_rhs {
+                // E.g. [x >= 5] & [x != 4] -> [x >= 5]
+                return Some(p1);
+            }
+
+            if p1_rhs == p2_rhs {
+                // E.g. [x >= 5] & [x != 5] -> [x >= 6]
+                return Some(predicate![domain >= p1_rhs + 1]);
+            }
+        }
+        (LowerBound, UpperBound) => {
+            if p1_rhs == p2_rhs {
+                return Some(predicate![domain == p1_rhs]);
+            }
+        }
+        (LowerBound, Equal) => {
+            assert!(p1_rhs <= p2_rhs);
+            return Some(p2);
+        }
+
+        (NotEqual, Equal) => return Some(p2),
+        (Equal, NotEqual) => return Some(p1),
+
+        // Handled in backward pass.
+        (NotEqual, UpperBound)
+        | (UpperBound, UpperBound)
+        | (Equal, UpperBound)
+        | (NotEqual, NotEqual) => {}
+
+        (UpperBound, LowerBound)
+        | (UpperBound, NotEqual)
+        | (UpperBound, Equal)
+        | (NotEqual, LowerBound)
+        | (Equal, LowerBound)
+        | (Equal, Equal) => unreachable!("predicate order: p1 = {p1}, p2 = {p2}"),
+    }
+
+    None
 }
 
 impl Display for Hypercube {
@@ -158,8 +345,8 @@ fn describe_state_with_predicates(state: &VariableState<Predicate>) -> Vec<Predi
 mod tests {
     use super::*;
     use crate::containers::HashSet;
-    use crate::predicate;
     use crate::state::State;
+    use crate::{conjunction, predicate};
 
     #[test]
     fn consistent_hypercube_can_be_created() {
@@ -168,7 +355,7 @@ mod tests {
         let x = state.new_interval_variable(1, 10, Some("x".into()));
         let y = state.new_interval_variable(1, 10, Some("y".into()));
 
-        let maybe_hypercube = Hypercube::new([predicate![x >= 2], predicate![y >= 2]]);
+        let maybe_hypercube = Hypercube::new(conjunction!([x >= 2] & [y >= 2]));
 
         assert!(maybe_hypercube.is_ok());
     }
@@ -180,7 +367,7 @@ mod tests {
         let x = state.new_interval_variable(1, 10, Some("x".into()));
         let y = state.new_interval_variable(1, 10, Some("y".into()));
 
-        let error = Hypercube::new([predicate![x >= 2], predicate![y >= 2], predicate![x <= 1]])
+        let error = Hypercube::new(conjunction!([x >= 2] & [y >= 2] & [x <= 1]))
             .expect_err("hypercube is inconsistent");
 
         assert_eq!(InconsistentHypercube(x), error);
@@ -194,7 +381,7 @@ mod tests {
         let y = state.new_interval_variable(1, 10, Some("y".into()));
 
         let hypercube =
-            Hypercube::new([predicate![x >= 2], predicate![y >= 2]]).expect("not inconsistent");
+            Hypercube::new(conjunction!([x >= 2] & [y >= 2])).expect("not inconsistent");
 
         assert_eq!(
             [predicate![x >= 2], predicate![y >= 2]]
@@ -211,7 +398,7 @@ mod tests {
         let x = state.new_interval_variable(1, 10, Some("x".into()));
 
         let hypercube =
-            Hypercube::new([predicate![x >= 2], predicate![x >= 4]]).expect("not inconsistent");
+            Hypercube::new(conjunction!([x >= 2] & [x >= 4])).expect("not inconsistent");
 
         assert_eq!(
             [predicate![x >= 4]].into_iter().collect::<HashSet<_>>(),
@@ -227,8 +414,7 @@ mod tests {
         let y = state.new_interval_variable(1, 10, Some("y".into()));
 
         let hypercube =
-            Hypercube::new([predicate![y >= 2], predicate![x <= 6], predicate![x >= 4]])
-                .expect("not inconsistent");
+            Hypercube::new(conjunction!([y >= 2] & [x <= 6] & [x >= 4])).expect("not inconsistent");
 
         assert_eq!(
             vec![predicate![x >= 4], predicate![x <= 6], predicate![y >= 2]],
@@ -242,13 +428,144 @@ mod tests {
 
         let x = state.new_interval_variable(1, 10, Some("x".into()));
 
-        let hypercube = Hypercube::new([predicate![x >= 4]])
-            .expect("not inconsistent")
+        let hypercube = Hypercube::from_single_predicate(predicate![x >= 4])
             .with_predicate(predicate![x >= 6])
             .expect("not inconsistent");
 
         assert_eq!(
             vec![predicate![x >= 6]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn adding_equality_removes_everything_else() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new(conjunction!([x >= 4] & [x != 5] & [x <= 7]))
+            .expect("not inconsistent")
+            .with_predicate(predicate![x == 6])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x == 6]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn lower_bound_and_not_equal_imply_tighter_lower_bound() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::from_single_predicate(predicate![x >= 4])
+            .with_predicate(predicate![x != 4])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x >= 5]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn upper_bound_and_not_equal_imply_tighter_upper_bound() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::from_single_predicate(predicate![x <= 4])
+            .with_predicate(predicate![x != 4])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x <= 3]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn new_hole_may_tighten_bound_a_lot() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new(conjunction!([x >= 4] & [x != 5]))
+            .expect("not inconsistent")
+            .with_predicate(predicate![x != 4])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x >= 6]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn new_hole_can_imply_equality() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new(conjunction!([x >= 4] & [x <= 5]))
+            .expect("not inconsistent")
+            .with_predicate(predicate![x != 4])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x == 5]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn different_domains_are_not_combined_during_minimization() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+        let y = state.new_interval_variable(1, 10, Some("y".into()));
+
+        let hypercube =
+            Hypercube::new(conjunction!([x == 10] & [y == 10])).expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x == 10], predicate![y == 10]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn lower_and_upper_bound_are_merged_if_hole_tightens_upper() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::new(conjunction!([x >= 9] & [x != 10]))
+            .expect("not inconsistent")
+            .with_predicate(predicate![x <= 10])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x == 9]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn upper_bound_is_tightened() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube = Hypercube::from_single_predicate(predicate![x <= 0])
+            .with_predicate(predicate![x <= -2])
+            .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x <= -2]],
             hypercube.iter_predicates().collect::<Vec<_>>(),
         );
     }

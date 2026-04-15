@@ -59,7 +59,8 @@ impl HypercubeLinearExplanation {
         );
 
         clause.extend(hypercube_linear.linear.terms().map(|term| {
-            let term_bound = term.lower_bound_at_trail_position(&state.assignments, trail_position);
+            let term_bound =
+                term.lower_bound_at_trail_position(&state.assignments, trail_position - 1);
 
             predicate![term >= term_bound]
         }));

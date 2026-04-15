@@ -782,7 +782,7 @@ impl HypercubeLinearResolver {
                 );
 
             trace!(
-                "weakened conflict constraint: {pivot} & {} -> {}",
+                "weakened conflict constraint: {} -> {}",
                 self.working_hypercube
                     .iter_predicates()
                     .chain(self.hypercube_predicates_on_conflict_dl.iter())
@@ -1070,7 +1070,7 @@ fn compute_tightly_propagating_reason(
             .term_for_domain(bound.domain)
             .expect("the bound is computed based on terms");
 
-        let num_weakenings = term.scale % divisor;
+        let num_weakenings = (term.scale % divisor).abs();
 
         tightly_propagating_reason.linear = tightly_propagating_reason
             .linear
@@ -1435,6 +1435,47 @@ mod tests {
             linear: LinearInequality::new(
                 [(NonZero::new(1).unwrap(), x), (NonZero::new(2).unwrap(), y)],
                 4,
+            )
+            .expect("not trivially satisfiable"),
+        };
+
+        let actual = compute_tightly_propagating_reason(
+            &state,
+            state.trail_len(),
+            &original_reason,
+            x.scaled(2),
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn tightly_propagating_reason_considers_negative_weights() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(0, 10, None);
+        let y = state.new_interval_variable(1, 10, None);
+
+        let original_reason = HypercubeLinear {
+            hypercube: Hypercube::default(),
+            linear: LinearInequality::new(
+                [
+                    (NonZero::new(2).unwrap(), x),
+                    (NonZero::new(-5).unwrap(), y),
+                ],
+                10,
+            )
+            .expect("not trivially satisfiable"),
+        };
+
+        let expected = HypercubeLinear {
+            hypercube: Hypercube::from_single_predicate(predicate![y <= 10]),
+            linear: LinearInequality::new(
+                [
+                    (NonZero::new(1).unwrap(), x),
+                    (NonZero::new(-2).unwrap(), y),
+                ],
+                10,
             )
             .expect("not trivially satisfiable"),
         };

@@ -1099,9 +1099,9 @@ mod tests {
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
                 PredicateType::LowerBound,
-                PredicateType::UpperBound,
                 PredicateType::NotEqual,
-                PredicateType::Equal
+                PredicateType::Equal,
+                PredicateType::UpperBound,
             ]
         );
         assert_eq!(value.get_value(), x);
@@ -1149,9 +1149,9 @@ mod tests {
             value.get_predicate_types().collect::<Vec<_>>(),
             vec![
                 PredicateType::LowerBound,
-                PredicateType::UpperBound,
                 PredicateType::NotEqual,
-                PredicateType::Equal
+                PredicateType::Equal,
+                PredicateType::UpperBound,
             ]
         );
         assert_eq!(value.get_value(), x);
