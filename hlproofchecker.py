@@ -148,21 +148,59 @@ def parse_line(line_num: int, raw: str) -> HLStep:
     )
 
 
-def read_proof(path: str) -> tuple[list[HLStep], dict[str, str]]:
-    """Read the proof file, returning steps and a var_map (xN -> fzn_name)."""
-    steps = []
-    var_map = {}
+def _collect_vars_and_var_map(path: str) -> tuple[list[str], dict[str, str]]:
+    """Single streaming pass: extract all SMT variable names and the var_map.
+
+    The var_map maps solver variable IDs (xN) to FlatZinc variable names.
+    """
+    seen: set[str] = set()
+    var_map: dict[str, str] = {}
+
+    with open(path) as f:
+        for raw in f:
+            raw = raw.rstrip("\n")
+            if not raw.strip():
+                continue
+            tokens = raw.split(None, 1)
+            if tokens[0] == "v":
+                parts = raw.split()
+                if len(parts) == 3:
+                    var_map[parts[1]] = parts[2]
+                continue
+
+            if "->" not in raw:
+                continue
+
+            lhs_part, rhs_part = raw.split("->", 1)
+
+            for m in _PRED_RE.finditer(lhs_part):
+                seen.add(m.group(1))
+
+            linear_lhs = rhs_part[: rhs_part.rfind("<=")].strip() if "<=" in rhs_part else ""
+            if linear_lhs:
+                toks = linear_lhs.split()
+                for i in range(1, len(toks), 2):
+                    seen.add(toks[i])
+
+    def sort_key(v: str):
+        if v.startswith("x") and v[1:].isdigit():
+            return (0, int(v[1:]))
+        return (1, v)
+
+    return sorted(seen, key=sort_key), var_map
+
+
+def iter_steps(path: str):
+    """Generator that yields HLStep objects, skipping 'v' lines."""
     with open(path) as f:
         for line_num, raw in enumerate(f, 1):
             raw = raw.rstrip("\n")
             if not raw.strip():
                 continue
-            parts = raw.split()
-            if parts[0] == "v" and len(parts) == 3:
-                var_map[parts[1]] = parts[2]
+            tokens = raw.split(None, 1)
+            if tokens[0] == "v":
                 continue
-            steps.append(parse_line(line_num, raw))
-    return steps, var_map
+            yield parse_line(line_num, raw)
 
 
 # ---------------------------------------------------------------------------
@@ -246,26 +284,8 @@ def smt_axiom_assert(step: HLStep) -> str:
     return f"(assert (=> {h} {l}))"
 
 
-def collect_vars(steps: list[HLStep]) -> list[str]:
-    """Return sorted list of all variable names appearing in the proof."""
-    seen = set()
-    for step in steps:
-        for pred in step.predicates:
-            seen.add(pred.var)
-        for _coeff, var in step.linear.terms:
-            seen.add(var)
-
-    def sort_key(v: str):
-        # Sort xN variables numerically, anything else lexicographically
-        if v.startswith("x") and v[1:].isdigit():
-            return (0, int(v[1:]))
-        return (1, v)
-
-    return sorted(seen, key=sort_key)
-
-
 # ---------------------------------------------------------------------------
-# Top-level generation
+# Top-level SMT generation
 # ---------------------------------------------------------------------------
 
 
@@ -282,62 +302,70 @@ def _hl_str(step: HLStep) -> str:
 
 
 def _emit_check(
-    out: list, check_num: int, label: str, parents: list[HLStep], target: HLStep
+    out, check_num: int, label: str, parents: list[HLStep], target: HLStep
 ) -> None:
-    """Emit one push/assert*/check-sat/pop block.
+    """Write one push/assert*/check-sat/pop block directly to `out`.
 
     Checks: given all `parents` hold (as HL implications), can we satisfy
     target's hypercube while violating target's linear?  UNSAT = correct.
     """
-    out.append(f"; === Check {check_num}: {label} (line {target.line_num}) ===")
-    out.append("(push 1)")
+    out.write(f"; === Check {check_num}: {label} (line {target.line_num}) ===\n")
+    out.write("(push 1)\n")
 
     for parent in parents:
-        out.append(f"; Parent (line {parent.line_num}): {_hl_str(parent)}")
-        out.append(smt_axiom_assert(parent))
+        out.write(f"; Parent (line {parent.line_num}): {_hl_str(parent)}\n")
+        out.write(smt_axiom_assert(parent) + "\n")
 
     h_target = smt_hypercube(target.predicates)
     not_l_target = smt_negate_linear(target.linear)
 
-    out.append(f"; Negate target: {_hl_str(target)}")
+    out.write(f"; Negate target: {_hl_str(target)}\n")
     if h_target != "true":
-        out.append(f"(assert {h_target})")
+        out.write(f"(assert {h_target})\n")
     if not_l_target != "true":
-        out.append(f"(assert {not_l_target})")
+        out.write(f"(assert {not_l_target})\n")
 
-    out.append(
-        f'(echo "Check {check_num}: {label} line={target.line_num} -- expected unsat")'
+    out.write(
+        f'(echo "Check {check_num}: {label} line={target.line_num} -- expected unsat")\n'
     )
-    out.append("(check-sat)")
-    out.append("(pop 1)")
-    out.append("")
+    out.write("(check-sat)\n")
+    out.write("(pop 1)\n")
+    out.write("\n")
 
 
-def generate_smt(steps: list[HLStep]) -> str:
-    out = []
+def generate_smt_streaming(proof_path: str, out) -> tuple[int, int, dict[str, str]]:
+    """Stream through the proof file and write SMT-LIB to `out`.
 
-    out.append("; HL Proof Verification")
-    out.append("; Each (check-sat) should return 'unsat' if the derivation is correct.")
-    out.append("; A 'sat' result means the step is not entailed by its parents.")
-    out.append("(set-logic QF_LIA)")
-    out.append("")
+    Does two passes over the file: one to collect variable names (for
+    declarations), one to emit checks.  Neither pass holds more than the
+    current proof group in memory.
 
-    all_vars = collect_vars(steps)
+    Returns (n_di, n_d, var_map).
+    """
+    all_vars, var_map = _collect_vars_and_var_map(proof_path)
+
+    out.write("; HL Proof Verification\n")
+    out.write("; Each (check-sat) should return 'unsat' if the derivation is correct.\n")
+    out.write("; A 'sat' result means the step is not entailed by its parents.\n")
+    out.write("(set-logic QF_LIA)\n\n")
+
+    for var in all_vars:
+        out.write(f"(declare-const {var} Int)\n")
     if all_vars:
-        for var in all_vars:
-            out.append(f"(declare-const {var} Int)")
-        out.append("")
+        out.write("\n")
 
-    current_i_group: list[HLStep] = []  # 'i' steps since the last 'di' or 'd'
-    current_di: HLStep | None = None  # most recent 'di' in this group (reset by 'd')
+    current_i_group: list[HLStep] = []
+    current_di: HLStep | None = None
+    n_di = n_d = 0
     check_num = 0
 
-    for step in steps:
+    for step in iter_steps(proof_path):
         if step.kind == "i":
             current_i_group.append(step)
 
         elif step.kind == "di":
             check_num += 1
+            n_di += 1
             parents = current_i_group + ([current_di] if current_di is not None else [])
             _emit_check(out, check_num, "di", parents, step)
             current_di = step
@@ -345,12 +373,13 @@ def generate_smt(steps: list[HLStep]) -> str:
 
         else:  # 'd'
             check_num += 1
+            n_d += 1
             parents = current_i_group + ([current_di] if current_di is not None else [])
             _emit_check(out, check_num, f"d ID={step.step_id}", parents, step)
             current_di = None
             current_i_group = []
 
-    return "\n".join(out) + "\n"
+    return n_di, n_d, var_map
 
 
 # ---------------------------------------------------------------------------
@@ -457,38 +486,39 @@ def verify_axiom(
 
 
 def run_axiom_verification(
-    steps: list[HLStep],
+    proof_path: str,
     var_map: dict,
     fzn_path: str,
     solver_bin: str,
 ) -> bool:
     """Verify all 'i' axioms against the FlatZinc model.
 
+    Streams through the proof file; only one step is held in memory at a time.
     Returns True if all axioms are verified, False otherwise.
     """
     with open(fzn_path) as f:
         fzn_content = f.read()
 
-    axioms = [s for s in steps if s.kind == "i"]
     n_ok = n_fail = n_skip = 0
 
-    for ax in axioms:
-        neg_lin = _fzn_negated_linear(ax.linear, var_map)
+    for step in iter_steps(proof_path):
+        if step.kind != "i":
+            continue
+
+        neg_lin = _fzn_negated_linear(step.linear, var_map)
         if neg_lin is None:
             # Trivially UNSAT — the negation is false, no solver call needed.
             n_skip += 1
             continue
 
-        ok = verify_axiom(ax, fzn_content, var_map, solver_bin)
+        ok = verify_axiom(step, fzn_content, var_map, solver_bin)
         if ok:
             n_ok += 1
-            print(
-                f"OK: axiom at line {ax.line_num}",
-            )
+            print(f"OK: axiom at line {step.line_num}")
         else:
             n_fail += 1
             print(
-                f"FAIL: axiom at line {ax.line_num}: {_hl_str(ax)}",
+                f"FAIL: axiom at line {step.line_num}: {_hl_str(step)}",
                 file=sys.stderr,
             )
 
@@ -523,23 +553,18 @@ def main():
     )
     args = parser.parse_args()
 
-    steps, var_map = read_proof(args.proof)
-    smt = generate_smt(steps)
-
     if args.output:
         with open(args.output, "w") as f:
-            f.write(smt)
-        n_di = sum(1 for s in steps if s.kind == "di")
-        n_d = sum(1 for s in steps if s.kind == "d")
+            n_di, n_d, var_map = generate_smt_streaming(args.proof, f)
         print(
             f"Written {n_di + n_d} checks ({n_di} di + {n_d} d) to {args.output}",
             file=sys.stderr,
         )
     else:
-        sys.stdout.write(smt)
+        _, _, var_map = generate_smt_streaming(args.proof, sys.stdout)
 
     if args.fzn:
-        ok = run_axiom_verification(steps, var_map, args.fzn, args.solver)
+        ok = run_axiom_verification(args.proof, var_map, args.fzn, args.solver)
         if not ok:
             sys.exit(2)
 
