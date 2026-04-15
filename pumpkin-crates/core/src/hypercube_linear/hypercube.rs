@@ -235,6 +235,7 @@ fn tighten_upper_bound_and_merge_equalities(p1: Predicate, p2: Predicate) -> Opt
         (Equal, UpperBound) => return Some(p1),
 
         (LowerBound, Equal) => return Some(p2),
+        (NotEqual, Equal) => return Some(p2),
 
         (LowerBound, UpperBound) => {
             if p1_rhs == p2_rhs {
@@ -246,8 +247,7 @@ fn tighten_upper_bound_and_merge_equalities(p1: Predicate, p2: Predicate) -> Opt
         (LowerBound, LowerBound)
         | (LowerBound, NotEqual)
         | (Equal, NotEqual)
-        | (NotEqual, NotEqual)
-        | (NotEqual, Equal) => {}
+        | (NotEqual, NotEqual) => {}
 
         (UpperBound, LowerBound)
         | (UpperBound, NotEqual)
@@ -589,6 +589,22 @@ mod tests {
 
         assert_eq!(
             vec![predicate![x <= -2]],
+            hypercube.iter_predicates().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn not_equal_followed_by_equal_is_removed() {
+        let mut state = State::default();
+
+        let x = state.new_interval_variable(1, 10, Some("x".into()));
+
+        let hypercube =
+            Hypercube::new([predicate![x != 1], predicate![x != 2], predicate![x == 4]])
+                .expect("not inconsistent");
+
+        assert_eq!(
+            vec![predicate![x == 4]],
             hypercube.iter_predicates().collect::<Vec<_>>(),
         );
     }
