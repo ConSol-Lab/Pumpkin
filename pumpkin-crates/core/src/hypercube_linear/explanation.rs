@@ -40,12 +40,10 @@ impl HypercubeLinearExplanation {
         state: &State,
         pivot: Predicate,
         trail_position: usize,
-    ) -> (Vec<Predicate>, LinearInequality) {
+    ) -> Vec<Predicate> {
         let hypercube_linear = match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => hypercube_linear,
-            HypercubeLinearExplanation::Conjunction(predicates) => {
-                return (predicates, LinearInequality::trivially_false());
-            }
+            HypercubeLinearExplanation::Conjunction(predicates) => return predicates,
         };
 
         let mut clause = vec![!pivot];
@@ -67,7 +65,7 @@ impl HypercubeLinearExplanation {
             predicate![term >= term_bound]
         }));
 
-        (clause, hypercube_linear.linear)
+        clause
     }
 
     pub(super) fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
@@ -97,6 +95,15 @@ impl HypercubeLinearExplanation {
             HypercubeLinearExplanation::Conjunction(predicates) => {
                 itertools::Either::Right(predicates.iter().copied())
             }
+        }
+    }
+
+    pub(super) fn take_linear(&mut self) -> LinearInequality {
+        match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => {
+                std::mem::take(&mut hypercube_linear.linear)
+            }
+            HypercubeLinearExplanation::Conjunction(_) => LinearInequality::trivially_false(),
         }
     }
 }
