@@ -1,17 +1,3 @@
-% Additions for Pumpkin, original is preserved below.
-predicate int_le_reif(var int: x, var int: y, var bool: b) =
-    int_lin_le_reif([1, -1], [x, y], 0, b);
-
-predicate int_le_reif__NOPOST(var int: x, var int: y, var bool: b) =
-    int_le_reif(x, y, b);
-
-predicate int_eq_reif(var int: x, var int: y, var bool: b) =
-    int_lin_eq_reif([1, -1], [x, y], 0, b);
-
-predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
-
-predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
-
 /*
 % FlatZinc built-in redefinitions for linear solvers.
 %
@@ -31,77 +17,75 @@ predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int:
 % Domains: reduce all to aux_ stuff?
 %% never use Concert's reif feature
 
-% ORIGINAL
-% %% var, var
-% predicate int_le_reif(var int: x, var int: y, var bool: b) =
-%   %%  trace(" int_le_reif VV: \(x), \(y), \(b) \n") /\
-%   if is_fixed(b) then
-%     if true == fix(b) then x <= y else x > y endif
-%   elseif ub(x) <= lb(y) then
-%     b == true
-%   elseif lb(x) > ub(y) then
-%     b == false
-%   elseif fPostprocessDomains /\ fPostproDom_DIFF then
-%     int_le_reif__POST(x - y, 0, b)
-%   else
-%     int_le_reif__NOPOST(x, y, b)
-%   endif;
-% 
-% %% const, var
-% predicate int_le_reif(int: x, var int: y, var bool: b) =
-%   %%  trace(" int_le_reif CV: \(x), \(y), \(b) \n") /\
-%   if is_fixed(b) then
-%     if true == fix(b) then x <= y else x > y endif
-%   elseif ub(x) <= lb(y) then
-%     b == true
-%   elseif lb(x) > ub(y) then
-%     b == false
-%   elseif not (x in dom(y)) then %% dom(y) has holes
-%     let {
-%       set of int: sDom2 = dom(y) intersect x + 1..infinity;
-%       constraint
-%         assert(
-%           card(sDom2) > 0,
-%           "Variable: dom(\(y)) = \(dom(y)), but dom() intersect \(x)..inf: \(sDom2)\n",
-%         );
-%     } in b <-> min(sDom2) <= y
-%   elseif fPostprocessDomains then
-%     int_ge_reif__POST(y, x, b)
-%   else
-%     int_le_reif(-y, -x, b)
-%   endif;
-% 
-% %% var, const
-% predicate int_le_reif(var int: x, int: y, var bool: b) =
-%   %%  trace(" int_le_reif VC: \(x), \(y), \(b) \n") /\
-%   if is_fixed(b) then
-%     if true == fix(b) then x <= y else x > y endif
-%   elseif ub(x) <= lb(y) then
-%     b == true
-%   elseif lb(x) > ub(y) then
-%     b == false
-%   elseif not (y in dom(x)) then %% dom(x) has holes
-%     let {
-%       set of int: sDom2 = dom(x) intersect -infinity..y - 1;
-%       constraint
-%         assert(
-%           card(sDom2) > 0,
-%           "Variable: dom(\(x)) = \(dom(x)), but dom() intersect -inf..\(y): \(sDom2)\n",
-%         );
-%     } in b <-> x <= max(sDom2)
-%   else
-%     if fPostprocessDomains then int_le_reif__POST(x, y, b) else int_le_reif__NOPOST(x, y, b) endif
-%   endif;
-% 
-% 
-% %% var int, var int
-% predicate int_le_reif__NOPOST(
-%   var int: x,
-%   var int: y,
-%   var bool: b,
-% ) =
-%   aux_int_le_if_1(x, y, b) /\ %% This can call POSTs...  TODO
-%     aux_int_gt_if_0(x, y, b);
+%% var, var
+predicate int_le_reif(var int: x, var int: y, var bool: b) =
+  %%  trace(" int_le_reif VV: \(x), \(y), \(b) \n") /\
+  if is_fixed(b) then
+    if true == fix(b) then x <= y else x > y endif
+  elseif ub(x) <= lb(y) then
+    b == true
+  elseif lb(x) > ub(y) then
+    b == false
+  elseif fPostprocessDomains /\ fPostproDom_DIFF then
+    int_le_reif__POST(x - y, 0, b)
+  else
+    int_le_reif__NOPOST(x, y, b)
+  endif;
+
+%% const, var
+predicate int_le_reif(int: x, var int: y, var bool: b) =
+  %%  trace(" int_le_reif CV: \(x), \(y), \(b) \n") /\
+  if is_fixed(b) then
+    if true == fix(b) then x <= y else x > y endif
+  elseif ub(x) <= lb(y) then
+    b == true
+  elseif lb(x) > ub(y) then
+    b == false
+  elseif not (x in dom(y)) then %% dom(y) has holes
+    let {
+      set of int: sDom2 = dom(y) intersect x + 1..infinity;
+      constraint
+        assert(
+          card(sDom2) > 0,
+          "Variable: dom(\(y)) = \(dom(y)), but dom() intersect \(x)..inf: \(sDom2)\n",
+        );
+    } in b <-> min(sDom2) <= y
+  elseif fPostprocessDomains then
+    int_ge_reif__POST(y, x, b)
+  else
+    int_le_reif(-y, -x, b)
+  endif;
+
+%% var, const
+predicate int_le_reif(var int: x, int: y, var bool: b) =
+  %%  trace(" int_le_reif VC: \(x), \(y), \(b) \n") /\
+  if is_fixed(b) then
+    if true == fix(b) then x <= y else x > y endif
+  elseif ub(x) <= lb(y) then
+    b == true
+  elseif lb(x) > ub(y) then
+    b == false
+  elseif not (y in dom(x)) then %% dom(x) has holes
+    let {
+      set of int: sDom2 = dom(x) intersect -infinity..y - 1;
+      constraint
+        assert(
+          card(sDom2) > 0,
+          "Variable: dom(\(x)) = \(dom(x)), but dom() intersect -inf..\(y): \(sDom2)\n",
+        );
+    } in b <-> x <= max(sDom2)
+  else
+    if fPostprocessDomains then int_le_reif__POST(x, y, b) else int_le_reif__NOPOST(x, y, b) endif
+  endif;
+
+%% var int, var int
+predicate int_le_reif__NOPOST(
+  var int: x,
+  var int: y,
+  var bool: b,
+) =
+  aux_int_le_if_1(x, y, b) /\ %% This can call POSTs...  TODO
+    aux_int_gt_if_0(x, y, b);
 
 %% var, var
 predicate int_lt_reif(var int: x, var int: y, var bool: b) =
@@ -141,50 +125,50 @@ predicate int_ne__SIMPLE(var int: x, int: y) =
     (x < y) + (x > y) > 0
   endif;
 
-% %% var, var
-% predicate int_eq_reif(var int: x, var int: y, var bool: b) =
-%   %%    trace(" int_eq_reif VV: \(x), \(y), \(b) \n") /\
-%   if is_fixed(b) then
-%     if fix(b) then x == y else x != y endif
-%   elseif card(dom(x) intersect dom(y)) > 0 then
-%     if is_fixed(x) then
-%       if is_fixed(y) then b <-> fix(x) == fix(y) else int_eq_reif(y, fix(x), b) endif
-%     elseif is_fixed(y) then
-%       int_eq_reif(x, fix(y), b)
-%     elseif fPostprocessDomains /\ fPostproDom_DIFF then
-%       int_eq_reif(x - y, 0, b)
-%     else
-%       aux_int_eq_iff_1(x, y, b)
-%     endif
-%   else
-%     not b
-%   endif;
-% 
-% %% var, const
-% predicate int753b5250c60c_eq_reif(var int: x, int: y, var bool: b) =
-%   %%  trace(" int_eq_reif VC: \(x), \(y), \(b) \n") /\
-%   if is_fixed(b) then
-%     if fix(b) then x == y else x != y endif
-%   elseif y in dom(x) then
-%     if is_fixed(x) then
-%       b <-> y == fix(x)
-%     elseif card(dom(x)) == 2 then
-%       x == max(dom(x) diff {y}) + b * (y - max(dom(x) diff {y})) %% This should directly connect b to var 0..1: x
-%     elseif fPostprocessDomains then
-%       int_eq_reif__POST(x, y, b)
-%     elseif %%%  THIS seems pretty complex, especially for binaries, and does not connect to eq_encoding (/ MIPD?)
-%     %%    elseif y==lb(x) then
-%     %%      int_lt_reif(y, x, not b)
-%     %%    elseif y==ub(x) then
-%     %%      int_lt_reif(x, y, not b)
-%     card(dom(x)) < nMZN__UnaryLenMax_eq then
-%       let { array [int] of var int: p = eq_encode(x) } in p[y] == b
-%     else
-%       aux_int_eq_iff_1(x, y, bool2int(b))
-%     endif
-%   else
-%     b == false
-%   endif;
+%% var, var
+predicate int_eq_reif(var int: x, var int: y, var bool: b) =
+  %%    trace(" int_eq_reif VV: \(x), \(y), \(b) \n") /\
+  if is_fixed(b) then
+    if fix(b) then x == y else x != y endif
+  elseif card(dom(x) intersect dom(y)) > 0 then
+    if is_fixed(x) then
+      if is_fixed(y) then b <-> fix(x) == fix(y) else int_eq_reif(y, fix(x), b) endif
+    elseif is_fixed(y) then
+      int_eq_reif(x, fix(y), b)
+    elseif fPostprocessDomains /\ fPostproDom_DIFF then
+      int_eq_reif(x - y, 0, b)
+    else
+      aux_int_eq_iff_1(x, y, b)
+    endif
+  else
+    not b
+  endif;
+
+%% var, const
+predicate int_eq_reif(var int: x, int: y, var bool: b) =
+  %%  trace(" int_eq_reif VC: \(x), \(y), \(b) \n") /\
+  if is_fixed(b) then
+    if fix(b) then x == y else x != y endif
+  elseif y in dom(x) then
+    if is_fixed(x) then
+      b <-> y == fix(x)
+    elseif card(dom(x)) == 2 then
+      x == max(dom(x) diff {y}) + b * (y - max(dom(x) diff {y})) %% This should directly connect b to var 0..1: x
+    elseif fPostprocessDomains then
+      int_eq_reif__POST(x, y, b)
+    elseif %%%  THIS seems pretty complex, especially for binaries, and does not connect to eq_encoding (/ MIPD?)
+    %%    elseif y==lb(x) then
+    %%      int_lt_reif(y, x, not b)
+    %%    elseif y==ub(x) then
+    %%      int_lt_reif(x, y, not b)
+    card(dom(x)) < nMZN__UnaryLenMax_eq then
+      let { array [int] of var int: p = eq_encode(x) } in p[y] == b
+    else
+      aux_int_eq_iff_1(x, y, bool2int(b))
+    endif
+  else
+    b == false
+  endif;
 
 predicate int_ne_reif(var int: x, var int: y, var bool: b) = int_eq_reif(x, y, not b);
 
@@ -199,15 +183,15 @@ function var float: sum2float(array [int] of int: c, array [int] of var int: x) 
     array [int] of var float: xF = x;
   } in sum (i in index_set(xF)) (cF[i] * xF[i]);
 
-% %% lin_expr, const
-% predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-%   if fPostprocessDomains /\ fPostproDom_DIFF then
-%     int_le_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-%   elseif fAvoidNI then
-%     aux_float_le_if_1(sum2float(c, x), d, b) /\ aux_float_ge_if_0(sum2float(c, x), d + 1, b)
-%   else
-%     int_le_reif__NOPOST(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-%   endif;
+%% lin_expr, const
+predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+  if fPostprocessDomains /\ fPostproDom_DIFF then
+    int_le_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+  elseif fAvoidNI then
+    aux_float_le_if_1(sum2float(c, x), d, b) /\ aux_float_ge_if_0(sum2float(c, x), d + 1, b)
+  else
+    int_le_reif__NOPOST(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+  endif;
 
 predicate int_lin_lt_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
   if true then
@@ -216,15 +200,15 @@ predicate int_lin_lt_reif(array [int] of int: c, array [int] of var int: x, int:
     int_lin_le_reif(c, x, d - 1, b)
   endif;
 
-% %% lin_expr, const
-% predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-%   if fPostprocessDomains /\ fPostproDom_DIFF then
-%     int_eq_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-%   elseif fAvoidNI /\ fAuxIntEqOLD00 then
-%     aux_int_eq_iff_1__float(sum2float(c, x), d, b)
-%   else
-%     aux_int_eq_iff_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-%   endif;
+%% lin_expr, const
+predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+  if fPostprocessDomains /\ fPostproDom_DIFF then
+    int_eq_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+  elseif fAvoidNI /\ fAuxIntEqOLD00 then
+    aux_int_eq_iff_1__float(sum2float(c, x), d, b)
+  else
+    aux_int_eq_iff_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+  endif;
 
 %% lin_expr, const
 predicate int_lin_ne(array [int] of int: c, array [int] of var int: x, int: d) =
