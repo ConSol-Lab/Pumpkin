@@ -1,6 +1,9 @@
 include "redefs_lin_halfreifs.mzn";
 include "redefs_lin_reifs.mzn";
 
+predicate int_lin_le_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+predicate int_lin_eq_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+
 %% var, var
 predicate int_le_imp(var int: x, var int: y, var bool: b) =
   if is_fixed(b) then
@@ -55,17 +58,17 @@ predicate int_eq_imp(var int: x, int: y, var bool: b) =
 
 %-----------------------------------------------------------------------------%
 
-%% lin_expr, const
-predicate int_lin_le_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-  if (d = 0) /\ (length(c) = 2) /\ (abs(c[1]) = 1) /\ (c[1] = -1 * c[2]) then
-    if (c[1] < 0) then int_le_imp(x[2], x[1], b) else int_le_imp(x[1], x[2], b) endif
-  elseif fPostprocessDomains /\ fPostproDom_DIFF then
-    int_le_imp(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  elseif fAvoidNI then
-    aux_float_le_if_1(sum2float(c, x), d, b)
-  else
-    aux_int_le_if_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  endif;
+% %% lin_expr, const
+% predicate int_lin_le_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+%   if (d = 0) /\ (length(c) = 2) /\ (abs(c[1]) = 1) /\ (c[1] = -1 * c[2]) then
+%     if (c[1] < 0) then int_le_imp(x[2], x[1], b) else int_le_imp(x[1], x[2], b) endif
+%   elseif fPostprocessDomains /\ fPostproDom_DIFF then
+%     int_le_imp(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   elseif fAvoidNI then
+%     aux_float_le_if_1(sum2float(c, x), d, b)
+%   else
+%     aux_int_le_if_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   endif;
 
 predicate int_lin_lt_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
   if true then
@@ -74,17 +77,17 @@ predicate int_lin_lt_imp(array [int] of int: c, array [int] of var int: x, int: 
     int_lin_le_imp(c, x, d - 1, b)
   endif;
 
-%% lin_expr, const
-predicate int_lin_eq_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-  if (d = 0) /\ (length(c) = 2) /\ (abs(c[1]) = 1) /\ (c[1] = -1 * c[2]) then
-    int_eq_imp(x[1], x[2], b)
-  elseif fPostprocessDomains /\ fPostproDom_DIFF then
-    int_eq_imp(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  elseif fAvoidNI then
-    aux_float_eq_if_1(sum2float(c, x), d, b)
-  else
-    aux_int_eq_if_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  endif;
+% %% lin_expr, const
+% predicate int_lin_eq_imp(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+%   if (d = 0) /\ (length(c) = 2) /\ (abs(c[1]) = 1) /\ (c[1] = -1 * c[2]) then
+%     int_eq_imp(x[1], x[2], b)
+%   elseif fPostprocessDomains /\ fPostproDom_DIFF then
+%     int_eq_imp(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   elseif fAvoidNI then
+%     aux_float_eq_if_1(sum2float(c, x), d, b)
+%   else
+%     aux_int_eq_if_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   endif;
 
 %-----------------------------------------------------------------------------%
 

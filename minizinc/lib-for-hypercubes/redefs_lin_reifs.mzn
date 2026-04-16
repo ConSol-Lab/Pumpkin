@@ -1,3 +1,6 @@
+predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b);
+
 /*
 % FlatZinc built-in redefinitions for linear solvers.
 %
@@ -183,15 +186,15 @@ function var float: sum2float(array [int] of int: c, array [int] of var int: x) 
     array [int] of var float: xF = x;
   } in sum (i in index_set(xF)) (cF[i] * xF[i]);
 
-%% lin_expr, const
-predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-  if fPostprocessDomains /\ fPostproDom_DIFF then
-    int_le_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  elseif fAvoidNI then
-    aux_float_le_if_1(sum2float(c, x), d, b) /\ aux_float_ge_if_0(sum2float(c, x), d + 1, b)
-  else
-    int_le_reif__NOPOST(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  endif;
+% %% lin_expr, const
+% predicate int_lin_le_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+%   if fPostprocessDomains /\ fPostproDom_DIFF then
+%     int_le_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   elseif fAvoidNI then
+%     aux_float_le_if_1(sum2float(c, x), d, b) /\ aux_float_ge_if_0(sum2float(c, x), d + 1, b)
+%   else
+%     int_le_reif__NOPOST(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   endif;
 
 predicate int_lin_lt_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
   if true then
@@ -200,15 +203,15 @@ predicate int_lin_lt_reif(array [int] of int: c, array [int] of var int: x, int:
     int_lin_le_reif(c, x, d - 1, b)
   endif;
 
-%% lin_expr, const
-predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
-  if fPostprocessDomains /\ fPostproDom_DIFF then
-    int_eq_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  elseif fAvoidNI /\ fAuxIntEqOLD00 then
-    aux_int_eq_iff_1__float(sum2float(c, x), d, b)
-  else
-    aux_int_eq_iff_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
-  endif;
+% %% lin_expr, const
+% predicate int_lin_eq_reif(array [int] of int: c, array [int] of var int: x, int: d, var bool: b) =
+%   if fPostprocessDomains /\ fPostproDom_DIFF then
+%     int_eq_reif(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   elseif fAvoidNI /\ fAuxIntEqOLD00 then
+%     aux_int_eq_iff_1__float(sum2float(c, x), d, b)
+%   else
+%     aux_int_eq_iff_1(sum (i in index_set(x)) (c[i] * x[i]), d, b)
+%   endif;
 
 %% lin_expr, const
 predicate int_lin_ne(array [int] of int: c, array [int] of var int: x, int: d) =
