@@ -568,6 +568,16 @@ impl Solver {
     pub fn default_brancher(&self) -> DefaultBrancher {
         DefaultBrancher::default_over_all_variables(self.satisfaction_solver.assignments())
     }
+
+    pub fn backup_brancher(&self) -> impl Brancher + 'static {
+        use crate::branching::value_selection::InDomainMin;
+        use crate::branching::variable_selection::InputOrder;
+
+        IndependentVariableValueBrancher::new(
+            InputOrder::new2(self.satisfaction_solver.assignments().get_domains()),
+            InDomainMin,
+        )
+    }
 }
 
 /// Proof logging methods

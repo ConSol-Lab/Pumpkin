@@ -22,6 +22,12 @@ impl<Var: Copy> InputOrder<Var> {
             variables: variables.to_vec(),
         }
     }
+
+    pub fn new2(variables: impl IntoIterator<Item = Var>) -> Self {
+        InputOrder {
+            variables: variables.into_iter().collect(),
+        }
+    }
 }
 
 impl VariableSelector<DomainId> for InputOrder<DomainId> {
