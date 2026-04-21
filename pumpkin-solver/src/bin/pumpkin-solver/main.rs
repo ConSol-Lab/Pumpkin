@@ -614,8 +614,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
-                    use_hypercube_linear: args.conflict_resolver
-                        == ConflictResolverType::HypercubeLinear,
+                    use_hypercube_linear: false,
                 },
                 NoLearningResolver,
             )?,
@@ -636,8 +635,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.map(|_| args.proof_type),
                     verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
-                    use_hypercube_linear: args.conflict_resolver
-                        == ConflictResolverType::HypercubeLinear,
+                    use_hypercube_linear: false,
                 },
                 ResolutionResolver::new(AnalysisMode::OneUIP, should_minimise_nogoods),
             )?,
@@ -658,8 +656,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
-                    use_hypercube_linear: args.conflict_resolver
-                        == ConflictResolverType::HypercubeLinear,
+                    use_hypercube_linear: false,
                 },
                 HypercubeLinearResolver::new(
                     args.proof_path

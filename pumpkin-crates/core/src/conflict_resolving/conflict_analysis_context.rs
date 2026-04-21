@@ -1,5 +1,8 @@
 use std::fmt::Debug;
 
+use itertools::Itertools;
+use log::debug;
+
 use crate::Random;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -210,7 +213,7 @@ impl ConflictAnalysisContext<'_> {
     /// which the solver backtracked.
     pub fn process_learned_nogood(
         &mut self,
-        learned_nogood_predicates: Vec<Predicate>,
+        mut learned_nogood_predicates: Vec<Predicate>,
         lbd: u32,
     ) -> usize {
         // important to notify about the conflict _before_ backtracking removes literals from
@@ -219,6 +222,11 @@ impl ConflictAnalysisContext<'_> {
         self.restart_strategy
             .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
 
+        learned_nogood_predicates.sort();
+        debug!(
+            "Learned {} ->  <= -1",
+            learned_nogood_predicates.iter().format(" & "),
+        );
         let learned_nogood = LearnedNogood::create_from_vec(learned_nogood_predicates, self);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
