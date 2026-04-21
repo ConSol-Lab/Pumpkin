@@ -656,7 +656,7 @@ fn run() -> PumpkinResult<()> {
                     optimisation_strategy: args.optimisation_strategy,
                     proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
                     verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
-                    use_hypercube_linear: false,
+                    use_hypercube_linear: true,
                 },
                 HypercubeLinearResolver::new(
                     args.proof_path
