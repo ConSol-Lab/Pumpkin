@@ -1,6 +1,7 @@
 //! A [`Brancher`] which simply switches uses a single [`VariableSelector`] and a single
 //! [`ValueSelector`].
 
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
@@ -17,6 +18,7 @@ use crate::engine::variables::DomainId;
 #[derive(Debug)]
 pub struct IndependentVariableValueBrancher<Var, VariableSelect, ValueSelect>
 where
+    Var: Debug,
     VariableSelect: VariableSelector<Var>,
     ValueSelect: ValueSelector<Var>,
 {
@@ -34,6 +36,7 @@ where
 impl<Var, VariableSelect, ValueSelect>
     IndependentVariableValueBrancher<Var, VariableSelect, ValueSelect>
 where
+    Var: Debug,
     VariableSelect: VariableSelector<Var>,
     ValueSelect: ValueSelector<Var>,
 {
@@ -49,6 +52,7 @@ where
 impl<Var, VariableSelect, ValueSelect> Brancher
     for IndependentVariableValueBrancher<Var, VariableSelect, ValueSelect>
 where
+    Var: Debug,
     VariableSelect: VariableSelector<Var>,
     ValueSelect: ValueSelector<Var>,
 {

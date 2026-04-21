@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::basic_types::SolutionReference;
 #[cfg(doc)]
 use crate::branching::Brancher;
@@ -17,7 +19,7 @@ use crate::engine::variables::DomainId;
 /// A trait containing the interface for [`ValueSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting a value
 /// for a given variable.
-pub trait ValueSelector<Var> {
+pub trait ValueSelector<Var>: Debug {
     /// Determines which value in the domain of `decision_variable` to branch next on.
     /// The domain of the `decision_variable` variable should have at least 2 values in it (as it
     /// otherwise should not have been selected as `decision_variable`). Returns a
