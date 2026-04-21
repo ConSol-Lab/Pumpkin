@@ -213,6 +213,7 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
+        #[derive(Debug)]
         struct DummyBrancher;
 
         impl Brancher for DummyBrancher {
