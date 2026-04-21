@@ -257,8 +257,9 @@ impl PropagationContext<'_> {
 
         if !matches!(modification_result, Ok(false)) {
             trace!(
-                "propagated {predicate} @ {dl} with result {modification_result:?}",
+                "propagated {predicate} @ {dl} by {propagator:?} with result {modification_result:?}",
                 dl = self.assignments.get_checkpoint(),
+                propagator = self.propagator_id,
             );
         }
 

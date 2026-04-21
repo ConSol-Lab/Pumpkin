@@ -654,6 +654,11 @@ impl State {
 
                 self.statistics.num_conflicts += 1;
                 if let Conflict::Propagator(inner) = &conflict {
+                    trace!(
+                        "propagated conflict by {propagator_id} @ {dl}",
+                        dl = self.get_checkpoint()
+                    );
+
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.trailed_values,
                         &self.assignments,
