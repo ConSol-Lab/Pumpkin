@@ -43,24 +43,6 @@ macro_rules! mzn_test {
             );
             assert!(output.ends_with("==========\n"));
         }
-
-        // paste::paste! {
-        //     #[test]
-        //     fn [<$name _with_hl_resolution>]() {
-        //         let mut actual_options = vec![];
-        //         actual_options.extend($options);
-
-        //         let output = run_mzn_test_with_options::<false>(
-        //             $file,
-        //             "mzn_constraints",
-        //             false,
-        //             TestType::SolutionEnumeration,
-        //             actual_options.clone(),
-        //             stringify!($name),
-        //         );
-        //         assert!(output.ends_with("==========\n"));
-        //     }
-        // }
     };
 }
 
