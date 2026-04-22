@@ -140,14 +140,16 @@ impl HypercubeLinearResolver {
             learned_constraint.hypercube, learned_constraint.linear,
         );
 
-        context.restore_to(learned_constraint.propagates_at);
-
         self.proof_file.borrow_mut().deduction(
             constraint_tag,
             learned_constraint.hypercube.iter_predicates(),
             learned_constraint.linear.terms(),
             learned_constraint.linear.bound(),
+            context.state.get_checkpoint(),
+            learned_constraint.propagates_at,
         );
+
+        context.restore_to(learned_constraint.propagates_at);
 
         let handle = context.state.add_propagator(HypercubeLinearConstructor {
             hypercube: learned_constraint.hypercube,

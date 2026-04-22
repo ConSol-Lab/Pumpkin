@@ -118,6 +118,8 @@ impl Trace {
         hypercube: impl IntoIterator<Item = Predicate>,
         linear_terms: impl IntoIterator<Item = AffineView<DomainId>>,
         linear_rhs: i32,
+        conflict_dl: usize,
+        backtrack_dl: usize,
     ) {
         let Some(writer) = self.proof_file.as_mut() else {
             return;
@@ -125,7 +127,7 @@ impl Trace {
 
         writeln!(
             writer,
-            "d {id} {h} -> {r} <= {linear_rhs}",
+            "d {id} {h} -> {r} <= {linear_rhs} confl@{conflict_dl} bt={backtrack_dl}",
             id = NonZero::from(constraint_tag),
             h = hypercube.into_iter().format(" & "),
             r = linear_terms
