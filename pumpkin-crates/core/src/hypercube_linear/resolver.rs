@@ -41,6 +41,7 @@ use crate::variables::TransformableVariable;
 
 create_statistics_struct!(ResolverStatistics {
     num_propositional_resolutions: usize,
+    num_skipped_propositional_resolutions: usize,
     num_propositional_resolutions_use_explanation_linear: usize,
     num_successful_fourier_resolutions: usize,
     num_integer_overflow_errors: usize,
@@ -581,6 +582,17 @@ impl HypercubeLinearResolver {
 
         let linear = if hl_slack_at_root < 0 {
             self.statistics.num_learned_clauses += 1;
+
+            // Make sure to add in the inferences to the proof.
+            for term in self.conflicting_linear.terms() {
+                let term_lb =
+                    term.lower_bound_at_trail_position(&state.assignments, root_trail_position);
+
+                self.proof_file
+                    .borrow_mut()
+                    .axiom([predicate![term <= term_lb - 1]], [], -1);
+            }
+
             LinearInequality::trivially_false()
         } else {
             self.statistics.num_learned_hls += 1;
@@ -763,25 +775,39 @@ impl HypercubeLinearResolver {
     ) {
         trace!("applying propositional resolution on {pivot}");
 
+        // No propositional resolution happens when the following are true:
+        // - the pivot does not imply a predicate in the current conflict hypercube,
+        // - the pivot does not contribute to the negative slack of the linear.
+
+        let pivot_implies_predicate_in_conflict = self
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .any(|p| pivot.implies(p));
+
+        let pivot_relevant_for_linear_slack = self
+            .conflicting_linear
+            .terms()
+            .any(|t| predicate_applies_to_term(pivot, t));
+
+        if !pivot_implies_predicate_in_conflict && !pivot_relevant_for_linear_slack {
+            trace!("  => skipping propositional resolution");
+            self.statistics.num_skipped_propositional_resolutions += 1;
+            return;
+        }
+
         let pivot_as_bound = BoundPredicate::new(pivot);
 
         // Both the conflict and the explanation are weakened on the pivot. This ensures
         // the propositional resolution removes all contribution of the pivot to the
         // conflict in the linear inequalities.
         if let Some(bound_predicate) = pivot_as_bound {
-            if self
-                .conflicting_linear
-                .terms()
-                .any(|t| predicate_applies_to_term(pivot, t))
-            {
-                self.hypercube_predicates_on_conflict_dl
-                    .push(bound_predicate.into(), state);
-                self.conflicting_linear = std::mem::take(&mut self.conflicting_linear)
+            self.hypercube_predicates_on_conflict_dl
+                .push(bound_predicate.into(), state);
+            self.conflicting_linear = std::mem::take(&mut self.conflicting_linear)
                 .weaken_to_zero(bound_predicate)
                 .expect(
                     "weakening the conflict will never result in a trivially satisfiable linear",
                 );
-            }
 
             trace!(
                 "weakened conflict constraint: {} -> {}",
@@ -798,23 +824,6 @@ impl HypercubeLinearResolver {
                 .expect("cannot weaken to trivially satisfiable");
 
             trace!("weakened explanation: {explanation}");
-        }
-
-        // No propositional resolution happens when the following are both true:
-        // - The pivot does not imply a predicate in the current hypercube,
-        // - and its negation is not implied by a predicate in the explanation.
-        let pivot_implies_predicate_in_conflict = self
-            .hypercube_predicates_on_conflict_dl
-            .iter()
-            .any(|p| pivot.implies(p));
-
-        let not_pivot_is_implied_by_hypercube_of_explanation =
-            explanation.iter_predicates().any(|p| p.implies(!pivot));
-
-        if !pivot_implies_predicate_in_conflict && !not_pivot_is_implied_by_hypercube_of_explanation
-        {
-            trace!("  => skipping propositional resolution");
-            return;
         }
 
         self.statistics.num_propositional_resolutions += 1;
