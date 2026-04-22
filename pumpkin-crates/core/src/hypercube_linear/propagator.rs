@@ -88,6 +88,8 @@ impl PropagatorConstructor for HypercubeLinearConstructor {
 
             hypercube_predicates,
             watched_predicates,
+            is_watching_linear: false,
+
             inference_code: InferenceCode::new(constraint_tag, HypercubeLinear),
         }
     }
@@ -107,6 +109,9 @@ pub struct HypercubeLinearPropagator {
     /// The predicate ID at index i corresponds to the predicate at index i in
     /// `hypercube_predicates`.
     watched_predicates: [PredicateId; NUM_WATCHED_PREDICATES],
+
+    /// True when we are watching the linear inequality.
+    is_watching_linear: bool,
 
     inference_code: InferenceCode,
 }
@@ -267,13 +272,20 @@ impl Propagator for HypercubeLinearPropagator {
         let satisfied_watchers = self.update_watched_predicates(context.reborrow());
 
         if satisfied_watchers < NUM_WATCHED_PREDICATES - 1 {
-            self.unregister_bound_events_on_linear(context.reborrow());
+            if self.is_watching_linear {
+                self.unregister_bound_events_on_linear(context.reborrow());
+                self.is_watching_linear = false;
+            }
+
             // More than one watcher is unassigned, so we do not need to propagate anything.
             return Ok(());
         } else {
             // The hypercube is satisfied, so we should be registered to bound events on the terms
             // of the linear inequality.
-            self.register_bound_events_on_linear(context.reborrow());
+            if !self.is_watching_linear {
+                self.register_bound_events_on_linear(context.reborrow());
+                self.is_watching_linear = true;
+            }
         }
 
         let unassigned_watcher_index = self.unassigned_watcher_index(context.reborrow());
