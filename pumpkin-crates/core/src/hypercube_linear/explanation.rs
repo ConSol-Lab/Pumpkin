@@ -106,6 +106,13 @@ impl HypercubeLinearExplanation {
             HypercubeLinearExplanation::Conjunction(_) => LinearInequality::trivially_false(),
         }
     }
+
+    pub(crate) fn linear(&self) -> Option<&LinearInequality> {
+        match self {
+            HypercubeLinearExplanation::Proper(hypercube_linear) => Some(&hypercube_linear.linear),
+            HypercubeLinearExplanation::Conjunction(_) => None,
+        }
+    }
 }
 
 impl Display for HypercubeLinearExplanation {

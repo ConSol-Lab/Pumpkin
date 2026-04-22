@@ -225,6 +225,10 @@ impl HypercubeLinearResolver {
             };
 
             trace!("applying HL resolution on {pivot} @ {trail_position}");
+            trace!(
+                "  trail predicate @ {trail_position} = {}",
+                state.trail_entry(trail_position).predicate
+            );
 
             if !self.contributes_to_conflict(pivot) {
                 trace!("  => no longer contributes, skipping");
@@ -832,8 +836,16 @@ impl HypercubeLinearResolver {
         self.hypercube_predicates_on_conflict_dl
             .retain(|p| !pivot.implies(p));
 
+        let linear_propagated_pivot_to_false = explanation.iter_predicates().any(|p| p == !pivot);
+
+        let linear_slack_is_negative = if let Some(linear) = explanation.linear() {
+            compute_linear_slack_at_trail_position(state, linear, trail_position - 1) < 0
+        } else {
+            true
+        };
+
         let can_substitute_with_explanation_linear =
-            explanation.iter_predicates().any(|p| p == !pivot);
+            linear_propagated_pivot_to_false && linear_slack_is_negative;
 
         if self.conflicting_linear.is_trivially_false() && can_substitute_with_explanation_linear {
             // If the conflicting linear is a clause, then we do not need to clausify
@@ -864,7 +876,7 @@ impl HypercubeLinearResolver {
             //
             // This requires explaining why the linear is conflicting.
             let linear = explanation.take_linear();
-            self.explain_linear(state, &linear, trail_position);
+            self.explain_linear(state, &linear, trail_position - 1);
             self.conflicting_linear = linear;
 
             self.statistics
