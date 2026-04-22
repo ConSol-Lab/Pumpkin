@@ -142,26 +142,37 @@ impl Ord for PredicateToExplain {
         assert_eq!(trail_order, Ordering::Equal);
         assert_eq!(self.predicate.get_domain(), other.predicate.get_domain());
 
+        let self_rhs = self.predicate.get_right_hand_side();
+        let other_rhs = other.predicate.get_right_hand_side();
+
+        // For same-type bounds, compare by value strength directly. A bound implied by
+        // the trail entry may be *stronger* than the direct entry (e.g. when x != k
+        // was already known, posting x >= k propagates to x >= k+1). Virtual rank
+        // cannot capture this because it treats all implied LB/UB uniformly.
+        match (
+            self.predicate.get_predicate_type(),
+            other.predicate.get_predicate_type(),
+        ) {
+            // Stronger lower bound (higher value) gets higher priority.
+            (PredicateType::LowerBound, PredicateType::LowerBound) => {
+                return self_rhs.cmp(&other_rhs);
+            }
+            // Stronger upper bound (lower value) gets higher priority.
+            (PredicateType::UpperBound, PredicateType::UpperBound) => {
+                return other_rhs.cmp(&self_rhs);
+            }
+            _ => {}
+        }
+
         match self.virtual_rank().cmp(&other.virtual_rank()) {
             ord @ (Ordering::Less | Ordering::Greater) => ord,
 
             // Same virtual rank: break ties by predicate strength / value.
             Ordering::Equal => {
-                let self_rhs = self.predicate.get_right_hand_side();
-                let other_rhs = other.predicate.get_right_hand_side();
-
                 match (
                     self.predicate.get_predicate_type(),
                     other.predicate.get_predicate_type(),
                 ) {
-                    // Stronger lower bound (higher value) gets higher priority.
-                    (PredicateType::LowerBound, PredicateType::LowerBound) => {
-                        self_rhs.cmp(&other_rhs)
-                    }
-                    // Stronger upper bound (lower value) gets higher priority.
-                    (PredicateType::UpperBound, PredicateType::UpperBound) => {
-                        other_rhs.cmp(&self_rhs)
-                    }
                     // Among implied not-equals the relative order is unspecified;
                     // break ties by ascending RHS value for a deterministic result.
                     (PredicateType::NotEqual, PredicateType::NotEqual) => other_rhs.cmp(&self_rhs),
@@ -422,6 +433,38 @@ mod tests {
         assert_eq!(heap.pop(), Some(predicate![x == 5]));
         assert_eq!(heap.pop(), Some(predicate![x >= 5]));
         assert_eq!(heap.pop(), Some(predicate![x != 4]));
+        assert_eq!(heap.pop(), None);
+    }
+
+    #[test]
+    fn not_equals_with_lower_bound_implies_stronger_bound() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        post(&mut state, predicate![x != 4]);
+        post(&mut state, predicate![x >= 4]);
+
+        let mut heap = PredicateHeap::default();
+        heap.push(predicate![x >= 4], &state);
+        heap.push(predicate![x >= 5], &state);
+
+        assert_eq!(heap.pop(), Some(predicate![x >= 5]));
+        assert_eq!(heap.pop(), Some(predicate![x >= 4]));
+        assert_eq!(heap.pop(), None);
+    }
+
+    #[test]
+    fn not_equals_with_upper_bound_implies_stronger_bound() {
+        let mut state = State::default();
+        let x = state.new_interval_variable(0, 10, Some("x".into()));
+        post(&mut state, predicate![x != 4]);
+        post(&mut state, predicate![x <= 4]);
+
+        let mut heap = PredicateHeap::default();
+        heap.push(predicate![x <= 4], &state);
+        heap.push(predicate![x <= 3], &state);
+
+        assert_eq!(heap.pop(), Some(predicate![x <= 3]));
+        assert_eq!(heap.pop(), Some(predicate![x <= 4]));
         assert_eq!(heap.pop(), None);
     }
 }
