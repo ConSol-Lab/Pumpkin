@@ -2249,7 +2249,7 @@ dependencies = [
  "pumpkin-constraints",
  "pumpkin-solver",
  "pyo3",
- "pyo3-build-config",
+ "pyo3-build-config 0.28.3",
 ]
 
 [[package]]
@@ -2263,7 +2263,7 @@ dependencies = [
  "memoffset",
  "once_cell",
  "portable-atomic",
- "pyo3-build-config",
+ "pyo3-build-config 0.25.1",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
@@ -2280,13 +2280,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyo3-build-config"
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e368e7ddfdeb98c9bca7f8383be1648fd84ab466bf2bc015e94008db6d35611e"
+dependencies = [
+ "target-lexicon",
+]
+
+[[package]]
 name = "pyo3-ffi"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7114fe5457c61b276ab77c5055f206295b812608083644a5c5b2640c3102565c"
 dependencies = [
  "libc",
- "pyo3-build-config",
+ "pyo3-build-config 0.25.1",
 ]
 
 [[package]]
@@ -2309,7 +2318,7 @@ checksum = "4109984c22491085343c05b0dbc54ddc405c3cf7b4374fc533f5c3313a572ccc"
 dependencies = [
  "heck",
  "proc-macro2",
- "pyo3-build-config",
+ "pyo3-build-config 0.25.1",
  "quote",
  "syn",
 ]
