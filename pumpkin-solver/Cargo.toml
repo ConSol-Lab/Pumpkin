@@ -24,7 +24,7 @@ thiserror = "2.0.12"
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.11.10"
 regex = "1.11.0"
-stringcase = "0.3.0"
+stringcase = "0.4.0"
 wait-timeout = "0.2.0"
 pumpkin-macros = { path = "../pumpkin-macros"}
 pumpkin-checker = { path = "../pumpkin-checker"}
