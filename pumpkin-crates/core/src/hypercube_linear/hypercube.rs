@@ -367,9 +367,10 @@ fn describe_state_with_predicates(state: &VariableState<Predicate>) -> Vec<Predi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conjunction;
     use crate::containers::HashSet;
+    use crate::predicate;
     use crate::state::State;
-    use crate::{conjunction, predicate};
 
     #[test]
     fn consistent_hypercube_can_be_created() {
