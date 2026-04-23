@@ -204,6 +204,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        #[derive(Debug)]
         struct DummyBrancher;
 
         impl Brancher for DummyBrancher {
