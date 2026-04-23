@@ -47,7 +47,6 @@ use crate::statistics::StatisticLogger;
 use crate::statistics::log_statistic;
 use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
-use crate::variables::Literal;
 
 /// The [`State`] is the container of variables and propagators.
 ///
@@ -155,20 +154,6 @@ impl State {
         self.constraint_tags.next_key()
     }
 
-    /// Creates a new Boolean (0-1) variable.
-    ///
-    /// The name is used in solver traces to identify individual domains. They are required to be
-    /// unique. If the state already contains a domain with the given name, then this function
-    /// will panic.
-    ///
-    /// Creation of new [`Literal`]s is not influenced by the current checkpoint of the state.
-    /// If a [`Literal`] is created at a non-zero checkpoint, then it will _not_ 'disappear'
-    /// when backtracking past the checkpoint where the domain was created.
-    pub fn new_literal(&mut self, name: Option<Arc<str>>) -> Literal {
-        let domain_id = self.new_interval_variable(0, 1, name);
-        Literal::new(domain_id)
-    }
-
     /// Creates a new interval variable with the given lower and upper bound.
     ///
     /// The name is used in solver traces to identify individual domains. They are required to be
@@ -260,14 +245,6 @@ impl State {
     /// checkpoint at which the [`Predicate`] became satisfied. Otherwise, [`None`] is returned.
     pub fn get_checkpoint_for_predicate(&self, predicate: Predicate) -> Option<usize> {
         self.assignments.get_checkpoint_for_predicate(&predicate)
-    }
-
-    /// Returns the truth value of the provided [`Literal`].
-    ///
-    /// If the [`Literal`] is assigned in the current [`State`] then [`Some`] containing whether
-    /// the [`Literal`] is satisfied or falsified is returned. Otherwise, [`None`] is returned.
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.truth_value(literal.get_true_predicate())
     }
 
     /// Returns the number of created checkpoints.
@@ -572,6 +549,7 @@ impl State {
         }
 
         let _ = self.notification_engine.process_backtrack_events(
+            checkpoint,
             &mut self.assignments,
             &mut self.trailed_values,
             &mut self.propagators,

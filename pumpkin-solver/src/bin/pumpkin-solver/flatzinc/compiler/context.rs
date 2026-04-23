@@ -4,12 +4,13 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
+use pumpkin_core::predicate;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::containers::HashSet;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::instance::Output;
@@ -37,16 +38,12 @@ pub(crate) struct CompilationContext<'a> {
     /// is posted or an array is created).
     pub(crate) variable_map: HashMap<Rc<str>, DomainId>,
 
-    /// Literal which is always true
-    pub(crate) true_literal: Literal,
-    /// Literal which is always false
-    pub(crate) false_literal: Literal,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
     /// A mapping from boolean variable array identifiers to slices of literals.
-    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
+    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Predicate]>>,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
@@ -75,9 +72,6 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
-        let true_literal = solver.get_true_literal();
-        let false_literal = solver.get_false_literal();
-
         CompilationContext {
             solver,
             identifiers: Default::default(),
@@ -85,8 +79,6 @@ impl CompilationContext<'_> {
             outputs: Default::default(),
             equivalences: Default::default(),
 
-            true_literal,
-            false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_arrays: Default::default(),
@@ -117,14 +109,14 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable(
         &mut self,
         expr: &flatzinc::Expr,
-    ) -> Result<Literal, FlatZincError> {
+    ) -> Result<Predicate, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
             flatzinc::Expr::Bool(value) => {
                 if *value {
-                    Ok(self.solver.get_true_literal())
+                    Ok(Predicate::trivially_true())
                 } else {
-                    Ok(self.solver.get_false_literal())
+                    Ok(!Predicate::trivially_true())
                 }
             }
             _ => Err(FlatZincError::UnexpectedExpr),
@@ -134,20 +126,20 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
         identifier: &str,
-    ) -> Result<Literal, FlatZincError> {
+    ) -> Result<Predicate, FlatZincError> {
         if let Some(domain_id) = self
             .variable_map
             .get(&self.equivalences.representative(identifier))
         {
-            Ok(Literal::new(*domain_id))
+            Ok(predicate!(domain_id >= 1))
         } else {
             self.boolean_parameters
                 .get(&self.equivalences.representative(identifier))
                 .map(|value| {
                     if *value {
-                        self.solver.get_true_literal()
+                        Predicate::trivially_true()
                     } else {
-                        self.solver.get_false_literal()
+                        !Predicate::trivially_true()
                     }
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
@@ -160,7 +152,7 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_array(
         &self,
         expr: &flatzinc::Expr,
-    ) -> Result<Rc<[Literal]>, FlatZincError> {
+    ) -> Result<Rc<[Predicate]>, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => {
                 if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
@@ -173,9 +165,9 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     if *value {
-                                        self.solver.get_true_literal()
+                                        Predicate::trivially_true()
                                     } else {
-                                        self.solver.get_false_literal()
+                                        !Predicate::trivially_true()
                                     }
                                 })
                                 .collect()
@@ -192,8 +184,8 @@ impl CompilationContext<'_> {
                     flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
                     }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
+                    flatzinc::BoolExpr::Bool(true) => Ok(Predicate::trivially_true()),
+                    flatzinc::BoolExpr::Bool(false) => Ok(!Predicate::trivially_true()),
                 })
                 .collect(),
             flatzinc::Expr::ArrayOfInt(array) => array
