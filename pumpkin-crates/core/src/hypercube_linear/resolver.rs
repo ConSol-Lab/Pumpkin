@@ -910,6 +910,20 @@ impl HypercubeLinearResolver {
         let current_dl = state.get_checkpoint();
         let decision_levels = (0..current_dl).rev();
 
+        // Before we test whether we can backtrack, we test whether the predicates that are
+        // true at the current decision level cover at most one domain. If not, then we for
+        // sure cannot backtrack.
+        let mut d1 = None;
+        for p in self.hypercube_predicates_on_conflict_dl.iter() {
+            if d1 == None {
+                d1 = Some(p.get_domain());
+            } else if d1 != Some(p.get_domain()) {
+                // If there are two different domains in the predicates that the
+                // current decision level, then we know for sure we cannot backjump.
+                return None;
+            }
+        }
+
         for decision_level in decision_levels {
             trace!("  => testing dl = {decision_level}");
             let trail_position = state
