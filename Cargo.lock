@@ -2198,7 +2198,7 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-propagators",
  "regex",
- "signal-hook 0.3.18",
+ "signal-hook 0.4.4",
  "stringcase",
  "thiserror",
  "vergen-gix",
