@@ -10,6 +10,7 @@ use crate::propagation::DomainEvent;
 /// ([`DomainId`], [`PredicateType`], value).
 ///
 /// To create a [`Predicate`], use [Predicate::new] or the more concise [predicate!] macro.
+///
 /// ## Order
 /// Predicates have a well-defined order. They are first ordered by the domain, and then by
 /// predicate type, and finally by the value. The order is chosen such that for a fixed domain `x`,
