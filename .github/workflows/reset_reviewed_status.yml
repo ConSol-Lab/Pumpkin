@@ -12,7 +12,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Dismiss old reviews
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
