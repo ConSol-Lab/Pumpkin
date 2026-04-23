@@ -6,6 +6,10 @@ use std::ops::Range;
     reason = "we implement our random generator using rand"
 )]
 use rand::Rng;
+#[allow(
+    clippy::disallowed_types,
+    reason = "we implement our random generator using rand"
+)]
 use rand::RngExt;
 #[allow(
     clippy::disallowed_types,
