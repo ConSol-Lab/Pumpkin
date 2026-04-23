@@ -15,7 +15,7 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: actions/cache@v4
       with:
         path: |
@@ -32,7 +32,7 @@ jobs:
     name: Test Suite for pumpkin-core in WebAssembly
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-unknown-unknown
@@ -48,7 +48,7 @@ jobs:
         runner: [ ubuntu-latest, macos-latest, windows-latest ]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
@@ -65,7 +65,7 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: actions/cache@v4
       with:
         path: |
@@ -82,7 +82,7 @@ jobs:
     name: Code Style and Lints
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: actions/cache@v4
       with:
         path: |
@@ -102,5 +102,5 @@ jobs:
     name: Dependency Licensing
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: EmbarkStudios/cargo-deny-action@v2
