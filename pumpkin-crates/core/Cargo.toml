@@ -23,7 +23,7 @@ downcast-rs = "1.2.1"
 drcp-format = { version = "0.3.1", path = "../../drcp-format" }
 convert_case = "0.8.0"
 itertools = "0.13.0"
-bitfield-struct = "0.9.2"
+bitfield-struct = "0.13.0"
 num = "0.4.3"
 enum-map = "2.7.3"
 clap = { version = "4.5.40", optional = true, features=["derive"] }
