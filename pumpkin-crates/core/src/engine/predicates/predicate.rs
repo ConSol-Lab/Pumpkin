@@ -10,6 +10,15 @@ use crate::propagation::DomainEvent;
 /// ([`DomainId`], [`PredicateType`], value).
 ///
 /// To create a [`Predicate`], use [Predicate::new] or the more concise [predicate!] macro.
+/// ## Order
+/// Predicates have a well-defined order. They are first ordered by the domain, and then by
+/// predicate type, and finally by the value. The order is chosen such that for a fixed domain `x`,
+/// predicates are ordered as follows:
+/// [>= 5], [>= 7], [!= 2], [!= 3], [== 5], [!= 7], [<= 6], [<= 10]
+///
+/// From the order, we get the lower-bound predicates first, ordered by ascending bound, then the
+/// (not-)equal predicates, ordered by ascending bound, then the upper-bound predicates, ordered by
+/// descending bounds.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
     /// The two most significant bits of the id stored in the [`Predicate`] contains the type of
@@ -18,21 +27,16 @@ pub struct Predicate {
     value: i32,
 }
 
-const LOWER_BOUND_CODE: u8 = 0;
-const UPPER_BOUND_CODE: u8 = 1;
-const NOT_EQUAL_CODE: u8 = 2;
-const EQUAL_CODE: u8 = 3;
+const LOWER_BOUND_CODE: u8 = PredicateType::LowerBound as u8;
+const UPPER_BOUND_CODE: u8 = PredicateType::UpperBound as u8;
+const NOT_EQUAL_CODE: u8 = PredicateType::NotEqual as u8;
+const EQUAL_CODE: u8 = PredicateType::Equal as u8;
 
 impl Predicate {
     /// Creates a new [`Predicate`] (also known as atomic constraint) which represents a domain
     /// operation.
     pub fn new(id: DomainId, predicate_type: PredicateType, value: i32) -> Self {
-        let code = match predicate_type {
-            PredicateType::LowerBound => LOWER_BOUND_CODE,
-            PredicateType::UpperBound => UPPER_BOUND_CODE,
-            PredicateType::NotEqual => NOT_EQUAL_CODE,
-            PredicateType::Equal => EQUAL_CODE,
-        };
+        let code = predicate_type as u8;
         let id = id.id() | (code as u32) << 30;
         Self { id, value }
     }
@@ -44,6 +48,39 @@ impl Predicate {
     pub fn get_predicate_type(&self) -> PredicateType {
         (*self).into()
     }
+
+    fn is_bound_predicate(&self) -> bool {
+        self.is_upper_bound_predicate() || self.is_lower_bound_predicate()
+    }
+}
+
+impl PartialOrd for Predicate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Predicate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.get_domain().cmp(&other.get_domain()) {
+            std::cmp::Ordering::Equal => {
+                if self.is_bound_predicate() || other.is_bound_predicate() {
+                    match self.get_type_code().cmp(&other.get_type_code()) {
+                        std::cmp::Ordering::Equal => {
+                            self.get_right_hand_side().cmp(&other.get_right_hand_side())
+                        }
+                        ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => {
+                            ordering
+                        }
+                    }
+                } else {
+                    self.get_right_hand_side().cmp(&other.get_right_hand_side())
+                }
+            }
+
+            ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
+        }
+    }
 }
 
 #[derive(Debug, Hash, EnumSetType)]
@@ -53,9 +90,9 @@ pub enum PredicateType {
     // Should correspond with the codes defined previously; `EnumSetType` requires that literals
     // are used and not expressions
     LowerBound = 0,
-    UpperBound = 1,
-    NotEqual = 2,
-    Equal = 3,
+    NotEqual = 1,
+    Equal = 2,
+    UpperBound = 3,
 }
 
 impl From<DomainEvent> for PredicateType {
@@ -320,5 +357,69 @@ mod test {
         let trivially_true = Predicate::trivially_true();
         let trivially_false = Predicate::trivially_false();
         assert!(!trivially_false == trivially_true);
+    }
+
+    #[test]
+    fn predicates_over_same_domain_are_ordered_by_increasing_lower_bound() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x >= 4];
+        let p2 = predicate![x >= 6];
+        assert!(p1 < p2);
+    }
+
+    #[test]
+    fn not_equal_predicates_are_bigger_than_lower_bounds() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x >= 4];
+        let p2 = predicate![x != 6];
+        let p3 = predicate![x != 2];
+
+        assert!(p1 < p2);
+        assert!(p1 < p3);
+    }
+
+    #[test]
+    fn not_equal_predicates_are_ordered_by_rhs() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x != 6];
+        let p2 = predicate![x != 2];
+
+        assert!(p1 > p2);
+    }
+
+    #[test]
+    fn equal_predicates_are_ordered_by_rhs() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x == 6];
+        let p2 = predicate![x == 2];
+
+        assert!(p1 > p2);
+    }
+
+    #[test]
+    fn equal_predicates_bigger_than_lower_bounds() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x == 6];
+        let p2 = predicate![x >= 2];
+
+        assert!(p1 > p2);
+    }
+
+    #[test]
+    fn equal_predicates_smaller_than_upper_bounds() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x == 6];
+        let p2 = predicate![x <= 2];
+
+        assert!(p1 < p2);
+    }
+
+    #[test]
+    fn tighter_upper_bound_is_smaller() {
+        let x = DomainId::new(0);
+        let p1 = predicate![x <= 6];
+        let p2 = predicate![x <= 2];
+
+        assert!(p1 > p2);
     }
 }
