@@ -6,6 +6,7 @@ use std::ops::Range;
     reason = "we implement our random generator using rand"
 )]
 use rand::Rng;
+use rand::RngExt;
 #[allow(
     clippy::disallowed_types,
     reason = "we implement our random generator using rand"
@@ -96,19 +97,19 @@ where
             "It should hold that 0.0 <= {probability} <= 1.0"
         );
 
-        self.gen_bool(probability)
+        self.random_bool(probability)
     }
 
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize {
-        self.gen_range(range)
+        self.random_range(range)
     }
 
     fn generate_i32_in_range(&mut self, lb: i32, ub: i32) -> i32 {
-        self.gen_range(lb..=ub)
+        self.random_range(lb..=ub)
     }
 
     fn generate_f64(&mut self) -> f64 {
-        self.gen_range(0.0..1.0)
+        self.random_range(0.0..1.0)
     }
 
     fn get_weighted_choice(&mut self, weights: &[f64]) -> Option<usize> {
