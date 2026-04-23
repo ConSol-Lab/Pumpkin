@@ -41,6 +41,47 @@ impl Predicate {
         Self { id, value }
     }
 
+    /// Returns `self` if this implies `other`.
+    pub fn implies(&self, other: Predicate) -> bool {
+        if self.get_domain() != other.get_domain() {
+            // Predicates only imply other predicates on the same domain.
+            return false;
+        }
+
+        match self.get_predicate_type() {
+            PredicateType::LowerBound => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() > other.get_right_hand_side(),
+                PredicateType::UpperBound | PredicateType::Equal => false,
+            },
+            PredicateType::UpperBound => match other.get_predicate_type() {
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => self.get_right_hand_side() < other.get_right_hand_side(),
+                PredicateType::LowerBound | PredicateType::Equal => false,
+            },
+            PredicateType::NotEqual => {
+                other.get_predicate_type() == PredicateType::NotEqual
+                    && self.get_right_hand_side() == other.get_right_hand_side()
+            }
+            PredicateType::Equal => match other.get_predicate_type() {
+                PredicateType::LowerBound => {
+                    self.get_right_hand_side() >= other.get_right_hand_side()
+                }
+                PredicateType::UpperBound => {
+                    self.get_right_hand_side() <= other.get_right_hand_side()
+                }
+                PredicateType::NotEqual => {
+                    self.get_right_hand_side() != other.get_right_hand_side()
+                }
+                PredicateType::Equal => self.get_right_hand_side() == other.get_right_hand_side(),
+            },
+        }
+    }
+
     fn get_type_code(&self) -> u8 {
         (self.id >> 30) as u8
     }
@@ -421,5 +462,111 @@ mod test {
         let p2 = predicate![x <= 2];
 
         assert!(p1 > p2);
+    }
+
+    #[test]
+    fn implies_over_different_domains_is_false() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+
+        assert!(!predicate![x >= 5].implies(predicate![y >= 4]));
+    }
+
+    #[test]
+    fn lower_bound_implies() {
+        let x = DomainId::new(0);
+
+        // Implies weaker bounds
+        assert!(predicate![x >= 5].implies(predicate![x >= 5]));
+        assert!(predicate![x >= 5].implies(predicate![x >= 4]));
+
+        // Implies not-equals below bound
+        assert!(predicate![x >= 5].implies(predicate![x != 4]));
+        assert!(predicate![x >= 5].implies(predicate![x != 3]));
+
+        // Does not imply stronger bounds
+        assert!(!predicate![x >= 5].implies(predicate![x >= 6]));
+
+        // Does not imply not-equals at or above bound
+        assert!(!predicate![x >= 5].implies(predicate![x != 6]));
+        assert!(!predicate![x >= 5].implies(predicate![x != 5]));
+
+        // Does not imply equals
+        assert!(!predicate![x >= 5].implies(predicate![x == 6]));
+        assert!(!predicate![x >= 5].implies(predicate![x == 5]));
+        assert!(!predicate![x >= 5].implies(predicate![x == 4]));
+    }
+
+    #[test]
+    fn upper_bound_implies() {
+        let x = DomainId::new(0);
+
+        // Implies weaker bounds
+        assert!(predicate![x <= 5].implies(predicate![x <= 5]));
+        assert!(predicate![x <= 5].implies(predicate![x <= 6]));
+
+        // Implies not-equals above bound
+        assert!(predicate![x <= 5].implies(predicate![x != 6]));
+        assert!(predicate![x <= 5].implies(predicate![x != 7]));
+
+        // Does not imply stronger bounds
+        assert!(!predicate![x <= 5].implies(predicate![x <= 4]));
+
+        // Does not imply not-equals at or below bound
+        assert!(!predicate![x <= 5].implies(predicate![x != 4]));
+        assert!(!predicate![x <= 5].implies(predicate![x != 5]));
+
+        // Does not imply equals
+        assert!(!predicate![x <= 5].implies(predicate![x == 6]));
+        assert!(!predicate![x <= 5].implies(predicate![x == 5]));
+        assert!(!predicate![x <= 5].implies(predicate![x == 4]));
+    }
+
+    #[test]
+    fn equals_implies() {
+        let x = DomainId::new(0);
+
+        // Implies lower bounds at or below
+        assert!(predicate![x == 5].implies(predicate![x >= 5]));
+        assert!(predicate![x == 5].implies(predicate![x >= 4]));
+
+        // Implies upper bounds at or above
+        assert!(predicate![x == 5].implies(predicate![x <= 5]));
+        assert!(predicate![x == 5].implies(predicate![x <= 6]));
+
+        // Implies not-equals
+        assert!(predicate![x == 5].implies(predicate![x != 4]));
+        assert!(predicate![x == 5].implies(predicate![x != 6]));
+
+        // Does not imply not-equals at bound
+        assert!(!predicate![x == 5].implies(predicate![x != 5]));
+
+        // Does not lower bounds above value
+        assert!(!predicate![x == 5].implies(predicate![x >= 6]));
+
+        // Does not upper bounds below value
+        assert!(!predicate![x == 5].implies(predicate![x <= 4]));
+    }
+
+    #[test]
+    fn not_equals_implies_nothing() {
+        let x = DomainId::new(0);
+
+        assert!(!predicate![x != 5].implies(predicate![x <= 4]));
+        assert!(!predicate![x != 5].implies(predicate![x <= 5]));
+        assert!(!predicate![x != 5].implies(predicate![x <= 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x >= 4]));
+        assert!(!predicate![x != 5].implies(predicate![x >= 5]));
+        assert!(!predicate![x != 5].implies(predicate![x >= 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x == 4]));
+        assert!(!predicate![x != 5].implies(predicate![x == 5]));
+        assert!(!predicate![x != 5].implies(predicate![x == 6]));
+
+        assert!(!predicate![x != 5].implies(predicate![x != 4]));
+        assert!(!predicate![x != 5].implies(predicate![x != 6]));
+
+        assert!(predicate![x != 5].implies(predicate![x != 5]));
     }
 }
