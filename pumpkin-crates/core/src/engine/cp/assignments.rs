@@ -394,15 +394,13 @@ impl Assignments {
     }
 }
 
-pub(crate) type AssignmentReason = ReasonRef;
-
 // methods to change the domains
 impl Assignments {
     fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new lower bound is weaker.
         if new_lower_bound <= self.get_lower_bound(domain_id) {
@@ -442,7 +440,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
@@ -482,7 +480,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         let mut update_took_place = false;
 
@@ -529,7 +527,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the value is not present anyway.
         if !self.domains[domain_id].contains(removed_value_from_domain) {
@@ -580,7 +578,7 @@ impl Assignments {
     pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
         notification_engine: &mut NotificationEngine,
     ) -> Result<bool, EmptyDomain> {
         let (lower_bound_before, upper_bound_before) = self.bounds[predicate.get_domain()];
@@ -797,7 +795,7 @@ pub(crate) struct ConstraintProgrammingTrailEntry {
     /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
     /// the update was due  to synchronisation from the propositional trail.
-    pub(crate) reason: Option<AssignmentReason>,
+    pub(crate) reason: Option<ReasonRef>,
 }
 
 #[derive(Clone, Copy, Debug)]
