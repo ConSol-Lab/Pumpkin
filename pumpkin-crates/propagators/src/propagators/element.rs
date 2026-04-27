@@ -19,6 +19,7 @@ use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::DomainEvents;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::Priority;
 use pumpkin_core::propagation::PropagationContext;
@@ -138,7 +139,7 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let payload = RightHandSideReason::from_bits(code);
 
         self.rhs_reason_buffer.clear();
@@ -158,7 +159,10 @@ where
                 }
             }));
 
-        &self.rhs_reason_buffer
+        LazyExplanation {
+            predicates: self.rhs_reason_buffer.as_slice(),
+            inference_code: self.inference_code.clone(),
+        }
     }
 }
 
@@ -175,13 +179,11 @@ where
     ) -> PropagationStatusCP {
         context.post(
             predicate![self.index >= 0],
-            conjunction!(),
-            &self.inference_code,
+            (conjunction!(), &self.inference_code),
         )?;
         context.post(
             predicate![self.index <= self.array.len() as i32 - 1],
-            conjunction!(),
-            &self.inference_code,
+            (conjunction!(), &self.inference_code),
         )?;
         Ok(())
     }
@@ -212,7 +214,6 @@ where
                     .with_value(rhs_lb)
                     .into_bits(),
             ),
-            &self.inference_code,
         )?;
         context.post(
             predicate![self.rhs <= rhs_ub],
@@ -222,7 +223,6 @@ where
                     .with_value(rhs_ub)
                     .into_bits(),
             ),
-            &self.inference_code,
         )?;
 
         Ok(())
@@ -255,7 +255,10 @@ where
         }
 
         for (idx, reason) in to_remove.drain(..) {
-            context.post(predicate![self.index != idx], reason, &self.inference_code)?;
+            context.post(
+                predicate![self.index != idx],
+                (reason, &self.inference_code),
+            )?;
         }
 
         Ok(())
@@ -274,13 +277,17 @@ where
 
         context.post(
             predicate![lhs >= rhs_lb],
-            conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
-            &self.inference_code,
+            (
+                conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
+                &self.inference_code,
+            ),
         )?;
         context.post(
             predicate![lhs <= rhs_ub],
-            conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
-            &self.inference_code,
+            (
+                conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
+                &self.inference_code,
+            ),
         )?;
         Ok(())
     }

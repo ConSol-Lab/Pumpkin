@@ -487,13 +487,13 @@ impl ProofProcessor {
             }
             Conflict::EmptyDomain(empty_domain_confict) => {
                 let mut predicates_to_explain = vec![];
-                empty_domain_confict.get_reason(
+                let maybe_trigger_inference = empty_domain_confict.get_reason(
                     &mut self.state,
                     &mut predicates_to_explain,
                     CurrentNogood::empty(),
                 );
 
-                if let Some(inference_code) = empty_domain_confict.trigger_inference_code {
+                if let Some(inference_code) = maybe_trigger_inference {
                     let generated_by = inference_code.tag();
                     let label = inference_code.label();
 

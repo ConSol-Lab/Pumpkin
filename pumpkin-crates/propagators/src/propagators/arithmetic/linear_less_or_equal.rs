@@ -15,6 +15,7 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -166,7 +167,7 @@ where
         "LinearLeq"
     }
 
-    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let i = code as usize;
 
         self.reason_buffer.clear();
@@ -183,7 +184,10 @@ where
                 }
             }));
 
-        &self.reason_buffer
+        LazyExplanation {
+            predicates: self.reason_buffer.as_slice(),
+            inference_code: self.inference_code.clone(),
+        }
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -222,7 +226,7 @@ where
             let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.post(predicate![x_i <= bound], i, &self.inference_code)?;
+                context.post(predicate![x_i <= bound], i)?;
             }
         }
 
@@ -279,7 +283,7 @@ where
                     })
                     .collect();
 
-                context.post(predicate![x_i <= bound], reason, &self.inference_code)?;
+                context.post(predicate![x_i <= bound], (reason, &self.inference_code))?;
             }
         }
 

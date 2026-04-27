@@ -8,7 +8,6 @@ use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
-use crate::proof::InferenceCode;
 use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
@@ -108,8 +107,6 @@ impl Assignments {
     }
 
     pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
-        // The clone is required because of InferenceCode is not copy. However, it is a
-        // reference-counted type, so cloning is cheap.
         self.trail[index].clone()
     }
 
@@ -397,7 +394,7 @@ impl Assignments {
     }
 }
 
-pub(crate) type AssignmentReason = (ReasonRef, InferenceCode);
+pub(crate) type AssignmentReason = ReasonRef;
 
 // methods to change the domains
 impl Assignments {
@@ -750,15 +747,15 @@ impl Assignments {
     }
 
     /// todo: This is a temporary hack, not to be used in general.
-    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef, InferenceCode) {
+    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef) {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
         self.update_bounds_snapshot(domain_id);
 
-        let (reason, inference_code) = entry.reason.unwrap();
+        let reason_ref = entry.reason.unwrap();
 
-        (entry.predicate, reason, inference_code)
+        (entry.predicate, reason_ref)
     }
 
     /// Get the number of values pruned from all the domains.
@@ -781,7 +778,7 @@ impl Assignments {
             .iter()
             .find_map(|entry| {
                 if entry.predicate == predicate {
-                    entry.reason.as_ref().map(|(reason_ref, _)| *reason_ref)
+                    entry.reason
                 } else {
                     None
                 }

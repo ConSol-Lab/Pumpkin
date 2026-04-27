@@ -11,6 +11,7 @@ use crate::propagation::Domains;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
 use crate::propagation::InferenceCheckers;
+use crate::propagation::LazyExplanation;
 use crate::propagation::LocalId;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
@@ -155,13 +156,20 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
+        let inner = self.propagator.lazy_explanation(code, context);
+        let preds: Vec<Predicate> = inner.predicates.to_vec();
+        let inference_code = inner.inference_code;
+
         self.reason_buffer.clear();
         self.reason_buffer
             .push(self.reification_literal.get_true_predicate());
-        self.reason_buffer
-            .extend(self.propagator.lazy_explanation(code, context));
-        &self.reason_buffer
+        self.reason_buffer.extend(preds);
+
+        LazyExplanation {
+            predicates: self.reason_buffer.as_slice(),
+            inference_code,
+        }
     }
 }
 
@@ -186,8 +194,7 @@ impl<Prop: Propagator + Clone> ReifiedPropagator<Prop> {
         if let Some(conflict) = self.propagator.detect_inconsistency(context.domains()) {
             context.post(
                 self.reification_literal.get_false_predicate(),
-                conflict.conjunction,
-                &conflict.inference_code,
+                (conflict.conjunction, &conflict.inference_code),
             )?;
         }
 
@@ -327,8 +334,10 @@ mod tests {
                     move |mut ctx: PropagationContext| {
                         ctx.post(
                             predicate![var >= 3],
-                            conjunction!(),
-                            &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                            (
+                                conjunction!(),
+                                &InferenceCode::unknown_label(ConstraintTag::create_from_index(0)),
+                            ),
                         )?;
                         Ok(())
                     },
