@@ -694,12 +694,12 @@ impl State {
         for trail_index in first_propagation_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_index);
 
-            let (reason_ref, inference_code) = entry
+            let reason_ref = entry
                 .reason
                 .expect("propagations should only be checked after propagations");
 
             reason_buffer.clear();
-            let reason_exists = self.reason_store.get_or_compute(
+            let inference_code = self.reason_store.get_or_compute(
                 reason_ref,
                 ExplanationContext::without_working_nogood(
                     &self.assignments,
@@ -709,7 +709,6 @@ impl State {
                 &mut self.propagators,
                 &mut reason_buffer,
             );
-            assert!(reason_exists, "all propagations have reasons");
 
             self.run_checker(
                 std::mem::take(&mut reason_buffer),
