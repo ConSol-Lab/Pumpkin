@@ -5,6 +5,7 @@ use crate::basic_types::Trail;
 #[cfg(doc)]
 use crate::containers::KeyedVec;
 use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 use crate::propagation::ExplanationContext;
 use crate::propagation::PropagatorId;
 use crate::propagation::store::PropagatorStore;
@@ -33,30 +34,32 @@ impl ReasonStore {
         Slot { store: self }
     }
 
-    /// Evaluate the reason with the given reference, and write the predicates to
-    /// `destination_buffer`.
+    /// Evaluate the reason with the given reference, write the predicates to `destination_buffer`,
+    /// and return the [`InferenceCode`] associated with the reason.
+    ///
+    /// # Panics
+    /// Panics if `reference` does not exist in the store.
     pub(crate) fn get_or_compute(
         &self,
         reference: ReasonRef,
         context: ExplanationContext<'_>,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
-    ) -> bool {
-        let Some(reason) = self.trail.get(reference.0 as usize) else {
-            return false;
-        };
+    ) -> InferenceCode {
+        let reason = self
+            .trail
+            .get(reference.0 as usize)
+            .expect("reason reference should not be stale");
 
         reason
             .1
-            .compute(context, reason.0, propagators, destination_buffer);
-
-        true
+            .compute(context, reason.0, propagators, destination_buffer)
     }
 
     pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
         match self.trail.get(reference.0 as usize) {
             Some(reason) => match &reason.1 {
-                StoredReason::Eager(_) => None,
+                StoredReason::Eager(_, _) => None,
                 StoredReason::DynamicLazy(code) => Some(code),
             },
             None => None,
@@ -90,14 +93,15 @@ pub(crate) struct ReasonRef(pub(crate) u32);
 #[derive(Debug)]
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
-    ///   propagated predicate.
-    Eager(PropositionalConjunction),
+    ///   propagated predicate, and the [`InferenceCode`] identifying the explanation algorithm.
+    Eager(PropositionalConjunction, InferenceCode),
     /// A lazy reason, which is computed on-demand rather than up-front. This is also referred to
     /// as a 'backward' reason.
     ///
     /// A lazy reason contains a payload that propagators can use to identify what type of
     /// propagation the reason is for. The payload should be enough for the propagator to construct
-    /// an explanation based on its internal state.
+    /// an explanation based on its internal state. The [`InferenceCode`] is returned by
+    /// [`crate::propagation::Propagator::lazy_explanation`] on demand.
     DynamicLazy(u64),
 }
 
@@ -105,44 +109,48 @@ pub enum Reason {
 #[derive(Debug, Clone)]
 pub(crate) enum StoredReason {
     /// An eager reason contains the propositional conjunction with the reason, without the
-    ///   propagated predicate.
-    Eager(PropositionalConjunction),
+    ///   propagated predicate, and the [`InferenceCode`] identifying the explanation algorithm.
+    Eager(PropositionalConjunction, InferenceCode),
     /// A lazy reason, which is computed on-demand rather than up-front. This is also referred to
     /// as a 'backward' reason.
     ///
     /// A lazy reason contains a payload that propagators can use to identify what type of
     /// propagation the reason is for. The payload should be enough for the propagator to construct
-    /// an explanation based on its internal state.
+    /// an explanation based on its internal state. The [`InferenceCode`] is returned by
+    /// [`crate::propagation::Propagator::lazy_explanation`] on demand.
     DynamicLazy(u64),
 }
 
 impl StoredReason {
-    /// Evaluate the reason, and write the predicates to the `destination_buffer`.
+    /// Evaluate the reason, write the predicates to `destination_buffer`, and return the
+    /// [`InferenceCode`] associated with the reason.
     pub(crate) fn compute(
         &self,
         context: ExplanationContext<'_>,
         propagator_id: PropagatorId,
         propagators: &mut PropagatorStore,
         destination_buffer: &mut impl Extend<Predicate>,
-    ) {
+    ) -> InferenceCode {
         match self {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            StoredReason::DynamicLazy(code) => destination_buffer.extend(
-                propagators[propagator_id]
-                    .lazy_explanation(*code, context)
-                    .iter()
-                    .copied(),
-            ),
-            StoredReason::Eager(result) => destination_buffer.extend(result.iter().copied()),
+            StoredReason::DynamicLazy(code) => {
+                let expl = propagators[propagator_id].lazy_explanation(*code, context);
+                destination_buffer.extend(expl.predicates.iter().copied());
+                expl.inference_code
+            }
+            StoredReason::Eager(result, inference_code) => {
+                destination_buffer.extend(result.iter().copied());
+                inference_code.clone()
+            }
         }
     }
 }
 
-impl From<PropositionalConjunction> for Reason {
-    fn from(value: PropositionalConjunction) -> Self {
-        Reason::Eager(value)
+impl From<(PropositionalConjunction, &InferenceCode)> for Reason {
+    fn from((conj, code): (PropositionalConjunction, &InferenceCode)) -> Self {
+        Reason::Eager(conj, code.clone())
     }
 }
 
@@ -178,11 +186,18 @@ impl Slot<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
     use crate::conjunction;
     use crate::engine::Assignments;
     use crate::engine::notifications::NotificationEngine;
     use crate::engine::variables::DomainId;
+    use crate::proof::ConstraintTag;
+
+    fn dummy_inference_code() -> InferenceCode {
+        InferenceCode::unknown_label(ConstraintTag::from_non_zero(NonZero::new(1).unwrap()))
+    }
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
@@ -193,10 +208,10 @@ mod tests {
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let reason = StoredReason::Eager(conjunction.clone());
+        let reason = StoredReason::Eager(conjunction.clone(), dummy_inference_code());
 
         let mut out_reason = vec![];
-        reason.compute(
+        let _ = reason.compute(
             ExplanationContext::test_new(&integers, &mut notification_engine),
             PropagatorId(0),
             &mut PropagatorStore::default(),
@@ -216,8 +231,10 @@ mod tests {
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let reason_ref =
-            reason_store.push(PropagatorId(0), StoredReason::Eager(conjunction.clone()));
+        let reason_ref = reason_store.push(
+            PropagatorId(0),
+            StoredReason::Eager(conjunction.clone(), dummy_inference_code()),
+        );
 
         assert_eq!(ReasonRef(0), reason_ref);
 

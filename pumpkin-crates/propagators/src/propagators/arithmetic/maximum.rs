@@ -106,8 +106,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
             // UB(a_i) <= UB(rhs, constraint_tag }
             context.post(
                 predicate![var <= rhs_ub],
-                conjunction!([self.rhs <= rhs_ub]),
-                &self.inference_code,
+                (conjunction!([self.rhs <= rhs_ub]), &self.inference_code),
             )?;
 
             let var_lb = context.lower_bound(var);
@@ -126,8 +125,10 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
         // LB(rhs, constraint_tag } >= max{LB(a_i)}.
         context.post(
             predicate![self.rhs >= max_lb],
-            PropositionalConjunction::from(lb_reason),
-            &self.inference_code,
+            (
+                PropositionalConjunction::from(lb_reason),
+                &self.inference_code,
+            ),
         )?;
 
         // Rule 3.
@@ -142,8 +143,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 .collect();
             context.post(
                 predicate![self.rhs <= max_ub],
-                ub_reason,
-                &self.inference_code,
+                (ub_reason, &self.inference_code),
             )?;
         }
 
@@ -175,8 +175,7 @@ impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Prop
                 propagation_reason.push(predicate![self.rhs >= rhs_lb]);
                 context.post(
                     predicate![propagating_variable >= rhs_lb],
-                    propagation_reason,
-                    &self.inference_code,
+                    (propagation_reason, &self.inference_code),
                 )?;
             }
         }

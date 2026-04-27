@@ -133,15 +133,16 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         // hold in the case of a negative lower-bound
         context.post(
             predicate![c <= new_max_c],
-            conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
-            inference_code,
+            (
+                conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
+                inference_code,
+            ),
         )?;
 
         // c is larger than the minimum value that a * b can take
         context.post(
             predicate![c >= new_min_c],
-            conjunction!([a >= a_min] & [b >= b_min]),
-            inference_code,
+            (conjunction!([a >= a_min] & [b >= b_min]), inference_code),
         )?;
     }
 
@@ -150,8 +151,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         let bound = div_ceil_pos(c_min, b_max);
         context.post(
             predicate![a >= bound],
-            conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
-            inference_code,
+            (
+                conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -160,8 +163,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         let bound = c_max / b_min;
         context.post(
             predicate![a <= bound],
-            conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
-            inference_code,
+            (
+                conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -170,8 +175,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         let bound = c_max / a_min;
         context.post(
             predicate![b <= bound],
-            conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
-            inference_code,
+            (
+                conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -181,8 +188,10 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 
         context.post(
             predicate![b >= bound],
-            conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
-            inference_code,
+            (
+                conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -247,8 +256,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_min >= 0 && b_min >= 0 {
         context.post(
             predicate![c >= 0],
-            conjunction!([a >= 0] & [b >= 0]),
-            inference_code,
+            (conjunction!([a >= 0] & [b >= 0]), inference_code),
         )?;
     }
 
@@ -256,8 +264,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_min >= 1 && c_min >= 1 {
         context.post(
             predicate![b >= 1],
-            conjunction!([a >= 1] & [c >= 1]),
-            inference_code,
+            (conjunction!([a >= 1] & [c >= 1]), inference_code),
         )?;
     }
 
@@ -265,8 +272,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if b_min >= 1 && c_min >= 1 {
         context.post(
             predicate![a >= 1],
-            conjunction!([b >= 1] & [c >= 1]),
-            inference_code,
+            (conjunction!([b >= 1] & [c >= 1]), inference_code),
         )?;
     }
 
@@ -275,8 +281,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_max <= 0 && b_max <= 0 {
         context.post(
             predicate![c >= 0],
-            conjunction!([a <= 0] & [b <= 0]),
-            inference_code,
+            (conjunction!([a <= 0] & [b <= 0]), inference_code),
         )?;
     }
 
@@ -284,8 +289,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_max <= -1 && c_max <= -1 {
         context.post(
             predicate![b >= 1],
-            conjunction!([a <= -1] & [c <= -1]),
-            inference_code,
+            (conjunction!([a <= -1] & [c <= -1]), inference_code),
         )?;
     }
 
@@ -293,8 +297,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if b_max <= -1 && c_max <= -1 {
         context.post(
             predicate![a >= 1],
-            conjunction!([b <= -1] & [c <= -1]),
-            inference_code,
+            (conjunction!([b <= -1] & [c <= -1]), inference_code),
         )?;
     }
 
@@ -304,8 +307,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_max <= 0 && b_min >= 0 {
         context.post(
             predicate![c <= 0],
-            conjunction!([a <= 0] & [b >= 0]),
-            inference_code,
+            (conjunction!([a <= 0] & [b >= 0]), inference_code),
         )?;
     }
 
@@ -313,8 +315,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_min >= 0 && b_max <= 0 {
         context.post(
             predicate![c <= 0],
-            conjunction!([a >= 0] & [b <= 0]),
-            inference_code,
+            (conjunction!([a >= 0] & [b <= 0]), inference_code),
         )?;
     }
 
@@ -323,8 +324,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_max <= -1 && c_min >= 1 {
         context.post(
             predicate![b <= -1],
-            conjunction!([a <= -1] & [c >= 1]),
-            inference_code,
+            (conjunction!([a <= -1] & [c >= 1]), inference_code),
         )?;
     }
 
@@ -332,8 +332,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if a_min >= 1 && c_max <= -1 {
         context.post(
             predicate![b <= -1],
-            conjunction!([a >= 1] & [c <= -1]),
-            inference_code,
+            (conjunction!([a >= 1] & [c <= -1]), inference_code),
         )?;
     }
 
@@ -342,8 +341,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if b_max <= -1 && c_min >= 1 {
         context.post(
             predicate![a <= -1],
-            conjunction!([b <= -1] & [c >= 1]),
-            inference_code,
+            (conjunction!([b <= -1] & [c >= 1]), inference_code),
         )?;
     }
 
@@ -351,8 +349,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if b_min >= 1 && c_max <= -1 {
         context.post(
             predicate![a <= -1],
-            conjunction!([b >= 1] & [c <= -1]),
-            inference_code,
+            (conjunction!([b >= 1] & [c <= -1]), inference_code),
         )?;
     }
 
