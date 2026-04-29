@@ -17,9 +17,9 @@ use crate::propagation::DomainEvent;
 /// predicates are ordered as follows:
 /// [>= 5], [>= 7], [!= 2], [!= 3], [== 5], [!= 7], [<= 6], [<= 10]
 ///
-/// From the order, we get the lower-bound predicates first, ordered by non-decreasing bound, then the
-/// (not-)equal predicates, ordered by non-decreasing bound, then the upper-bound predicates, ordered by
-/// non-increasing bounds.
+/// From the order, we get the lower-bound predicates first, ordered by non-decreasing bound, then
+/// the (not-)equal predicates, ordered by non-decreasing bound, then the upper-bound predicates,
+/// ordered by non-increasing bounds.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
     /// The two most significant bits of the id stored in the [`Predicate`] contains the type of
