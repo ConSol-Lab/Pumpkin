@@ -114,6 +114,7 @@ impl PartialOrd for Predicate {
 }
 
 impl Ord for Predicate {
+    /// See [`Predicate`] for details on the order.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match self.get_domain().cmp(&other.get_domain()) {
             std::cmp::Ordering::Equal => {
