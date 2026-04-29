@@ -163,6 +163,25 @@ impl Display for LinearInequality {
     }
 }
 
+/// A convenient helper to construct linear inequalities.
+///
+/// ## Examples
+/// In the following, variable bindings are [`DomainId`]s.
+/// ```ignore
+/// linear_inequality(2 x + 3 y <= 4);
+/// linear_inequality(-1 x + 5 y <= -3);
+/// ```
+#[macro_export]
+macro_rules! linear_inequality {
+    ($($weight:literal $var:ident $(+)?)* <= $bound:expr) => {{
+        let terms = vec![$((
+            std::num::NonZero::new($weight).unwrap(),
+            $var,
+        ),)*];
+        LinearInequality::new(terms, $bound).unwrap()
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,5 +267,23 @@ mod tests {
             Vec::<AffineView<DomainId>>::new(),
             linear.terms().collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn macro_handles_linears() {
+        let x = DomainId::new(0);
+        let y = DomainId::new(1);
+
+        let actual = linear_inequality!(2 x + -3 y <= 5);
+        let expected = LinearInequality::new(
+            [
+                (NonZero::new(2).unwrap(), x),
+                (NonZero::new(-3).unwrap(), y),
+            ],
+            5,
+        )
+        .expect("not trivially satisfiable");
+
+        assert_eq!(actual, expected);
     }
 }

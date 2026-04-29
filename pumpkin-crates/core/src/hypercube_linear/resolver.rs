@@ -1295,7 +1295,7 @@ mod tests {
     use crate::hypercube_linear::Trace;
     use crate::hypercube_linear::explanation::HypercubeLinear;
     use crate::hypercube_linear::fake_trail::FakeTrail;
-    use crate::predicate;
+    use crate::{linear_inequality, predicate};
 
     /// One Fourier elimination step (on x) produces y + z ≤ 7.
     ///
@@ -1318,14 +1318,7 @@ mod tests {
         // Reason for x ≥ 5: {} → −x + z ≤ −2
         let reason_for_x = HypercubeLinear {
             hypercube: Hypercube::default(),
-            linear: LinearInequality::new(
-                [
-                    (NonZero::new(-1).unwrap(), x),
-                    (NonZero::new(1).unwrap(), z),
-                ],
-                -2,
-            )
-            .expect("not trivially satisfiable"),
+            linear: linear_inequality!(-1 x + 1 z <= -2),
         };
 
         let mut trail = trail_builder
@@ -1334,17 +1327,11 @@ mod tests {
             .propagate(predicate![x >= 5], reason_for_x)
             .build();
 
-        let conflicting_linear = LinearInequality::new(
-            [(NonZero::new(1).unwrap(), x), (NonZero::new(1).unwrap(), y)],
-            5,
-        )
-        .expect("not trivially satisfiable");
-
         let mut resolver = HypercubeLinearResolver::new(Trace::discard());
         let result = resolver.run_resolution(
             &mut trail,
             [predicate![x >= 5], predicate![y >= 1]],
-            conflicting_linear,
+            linear_inequality!(1 x + 1 y <= 5),
         );
 
         // The Fourier step eliminates x: conflict becomes y + z ≤ 3.
@@ -1373,15 +1360,16 @@ mod tests {
         let y = trail_builder.domain(0, 10);
         let w = trail_builder.domain(0, 10);
 
-        let reason_for_x = vec![
-            predicate![y >= 3],
-            predicate![x <= 4], // !pivot
-        ];
-
         let mut trail = trail_builder
             .decide(predicate![y >= 3])
             .decide(predicate![w >= 2])
-            .propagate(predicate![x >= 5], reason_for_x)
+            .propagate(
+                predicate![x >= 5],
+                vec![
+                    predicate![y >= 3],
+                    predicate![x <= 4], // !pivot
+                ],
+            )
             .build();
 
         // Conflict: trivially_false linear with two conflict-DL predicates.
