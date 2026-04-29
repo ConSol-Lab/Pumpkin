@@ -42,7 +42,7 @@ impl Predicate {
         Self { id, value }
     }
 
-    /// Returns `true` if this implies `other`.
+    /// Returns `true` if `self` implies `other`.
     ///
     /// # Example
     /// ```
