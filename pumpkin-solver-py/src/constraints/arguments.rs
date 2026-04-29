@@ -1,5 +1,5 @@
 use pumpkin_solver::core::predicates::Predicate;
-use pumpkin_solver::core::variables::IntegerVariableEnum;
+use pumpkin_solver::core::variables::AnyInteger;
 
 use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
@@ -12,7 +12,7 @@ pub trait PythonConstraintArg {
 }
 
 impl PythonConstraintArg for IntExpression {
-    type Output = IntegerVariableEnum;
+    type Output = AnyInteger;
 
     fn to_solver_constraint_argument(self) -> Self::Output {
         self.0

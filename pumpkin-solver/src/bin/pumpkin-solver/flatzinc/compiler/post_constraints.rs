@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use pumpkin_core::variables::IntegerVariableEnum;
+use pumpkin_core::variables::AnyInteger;
 use pumpkin_propagators::disjunctive::ArgDisjunctiveTask;
 use pumpkin_solver::core::constraints::Constraint;
 use pumpkin_solver::core::constraints::NegatableConstraint;
@@ -636,8 +636,8 @@ fn compile_bool2int(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     Ok(pumpkin_constraints::binary_equals(
-        IntegerVariableEnum::Predicate(a.scaled(1)),
-        IntegerVariableEnum::DomainId(b.scaled(1)),
+        AnyInteger::Predicate(a.scaled(1)),
+        AnyInteger::DomainId(b.scaled(1)),
         constraint_tag,
     )
     .post(context.solver)

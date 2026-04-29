@@ -4,8 +4,8 @@ use pumpkin_core::constraints::Constraint;
 use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::AffineView;
+use pumpkin_core::variables::AnyInteger;
 use pumpkin_core::variables::DomainId;
-use pumpkin_core::variables::IntegerVariableEnum;
 use pumpkin_core::variables::TransformableVariable;
 
 use super::less_than_or_equals;
@@ -103,7 +103,7 @@ impl Constraint for BooleanEqual {
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> Vec<IntegerVariableEnum> {
+    fn create_domains(&self) -> Vec<AnyInteger> {
         self.bools
             .iter()
             .enumerate()

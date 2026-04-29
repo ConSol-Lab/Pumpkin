@@ -1,12 +1,12 @@
 use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::IntegerVariableEnum;
 use pumpkin_solver::core::variables::TransformableVariable;
 use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntExpression(pub IntegerVariableEnum);
+pub struct IntExpression(pub AnyInteger);
 
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {

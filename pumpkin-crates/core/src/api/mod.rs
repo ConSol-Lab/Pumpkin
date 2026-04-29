@@ -51,9 +51,9 @@ pub mod variables {
     use crate::Solver;
     pub use crate::engine::Reason;
     pub use crate::engine::variables::AffineView;
+    pub use crate::engine::variables::AnyInteger;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
-    pub use crate::engine::variables::IntegerVariableEnum;
     pub use crate::engine::variables::TransformableVariable;
     #[cfg(doc)]
     use crate::predicates::Predicate;
