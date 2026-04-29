@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::branching::Brancher;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
@@ -7,7 +9,7 @@ use crate::results::SolutionReference;
 
 /// Defines methods for selecting which of two branching strategies to use; the default or the
 /// other brancher.
-pub trait AlternatingStrategy {
+pub trait AlternatingStrategy: Debug {
     /// Called when the next decision is made by the [`AlternatingBrancher`]. Returns true if the
     /// default brancher should be used and false otherwise.
     ///
