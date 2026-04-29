@@ -1,4 +1,5 @@
 use pumpkin_solver::core::predicates::Predicate;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::AnyInteger;
 
 use crate::variables::BoolExpression;
@@ -12,7 +13,7 @@ pub trait PythonConstraintArg {
 }
 
 impl PythonConstraintArg for IntExpression {
-    type Output = AnyInteger;
+    type Output = AffineView<AnyInteger>;
 
     fn to_solver_constraint_argument(self) -> Self::Output {
         self.0

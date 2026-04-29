@@ -1,4 +1,5 @@
 use pumpkin_solver::core::predicate;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::TransformableVariable;
@@ -6,7 +7,7 @@ use pyo3::prelude::*;
 
 #[pyclass(eq, hash, frozen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntExpression(pub AnyInteger);
+pub struct IntExpression(pub AffineView<AnyInteger>);
 
 impl From<DomainId> for IntExpression {
     fn from(domain_id: DomainId) -> IntExpression {

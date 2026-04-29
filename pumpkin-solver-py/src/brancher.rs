@@ -7,13 +7,14 @@ use pumpkin_solver::core::containers::HashMap;
 use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::StatisticLogger;
+use pumpkin_solver::core::variables::AffineView;
 use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
 
 use crate::variables::IntExpression;
 
 pub struct PythonBrancher {
-    warm_start: WarmStart<AnyInteger>,
+    warm_start: WarmStart<AffineView<AnyInteger>>,
     default_brancher: DefaultBrancher,
 }
 

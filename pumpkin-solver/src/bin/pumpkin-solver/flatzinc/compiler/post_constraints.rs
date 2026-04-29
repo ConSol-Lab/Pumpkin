@@ -636,8 +636,8 @@ fn compile_bool2int(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     Ok(pumpkin_constraints::binary_equals(
-        AnyInteger::Predicate(a.scaled(1)),
-        AnyInteger::DomainId(b.scaled(1)),
+        AnyInteger::Predicate(a).scaled(1),
+        AnyInteger::DomainId(b).scaled(1),
         constraint_tag,
     )
     .post(context.solver)
