@@ -493,9 +493,7 @@ impl DimacsSink for SolverDimacsSink {
     }
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
-        let mapped = self
-            .mapped_clause(clause)
-            .into_iter();
+        let mapped = self.mapped_clause(clause).into_iter();
         let _ = self.solver.add_clause(mapped, self.constraint_tag);
     }
 
@@ -521,10 +519,7 @@ impl DimacsSink for SolverDimacsSink {
                 .new_bounded_integer(0, 1)
                 .lower_bound_predicate(1);
             clause.push(soft_literal);
-            let _ = self.solver.add_clause(
-                clause.into_iter(),
-                self.constraint_tag,
-            );
+            let _ = self.solver.add_clause(clause, self.constraint_tag);
 
             self.objective
                 .add_weighted_literal(!soft_literal, weight.get().into());

@@ -3,7 +3,7 @@ use crate::basic_types::SolutionReference;
 use crate::containers::HashMap;
 use crate::predicates::Predicate;
 
-/// A struct which represents a linear function over weighted [`Literal`]s, and a
+/// A struct which represents a linear function over weighted [`Predicate`]s, and a
 /// constant term.
 #[derive(Clone, Default, Debug)]
 pub struct Function {

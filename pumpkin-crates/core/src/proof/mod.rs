@@ -310,18 +310,6 @@ impl ProofLog {
         ) || cfg!(feature = "check-deductions")
     }
 
-    pub(crate) fn reify_predicate(&mut self, predicate: Predicate) {
-        let Some(ProofImpl::CpProof {
-            ref mut proof_atomics,
-            ..
-        }) = self.internal_proof
-        else {
-            return;
-        };
-
-        proof_atomics.reify_predicate(predicate);
-    }
-
     pub(crate) fn is_logging_proof(&self) -> bool {
         self.internal_proof.is_some()
     }

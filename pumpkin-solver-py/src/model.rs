@@ -161,15 +161,8 @@ impl Model {
     }
 
     /// Reify a predicate as an explicit boolean expression.
-    ///
-    /// A tag should be provided for this link to be identifiable in the proof.
-    #[pyo3(signature = (predicate, tag, name=None))]
-    fn predicate_as_boolean(
-        &mut self,
-        predicate: Predicate,
-        tag: Tag,
-        name: Option<&str>,
-    ) -> PyResult<BoolExpression> {
+    #[pyo3(signature = (predicate))]
+    fn predicate_as_boolean(&mut self, predicate: Predicate) -> PyResult<BoolExpression> {
         if self.solver.is_inconsistent() {
             return Err(PyValueError::new_err(
                 "Cannot reify predicate: solver is in an infeasible state",
@@ -177,7 +170,6 @@ impl Model {
         }
 
         let solver_predicate = predicate.into_solver_predicate();
-        let Tag(tag) = tag;
 
         Ok(solver_predicate.into())
     }

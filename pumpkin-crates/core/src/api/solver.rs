@@ -53,6 +53,7 @@ use crate::statistics::log_statistic_postfix;
 /// ```rust
 /// # use pumpkin_core::Solver;
 /// # use pumpkin_core::variables::TransformableVariable;
+/// # use pumpkin_core::predicate;
 /// let mut solver = Solver::default();
 ///
 /// // Integer Variables
@@ -74,19 +75,15 @@ use crate::statistics::log_statistic_postfix;
 ///
 ///
 /// // Propositional Variable
+/// //
+/// // Propositional variables do not explicitly exist in Pumpkin, but atomic constraints can be
+/// // treated as integer variable.
 ///
-/// // We can create a literal
-/// let literal = solver.new_literal();
+/// // We can create a new Boolean variable first.
+/// let boolean = solver.new_bounded_integer(0, 1);
 ///
-/// // We can also create such a variable with a name
-/// let named_literal = solver.new_named_literal("z");
-///
-/// // We can also get the predicate from the literal
-/// let true_predicate = literal.get_true_predicate();
-///
-/// // We can also create an iterator of new literals and get a number of them at once
-/// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();
-/// assert_eq!(list_of_5_literals.len(), 5);
+/// // And then create a predicate over this boolean variable.
+/// let predicate = predicate!(boolean >= 1);
 /// ```
 ///
 /// # Using the Solver

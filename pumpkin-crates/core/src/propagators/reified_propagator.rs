@@ -261,6 +261,7 @@ mod tests {
     use crate::engine::PropagatorConflict;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
+    use crate::predicates::PredicateConstructor;
     use crate::predicates::PropositionalConjunction;
     use crate::proof::ConstraintTag;
     use crate::proof::InferenceCode;
@@ -306,9 +307,9 @@ mod tests {
             })
             .expect("no conflict");
 
-        assert_eq!(solver.is_literal_false(reification_literal));
+        assert_eq!(solver.evaluate_predicate(reification_literal), Some(false));
 
-        let reason = solver.get_reason_bool(reification_literal, false);
+        let reason = solver.get_reason_int(!reification_literal);
         assert_eq!(reason, triggered_conflict);
     }
 
@@ -316,7 +317,7 @@ mod tests {
     fn a_true_literal_is_added_to_reason_for_propagation() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
+        let reification_literal = solver.new_variable(0, 1).lower_bound_predicate(1);
         let var = solver.new_variable(1, 5);
 
         let propagator = solver
@@ -338,23 +339,20 @@ mod tests {
 
         solver.assert_bounds(var, 1, 5);
 
-        let _ = solver.set_literal(reification_literal, true);
+        let _ = solver.set_predicate(reification_literal);
         solver.propagate(propagator).expect("no conflict");
 
         solver.assert_bounds(var, 3, 5);
         let reason = solver.get_reason_int(predicate![var >= 3]);
-        assert_eq!(
-            reason,
-            PropositionalConjunction::from(reification_literal.get_true_predicate())
-        );
+        assert_eq!(reason, PropositionalConjunction::from(reification_literal));
     }
 
     #[test]
     fn a_true_literal_is_added_to_a_conflict_conjunction() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
-        let _ = solver.set_literal(reification_literal, true);
+        let reification_literal = solver.new_variable(0, 1).lower_bound_predicate(1);
+        let _ = solver.set_predicate(reification_literal);
 
         let var = solver.new_variable(1, 1);
         let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));
@@ -380,10 +378,7 @@ mod tests {
             Conflict::Propagator(conflict_nogood) => {
                 assert_eq!(
                     conflict_nogood.conjunction,
-                    PropositionalConjunction::from(vec![
-                        reification_literal.get_true_predicate(),
-                        predicate![var >= 1]
-                    ])
+                    PropositionalConjunction::from(vec![reification_literal, predicate![var >= 1]])
                 )
             }
 
@@ -395,7 +390,7 @@ mod tests {
     fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
         let mut solver = TestSolver::default();
 
-        let reification_literal = solver.new_literal();
+        let reification_literal = solver.new_variable(0, 1).lower_bound_predicate(1);
         let var = solver.new_variable(1, 5);
 
         let inference_code = InferenceCode::unknown_label(ConstraintTag::create_from_index(0));

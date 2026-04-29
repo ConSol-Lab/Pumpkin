@@ -41,19 +41,6 @@ impl ProofAtomics {
         IntAtomic::new(name, comparison, value)
     }
 
-    /// Given a literal, whenever it shows up in a proof step, substitute it with the provided
-    /// predicate.
-    pub(crate) fn reify_predicate(&mut self, predicate: Predicate) {
-        // Note: This only works because we assume `literal` is a fresh literal and we are given
-        // the positive polarity. That assumption holds as the only place this can be called is
-        // transitively through `new_literal_for_predicate`. As soon as this assumption is
-        // violated, all hell will break loose.
-
-        let _ = self
-            .reification_domains
-            .insert(predicate.get_domain(), predicate);
-    }
-
     /// The given predicate is a predicate over a literal. This function gets the associated
     /// predicate that was reified with [`Self::reify_predicate`] if it exists.
     fn get_underlying_predicate(&self, predicate: Predicate) -> Option<Predicate> {

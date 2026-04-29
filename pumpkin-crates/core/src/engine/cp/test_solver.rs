@@ -201,25 +201,15 @@ impl TestSolver {
         Ok(())
     }
 
-    pub fn set_predicate(
-        &mut self,
-        predicate: Predicate,
-        truth_value: bool,
-    ) -> Result<(), EmptyDomain> {
-        let _ = match truth_value {
-            true => self.state.assignments.post_predicate(
-                predicate,
-                None,
-                &mut self.state.notification_engine,
-            )?,
-            false => self.state.assignments.post_predicate(
-                !predicate,
-                None,
-                &mut self.state.notification_engine,
-            )?,
-        };
+    pub fn set_predicate(&mut self, predicate: Predicate) -> Result<(), EmptyDomain> {
+        self.state
+            .assignments
+            .post_predicate(predicate, None, &mut self.state.notification_engine)
+            .map(|_| ())
+    }
 
-        Ok(())
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.state.assignments.evaluate_predicate(predicate)
     }
 
     pub fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
