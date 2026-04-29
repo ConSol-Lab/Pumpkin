@@ -103,7 +103,7 @@ impl Constraint for BooleanEqual {
 }
 
 impl BooleanEqual {
-    fn create_domains(&self) -> Vec<AnyInteger> {
+    fn create_domains(&self) -> Vec<AffineView<AnyInteger>> {
         self.bools
             .iter()
             .enumerate()

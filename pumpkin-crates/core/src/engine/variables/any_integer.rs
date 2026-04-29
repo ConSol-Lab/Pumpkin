@@ -14,31 +14,47 @@ use crate::variables::TransformableVariable;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AnyInteger {
-    DomainId(AffineView<DomainId>),
-    Predicate(AffineView<Predicate>),
+    DomainId(DomainId),
+    Predicate(Predicate),
 }
 
-impl From<AffineView<DomainId>> for AnyInteger {
+impl From<AffineView<DomainId>> for AffineView<AnyInteger> {
     fn from(value: AffineView<DomainId>) -> Self {
-        AnyInteger::DomainId(value)
+        AffineView::new(AnyInteger::DomainId(value.inner), value.scale, value.offset)
+    }
+}
+
+impl From<DomainId> for AffineView<AnyInteger> {
+    fn from(value: DomainId) -> Self {
+        AffineView::new(AnyInteger::DomainId(value), 1, 0)
     }
 }
 
 impl From<DomainId> for AnyInteger {
     fn from(value: DomainId) -> Self {
-        AnyInteger::DomainId(value.scaled(1))
+        AnyInteger::DomainId(value)
     }
 }
 
-impl From<AffineView<Predicate>> for AnyInteger {
+impl From<AffineView<Predicate>> for AffineView<AnyInteger> {
     fn from(value: AffineView<Predicate>) -> Self {
-        AnyInteger::Predicate(value)
+        AffineView::new(
+            AnyInteger::Predicate(value.inner),
+            value.scale,
+            value.offset,
+        )
+    }
+}
+
+impl From<Predicate> for AffineView<AnyInteger> {
+    fn from(value: Predicate) -> Self {
+        AffineView::new(AnyInteger::Predicate(value), 1, 0)
     }
 }
 
 impl From<Predicate> for AnyInteger {
     fn from(value: Predicate) -> Self {
-        AnyInteger::Predicate(value.scaled(1))
+        AnyInteger::Predicate(value)
     }
 }
 
@@ -74,24 +90,18 @@ impl PredicateConstructor for AnyInteger {
     }
 }
 
-impl TransformableVariable<AnyInteger> for AnyInteger {
-    fn scaled(&self, scale: i32) -> AnyInteger {
-        match self {
-            AnyInteger::DomainId(domain_id) => domain_id.scaled(scale).into(),
-            AnyInteger::Predicate(literal) => literal.scaled(scale).into(),
-        }
+impl TransformableVariable<AffineView<AnyInteger>> for AnyInteger {
+    fn scaled(&self, scale: i32) -> AffineView<AnyInteger> {
+        AffineView::new(*self, scale, 0)
     }
 
-    fn offset(&self, offset: i32) -> AnyInteger {
-        match self {
-            AnyInteger::DomainId(domain_id) => domain_id.offset(offset).into(),
-            AnyInteger::Predicate(literal) => literal.offset(offset).into(),
-        }
+    fn offset(&self, offset: i32) -> AffineView<AnyInteger> {
+        AffineView::new(*self, 1, offset)
     }
 }
 
 impl IntegerVariable for AnyInteger {
-    type AffineView = AnyInteger;
+    type AffineView = AffineView<AnyInteger>;
 
     fn lower_bound(&self, assignment: &Assignments) -> i32 {
         match self {
