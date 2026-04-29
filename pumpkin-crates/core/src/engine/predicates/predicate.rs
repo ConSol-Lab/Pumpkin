@@ -17,9 +17,9 @@ use crate::propagation::DomainEvent;
 /// predicates are ordered as follows:
 /// [>= 5], [>= 7], [!= 2], [!= 3], [== 5], [!= 7], [<= 6], [<= 10]
 ///
-/// From the order, we get the lower-bound predicates first, ordered by ascending bound, then the
-/// (not-)equal predicates, ordered by ascending bound, then the upper-bound predicates, ordered by
-/// descending bounds.
+/// From the order, we get the lower-bound predicates first, ordered by non-decreasing bound, then the
+/// (not-)equal predicates, ordered by non-decreasing bound, then the upper-bound predicates, ordered by
+/// non-increasing bounds.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
     /// The two most significant bits of the id stored in the [`Predicate`] contains the type of
@@ -42,7 +42,18 @@ impl Predicate {
         Self { id, value }
     }
 
-    /// Returns `self` if this implies `other`.
+    /// Returns `true` if this implies `other`.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_core::variables::DomainId;
+    /// # use pumpkin_core::predicate;
+    /// let x = DomainId::new(0);
+    ///
+    /// assert!(predicate![x >= 5].implies(predicate![x >= 3]));
+    /// assert!(predicate![x >= 5].implies(predicate![x != 1]));
+    /// assert!(predicate![x == 5].implies(predicate![x <= 5]));
+    /// ```
     pub fn implies(&self, other: Predicate) -> bool {
         if self.get_domain() != other.get_domain() {
             // Predicates only imply other predicates on the same domain.
