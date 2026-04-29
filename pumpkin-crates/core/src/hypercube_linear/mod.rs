@@ -8,6 +8,10 @@ mod predicate_heap;
 mod propagator;
 mod resolver;
 mod trace;
+mod trail_view;
+
+#[cfg(test)]
+mod fake_trail;
 
 pub use bound_predicate::*;
 pub use checker::*;

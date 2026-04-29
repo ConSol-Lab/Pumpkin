@@ -5,13 +5,13 @@ use itertools::Itertools;
 use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::LinearInequality;
+use crate::hypercube_linear::trail_view::TrailView;
+use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::state::State;
-use crate::variables::IntegerVariable;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct HypercubeLinear {
+pub(crate) struct HypercubeLinear {
     pub hypercube: Hypercube,
     pub linear: LinearInequality,
 }
@@ -23,7 +23,7 @@ impl Display for HypercubeLinear {
 }
 
 #[derive(Clone)]
-pub(super) enum HypercubeLinearExplanation {
+pub(crate) enum HypercubeLinearExplanation {
     Proper(HypercubeLinear),
     Conjunction(Vec<Predicate>),
 }
@@ -35,9 +35,9 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    pub(super) fn into_clause(
+    pub(crate) fn into_clause(
         self,
-        state: &State,
+        trail: &impl TrailView,
         pivot: Predicate,
         trail_position: usize,
     ) -> Vec<Predicate> {
@@ -59,16 +59,14 @@ impl HypercubeLinearExplanation {
         );
 
         clause.extend(hypercube_linear.linear.terms().map(|term| {
-            let term_bound =
-                term.lower_bound_at_trail_position(&state.assignments, trail_position - 1);
-
+            let term_bound = affine_lower_bound_at(trail, term, trail_position - 1);
             predicate![term >= term_bound]
         }));
 
         clause
     }
 
-    pub(super) fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
+    pub(crate) fn weaken_to_zero(self, bound: BoundPredicate) -> Option<Self> {
         match self {
             HypercubeLinearExplanation::Proper(mut hypercube_linear) => {
                 hypercube_linear.linear =
@@ -87,7 +85,7 @@ impl HypercubeLinearExplanation {
         }
     }
 
-    pub(super) fn iter_predicates(&self) -> impl Iterator<Item = Predicate> {
+    pub(crate) fn iter_predicates(&self) -> impl Iterator<Item = Predicate> {
         match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => {
                 itertools::Either::Left(hypercube_linear.hypercube.iter_predicates())
@@ -98,7 +96,7 @@ impl HypercubeLinearExplanation {
         }
     }
 
-    pub(super) fn take_linear(&mut self) -> LinearInequality {
+    pub(crate) fn take_linear(&mut self) -> LinearInequality {
         match self {
             HypercubeLinearExplanation::Proper(hypercube_linear) => {
                 std::mem::take(&mut hypercube_linear.linear)
@@ -133,6 +131,7 @@ mod tests {
     use std::num::NonZero;
 
     use super::*;
+    use crate::state::State;
 
     #[test]
     fn weaken_to_zero_conjunction_is_passthrough() {

@@ -1,9 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+use crate::hypercube_linear::trail_view::TrailView;
 use crate::predicates::Predicate;
 use crate::predicates::PredicateType;
-use crate::state::State;
 
 /// A max-heap of predicates. The keys are based on the trail positions of the predicates in the
 /// state, meaning predicates are popped in reverse trail order. Implied predicates are popped
@@ -44,19 +44,19 @@ impl PredicateHeap {
 
     /// Push a new predicate onto the heap.
     ///
-    /// If the predicate is not true in the given state, this method panics.
-    pub(crate) fn push(&mut self, predicate: Predicate, state: &State) {
+    /// If the predicate is not true in the given trail, this method panics.
+    pub(crate) fn push(&mut self, predicate: Predicate, trail: &impl TrailView) {
         // TODO: This can probably be optimized. But only do so once profiling shows this
         // as a problem.
         if self.heap.iter().any(|pte| pte.predicate == predicate) {
             return;
         }
 
-        let trail_position = state
+        let trail_position = trail
             .trail_position(predicate)
-            .expect("predicate must be true in given state");
+            .expect("predicate must be true in given trail");
 
-        let is_implied = state.trail_entry(trail_position).predicate != predicate;
+        let is_implied = trail.predicate_at_trail_position(trail_position) != predicate;
 
         self.heap.push(PredicateToExplain {
             predicate,
