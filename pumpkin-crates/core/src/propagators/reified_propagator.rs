@@ -158,13 +158,12 @@ impl<WrappedPropagator: Propagator + Clone> Propagator for ReifiedPropagator<Wra
 
     fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> LazyExplanation<'_> {
         let inner = self.propagator.lazy_explanation(code, context);
-        let preds: Vec<Predicate> = inner.predicates.to_vec();
         let inference_code = inner.inference_code;
 
         self.reason_buffer.clear();
         self.reason_buffer
             .push(self.reification_literal.get_true_predicate());
-        self.reason_buffer.extend(preds);
+        self.reason_buffer.extend(inner.predicates);
 
         LazyExplanation {
             predicates: self.reason_buffer.as_slice(),

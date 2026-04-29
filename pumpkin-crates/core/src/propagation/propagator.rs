@@ -40,7 +40,7 @@ use crate::statistics::statistic_logger::StatisticLogger;
 pub struct LazyExplanation<'a> {
     /// The predicates that explain the propagation.
     pub predicates: &'a [Predicate],
-    /// The inference code identifying the explanation step.
+    /// The inference code identifying the explanation algorithm.
     pub inference_code: InferenceCode,
 }
 
