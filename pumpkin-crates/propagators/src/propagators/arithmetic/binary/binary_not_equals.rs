@@ -126,8 +126,7 @@ where
         if a_lb == a_ub {
             context.post(
                 predicate!(self.b != a_lb),
-                conjunction!([self.a == a_lb]),
-                &self.inference_code,
+                (conjunction!([self.a == a_lb]), &self.inference_code),
             )?;
         }
 
@@ -135,8 +134,7 @@ where
         if b_lb == b_ub {
             context.post(
                 predicate!(self.a != b_lb),
-                conjunction!([self.b == b_lb]),
-                &self.inference_code,
+                (conjunction!([self.b == b_lb]), &self.inference_code),
             )?;
         }
 
@@ -161,16 +159,14 @@ where
         if a_lb == a_ub {
             context.post(
                 predicate!(self.b != a_lb),
-                conjunction!([self.a == a_lb]),
-                &self.inference_code,
+                (conjunction!([self.a == a_lb]), &self.inference_code),
             )?;
         }
 
         if b_lb == b_ub {
             context.post(
                 predicate!(self.a != b_lb),
-                conjunction!([self.b == b_lb]),
-                &self.inference_code,
+                (conjunction!([self.b == b_lb]), &self.inference_code),
             )?;
         }
 

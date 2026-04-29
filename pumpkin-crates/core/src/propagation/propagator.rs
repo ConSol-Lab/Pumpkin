@@ -16,6 +16,7 @@ use crate::engine::PropagationStatusCP;
 use crate::engine::PropagatorConflict;
 use crate::engine::notifications::OpaqueDomainEvent;
 use crate::predicates::Predicate;
+use crate::proof::InferenceCode;
 #[cfg(doc)]
 use crate::propagation::DomainEvent;
 #[cfg(doc)]
@@ -32,6 +33,16 @@ use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 #[cfg(doc)]
 use crate::state::Conflict;
 use crate::statistics::statistic_logger::StatisticLogger;
+
+/// The result of [`Propagator::lazy_explanation`]: a slice of predicates that form the reason for
+/// a propagation, together with the [`InferenceCode`] that identifies the explanation algorithm.
+#[derive(Clone, Debug)]
+pub struct LazyExplanation<'a> {
+    /// The predicates that explain the propagation.
+    pub predicates: &'a [Predicate],
+    /// The inference code identifying the explanation algorithm.
+    pub inference_code: InferenceCode,
+}
 
 // We need to use this to cast from `Box<dyn Propagator>` to `NogoodPropagator`; rust inherently
 // does not allow downcasting from the trait definition to its concrete type.
@@ -195,7 +206,11 @@ pub trait Propagator: Downcast + DynClone {
     /// explanation is generated); the bounds at the time of the propagation can be retrieved using
     /// methods such as [`ReadDomains::lower_bound_at_trail_position`] in combination
     /// with [`ExplanationContext::get_trail_position`].
-    fn lazy_explanation(&mut self, _code: u64, _context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(
+        &mut self,
+        _code: u64,
+        _context: ExplanationContext,
+    ) -> LazyExplanation<'_> {
         panic!(
             "{}",
             format!(

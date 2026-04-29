@@ -49,15 +49,10 @@ impl From<PropagatorConflict> for Conflict {
 }
 
 /// A conflict because a domain became empty.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EmptyDomainConflict {
     /// The predicate that caused a domain to become empty.
     pub trigger_predicate: Predicate,
-    /// The [`InferenceCode`] that accompanies triggered the conflict.
-    ///
-    /// If the empty domain is not triggered by a propagation, this is [`None`].
-    pub trigger_inference_code: Option<InferenceCode>,
-
     /// The reason for [`EmptyDomainConflict::trigger_predicate`] to be true.
     ///
     /// If the empty domain is not triggered by a propagation, this is [`None`].
@@ -77,9 +72,9 @@ impl EmptyDomainConflict {
         state: &mut State,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         current_nogood: CurrentNogood,
-    ) {
-        if let Some(reason_ref) = self.trigger_reason {
-            let _ = state.reason_store.get_or_compute(
+    ) -> Option<InferenceCode> {
+        self.trigger_reason.map(|reason_ref| {
+            state.reason_store.get_or_compute(
                 reason_ref,
                 ExplanationContext::new(
                     &state.assignments,
@@ -89,8 +84,8 @@ impl EmptyDomainConflict {
                 ),
                 &mut state.propagators,
                 reason_buffer,
-            );
-        }
+            )
+        })
     }
 }
 

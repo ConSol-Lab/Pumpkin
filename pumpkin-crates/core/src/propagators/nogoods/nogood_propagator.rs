@@ -22,6 +22,7 @@ use crate::predicate;
 use crate::proof::InferenceCode;
 use crate::propagation::EnqueueDecision;
 use crate::propagation::ExplanationContext;
+use crate::propagation::LazyExplanation;
 use crate::propagation::NotificationContext;
 use crate::propagation::Priority;
 use crate::propagation::PropagationContext;
@@ -176,7 +177,7 @@ impl NogoodPropagator {
                 .get_trail_position(&!notification_engine.get_predicate(nogood[0]))
                 .unwrap();
             let trail_entry = assignments.get_trail_entry(trail_position);
-            if let Some((reason_ref, _)) = trail_entry.reason {
+            if let Some(reason_ref) = trail_entry.reason {
                 let propagator_id = reason_store.get_propagator(reason_ref);
                 let code = reason_store.get_lazy_code(reason_ref);
 
@@ -317,12 +318,7 @@ impl Propagator for NogoodPropagator {
                 let reason = Reason::DynamicLazy(watcher.nogood_id.id as u64);
 
                 let predicate = !context.get_predicate(nogood_predicates[0]);
-                let result = context.post(
-                    predicate,
-                    reason,
-                    &self.inference_codes
-                        [self.nogood_predicates.get_nogood_index(&watcher.nogood_id)],
-                );
+                let result = context.post(predicate, reason);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
                     return Err(e.into());
@@ -357,7 +353,11 @@ impl Propagator for NogoodPropagator {
     ///
     /// In case of the noogood propagator, lazy explanations internally also update information
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
-    fn lazy_explanation(&mut self, code: u64, mut context: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(
+        &mut self,
+        code: u64,
+        mut context: ExplanationContext,
+    ) -> LazyExplanation<'_> {
         let id = NogoodId { id: code as u32 };
 
         self.temp_nogood_reason = self.nogood_predicates[id][1..]
@@ -415,8 +415,10 @@ impl Propagator for NogoodPropagator {
             // At this point, it is safe to increase the activity value
             self.nogood_info[info_id].activity += self.parameters.activity_bump_increment;
         }
-        // update LBD, so we need code plus assignments as input.
-        &self.temp_nogood_reason
+        LazyExplanation {
+            predicates: self.temp_nogood_reason.as_slice(),
+            inference_code: self.inference_codes[info_id].clone(),
+        }
     }
 }
 
@@ -486,14 +488,12 @@ impl NogoodPropagator {
         // Then we propagate the asserting predicate and as the reason we give the index to the
         // asserting nogood such that we can re-create the reason when asked for it
         let reason = Reason::DynamicLazy(nogood_id.id as u64);
-        let inference_code =
-            &self.inference_codes[self.nogood_predicates.get_nogood_index(&nogood_id)];
 
         let predicate = !context
             .notification_engine
             .get_predicate(self.nogood_predicates[nogood_id][0]);
         context
-            .post(predicate, reason, inference_code)
+            .post(predicate, reason)
             .expect("Cannot fail to add the asserting predicate.");
 
         // We then assign the nogood to the correct tier based on its LBD
@@ -608,8 +608,10 @@ impl NogoodPropagator {
             // Post the negated predicate at the root to respect the nogood.
             context.post(
                 !nogood[0],
-                PropositionalConjunction::from(input_nogood),
-                &inference_code,
+                (
+                    PropositionalConjunction::from(input_nogood),
+                    &inference_code,
+                ),
             )?;
             Ok(())
         }
@@ -1234,7 +1236,7 @@ impl NogoodPropagator {
                 .filter(|&p| p != !propagated_predicate)
                 .collect::<PropositionalConjunction>();
 
-            context.post(propagated_predicate, reason, inference_code)?;
+            context.post(propagated_predicate, (reason, inference_code))?;
         }
         Ok(())
     }

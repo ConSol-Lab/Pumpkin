@@ -124,7 +124,7 @@ impl Propagator for DeductionPropagator {
                 // This will never fail, as the predicate is known to be unassigned. So
                 // this propagator only returns explicit conflicts and never empty
                 // domain conflicts.
-                context.post(!unassigned_predicate, explanation, &self.inference_code)?;
+                context.post(!unassigned_predicate, (explanation, &self.inference_code))?;
             }
         }
 

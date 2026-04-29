@@ -94,8 +94,7 @@ where
         // zero at the root.
         context.post(
             predicate![self.absolute >= 0],
-            conjunction!(),
-            &self.inference_code,
+            (conjunction!(), &self.inference_code),
         )?;
 
         // Propagating absolute value can be broken into a few cases:
@@ -112,21 +111,27 @@ where
 
         context.post(
             predicate![self.absolute <= signed_absolute_ub],
-            conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
-            &self.inference_code,
+            (
+                conjunction!([self.signed >= signed_lb] & [self.signed <= signed_ub]),
+                &self.inference_code,
+            ),
         )?;
 
         if signed_lb > 0 {
             context.post(
                 predicate![self.absolute >= signed_lb],
-                conjunction!([self.signed >= signed_lb]),
-                &self.inference_code,
+                (
+                    conjunction!([self.signed >= signed_lb]),
+                    &self.inference_code,
+                ),
             )?;
         } else if signed_ub < 0 {
             context.post(
                 predicate![self.absolute >= signed_ub.abs()],
-                conjunction!([self.signed <= signed_ub]),
-                &self.inference_code,
+                (
+                    conjunction!([self.signed <= signed_ub]),
+                    &self.inference_code,
+                ),
             )?;
         }
 
@@ -134,26 +139,34 @@ where
         let absolute_lb = context.lower_bound(&self.absolute);
         context.post(
             predicate![self.signed >= -absolute_ub],
-            conjunction!([self.absolute <= absolute_ub]),
-            &self.inference_code,
+            (
+                conjunction!([self.absolute <= absolute_ub]),
+                &self.inference_code,
+            ),
         )?;
         context.post(
             predicate![self.signed <= absolute_ub],
-            conjunction!([self.absolute <= absolute_ub]),
-            &self.inference_code,
+            (
+                conjunction!([self.absolute <= absolute_ub]),
+                &self.inference_code,
+            ),
         )?;
 
         if signed_ub <= 0 {
             context.post(
                 predicate![self.signed <= -absolute_lb],
-                conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
-                &self.inference_code,
+                (
+                    conjunction!([self.signed <= 0] & [self.absolute >= absolute_lb]),
+                    &self.inference_code,
+                ),
             )?;
         } else if signed_lb >= 0 {
             context.post(
                 predicate![self.signed >= absolute_lb],
-                conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
-                &self.inference_code,
+                (
+                    conjunction!([self.signed >= 0] & [self.absolute >= absolute_lb]),
+                    &self.inference_code,
+                ),
             )?;
         }
 

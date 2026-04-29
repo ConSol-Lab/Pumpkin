@@ -333,12 +333,12 @@ impl ConflictAnalysisContext<'_> {
     ) -> Option<InferenceCode> {
         let inference_code = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
 
-        if inference_code.is_some() {
+        if let Some(ref ic) = inference_code {
             let trail_index = state.trail_position(predicate).expect(
                 "an inference code is only present if the propagated predicate is on the trail",
             );
             let trail_entry = state.assignments.get_trail_entry(trail_index);
-            let Some((reason_ref, inference_code)) = trail_entry.reason else {
+            let Some(reason_ref) = trail_entry.reason else {
                 return inference_code;
             };
 
@@ -355,7 +355,7 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                let inference_code = unit_nogood_inference_codes
+                let unit_ic = unit_nogood_inference_codes
                     .get(&predicate)
                     .or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
@@ -370,7 +370,7 @@ impl ConflictAnalysisContext<'_> {
 
                 let _ = proof_log.log_inference(
                     &mut state.constraint_tags,
-                    inference_code.clone(),
+                    unit_ic.clone(),
                     [],
                     Some(predicate),
                     &state.variable_names,
@@ -380,7 +380,7 @@ impl ConflictAnalysisContext<'_> {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     &mut state.constraint_tags,
-                    inference_code,
+                    ic.clone(),
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                     &state.variable_names,
@@ -401,7 +401,7 @@ impl ConflictAnalysisContext<'_> {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
-        let _ = self.state.reason_store.get_or_compute(
+        let trigger_inference_code = self.state.reason_store.get_or_compute(
             conflict.trigger_reason.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
@@ -417,7 +417,7 @@ impl ConflictAnalysisContext<'_> {
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &mut self.state.constraint_tags,
-            conflict.trigger_inference_code.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
+            trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
             &self.state.variable_names,
