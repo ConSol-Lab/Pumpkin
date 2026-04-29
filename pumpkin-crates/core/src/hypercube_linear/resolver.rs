@@ -1309,15 +1309,15 @@ mod tests {
     /// so we backjump there and the learned constraint is ({z ≥ 3, y ≥ 1}, y + z ≤ 7).
     #[test]
     fn one_fourier_step_yields_y_plus_z_le_7() {
-        let mut trail_builder = FakeTrail::builder(2);
+        let mut trail_builder = FakeTrail::builder();
 
         let x = trail_builder.domain(0, 10);
         let y = trail_builder.domain(0, 10);
         let z = trail_builder.domain(0, 10);
 
         // Reason for x ≥ 5: {} → −x + z ≤ −2
-        let reason_for_x = HypercubeLinearExplanation::Proper(HypercubeLinear {
-            hypercube: Hypercube::new([]).expect("not inconsistent"),
+        let reason_for_x = HypercubeLinear {
+            hypercube: Hypercube::default(),
             linear: LinearInequality::new(
                 [
                     (NonZero::new(-1).unwrap(), x),
@@ -1326,23 +1326,12 @@ mod tests {
                 -2,
             )
             .expect("not trivially satisfiable"),
-        });
-
-        // y ≥ 1 is a decision at DL 2; no reason is needed for the test since it won't be
-        // explained.
-        let reason_for_y = HypercubeLinearExplanation::Conjunction(vec![]);
+        };
 
         let mut trail = trail_builder
-            // DL 1: z ≥ 3 is a decision (no reason needed here).
-            .at_checkpoint(1)
-            .assign(
-                predicate![z >= 3],
-                HypercubeLinearExplanation::Conjunction(vec![]),
-            )
-            // DL 2 (conflict DL): y ≥ 1 then x ≥ 5 (x has higher position → popped first).
-            .at_checkpoint(2)
-            .assign(predicate![y >= 1], reason_for_y)
-            .assign(predicate![x >= 5], reason_for_x)
+            .decide(predicate![z >= 3])
+            .decide(predicate![y >= 1])
+            .propagate(predicate![x >= 5], reason_for_x)
             .build();
 
         let conflicting_linear = LinearInequality::new(
@@ -1361,18 +1350,10 @@ mod tests {
         // The Fourier step eliminates x: conflict becomes y + z ≤ 3.
         // HL-slack at DL0 (y≥1, z≥3 in hypercube, bound=3): 3−1−3 = −1 < 0 → trivially_false.
         // Hypercube should contain z ≥ 3 (from DL 1) and y ≥ 1 (from DL 2).
-        assert!(
-            result
-                .hypercube
-                .iter_predicates()
-                .any(|p| p == predicate![z >= 3])
-        );
-        assert!(
-            result
-                .hypercube
-                .iter_predicates()
-                .any(|p| p == predicate![y >= 1])
-        );
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 1], predicate![z >= 3]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube,);
         // Linear is trivially false because the HL is already a clause at DL 0.
         assert!(result.linear.is_trivially_false());
     }
@@ -1386,30 +1367,21 @@ mod tests {
     /// (HL-slack = −1 with one unsatisfied predicate), so we backjump there.
     #[test]
     fn propositional_resolution_adds_conjunction_reason_to_working_hypercube() {
-        let mut trail_builder = FakeTrail::builder(2);
+        let mut trail_builder = FakeTrail::builder();
 
         let x = trail_builder.domain(0, 10);
         let y = trail_builder.domain(0, 10);
         let w = trail_builder.domain(0, 10);
 
-        let reason_for_x = HypercubeLinearExplanation::Conjunction(vec![
+        let reason_for_x = vec![
             predicate![y >= 3],
             predicate![x <= 4], // !pivot
-        ]);
+        ];
 
         let mut trail = trail_builder
-            .at_checkpoint(1)
-            .assign(
-                predicate![y >= 3],
-                HypercubeLinearExplanation::Conjunction(vec![]),
-            )
-            .at_checkpoint(2)
-            // w ≥ 2 assigned before x ≥ 5 → x has higher trail position → x is popped first.
-            .assign(
-                predicate![w >= 2],
-                HypercubeLinearExplanation::Conjunction(vec![]),
-            )
-            .assign(predicate![x >= 5], reason_for_x)
+            .decide(predicate![y >= 3])
+            .decide(predicate![w >= 2])
+            .propagate(predicate![x >= 5], reason_for_x)
             .build();
 
         // Conflict: trivially_false linear with two conflict-DL predicates.
@@ -1421,22 +1393,10 @@ mod tests {
             LinearInequality::trivially_false(),
         );
 
-        // y ≥ 3 (at DL 1) must be in the learned hypercube after propositional resolve of x.
-        assert!(
-            result
-                .hypercube
-                .iter_predicates()
-                .any(|p| p == predicate![y >= 3]),
-            "expected y ≥ 3 in learned hypercube"
-        );
-        // w ≥ 2 (the remaining conflict-DL predicate) must also be in the hypercube.
-        assert!(
-            result
-                .hypercube
-                .iter_predicates()
-                .any(|p| p == predicate![w >= 2]),
-            "expected w ≥ 2 in learned hypercube"
-        );
+        let expected_hypercube =
+            Hypercube::new([predicate![y >= 3], predicate![w >= 2]]).expect("not inconsistent");
+
+        assert_eq!(result.hypercube, expected_hypercube,);
         assert!(result.linear.is_trivially_false());
     }
 }

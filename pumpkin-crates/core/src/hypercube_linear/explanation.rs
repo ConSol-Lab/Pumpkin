@@ -28,6 +28,18 @@ pub(crate) enum HypercubeLinearExplanation {
     Conjunction(Vec<Predicate>),
 }
 
+impl From<HypercubeLinear> for HypercubeLinearExplanation {
+    fn from(hypercube_linear: HypercubeLinear) -> Self {
+        HypercubeLinearExplanation::Proper(hypercube_linear)
+    }
+}
+
+impl<T: Into<Vec<Predicate>>> From<T> for HypercubeLinearExplanation {
+    fn from(conjunction: T) -> Self {
+        HypercubeLinearExplanation::Conjunction(conjunction.into())
+    }
+}
+
 impl Default for HypercubeLinearExplanation {
     fn default() -> Self {
         HypercubeLinearExplanation::Conjunction(vec![])

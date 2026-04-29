@@ -20,7 +20,6 @@ pub(super) struct FakeTrail {
 }
 
 pub(super) struct FakeTrailBuilder {
-    current_checkpoint: usize,
     current_builder_checkpoint: usize,
     next_trail_position: usize,
     assignments: Vec<FakeAssignment>,
@@ -33,16 +32,24 @@ impl FakeTrailBuilder {
         self.initial_bounds.push((lower, upper))
     }
 
-    pub(super) fn at_checkpoint(mut self, checkpoint: usize) -> Self {
-        self.current_builder_checkpoint = checkpoint;
+    pub(super) fn decide(mut self, predicate: Predicate) -> Self {
+        self.current_builder_checkpoint += 1;
+        self.push_predicate(predicate);
+
         self
     }
 
-    pub(super) fn assign(
+    pub(super) fn propagate(
         mut self,
         predicate: Predicate,
-        reason: HypercubeLinearExplanation,
+        reason: impl Into<HypercubeLinearExplanation>,
     ) -> Self {
+        self.push_predicate(predicate);
+        let _ = self.reasons.insert(predicate, reason.into());
+        self
+    }
+
+    fn push_predicate(&mut self, predicate: Predicate) {
         self.next_trail_position += 1;
         let tp = self.next_trail_position;
         self.assignments.push(FakeAssignment {
@@ -50,13 +57,11 @@ impl FakeTrailBuilder {
             trail_position: tp,
             checkpoint: self.current_builder_checkpoint,
         });
-        let _ = self.reasons.insert(predicate, reason);
-        self
     }
 
     pub(super) fn build(self) -> FakeTrail {
         FakeTrail {
-            current_checkpoint: self.current_checkpoint,
+            current_checkpoint: self.current_builder_checkpoint,
             assignments: self.assignments,
             reasons: self.reasons,
             initial_bounds: self.initial_bounds,
@@ -65,9 +70,8 @@ impl FakeTrailBuilder {
 }
 
 impl FakeTrail {
-    pub(super) fn builder(current_checkpoint: usize) -> FakeTrailBuilder {
+    pub(super) fn builder() -> FakeTrailBuilder {
         FakeTrailBuilder {
-            current_checkpoint,
             current_builder_checkpoint: 0,
             next_trail_position: 0,
             assignments: vec![],
