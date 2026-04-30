@@ -116,7 +116,7 @@ impl TrailView for State {
             .get_trail_position(&pivot)
             .expect("pivot must be on trail");
 
-        let (reason_ref, _) = self
+        let reason_ref = self
             .assignments
             .get_trail_entry(trail_position)
             .reason
@@ -125,7 +125,7 @@ impl TrailView for State {
         if let Some(code) = self.reason_store.get_lazy_code(reason_ref) {
             let propagator_id = self.reason_store.get_propagator(reason_ref);
 
-            if let Some((hypercube, linear)) = self.propagators[propagator_id]
+            if let Some((hypercube, linear, _)) = self.propagators[propagator_id]
                 .explain_as_hypercube_linear(
                     code,
                     ExplanationContext::without_working_nogood(

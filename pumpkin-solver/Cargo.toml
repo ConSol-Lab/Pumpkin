@@ -11,21 +11,21 @@ repository.workspace = true
 [dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
 clap-verbosity-flag = "3.0.4"
-env_logger = "0.10.0"
+env_logger = "0.11.10"
 flatzinc = "0.3.21"
 log = "0.4.27"
 pumpkin-core = { version = "0.3.0", path = "../pumpkin-crates/core/", features = ["clap"] }
 pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints/"}
 pumpkin-propagators = { version = "0.3.0", path = "../pumpkin-crates/propagators/", features=["clap"]}
 pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
-signal-hook = "0.3.18"
+signal-hook = "0.4.4"
 thiserror = "2.0.12"
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }
-env_logger = "0.10.0"
+env_logger = "0.11.10"
 regex = "1.11.0"
-stringcase = "0.3.0"
+stringcase = "0.4.0"
 wait-timeout = "0.2.0"
 pumpkin-macros = { path = "../pumpkin-macros"}
 pumpkin-checker = { path = "../pumpkin-checker"}
@@ -39,4 +39,5 @@ debug-checks = ["pumpkin-core/debug-checks"]
 check-propagations = ["pumpkin-core/check-propagations"]
 
 [build-dependencies]
-cc = "1.1.30"
+cc = "1.2.61"
+vergen-gix = { version = "9.1.0", features = [] }

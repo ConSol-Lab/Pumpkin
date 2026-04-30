@@ -36,11 +36,7 @@ impl ConflictState {
     ///
     /// Depending on the checkpoint that the predicate is assigned, the predicate is either
     /// explained further or stored as part of the final learned constraint.
-    pub(crate) fn add_hypercube_predicate(
-        &mut self,
-        trail: &dyn TrailView,
-        predicate: Predicate,
-    ) {
+    pub(crate) fn add_hypercube_predicate(&mut self, trail: &dyn TrailView, predicate: Predicate) {
         let checkpoint = trail
             .checkpoint_for_predicate(predicate)
             .unwrap_or_else(|| panic!("adding unassigned predicate {predicate} to hypercube"));

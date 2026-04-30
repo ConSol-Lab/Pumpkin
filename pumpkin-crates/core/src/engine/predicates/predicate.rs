@@ -10,6 +10,16 @@ use crate::propagation::DomainEvent;
 /// ([`DomainId`], [`PredicateType`], value).
 ///
 /// To create a [`Predicate`], use [Predicate::new] or the more concise [predicate!] macro.
+///
+/// ## Order
+/// Predicates have a well-defined order. They are first ordered by the domain, and then by
+/// predicate type, and finally by the value. The order is chosen such that for a fixed domain `x`,
+/// predicates are ordered as follows:
+/// [>= 5], [>= 7], [!= 2], [!= 3], [== 5], [!= 7], [<= 6], [<= 10]
+///
+/// From the order, we get the lower-bound predicates first, ordered by non-decreasing bound, then
+/// the (not-)equal predicates, ordered by non-decreasing bound, then the upper-bound predicates,
+/// ordered by non-increasing bounds.
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Predicate {
     /// The two most significant bits of the id stored in the [`Predicate`] contains the type of
@@ -17,6 +27,11 @@ pub struct Predicate {
     id: u32,
     value: i32,
 }
+
+const LOWER_BOUND_CODE: u8 = PredicateType::LowerBound as u8;
+const UPPER_BOUND_CODE: u8 = PredicateType::UpperBound as u8;
+const NOT_EQUAL_CODE: u8 = PredicateType::NotEqual as u8;
+const EQUAL_CODE: u8 = PredicateType::Equal as u8;
 
 impl Predicate {
     /// Creates a new [`Predicate`] (also known as atomic constraint) which represents a domain
@@ -27,15 +42,18 @@ impl Predicate {
         Self { id, value }
     }
 
-    fn get_type_code(&self) -> u8 {
-        (self.id >> 30) as u8
-    }
-
-    pub fn get_predicate_type(&self) -> PredicateType {
-        (*self).into()
-    }
-
-    /// Returns `self` if this implies `other`.
+    /// Returns `true` if `self` implies `other`.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_core::variables::DomainId;
+    /// # use pumpkin_core::predicate;
+    /// let x = DomainId::new(0);
+    ///
+    /// assert!(predicate![x >= 5].implies(predicate![x >= 3]));
+    /// assert!(predicate![x >= 5].implies(predicate![x != 1]));
+    /// assert!(predicate![x == 5].implies(predicate![x <= 5]));
+    /// ```
     pub fn implies(&self, other: Predicate) -> bool {
         if self.get_domain() != other.get_domain() {
             // Predicates only imply other predicates on the same domain.
@@ -76,6 +94,14 @@ impl Predicate {
         }
     }
 
+    fn get_type_code(&self) -> u8 {
+        (self.id >> 30) as u8
+    }
+
+    pub fn get_predicate_type(&self) -> PredicateType {
+        (*self).into()
+    }
+
     fn is_bound_predicate(&self) -> bool {
         self.is_upper_bound_predicate() || self.is_lower_bound_predicate()
     }
@@ -88,32 +114,27 @@ impl PartialOrd for Predicate {
 }
 
 impl Ord for Predicate {
+    /// See [`Predicate`] for details on the order.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.get_domain().cmp(&other.get_domain()) {
-            std::cmp::Ordering::Equal => {
-                if self.is_bound_predicate() || other.is_bound_predicate() {
-                    match self.get_type_code().cmp(&other.get_type_code()) {
-                        std::cmp::Ordering::Equal => {
-                            self.get_right_hand_side().cmp(&other.get_right_hand_side())
-                        }
-                        ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => {
-                            ordering
-                        }
-                    }
-                } else {
-                    self.get_right_hand_side().cmp(&other.get_right_hand_side())
-                }
-            }
+        let domain_order = self.get_domain().cmp(&other.get_domain());
 
+        if domain_order != std::cmp::Ordering::Equal {
+            return domain_order;
+        }
+
+        if !self.is_bound_predicate() && !other.is_bound_predicate() {
+            // If neither predicate is a bound predicate, then we order by right-hand side.
+            return self.get_right_hand_side().cmp(&other.get_right_hand_side());
+        }
+
+        match self.get_type_code().cmp(&other.get_type_code()) {
+            std::cmp::Ordering::Equal => {
+                self.get_right_hand_side().cmp(&other.get_right_hand_side())
+            }
             ordering @ (std::cmp::Ordering::Less | std::cmp::Ordering::Greater) => ordering,
         }
     }
 }
-
-const LOWER_BOUND_CODE: u8 = PredicateType::LowerBound as u8;
-const UPPER_BOUND_CODE: u8 = PredicateType::UpperBound as u8;
-const NOT_EQUAL_CODE: u8 = PredicateType::NotEqual as u8;
-const EQUAL_CODE: u8 = PredicateType::Equal as u8;
 
 #[derive(Debug, Hash, EnumSetType)]
 #[repr(u8)]

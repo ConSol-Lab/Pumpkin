@@ -166,11 +166,7 @@ impl HypercubeLinearPropagator {
                 Err(_) => return Ok(()),
             };
 
-            context.post(
-                predicate![term <= term_upper_bound],
-                0_u64,
-                &self.inference_code,
-            )?;
+            context.post(predicate![term <= term_upper_bound], 0_u64)?;
         }
 
         Ok(())
@@ -264,8 +260,12 @@ impl Propagator for HypercubeLinearPropagator {
         &mut self,
         _code: u64,
         _context: crate::propagation::ExplanationContext,
-    ) -> Option<(Hypercube, LinearInequality)> {
-        Some((self.hypercube.clone(), self.linear.clone()))
+    ) -> Option<(Hypercube, LinearInequality, InferenceCode)> {
+        Some((
+            self.hypercube.clone(),
+            self.linear.clone(),
+            self.inference_code.clone(),
+        ))
     }
 
     fn propagate(&mut self, mut context: PropagationContext) -> PropagationStatusCP {
@@ -316,7 +316,7 @@ impl Propagator for HypercubeLinearPropagator {
                     // does not appear in the linear inequality. Since the slack is negative, we
                     // can propagate that predicate to false.
 
-                    context.post(!predicate_in_hypercube, 0_u64, &self.inference_code)?;
+                    context.post(!predicate_in_hypercube, 0_u64)?;
                 } else if let Some(term_to_propagate) = maybe_term {
                     // The slack is at least 0, but it may be that the linear could propagate
                     // something weaker than `!predicate_in_hypercube`.
@@ -340,11 +340,7 @@ impl Propagator for HypercubeLinearPropagator {
                         Err(_) => return Ok(()),
                     };
 
-                    context.post(
-                        predicate![term_to_propagate <= bound],
-                        0_u64,
-                        &self.inference_code,
-                    )?;
+                    context.post(predicate![term_to_propagate <= bound], 0_u64)?;
                 }
             }
 
@@ -411,7 +407,7 @@ impl Propagator for HypercubeLinearPropagator {
                     )
                     .collect::<PropositionalConjunction>();
 
-                context.post(!unassigned_predicate, reason, &self.inference_code)?;
+                context.post(!unassigned_predicate, (reason, &self.inference_code))?;
             } else if let Some(term) = self
                 .linear
                 .term_for_domain(unassigned_predicate.get_domain())
@@ -434,8 +430,7 @@ impl Propagator for HypercubeLinearPropagator {
 
                 context.post(
                     predicate![term <= new_upper_bound],
-                    reason,
-                    &self.inference_code,
+                    (reason, &self.inference_code),
                 )?;
             }
         } else {

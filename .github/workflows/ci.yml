@@ -15,8 +15,8 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
+    - uses: actions/checkout@v6
+    - uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/bin/
@@ -26,13 +26,13 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: dtolnay/rust-toolchain@stable
-    - run: cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations
+    - run: cargo test --release --no-fail-fast --features pumpkin-solver/check-propagations --features pumpkin-core/check-deductions
 
   wasm-test:
     name: Test Suite for pumpkin-core in WebAssembly
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-unknown-unknown
@@ -48,8 +48,8 @@ jobs:
         runner: [ ubuntu-latest, macos-latest, windows-latest ]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.x
       - name: Install pytest
@@ -65,8 +65,8 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
+    - uses: actions/checkout@v6
+    - uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/bin/
@@ -82,8 +82,8 @@ jobs:
     name: Code Style and Lints
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v4
+    - uses: actions/checkout@v6
+    - uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/bin/
@@ -102,5 +102,5 @@ jobs:
     name: Dependency Licensing
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: EmbarkStudios/cargo-deny-action@v2

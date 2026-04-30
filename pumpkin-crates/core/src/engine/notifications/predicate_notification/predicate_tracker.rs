@@ -1089,7 +1089,7 @@ mod tests {
             vec![
                 PredicateType::LowerBound,
                 PredicateType::NotEqual,
-                PredicateType::Equal
+                PredicateType::Equal,
             ]
         );
         assert_eq!(value.get_value(), x);
@@ -1139,7 +1139,7 @@ mod tests {
             vec![
                 PredicateType::LowerBound,
                 PredicateType::NotEqual,
-                PredicateType::Equal
+                PredicateType::Equal,
             ]
         );
         assert_eq!(value.get_value(), x);

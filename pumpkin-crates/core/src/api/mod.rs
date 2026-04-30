@@ -121,6 +121,7 @@ pub mod state {
     pub use crate::engine::Conflict;
     pub use crate::engine::EmptyDomain;
     pub use crate::engine::EmptyDomainConflict;
+    pub use crate::engine::PredicateHeap;
     pub use crate::engine::PropagationStatusCP;
     pub use crate::engine::PropagatorConflict;
     pub use crate::engine::State;

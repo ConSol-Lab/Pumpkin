@@ -566,7 +566,7 @@ impl HypercubeLinearResolver {
             let propagator_id = state.reason_store.get_propagator(trigger_reason);
             let trail_position = state.trail_len() - 1;
 
-            if let Some((hypercube, linear)) = state.propagators[propagator_id]
+            if let Some((hypercube, linear, _)) = state.propagators[propagator_id]
                 .explain_as_hypercube_linear(
                     code,
                     ExplanationContext::without_working_nogood(
@@ -1211,9 +1211,11 @@ fn gcd(a: i32, b: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::conjunction;
     use crate::hypercube_linear::explanation::HypercubeLinear;
     use crate::hypercube_linear::fake_trail::FakeTrail;
-    use crate::{conjunction, linear_inequality, predicate};
+    use crate::linear_inequality;
+    use crate::predicate;
 
     /// One Fourier elimination step (on x) produces y + z ≤ 7.
     ///

@@ -447,7 +447,7 @@ impl ConstraintSatisfactionSolver {
                         continue;
                     }
 
-                    ConflictAnalysisContext::get_propagation_reason_inner(
+                    let _ = ConflictAnalysisContext::get_propagation_reason_inner(
                         predicate,
                         CurrentNogood::empty(),
                         context.proof_log,
@@ -772,9 +772,13 @@ impl ConstraintSatisfactionSolver {
 
         for trail_idx in start_trail_index..self.state.trail_len() {
             let entry = self.state.trail_entry(trail_idx);
-            let (_, inference_code) = entry
-                .reason
-                .expect("Added by a propagator and must therefore have a reason");
+
+            // Get the conjunction of predicates explaining the propagation along with the
+            // InferenceCode identifying the explanation algorithm.
+            let mut reason = vec![];
+            let inference_code = self
+                .state
+                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             if !self.internal_parameters.proof_log.is_logging_inferences() {
                 // In case we are not logging inferences, we only need to keep track
@@ -785,11 +789,6 @@ impl ConstraintSatisfactionSolver {
                     .insert(entry.predicate, inference_code);
                 continue;
             }
-
-            // Get the conjunction of predicates explaining the propagation.
-            let mut reason = vec![];
-            self.state
-                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             let propagated = entry.predicate;
 
@@ -1000,7 +999,23 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
+        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if are_all_falsified_at_root {
+            // Since the propagation is not actually performed, we log the inference
+            // explicitly here for the proof.
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(
+                    &mut self.state.constraint_tags,
+                    inference_code,
+                    predicates.iter().copied(),
+                    None,
+                    &self.state.variable_names,
+                    &self.state.assignments,
+                )
+                .expect("failed to write to proof");
+
             finalize_proof(FinalizingContext {
                 conflict: predicates.into(),
                 proof_log: &mut self.internal_parameters.proof_log,
@@ -1014,7 +1029,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
         if let Err(constraint_operation_error) = self.add_nogood(predicates, inference_code) {
             let _ = self.conclude_proof_unsat();
 

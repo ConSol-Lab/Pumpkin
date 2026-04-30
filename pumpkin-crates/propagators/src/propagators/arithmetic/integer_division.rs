@@ -224,12 +224,14 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     if rhs_min < new_min_rhs {
         context.post(
             predicate![rhs >= new_min_rhs],
-            conjunction!(
-                [numerator >= numerator_min]
-                    & [denominator <= denominator_max]
-                    & [denominator >= 1]
+            (
+                conjunction!(
+                    [numerator >= numerator_min]
+                        & [denominator <= denominator_max]
+                        & [denominator >= 1]
+                ),
+                inference_code,
             ),
-            inference_code,
         )?;
     }
 
@@ -241,8 +243,10 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     if numerator_min < new_min_numerator {
         context.post(
             predicate![numerator >= new_min_numerator],
-            conjunction!([denominator >= denominator_min] & [rhs >= rhs_min]),
-            inference_code,
+            (
+                conjunction!([denominator >= denominator_min] & [rhs >= rhs_min]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -255,13 +259,15 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
         if denominator_max > new_max_denominator {
             context.post(
                 predicate![denominator <= new_max_denominator],
-                conjunction!(
-                    [numerator <= numerator_max]
-                        & [numerator >= 0]
-                        & [rhs >= rhs_min]
-                        & [denominator >= 1]
+                (
+                    conjunction!(
+                        [numerator <= numerator_max]
+                            & [numerator >= 0]
+                            & [rhs >= rhs_min]
+                            & [denominator >= 1]
+                    ),
+                    inference_code,
                 ),
-                inference_code,
             )?;
         }
     }
@@ -279,10 +285,15 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     if denominator_min < new_min_denominator {
         context.post(
             predicate![denominator >= new_min_denominator],
-            conjunction!(
-                [numerator >= numerator_min] & [rhs <= rhs_max] & [rhs >= 0] & [denominator >= 1]
+            (
+                conjunction!(
+                    [numerator >= numerator_min]
+                        & [rhs <= rhs_max]
+                        & [rhs >= 0]
+                        & [denominator >= 1]
+                ),
+                inference_code,
             ),
-            inference_code,
         )?;
     }
 
@@ -313,8 +324,10 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     if rhs_max > new_max_rhs {
         context.post(
             predicate![rhs <= new_max_rhs],
-            conjunction!([numerator <= numerator_max] & [denominator >= denominator_min]),
-            inference_code,
+            (
+                conjunction!([numerator <= numerator_max] & [denominator >= denominator_min]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -327,8 +340,12 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     if numerator_max > new_max_numerator {
         context.post(
             predicate![numerator <= new_max_numerator],
-            conjunction!([denominator <= denominator_max] & [denominator >= 1] & [rhs <= rhs_max]),
-            inference_code,
+            (
+                conjunction!(
+                    [denominator <= denominator_max] & [denominator >= 1] & [rhs <= rhs_max]
+                ),
+                inference_code,
+            ),
         )?;
     }
 
@@ -358,8 +375,10 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if numerator_min >= 0 && rhs_min < 0 {
         context.post(
             predicate![rhs >= 0],
-            conjunction!([numerator >= 0] & [denominator >= 1]),
-            inference_code,
+            (
+                conjunction!([numerator >= 0] & [denominator >= 1]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -367,8 +386,10 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if numerator_min <= 0 && rhs_min > 0 {
         context.post(
             predicate![numerator >= 1],
-            conjunction!([rhs >= 1] & [denominator >= 1]),
-            inference_code,
+            (
+                conjunction!([rhs >= 1] & [denominator >= 1]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -376,8 +397,10 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if numerator_max <= 0 && rhs_max > 0 {
         context.post(
             predicate![rhs <= 0],
-            conjunction!([numerator <= 0] & [denominator >= 1]),
-            inference_code,
+            (
+                conjunction!([numerator <= 0] & [denominator >= 1]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -385,8 +408,10 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     if numerator_max >= 0 && rhs_max < 0 {
         context.post(
             predicate![numerator <= -1],
-            conjunction!([rhs <= -1] & [denominator >= 1]),
-            inference_code,
+            (
+                conjunction!([rhs <= -1] & [denominator >= 1]),
+                inference_code,
+            ),
         )?;
     }
 
@@ -457,28 +482,27 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
+    use pumpkin_core::state::State;
 
     use super::*;
 
     #[test]
     fn detects_conflicts() {
-        let mut solver = TestSolver::default();
-        let numerator = solver.new_variable(1, 1);
-        let denominator = solver.new_variable(2, 2);
-        let rhs = solver.new_variable(2, 2);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let numerator = state.new_interval_variable(1, 1, None);
+        let denominator = state.new_interval_variable(2, 2, None);
+        let rhs = state.new_interval_variable(2, 2, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let propagator = solver.new_propagator(DivisionArgs {
+        let _ = state.add_propagator(DivisionArgs {
             numerator,
             denominator,
             rhs,
             constraint_tag,
         });
 
-        assert!(propagator.is_err());
+        let _ = state.propagate_to_fixed_point().unwrap_err();
     }
 }
