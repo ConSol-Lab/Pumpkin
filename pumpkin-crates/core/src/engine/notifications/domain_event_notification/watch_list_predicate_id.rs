@@ -125,7 +125,7 @@ impl PredicateWatchList {
         predicate_notifier.track_predicate(predicate_id, trailed_values, assignments);
     }
 
-    pub(crate) fn watch_literal(
+    pub(crate) fn watch_predicate_events(
         &mut self,
         predicate: Predicate,
         propagator_var: PropagatorVarId,
@@ -210,7 +210,7 @@ impl PredicateWatchList {
         self.watch_list_predicate_id.get(predicate_id)
     }
 
-    pub(crate) fn watch_literal_backtrack(
+    pub(crate) fn watch_predicate_events_backtrack(
         &mut self,
         predicate: Predicate,
         propagator_var: PropagatorVarId,

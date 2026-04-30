@@ -58,7 +58,7 @@ impl BoolExpression {
         BoolExpression(!self.0)
     }
 
-    pub fn as_expression(&self) -> IntExpression {
+    pub fn as_integer(&self) -> IntExpression {
         (*self).into()
     }
 }

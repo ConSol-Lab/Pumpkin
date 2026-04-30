@@ -37,7 +37,7 @@ pub mod variables {
     //! information unaltered, or apply transformations which can be performed without the need of
     //! constraints.
     //!
-    //! We define the following type of variable:
+    //! We define the following types of variables:
     //! - Integer Variables ([`IntegerVariable`]) - These can be represented using two types:
     //!  - Represented by [`DomainId`]s when interacting with the [`Solver`]. These variables can be
     //!    created using [`Solver::new_bounded_integer`] when creating a variable with the domain
@@ -45,8 +45,8 @@ pub mod variables {
     //!    creating a variable with holes in the domain. These variables can be transformed
     //!    (according to the trait [`TransformableVariable`]) to create an [`AffineView`].
     //!  - Represented by [`Predicate`]s when interacting with the [`Solver`]. These can be created
-    //!    [`DomainId`]s using the [`crate::predicate`] macro and are also treated as integer
-    //!    variables by the [`Solver`].
+    //!    over [`DomainId`]s using the [`crate::predicate`] macro. [`Predicate`]s are also treated
+    //!    as integer variables by the [`Solver`].
     #[cfg(doc)]
     use crate::Solver;
     pub use crate::engine::Reason;

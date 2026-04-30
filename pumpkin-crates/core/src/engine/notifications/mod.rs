@@ -177,7 +177,7 @@ impl NotificationEngine {
             .unwatch_predicate(predicate_id, propagator_to_unwatch)
     }
 
-    pub(crate) fn watch_literal(
+    pub(crate) fn watch_predicate_events(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
@@ -185,7 +185,7 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        self.watch_list_predicate_ids.watch_literal(
+        self.watch_list_predicate_ids.watch_predicate_events(
             predicate,
             propagator_var,
             events,
@@ -195,7 +195,7 @@ impl NotificationEngine {
         );
     }
 
-    pub(crate) fn watch_literal_backtrack(
+    pub(crate) fn watch_predicate_events_backtrack(
         &mut self,
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
@@ -203,14 +203,15 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        self.watch_list_predicate_ids.watch_literal_backtrack(
-            predicate,
-            propagator_var,
-            events,
-            &mut self.predicate_notifier,
-            assignments,
-            trailed_values,
-        );
+        self.watch_list_predicate_ids
+            .watch_predicate_events_backtrack(
+                predicate,
+                propagator_var,
+                events,
+                &mut self.predicate_notifier,
+                assignments,
+                trailed_values,
+            );
     }
 
     pub(crate) fn watch_all_backtrack(
@@ -398,11 +399,7 @@ impl NotificationEngine {
             }
         }
 
-        for (literal, propagator_id) in self
-            .backtrack_events_literals
-            .synchronise(new_checkpoint)
-            .collect::<Vec<_>>()
-        {
+        for (literal, propagator_id) in self.backtrack_events_literals.synchronise(new_checkpoint) {
             if let Some(watcher) = self
                 .watch_list_predicate_ids
                 .backtrack_watcher_for_literal_and_propagator(literal, propagator_id)
@@ -428,49 +425,35 @@ impl NotificationEngine {
         trailed_values: &mut TrailedValues,
         assignments: &Assignments,
     ) {
-        for predicate_id in self
-            .predicate_notifier
-            .drain_satisfied_predicates()
-            .collect::<Vec<_>>()
-        {
-            if let Some(watchers) = self
+        for predicate_id in self.predicate_notifier.drain_satisfied_predicates() {
+            let Some(watchers) = self
                 .watch_list_predicate_ids
                 .watchers_predicate_id(predicate_id)
-            {
-                for predicate_watcher in watchers {
-                    if let Some(events) = predicate_watcher.events
-                        && let Some(local_id) = predicate_watcher.local_id
+            else {
+                continue;
+            };
+
+            for predicate_watcher in watchers {
+                if let Some(events) = predicate_watcher.events
+                    && let Some(local_id) = predicate_watcher.local_id
+                {
+                    if events.is_empty()
+                        || self
+                            .backtrack_events_literals
+                            .contains(&(predicate_id, predicate_watcher.propagator_id))
                     {
-                        if events.is_empty()
-                            || self
-                                .backtrack_events_literals
-                                .contains(&(predicate_id, predicate_watcher.propagator_id))
-                        {
-                            continue;
-                        }
-                        self.backtrack_events_literals
-                            .push((predicate_id, predicate_watcher.propagator_id));
+                        continue;
+                    }
 
-                        let propagator = &mut propagators[predicate_watcher.propagator_id];
-                        for event in events.iter() {
-                            let mut context = NotificationContext::new(trailed_values, assignments);
+                    self.backtrack_events_literals
+                        .push((predicate_id, predicate_watcher.propagator_id));
 
-                            let enqueue_decision =
-                                propagator.notify(context.reborrow(), local_id, event.into());
-
-                            if enqueue_decision == EnqueueDecision::Enqueue {
-                                propagator_queue.enqueue_propagator(
-                                    predicate_watcher.propagator_id,
-                                    propagator.priority(),
-                                );
-                            }
-                        }
-                    } else {
+                    let propagator = &mut propagators[predicate_watcher.propagator_id];
+                    for event in events.iter() {
                         let mut context = NotificationContext::new(trailed_values, assignments);
 
-                        let propagator = &mut propagators[predicate_watcher.propagator_id];
-                        let enqueue_decision = propagator
-                            .notify_predicate_id_satisfied(context.reborrow(), predicate_id);
+                        let enqueue_decision =
+                            propagator.notify(context.reborrow(), local_id, event.into());
 
                         if enqueue_decision == EnqueueDecision::Enqueue {
                             propagator_queue.enqueue_propagator(
@@ -478,6 +461,19 @@ impl NotificationEngine {
                                 propagator.priority(),
                             );
                         }
+                    }
+                } else {
+                    let mut context = NotificationContext::new(trailed_values, assignments);
+
+                    let propagator = &mut propagators[predicate_watcher.propagator_id];
+                    let enqueue_decision =
+                        propagator.notify_predicate_id_satisfied(context.reborrow(), predicate_id);
+
+                    if enqueue_decision == EnqueueDecision::Enqueue {
+                        propagator_queue.enqueue_propagator(
+                            predicate_watcher.propagator_id,
+                            propagator.priority(),
+                        );
                     }
                 }
             }

@@ -12,6 +12,10 @@ use crate::variables::DomainId;
 use crate::variables::IntegerVariable;
 use crate::variables::TransformableVariable;
 
+/// An implementation of [`IntegerVariable`] which stores either a [`DomainId`] or [`Predicate`].
+///
+/// This enum can be used when you want to supply multiple [`IntegerVariable`]s, which should be of
+/// the same type, but are not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AnyInteger {
     DomainId(DomainId),

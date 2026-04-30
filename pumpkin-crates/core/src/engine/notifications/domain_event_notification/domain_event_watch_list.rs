@@ -31,7 +31,7 @@ pub struct Watchers<'a> {
 
 impl<'a> Watchers<'a> {
     pub(crate) fn watch_predicate(&mut self, predicate: Predicate, events: EnumSet<DomainEvent>) {
-        self.notification_engine.watch_literal(
+        self.notification_engine.watch_predicate_events(
             predicate,
             events,
             self.propagator_var,
@@ -45,7 +45,7 @@ impl<'a> Watchers<'a> {
         predicate: Predicate,
         events: EnumSet<DomainEvent>,
     ) {
-        self.notification_engine.watch_literal_backtrack(
+        self.notification_engine.watch_predicate_events_backtrack(
             predicate,
             events,
             self.propagator_var,
