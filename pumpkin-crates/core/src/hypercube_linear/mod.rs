@@ -1,11 +1,13 @@
 mod bound_predicate;
 mod checker;
+mod conflict_state;
 mod constraint;
 mod explanation;
 mod hypercube;
 mod linear;
 mod predicate_heap;
 mod propagator;
+mod resh_strategy;
 mod resolver;
 mod trace;
 mod trail_view;

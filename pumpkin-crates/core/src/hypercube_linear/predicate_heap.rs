@@ -45,7 +45,7 @@ impl PredicateHeap {
     /// Push a new predicate onto the heap.
     ///
     /// If the predicate is not true in the given trail, this method panics.
-    pub(crate) fn push(&mut self, predicate: Predicate, trail: &impl TrailView) {
+    pub(crate) fn push<T: TrailView + ?Sized>(&mut self, predicate: Predicate, trail: &T) {
         // TODO: This can probably be optimized. But only do so once profiling shows this
         // as a problem.
         if self.heap.iter().any(|pte| pte.predicate == predicate) {

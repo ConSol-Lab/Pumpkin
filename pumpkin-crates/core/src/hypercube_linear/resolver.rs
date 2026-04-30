@@ -19,9 +19,12 @@ use crate::hypercube_linear::Hypercube;
 use crate::hypercube_linear::HypercubeLinearConstructor;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::Trace;
+use crate::hypercube_linear::conflict_state::ConflictState;
+use crate::hypercube_linear::conflict_state::predicate_applies_to_term;
 use crate::hypercube_linear::explanation::HypercubeLinear;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
-use crate::hypercube_linear::predicate_heap::PredicateHeap;
+use crate::hypercube_linear::resh_strategy::ResHStrategy;
+use crate::hypercube_linear::resh_strategy::StandardResH;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
 use crate::hypercube_linear::trail_view::affine_upper_bound_at;
@@ -41,32 +44,23 @@ use crate::variables::DomainId;
 use crate::variables::TransformableVariable;
 
 create_statistics_struct!(ResolverStatistics {
-    num_propositional_resolutions: usize,
-    num_skipped_propositional_resolutions: usize,
-    num_propositional_resolutions_use_explanation_linear: usize,
     num_successful_fourier_resolutions: usize,
     num_integer_overflow_errors: usize,
     num_conflicts: usize,
     num_learned_clauses: usize,
     num_learned_hls: usize,
+    num_propositional_resolutions: usize,
+    num_skipped_propositional_resolutions: usize,
 });
 
 #[derive(Clone, Debug)]
 pub struct HypercubeLinearResolver {
-    /// The hypercube that is being discovered during conflict resolution.
-    working_hypercube: Hypercube,
-    /// Predicates in the conflicting hypercube that are true on the current decision level.
-    hypercube_predicates_on_conflict_dl: PredicateHeap,
-    /// Predicates in the conflict hypercube that are set at the decision level of the conflict.
-    predicates_to_explain: PredicateHeap,
-    /// The linear inequality of the conflict constraint.
-    conflicting_linear: LinearInequality,
+    state: ConflictState,
+    prop_resolver: Box<dyn ResHStrategy>,
 
     /// The statistics gathered by the resolver.
     statistics: ResolverStatistics,
 
-    /// The proof file of the analysis.
-    proof_file: Rc<RefCell<Trace>>,
     /// True if the names are written to the trace, false if not.
     logged_variable_names: bool,
 
@@ -79,13 +73,24 @@ pub struct HypercubeLinearResolver {
 
 impl HypercubeLinearResolver {
     pub fn new(trace: Trace) -> Self {
+        let proof_file = Rc::new(RefCell::new(trace));
         Self {
-            working_hypercube: Default::default(),
-            hypercube_predicates_on_conflict_dl: Default::default(),
-            predicates_to_explain: Default::default(),
-            conflicting_linear: Default::default(),
+            state: ConflictState::new(Rc::clone(&proof_file)),
+            prop_resolver: Box::new(StandardResH::default()),
             statistics: Default::default(),
-            proof_file: Rc::new(RefCell::new(trace)),
+            logged_variable_names: false,
+            #[cfg(feature = "hl-checks")]
+            learned_constraints: Default::default(),
+        }
+    }
+
+    pub fn with_linear_resh(trace: Trace) -> Self {
+        let proof_file = Rc::new(RefCell::new(trace));
+        // TODO: replace with LinearWeakeningResH once implemented.
+        Self {
+            state: ConflictState::new(Rc::clone(&proof_file)),
+            prop_resolver: Box::new(StandardResH::default()),
+            statistics: Default::default(),
             logged_variable_names: false,
             #[cfg(feature = "hl-checks")]
             learned_constraints: Default::default(),
@@ -102,7 +107,10 @@ impl Default for HypercubeLinearResolver {
 impl ConflictResolver for HypercubeLinearResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         if !self.logged_variable_names {
-            self.proof_file.borrow_mut().write_variables(context.state);
+            self.state
+                .proof_file
+                .borrow_mut()
+                .write_variables(context.state);
             self.logged_variable_names = true;
         }
 
@@ -120,7 +128,8 @@ impl ConflictResolver for HypercubeLinearResolver {
     }
 
     fn log_statistics(&self, logger: StatisticLogger) {
-        self.statistics.log(logger);
+        self.statistics.log(logger.clone());
+        self.prop_resolver.log_statistics(logger);
     }
 }
 
@@ -144,7 +153,7 @@ impl HypercubeLinearResolver {
             learned_constraint.hypercube, learned_constraint.linear,
         );
 
-        self.proof_file.borrow_mut().deduction(
+        self.state.proof_file.borrow_mut().deduction(
             constraint_tag,
             learned_constraint.hypercube.iter_predicates(),
             learned_constraint.linear.terms(),
@@ -192,21 +201,22 @@ impl HypercubeLinearResolver {
         initial_predicates: impl IntoIterator<Item = Predicate>,
         conflicting_linear: LinearInequality,
     ) -> LearnedHypercubeLinear {
-        assert!(self.hypercube_predicates_on_conflict_dl.is_empty());
-        assert!(self.predicates_to_explain.is_empty());
+        assert!(self.state.hypercube_predicates_on_conflict_dl.is_empty());
+        assert!(self.state.predicates_to_explain.is_empty());
 
-        self.conflicting_linear = conflicting_linear;
+        self.state.conflicting_linear = conflicting_linear;
 
         // Seed predicates_to_explain with linear term predicates at the conflict DL.
         // For hypercube-linear empty-domain conflicts this replaces the manual loop that
         // was previously in collect_initial_conflict_from_empty_domain. For trivially-false
         // linears (propagator / clausal conflicts) this is a no-op.
         let conflict_tp = trail.current_trail_position();
-        let linear_for_explain = self.conflicting_linear.clone();
-        self.explain_linear(trail, &linear_for_explain, conflict_tp);
+        let linear_for_explain = self.state.conflicting_linear.clone();
+        self.state
+            .explain_linear(trail, &linear_for_explain, conflict_tp);
 
         for predicate in initial_predicates {
-            self.add_hypercube_predicate(trail, predicate);
+            self.state.add_hypercube_predicate(trail, predicate);
         }
 
         self.run_resolution_loop(trail)
@@ -220,16 +230,18 @@ impl HypercubeLinearResolver {
 
             trace!(
                 "conflict constraint: {} -> {}",
-                self.working_hypercube
+                self.state
+                    .working_hypercube
                     .iter_predicates()
-                    .chain(self.hypercube_predicates_on_conflict_dl.iter())
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
                     .format(" & "),
-                self.conflicting_linear,
+                self.state.conflicting_linear,
             );
 
             trace!(
                 "to explain: {}",
-                self.predicates_to_explain
+                self.state
+                    .predicates_to_explain
                     .iter()
                     .map(|p| format!("{p} @ {}", trail.trail_position(p).unwrap()))
                     .format(", "),
@@ -243,6 +255,7 @@ impl HypercubeLinearResolver {
             }
 
             let pivot = self
+                .state
                 .predicates_to_explain
                 .pop()
                 .expect("there are at least two predicates to explain");
@@ -266,17 +279,18 @@ impl HypercubeLinearResolver {
                 trail.predicate_at_trail_position(trail_position)
             );
 
-            if !self.contributes_to_conflict(pivot) {
+            if !self.state.contributes_to_conflict(pivot) {
                 trace!("  => no longer contributes, skipping");
                 continue;
             }
 
-            self.proof_file.borrow_mut().intermediate_deduction(
-                self.working_hypercube
+            self.state.proof_file.borrow_mut().intermediate_deduction(
+                self.state
+                    .working_hypercube
                     .iter_predicates()
-                    .chain(self.hypercube_predicates_on_conflict_dl.iter()),
-                self.conflicting_linear.terms(),
-                self.conflicting_linear.bound(),
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter()),
+                self.state.conflicting_linear.terms(),
+                self.state.conflicting_linear.bound(),
             );
 
             let explanation = self.explain(trail, pivot);
@@ -290,19 +304,21 @@ impl HypercubeLinearResolver {
     /// Simplify the conflicting hypercube linear given any equalities in the conflicting hypercube.
     fn simplify_conflict(&mut self) {
         let equality_predicates = self
+            .state
             .working_hypercube
             .iter_predicates()
-            .chain(self.hypercube_predicates_on_conflict_dl.iter())
+            .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
             .filter_map(|predicate| {
                 if predicate.is_equality_predicate() {
                     Some((predicate.get_domain(), predicate.get_right_hand_side()))
                 } else {
                     None
                 }
-            });
+            })
+            .collect::<Vec<_>>();
 
         for (domain, value) in equality_predicates {
-            let Some(term) = self.conflicting_linear.term_for_domain(domain) else {
+            let Some(term) = self.state.conflicting_linear.term_for_domain(domain) else {
                 continue;
             };
 
@@ -311,7 +327,7 @@ impl HypercubeLinearResolver {
                 false => BoundComparator::UpperBound,
             };
 
-            self.conflicting_linear = std::mem::take(&mut self.conflicting_linear)
+            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
                 .weaken_to_zero(BoundPredicate {
                     domain,
                     comparator,
@@ -335,7 +351,8 @@ impl HypercubeLinearResolver {
 
                     #[cfg(feature = "hl-checks")]
                     assert!(
-                        self.conflicting_linear
+                        self.state
+                            .conflicting_linear
                             .term_for_domain(pivot.get_domain())
                             .is_none(),
                         "fourier resolve succeeded but pivot domain still in conflicting linear"
@@ -354,6 +371,101 @@ impl HypercubeLinearResolver {
         self.propositional_resolve(trail, trail_position, pivot, explanation);
     }
 
+    fn propositional_resolve(
+        &mut self,
+        trail: &mut impl TrailView,
+        trail_position: usize,
+        pivot: Predicate,
+        mut explanation: HypercubeLinearExplanation,
+    ) {
+        trace!("applying propositional resolution on {pivot}");
+
+        // No propositional resolution happens when the following are true:
+        // - the pivot does not imply a predicate in the current conflict hypercube,
+        // - the pivot does not contribute to the negative slack of the linear.
+
+        let pivot_implies_predicate_in_conflict = self
+            .state
+            .hypercube_predicates_on_conflict_dl
+            .iter()
+            .any(|p| {
+                let p_tp = trail.trail_position(p).expect("all hypercube is satisfied");
+
+                pivot.implies(p) && p_tp == trail_position
+            });
+
+        let pivot_relevant_for_linear_slack = self
+            .state
+            .conflicting_linear
+            .terms()
+            .any(|t| predicate_applies_to_term(pivot, t));
+
+        if !pivot_implies_predicate_in_conflict && !pivot_relevant_for_linear_slack {
+            trace!("  => skipping propositional resolution");
+            self.statistics.num_skipped_propositional_resolutions += 1;
+
+            #[cfg(feature = "hl-checks")]
+            assert!(
+                !self
+                    .state
+                    .hypercube_predicates_on_conflict_dl
+                    .contains(pivot),
+                "skipped propositional resolution but pivot still in conflict DL heap"
+            );
+
+            return;
+        }
+
+        let pivot_as_bound = BoundPredicate::new(pivot);
+
+        // Both the conflict and the explanation are weakened on the pivot. This ensures
+        // the propositional resolution removes all contribution of the pivot to the
+        // conflict in the linear inequalities.
+        if let Some(bound_predicate) = pivot_as_bound {
+            self.state
+                .hypercube_predicates_on_conflict_dl
+                .push(bound_predicate.into(), trail);
+            self.state.conflicting_linear = std::mem::take(&mut self.state.conflicting_linear)
+                .weaken_to_zero(bound_predicate)
+                .expect(
+                    "weakening the conflict will never result in a trivially satisfiable linear",
+                );
+
+            trace!(
+                "weakened conflict constraint: {} -> {}",
+                self.state
+                    .working_hypercube
+                    .iter_predicates()
+                    .chain(self.state.hypercube_predicates_on_conflict_dl.iter())
+                    .format(" & "),
+                self.state.conflicting_linear,
+            );
+
+            explanation = std::mem::take(&mut explanation)
+                .weaken_to_zero(!bound_predicate)
+                .expect("cannot weaken to trivially satisfiable");
+
+            trace!("weakened explanation: {explanation}");
+        }
+
+        self.statistics.num_propositional_resolutions += 1;
+        self.state
+            .hypercube_predicates_on_conflict_dl
+            .retain(|p| !pivot.implies(p));
+
+        #[cfg(feature = "hl-checks")]
+        assert!(
+            !self
+                .state
+                .hypercube_predicates_on_conflict_dl
+                .contains(pivot),
+            "pivot still in conflict DL heap after propositional resolution"
+        );
+
+        self.prop_resolver
+            .apply(&mut self.state, trail, trail_position, pivot, explanation);
+    }
+
     fn explain(
         &mut self,
         trail: &mut impl TrailView,
@@ -364,7 +476,7 @@ impl HypercubeLinearResolver {
         match &explanation {
             HypercubeLinearExplanation::Proper(hl) => {
                 trace!("explaining with HL");
-                self.proof_file.borrow_mut().axiom(
+                self.state.proof_file.borrow_mut().axiom(
                     hl.hypercube.iter_predicates(),
                     hl.linear.terms(),
                     hl.linear.bound(),
@@ -375,7 +487,7 @@ impl HypercubeLinearResolver {
 
                 // Add reason predicates (all except !pivot) to the hypercube.
                 for &predicate in predicates.iter().filter(|&&p| p != !pivot) {
-                    self.add_hypercube_predicate(trail, predicate);
+                    self.state.add_hypercube_predicate(trail, predicate);
 
                     #[cfg(feature = "hl-checks")]
                     {
@@ -387,7 +499,8 @@ impl HypercubeLinearResolver {
                     }
                 }
 
-                self.proof_file
+                self.state
+                    .proof_file
                     .borrow_mut()
                     .axiom(predicates.iter().copied(), [], -1);
             }
@@ -411,7 +524,7 @@ impl HypercubeLinearResolver {
             Conflict::Propagator(propagator_conflict) => {
                 trace!("Converting propagator conflict to hypercube");
 
-                self.proof_file.borrow_mut().axiom(
+                self.state.proof_file.borrow_mut().axiom(
                     propagator_conflict.conjunction.iter().copied(),
                     [],
                     -1,
@@ -464,7 +577,7 @@ impl HypercubeLinearResolver {
                 )
             {
                 trace!("constructing conflict from HL");
-                self.proof_file.borrow_mut().axiom(
+                self.state.proof_file.borrow_mut().axiom(
                     hypercube.iter_predicates(),
                     linear.terms(),
                     linear.bound(),
@@ -493,7 +606,8 @@ impl HypercubeLinearResolver {
         );
         clausal_conflict.push(!trigger_predicate);
 
-        self.proof_file
+        self.state
+            .proof_file
             .borrow_mut()
             .axiom(clausal_conflict.iter().copied(), [], -1);
 
@@ -517,46 +631,17 @@ impl HypercubeLinearResolver {
         (clausal_conflict, LinearInequality::trivially_false())
     }
 
-    /// Adds a predicate to the conflicting hypercube.
-    ///
-    /// Depending on the checkpoint that the predicate is assigned, the predicate is either
-    /// explained further or stored as part of the final learned constraint.
-    fn add_hypercube_predicate(&mut self, trail: &impl TrailView, predicate: Predicate) {
-        let checkpoint = trail
-            .checkpoint_for_predicate(predicate)
-            .unwrap_or_else(|| panic!("adding unassigned predicate {predicate} to hypercube"));
-
-        #[cfg(feature = "hl-checks")]
-        assert!(
-            trail.checkpoint_for_predicate(predicate).is_some(),
-            "adding untrue predicate {predicate} to hypercube"
-        );
-
-        if checkpoint == 0 {
-            // Ignore it. We don't need to process it further.
-            self.proof_file.borrow_mut().axiom([!predicate], [], -1);
-        } else if checkpoint == trail.current_checkpoint() {
-            self.predicates_to_explain.push(predicate, trail);
-            self.hypercube_predicates_on_conflict_dl
-                .push(predicate, trail);
-        } else {
-            self.working_hypercube = std::mem::take(&mut self.working_hypercube)
-                .with_predicate(predicate)
-                .expect("cannot create trivially false hypercube");
-        }
-    }
-
     /// Build the learned hypercube linear from the current state of the resolver.
     fn extract_learned_hypercube_linear(
         &mut self,
         trail: &impl TrailView,
         propagates_at: usize,
     ) -> LearnedHypercubeLinear {
-        let hypercube = std::mem::take(&mut self.working_hypercube)
-            .with_predicates(self.hypercube_predicates_on_conflict_dl.drain())
+        let hypercube = std::mem::take(&mut self.state.working_hypercube)
+            .with_predicates(self.state.hypercube_predicates_on_conflict_dl.drain())
             .expect("can never encounter inconsistent hypercube");
 
-        let _ = self.predicates_to_explain.drain();
+        let _ = self.state.predicates_to_explain.drain();
 
         // Determine whether the linear can propagate something at some point.
         // If not, replace it with a trivially false linear to save memory and
@@ -565,7 +650,7 @@ impl HypercubeLinearResolver {
         let hl_slack_at_root = compute_hl_slack_at_trail_position(
             trail,
             &hypercube,
-            &self.conflicting_linear,
+            &self.state.conflicting_linear,
             root_trail_position,
         );
 
@@ -573,10 +658,11 @@ impl HypercubeLinearResolver {
             self.statistics.num_learned_clauses += 1;
 
             // Make sure to add in the inferences to the proof.
-            for term in self.conflicting_linear.terms() {
+            for term in self.state.conflicting_linear.terms() {
                 let term_lb = affine_lower_bound_at(trail, term, root_trail_position);
 
-                self.proof_file
+                self.state
+                    .proof_file
                     .borrow_mut()
                     .axiom([predicate![term <= term_lb - 1]], [], -1);
             }
@@ -584,7 +670,7 @@ impl HypercubeLinearResolver {
             LinearInequality::trivially_false()
         } else {
             self.statistics.num_learned_hls += 1;
-            std::mem::take(&mut self.conflicting_linear)
+            std::mem::take(&mut self.state.conflicting_linear)
         };
 
         LearnedHypercubeLinear {
@@ -617,7 +703,10 @@ impl HypercubeLinearResolver {
         pivot: Predicate,
         explanation: &HypercubeLinear,
     ) -> Result<(), FourierError> {
-        let maybe_term_in_conflicting = self.conflicting_linear.term_for_domain(pivot.get_domain());
+        let maybe_term_in_conflicting = self
+            .state
+            .conflicting_linear
+            .term_for_domain(pivot.get_domain());
         let maybe_term_in_reason = explanation.linear.term_for_domain(pivot.get_domain());
 
         let (weight_in_conflicting, weight_in_reason) =
@@ -657,8 +746,11 @@ impl HypercubeLinearResolver {
             return Err(FourierError::NoVariableElimination);
         }
 
-        let conflict_slack =
-            compute_linear_slack_at_trail_position(trail, &self.conflicting_linear, trail_position);
+        let conflict_slack = compute_linear_slack_at_trail_position(
+            trail,
+            &self.state.conflicting_linear,
+            trail_position,
+        );
         let reason_slack =
             compute_linear_slack_at_trail_position(trail, &explanation.linear, trail_position);
 
@@ -692,13 +784,15 @@ impl HypercubeLinearResolver {
         // Extend the hypercube of the conflict with the predicates from the hypercube of
         // the explanation.
         for predicate in tightly_propagating_reason.hypercube.iter_predicates() {
-            self.add_hypercube_predicate(trail, predicate);
+            self.state.add_hypercube_predicate(trail, predicate);
         }
 
-        self.explain_linear(trail, &tightly_propagating_reason.linear, trail_position);
+        self.state
+            .explain_linear(trail, &tightly_propagating_reason.linear, trail_position);
 
         let scale_reason = weight_in_conflicting.abs();
         let mut linear_terms = self
+            .state
             .conflicting_linear
             .terms()
             .map(|term| Ok((term.scale, term.inner)))
@@ -717,6 +811,7 @@ impl HypercubeLinearResolver {
             .collect::<Result<Vec<(_, _)>, _>>()?;
 
         let mut linear_rhs = self
+            .state
             .conflicting_linear
             .bound()
             .checked_add(
@@ -742,7 +837,7 @@ impl HypercubeLinearResolver {
         });
         linear_rhs = <i32 as NumExt>::div_ceil(linear_rhs, normalize_by);
 
-        self.conflicting_linear = LinearInequality::new(
+        self.state.conflicting_linear = LinearInequality::new(
             linear_terms
                 .into_iter()
                 .map(|(weight, domain)| (NonZero::new(weight).unwrap(), domain)),
@@ -751,154 +846,6 @@ impl HypercubeLinearResolver {
         .ok_or(FourierError::ResultOfEliminationTriviallySatisfiable)?;
 
         Ok(())
-    }
-
-    fn propositional_resolve(
-        &mut self,
-        trail: &mut impl TrailView,
-        trail_position: usize,
-        pivot: Predicate,
-        mut explanation: HypercubeLinearExplanation,
-    ) {
-        trace!("applying propositional resolution on {pivot}");
-
-        // No propositional resolution happens when the following are true:
-        // - the pivot does not imply a predicate in the current conflict hypercube,
-        // - the pivot does not contribute to the negative slack of the linear.
-
-        let pivot_implies_predicate_in_conflict =
-            self.hypercube_predicates_on_conflict_dl.iter().any(|p| {
-                let p_tp = trail.trail_position(p).expect("all hypercube is satisfied");
-
-                pivot.implies(p) && p_tp == trail_position
-            });
-
-        let pivot_relevant_for_linear_slack = self
-            .conflicting_linear
-            .terms()
-            .any(|t| predicate_applies_to_term(pivot, t));
-
-        if !pivot_implies_predicate_in_conflict && !pivot_relevant_for_linear_slack {
-            trace!("  => skipping propositional resolution");
-            self.statistics.num_skipped_propositional_resolutions += 1;
-
-            #[cfg(feature = "hl-checks")]
-            assert!(
-                !self.hypercube_predicates_on_conflict_dl.contains(pivot),
-                "skipped propositional resolution but pivot still in conflict DL heap"
-            );
-
-            return;
-        }
-
-        let pivot_as_bound = BoundPredicate::new(pivot);
-
-        // Both the conflict and the explanation are weakened on the pivot. This ensures
-        // the propositional resolution removes all contribution of the pivot to the
-        // conflict in the linear inequalities.
-        if let Some(bound_predicate) = pivot_as_bound {
-            self.hypercube_predicates_on_conflict_dl
-                .push(bound_predicate.into(), trail);
-            self.conflicting_linear = std::mem::take(&mut self.conflicting_linear)
-                .weaken_to_zero(bound_predicate)
-                .expect(
-                    "weakening the conflict will never result in a trivially satisfiable linear",
-                );
-
-            trace!(
-                "weakened conflict constraint: {} -> {}",
-                self.working_hypercube
-                    .iter_predicates()
-                    .chain(self.hypercube_predicates_on_conflict_dl.iter())
-                    .format(" & "),
-                self.conflicting_linear,
-            );
-
-            // Then, we have to do the same on the explanation.
-            explanation = std::mem::take(&mut explanation)
-                .weaken_to_zero(!bound_predicate)
-                .expect("cannot weaken to trivially satisfiable");
-
-            trace!("weakened explanation: {explanation}");
-        }
-
-        self.statistics.num_propositional_resolutions += 1;
-
-        // Remove the predicates from the hypercube that are resolved on.
-        self.hypercube_predicates_on_conflict_dl
-            .retain(|p| !pivot.implies(p));
-
-        #[cfg(feature = "hl-checks")]
-        assert!(
-            !self.hypercube_predicates_on_conflict_dl.contains(pivot),
-            "pivot still in conflict DL heap after propositional resolution"
-        );
-
-        let linear_propagated_pivot_to_false = explanation.iter_predicates().any(|p| p == !pivot);
-
-        let linear_slack_is_negative = if let Some(linear) = explanation.linear() {
-            compute_linear_slack_at_trail_position(trail, linear, trail_position - 1) < 0
-        } else {
-            true
-        };
-
-        let can_substitute_with_explanation_linear =
-            linear_propagated_pivot_to_false && linear_slack_is_negative;
-
-        if self.conflicting_linear.is_trivially_false() && can_substitute_with_explanation_linear {
-            // If the conflicting linear is a clause, then we do not need to clausify
-            // the explanation. Instead, the linear of the conflicting constraint
-            // becomes the linear of the explanation and the hypercube of the conflict
-            // is extended with the hypercube of the conflict.
-
-            trace!(
-                "since the linear in the conflict is trivially false, use linear from explanation"
-            );
-
-            for predicate in explanation.iter_predicates() {
-                let truth_value = trail
-                    .truth_value_at(predicate, trail_position)
-                    .expect("all predicates in explanation hypercube are assigned");
-
-                // If the predicate is false, then it is propagated. In that case, it does
-                // not feature in the resolvent so we can continue to the next predicate.
-                if !truth_value {
-                    continue;
-                }
-
-                self.add_hypercube_predicate(trail, predicate);
-            }
-
-            // Set the linear from the explanation as the conflict linear.
-            //
-            // This requires explaining why the linear is conflicting.
-            let linear = explanation.take_linear();
-            self.explain_linear(trail, &linear, trail_position - 1);
-            self.conflicting_linear = linear;
-
-            self.statistics
-                .num_propositional_resolutions_use_explanation_linear += 1;
-        } else {
-            let clausal_explanation = explanation.into_clause(trail, pivot, trail_position);
-
-            trace!(
-                "clausal explanation: {}",
-                clausal_explanation.iter().format(" & ")
-            );
-            for predicate in clausal_explanation {
-                let truth_value = trail
-                    .truth_value_at(predicate, trail_position)
-                    .expect("all predicates in explanation hypercube are assigned");
-
-                // If the predicate is false, then it is propagated. In that case, it does
-                // not feature in the resolvent so we can continue to the next predicate.
-                if !truth_value {
-                    continue;
-                }
-
-                self.add_hypercube_predicate(trail, predicate);
-            }
-        }
     }
 
     fn will_propagate_on_previous_dl(&self, trail: &impl TrailView) -> Option<usize> {
@@ -910,7 +857,7 @@ impl HypercubeLinearResolver {
         // true at the current decision level cover at most one domain. If not, then we for
         // sure cannot backtrack.
         let mut d1 = None;
-        for p in self.hypercube_predicates_on_conflict_dl.iter() {
+        for p in self.state.hypercube_predicates_on_conflict_dl.iter() {
             if d1 == None {
                 d1 = Some(p.get_domain());
             } else if d1 != Some(p.get_domain()) {
@@ -926,15 +873,16 @@ impl HypercubeLinearResolver {
 
             // TODO: Optimize this
             let final_hypercube = self
+                .state
                 .working_hypercube
                 .clone()
-                .with_predicates(self.hypercube_predicates_on_conflict_dl.iter())
+                .with_predicates(self.state.hypercube_predicates_on_conflict_dl.iter())
                 .expect("no inconsistent hypercube");
             if !propagates_at(
                 trail,
                 trail_position,
                 &final_hypercube,
-                &self.conflicting_linear,
+                &self.state.conflicting_linear,
             ) {
                 trace!("    => does not propagate");
                 // The initial assumption is that the hypercube linear is conflicting, so it will be
@@ -961,14 +909,14 @@ impl HypercubeLinearResolver {
     fn assert_loop_invariants(&self, trail: &impl TrailView, trail_position: usize) {
         // All predicates at the conflict DL must have the current checkpoint.
         let current_cp = trail.current_checkpoint();
-        for p in self.hypercube_predicates_on_conflict_dl.iter() {
+        for p in self.state.hypercube_predicates_on_conflict_dl.iter() {
             assert_eq!(
                 trail.checkpoint_for_predicate(p),
                 Some(current_cp),
                 "predicate {p} in conflict DL heap has wrong checkpoint"
             );
         }
-        for p in self.predicates_to_explain.iter() {
+        for p in self.state.predicates_to_explain.iter() {
             assert_eq!(
                 trail.checkpoint_for_predicate(p),
                 Some(current_cp),
@@ -976,7 +924,7 @@ impl HypercubeLinearResolver {
             );
         }
         // All predicates in the working hypercube must be at a strictly earlier checkpoint.
-        for p in self.working_hypercube.iter_predicates() {
+        for p in self.state.working_hypercube.iter_predicates() {
             let cp = trail
                 .checkpoint_for_predicate(p)
                 .expect("working hypercube predicate must be assigned");
@@ -998,12 +946,15 @@ impl HypercubeLinearResolver {
             "trail_position {trail_position} should be after previous checkpoint end {last_tp_prev_cp}"
         );
 
-        let linear_slack =
-            compute_linear_slack_at_trail_position(trail, &self.conflicting_linear, trail_position);
+        let linear_slack = compute_linear_slack_at_trail_position(
+            trail,
+            &self.state.conflicting_linear,
+            trail_position,
+        );
 
         if !linear_slack.is_negative() {
             eprintln!("Bounds in conflicting linear:");
-            for term in self.conflicting_linear.terms() {
+            for term in self.state.conflicting_linear.terms() {
                 let lb = affine_lower_bound_at(trail, term, trail_position);
                 eprintln!(
                     "  - {} {} >= {} @ {:?}",
@@ -1019,9 +970,10 @@ impl HypercubeLinearResolver {
         }
 
         let unsatisfied = self
+            .state
             .hypercube_predicates_on_conflict_dl
             .iter()
-            .chain(self.working_hypercube.iter_predicates())
+            .chain(self.state.working_hypercube.iter_predicates())
             .filter(|&p| trail.truth_value_at(p, trail_position) != Some(true))
             .collect::<Vec<_>>();
         assert_eq!(
@@ -1029,50 +981,6 @@ impl HypercubeLinearResolver {
             vec![],
             "hypercube contains unsatisfied predicates at trail position {trail_position}"
         );
-    }
-
-    fn contributes_to_conflict(&self, pivot: Predicate) -> bool {
-        let is_in_hypercube = self.hypercube_predicates_on_conflict_dl.contains(pivot);
-        let contributes_to_linear_conflict = self
-            .conflicting_linear
-            .term_for_domain(pivot.get_domain())
-            .is_some_and(|term| predicate_applies_to_term(pivot, term));
-
-        is_in_hypercube || contributes_to_linear_conflict
-    }
-
-    /// Enqueue the contributions of the linear terms to be explained.
-    fn explain_linear(
-        &mut self,
-        trail: &impl TrailView,
-        linear: &LinearInequality,
-        trail_position: usize,
-    ) {
-        for term in linear.terms() {
-            let term_bound = affine_lower_bound_at(trail, term, trail_position);
-            let predicate = predicate![term >= term_bound];
-
-            let checkpoint = trail
-                .checkpoint_for_predicate(predicate)
-                .expect("the predicate is true");
-
-            // Only explain the predicate if it is at the conflict checkpoint.
-            if checkpoint == trail.current_checkpoint() {
-                self.predicates_to_explain.push(predicate, trail);
-            }
-        }
-    }
-}
-
-fn predicate_applies_to_term(pivot: Predicate, term: AffineView<DomainId>) -> bool {
-    if pivot.get_domain() != term.inner {
-        return false;
-    }
-
-    if term.scale.is_positive() {
-        pivot.is_lower_bound_predicate()
-    } else {
-        pivot.is_upper_bound_predicate()
     }
 }
 

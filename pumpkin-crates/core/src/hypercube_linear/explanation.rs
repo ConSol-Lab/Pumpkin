@@ -76,9 +76,9 @@ impl Default for HypercubeLinearExplanation {
 }
 
 impl HypercubeLinearExplanation {
-    pub(crate) fn into_clause(
+    pub(crate) fn into_clause<T: TrailView + ?Sized>(
         self,
-        trail: &impl TrailView,
+        trail: &T,
         pivot: Predicate,
         trail_position: usize,
     ) -> Vec<Predicate> {

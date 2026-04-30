@@ -33,8 +33,8 @@ pub(crate) trait TrailView {
 /// Computes the lower bound of an [`AffineView`] at the given trail position.
 ///
 /// Mirrors [`crate::variables::AffineView::lower_bound_at_trail_position`].
-pub(super) fn affine_lower_bound_at(
-    trail: &impl TrailView,
+pub(super) fn affine_lower_bound_at<T: TrailView + ?Sized>(
+    trail: &T,
     term: AffineView<DomainId>,
     trail_position: usize,
 ) -> i32 {
@@ -49,8 +49,8 @@ pub(super) fn affine_lower_bound_at(
 /// Computes the upper bound of an [`AffineView`] at the given trail position.
 ///
 /// Mirrors [`crate::variables::AffineView::upper_bound_at_trail_position`].
-pub(super) fn affine_upper_bound_at(
-    trail: &impl TrailView,
+pub(super) fn affine_upper_bound_at<T: TrailView + ?Sized>(
+    trail: &T,
     term: AffineView<DomainId>,
     trail_position: usize,
 ) -> i32 {
