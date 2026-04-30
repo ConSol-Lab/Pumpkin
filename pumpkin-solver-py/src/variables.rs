@@ -5,7 +5,7 @@ use pumpkin_solver::core::variables::DomainId;
 use pumpkin_solver::core::variables::TransformableVariable;
 use pyo3::prelude::*;
 
-#[pyclass(eq, hash, frozen)]
+#[pyclass(eq, hash, frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct IntExpression(pub AffineView<AnyInteger>);
 
@@ -38,7 +38,7 @@ impl IntExpression {
     }
 }
 
-#[pyclass(eq, hash, frozen)]
+#[pyclass(eq, hash, frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BoolExpression(pub pumpkin_solver::core::predicates::Predicate);
 
@@ -69,7 +69,7 @@ impl From<pumpkin_solver::core::predicates::Predicate> for BoolExpression {
     }
 }
 
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, hash, frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Comparator {
     NotEqual,
@@ -78,7 +78,7 @@ pub enum Comparator {
     GreaterThanOrEqual,
 }
 
-#[pyclass(eq, get_all, hash, frozen)]
+#[pyclass(eq, get_all, hash, frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Predicate {
     pub variable: IntExpression,

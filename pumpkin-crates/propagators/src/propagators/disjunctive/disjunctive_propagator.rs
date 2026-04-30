@@ -221,15 +221,17 @@ fn edge_finding<Var: IntegerVariable, SortedTaskVar: IntegerVariable>(
                     let propagated_predicate = predicate!(propagated_variable >= new_bound);
                     context.post(
                         propagated_predicate,
-                        create_propagation_explanation(
-                            tasks,
-                            i,
-                            theta_lambda_tree,
-                            context,
-                            new_bound,
-                            lct_j,
+                        (
+                            create_propagation_explanation(
+                                tasks,
+                                i,
+                                theta_lambda_tree,
+                                context,
+                                new_bound,
+                                lct_j,
+                            ),
+                            inference_code,
                         ),
-                        inference_code,
                     )?;
                 }
 

@@ -43,7 +43,7 @@ pub struct Model {
     brancher: PythonBrancher,
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone, Debug)]
 pub struct Tag(pub ConstraintTag);
 

@@ -203,6 +203,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
+        #[derive(Debug)]
         struct DummyBrancher;
 
         impl Brancher for DummyBrancher {
@@ -723,9 +724,13 @@ impl ConstraintSatisfactionSolver {
 
         for trail_idx in start_trail_index..self.state.trail_len() {
             let entry = self.state.trail_entry(trail_idx);
-            let (_, inference_code) = entry
-                .reason
-                .expect("Added by a propagator and must therefore have a reason");
+
+            // Get the conjunction of predicates explaining the propagation along with the
+            // InferenceCode identifying the explanation algorithm.
+            let mut reason = vec![];
+            let inference_code = self
+                .state
+                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             if !self.internal_parameters.proof_log.is_logging_inferences() {
                 // In case we are not logging inferences, we only need to keep track
@@ -736,11 +741,6 @@ impl ConstraintSatisfactionSolver {
                     .insert(entry.predicate, inference_code);
                 continue;
             }
-
-            // Get the conjunction of predicates explaining the propagation.
-            let mut reason = vec![];
-            self.state
-                .get_propagation_reason_trail_entry(trail_idx, &mut reason);
 
             let propagated = entry.predicate;
 

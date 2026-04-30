@@ -22,6 +22,7 @@ use pumpkin_core::propagation::Domains;
 use pumpkin_core::propagation::EnqueueDecision;
 use pumpkin_core::propagation::ExplanationContext;
 use pumpkin_core::propagation::InferenceCheckers;
+use pumpkin_core::propagation::LazyExplanation;
 use pumpkin_core::propagation::LocalId;
 use pumpkin_core::propagation::NotificationContext;
 use pumpkin_core::propagation::OpaqueDomainEvent;
@@ -156,7 +157,6 @@ where
                 .with_predicate_type(predicate_type)
                 .with_value(value)
                 .into_bits(),
-            &self.inference_code,
         )
     }
 }
@@ -305,7 +305,7 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> LazyExplanation<'_> {
         use PredicateType::*;
         use Variable::*;
 
@@ -324,7 +324,10 @@ where
 
         self.reason = explanation;
 
-        slice::from_ref(&self.reason)
+        LazyExplanation {
+            predicates: slice::from_ref(&self.reason),
+            inference_code: self.inference_code.clone(),
+        }
     }
 
     fn propagate_from_scratch(&self, mut context: PropagationContext) -> PropagationStatusCP {

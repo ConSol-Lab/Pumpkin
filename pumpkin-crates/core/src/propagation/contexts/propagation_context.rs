@@ -9,7 +9,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::reason::StoredReason;
-use crate::proof::InferenceCode;
 use crate::propagation::DomainEvents;
 use crate::propagation::Domains;
 use crate::propagation::HasAssignments;
@@ -249,13 +248,12 @@ impl PropagationContext<'_> {
         &mut self,
         predicate: Predicate,
         reason: impl Into<Reason>,
-        inference_code: &InferenceCode,
     ) -> Result<(), EmptyDomainConflict> {
         let slot = self.reason_store.new_slot();
 
         let modification_result = self.assignments.post_predicate(
             predicate,
-            Some((slot.reason_ref(), inference_code.clone())),
+            Some(slot.reason_ref()),
             self.notification_engine,
         );
 
@@ -273,13 +271,12 @@ impl PropagationContext<'_> {
                     self.propagator_id,
                     build_reason(reason, self.reification_literal),
                 );
-                let (trigger_predicate, trigger_reason, trigger_inference_code) =
+                let (trigger_predicate, trigger_reason) =
                     self.assignments.remove_last_trail_element();
 
                 Err(EmptyDomainConflict {
                     trigger_predicate,
                     trigger_reason: Some(trigger_reason),
-                    trigger_inference_code: Some(trigger_inference_code),
                 })
             }
         }
@@ -291,9 +288,9 @@ pub(crate) fn build_reason(
     reification_literal: Option<Predicate>,
 ) -> StoredReason {
     match reason.into() {
-        Reason::Eager(mut conjunction) => {
+        Reason::Eager(mut conjunction, inference_code) => {
             conjunction.extend(reification_literal);
-            StoredReason::Eager(conjunction)
+            StoredReason::Eager(conjunction, inference_code)
         }
         Reason::DynamicLazy(code) => StoredReason::DynamicLazy(code),
     }

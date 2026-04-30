@@ -8,7 +8,6 @@ use crate::engine::predicates::predicate::PredicateType;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
-use crate::proof::InferenceCode;
 use crate::pumpkin_assert_eq_moderate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
@@ -108,8 +107,6 @@ impl Assignments {
     }
 
     pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
-        // The clone is required because of InferenceCode is not copy. However, it is a
-        // reference-counted type, so cloning is cheap.
         self.trail[index].clone()
     }
 
@@ -415,15 +412,13 @@ impl Assignments {
     }
 }
 
-pub(crate) type AssignmentReason = (ReasonRef, InferenceCode);
-
 // methods to change the domains
 impl Assignments {
     fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new lower bound is weaker.
         if new_lower_bound <= self.get_lower_bound(domain_id) {
@@ -463,7 +458,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
@@ -503,7 +498,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         let mut update_took_place = false;
 
@@ -550,7 +545,7 @@ impl Assignments {
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
     ) -> Result<bool, EmptyDomain> {
         // No need to do any changes if the value is not present anyway.
         if !self.domains[domain_id].contains(removed_value_from_domain) {
@@ -601,7 +596,7 @@ impl Assignments {
     pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
-        reason: Option<AssignmentReason>,
+        reason: Option<ReasonRef>,
         notification_engine: &mut NotificationEngine,
     ) -> Result<bool, EmptyDomain> {
         let (lower_bound_before, upper_bound_before) = self.bounds[predicate.get_domain()];
@@ -837,15 +832,15 @@ impl Assignments {
     }
 
     /// todo: This is a temporary hack, not to be used in general.
-    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef, InferenceCode) {
+    pub(crate) fn remove_last_trail_element(&mut self) -> (Predicate, ReasonRef) {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
         self.update_bounds_snapshot(domain_id);
 
-        let (reason, inference_code) = entry.reason.unwrap();
+        let reason_ref = entry.reason.unwrap();
 
-        (entry.predicate, reason, inference_code)
+        (entry.predicate, reason_ref)
     }
 
     /// Get the number of values pruned from all the domains.
@@ -868,7 +863,7 @@ impl Assignments {
             .iter()
             .find_map(|entry| {
                 if entry.predicate == predicate {
-                    entry.reason.as_ref().map(|(reason_ref, _)| *reason_ref)
+                    entry.reason
                 } else {
                     None
                 }
@@ -887,7 +882,7 @@ pub(crate) struct ConstraintProgrammingTrailEntry {
     /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
     /// the update was due  to synchronisation from the propositional trail.
-    pub(crate) reason: Option<AssignmentReason>,
+    pub(crate) reason: Option<ReasonRef>,
 }
 
 #[derive(Clone, Copy, Debug)]
