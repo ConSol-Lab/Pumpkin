@@ -174,7 +174,7 @@ impl Display for LinearInequality {
 #[macro_export]
 macro_rules! linear_inequality {
     ($($weight:literal $var:ident $(+)?)* <= $bound:expr) => {{
-        let terms = vec![$((
+        let terms = [$((
             std::num::NonZero::new($weight).unwrap(),
             $var,
         ),)*];

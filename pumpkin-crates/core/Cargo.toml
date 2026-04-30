@@ -43,3 +43,6 @@ check-propagations = []
 debug-checks = []
 hl-checks = []
 clap = ["dep:clap"]
+
+[dev-dependencies]
+test-log = "0.2.20"

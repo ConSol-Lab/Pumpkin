@@ -16,6 +16,7 @@ mod fake_trail;
 pub use bound_predicate::*;
 pub use checker::*;
 pub use constraint::*;
+pub use explanation::*;
 pub use hypercube::*;
 pub use linear::*;
 pub use propagator::*;

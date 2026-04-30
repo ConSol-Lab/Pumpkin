@@ -93,6 +93,12 @@ impl HypercubeLinearResolver {
     }
 }
 
+impl Default for HypercubeLinearResolver {
+    fn default() -> Self {
+        HypercubeLinearResolver::new(Trace::discard())
+    }
+}
+
 impl ConflictResolver for HypercubeLinearResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) {
         if !self.logged_variable_names {
@@ -651,23 +657,28 @@ impl HypercubeLinearResolver {
             return Err(FourierError::NoVariableElimination);
         }
 
+        let conflict_slack =
+            compute_linear_slack_at_trail_position(trail, &self.conflicting_linear, trail_position);
         let reason_slack =
             compute_linear_slack_at_trail_position(trail, &explanation.linear, trail_position);
 
         trace!("applying fourier elimination on {pivot}");
-        trace!(
-            "  - slack conflict: {}",
-            compute_linear_slack_at_trail_position(trail, &self.conflicting_linear, trail_position),
-        );
+        trace!("  - slack conflict: {conflict_slack}");
         trace!("  - slack b: {reason_slack}");
 
-        let tightly_propagating_reason = compute_tightly_propagating_reason(
-            trail,
-            trail_position,
-            explanation,
-            reason_slack,
-            pivot.get_domain().scaled(weight_in_reason),
-        );
+        let tightly_propagating_reason = if i64::from(weight_in_reason) * conflict_slack.abs()
+            > i64::from(weight_in_conflicting) * reason_slack
+        {
+            Cow::Borrowed(explanation)
+        } else {
+            compute_tightly_propagating_reason(
+                trail,
+                trail_position,
+                explanation,
+                reason_slack,
+                pivot.get_domain().scaled(weight_in_reason),
+            )
+        };
 
         trace!("  - tightly propagating: {tightly_propagating_reason}");
 
@@ -755,10 +766,12 @@ impl HypercubeLinearResolver {
         // - the pivot does not imply a predicate in the current conflict hypercube,
         // - the pivot does not contribute to the negative slack of the linear.
 
-        let pivot_implies_predicate_in_conflict = self
-            .hypercube_predicates_on_conflict_dl
-            .iter()
-            .any(|p| pivot.implies(p));
+        let pivot_implies_predicate_in_conflict =
+            self.hypercube_predicates_on_conflict_dl.iter().any(|p| {
+                let p_tp = trail.trail_position(p).expect("all hypercube is satisfied");
+
+                pivot.implies(p) && p_tp == trail_position
+            });
 
         let pivot_relevant_for_linear_slack = self
             .conflicting_linear
@@ -1289,13 +1302,10 @@ fn gcd(a: i32, b: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZero;
-
     use super::*;
-    use crate::hypercube_linear::Trace;
     use crate::hypercube_linear::explanation::HypercubeLinear;
     use crate::hypercube_linear::fake_trail::FakeTrail;
-    use crate::{linear_inequality, predicate};
+    use crate::{conjunction, linear_inequality, predicate};
 
     /// One Fourier elimination step (on x) produces y + z ≤ 7.
     ///
@@ -1307,7 +1317,7 @@ mod tests {
     /// After Fourier: only y ≥ 1 remains on the conflict DL; z ≥ 3 is at an earlier DL.
     /// The constraint {z ≥ 3, y ≥ 1} → y + z ≤ 7 is unit-propagating at DL 1 (slack = −1),
     /// so we backjump there and the learned constraint is ({z ≥ 3, y ≥ 1}, y + z ≤ 7).
-    #[test]
+    #[test_log::test]
     fn one_fourier_step_yields_y_plus_z_le_7() {
         let mut trail_builder = FakeTrail::builder();
 
@@ -1315,19 +1325,16 @@ mod tests {
         let y = trail_builder.domain(0, 10);
         let z = trail_builder.domain(0, 10);
 
-        // Reason for x ≥ 5: {} → −x + z ≤ −2
-        let reason_for_x = HypercubeLinear {
-            hypercube: Hypercube::default(),
-            linear: linear_inequality!(-1 x + 1 z <= -2),
-        };
-
         let mut trail = trail_builder
             .decide(predicate![z >= 3])
             .decide(predicate![y >= 1])
-            .propagate(predicate![x >= 5], reason_for_x)
+            .propagate(
+                predicate![x >= 5],
+                HypercubeLinear::from(linear_inequality!(-1 x + 1 z <= -2)),
+            )
             .build();
 
-        let mut resolver = HypercubeLinearResolver::new(Trace::discard());
+        let mut resolver = HypercubeLinearResolver::default();
         let result = resolver.run_resolution(
             &mut trail,
             [predicate![x >= 5], predicate![y >= 1]],
@@ -1340,8 +1347,7 @@ mod tests {
         let expected_hypercube =
             Hypercube::new([predicate![y >= 1], predicate![z >= 3]]).expect("not inconsistent");
 
-        assert_eq!(result.hypercube, expected_hypercube,);
-        // Linear is trivially false because the HL is already a clause at DL 0.
+        assert_eq!(result.hypercube, expected_hypercube);
         assert!(result.linear.is_trivially_false());
     }
 
@@ -1352,7 +1358,7 @@ mod tests {
     /// After resolving x ≥ 5 (adding y ≥ 3 to the working hypercube), only w ≥ 2 remains on
     /// the conflict DL. The constraint {y ≥ 3, w ≥ 2} → trivially_false propagates at DL 1
     /// (HL-slack = −1 with one unsatisfied predicate), so we backjump there.
-    #[test]
+    #[test_log::test]
     fn propositional_resolution_adds_conjunction_reason_to_working_hypercube() {
         let mut trail_builder = FakeTrail::builder();
 
@@ -1365,16 +1371,13 @@ mod tests {
             .decide(predicate![w >= 2])
             .propagate(
                 predicate![x >= 5],
-                vec![
-                    predicate![y >= 3],
-                    predicate![x <= 4], // !pivot
-                ],
+                conjunction!([y >= 3] & [x <= 4]), // !pivot
             )
             .build();
 
         // Conflict: trivially_false linear with two conflict-DL predicates.
         // Two different domains → multi-domain check returns None → resolution proceeds.
-        let mut resolver = HypercubeLinearResolver::new(Trace::discard());
+        let mut resolver = HypercubeLinearResolver::default();
         let result = resolver.run_resolution(
             &mut trail,
             [predicate![x >= 5], predicate![w >= 2]],
@@ -1384,7 +1387,65 @@ mod tests {
         let expected_hypercube =
             Hypercube::new([predicate![y >= 3], predicate![w >= 2]]).expect("not inconsistent");
 
-        assert_eq!(result.hypercube, expected_hypercube,);
+        assert_eq!(result.hypercube, expected_hypercube);
         assert!(result.linear.is_trivially_false());
+    }
+
+    #[test_log::test]
+    fn do_not_resolve_on_too_strong_a_pivot_in_hypercube() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![x >= 2])
+            .decide(predicate![y >= 3])
+            .propagate(predicate![z >= 5], conjunction!([y >= 3] & [z <= 4]))
+            .propagate(predicate![x >= 4], conjunction!([y >= 3] & [x <= 3]))
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2]],
+            linear_inequality!(1 y + 3 z <= 15),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::new([predicate![x >= 2], predicate![y >= 3]]).expect("not inconsistent")
+        );
+        assert!(result.linear.is_trivially_false());
+    }
+
+    #[test_log::test]
+    fn do_not_resolve_on_too_strong_a_pivot_when_stronger_bound_used_in_linear() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 10);
+        let y = trail_builder.domain(0, 10);
+        let z = trail_builder.domain(0, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![x >= 2])
+            .decide(predicate![y >= 3])
+            .propagate(predicate![z >= 5], conjunction!([y >= 3] & [z <= 4]))
+            .propagate(predicate![x >= 4], linear_inequality!(-1 x + 1 y <= -1))
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::default();
+        let result = resolver.run_resolution(
+            &mut trail,
+            [predicate![x >= 2]],
+            linear_inequality!(1 x + 1 y + 3 z <= 19),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::from_single_predicate(predicate![x >= 2]),
+        );
+        assert_eq!(result.linear, linear_inequality!(2 y + 3 z <= 18));
     }
 }

@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 use crate::hypercube_linear::BoundPredicate;
 use crate::hypercube_linear::Hypercube;
+use crate::hypercube_linear::InconsistentHypercube;
 use crate::hypercube_linear::LinearInequality;
 use crate::hypercube_linear::trail_view::TrailView;
 use crate::hypercube_linear::trail_view::affine_lower_bound_at;
@@ -11,14 +12,36 @@ use crate::predicate;
 use crate::predicates::Predicate;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct HypercubeLinear {
+pub struct HypercubeLinear {
     pub hypercube: Hypercube,
     pub linear: LinearInequality,
+}
+
+impl From<LinearInequality> for HypercubeLinear {
+    fn from(linear: LinearInequality) -> Self {
+        HypercubeLinear {
+            hypercube: Hypercube::default(),
+            linear,
+        }
+    }
 }
 
 impl Display for HypercubeLinear {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} -> {}", self.hypercube, self.linear,)
+    }
+}
+
+impl HypercubeLinear {
+    pub fn from_clause(
+        predicates: impl IntoIterator<Item = Predicate>,
+    ) -> Result<Self, InconsistentHypercube> {
+        let hypercube = Hypercube::new(predicates)?;
+
+        Ok(HypercubeLinear {
+            hypercube,
+            linear: LinearInequality::trivially_false(),
+        })
     }
 }
 
@@ -31,6 +54,12 @@ pub(crate) enum HypercubeLinearExplanation {
 impl From<HypercubeLinear> for HypercubeLinearExplanation {
     fn from(hypercube_linear: HypercubeLinear) -> Self {
         HypercubeLinearExplanation::Proper(hypercube_linear)
+    }
+}
+
+impl From<LinearInequality> for HypercubeLinearExplanation {
+    fn from(linear: LinearInequality) -> Self {
+        HypercubeLinearExplanation::Proper(HypercubeLinear::from(linear))
     }
 }
 
