@@ -2,7 +2,8 @@ use pyo3::prelude::*;
 
 use crate::result::Solution;
 
-#[pyclass]
+#[pyclass(from_py_object)]
+#[derive(Clone)]
 pub enum OptimisationResult {
     /// The problem was solved to optimality, and the solution is an optimal one.
     Optimal(Solution),
@@ -14,14 +15,14 @@ pub enum OptimisationResult {
     Unknown(),
 }
 
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Optimiser {
     LinearSatUnsat,
     LinearUnsatSat,
 }
 
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Minimise,
