@@ -24,7 +24,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::optimisation::OptimisationProcedure;
 #[cfg(doc)]
 use crate::optimisation::linear_sat_unsat::LinearSatUnsat;
@@ -54,6 +53,7 @@ use crate::statistics::log_statistic_postfix;
 /// ```rust
 /// # use pumpkin_core::Solver;
 /// # use pumpkin_core::variables::TransformableVariable;
+/// # use pumpkin_core::predicate;
 /// let mut solver = Solver::default();
 ///
 /// // Integer Variables
@@ -75,19 +75,15 @@ use crate::statistics::log_statistic_postfix;
 ///
 ///
 /// // Propositional Variable
+/// //
+/// // Propositional variables do not explicitly exist in Pumpkin, but atomic constraints can be
+/// // treated as integer variable.
 ///
-/// // We can create a literal
-/// let literal = solver.new_literal();
+/// // We can create a new Boolean variable first.
+/// let boolean = solver.new_bounded_integer(0, 1);
 ///
-/// // We can also create such a variable with a name
-/// let named_literal = solver.new_named_literal("z");
-///
-/// // We can also get the predicate from the literal
-/// let true_predicate = literal.get_true_predicate();
-///
-/// // We can also create an iterator of new literals and get a number of them at once
-/// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();
-/// assert_eq!(list_of_5_literals.len(), 5);
+/// // And then create a predicate over this boolean variable.
+/// let predicate = predicate!(boolean >= 1);
 /// ```
 ///
 /// # Using the Solver
@@ -96,16 +92,13 @@ use crate::statistics::log_statistic_postfix;
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     pub(crate) satisfaction_solver: ConstraintSatisfactionSolver,
-    true_literal: Literal,
 }
 
 impl Default for Solver {
     fn default() -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            true_literal,
         }
     }
 }
@@ -114,10 +107,8 @@ impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
-            true_literal,
         }
     }
 
@@ -159,12 +150,9 @@ impl Solver {
 
 /// Methods to retrieve information about variables
 impl Solver {
-    /// Get the value of the given [`Literal`] at the root level (after propagation), which could be
-    /// unassigned.
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.satisfaction_solver.get_literal_value(literal)
+    pub fn get_predicate_value(&self, predicate: Predicate) -> Option<bool> {
+        self.satisfaction_solver.evaluate_predicate(predicate)
     }
-
     /// Get the lower-bound of the given [`IntegerVariable`] at the root level (after propagation).
     pub fn lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_lower_bound(variable)
@@ -183,88 +171,6 @@ impl Solver {
 
 /// Functions to create and retrieve integer and propositional variables.
 impl Solver {
-    /// Returns an infinite iterator of positive literals of new variables. The new variables will
-    /// be unnamed.
-    ///
-    /// # Example
-    /// ```
-    /// # use pumpkin_core::Solver;
-    /// # use pumpkin_core::variables::Literal;
-    /// let mut solver = Solver::default();
-    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
-    ///
-    /// // `literals` contains 5 positive literals of newly created propositional variables.
-    /// assert_eq!(literals.len(), 5);
-    /// ```
-    ///
-    /// Note that this method captures the lifetime of the immutable reference to `self`.
-    pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
-        std::iter::from_fn(|| Some(self.new_literal()))
-    }
-
-    /// Create a fresh propositional variable and return the literal with positive polarity.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use pumpkin_core::Solver;
-    /// let mut solver = Solver::default();
-    ///
-    /// // We can create a literal
-    /// let literal = solver.new_literal();
-    /// ```
-    pub fn new_literal(&mut self) -> Literal {
-        self.satisfaction_solver.create_new_literal(None)
-    }
-
-    pub fn new_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-    ) -> Literal {
-        self.satisfaction_solver
-            .create_new_literal_for_predicate(predicate, None, constraint_tag)
-    }
-
-    pub fn new_named_literal_for_predicate(
-        &mut self,
-        predicate: Predicate,
-        constraint_tag: ConstraintTag,
-        name: impl Into<String>,
-    ) -> Literal {
-        self.satisfaction_solver.create_new_literal_for_predicate(
-            predicate,
-            Some(name.into().into()),
-            constraint_tag,
-        )
-    }
-
-    /// Create a fresh propositional variable with a given name and return the literal with positive
-    /// polarity.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use pumpkin_core::Solver;
-    /// let mut solver = Solver::default();
-    ///
-    /// // We can also create such a variable with a name
-    /// let named_literal = solver.new_named_literal("z");
-    /// ```
-    pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
-        let name = name.into();
-        self.satisfaction_solver
-            .create_new_literal(Some(name.into()))
-    }
-
-    /// Get a literal which is always true.
-    pub fn get_true_literal(&self) -> Literal {
-        self.true_literal
-    }
-
-    /// Get a literal which is always false.
-    pub fn get_false_literal(&self) -> Literal {
-        !self.true_literal
-    }
-
     /// Create a new integer variable with the given bounds.
     ///
     /// # Example

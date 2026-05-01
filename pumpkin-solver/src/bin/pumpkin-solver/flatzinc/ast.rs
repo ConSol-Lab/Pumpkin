@@ -1,4 +1,5 @@
 use log::warn;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_solver::core::branching::value_selection::DynamicValueSelector;
 use pumpkin_solver::core::branching::value_selection::InDomainInterval;
 use pumpkin_solver::core::branching::value_selection::InDomainMax;
@@ -23,7 +24,6 @@ use pumpkin_solver::core::branching::variable_selection::Smallest;
 use pumpkin_solver::core::pumpkin_assert_eq_simple;
 use pumpkin_solver::core::pumpkin_assert_simple;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::error::FlatZincError;
 #[derive(Debug)]
@@ -43,8 +43,8 @@ pub(crate) enum VariableSelectionStrategy {
 impl VariableSelectionStrategy {
     pub(crate) fn create_from_literals(
         &self,
-        propositional_variables: &[Literal],
-    ) -> DynamicVariableSelector<Literal> {
+        propositional_variables: &[Predicate],
+    ) -> DynamicVariableSelector<Predicate> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => {
                 warn!(
@@ -128,7 +128,7 @@ pub(crate) enum ValueSelectionStrategy {
 }
 
 impl ValueSelectionStrategy {
-    pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Literal> {
+    pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Predicate> {
         DynamicValueSelector::new(match self {
             ValueSelectionStrategy::InDomain
             | ValueSelectionStrategy::InDomainInterval

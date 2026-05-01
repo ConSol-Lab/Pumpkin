@@ -1,10 +1,11 @@
 use std::time::Instant;
 
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::proof::ConstraintTag;
 use pumpkin_solver::core::pumpkin_assert_eq_simple;
 use pumpkin_solver::core::pumpkin_assert_simple;
-use pumpkin_solver::core::variables::Literal;
 
 use super::PseudoBooleanConstraintEncoderInterface;
 use super::WeightedLiteral;
@@ -20,8 +21,8 @@ use crate::maxsat::encoders::EncodingError::CannotStrengthen;
 /// Constraints, 2011, 16: 195-221.
 #[derive(Debug)]
 pub(crate) struct CardinalityNetworkEncoder {
-    literals: Vec<Literal>,
-    output: Vec<Literal>,
+    literals: Vec<Predicate>,
+    output: Vec<Predicate>,
     num_clauses_added: usize,
     /// Useless, since the encoder is only used when solving DIMACS problems, but required to add
     /// constraints.
@@ -81,10 +82,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
         println!("c CNE k = {k}");
 
         if solver
-            .add_clause(
-                [(!self.output[k as usize]).get_true_predicate()],
-                self.constraint_tag,
-            )
+            .add_clause([(!self.output[k as usize])], self.constraint_tag)
             .is_err()
         {
             Err(CannotStrengthen)
@@ -97,7 +95,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 impl CardinalityNetworkEncoder {
     /// Create a new encoder from the given literals which form the left-hand side.
     pub(crate) fn new(
-        literals: Vec<Literal>,
+        literals: Vec<Predicate>,
         p: u64,
         solver: &mut Solver,
     ) -> Result<Self, EncodingError> {
@@ -136,10 +134,7 @@ impl CardinalityNetworkEncoder {
         if result.is_err() {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
-            let r = solver.add_clause(
-                [(!self.output[p as usize]).get_true_predicate()],
-                self.constraint_tag,
-            );
+            let r = solver.add_clause([(!self.output[p as usize])], self.constraint_tag);
             if r.is_err() {
                 return Err(EncodingError::RootPropagationConflict);
             }
@@ -159,14 +154,11 @@ impl CardinalityNetworkEncoder {
 
         let num_padding_literals = round_up_to_multiple(n, k) - n;
         let padding_lits = (0..num_padding_literals)
-            .map(|_| solver.new_literal())
+            .map(|_| solver.new_bounded_integer(0, 1).lower_bound_predicate(1))
             .collect::<Vec<_>>();
 
         for &lit in padding_lits.iter() {
-            if solver
-                .add_clause([(!lit).get_true_predicate()], self.constraint_tag)
-                .is_err()
-            {
+            if solver.add_clause([(!lit)], self.constraint_tag).is_err() {
                 return Err(EncodingError::RootPropagationConflict);
             }
         }
@@ -188,35 +180,23 @@ impl CardinalityNetworkEncoder {
 
     fn s_merge(
         &mut self,
-        a: &[Literal],
-        b: &[Literal],
+        a: &[Predicate],
+        b: &[Predicate],
         solver: &mut Solver,
-    ) -> Option<Vec<Literal>> {
+    ) -> Option<Vec<Predicate>> {
         pumpkin_assert_eq_simple!(a.len(), b.len());
 
         if a.len() == 1 {
-            let c = vec![solver.new_literal(), solver.new_literal()];
-            let a = a[0].get_true_predicate();
-            let b = b[0].get_true_predicate();
+            let c = vec![
+                solver.new_bounded_integer(0, 1).lower_bound_predicate(1),
+                solver.new_bounded_integer(0, 1).lower_bound_predicate(1),
+            ];
+            let a = a[0];
+            let b = b[0];
 
-            try_add_clause!(
-                self,
-                solver,
-                vec![!a, !b, c[1].get_true_predicate()],
-                self.constraint_tag
-            );
-            try_add_clause!(
-                self,
-                solver,
-                vec![!a, c[0].get_true_predicate()],
-                self.constraint_tag
-            );
-            try_add_clause!(
-                self,
-                solver,
-                vec![!b, c[0].get_true_predicate()],
-                self.constraint_tag
-            );
+            try_add_clause!(self, solver, vec![!a, !b, c[1]], self.constraint_tag);
+            try_add_clause!(self, solver, vec![!a, c[0]], self.constraint_tag);
+            try_add_clause!(self, solver, vec![!b, c[0]], self.constraint_tag);
 
             return Some(c);
         }
@@ -234,7 +214,7 @@ impl CardinalityNetworkEncoder {
         pumpkin_assert_eq_simple!((a.len() >> 1) + 1, e.len());
 
         let mut c = (0..a.len())
-            .map(|_| solver.new_literal())
+            .map(|_| solver.new_bounded_integer(0, 1).lower_bound_predicate(1))
             .collect::<Vec<_>>();
         c.insert(0, d[0]);
 
@@ -242,29 +222,19 @@ impl CardinalityNetworkEncoder {
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1)]).get_true_predicate()
-                ],
+                vec![(!d[i + 1]), (!e[i]), (c[2 * (i + 1)])],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!d[i + 1]), (c[2 * (i + 1) - 1])],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!e[i]), (c[2 * (i + 1) - 1])],
                 self.constraint_tag
             );
         }
@@ -272,7 +242,7 @@ impl CardinalityNetworkEncoder {
         Some(c)
     }
 
-    fn h_sort(&mut self, seq: &[Literal], solver: &mut Solver) -> Option<Vec<Literal>> {
+    fn h_sort(&mut self, seq: &[Predicate], solver: &mut Solver) -> Option<Vec<Predicate>> {
         pumpkin_assert_simple!(seq.len() & 1 == 0);
 
         let n = seq.len() >> 1;
@@ -289,10 +259,10 @@ impl CardinalityNetworkEncoder {
 
     fn h_merge(
         &mut self,
-        a: &[Literal],
-        b: &[Literal],
+        a: &[Predicate],
+        b: &[Predicate],
         solver: &mut Solver,
-    ) -> Option<Vec<Literal>> {
+    ) -> Option<Vec<Predicate>> {
         pumpkin_assert_eq_simple!(a.len(), b.len());
 
         let n = a.len();
@@ -310,7 +280,7 @@ impl CardinalityNetworkEncoder {
         let e = self.h_merge(&a_even, &b_even, solver)?;
 
         let mut c = (0..2 * n - 2)
-            .map(|_| solver.new_literal())
+            .map(|_| solver.new_bounded_integer(0, 1).lower_bound_predicate(1))
             .collect::<Vec<_>>();
 
         c.insert(0, d[0]);
@@ -320,29 +290,19 @@ impl CardinalityNetworkEncoder {
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1)]).get_true_predicate()
-                ],
+                vec![(!d[i + 1]), (!e[i]), (c[2 * (i + 1)])],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!d[i + 1]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!d[i + 1]), (c[2 * (i + 1) - 1])],
                 self.constraint_tag
             );
             try_add_clause!(
                 self,
                 solver,
-                vec![
-                    (!e[i]).get_true_predicate(),
-                    (c[2 * (i + 1) - 1]).get_true_predicate()
-                ],
+                vec![(!e[i]), (c[2 * (i + 1) - 1])],
                 self.constraint_tag
             );
         }
@@ -350,7 +310,7 @@ impl CardinalityNetworkEncoder {
         Some(c)
     }
 
-    fn card(&mut self, a: &[Literal], k: u64, solver: &mut Solver) -> Option<Vec<Literal>> {
+    fn card(&mut self, a: &[Predicate], k: u64, solver: &mut Solver) -> Option<Vec<Predicate>> {
         let n = a.len() as u64;
         let m = n / k;
         pumpkin_assert_eq_simple!(n, m * k);
@@ -393,13 +353,13 @@ fn round_up_to_multiple(k: u64, multiple: u64) -> u64 {
     }
 }
 
-fn odd_literals(lits: &[Literal]) -> Vec<Literal> {
+fn odd_literals(lits: &[Predicate]) -> Vec<Predicate> {
     // Note: in the literature, sequences start at 1, hence the odd literals
     // step by two but start at the first literal.
     lits.iter().copied().step_by(2).collect::<Vec<_>>()
 }
 
-fn even_literals(lits: &[Literal]) -> Vec<Literal> {
+fn even_literals(lits: &[Predicate]) -> Vec<Predicate> {
     // Note: in the literature, sequences start at 1, hence the even literals
     // skip the first and then step by two.
     lits.iter().copied().skip(1).step_by(2).collect::<Vec<_>>()
@@ -407,6 +367,9 @@ fn even_literals(lits: &[Literal]) -> Vec<Literal> {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_core::predicates::Predicate;
+    use pumpkin_core::predicates::PredicateConstructor;
+
     use super::*;
 
     #[test]
@@ -427,16 +390,8 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
-        assert!(
-            solver
-                .add_clause([xs[0].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[1].get_true_predicate()], constraint_tag)
-                .is_err()
-        );
+        assert!(solver.add_clause([xs[0]], constraint_tag).is_ok());
+        assert!(solver.add_clause([xs[1]], constraint_tag).is_err());
     }
 
     #[test]
@@ -447,25 +402,13 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
-        assert!(
-            solver
-                .add_clause([xs[0].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[1].get_true_predicate()], constraint_tag)
-                .is_ok()
-        );
-        assert!(
-            solver
-                .add_clause([xs[2].get_true_predicate()], constraint_tag)
-                .is_err()
-        );
+        assert!(solver.add_clause([xs[0]], constraint_tag).is_ok());
+        assert!(solver.add_clause([xs[1]], constraint_tag).is_ok());
+        assert!(solver.add_clause([xs[2]], constraint_tag).is_err());
     }
 
-    fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {
-        std::iter::from_fn(|| Some(solver.new_literal()))
+    fn create_variables(solver: &mut Solver, n: usize) -> Vec<Predicate> {
+        std::iter::from_fn(|| Some(solver.new_bounded_integer(0, 1).lower_bound_predicate(1)))
             .take(n)
             .collect::<Vec<_>>()
     }

@@ -11,7 +11,6 @@ use crate::engine::State;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::options::LearningOptions;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
@@ -82,11 +81,6 @@ impl TestSolver {
 
     pub fn new_sparse_variable(&mut self, values: Vec<i32>) -> DomainId {
         self.state.new_sparse_variable(values, None)
-    }
-
-    pub fn new_literal(&mut self) -> Literal {
-        let domain_id = self.new_variable(0, 1);
-        Literal::new(domain_id)
     }
 
     pub fn new_propagator<Constructor>(
@@ -197,13 +191,6 @@ impl TestSolver {
         }
     }
 
-    pub fn is_literal_false(&self, literal: Literal) -> bool {
-        self.state
-            .assignments
-            .evaluate_predicate(literal.get_true_predicate())
-            .is_some_and(|truth_value| !truth_value)
-    }
-
     pub fn upper_bound(&self, var: DomainId) -> i32 {
         self.state.assignments.get_upper_bound(var)
     }
@@ -214,21 +201,15 @@ impl TestSolver {
         Ok(())
     }
 
-    pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
-        let _ = match truth_value {
-            true => self.state.assignments.post_predicate(
-                literal.get_true_predicate(),
-                None,
-                &mut self.state.notification_engine,
-            )?,
-            false => self.state.assignments.post_predicate(
-                (!literal).get_true_predicate(),
-                None,
-                &mut self.state.notification_engine,
-            )?,
-        };
+    pub fn set_predicate(&mut self, predicate: Predicate) -> Result<(), EmptyDomain> {
+        self.state
+            .assignments
+            .post_predicate(predicate, None, &mut self.state.notification_engine)
+            .map(|_| ())
+    }
 
-        Ok(())
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.state.assignments.evaluate_predicate(predicate)
     }
 
     pub fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Conflict> {
@@ -303,18 +284,6 @@ impl TestSolver {
         );
 
         PropositionalConjunction::from(predicates)
-    }
-
-    pub fn get_reason_bool(
-        &mut self,
-        literal: Literal,
-        truth_value: bool,
-    ) -> PropositionalConjunction {
-        let predicate = match truth_value {
-            true => literal.get_true_predicate(),
-            false => (!literal).get_true_predicate(),
-        };
-        self.get_reason_int(predicate)
     }
 
     pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {

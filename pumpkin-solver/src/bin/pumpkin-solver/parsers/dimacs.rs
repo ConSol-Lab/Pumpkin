@@ -19,11 +19,12 @@ use std::num::NonZeroI32;
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
+use pumpkin_core::predicates::Predicate;
+use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::Function;
 use pumpkin_solver::core::options::SolverOptions;
 use pumpkin_solver::core::proof::ConstraintTag;
-use pumpkin_solver::core::variables::Literal;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -434,7 +435,7 @@ fn next_header_component<'a, Num: FromStr>(
 pub(crate) struct SolverDimacsSink {
     pub(crate) solver: Solver,
     pub(crate) objective: Function,
-    pub(crate) variables: Vec<Literal>,
+    pub(crate) variables: Vec<Predicate>,
     constraint_tag: ConstraintTag,
 }
 
@@ -452,7 +453,7 @@ impl SolverArgs {
 }
 
 impl SolverDimacsSink {
-    fn mapped_clause(&self, clause: &[NonZeroI32]) -> Vec<Literal> {
+    fn mapped_clause(&self, clause: &[NonZeroI32]) -> Vec<Predicate> {
         clause
             .iter()
             .map(|dimacs_code| {
@@ -474,7 +475,11 @@ impl DimacsSink for SolverDimacsSink {
 
         let mut solver = Solver::with_options(solver_options);
         let variables = (0..num_variables)
-            .map(|code| solver.new_named_literal(format!("{}", code + 1)))
+            .map(|code| {
+                solver
+                    .new_named_bounded_integer(0, 1, format!("{}", code + 1))
+                    .lower_bound_predicate(1)
+            })
             .collect::<Vec<_>>();
 
         let constraint_tag = solver.new_constraint_tag();
@@ -488,10 +493,7 @@ impl DimacsSink for SolverDimacsSink {
     }
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
-        let mapped = self
-            .mapped_clause(clause)
-            .into_iter()
-            .map(|literal| literal.get_true_predicate());
+        let mapped = self.mapped_clause(clause).into_iter();
         let _ = self.solver.add_clause(mapped, self.constraint_tag);
     }
 
@@ -500,7 +502,7 @@ impl DimacsSink for SolverDimacsSink {
 
         let is_clause_satisfied = clause
             .iter()
-            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false));
+            .any(|literal| self.solver.get_predicate_value(*literal).unwrap_or(false));
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
@@ -512,14 +514,12 @@ impl DimacsSink for SolverDimacsSink {
                 .add_weighted_literal(clause[0], weight.get().into());
         } else {
             // General case, a soft clause with more than one literal.
-            let soft_literal = self.solver.new_literal();
+            let soft_literal = self
+                .solver
+                .new_bounded_integer(0, 1)
+                .lower_bound_predicate(1);
             clause.push(soft_literal);
-            let _ = self.solver.add_clause(
-                clause
-                    .into_iter()
-                    .map(|literal| literal.get_true_predicate()),
-                self.constraint_tag,
-            );
+            let _ = self.solver.add_clause(clause, self.constraint_tag);
 
             self.objective
                 .add_weighted_literal(!soft_literal, weight.get().into());

@@ -39,7 +39,7 @@ macro_rules! python_constraint {
             pub fn implied_by(
                 self,
                 solver: &mut pumpkin_solver::Solver,
-                reification_literal: pumpkin_solver::core::variables::Literal,
+                reification_literal: pumpkin_solver::core::predicates::Predicate,
             ) -> Result<(), pumpkin_solver::core::ConstraintOperationError> {
                 pumpkin_constraints::$constraint_func(
                     $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field)),+ ,

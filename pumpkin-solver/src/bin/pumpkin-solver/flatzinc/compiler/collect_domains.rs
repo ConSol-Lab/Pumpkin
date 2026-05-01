@@ -5,8 +5,8 @@ use std::rc::Rc;
 use flatzinc::Annotation;
 use pumpkin_core::Solver;
 use pumpkin_core::containers::HashMap;
+use pumpkin_core::predicate;
 use pumpkin_core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use super::context::Domain;
@@ -39,7 +39,7 @@ pub(crate) fn run(
                         )
                     });
 
-                let literal = Literal::new(domain_id);
+                let literal = predicate!(domain_id >= 1);
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));

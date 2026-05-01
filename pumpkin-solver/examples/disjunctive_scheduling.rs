@@ -11,6 +11,7 @@
 
 use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::constraints::NegatableConstraint;
+use pumpkin_core::predicates::PredicateConstructor;
 use pumpkin_solver::Solver;
 use pumpkin_solver::core::results::ProblemSolution;
 use pumpkin_solver::core::results::SatisfactionResult;
@@ -53,7 +54,7 @@ fn main() {
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
-                .map(|_| solver.new_literal())
+                .map(|_| solver.new_bounded_integer(0, 1).lower_bound_predicate(1))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -77,13 +78,7 @@ fn main() {
             .reify(&mut solver, literal);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_clause(
-                [
-                    literal.get_true_predicate(),
-                    precedence_literals[y][x].get_true_predicate(),
-                ],
-                constraint_tag,
-            );
+            let _ = solver.add_clause([literal, precedence_literals[y][x]], constraint_tag);
         }
     }
 

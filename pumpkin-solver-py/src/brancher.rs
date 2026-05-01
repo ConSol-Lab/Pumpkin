@@ -8,13 +8,14 @@ use pumpkin_solver::core::predicates::Predicate;
 use pumpkin_solver::core::results::SolutionReference;
 use pumpkin_solver::core::statistics::StatisticLogger;
 use pumpkin_solver::core::variables::AffineView;
+use pumpkin_solver::core::variables::AnyInteger;
 use pumpkin_solver::core::variables::DomainId;
 
 use crate::variables::IntExpression;
 
 #[derive(Debug)]
 pub struct PythonBrancher {
-    warm_start: WarmStart<AffineView<DomainId>>,
+    warm_start: WarmStart<AffineView<AnyInteger>>,
     default_brancher: DefaultBrancher,
 }
 

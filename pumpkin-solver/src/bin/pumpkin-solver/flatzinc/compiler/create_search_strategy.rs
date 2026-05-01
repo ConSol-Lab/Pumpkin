@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use flatzinc::AnnExpr;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_solver::core::branching::Brancher;
 use pumpkin_solver::core::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_solver::core::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
@@ -9,7 +10,6 @@ use pumpkin_solver::core::branching::value_selection::InDomainMax;
 use pumpkin_solver::core::branching::value_selection::InDomainMin;
 use pumpkin_solver::core::branching::variable_selection::InputOrder;
 use pumpkin_solver::core::variables::DomainId;
-use pumpkin_solver::core::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -31,7 +31,7 @@ pub(crate) fn run(
 fn get_bool_variables(
     context: &mut CompilationContext,
     variables: &AnnExpr,
-) -> Result<Vec<Literal>, FlatZincError> {
+) -> Result<Vec<Predicate>, FlatZincError> {
     Ok(match variables {
         AnnExpr::String(identifier) => {
             vec![context.resolve_bool_variable_from_identifier(identifier)?]
@@ -146,10 +146,7 @@ fn create_from_search_strategy(
                     }
                     AnnExpr::Expr(expr) => {
                             let bool_variable_array = context
-                                .resolve_bool_variable_array(expr)?
-                                .iter()
-                                .map(|literal| literal.get_integer_variable())
-                                .collect::<Vec<_>>();
+                                .resolve_bool_variable_array(expr)?;
 
                             match values {
                                     AnnExpr::Expr(expr) => {
@@ -228,7 +225,7 @@ fn create_search_over_domains(
 }
 
 fn create_search_over_propositional_variables(
-    search_variables: &[Literal],
+    search_variables: &[Predicate],
     variable_selection_strategy: &VariableSelectionStrategy,
     value_selection_strategy: &ValueSelectionStrategy,
 ) -> DynamicBrancher {

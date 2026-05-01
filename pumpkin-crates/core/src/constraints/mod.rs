@@ -1,9 +1,9 @@
 //! Defines the main building blocks of constraints.
 use crate::ConstraintOperationError;
 use crate::Solver;
+use crate::predicates::Predicate;
 use crate::propagation::PropagatorConstructor;
 use crate::propagators::reified_propagator::ReifiedPropagatorArgs;
-use crate::variables::Literal;
 
 mod constraint_poster;
 pub use constraint_poster::ConstraintPoster;
@@ -34,7 +34,7 @@ pub trait Constraint {
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError>;
 }
 
@@ -50,7 +50,7 @@ where
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         let _ = solver.add_propagator(ReifiedPropagatorArgs {
             propagator: self,
@@ -68,7 +68,7 @@ impl<C: Constraint> Constraint for Vec<C> {
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         self.into_iter()
             .try_for_each(|c| c.implied_by(solver, reification_literal))
@@ -97,7 +97,7 @@ pub trait NegatableConstraint: Constraint {
     fn reify(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError>
     where
         Self: Sized,

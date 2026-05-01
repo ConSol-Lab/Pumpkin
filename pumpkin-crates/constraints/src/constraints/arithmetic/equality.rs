@@ -3,9 +3,9 @@ use pumpkin_core::Solver;
 use pumpkin_core::constraints::Constraint;
 use pumpkin_core::constraints::NegatableConstraint;
 use pumpkin_core::options::ReifiedPropagatorArgs;
+use pumpkin_core::predicates::Predicate;
 use pumpkin_core::proof::ConstraintTag;
 use pumpkin_core::variables::IntegerVariable;
-use pumpkin_core::variables::Literal;
 use pumpkin_core::variables::TransformableVariable;
 use pumpkin_propagators::arithmetic::BinaryEqualsPropagatorArgs;
 use pumpkin_propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
@@ -109,7 +109,7 @@ where
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         if self.terms.len() == 2 && !solver.is_logging_proof() {
             let _ = solver.add_propagator(ReifiedPropagatorArgs {
@@ -184,7 +184,7 @@ where
     fn implied_by(
         self,
         solver: &mut Solver,
-        reification_literal: Literal,
+        reification_literal: Predicate,
     ) -> Result<(), ConstraintOperationError> {
         let NotEqualConstraint {
             terms,
