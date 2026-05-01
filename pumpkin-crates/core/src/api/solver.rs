@@ -5,7 +5,6 @@ use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::Solution;
 use crate::branching::Brancher;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
@@ -434,9 +433,8 @@ impl Solver {
             resolver,
         ) {
             CSPSolverExecutionFlag::Feasible => {
-                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
-                brancher.on_solution(solution.as_reference());
+                brancher.on_solution(self.satisfaction_solver.get_solution_reference());
                 SatisfactionResultUnderAssumptions::Satisfiable(Satisfiable::new(
                     self, brancher, resolver,
                 ))
