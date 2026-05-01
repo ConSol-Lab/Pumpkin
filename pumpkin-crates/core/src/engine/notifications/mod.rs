@@ -1,6 +1,7 @@
 mod domain_event_notification;
 mod predicate_notification;
 
+use bit_set::BitSet;
 pub use domain_event_notification::DomainEvent;
 pub(crate) use domain_event_notification::EventSink;
 pub(crate) use domain_event_notification::WatchListDomainEvents;
@@ -12,6 +13,7 @@ pub(crate) use predicate_notification::PredicateNotifier;
 
 use crate::basic_types::PredicateId;
 use crate::basic_types::Trail;
+use crate::containers::StorageKey;
 use crate::engine::Assignments;
 use crate::engine::PropagatorQueue;
 use crate::engine::TrailedValues;
@@ -44,6 +46,7 @@ pub(crate) struct NotificationEngine {
     /// place
     backtrack_events: EventSink,
     backtrack_events_literals: Trail<(PredicateId, PropagatorId)>,
+    notified_predicate_ids: BitSet,
 }
 
 impl Default for NotificationEngine {
@@ -56,6 +59,7 @@ impl Default for NotificationEngine {
             events: Default::default(),
             backtrack_events: Default::default(),
             backtrack_events_literals: Default::default(),
+            notified_predicate_ids: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -80,6 +84,7 @@ impl NotificationEngine {
             events: Default::default(),
             backtrack_events: Default::default(),
             backtrack_events_literals: Default::default(),
+            notified_predicate_ids: Default::default(),
         };
         // Grow for the dummy predicate
         result.grow();
@@ -400,6 +405,7 @@ impl NotificationEngine {
         }
 
         for (literal, propagator_id) in self.backtrack_events_literals.synchronise(new_checkpoint) {
+            let _ = self.notified_predicate_ids.remove(literal.index());
             if let Some(watcher) = self
                 .watch_list_predicate_ids
                 .backtrack_watcher_for_literal_and_propagator(literal, propagator_id)
@@ -438,15 +444,13 @@ impl NotificationEngine {
                     && let Some(local_id) = predicate_watcher.local_id
                 {
                     if events.is_empty()
-                        || self
-                            .backtrack_events_literals
-                            .contains(&(predicate_id, predicate_watcher.propagator_id))
+                        || self.notified_predicate_ids.contains(predicate_id.index())
                     {
                         continue;
                     }
-
                     self.backtrack_events_literals
                         .push((predicate_id, predicate_watcher.propagator_id));
+                    let _ = self.notified_predicate_ids.insert(predicate_id.index());
 
                     let propagator = &mut propagators[predicate_watcher.propagator_id];
                     for event in events.iter() {
