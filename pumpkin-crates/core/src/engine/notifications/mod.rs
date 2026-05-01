@@ -448,9 +448,9 @@ impl NotificationEngine {
                     {
                         continue;
                     }
+
                     self.backtrack_events_literals
                         .push((predicate_id, predicate_watcher.propagator_id));
-                    let _ = self.notified_predicate_ids.insert(predicate_id.index());
 
                     let propagator = &mut propagators[predicate_watcher.propagator_id];
                     for event in events.iter() {
@@ -481,6 +481,10 @@ impl NotificationEngine {
                     }
                 }
             }
+
+            // NOTE: This assumes that there are no registration for predicates after it has become
+            // true.
+            let _ = self.notified_predicate_ids.insert(predicate_id.index());
         }
     }
 
