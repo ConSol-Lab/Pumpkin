@@ -57,7 +57,7 @@ pub(crate) fn run_solver_with_options(
     let solver = PathBuf::from(env!("CARGO_BIN_EXE_pumpkin-solver"));
 
     let add_extension = |extension: &str| -> PathBuf {
-        if let Some(prefix) = prefix.and_then(|s| if s.is_empty() { None } else { Some(s) }) {
+        if let Some(prefix) = prefix.filter(|s| !s.is_empty()) {
             instance_path.with_extension(format!("{prefix}.{extension}"))
         } else {
             instance_path.with_extension(extension)
