@@ -361,4 +361,4 @@ use pumpkin_core::conflict_resolving::ConflictResolver;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The latest commit hash.
-pub const LATEST_COMMIT: &str = env!("VERGEN_GIT_SHA");
+pub const LATEST_COMMIT: &str = env!("GIT_SHA");
