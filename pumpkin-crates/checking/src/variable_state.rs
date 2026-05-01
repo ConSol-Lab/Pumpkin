@@ -31,6 +31,10 @@ impl<Atomic> VariableState<Atomic>
 where
     Atomic: AtomicConstraint,
 {
+    pub fn reset_domain(&mut self, identified: Atomic::Identifier) {
+        let _ = self.domains.insert(identified, Domain::all_integers());
+    }
+
     /// Create a variable state that applies all the premises and, if present, the negation of the
     /// consequent.
     ///
@@ -308,9 +312,11 @@ impl Domain {
 
         self.upper_bound = IntExt::Int(bound);
 
-        // Note the '+ 1' to keep the elements <= the upper bound instead of <
-        // the upper bound.
-        let _ = self.holes.split_off(&(bound + 1));
+        if bound < i32::MAX {
+            // Note the '+ 1' to keep the elements <= the upper bound instead of <
+            // the upper bound.
+            let _ = self.holes.split_off(&(bound + 1));
+        }
 
         // Take care of the condition where the new bound is already a hole in the domain.
         if self.holes.contains(&bound) {
