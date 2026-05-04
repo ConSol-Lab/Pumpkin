@@ -34,6 +34,7 @@ mod clause;
 mod cumulative;
 mod disjunctive_strict;
 mod element;
+mod regular;
 mod table;
 
 pub use all_different::*;
@@ -43,4 +44,5 @@ pub use clause::*;
 pub use cumulative::*;
 pub use disjunctive_strict::*;
 pub use element::*;
+pub use regular::*;
 pub use table::*;

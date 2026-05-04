@@ -8,3 +8,4 @@ pub mod arithmetic;
 pub mod cumulative;
 pub mod disjunctive;
 pub mod element;
+pub mod regular;
