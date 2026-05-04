@@ -60,6 +60,7 @@ pub(crate) struct CompilationContext<'a> {
     /// All set parameters.
     pub(crate) set_constants: HashMap<Rc<str>, Set>,
 
+    pub(crate) array_of_set_constants: HashMap<Rc<str>, Rc<[Set]>>,
     /// All the constraints with their constraint tags.
     pub(crate) constraints: Vec<(ConstraintTag, flatzinc::ConstraintItem)>,
 }
@@ -97,6 +98,7 @@ impl CompilationContext<'_> {
             integer_variable_arrays: Default::default(),
 
             set_constants: Default::default(),
+            array_of_set_constants: Default::default(),
 
             constraints: Default::default(),
         }
@@ -437,6 +439,41 @@ impl CompilationContext<'_> {
                 })
                 .collect(),
             _ => Err(FlatZincError::UnexpectedExpr),
+        }
+    }
+
+    pub(crate) fn resolve_array_of_sets_constant(
+        &self,
+        expr: &flatzinc::Expr,
+    ) -> Result<Rc<[Set]>, FlatZincError> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => {
+                self.array_of_set_constants.get(id.as_str()).cloned().ok_or(
+                    FlatZincError::InvalidIdentifier {
+                        identifier: id.clone().into(),
+                        expected_type: "array of set of int".into(),
+                    },
+                )
+            }
+            flatzinc::Expr::ArrayOfSet(set_literal) => Ok(set_literal
+                .iter()
+                .map(|set_expr| match set_expr {
+                    flatzinc::SetExpr::Set(set_literal_expr) => self
+                        .resolve_set_constant(&flatzinc::Expr::Set(set_literal_expr.clone()))
+                        .unwrap(),
+                    flatzinc::SetExpr::VarParIdentifier(inner) => self
+                        .resolve_set_constant(&flatzinc::Expr::VarParIdentifier(inner.clone()))
+                        .unwrap(),
+                })
+                .collect::<Vec<_>>()
+                .into()),
+            flatzinc::Expr::Set(_)
+            | flatzinc::Expr::Bool(_)
+            | flatzinc::Expr::Int(_)
+            | flatzinc::Expr::Float(_)
+            | flatzinc::Expr::ArrayOfBool(_)
+            | flatzinc::Expr::ArrayOfInt(_)
+            | flatzinc::Expr::ArrayOfFloat(_) => Err(FlatZincError::UnexpectedExpr),
         }
     }
 

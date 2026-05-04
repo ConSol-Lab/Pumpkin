@@ -70,8 +70,41 @@ pub(crate) fn run(
                     .insert(context.identifiers.get_interned(id), set);
             }
 
-            flatzinc::ParDeclItem::ArrayOfSet { .. } => {
-                todo!("implement array of integer set parameters")
+            flatzinc::ParDeclItem::ArrayOfSet { ix: _, id, v } => {
+                let result = v
+                    .iter()
+                    .map(|set_literal| {
+                        let set = match set_literal {
+                            flatzinc::SetLiteral::IntRange(lower_bound, upper_bound) => {
+                                Set::Interval {
+                                    lower_bound: i32::try_from(*lower_bound).unwrap(),
+                                    upper_bound: i32::try_from(*upper_bound).unwrap(),
+                                }
+                            }
+
+                            flatzinc::SetLiteral::SetInts(values) => {
+                                let values = values
+                                    .iter()
+                                    .copied()
+                                    .map(i32::try_from)
+                                    .collect::<Result<_, _>>()
+                                    .unwrap();
+
+                                Set::Sparse { values }
+                            }
+
+                            flatzinc::SetLiteral::BoundedFloat(_, _)
+                            | flatzinc::SetLiteral::SetFloats(_) => {
+                                panic!("float values are unsupported")
+                            }
+                        };
+                        set
+                    })
+                    .collect::<Vec<_>>();
+
+                let _ = context
+                    .array_of_set_constants
+                    .insert(context.identifiers.get_interned(id), result.into());
             }
 
             flatzinc::ParDeclItem::Float { .. } | flatzinc::ParDeclItem::ArrayOfFloat { .. } => {

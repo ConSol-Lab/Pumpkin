@@ -346,6 +346,7 @@ pub(crate) fn run(
                 "The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"
             ),
             "pumpkin_regular" => compile_regular(context, exprs, options, constraint_tag)?,
+            "pumpkin_regular_nfa" => compile_regular_nfa(context, exprs, options, constraint_tag)?,
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -440,6 +441,52 @@ fn compile_regular(
         num_states.try_into().unwrap(),
         num_inputs.try_into().unwrap(),
         to_2d(&transition, num_states as usize, num_inputs as usize),
+        start_state,
+        match accepting {
+            Set::Interval {
+                lower_bound,
+                upper_bound,
+            } => (lower_bound..=upper_bound).collect(),
+            Set::Sparse { values } => values.to_vec(),
+        },
+    )
+    .post(context.solver);
+    Ok(post_result.is_ok())
+}
+
+fn compile_regular_nfa(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+    _options: &FlatZincOptions,
+    _constraint_tag: ConstraintTag,
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 6, "pumpkin_regular_nfa");
+
+    let input = context.resolve_integer_variable_array(&exprs[0])?;
+    let num_states = context.resolve_integer_constant_from_expr(&exprs[1])?;
+    let num_inputs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+    let transition = context.resolve_array_of_sets_constant(&exprs[3])?;
+    let start_state = context.resolve_integer_constant_from_expr(&exprs[4])?;
+    let accepting = context.resolve_set_constant(&exprs[5])?;
+
+    let post_result = pumpkin_constraints::regular_nfa(
+        input.to_vec(),
+        num_states.try_into().unwrap(),
+        num_inputs.try_into().unwrap(),
+        to_2d(
+            &transition
+                .iter()
+                .map(|set| match set {
+                    Set::Interval {
+                        lower_bound,
+                        upper_bound,
+                    } => (*lower_bound..=*upper_bound).collect::<Vec<_>>(),
+                    Set::Sparse { values } => values.to_vec(),
+                })
+                .collect::<Vec<_>>(),
+            num_states as usize,
+            num_inputs as usize,
+        ),
         start_state,
         match accepting {
             Set::Interval {
