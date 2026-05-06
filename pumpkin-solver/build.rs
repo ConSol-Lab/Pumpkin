@@ -45,7 +45,7 @@ fn determine_git_hash() {
     let git_sha = String::from_utf8(output.stdout)
         .expect("Git output was not valid UTF-8")
         .trim()
-        .to_string();
+        .to_owned();
 
     println!("cargo:rustc-env=GIT_SHA={}", git_sha);
 
