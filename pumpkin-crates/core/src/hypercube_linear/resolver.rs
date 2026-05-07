@@ -23,6 +23,7 @@ use crate::hypercube_linear::conflict_state::ConflictState;
 use crate::hypercube_linear::conflict_state::predicate_applies_to_term;
 use crate::hypercube_linear::explanation::HypercubeLinear;
 use crate::hypercube_linear::explanation::HypercubeLinearExplanation;
+use crate::hypercube_linear::resh_strategy::MiddlingResH;
 use crate::hypercube_linear::resh_strategy::ResHStrategy;
 use crate::hypercube_linear::resh_strategy::StandardResH;
 use crate::hypercube_linear::trail_view::TrailView;
@@ -84,12 +85,11 @@ impl HypercubeLinearResolver {
         }
     }
 
-    pub fn with_linear_resh(trace: Trace) -> Self {
+    pub fn with_middling_resh(trace: Trace) -> Self {
         let proof_file = Rc::new(RefCell::new(trace));
-        // TODO: replace with LinearWeakeningResH once implemented.
         Self {
             state: ConflictState::new(Rc::clone(&proof_file)),
-            prop_resolver: Box::new(StandardResH::default()),
+            prop_resolver: Box::new(MiddlingResH::default()),
             statistics: Default::default(),
             logged_variable_names: false,
             #[cfg(feature = "hl-checks")]
@@ -1357,5 +1357,39 @@ mod tests {
             Hypercube::from_single_predicate(predicate![x >= 2]),
         );
         assert_eq!(result.linear, linear_inequality!(2 y + 3 z <= 18));
+    }
+
+    #[test_log::test]
+    fn propositional_resolution_may_also_weaken_linear_from_explanation() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 5);
+        let y = trail_builder.domain(-5, 5);
+        let z = trail_builder.domain(-5, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 0])
+            .decide(predicate![y >= 2])
+            .propagate(
+                predicate![x >= 3],
+                HypercubeLinear {
+                    hypercube: Hypercube::from_single_predicate(predicate![x <= 2]),
+                    linear: linear_inequality!(2 y + 1 z <= 3),
+                },
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
+        let result = resolver.run_resolution(
+            &mut trail,
+            conjunction!([x >= 3]),
+            linear_inequality!(1 y + 1 z <= 1),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::from_single_predicate(predicate![y >= 2]),
+        );
+        assert_eq!(result.linear, linear_inequality!(1 y + 1 z <= 1));
     }
 }
