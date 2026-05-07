@@ -174,10 +174,6 @@ impl ResHStrategy for MiddlingResH {
                 continue;
             }
 
-            println!("===");
-            dbg!((w1, x1, s1));
-            dbg!((w2, x2, s2));
-
             assert_ne!(
                 s1, s2,
                 "a linear inequality never yields multiple terms for the same variable"
@@ -200,24 +196,15 @@ impl ResHStrategy for MiddlingResH {
                 (w1.get(), x1, w2.get(), s2, i + 1)
             };
 
-            dbg!((
-                target_weight,
-                variable,
-                actual_weight,
-                source_to_weaken,
-                index_to_weaken_in_terms
-            ));
-
             assert!(target_weight.abs() < actual_weight.abs());
+            assert_eq!(target_weight.is_positive(), actual_weight.is_positive());
 
             // Determine what predicate will be weakened on.
             let predicate_to_weaken_on = if target_weight.is_positive() {
-                let bound =
-                    trail.lower_bound_at_trail_position(variable, trail_position) * target_weight;
+                let bound = trail.lower_bound_at_trail_position(variable, trail_position);
                 predicate![variable >= bound]
             } else {
-                let bound =
-                    trail.upper_bound_at_trail_position(variable, trail_position) * target_weight;
+                let bound = trail.upper_bound_at_trail_position(variable, trail_position);
                 predicate![variable <= bound]
             };
 
@@ -233,8 +220,6 @@ impl ResHStrategy for MiddlingResH {
                     * (actual_weight.abs() - target_weight.abs())
             };
 
-            dbg!(weaken_bound_by);
-
             linear_terms[index_to_weaken_in_terms].0 =
                 NonZero::new(target_weight).expect("all weights are non-zero");
 
@@ -247,10 +232,6 @@ impl ResHStrategy for MiddlingResH {
                 }
             }
         }
-
-        dbg!(&linear_terms);
-        dbg!(weakened_explanation_bound);
-        dbg!(weakened_conflict_bound);
 
         let new_conflicting_linear = LinearInequality::new(
             linear_terms

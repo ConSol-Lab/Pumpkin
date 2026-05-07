@@ -791,11 +791,23 @@ impl HypercubeLinearResolver {
             .explain_linear(trail, &tightly_propagating_reason.linear, trail_position);
 
         let scale_reason = weight_in_conflicting.abs();
+        let scale_conflict = tightly_propagating_reason
+            .linear
+            .term_for_domain(pivot.get_domain())
+            .unwrap()
+            .scale
+            .abs();
+
         let mut linear_terms = self
             .state
             .conflicting_linear
             .terms()
-            .map(|term| Ok((term.scale, term.inner)))
+            .map(|term| {
+                term.scale
+                    .checked_mul(scale_conflict)
+                    .ok_or(FourierError::IntegerOverflow)
+                    .map(|scaled_weight| (scaled_weight, term.inner))
+            })
             .chain(
                 tightly_propagating_reason
                     .linear
@@ -1391,5 +1403,39 @@ mod tests {
             Hypercube::from_single_predicate(predicate![y >= 2]),
         );
         assert_eq!(result.linear, linear_inequality!(1 y + 1 z <= 1));
+    }
+
+    #[test_log::test]
+    fn middling_resh_works_with_negative_signs() {
+        let mut trail_builder = FakeTrail::builder();
+
+        let x = trail_builder.domain(0, 5);
+        let y = trail_builder.domain(-5, 5);
+        let z = trail_builder.domain(-5, 5);
+
+        let mut trail = trail_builder
+            .decide(predicate![z >= 0])
+            .decide(predicate![y <= -2])
+            .propagate(
+                predicate![x >= 3],
+                HypercubeLinear {
+                    hypercube: Hypercube::from_single_predicate(predicate![x <= 2]),
+                    linear: linear_inequality!(-2 y + 1 z <= 3),
+                },
+            )
+            .build();
+
+        let mut resolver = HypercubeLinearResolver::with_middling_resh(Trace::discard());
+        let result = resolver.run_resolution(
+            &mut trail,
+            conjunction!([x >= 3]),
+            linear_inequality!(-1 y + 1 z <= 1),
+        );
+
+        assert_eq!(
+            result.hypercube,
+            Hypercube::from_single_predicate(predicate![y <= -2]),
+        );
+        assert_eq!(result.linear, linear_inequality!(-1 y + 1 z <= 1));
     }
 }
