@@ -405,6 +405,12 @@ struct Args {
     /// Ignored if not using hypercube linear resolver or not logging a proof.
     #[arg(long = "hl-proof-with-intermediates", default_value_t)]
     hl_proof_with_intermediates: bool,
+
+    /// Use the middling propositional resolution operator.
+    ///
+    /// Ignored if not using a hypercube linear resolver.
+    #[arg(long = "hl-middling-propres", default_value_t)]
+    hl_middling_propres: bool,
 }
 
 fn configure_logging(
@@ -636,41 +642,50 @@ fn run() -> PumpkinResult<()> {
                     !args.no_learning_clause_minimisation,
                 ),
             )?,
-            ConflictResolverType::HypercubeLinear => flatzinc::solve(
-                Solver::with_options(solver_options),
-                instance_path,
-                time_limit,
-                FlatZincOptions {
-                    free_search: args.free_search,
-                    all_solutions: args.all_solutions,
-                    cumulative_options: CumulativeOptions::new(
-                        args.cumulative_allow_holes,
-                        args.cumulative_explanation_type,
-                        !args.cumulative_single_profiles,
-                        args.cumulative_propagation_method,
-                        args.cumulative_incremental_backtracking,
-                    ),
-                    optimisation_strategy: args.optimisation_strategy,
-                    proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
-                    verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
-                    use_hypercube_linear: true,
-                },
-                HypercubeLinearResolver::new(
-                    args.proof_path
-                        .as_ref()
-                        .map(File::create)
-                        .transpose()?
-                        .map(|file| {
-                            Trace::to_file(
-                                file,
-                                TraceOptions {
-                                    include_intermediate_steps: args.hl_proof_with_intermediates,
-                                },
-                            )
-                        })
-                        .unwrap_or(Trace::discard()),
-                ),
-            )?,
+            ConflictResolverType::HypercubeLinear => {
+                let trace = args
+                    .proof_path
+                    .as_ref()
+                    .map(File::create)
+                    .transpose()?
+                    .map(|file| {
+                        Trace::to_file(
+                            file,
+                            TraceOptions {
+                                include_intermediate_steps: args.hl_proof_with_intermediates,
+                            },
+                        )
+                    })
+                    .unwrap_or(Trace::discard());
+
+                let resolver = if args.hl_middling_propres {
+                    HypercubeLinearResolver::with_middling_resh(trace)
+                } else {
+                    HypercubeLinearResolver::new(trace)
+                };
+
+                flatzinc::solve(
+                    Solver::with_options(solver_options),
+                    instance_path,
+                    time_limit,
+                    FlatZincOptions {
+                        free_search: args.free_search,
+                        all_solutions: args.all_solutions,
+                        cumulative_options: CumulativeOptions::new(
+                            args.cumulative_allow_holes,
+                            args.cumulative_explanation_type,
+                            !args.cumulative_single_profiles,
+                            args.cumulative_propagation_method,
+                            args.cumulative_incremental_backtracking,
+                        ),
+                        optimisation_strategy: args.optimisation_strategy,
+                        proof_type: args.proof_path.as_ref().map(|_| args.proof_type),
+                        verbose: args.verbose.log_level_filter() >= LevelFilter::Info,
+                        use_hypercube_linear: true,
+                    },
+                    resolver,
+                )?
+            }
         },
     }
 
