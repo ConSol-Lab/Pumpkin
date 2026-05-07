@@ -15,7 +15,7 @@ pumpkin-checking = { version = "0.3.0", path = "../checking" }
 thiserror = "2.0.12"
 log = "0.4.17"
 bitfield = "0.19.4"
-enumset = "1.1.2"
+enumset = "1.1.11"
 fnv = "1.0.7" # We require features which are on the `main` branch of the repository but are not on crates.io
 rand = { version = "0.10.1", features = [ "alloc" ] }
 once_cell = "1.19.0"
