@@ -4,6 +4,7 @@
 #[cfg(doc)]
 use pumpkin_core::propagation;
 
+pub mod all_different;
 pub mod arithmetic;
 pub mod cumulative;
 pub mod disjunctive;
