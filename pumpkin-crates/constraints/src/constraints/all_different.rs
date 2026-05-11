@@ -12,6 +12,6 @@ pub fn all_different<Var: IntegerVariable + 'static>(
 ) -> impl Constraint {
     AllDifferentConstructor {
         x: variables.into(),
-        constraint_tag: ConstraintTag,
+        constraint_tag,
     }
 }
