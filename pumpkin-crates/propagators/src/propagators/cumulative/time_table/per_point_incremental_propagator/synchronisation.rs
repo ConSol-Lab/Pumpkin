@@ -3,8 +3,8 @@ use std::rc::Rc;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::proof::InferenceCode;
 use pumpkin_core::propagation::Domains;
-use pumpkin_core::results::PropagationStatusCP;
 use pumpkin_core::state::Conflict;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::variables::IntegerVariable;
 
 use crate::cumulative::CumulativeParameters;
@@ -160,13 +160,12 @@ fn sort_profile_based_on_id<Var: IntegerVariable + 'static>(profile: &mut Resour
     profile.profile_tasks.sort_by_key(|task| task.id.unpack());
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
 
-    use pumpkin_core::TestSolver;
     use pumpkin_core::propagation::LocalId;
+    use pumpkin_core::state::State;
 
     use super::find_synchronised_conflict;
     use crate::cumulative::CumulativeParameters;
@@ -177,11 +176,11 @@ mod tests {
 
     #[test]
     fn test_correct_conflict_returned() {
-        let mut solver = TestSolver::default();
+        let mut state = State::default();
 
-        let x0 = solver.new_variable(0, 10);
-        let x1 = solver.new_variable(0, 10);
-        let x2 = solver.new_variable(0, 10);
+        let x0 = state.new_interval_variable(0, 10, None);
+        let x1 = state.new_interval_variable(0, 10, None);
+        let x2 = state.new_interval_variable(0, 10, None);
 
         let tasks = vec![
             Task {

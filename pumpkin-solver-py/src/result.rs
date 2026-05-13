@@ -5,16 +5,18 @@ use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
 use crate::variables::Predicate;
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 pub enum SatisfactionResult {
     Satisfiable(Solution),
     Unsatisfiable(),
     Unknown(),
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 pub enum SatisfactionUnderAssumptionsResult {
     Satisfiable(Solution),
     UnsatisfiableUnderAssumptions(Vec<Predicate>),
@@ -22,7 +24,7 @@ pub enum SatisfactionUnderAssumptionsResult {
     Unknown(),
 }
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Solution(pumpkin_solver::core::results::Solution);
 

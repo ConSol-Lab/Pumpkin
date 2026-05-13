@@ -2,7 +2,6 @@ use super::VariableSelector;
 use crate::branching::BrancherEvent;
 use crate::branching::SelectionContext;
 use crate::containers::SparseSet;
-use crate::containers::StorageKey;
 use crate::variables::DomainId;
 
 /// A [`VariableSelector`] which selects a random unfixed variable.
@@ -15,9 +14,7 @@ impl RandomSelector {
     pub fn new(variables: impl IntoIterator<Item = DomainId>) -> Self {
         // Note the -1 due to the fact that the indices of the domain ids start at 1
         Self {
-            variables: SparseSet::new(variables.into_iter().collect(), |element| {
-                element.index() - 1
-            }),
+            variables: SparseSet::new(variables.into_iter().collect()),
         }
     }
 

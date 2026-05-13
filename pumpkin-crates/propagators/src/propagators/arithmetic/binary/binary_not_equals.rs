@@ -16,7 +16,7 @@ use pumpkin_core::propagation::Propagator;
 use pumpkin_core::propagation::PropagatorConstructor;
 use pumpkin_core::propagation::PropagatorConstructorContext;
 use pumpkin_core::propagation::ReadDomains;
-use pumpkin_core::results::PropagationStatusCP;
+use pumpkin_core::state::PropagationStatusCP;
 use pumpkin_core::state::PropagatorConflict;
 use pumpkin_core::variables::IntegerVariable;
 
@@ -83,20 +83,16 @@ where
 {
     fn detect_inconsistency(&self, domains: Domains) -> Option<PropagatorConflict> {
         // We first check whether they are both fixed
-        if domains.is_fixed(&self.a) && domains.is_fixed(&self.b) {
-            let lb_a = domains.lower_bound(&self.a);
-            let lb_b = domains.lower_bound(&self.b);
-
-            // If they are, then we check whether they are assigned to the same value
-            if lb_a == lb_b {
-                // If this is the case then we have detected a conflict
-                Some(PropagatorConflict {
-                    conjunction: conjunction!([self.a == lb_a] & [self.b == lb_a]),
-                    inference_code: self.inference_code.clone(),
-                })
-            } else {
-                None
-            }
+        if let Some(fixed_a) = domains.fixed_value(&self.a)
+            && let Some(fixed_b) = domains.fixed_value(&self.b)
+            && fixed_a == fixed_b
+        {
+            // If they are, and they are assigned to the same value, then we have detected a
+            // conflict
+            Some(PropagatorConflict {
+                conjunction: conjunction!([self.a == fixed_a] & [self.b == fixed_a]),
+                inference_code: self.inference_code.clone(),
+            })
         } else {
             None
         }
@@ -130,8 +126,7 @@ where
         if a_lb == a_ub {
             context.post(
                 predicate!(self.b != a_lb),
-                conjunction!([self.a == a_lb]),
-                &self.inference_code,
+                (conjunction!([self.a == a_lb]), &self.inference_code),
             )?;
         }
 
@@ -139,8 +134,7 @@ where
         if b_lb == b_ub {
             context.post(
                 predicate!(self.a != b_lb),
-                conjunction!([self.b == b_lb]),
-                &self.inference_code,
+                (conjunction!([self.b == b_lb]), &self.inference_code),
             )?;
         }
 
@@ -165,16 +159,14 @@ where
         if a_lb == a_ub {
             context.post(
                 predicate!(self.b != a_lb),
-                conjunction!([self.a == a_lb]),
-                &self.inference_code,
+                (conjunction!([self.a == a_lb]), &self.inference_code),
             )?;
         }
 
         if b_lb == b_ub {
             context.post(
                 predicate!(self.a != b_lb),
-                conjunction!([self.b == b_lb]),
-                &self.inference_code,
+                (conjunction!([self.b == b_lb]), &self.inference_code),
             )?;
         }
 
@@ -206,50 +198,55 @@ where
     }
 }
 
-#[allow(deprecated, reason = "Will be refactored")]
 #[cfg(test)]
 mod tests {
-    use pumpkin_core::TestSolver;
-    use pumpkin_core::propagation::EnqueueDecision;
+    use pumpkin_core::state::State;
 
+    use crate::StateExt;
     use crate::propagators::arithmetic::BinaryNotEqualsPropagatorArgs;
 
     #[test]
     fn detects_conflict() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 0);
-        let b = solver.new_variable(0, 0);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 0, None);
+        let b = state.new_interval_variable(0, 0, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        let _ = state
+            .propagate_to_fixed_point()
             .expect_err("Expected conflict to be detected");
     }
 
     #[test]
     fn propagate_when_one_is_fixed() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 0);
-        let b = solver.new_variable(0, 1);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 0, None);
+        let b = state.new_interval_variable(0, 1, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        solver.assert_bounds(b, 1, 1);
+        state.assert_bounds(b, 1, 1);
     }
 
+    #[allow(deprecated, reason = "Uses TestSolver for EnqueueDecision assertions")]
     #[test]
     fn incremental_propagation() {
+        use pumpkin_core::TestSolver;
+        use pumpkin_core::propagation::EnqueueDecision;
+
         let mut solver = TestSolver::default();
         let a = solver.new_variable(0, 0);
         let b = solver.new_variable(0, 10);
@@ -277,20 +274,21 @@ mod tests {
 
     #[test]
     fn non_overlapping_is_ok() {
-        let mut solver = TestSolver::default();
-        let a = solver.new_variable(0, 5);
-        let b = solver.new_variable(6, 10);
-        let constraint_tag = solver.new_constraint_tag();
+        let mut state = State::default();
+        let a = state.new_interval_variable(0, 5, None);
+        let b = state.new_interval_variable(6, 10, None);
+        let constraint_tag = state.new_constraint_tag();
 
-        let _ = solver
-            .new_propagator(BinaryNotEqualsPropagatorArgs {
-                a,
-                b,
-                constraint_tag,
-            })
+        let _ = state.add_propagator(BinaryNotEqualsPropagatorArgs {
+            a,
+            b,
+            constraint_tag,
+        });
+        state
+            .propagate_to_fixed_point()
             .expect("Expected no conflict to be detected");
 
-        solver.assert_bounds(a, 0, 5);
-        solver.assert_bounds(b, 6, 10);
+        state.assert_bounds(a, 0, 5);
+        state.assert_bounds(b, 6, 10);
     }
 }

@@ -169,8 +169,7 @@ impl DebugHelper {
             let _ = reason_store.get_or_compute(
                 trail_entry
                     .reason
-                    .expect("Expected checked propagation to have a reason")
-                    .0,
+                    .expect("Expected checked propagation to have a reason"),
                 ExplanationContext::without_working_nogood(
                     assignments,
                     trail_index,

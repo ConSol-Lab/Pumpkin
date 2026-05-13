@@ -36,11 +36,10 @@ create_statistics_struct!(SemanticMinimiserStatistics {
 
 impl Default for SemanticMinimiser {
     fn default() -> Self {
-        let mapping = |x: &DomainId| x.id() as usize;
         Self {
             original_domains: Default::default(),
             domains: Default::default(),
-            present_ids: SparseSet::new(vec![], mapping),
+            present_ids: SparseSet::new(vec![]),
             helper: Vec::default(),
             statistics: SemanticMinimiserStatistics::default(),
         }

@@ -4,15 +4,25 @@ mod linear;
 mod nogood;
 mod time_table;
 
+use pumpkin_checking::SupportingInference;
 use pumpkin_checking::VariableState;
 
 use crate::model::Atomic;
 use crate::model::Model;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fact {
     pub premises: Vec<Atomic>,
     pub consequent: Option<Atomic>,
+}
+
+impl From<SupportingInference<Atomic>> for Fact {
+    fn from(value: SupportingInference<Atomic>) -> Self {
+        Fact {
+            premises: value.premises,
+            consequent: value.consequent,
+        }
+    }
 }
 
 impl Fact {
@@ -46,7 +56,7 @@ pub enum InvalidInference {
     UndefinedConstraint,
 
     /// The inference does not state which constraint generated it.
-    #[error("missing constraint hint")]
+    #[error("the constraint hint points to an unknown constraint ID")]
     MissingConstraint,
 
     /// The premises of the inference are inconsistent.

@@ -16,10 +16,10 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-pyo3 = { version = "0.25.1", features= ["extension-module"] }
+pyo3 = { version = "0.28.3", features= ["extension-module"] }
 pumpkin-solver = { version = "0.3.0", path = "../pumpkin-solver" }
 pumpkin-constraints = { version = "0.3.0", path = "../pumpkin-crates/constraints", features=["clap"] }
 pumpkin-conflict-resolvers = { version = "0.3.0", path = "../pumpkin-crates/conflict-resolvers/"}
 
 [build-dependencies]
-pyo3-build-config = "0.25.1"
+pyo3-build-config = "0.28.3"

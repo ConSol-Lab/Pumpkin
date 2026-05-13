@@ -29,18 +29,13 @@ use crate::statistics::StatisticLogger;
 /// [`DynamicBrancher::on_solution`] are called at the appropriate times as these methods ensure
 /// that the index to the current brancher to try is reset. If these methods are not called at the
 /// appropriate time then it will (likely) lead to incomplete solutions being returned!
+#[derive(Debug)]
 pub struct DynamicBrancher {
     branchers: Vec<Box<dyn Brancher>>,
     brancher_index: usize,
 
     relevant_event_to_index: EnumMap<BrancherEvent, Vec<usize>>,
     relevant_events: Vec<BrancherEvent>,
-}
-
-impl Debug for DynamicBrancher {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynamicBrancher").finish()
-    }
 }
 
 impl DynamicBrancher {

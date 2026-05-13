@@ -32,7 +32,6 @@ use crate::propagation::HasAssignments;
 use crate::propagators::nogoods::NogoodChecker;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_eq_simple;
-use crate::state::EmptyDomain;
 use crate::state::PropagatorHandle;
 
 /// Used during conflict analysis to provide the necessary information.
@@ -70,8 +69,9 @@ impl ConflictAnalysisContext<'_> {
     /// Returns `true` if a change to a domain occured, and `false` if the given [`Predicate`] was
     /// already true.
     ///
-    /// If a domain becomes empty due to this operation, an [`EmptyDomain`] error is returned.
-    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomain> {
+    /// If a domain becomes empty due to this operation, an [`EmptyDomainConflict`] error is
+    /// returned.
+    pub fn post(&mut self, predicate: Predicate) -> Result<bool, EmptyDomainConflict> {
         self.state.post(predicate)
     }
 
@@ -135,16 +135,35 @@ impl ConflictAnalysisContext<'_> {
             .collect()
     }
 
+    /// Get the reason for `predicate` being true, without logging that reason to the proof.
+    pub fn get_propagation_reason_without_proof_log(
+        &mut self,
+        predicate: Predicate,
+        current_nogood: CurrentNogood<'_>,
+        reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
+    ) -> Option<InferenceCode> {
+        Self::get_propagation_reason_inner(
+            predicate,
+            current_nogood,
+            &mut ProofLog::default(),
+            self.unit_nogood_inference_codes,
+            reason_buffer,
+            self.state,
+        )
+    }
+
     /// Compute the reason for `predicate` being true. The reason will be stored in
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    ///
+    /// Returns the [`InferenceCode`] if one was attached to this reason.
     pub fn get_propagation_reason(
         &mut self,
         predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
-    ) {
+    ) -> Option<InferenceCode> {
         Self::get_propagation_reason_inner(
             predicate,
             current_nogood,
@@ -152,12 +171,16 @@ impl ConflictAnalysisContext<'_> {
             self.unit_nogood_inference_codes,
             reason_buffer,
             self.state,
-        );
+        )
     }
 
     /// Returns the last decision which was made by the solver (if such a decision exists).
     pub fn find_last_decision(&mut self) -> Option<Predicate> {
         self.state.assignments.find_last_decision()
+    }
+
+    pub fn is_proof_logging_inferences(&self) -> bool {
+        self.proof_log.is_logging_inferences()
     }
 }
 
@@ -175,13 +198,47 @@ impl ConflictAnalysisContext<'_> {
         );
     }
 
+    /// Log an inference to the proof.
+    pub fn log_inference(
+        &mut self,
+        inference_code: InferenceCode,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
+        consequent: Option<Predicate>,
+    ) {
+        let _ = self
+            .proof_log
+            .log_inference(
+                &mut self.state.constraint_tags,
+                inference_code,
+                premises,
+                consequent,
+                &self.state.variable_names,
+                &self.state.assignments,
+            )
+            .expect("Failed to write proof log");
+    }
+
+    /// Indicate to the proof that the initial domain `predicate` is used in the next
+    /// deduction.
+    pub fn log_domain_inference(&mut self, predicate: Predicate) {
+        let _ = self
+            .proof_log
+            .log_domain_inference(
+                predicate,
+                &self.state.variable_names,
+                &mut self.state.constraint_tags,
+                &self.state.assignments,
+            )
+            .expect("Failed to write proof log");
+    }
+
     /// Log a deduction (learned nogood) to the proof.
     ///
     /// The inferences and marked propagations are assumed to be recorded in reverse-application
     /// order.
     pub fn log_deduction(
         &mut self,
-        premises: impl IntoIterator<Item = Predicate>,
+        premises: impl IntoIterator<Item = Predicate> + Clone,
     ) -> ConstraintTag {
         self.proof_log
             .log_deduction(
@@ -266,6 +323,8 @@ impl ConflictAnalysisContext<'_> {
     /// `reason_buffer`.
     ///
     /// If `predicate` is not true, or it is a decision, then this function will panic.
+    ///
+    /// Returns the [`InferenceCode`] if one was attached to this reason.
     pub(crate) fn get_propagation_reason_inner(
         predicate: Predicate,
         current_nogood: CurrentNogood<'_>,
@@ -273,14 +332,17 @@ impl ConflictAnalysisContext<'_> {
         unit_nogood_inference_codes: &HashMap<Predicate, InferenceCode>,
         reason_buffer: &mut (impl Extend<Predicate> + AsRef<[Predicate]>),
         state: &mut State,
-    ) {
-        let trail_index = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
+    ) -> Option<InferenceCode> {
+        let inference_code = state.get_propagation_reason(predicate, reason_buffer, current_nogood);
 
-        if let Some(trail_index) = trail_index {
+        if let Some(ref ic) = inference_code {
+            let trail_index = state.trail_position(predicate).expect(
+                "an inference code is only present if the propagated predicate is on the trail",
+            );
             let trail_entry = state.assignments.get_trail_entry(trail_index);
-            let (reason_ref, inference_code) = trail_entry
-                .reason
-                .expect("Cannot be a null reason for propagation.");
+            let Some(reason_ref) = trail_entry.reason else {
+                return inference_code;
+            };
 
             let propagator_id = state.reason_store.get_propagator(reason_ref);
 
@@ -295,10 +357,9 @@ impl ConflictAnalysisContext<'_> {
                 //
                 // It could be that the predicate is implied by another unit nogood
 
-                // TODO: does not work with extended nogoods since they can have empty reasons even
-                // if it is not a "unit" nogood (I think)
-                if let Some(inference_code) =
-                    unit_nogood_inference_codes.get(&predicate).or_else(|| {
+                let unit_ic = unit_nogood_inference_codes
+                    .get(&predicate)
+                    .or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
                         // [x >= v] but that the corresponding unit nogood idea is the one for the
                         // predicate [x == v]
@@ -307,21 +368,21 @@ impl ConflictAnalysisContext<'_> {
 
                         unit_nogood_inference_codes.get(&predicate!(domain_id == right_hand_side))
                     })
-                {
-                    let _ = proof_log.log_inference(
-                        &mut state.constraint_tags,
-                        inference_code.clone(),
-                        [],
-                        Some(predicate),
-                        &state.variable_names,
-                        &state.assignments,
-                    );
-                }
+                    .expect("Expected to be able to retrieve step id for unit nogood");
+
+                let _ = proof_log.log_inference(
+                    &mut state.constraint_tags,
+                    unit_ic.clone(),
+                    [],
+                    Some(predicate),
+                    &state.variable_names,
+                    &state.assignments,
+                );
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
                 let _ = proof_log.log_inference(
                     &mut state.constraint_tags,
-                    inference_code,
+                    ic.clone(),
                     reason_buffer.as_ref().iter().copied(),
                     Some(predicate),
                     &state.variable_names,
@@ -329,6 +390,8 @@ impl ConflictAnalysisContext<'_> {
                 );
             }
         }
+
+        inference_code
     }
 
     fn compute_conflict_nogood(
@@ -340,8 +403,8 @@ impl ConflictAnalysisContext<'_> {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let mut empty_domain_reason: Vec<Predicate> = vec![];
-        let _ = self.state.reason_store.get_or_compute(
-            conflict.trigger_reason,
+        let trigger_inference_code = self.state.reason_store.get_or_compute(
+            conflict.trigger_reason.expect("in conflict analysis the empty domain conflict is always triggered by a propagation"),
             ExplanationContext::without_working_nogood(
                 &self.state.assignments,
                 self.state.assignments.num_trail_entries(), // Note that we do not do a
@@ -356,7 +419,7 @@ impl ConflictAnalysisContext<'_> {
         // We also need to log this last propagation to the proof log as an inference.
         let _ = self.proof_log.log_inference(
             &mut self.state.constraint_tags,
-            conflict.trigger_inference_code,
+            trigger_inference_code,
             empty_domain_reason.iter().copied(),
             Some(conflict.trigger_predicate),
             &self.state.variable_names,

@@ -10,6 +10,8 @@ use crate::engine::notifications::Watchers;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::Predicate;
+use crate::predicates::PredicateConstructor;
+use crate::predicates::PredicateType;
 use crate::pumpkin_assert_simple;
 
 /// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
@@ -188,6 +190,26 @@ impl TransformableVariable<AffineView<DomainId>> for DomainId {
 
     fn offset(&self, offset: i32) -> AffineView<DomainId> {
         AffineView::new(*self, 1, offset)
+    }
+}
+
+impl PredicateConstructor for DomainId {
+    type Value = i32;
+
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::Equal, bound)
+    }
+
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::LowerBound, bound)
+    }
+
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::UpperBound, bound)
+    }
+
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::new(*self, PredicateType::NotEqual, bound)
     }
 }
 

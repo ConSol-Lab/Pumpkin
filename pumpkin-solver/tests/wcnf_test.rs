@@ -28,6 +28,7 @@ test_wcnf_instance!(johnson8_4_4, 56);
 test_wcnf_instance!(normalized_g2x2, 2);
 test_wcnf_instance!(normalized_g9x3, 7);
 // test_wcnf_instance!(normalized_g9x9, 20);
+#[cfg(not(feature = "check-propagations"))]
 test_wcnf_instance!(ram_k3_n9, 1);
 
 struct MaxSATChecker {

@@ -147,7 +147,7 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.domains()
                 ));
-                context.post(predicate, full_explanation, &self.inference_code)
+                context.post(predicate, (full_explanation, &self.inference_code))
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -226,7 +226,7 @@ impl CumulativePropagationHandler {
                     &full_explanation,
                     context.domains()
                 ));
-                context.post(predicate, full_explanation, &self.inference_code)
+                context.post(predicate, (full_explanation, &self.inference_code))
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
@@ -281,7 +281,7 @@ impl CumulativePropagationHandler {
 
                 pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
 
-                context.post(predicate, reason, &self.inference_code)
+                context.post(predicate, (reason, &self.inference_code))
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -340,7 +340,7 @@ impl CumulativePropagationHandler {
 
                 pumpkin_assert_extreme!(check_explanation(predicate, &reason, context.domains()));
 
-                context.post(predicate, reason, &self.inference_code)
+                context.post(predicate, (reason, &self.inference_code))
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
@@ -413,7 +413,7 @@ impl CumulativePropagationHandler {
                         &explanation,
                         context.domains()
                     ));
-                    context.post(predicate, (*explanation).clone(), &self.inference_code)?;
+                    context.post(predicate, ((*explanation).clone(), &self.inference_code))?;
                 }
                 CumulativeExplanationType::Pointwise => {
                     // We split into two cases when determining the explanation of the profile
@@ -449,7 +449,7 @@ impl CumulativePropagationHandler {
                         &explanation,
                         context.domains()
                     ));
-                    context.post(predicate, explanation, &self.inference_code)?;
+                    context.post(predicate, (explanation, &self.inference_code))?;
                 }
             }
         }

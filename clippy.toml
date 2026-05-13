@@ -1,4 +1,6 @@
 allowed-duplicate-crates = [
-    "hashbrown", 
-    "windows-sys",
+    "wit-bindgen",
+    "regex-automata",
+    "regex-syntax",
+    "hashbrown",
 ]
