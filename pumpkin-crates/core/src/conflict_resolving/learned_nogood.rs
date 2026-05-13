@@ -3,6 +3,7 @@ use std::ops::Deref;
 use crate::conflict_resolving::ConflictAnalysisContext;
 use crate::engine::AnalysisMode;
 use crate::predicates::Predicate;
+use crate::pumpkin_assert_moderate;
 
 /// A structure which stores a learned nogood
 ///
@@ -103,7 +104,7 @@ impl LearnedNogood {
 
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
-        let mut backjump_level = if clean_nogood.len() > 1 {
+        let backjump_level = if clean_nogood.len() > 1 {
             context
                 .state
                 .get_checkpoint_for_predicate(clean_nogood[1])
@@ -113,25 +114,30 @@ impl LearnedNogood {
             0
         };
 
-        if clean_nogood.len() > 1 && propagating_domain.is_some() {
-            // In this case, the order of the predicates is irrelevant (for now)
-            //
-            // We first find the propagating domain
-            let propagating_domain = clean_nogood[0].get_domain();
-            // Then we calculate the backjump level as the level of the highest present predicate
-            // in the nogood which is not concerning the propagating domain
-            backjump_level = clean_nogood
-                .iter()
-                .filter(|predicate| predicate.get_domain() != propagating_domain)
-                .map(|predicate| {
-                    context
-                        .state
-                        .get_checkpoint_for_predicate(*predicate)
-                        .unwrap()
-                })
-                .max()
-                .unwrap_or(0);
-        }
+        pumpkin_assert_moderate!(
+            propagating_domain.is_none()
+                || backjump_level == {
+                    // In this case, the order of the predicates is irrelevant (for now)
+                    //
+                    // We first find the propagating domain
+                    let propagating_domain = clean_nogood[0].get_domain();
+                    // Then we calculate the backjump level as the level of the highest present
+                    // predicate in the nogood which is not concerning the
+                    // propagating domain
+                    clean_nogood
+                        .iter()
+                        .filter(|predicate| predicate.get_domain() != propagating_domain)
+                        .map(|predicate| {
+                            context
+                                .state
+                                .get_checkpoint_for_predicate(*predicate)
+                                .unwrap()
+                        })
+                        .max()
+                        .unwrap_or(0)
+                },
+            "The predicate of the second-highest decision level was not correctly placed when using extended conflict analysis."
+        );
 
         Self {
             predicates: clean_nogood,
