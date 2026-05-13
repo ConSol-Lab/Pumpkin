@@ -178,10 +178,18 @@ impl ResolutionResolver {
         while {
             match self.mode {
                 AnalysisMode::OneUIP | AnalysisMode::HalfExtendedUIP => {
+                    // We wait until there is only a single element from the current decision level
+                    // left.
                     self.to_process_heap.num_nonremoved_elements() > 1
                 }
-                AnalysisMode::AllDecision => self.to_process_heap.num_nonremoved_elements() > 0,
+                AnalysisMode::AllDecision => {
+                    // We wait until there are only decisions left.
+                    self.to_process_heap.num_nonremoved_elements() > 0
+                }
                 AnalysisMode::ExtendedUIP => {
+                    // We wait until there are only elements over a single variable left.
+                    //
+                    // TODO: compute this incrementally
                     self.to_process_heap
                         .keys()
                         .map(|predicate_id| {
@@ -194,6 +202,15 @@ impl ResolutionResolver {
                         > 1
                 }
                 AnalysisMode::BoundsExtendedUIP => {
+                    // We wait until extended nogood propagation can propagate a bound.
+                    //
+                    // Firstly, there should be only elements over a single element.
+                    // Secondly, one of the following should hold:
+                    // - There is a lower-bound present but no upper-bound OR there is an
+                    //   upper-bound present but no lower-bound
+                    // - There are only holes present
+                    // - There is an equality present (would necessarily lead to a single predicate
+                    //   due to semantic minimisation)
                     let present_domain_ids = self
                         .to_process_heap
                         .keys()
@@ -207,44 +224,25 @@ impl ResolutionResolver {
                     if present_domain_ids.len() > 1 {
                         true
                     } else {
-                        let (lower_bounds, upper_bounds, _inequalities, equalities) = self
-                            .to_process_heap
-                            .keys()
-                            .map(|predicate_id| {
-                                self.predicate_id_generator.get_predicate(predicate_id)
-                            })
-                            .fold(
-                                (0, 0, 0, 0),
-                                |(lower_bounds, upper_bounds, inequalities, equalities),
-                                 predicate| {
-                                    match predicate.get_predicate_type() {
-                                        PredicateType::LowerBound => (
-                                            lower_bounds + 1,
-                                            upper_bounds,
-                                            inequalities,
-                                            equalities,
-                                        ),
-                                        PredicateType::UpperBound => (
-                                            lower_bounds,
-                                            upper_bounds + 1,
-                                            inequalities,
-                                            equalities,
-                                        ),
-                                        PredicateType::NotEqual => (
-                                            lower_bounds,
-                                            upper_bounds,
-                                            inequalities + 1,
-                                            equalities,
-                                        ),
-                                        PredicateType::Equal => (
-                                            lower_bounds,
-                                            upper_bounds,
-                                            inequalities,
-                                            equalities + 1,
-                                        ),
-                                    }
-                                },
-                            );
+                        // We calculate the number of predicate types from the current decision
+                        // level (note that they are necessarily over a
+                        // single variable) to determine when bound
+                        // propagation can take place.
+                        let (
+                            mut lower_bounds,
+                            mut upper_bounds,
+                            mut _disequalities,
+                            mut equalities,
+                        ) = (0, 0, 0, 0);
+                        for predicate_id in self.to_process_heap.keys() {
+                            let predicate = self.predicate_id_generator.get_predicate(predicate_id);
+                            match predicate.get_predicate_type() {
+                                PredicateType::LowerBound => lower_bounds += 1,
+                                PredicateType::NotEqual => _disequalities += 1,
+                                PredicateType::Equal => equalities += 1,
+                                PredicateType::UpperBound => upper_bounds += 1,
+                            }
+                        }
                         // We return true if we cannot propagate any bounds
                         //
                         // We can propagate bounds in the following situations:
