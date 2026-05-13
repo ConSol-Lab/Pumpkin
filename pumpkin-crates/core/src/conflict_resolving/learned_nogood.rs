@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use crate::conflict_resolving::ConflictAnalysisContext;
+use crate::engine::AnalysisMode;
 use crate::predicates::Predicate;
 
 /// A structure which stores a learned nogood
@@ -36,7 +37,7 @@ impl LearnedNogood {
     pub(crate) fn create_from_vec(
         mut clean_nogood: Vec<Predicate>,
         context: &ConflictAnalysisContext,
-        is_extended: bool,
+        analysis_mode: AnalysisMode,
     ) -> Self {
         if clean_nogood.is_empty() {
             return Self {
@@ -49,7 +50,12 @@ impl LearnedNogood {
         // - The predicate from the current decision level is placed at index 0
         // - The predicate from the highest decision level below the current is placed at index 1
 
-        let propagating_domain = if is_extended {
+        // If we are performing extended conflict analysis, then we find the domain that is
+        // currently propagating; this is to correctly put the predicates in the right place.
+        let propagating_domain = if matches!(
+            analysis_mode,
+            AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP
+        ) {
             Some(
                 clean_nogood
                     .iter()
@@ -86,6 +92,8 @@ impl LearnedNogood {
                 && (propagating_domain.is_none()
                     || predicate.get_domain() != propagating_domain.unwrap().get_domain())
             {
+                // The extra condition is to ensure that the first two predicates in the nogood
+                // are over different variables.
                 highest_level_below_current = dl;
                 clean_nogood.swap(1, index);
             }

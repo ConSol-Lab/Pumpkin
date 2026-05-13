@@ -115,12 +115,7 @@ impl ConflictResolver for ResolutionResolver {
         let backtrack_level = context.process_learned_nogood(
             self.processed_nogood_predicates.clone(),
             lbd,
-            match self.mode {
-                AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => true,
-                AnalysisMode::AllDecision
-                | AnalysisMode::OneUIP
-                | AnalysisMode::HalfExtendedUIP => false,
-            },
+            self.mode,
         );
 
         self.statistics

@@ -9,6 +9,7 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::conflict_resolving::ConflictResolver;
 use crate::conflict_resolving::LearnedNogood;
 use crate::containers::HashMap;
+use crate::engine::AnalysisMode;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EmptyDomainConflict;
@@ -269,7 +270,7 @@ impl ConflictAnalysisContext<'_> {
         &mut self,
         learned_nogood_predicates: Vec<Predicate>,
         lbd: u32,
-        is_extended: bool,
+        analysis_mode: AnalysisMode,
     ) -> usize {
         // important to notify about the conflict _before_ backtracking removes literals from
         // the trail -> although in the current version this does nothing but notify that a
@@ -278,7 +279,7 @@ impl ConflictAnalysisContext<'_> {
             .notify_conflict(lbd, self.state.assignments.get_pruned_value_count());
 
         let learned_nogood =
-            LearnedNogood::create_from_vec(learned_nogood_predicates, self, is_extended);
+            LearnedNogood::create_from_vec(learned_nogood_predicates, self, analysis_mode);
 
         let constraint_tag = self.log_deduction(learned_nogood.predicates.iter().copied());
         let inference_code = InferenceCode::new(constraint_tag, NogoodLabel);
