@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use log::info;
 use pumpkin_core::asserts::pumpkin_assert_advanced;
 use pumpkin_core::asserts::pumpkin_assert_moderate;
 use pumpkin_core::asserts::pumpkin_assert_simple;
@@ -411,7 +410,10 @@ impl ResolutionResolver {
 
     fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) {
         // The final nogood is composed of the predicates encountered from the lower decision
-        // levels, plus the predicate remaining in the heap.
+        // levels, plus the predicate(s) remaining in the heap.
+
+        // Depending on what mode we are in, we first remove the elements which are remaining in
+        // the heap.
         match self.mode {
             AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
                 // When using extended UIP, we need to ensure that all of the remaining predicates
@@ -433,12 +435,13 @@ impl ResolutionResolver {
                     "There should be only one variable in the final nogood from teh current decision level"
                 );
 
-                // We need to add all of the remaining predicates to the nogood; due to the way in
-                // which the extended UIP is calculated, this could be multiple elements.
                 let propagating_domain = self
                     .predicate_id_generator
                     .get_predicate(*self.to_process_heap.peek_max().unwrap().0)
                     .get_domain();
+
+                // We need to add all of the remaining predicates to the nogood; due to the way in
+                // which the extended UIP is calculated, this could be multiple elements.
                 while self.to_process_heap.num_nonremoved_elements() > 0 {
                     let predicate = self.pop_predicate_from_conflict_nogood();
                     pumpkin_assert_simple!(predicate.get_domain() == propagating_domain);
@@ -485,6 +488,29 @@ impl ResolutionResolver {
                 .minimise(context, &mut self.processed_nogood_predicates);
         }
 
+        // We update the statistics if we are performing extended nogood learning
+        self.update_statistics(context);
+
+        pumpkin_assert_advanced!(
+            self.processed_nogood_predicates
+                .iter()
+                .filter(|p| context.evaluate_predicate(**p) == Some(true))
+                .count()
+                >= self.processed_nogood_predicates.len() - 1,
+            "Not all predicates evaluated to true: {:?}",
+            self.processed_nogood_predicates
+                .iter()
+                .filter(|p| context.evaluate_predicate(**p) != Some(true))
+                .collect::<Vec<_>>()
+        );
+
+        // TODO: asserting predicate may be bumped twice, probably not a problem.
+        for predicate in self.processed_nogood_predicates.iter() {
+            context.predicate_appeared_in_conflict(*predicate);
+        }
+    }
+
+    fn update_statistics(&mut self, context: &ConflictAnalysisContext) {
         // If we are using extended UIP then we update some statistics
         match self.mode {
             AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
@@ -511,35 +537,6 @@ impl ResolutionResolver {
                 }
             }
             AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {}
-        }
-        info!(
-            "Adding nogood of length {} with {} predicates from the current decision level",
-            self.processed_nogood_predicates.len(),
-            self.processed_nogood_predicates
-                .iter()
-                .filter(
-                    |predicate| context.get_checkpoint_for_predicate(**predicate).unwrap()
-                        == context.get_checkpoint()
-                )
-                .count(),
-        );
-
-        pumpkin_assert_advanced!(
-            self.processed_nogood_predicates
-                .iter()
-                .filter(|p| context.evaluate_predicate(**p) == Some(true))
-                .count()
-                >= self.processed_nogood_predicates.len() - 1,
-            "Not all predicates evaluated to true: {:?}",
-            self.processed_nogood_predicates
-                .iter()
-                .filter(|p| context.evaluate_predicate(**p) != Some(true))
-                .collect::<Vec<_>>()
-        );
-
-        // TODO: asserting predicate may be bumped twice, probably not a problem.
-        for predicate in self.processed_nogood_predicates.iter() {
-            context.predicate_appeared_in_conflict(*predicate);
         }
     }
 }
