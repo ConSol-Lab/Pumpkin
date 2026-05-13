@@ -260,15 +260,6 @@ impl Propagator for NogoodPropagator {
         EnqueueDecision::Enqueue
     }
 
-    fn notify(
-        &mut self,
-        _context: NotificationContext,
-        _local_id: crate::propagation::LocalId,
-        _event: crate::propagation::OpaqueDomainEvent,
-    ) -> EnqueueDecision {
-        EnqueueDecision::Enqueue
-    }
-
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
         self.statistics.log(statistic_logger);
     }
@@ -280,15 +271,14 @@ impl Propagator for NogoodPropagator {
     fn propagate(&mut self, mut context: PropagationContext) -> Result<(), Conflict> {
         // TODO: cannot do learned nogood management easily when using extended UIP, disabled for
         // everything for now
+        // First we clean up the nogood database
+        // self.clean_up_learned_nogoods_if_needed(
+        //     context.assignments,
+        //     context.reason_store,
+        //     context.notification_engine,
+        // );
         match self.analysis_mode {
             AnalysisMode::ExtendedUIP | AnalysisMode::BoundsExtendedUIP => {
-                // First we clean up the nogood database
-                // self.clean_up_learned_nogoods_if_needed(
-                //     context.assignments,
-                //     context.reason_store,
-                //     context.notification_engine,
-                // );
-
                 if self.watch_lists.len() <= context.num_predicate_ids() {
                     self.watch_lists
                         .resize(context.num_predicate_ids() + 1, Vec::default());
@@ -490,14 +480,6 @@ impl Propagator for NogoodPropagator {
             AnalysisMode::OneUIP | AnalysisMode::AllDecision | AnalysisMode::HalfExtendedUIP => {
                 pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
-                // First we perform nogood management to ensure that the database does not grow
-                // excessively large with "bad" nogoods
-                // self.clean_up_learned_nogoods_if_needed(
-                //     context.assignments,
-                //     context.reason_store,
-                //     context.notification_engine,
-                // );
-
                 if self.watch_lists.len() <= context.num_predicate_ids() {
                     self.watch_lists
                         .resize(context.num_predicate_ids() + 1, Vec::default());
@@ -584,29 +566,26 @@ impl Propagator for NogoodPropagator {
                             // we do not propagate
                             let mut is_falsified = false;
                             let mut num_unassigned = 0;
-                            let unassigned_predicate_ids = nogood_predicates
-                                .iter()
-                                .filter_map(|predicate_id| {
-                                    if context.is_predicate_id_falsified(*predicate_id) {
-                                        is_falsified = true;
-                                        None
-                                    } else if context.is_predicate_id_satisfied(*predicate_id) {
-                                        None
-                                    } else {
-                                        num_unassigned += 1;
-                                        let predicate = context.get_predicate(*predicate_id);
-                                        Some(predicate.get_domain())
-                                    }
-                                })
-                                .collect::<HashSet<_>>();
-                            if num_unassigned > 1
-                                && !is_falsified
-                                && unassigned_predicate_ids.len() == 1
+                            let mut unassigned_domains = HashSet::new();
+                            for predicate_id in nogood_predicates.iter() {
+                                if context.is_predicate_id_falsified(*predicate_id) {
+                                    is_falsified = true;
+                                    break;
+                                } else if context.is_predicate_id_satisfied(*predicate_id) {
+                                    continue;
+                                } else {
+                                    num_unassigned += 1;
+                                    let predicate = context.get_predicate(*predicate_id);
+                                    let _ = unassigned_domains.insert(predicate.get_domain());
+                                }
+                            }
+
+                            if num_unassigned > 1 && !is_falsified && unassigned_domains.len() == 1
                             {
                                 NogoodPropagator::propagate_extended_nogood(
                                     &mut context,
                                     nogood_predicates,
-                                    *unassigned_predicate_ids.iter().next().unwrap(),
+                                    *unassigned_domains.iter().next().unwrap(),
                                     inference_code,
                                     &mut self.statistics,
                                 )?;
